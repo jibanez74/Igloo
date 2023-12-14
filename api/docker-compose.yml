@@ -1,0 +1,15 @@
+version: "3.1"
+
+services:
+  igloo_db:
+    container_name: "igloo_db"
+    image: postgres:12.4-alpine
+    volumes:
+      - "./postgres_data:/var/lib/postgresql/data:rw"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: "igloo"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    restart: unless-stopped
