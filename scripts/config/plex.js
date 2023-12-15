@@ -1,4 +1,5 @@
 const axios = require("axios");
+const keys = require("./keys");
 
 const plex = axios.create({
   baseURL: keys.PLEX_HOST,

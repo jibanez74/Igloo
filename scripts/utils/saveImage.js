@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const plex = require("../config/plex");
+const { v4 } = require("uuid");
 
 async function saveImage(apiPath, filePath) {
   try {
@@ -15,11 +16,10 @@ async function saveImage(apiPath, filePath) {
     }
 
     fs.writeFileSync(fileNameAndPath, data);
+
     return fileNameAndPath;
   } catch (err) {
-    // write the error to a json file
-    const errorFilePath = path.join(__dirname, "errors.json");
-    fs.writeFileSync(errorFilePath, JSON.stringify(err));
+    console.error(err);
     process.exit(2);
   }
 }

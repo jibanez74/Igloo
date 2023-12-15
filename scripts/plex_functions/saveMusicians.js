@@ -1,11 +1,13 @@
 const fs = require("fs");
 const path = require("path");
-const api = require("./config/api");
-const plex = require("./config/plex");
-const saveGenres = require("./utils/saveGenres");
-const saveImage = require("./utils/saveImage");
+const api = require("../config/api");
+const plex = require("../config/plex");
+const saveGenres = require("../utils/saveGenres");
+const saveImage = require("../utils/saveImage");
 
 async function saveMusicians() {
+  console.log("starting process to save musicians");
+
   let plexArtistData = null;
   const errors = [];
 
@@ -28,6 +30,7 @@ async function saveMusicians() {
 
     try {
       const res = await api.get(`/musician/name/${artist.title}`);
+
       exist = true;
     } catch (err) {
       if (err.response && err.response.status !== 404) {
@@ -81,7 +84,7 @@ async function saveMusicians() {
     );
   }
 
-  console.log("Process finished");
+  console.log("Finished with saving musicians");
 
   process.exit(0);
 }
