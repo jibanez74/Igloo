@@ -1,101 +1,177 @@
 package handlers
 
 import (
-	"igloo/helpers"
-	"igloo/models"
-	"igloo/repository"
-	"net/http"
-	"strconv"
+  "igloo/helpers"
+  "igloo/models"
+  "net/http"
+  "strconv"
+  "math"
+  "strings"
 
-	"github.com/go-chi/chi/v5"
+  "github.com/go-chi/chi/v5"
+  "gorm.io/gorm"
 )
 
-type musicianHandler struct {
-	repo repository.MusicianRepository
+func (h *appHandler) GetMusicians(w http.ResponseWriter, r *http.Request) {
+  page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+  if page < 1 {
+    page = 1
+  }
+
+  pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+  if pageSize < 1 {
+    pageSize = 10
+  }
+
+  offset := (page - 1) * pageSize
+
+  var total int64
+  h.db.Model(&models.Musician{}).Count(&total)
+  totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+
+  if total == 0 {
+    res := helpers.JSONResponse{
+      Error: false,
+      Message: "No musicians found",
+      Data: map[string]interface{}{
+        "musicians": []models.Musician{},
+        "page": page,
+        "totalPages": totalPages,
+      },
+    }
+
+    helpers.WriteJSON(w, http.StatusOK, res)
+
+    return
+  }
+
+  var musicians []models.Musician
+
+  result := h.db.Offset(offset).Limit(pageSize).Find(&musicians)
+  if result.Error != nil {
+    helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    return
+  }
+
+  res := helpers.JSONResponse{
+    Error: false,
+    Message: "Fetch musicians successfully",
+    Data: map[string]interface{}{
+      "musicians": musicians,
+      "page": page,
+      "totalPages": totalPages,
+    },
+  }
+
+  helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func NewMusicianHandler(repo repository.MusicianRepository) *musicianHandler {
-	return &musicianHandler{repo: repo}
+func (h *appHandler) FindMusicianByName(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  var musician models.Musician
+
+  result := h.db.Where("name = ?", name).First(&musician)
+  if result.Error != nil {
+    if result.Error == gorm.ErrRecordNotFound {
+      helpers.ErrorJSON(w, result.Error, http.StatusNotFound)
+    } else {
+      helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    }
+
+    return
+  }
+
+  res := helpers.JSONResponse{
+    Error:   false,
+    Message: "Musician found successfully",
+    Data:    musician,
+  }
+
+  helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func (h *musicianHandler) GetMusicians(w http.ResponseWriter, r *http.Request) {
-	musicians, err := h.repo.GetMusicians()
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
+func (h *appHandler) FindMusicianByID(w http.ResponseWriter, r *http.Request) {
+  id := chi.URLParam(r, "id")
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Musicians found successfully",
-		Data:    musicians,
-	}
+  var musician models.Musician
 
-	helpers.WriteJSON(w, http.StatusOK, res)
+  result := h.db.First(&musician, id)
+  if result.Error != nil {
+    if result.Error == gorm.ErrRecordNotFound {
+      helpers.ErrorJSON(w, result.Error, http.StatusNotFound)
+    } else {
+      helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    }
+
+    return
+  }
+
+  res := helpers.JSONResponse{
+    Error:   false,
+    Message: "Musician found successfully",
+    Data:    musician,
+  }
+
+  helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func (h *musicianHandler) GetMusicianByName(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+func (h *appHandler) CreateMusician(w http.ResponseWriter, r *http.Request) {
+  var musician models.Musician
 
-	musician, err := h.repo.FindByName(name)
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusNotFound)
-		return
-	}
+  err := helpers.ReadJSON(w, r, &musician)
+  if err != nil {
+    helpers.ErrorJSON(w, err)
+    return
+  }
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Musician found successfully",
-		Data:    musician,
-	}
+  err = h.db.Create(&musician).Error
+  if err != nil {
+    if strings.Contains(err.Error(), "validation failed") {
+      helpers.ErrorJSON(w, err, http.StatusBadRequest)
+    } else {
+      helpers.ErrorJSON(w, err, http.StatusInternalServerError)
+    }
+  
+    return
+  }
 
-	helpers.WriteJSON(w, http.StatusOK, res)
+  res := helpers.JSONResponse{
+    Error:   false,
+    Message: "Musician created successfully",
+    Data:    musician,
+  }
+
+  helpers.WriteJSON(w, http.StatusCreated, res)
 }
 
-func (h *musicianHandler) GetMusicianByID(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+func (h *appHandler) DeleteMusician(w http.ResponseWriter, r *http.Request) {
+  id := chi.URLParam(r, "id")
 
-	musicianID, err := strconv.Atoi(id)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
+  var musician models.Musician
 
-	musician, err := h.repo.FindByID(musicianID)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
+  result := h.db.First(&musician, id)
+  if result.Error != nil {
+    if result.Error == gorm.ErrRecordNotFound {
+      helpers.ErrorJSON(w, result.Error, http.StatusNotFound)
+    } else {
+      helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    }
 
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Musician found successfully",
-		Data:    musician,
-	}
+    return
+  }
 
-	helpers.WriteJSON(w, http.StatusOK, res)
-}
+  result = h.db.Delete(&musician)
+  if result.Error != nil {
+    helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    return
+  }
 
-func (h *musicianHandler) CreateMusician(w http.ResponseWriter, r *http.Request) {
-	var musician models.Musician
+  res := helpers.JSONResponse{
+    Error:   false,
+    Message: "Musician deleted successfully",
+    Data:    musician,
+  }
 
-	err := helpers.ReadJSON(w, r, &musician)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	err = h.repo.CreateMusician(&musician)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "Musician created successfully",
-		Data:    musician,
-	}
-
-	helpers.WriteJSON(w, http.StatusCreated, res)
+  helpers.WriteJSON(w, http.StatusOK, res)
 }

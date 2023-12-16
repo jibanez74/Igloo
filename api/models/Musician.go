@@ -1,4 +1,3 @@
-// description: defines the model and hooks for a musician
 package models
 
 import (
@@ -7,7 +6,7 @@ import (
 
 type Musician struct {
 	gorm.Model
-	Name    string        `gorm:"size:60;not null; unique" json:"name"`
+	Name    string        `gorm:"size:80;not null; uniqueIndex" json:"name"`
 	Thumb   string        `gorm:"size:100; not null; default:'/public/images/no_thumb.jpg'" json:"thumb"`
 	Art     string        `gorm:"size:100; not null; default:'/public/images/no_art.jpg'" json:"art"`
 	Summary string        `gorm:"type:text; not null; default:'unknown'" json:"summary"`
