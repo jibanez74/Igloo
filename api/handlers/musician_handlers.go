@@ -47,7 +47,7 @@ func (h *appHandler) GetMusicians(w http.ResponseWriter, r *http.Request) {
 
   var musicians []models.Musician
 
-  result := h.db.Offset(offset).Limit(pageSize).Find(&musicians)
+    result := h.db.Offset(offset).Limit(pageSize).Find(&musicians)
   if result.Error != nil {
     helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
     return

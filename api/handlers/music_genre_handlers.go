@@ -1,12 +1,31 @@
 package handlers
 
 import (
-	"igloo/models"
-
-	"gorm.io/gorm"
+  "igloo/helpers"
+  "igloo/models"
+  "net/http"
+  "gorm.io/gorm"
 )
 
-// create handler to find a music genre by its name, if not found then create it
-// if found, then return the music genre
-// if not found, then create it and return the music genre
-func (h *appHandler) Find 
+func (h *appHandler) GetAllMusicGenres(w http.ResponseWriter, r *http.Request) {
+  var music_genres []models.MusicGenre
+  
+  result := h.db.Find(&music_genres)
+  if result.Error != nil {
+    if result.Error == gorm.ErrRecordNotFound {
+      helpers.ErrorJSON(w, result.Error, http.StatusNotFound)
+    } else {
+      helpers.ErrorJSON(w, result.Error, http.StatusInternalServerError)
+    }
+
+    return
+  }
+
+  res := helpers.JSONResponse{
+    Error: false,
+    Message: "Music genres found",
+    Data: music_genres,
+  }
+
+  helpers.WriteJSON(w, http.StatusOK, res)
+}

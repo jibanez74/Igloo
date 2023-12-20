@@ -3,7 +3,7 @@ const fs = require("fs");
 const api = require("../config/api");
 const plex = require("../config/plex");
 const saveMoods = require("../utils/saveMoods");
-const saveGenres = require("../utils/saveGenres");
+const saveGenres = require("../utils/sav∫eGenres");
 const saveImage = require("../utils/saveImage");
 
 async function saveAlbums() {
