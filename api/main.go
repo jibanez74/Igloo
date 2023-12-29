@@ -28,5 +28,11 @@ func main() {
 	app.Get("/api/v1/music-genre", h.GetMusicGenres)
 	app.Post("/api/v1/music-genre", h.FindOrCreateMusicGenre)
 
+	// album routes
+	app.Get("/api/v1/album", h.GetAlbumsWithPagination)
+	app.Get("/api/v1/album/title/{title}", h.GetAlbumByTitle)
+	app.Get("/api/v1/album/{id}", h.GetAlbumById)
+	app.Post("/api/v1/album", h.CreateAlbum)
+
 	app.Listen(":8080")
 }
