@@ -16,11 +16,13 @@ func (h *appHandler) GetMusicGenres(c *fiber.Ctx) error {
 }
 
 func (h *appHandler) FindOrCreateMusicGenre(c *fiber.Ctx) error {
-	tag := c.Params("tag")
-
 	var musicGenre models.MusicGenre
 
-	err := h.db.Where(models.MusicGenre{Tag: tag}).FirstOrCreate(&musicGenre).Error
+	if err := c.BodyParser(&musicGenre); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	err := h.db.Where(models.MusicGenre{Tag: musicGenre.Tag}).FirstOrCreate(&musicGenre).Error
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not find or create music genre"})
 	}

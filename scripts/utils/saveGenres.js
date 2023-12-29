@@ -8,7 +8,7 @@ async function saveGenres(genres) {
   if (!genres) {
     const res = await api.post("/music-genre", { tag: "unknown" });
 
-    genreList.push(res.data.data);
+    genreList.push(res.data);
 
     return genreList;
   }
@@ -17,10 +17,9 @@ async function saveGenres(genres) {
     try {
       const res = await api.post("/music-genre", { tag: g.tag });
 
-      genreList.push(res.data.data);
+      genreList.push(res.data);
     } catch (err) {
       console.log("error saving genre", err);
-      // write the error to a json file
       const errorFilePath = path.join(__dirname, "errors.json");
       fs.writeFileSync(errorFilePath, JSON.stringify(err));
 

@@ -24,5 +24,9 @@ func main() {
 	app.Post("/api/v1/musician", h.CreateMusician)
 	app.Delete("/api/v1/musician/{id}", h.DeleteMusician)
 
+	// music genre routes
+	app.Get("/api/v1/music-genre", h.GetMusicGenres)
+	app.Post("/api/v1/music-genre", h.FindOrCreateMusicGenre)
+
 	app.Listen(":8080")
 }
