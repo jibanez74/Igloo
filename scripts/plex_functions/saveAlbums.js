@@ -2,8 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const api = require("../config/api");
 const plex = require("../config/plex");
-const saveMoods = require("../utils/saveMoods");
-const saveGenres = require("../utils/sav∫eGenres");
+const saveGenres = require("../utils/saveGenres");
 const saveImage = require("../utils/saveImage");
 
 async function saveAlbums() {
@@ -13,13 +12,13 @@ async function saveAlbums() {
   try {
     const res = await plex.get("/library/sections/11/albums");
 
-    plexAlbums = data.MediaContainer.Metadata;
+    plexAlbums = res.data.MediaContainer.Metadata;
   } catch (err) {
     console.error("Unable to fetch albums from plex", err);
     process.exit(1);
   }
 
-  if (!plexAlbum || plexAlbums.length === 0) {
+  if (!plexAlbums || plexAlbums.length === 0) {
     console.log("No album were fetch from plex");
     process.exit(0);
   }
@@ -28,7 +27,7 @@ async function saveAlbums() {
     let exist = false;
 
     try {
-      const res = await api.get(`/album/name/${name}`);
+      const res = await api.get(`/album/title/${a.title}`);
 
       exist = true;
     } catch (err) {
@@ -36,8 +35,6 @@ async function saveAlbums() {
         console.error(err);
         const errorFilePath = path.join(__dirname, "errors.json");
         fs.writeFileSync(errorFilePath, JSON.stringify(err));
-      } else if (err.response && err.response.status === 404) {
-        exist = false;
       } else {
         console.error(err);
         process.exit(1);
@@ -53,13 +50,14 @@ async function saveAlbums() {
       numberOfTracks: a.leafCount,
       studio: a.studio ? a.studio : undefined,
       year: a.year ? a.year : undefined,
+      summary: a.summary ? a.summary : undefined,
     };
 
     if (a.parentTitle) {
       try {
         const res = await api.get(`/musician/name/${a.parentTitle}`);
 
-        album.musicians = [res.data.data];
+        album.musicians = [res.data];
       } catch (err) {
         const errorFilePath = path.join(__dirname, "errors.json");
         fs.writeFileSync(errorFilePath, JSON.stringify(err));
@@ -84,9 +82,18 @@ async function saveAlbums() {
       const date = new Date(a.originallyAvailableAt);
       album.releaseDate = date.toISOString();
     }
+
+    try {
+      await api.post("/album", album);
+    } catch (err) {
+      console.log("unable to save album", err);
+      process.exit(4);
+    }
   }
 
   console.log("Finished saving album data");
 
   process.exit(0);
 }
+
+module.exports = saveAlbums;

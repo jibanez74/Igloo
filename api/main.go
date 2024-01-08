@@ -5,6 +5,7 @@ import (
 	"igloo/handlers"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
 func main() {
@@ -13,9 +14,11 @@ func main() {
 		panic(err)
 	}
 
-	h := handlers.NewAppHandler(db)
-
+	// fiber configuration
 	app := fiber.New()
+	app.Use(recover.New())
+
+	h := handlers.NewAppHandler(db)
 
 	// musician routes
 	app.Get("/api/v1/musician", h.GetMusicianWithPagination)
@@ -23,6 +26,12 @@ func main() {
 	app.Get("/api/v1/musician/{id}", h.GetMusicianById)
 	app.Post("/api/v1/musician", h.CreateMusician)
 	app.Delete("/api/v1/musician/{id}", h.DeleteMusician)
+
+	// album routes
+	app.Get("/api/v1/album/title/{title}", h.GetAlbumByTitle)
+	app.Get("/api/v1/album/{id}", h.GetAlbumById)
+	app.Get("/api/v1/album", h.GetAlbumsWithPagination)
+	app.Post("/api/v1/album", h.CreateAlbum)
 
 	// music genre routes
 	app.Get("/api/v1/music-genre", h.GetMusicGenres)
