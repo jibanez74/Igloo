@@ -9,10 +9,10 @@ type User struct {
 	gorm.Model
 	FirstName           string         `gorm:"size:30;not null" json:"firstName"`
 	LastName            string         `gorm:"size:30;not null" json:"lastName"`
-	Email               string         `gorm:"size:50;not null;unique" json:"email"`
-	Username            string         `gorm:"size:20;not null;unique" json:"username"`
+	Email               string         `gorm:"not null;uniqueIndex" json:"email"`
+	Username            string         `gorm:"size:20;not null;uniqueIndex" json:"username"`
 	Password            string         `gorm:"size:128;not null" json:"password"`
-	Avatar              string         `gorm:"size:20;not null; default:'no_avatar.jpg'" json:"avatar"`
+	Avatar              string         `gorm:"default:'/public/images/no_avatar.jpg'" json:"avatar"`
 	IsAdmin             bool           `gorm:"default:false; not null"`
 	FavoriteMusicians   []*Musician    `gorm:"many2many:user_musicians" json:"favoriteMusicians"`
 	FavoriteMusicGenres []*MusicGenre  `gorm:"many2many:user_genres" json:"favoriteGenres"`

@@ -12,4 +12,6 @@ type TrackHistory struct {
 	Tracks   []*Track `gorm:"many2many:track_history" json:"tracks"`
 	Liked    bool     `gorm:"default:false; not null" json:"liked"`
 	Disliked bool     `gorm:"default:false; not null" json:"disliked"`
+	Played  bool     `gorm:"default:false" json:"played"`
+	PlayedCount uint `gorm:"default:0" json:"played_count"`
 }

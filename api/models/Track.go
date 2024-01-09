@@ -8,17 +8,17 @@ import (
 type Track struct {
 	gorm.Model
 	Title        string `gorm:"size:60;not null" json:"title"`
-	Index        uint   `gorm:"not null; default:0" json:"index"`
-	RemoteFile   string `gorm:"size:255;not null" json:"remoteFile"`
-	LocalFile    string `gorm:"size:255" json:"localFile"`
-	IsDownload   bool   `gorm:"not null; default:false" json:"isDownload"`
+	Index        uint   `gorm:"default:0" json:"index"`
+	RemoteFile   string `gorm:"not null;uniqueIndex" json:"remoteFile"`
+	LocalFile    string `json:"localFile"`
+	IsDownload   bool   `gorm:"default:false" json:"isDownload"`
 	Duration     uint   `gorm:"not null" json:"duration"`
 	Container    string `gorm:"size:10;not null" json:"container"`
 	Bitrate      uint   `gorm:"not null" json:"bitrate"`
 	Channels     uint   `gorm:"not null" json:"channels"`
 	Language     string `gorm:"size:10; not null; default:'unknown'" json:"language"`
-	Size         uint   `gorm:"not null; default:0" json:"size"`
-	MusicBrainID string `gorm:"size:255;not null; default:'unknown'" json:"musicBrainID"`
+	Size         uint   `gorm:"not null" json:"size"`
+	MusicBrainID string `gorm:"default:'unknown'" json:"musicBrainID"`
 	Summary      string `gorm:"type:text" json:"summary"`
 	Codec        string `gorm:"size:10;not null" json:"codec"`
 	AlbumID      uint

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func (h *appHandler) GetMusicianWithPagination(c *fiber.Ctx) error {
@@ -51,6 +52,10 @@ func (h *appHandler) GetMusicianByName(c *fiber.Ctx) error {
 
 	err := h.db.Where("name = ?", name).First(&musician).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Musician not found"})
+		}
+
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Musician not found"})
 	}
 
@@ -63,6 +68,10 @@ func (h *appHandler) GetMusicianById(c *fiber.Ctx) error {
 
 	err := h.db.First(&musician, id).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Musician not found"})
+		}
+
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Musician not found"})
 	}
 

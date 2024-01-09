@@ -4,15 +4,18 @@ import (
 	"igloo/models"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func (h *appHandler) GetMusicGenres(c *fiber.Ctx) error {
-	var musicGenres []models.MusicGenre
-	if err := h.db.Find(&musicGenres).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Music genres not found"})
+	var genres []models.MusicGenre
+
+	result := h.db.Find(&genres).Select("ID", "Tag")
+	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not get music genres"})
 	}
 
-	return c.JSON(musicGenres)
+	return c.JSON(genres)
 }
 
 func (h *appHandler) FindOrCreateMusicGenre(c *fiber.Ctx) error {
