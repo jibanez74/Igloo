@@ -26,24 +26,7 @@ async function saveMusicians() {
   }
 
   for (const artist of plexArtistData) {
-    let exist = false;
-
-    try {
-      const res = await api.get(`/musician/name/${artist.title}`);
-
-      exist = true;
-    } catch (err) {
-      if (err.response && err.response.status !== 404) {
-        console.error(err);
-        const errorFilePath = path.join(__dirname, "errors.json");
-        fs.writeFileSync(errorFilePath, JSON.stringify(err));
-      } else if (err.response && err.response.status === 404) {
-        exist = false;
-      } else {
-        console.error(err);
-        process.exit(1);
-      }
-    }
+    const exist = await checkArtist(artist.title);
 
     if (exist) {
       continue;
@@ -87,6 +70,23 @@ async function saveMusicians() {
   console.log("Finished with saving musicians");
 
   process.exit(0);
+}
+
+async function checkArtist(title) {
+  let exist = false;
+
+  try {
+    const res = await api.get(`/api/v1/musician/name/${title}`);
+
+    exist = true;
+  } catch (err) {
+    if (err.response.status !== 404) {
+      console.error(err.response.status);
+      process.exist(3);
+    }
+  }
+
+  return true;
 }
 
 module.exports = saveMusicians;
