@@ -21,15 +21,15 @@ func main() {
 	h := handlers.NewAppHandler(db)
 
 	// musician routes
-	app.Get("/api/v1/musician/name/{name}", h.GetMusicianByName)
-	app.Get("/api/v1/musician/id/{id}", h.GetMusicianById)
+	app.Get("/api/v1/musician/name/:name", h.GetMusicianByName)
+	app.Get("/api/v1/musician/id/:id", h.GetMusicianById)
 	app.Get("/api/v1/musician", h.GetMusicianWithPagination)
 	app.Post("/api/v1/musician", h.CreateMusician)
 	app.Delete("/api/v1/musician/{id}", h.DeleteMusician)
 
 	// album routes
-	app.Get("/api/v1/album/title/{title}", h.GetAlbumByTitle)
-	app.Get("/api/v1/album/id/{id}", h.GetAlbumById)
+	app.Get("/api/v1/album/title/:title", h.GetAlbumByTitle)
+	app.Get("/api/v1/album/id/:id", h.GetAlbumById)
 	app.Get("/api/v1/album", h.GetAlbumsWithPagination)
 	app.Post("/api/v1/album", h.CreateAlbum)
 
