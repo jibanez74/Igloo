@@ -6,6 +6,8 @@ const saveGenres = require("../utils/saveGenres");
 const saveImage = require("../utils/saveImage");
 
 async function saveAlbums() {
+  console.log("about to save albums");
+
   let plexAlbums = null;
   const errors = [];
 
@@ -24,22 +26,7 @@ async function saveAlbums() {
   }
 
   for (const a of plexAlbums) {
-    let exist = false;
-
-    try {
-      const res = await api.get(`/album/title/${a.title}`);
-
-      exist = true;
-    } catch (err) {
-      if (err.response && err.response.status !== 404) {
-        console.error(err);
-        const errorFilePath = path.join(__dirname, "errors.json");
-        fs.writeFileSync(errorFilePath, JSON.stringify(err));
-      } else {
-        console.error(err);
-        process.exit(1);
-      }
-    }
+    const exist = await checkAlbum(a.title);
 
     if (exist) {
       continue;
@@ -55,10 +42,13 @@ async function saveAlbums() {
 
     if (a.parentTitle) {
       try {
-        const res = await api.get(`/musician/name/${a.parentTitle}`);
+        const name = a.parentTitle;
+        const encodedName = encodeURIComponent(name);
+        const res = await api.get(`/musician/name/${encodedName}`);
 
         album.musicians = [res.data];
       } catch (err) {
+        console.error(err);
         const errorFilePath = path.join(__dirname, "errors.json");
         fs.writeFileSync(errorFilePath, JSON.stringify(err));
 
@@ -94,6 +84,23 @@ async function saveAlbums() {
   console.log("Finished saving album data");
 
   process.exit(0);
+}
+
+async function checkAlbum(title) {
+  let exist = false;
+
+  try {
+    await api.get(`/api/v1/album/title/${title}`);
+
+    exist = true;
+  } catch (err) {
+    if (err.response.status !== 404) {
+      console.error(err.response.data);
+      process.exit(3);
+    }
+  }
+
+  return exist;
 }
 
 module.exports = saveAlbums;

@@ -50,7 +50,7 @@ func (h *appHandler) GetMusicianByName(c *fiber.Ctx) error {
 	var musician models.Musician
 	name := c.Params("name")
 
-	err := h.db.Where("name = ?", name).First(&musician).Error
+	err := h.db.Where("Name = ?", name).First(&musician).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Musician not found"})
