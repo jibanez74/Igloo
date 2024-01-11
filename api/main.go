@@ -28,7 +28,10 @@ func setupApp(db *gorm.DB) *fiber.App {
 	app.Get("/api/v1/musician", musicianHandler.GetMusicians)
 
 	// album routes
+	app.Get("/api/v1/album/title/:title", albumHandler.GetAlbumByTitle)
+	app.Get("/api/v1/album/id/:id", albumHandler.GetAlbumByID)
 	app.Get("/api/v1/album", albumHandler.GetAlbums)
+	app.Post("/api/v1/album", albumHandler.CreateAlbum)
 
 	// music genres routes
 	app.Get("/api/v1/music-genre", musicGenreHandler.GetMusicGenres)
