@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"igloo/models" // Import the models package
+	"igloo/models"
 	"igloo/repository"
 
 	"github.com/gofiber/fiber/v2"
