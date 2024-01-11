@@ -42,9 +42,9 @@ async function saveAlbums() {
 
     if (a.parentTitle) {
       try {
-        const name = a.parentTitle;
-        const encodedName = encodeURIComponent(name);
-        const res = await api.get(`/musician/name/${encodedName}`);
+        const res = await api.post("/musician/name", {
+          name: a.parentTitle,
+        });
 
         album.musicians = [res.data];
       } catch (err) {
