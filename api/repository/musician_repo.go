@@ -8,6 +8,7 @@ import (
 
 type MusicianRepo interface {
 	GetMusicians(*[]models.Musician) error
+	GetMusicianByName(*models.Musician, string) error
 	GetMusicianByID(*models.Musician, uint) error
 	CreateMusician(*models.Musician) error
 }
@@ -22,6 +23,10 @@ func NewMusicianRepo(db *gorm.DB) *musicianRepo {
 
 func (r *musicianRepo) GetMusicians(m *[]models.Musician) error {
 	return r.db.Find(m).Error
+}
+
+func (r *musicianRepo) GetMusicianByName(m *models.Musician, n string) error {
+	return r.db.Where("Name = ?", n).Error
 }
 
 func (r *musicianRepo) GetMusicianByID(m *models.Musician, id uint) error {
