@@ -1,53 +1,47 @@
 package main
 
 import (
+	"fmt"
 	"igloo/database"
 	"igloo/handlers"
-	"igloo/repository"
+	"log"
+	"net/http"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"gorm.io/gorm"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-func setupApp(db *gorm.DB) *fiber.App {
-	musicianRepo := repository.NewMusicianRepo(db)
-	musicianHandler := handlers.NewMusicianHandler(musicianRepo)
-
-	albumRepo := repository.NewAlbumRepo(db)
-	albumHandler := handlers.NewAlbumHandler(albumRepo)
-
-	musicGenreRepo := repository.NewMusicGenreRepo(db)
-	musicGenreHandler := handlers.NewMusicGenreHandler(musicGenreRepo)
-
-	// configure a new fiber app
-	app := fiber.New()
-	app.Use(recover.New())
-
-	// musician routes
-	app.Get("/api/v1/musician", musicianHandler.GetMusicians)
-	app.Post("/api/v1/musician", musicianHandler.CreateMusician)
-
-	// album routes
-	app.Get("/api/v1/album/title/:title", albumHandler.GetAlbumByTitle)
-	app.Get("/api/v1/album/id/:id", albumHandler.GetAlbumByID)
-	app.Get("/api/v1/album", albumHandler.GetAlbums)
-	app.Post("/api/v1/album", albumHandler.CreateAlbum)
-
-	// music genres routes
-	app.Get("/api/v1/music-genre", musicGenreHandler.GetMusicGenres)
-
-	return app
-}
+const port = 8080
 
 func main() {
-	// init connection to database
 	db, err := database.InitDatabase()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	// setup and start the Fiber app
-	app := setupApp(db)
-	app.Listen(":8080")
+	appHandlers := handlers.NewAppHandlers(db)
+
+	mux := chi.NewRouter()
+
+	mux.Use(middleware.Recoverer)
+
+	// music genre routes
+	mux.Get("/api/v1/music-genre/id/{id}", appHandlers.GetMusicGenreByID)
+	mux.Get("/api/v1/music-genre/tag/{tag}", appHandlers.GetMusicGenreByTag)
+	mux.Get("/api/v1/music-genre", appHandlers.GetMusicGenres)
+	mux.Post("/api/v1/music-genre", appHandlers.FindOrCreateMusicGenre)
+
+	// musician routes
+	mux.Get("/api/v1/musician/id/{id}", appHandlers.GetMusicianByID)
+	mux.Get("/api/v1/musician/name/{name}", appHandlers.GetMusicianByName)
+	mux.Get("/api/v1/musician", appHandlers.GetMusicians)
+	mux.Post("/api/v1/musician", appHandlers.CreateMusician)
+
+
+	log.Println("Starting application on port", port)
+
+	err = http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
