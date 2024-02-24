@@ -18,6 +18,8 @@ type User struct {
 	FavoriteMusicGenres []*MusicGenre  `gorm:"many2many:user_genres" json:"favoriteGenres"`
 	Playlists           []*Playlist    `gorm:"constraint:OnDelete:CASCADE" json:"playlists"`
 	TrackHistory        []TrackHistory `gorm:"constraint:OnDelete:CASCADE" json:"trackHistory"`
+	FavoriteMovies      []*Movie       `gorm:"many2many:user_movies" json:"favoriteMovies"`
+	FavoriteMovieGenres []*MovieGenre  `gorm:"many2many:user_genres" json:"favoriteMovieGenres"`
 }
 
 func (m *User) BeforeSave(tx *gorm.DB) (err error) {

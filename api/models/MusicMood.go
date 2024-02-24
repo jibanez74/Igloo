@@ -5,7 +5,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type Mood struct {
+type MusicMood struct {
 	gorm.Model
 	Tag    string   `gorm:"size:20;not null; uniqueIndex" json:"tag"`
 	Tracks []*Track `gorm:"many2many:track_moods;" json:"tracks"`

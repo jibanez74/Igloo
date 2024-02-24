@@ -8,7 +8,7 @@ import (
 
 type Album struct {
 	gorm.Model
-	Title          string        `gorm:"size:60;not null;uniqueIndex" json:"title"`
+	Title          string        `gorm:"size:60;not null;index" json:"title"`
 	NumberOfTracks uint          `gorm:"default:0" json:"numberOfTracks"`
 	Summary        string        `gorm:"type:text;default:'unknown'" json:"summary"`
 	Thumb          string        `gorm:"default:'/public/images/no_thumb.jpg'" json:"thumb"`

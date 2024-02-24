@@ -6,7 +6,7 @@ import (
 
 type Musician struct {
 	gorm.Model
-	Name    string        `gorm:"size:60;not null; uniqueIndex" json:"name"`
+	Name    string        `gorm:"size:60;not null;index" json:"name"`
 	Thumb   string        `gorm:"default:'/public/images/no_thumb.jpg'" json:"thumb"`
 	Art     string        `gorm:"default:'/public/images/no_art.jpg'" json:"art"`
 	Summary string        `gorm:"type:text;default:'unknown'" json:"summary"`

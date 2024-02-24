@@ -7,25 +7,23 @@ import (
 
 type Track struct {
 	gorm.Model
-	Title        string `gorm:"size:60;not null" json:"title"`
+	Title        string `gorm:"size:100;not null;index" json:"title"`
 	Index        uint   `gorm:"default:0" json:"index"`
-	RemoteFile   string `gorm:"not null;uniqueIndex" json:"remoteFile"`
-	LocalFile    string `json:"localFile"`
-	IsDownload   bool   `gorm:"default:false" json:"isDownload"`
+	RemoteFile   string `gorm:"not null;index" json:"remoteFile"`
 	Duration     uint   `gorm:"not null" json:"duration"`
+	Year         uint   `json:"year"`
 	Container    string `gorm:"size:10;not null" json:"container"`
 	Bitrate      uint   `gorm:"not null" json:"bitrate"`
 	Channels     uint   `gorm:"not null" json:"channels"`
 	Language     string `gorm:"size:10; not null; default:'unknown'" json:"language"`
 	Size         uint   `gorm:"not null" json:"size"`
 	MusicBrainID string `gorm:"default:'unknown'" json:"musicBrainID"`
-	Summary      string `gorm:"type:text" json:"summary"`
 	Codec        string `gorm:"size:10;not null" json:"codec"`
 	AlbumID      uint
 	Album        Album
 	Musicians    []*Musician     `gorm:"many2many:musician_tracks;" json:"musicians"`
 	Genres       []*MusicGenre   `gorm:"many2many:track_genres;" json:"genres"`
-	Moods        []*Mood         `gorm:"many2many:track_moods;" json:"moods"`
+	Moods        []*MusicMood    `gorm:"many2many:track_moods;" json:"moods"`
 	Playlists    []*Playlist     `gorm:"many2many:playlist_tracks;" json:"playlists"`
 	PlayHistory  []*TrackHistory `gorm:"many2many:track_history" json:"playHistory"`
 }

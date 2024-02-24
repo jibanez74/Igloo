@@ -2,106 +2,61 @@ package handlers
 
 import (
 	"igloo/models"
-	"igloo/utils"
-	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
-func (h *appHandlers) GetMusicianByID(w http.ResponseWriter, r *http.Request) {
-	var musician models.Musician
-	id := chi.URLParam(r, "id")
+func (h *appHandlers) GetMusicianByID(c *fiber.Ctx) error {
+	var m models.Musician
+	id := c.Params("id")
 
 	musicianId, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		utils.ErrorJSON(w, err)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err})
 	}
 
-	err = h.db.First(&musician, uint(musicianId)).Error
+	err = h.db.First(&m, uint(musicianId)).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.ErrorJSON(w, err, 404)
-		} else {
-			utils.ErrorJSON(w, err, 500)
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err})
 		}
 
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
 	}
 
-	res := utils.JSONResponse{
-		Error:   false,
-		Message: "Musician fetched successfully",
-		Data:    musician,
-	}
-
-	utils.WriteJSON(w, 200, res)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
 }
 
-func (h *appHandlers) GetMusicianByName(w http.ResponseWriter, r *http.Request) {
-	var musician models.Musician
-	name := chi.URLParam(r, "name")
+func (h *appHandlers) GetMusicianByName(c *fiber.Ctx) error {
+	var m models.Musician
+	n := c.Params("name")
 
-	err := h.db.Where("Name = ?", name).Error
+	err := h.db.First(&m).Where("Name = ?", n).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			utils.ErrorJSON(w, err, 404)
-		} else {
-			utils.ErrorJSON(w, err, 500)
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err})
 		}
 
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
 	}
 
-	res := utils.JSONResponse{
-		Error:   false,
-		Message: "Musician fetched successfully",
-		Data:    musician,
-	}
-
-	utils.WriteJSON(w, 200, res)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
 }
 
-func (h *appHandlers) GetMusicians(w http.ResponseWriter, r *http.Request) {
-	var musicians models.Musician
+func (h *appHandlers) CreateMusician(c *fiber.Ctx) error {
+	var m models.Musician
 
-	err := h.db.Find(&musicians).Error
+	err := c.BodyParser(&m)
 	if err != nil {
-		utils.ErrorJSON(w, err, 500)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "An error occurred parsing post data"})
 	}
 
-	res := utils.JSONResponse{
-		Error:   false,
-		Message: "Musician fetched successfully",
-		Data:    musicians,
-	}
-
-	utils.WriteJSON(w, 200, res)
-}
-
-func (h *appHandlers) CreateMusician(w http.ResponseWriter, r *http.Request) {
-	var musician models.Musician
-
-	err := utils.ReadJSON(w, r, &musician)
+	err = h.db.Create(&m).Error
 	if err != nil {
-		utils.ErrorJSON(w, err)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Unable to create musician in data base"})
 	}
 
-	err = h.db.Create(&musician).Error
-	if err != nil {
-		utils.ErrorJSON(w, err)
-		return
-	}
-
-	res := utils.JSONResponse{
-		Error:   false,
-		Message: "Musician was created successfully",
-		Data:    musician,
-	}
-
-	utils.WriteJSON(w, 201, res)
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"item": m})
 }

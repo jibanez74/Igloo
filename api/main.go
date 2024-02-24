@@ -1,47 +1,53 @@
 package main
 
 import (
-	"fmt"
 	"igloo/database"
 	"igloo/handlers"
-	"log"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
-const port = 8080
+const PORT = ":8080"
 
 func main() {
 	db, err := database.InitDatabase()
 	if err != nil {
-		log.Fatal(err)
+		panic("Unable to connect to db")
 	}
 
 	appHandlers := handlers.NewAppHandlers(db)
 
-	mux := chi.NewRouter()
-
-	mux.Use(middleware.Recoverer)
+	app := fiber.New()
+	app.Use(recover.New())
+	app.Use(cors.New())
 
 	// music genre routes
-	mux.Get("/api/v1/music-genre/id/{id}", appHandlers.GetMusicGenreByID)
-	mux.Get("/api/v1/music-genre/tag/{tag}", appHandlers.GetMusicGenreByTag)
-	mux.Get("/api/v1/music-genre", appHandlers.GetMusicGenres)
-	mux.Post("/api/v1/music-genre", appHandlers.FindOrCreateMusicGenre)
+	app.Get("/api/v1/music-genre/tag/:tag", appHandlers.GetMusicGenreByTag)
+	app.Get("/api/v1/music-genre", appHandlers.GetMusicGenres)
+	app.Post("/api/v1/music-genre", appHandlers.FindOrCreateMusicGenre)
+
+	// music mood routes
+	app.Get("/api/v1/music-mood/tag/:tag", appHandlers.GetMusicMoodByTag)
+	app.Get("/api/v1/music-mood", appHandlers.GetMusicMoods)
+	app.Post("/api/v1/music-mood", appHandlers.FindOrCreateMusicMood)
 
 	// musician routes
-	mux.Get("/api/v1/musician/id/{id}", appHandlers.GetMusicianByID)
-	mux.Get("/api/v1/musician/name/{name}", appHandlers.GetMusicianByName)
-	mux.Get("/api/v1/musician", appHandlers.GetMusicians)
-	mux.Post("/api/v1/musician", appHandlers.CreateMusician)
+	app.Get("/api/v1/musician/name/:name", appHandlers.GetMusicianByName)
+	app.Get("/api/v1/musician/id/:id", appHandlers.GetMusicianByID)
+	app.Post("/api/v1/musician", appHandlers.CreateMusician)
 
+	// album routes
+	app.Get("/api/v1/album/title/:title", appHandlers.GetAlbumByTitle)
+	app.Get("/api/v1/album/id/:id", appHandlers.GetAlbumByID)
+	app.Get("/api/v1/album", appHandlers.GetAlbums)
+	app.Post("/api/v1/album", appHandlers.CreateAlbum)
 
-	log.Println("Starting application on port", port)
+	// track routes
+	app.Get("/api/v1/track/id/:id", appHandlers.GetTrackByID)
+	app.Get("/api/v1/track", appHandlers.GetTracks)
+	app.Post("/api/v1/track", appHandlers.CreateTrack)
 
-	err = http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
-	if err != nil {
-		log.Fatal(err)
-	}
+	app.Listen(PORT)
 }

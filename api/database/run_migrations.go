@@ -8,7 +8,7 @@ import (
 )
 
 func RunMigrations(db *gorm.DB) {
-	err := db.AutoMigrate(&models.User{}, &models.MusicGenre{}, &models.Mood{}, &models.Musician{}, &models.Album{}, &models.Track{}, &models.Playlist{}, &models.TrackHistory{})
+	err := db.AutoMigrate(&models.User{}, &models.MusicGenre{}, &models.MusicMood{}, &models.Musician{}, &models.Album{}, &models.Track{}, &models.Playlist{}, &models.TrackHistory{})
 	if err != nil {
 		panic("Error: Unable to run user migrations")
 	}
