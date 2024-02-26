@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const api = require("./config/api");
-const saveImage = require("./utils/saveImage");
+const saveImage = require("./utils/savePlexImage");
 const plex = require("./config/plex");
 const querystring = require("querystring");
 

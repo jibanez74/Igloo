@@ -1,0 +1,3983 @@
+{
+  "MediaContainer": {
+    "size": 1,
+    "allowSync": true,
+    "identifier": "com.plexapp.plugins.library",
+    "librarySectionID": 1,
+    "librarySectionTitle": "Movies",
+    "librarySectionUUID": "022171c4-52f4-4b97-b145-c6b0646cd9b0",
+    "mediaTagPrefix": "/system/bundle/media/flags/",
+    "mediaTagVersion": 1707825153,
+    "Metadata": [
+      {
+        "ratingKey": "994",
+        "key": "/library/metadata/994",
+        "guid": "plex://movie/5d776d147a53e9001e75042e",
+        "studio": "United Artists",
+        "type": "movie",
+        "title": "12 Angry Men",
+        "librarySectionTitle": "Movies",
+        "librarySectionID": 1,
+        "librarySectionKey": "/library/sections/1",
+        "contentRating": "Not Rated",
+        "summary": "The defense and the prosecution have rested and the jury is filing into the jury room to decide if a young Spanish-American is guilty or innocent of murdering his father. What begins as an open and shut case soon becomes a mini-drama of each of the jurors' prejudices and preconceptions about the trial, the accused, and each other.",
+        "rating": 10,
+        "audienceRating": 9.7,
+        "lastViewedAt": 1708734773,
+        "year": 1957,
+        "tagline": "Life is in their hands. Death is on their minds.",
+        "thumb": "/library/metadata/994/thumb/1707879462",
+        "art": "/library/metadata/994/art/1707879462",
+        "duration": 5773981,
+        "originallyAvailableAt": "1957-04-10",
+        "addedAt": 1626997459,
+        "updatedAt": 1707879462,
+        "audienceRatingImage": "rottentomatoes://image.rating.upright",
+        "chapterSource": "media",
+        "primaryExtraKey": "/library/metadata/1045",
+        "ratingImage": "rottentomatoes://image.rating.ripe",
+        "Media": [
+          {
+            "id": 2438,
+            "duration": 5773981,
+            "bitrate": 5581,
+            "width": 1800,
+            "height": 1076,
+            "aspectRatio": 1.66,
+            "audioChannels": 2,
+            "audioCodec": "aac",
+            "videoCodec": "h264",
+            "videoResolution": "1080",
+            "container": "mp4",
+            "videoFrameRate": "24p",
+            "optimizedForStreaming": 0,
+            "audioProfile": "lc",
+            "has64bitOffsets": true,
+            "videoProfile": "high",
+            "Part": [
+              {
+                "accessible": true,
+                "exists": true,
+                "id": 2438,
+                "key": "/library/parts/2438/1626997459/file.mp4",
+                "duration": 5773981,
+                "file": "/movies/Drama/12 Angry Men (1957).mp4",
+                "size": 4034369657,
+                "audioProfile": "lc",
+                "container": "mp4",
+                "deepAnalysisVersion": "6",
+                "has64bitOffsets": true,
+                "hasThumbnail": "1",
+                "optimizedForStreaming": false,
+                "requiredBandwidths": "6658,6335,6035,5885,5796,5796,5796,5796",
+                "videoProfile": "high",
+                "Stream": [
+                  {
+                    "id": 5315,
+                    "streamType": 1,
+                    "default": true,
+                    "codec": "h264",
+                    "index": 1,
+                    "bitrate": 5279,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "bitDepth": 8,
+                    "chromaLocation": "topleft",
+                    "chromaSubsampling": "4:2:0",
+                    "codedHeight": 1088,
+                    "codedWidth": 1808,
+                    "colorPrimaries": "bt709",
+                    "colorRange": "tv",
+                    "colorSpace": "bt709",
+                    "colorTrc": "bt709",
+                    "frameRate": 23.976,
+                    "hasScalingMatrix": false,
+                    "height": 1076,
+                    "level": 40,
+                    "profile": "high",
+                    "refFrames": 4,
+                    "requiredBandwidths": "6346,6024,5724,5574,5487,5487,5487,5487",
+                    "streamIdentifier": "2",
+                    "width": 1800,
+                    "displayTitle": "1080p (H.264)",
+                    "extendedDisplayTitle": "1080p (H.264)"
+                  },
+                  {
+                    "id": 5314,
+                    "streamType": 2,
+                    "selected": true,
+                    "default": true,
+                    "codec": "aac",
+                    "index": 0,
+                    "channels": 2,
+                    "bitrate": 100,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "audioChannelLayout": "stereo",
+                    "profile": "lc",
+                    "requiredBandwidths": "102,102,102,102,102,102,102,102",
+                    "samplingRate": 48000,
+                    "streamIdentifier": "1",
+                    "displayTitle": "English (AAC Stereo)",
+                    "extendedDisplayTitle": "English (AAC Stereo)"
+                  },
+                  {
+                    "id": 5316,
+                    "streamType": 2,
+                    "codec": "aac",
+                    "index": 2,
+                    "channels": 2,
+                    "bitrate": 101,
+                    "language": "Français",
+                    "languageTag": "fr",
+                    "languageCode": "fra",
+                    "audioChannelLayout": "stereo",
+                    "profile": "lc",
+                    "requiredBandwidths": "103,103,103,103,103,103,103,103",
+                    "samplingRate": 48000,
+                    "streamIdentifier": "3",
+                    "displayTitle": "Français (AAC Stereo)",
+                    "extendedDisplayTitle": "Français (AAC Stereo)"
+                  },
+                  {
+                    "id": 5317,
+                    "streamType": 2,
+                    "codec": "aac",
+                    "index": 3,
+                    "channels": 2,
+                    "bitrate": 98,
+                    "language": "Español",
+                    "languageTag": "es",
+                    "languageCode": "spa",
+                    "audioChannelLayout": "stereo",
+                    "profile": "lc",
+                    "requiredBandwidths": "102,102,102,102,102,102,102,102",
+                    "samplingRate": 48000,
+                    "streamIdentifier": "4",
+                    "displayTitle": "Español (AAC Stereo)",
+                    "extendedDisplayTitle": "Español (AAC Stereo)"
+                  },
+                  {
+                    "id": 5318,
+                    "streamType": 3,
+                    "default": true,
+                    "codec": "mov_text",
+                    "index": 4,
+                    "language": "Français",
+                    "languageTag": "fr",
+                    "languageCode": "fra",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "5",
+                    "displayTitle": "Français (MOV_TEXT)",
+                    "extendedDisplayTitle": "Français (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5319,
+                    "streamType": 3,
+                    "default": true,
+                    "codec": "eia_608",
+                    "index": 5,
+                    "bitrate": 0,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "6",
+                    "displayTitle": "English (Closed Captions)",
+                    "extendedDisplayTitle": "English (Closed Captions)"
+                  },
+                  {
+                    "id": 5320,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 6,
+                    "bitrate": 0,
+                    "language": "Français",
+                    "languageTag": "fr",
+                    "languageCode": "fra",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "7",
+                    "displayTitle": "Français (MOV_TEXT)",
+                    "extendedDisplayTitle": "Français (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5321,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 7,
+                    "language": "Español",
+                    "languageTag": "es",
+                    "languageCode": "spa",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "8",
+                    "displayTitle": "Español (MOV_TEXT)",
+                    "extendedDisplayTitle": "Español (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5322,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 8,
+                    "bitrate": 0,
+                    "language": "Español",
+                    "languageTag": "es",
+                    "languageCode": "spa",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "9",
+                    "displayTitle": "Español (MOV_TEXT)",
+                    "extendedDisplayTitle": "Español (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5323,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 9,
+                    "bitrate": 0,
+                    "language": "中文",
+                    "languageTag": "zh",
+                    "languageCode": "zho",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "10",
+                    "displayTitle": "中文 (MOV_TEXT)",
+                    "extendedDisplayTitle": "中文 (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5324,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 10,
+                    "bitrate": 0,
+                    "language": "Dansk",
+                    "languageTag": "da",
+                    "languageCode": "dan",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "11",
+                    "displayTitle": "Dansk (MOV_TEXT)",
+                    "extendedDisplayTitle": "Dansk (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5325,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 11,
+                    "bitrate": 0,
+                    "language": "Deutsch",
+                    "languageTag": "de",
+                    "languageCode": "deu",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "12",
+                    "displayTitle": "Deutsch (MOV_TEXT)",
+                    "extendedDisplayTitle": "Deutsch (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5326,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 12,
+                    "bitrate": 0,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "13",
+                    "displayTitle": "English (MOV_TEXT)",
+                    "extendedDisplayTitle": "English (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5327,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 13,
+                    "bitrate": 0,
+                    "language": "Español",
+                    "languageTag": "es",
+                    "languageCode": "spa",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "14",
+                    "displayTitle": "Español (MOV_TEXT)",
+                    "extendedDisplayTitle": "Español (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5328,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 14,
+                    "bitrate": 0,
+                    "language": "Suomi",
+                    "languageTag": "fi",
+                    "languageCode": "fin",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "15",
+                    "displayTitle": "Suomi (MOV_TEXT)",
+                    "extendedDisplayTitle": "Suomi (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5329,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 15,
+                    "bitrate": 0,
+                    "language": "Indonesia",
+                    "languageTag": "id",
+                    "languageCode": "ind",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "16",
+                    "displayTitle": "Indonesia (MOV_TEXT)",
+                    "extendedDisplayTitle": "Indonesia (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5330,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 16,
+                    "bitrate": 0,
+                    "language": "Italiano",
+                    "languageTag": "it",
+                    "languageCode": "ita",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "17",
+                    "displayTitle": "Italiano (MOV_TEXT)",
+                    "extendedDisplayTitle": "Italiano (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5331,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 17,
+                    "bitrate": 0,
+                    "language": "한국어",
+                    "languageTag": "ko",
+                    "languageCode": "kor",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "18",
+                    "displayTitle": "한국어 (MOV_TEXT)",
+                    "extendedDisplayTitle": "한국어 (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5332,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 18,
+                    "bitrate": 0,
+                    "language": "Nederlands",
+                    "languageTag": "nl",
+                    "languageCode": "nld",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "19",
+                    "displayTitle": "Nederlands (MOV_TEXT)",
+                    "extendedDisplayTitle": "Nederlands (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5333,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 19,
+                    "bitrate": 0,
+                    "language": "norsk",
+                    "languageTag": "no",
+                    "languageCode": "nor",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "20",
+                    "displayTitle": "norsk (MOV_TEXT)",
+                    "extendedDisplayTitle": "norsk (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5334,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 20,
+                    "bitrate": 0,
+                    "language": "Português",
+                    "languageTag": "pt",
+                    "languageCode": "por",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "21",
+                    "displayTitle": "Português (MOV_TEXT)",
+                    "extendedDisplayTitle": "Português (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5335,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 21,
+                    "bitrate": 0,
+                    "language": "Svenska",
+                    "languageTag": "sv",
+                    "languageCode": "swe",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "22",
+                    "displayTitle": "Svenska (MOV_TEXT)",
+                    "extendedDisplayTitle": "Svenska (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5336,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 22,
+                    "bitrate": 0,
+                    "language": "ไทย",
+                    "languageTag": "th",
+                    "languageCode": "tha",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "23",
+                    "displayTitle": "ไทย (MOV_TEXT)",
+                    "extendedDisplayTitle": "ไทย (MOV_TEXT)"
+                  },
+                  {
+                    "id": 5337,
+                    "streamType": 3,
+                    "codec": "mov_text",
+                    "index": 23,
+                    "bitrate": 0,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                    "streamIdentifier": "24",
+                    "displayTitle": "English (MOV_TEXT)",
+                    "extendedDisplayTitle": "English (MOV_TEXT)"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Genre": [
+          {
+            "id": 7,
+            "filter": "genre=7",
+            "tag": "Drama"
+          },
+          {
+            "id": 257,
+            "filter": "genre=257",
+            "tag": "Crime"
+          }
+        ],
+        "Country": [
+          {
+            "id": 102,
+            "filter": "country=102",
+            "tag": "United States of America"
+          }
+        ],
+        "Guid": [
+          {
+            "id": "imdb://tt0050083"
+          },
+          {
+            "id": "tmdb://389"
+          },
+          {
+            "id": "tvdb://572"
+          }
+        ],
+        "Rating": [
+          {
+            "image": "imdb://image.rating",
+            "value": 9,
+            "type": "audience"
+          },
+          {
+            "image": "rottentomatoes://image.rating.ripe",
+            "value": 10,
+            "type": "critic"
+          },
+          {
+            "image": "rottentomatoes://image.rating.upright",
+            "value": 9.7,
+            "type": "audience"
+          },
+          {
+            "image": "themoviedb://image.rating",
+            "value": 8.5,
+            "type": "audience"
+          }
+        ],
+        "Director": [
+          {
+            "id": 6102,
+            "filter": "director=6102",
+            "tag": "Sidney Lumet",
+            "tagKey": "5d776826103a2d001f563f4d",
+            "thumb": "https://metadata-static.plex.tv/5/people/5d780db9ad8fe4cc12f403c2c15148aa.jpg"
+          }
+        ],
+        "Writer": [
+          {
+            "id": 6103,
+            "filter": "writer=6103",
+            "tag": "Reginald Rose",
+            "tagKey": "5d7768394de0ee001fccc52d",
+            "thumb": "https://image.tmdb.org/t/p/original/qscQc09Nh6fTfenlwl2pNvnD2MQ.jpg"
+          }
+        ],
+        "Role": [
+          {
+            "id": 6104,
+            "filter": "actor=6104",
+            "tag": "Martin Balsam",
+            "tagKey": "5d776825151a60001f24a42d",
+            "role": "Juror 1",
+            "thumb": "https://metadata-static.plex.tv/e/people/e7f91377df706ad0e0d775e37009e33b.jpg"
+          },
+          {
+            "id": 6105,
+            "filter": "actor=6105",
+            "tag": "John Fiedler",
+            "tagKey": "5d776826103a2d001f563f50",
+            "role": "Juror 2",
+            "thumb": "https://metadata-static.plex.tv/people/5d776826103a2d001f563f50.jpg"
+          },
+          {
+            "id": 6106,
+            "filter": "actor=6106",
+            "tag": "Lee J. Cobb",
+            "tagKey": "5d776826103a2d001f563f4f",
+            "role": "Juror 3",
+            "thumb": "https://metadata-static.plex.tv/1/people/1aa335d08b9930c9815a58b9936a21d3.jpg"
+          },
+          {
+            "id": 4988,
+            "filter": "actor=4988",
+            "tag": "E.G. Marshall",
+            "tagKey": "5d7768254de0ee001fcc819d",
+            "role": "Juror 4",
+            "thumb": "https://metadata-static.plex.tv/people/5d7768254de0ee001fcc819d.jpg"
+          },
+          {
+            "id": 6107,
+            "filter": "actor=6107",
+            "tag": "Jack Klugman",
+            "tagKey": "5d776826103a2d001f563f51",
+            "role": "Juror 5",
+            "thumb": "https://metadata-static.plex.tv/6/people/617214eeda5d3425f942ca37fb1c9538.jpg"
+          },
+          {
+            "id": 6108,
+            "filter": "actor=6108",
+            "tag": "Edward Binns",
+            "tagKey": "5d776826103a2d001f563f52",
+            "role": "Juror 6",
+            "thumb": "https://metadata-static.plex.tv/4/people/453e402eb3ac7ad01def93ab9e5c4e19.jpg"
+          },
+          {
+            "id": 6109,
+            "filter": "actor=6109",
+            "tag": "Jack Warden",
+            "tagKey": "5d776826103a2d001f563f53",
+            "role": "Juror 7",
+            "thumb": "https://metadata-static.plex.tv/c/people/c102b8e245b9a6c643241d38cec402f9.jpg"
+          },
+          {
+            "id": 6110,
+            "filter": "actor=6110",
+            "tag": "Henry Fonda",
+            "tagKey": "5d776826103a2d001f563f4e",
+            "role": "Juror 8",
+            "thumb": "https://metadata-static.plex.tv/e/people/ea3854b4d1e4bf4b6cddd82e410b2b6d.jpg"
+          },
+          {
+            "id": 6111,
+            "filter": "actor=6111",
+            "tag": "Joseph Sweeney",
+            "tagKey": "5d776826103a2d001f563f54",
+            "role": "Juror 9",
+            "thumb": "https://image.tmdb.org/t/p/original/m0liVGH2JrhcvCr3buYUeXwhAyV.jpg"
+          },
+          {
+            "id": 6112,
+            "filter": "actor=6112",
+            "tag": "Ed Begley",
+            "tagKey": "5d776826103a2d001f563f55",
+            "role": "Juror 10",
+            "thumb": "https://metadata-static.plex.tv/0/people/00dfddc69efe823c00b133d3c345c3ae.jpg"
+          },
+          {
+            "id": 6113,
+            "filter": "actor=6113",
+            "tag": "George Voskovec",
+            "tagKey": "5d776826103a2d001f563f56",
+            "role": "Juror 11",
+            "thumb": "https://metadata-static.plex.tv/8/people/83bf2eddbeb62d169a627ee80b24c43d.jpg"
+          },
+          {
+            "id": 6114,
+            "filter": "actor=6114",
+            "tag": "Robert Webber",
+            "tagKey": "5d776826103a2d001f563f57",
+            "role": "Juror 12",
+            "thumb": "https://metadata-static.plex.tv/people/5d776826103a2d001f563f57.jpg"
+          },
+          {
+            "id": 6115,
+            "filter": "actor=6115",
+            "tag": "Rudy Bond",
+            "tagKey": "5d776826103a2d001f563f58",
+            "role": "Judge (uncredited)",
+            "thumb": "https://metadata-static.plex.tv/1/people/1d78232454775cb5f1bfb82f2388ab22.jpg"
+          },
+          {
+            "id": 6116,
+            "filter": "actor=6116",
+            "tag": "Tom Gorman",
+            "tagKey": "5e165b2461c6140040d94e3a",
+            "role": "Stenographer (uncredited)"
+          },
+          {
+            "id": 6117,
+            "filter": "actor=6117",
+            "tag": "James Kelly",
+            "tagKey": "5d776826103a2d001f563f5a",
+            "role": "Guard (uncredited)"
+          },
+          {
+            "id": 6118,
+            "filter": "actor=6118",
+            "tag": "Billy Nelson",
+            "tagKey": "5d776851880197001ec98528",
+            "role": "Court Clerk (uncredited)",
+            "thumb": "https://metadata-static.plex.tv/d/people/d95ebea1207b122375c22cd19c4a62d1.jpg"
+          },
+          {
+            "id": 6119,
+            "filter": "actor=6119",
+            "tag": "John Savoca",
+            "tagKey": "5d776d147a53e9001e750466",
+            "role": "The Accused (uncredited)"
+          },
+          {
+            "id": 6120,
+            "filter": "actor=6120",
+            "tag": "Walter Stocker",
+            "tagKey": "5d7768bf431c830024c15381",
+            "role": "Man Waiting for Elevator (uncredited)"
+          },
+          {
+            "id": 6121,
+            "filter": "actor=6121",
+            "tag": "John Gavin",
+            "tagKey": "5d7768274de0ee001fcc89f8",
+            "role": "Man in Court Corridor",
+            "thumb": "https://metadata-static.plex.tv/c/people/caab62154dbb6bebeddfad787731e07b.jpg"
+          }
+        ],
+        "Producer": [
+          {
+            "id": 6122,
+            "filter": "producer=6122",
+            "tag": "Henry Fonda",
+            "tagKey": "5d776826103a2d001f563f4e",
+            "thumb": "https://metadata-static.plex.tv/e/people/ea3854b4d1e4bf4b6cddd82e410b2b6d.jpg"
+          },
+          {
+            "id": 6123,
+            "filter": "producer=6123",
+            "tag": "Reginald Rose",
+            "tagKey": "5d7768394de0ee001fccc52d",
+            "thumb": "https://image.tmdb.org/t/p/original/qscQc09Nh6fTfenlwl2pNvnD2MQ.jpg"
+          }
+        ],
+        "Chapter": [
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 1,
+            "startTimeOffset": 0,
+            "endTimeOffset": 859000,
+            "thumb": "/library/media/2438/chapterImages/1"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 2,
+            "startTimeOffset": 859000,
+            "endTimeOffset": 1515000,
+            "thumb": "/library/media/2438/chapterImages/2"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 3,
+            "startTimeOffset": 1515000,
+            "endTimeOffset": 2180000,
+            "thumb": "/library/media/2438/chapterImages/3"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 4,
+            "startTimeOffset": 2180000,
+            "endTimeOffset": 3046000,
+            "thumb": "/library/media/2438/chapterImages/4"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 5,
+            "startTimeOffset": 3046000,
+            "endTimeOffset": 3722000,
+            "thumb": "/library/media/2438/chapterImages/5"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 6,
+            "startTimeOffset": 3722000,
+            "endTimeOffset": 4348000,
+            "thumb": "/library/media/2438/chapterImages/6"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 7,
+            "startTimeOffset": 4348000,
+            "endTimeOffset": 4980000,
+            "thumb": "/library/media/2438/chapterImages/7"
+          },
+          {
+            "id": 4,
+            "filter": "thumb=4",
+            "index": 8,
+            "startTimeOffset": 4980000,
+            "endTimeOffset": 5773940,
+            "thumb": "/library/media/2438/chapterImages/8"
+          }
+        ],
+        "Review": [
+          {
+            "id": 1151,
+            "filter": "art=1151",
+            "tag": "Chris Stuckmann",
+            "text": "This movie is a masterpiece. That term gets thrown around a lot -- it's a very easy thing to say about great films like this -- but this movie is one of the best. This is one of the very few films that I will call perfect.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://youtu.be/VzwPNMiQFf8",
+            "source": "ChrisStuckmann.com"
+          },
+          {
+            "id": 145,
+            "filter": "art=145",
+            "tag": "Roger Ebert",
+            "text": "This is a film where tension comes from personality conflict, dialogue and body language, not action.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.rogerebert.com/reviews/great-movie-12-angry-men-1957",
+            "source": "Chicago Sun-Times"
+          },
+          {
+            "id": 6124,
+            "filter": "art=6124",
+            "tag": "A.H. Weiler",
+            "text": "Although it may sound ungallant, these 12 Angry Men, are all right without distaff glamour. Their dramas are powerful and provocative enough to keep a viewer spellbound.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://movies.nytimes.com/movie/review?res=9F02E3DE1730E23BBC4D52DFB266838C649EDE&partner=Rotten Tomatoes",
+            "source": "New York Times"
+          },
+          {
+            "id": 6125,
+            "filter": "art=6125",
+            "tag": "Glenn Heath Jr.",
+            "text": "The film takes a confined, almost completely banal real-world location and makes it completely dynamic, using incredibly nimble camera movements to establish character motivation and theme.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.slantmagazine.com/film/review/12-angry-men",
+            "source": "Slant Magazine"
+          },
+          {
+            "id": 6126,
+            "filter": "art=6126",
+            "tag": "Hy Hollinger",
+            "text": "The film leaves a tremendous impact.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://archive.org/details/variety205-1957-02/page/n237/mode/2up",
+            "source": "Variety"
+          },
+          {
+            "id": 856,
+            "filter": "art=856",
+            "tag": "Jonathan Rosenbaum",
+            "text": "Mechanically written, but within its own middlebrow limitations, it delivers the goods.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://onfilm.chicagoreader.com/movies/capsules/8667_TWELVE_ANGRY_MEN",
+            "source": "Chicago Reader"
+          },
+          {
+            "id": 6127,
+            "filter": "art=6127",
+            "tag": "David Keyes",
+            "text": "With each new viewing I come away feelings as if I have peeled away another layer on the characters and their buried motives.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.thecinemaphileblog.com/2016/05/lessons-from-criterion-12-angry-men-by.html",
+            "source": "Cinemaphile.org"
+          },
+          {
+            "id": 4244,
+            "filter": "art=4244",
+            "tag": "Felix Vasquez Jr.",
+            "text": "The cast is incredible, the writing superb, and the film is unparalleled in its sheer excellence.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://cinema-crazed.com/blog/2012/12/12/12-angry-men-criterion-collection-blu-ray/",
+            "source": "Cinema Crazed"
+          },
+          {
+            "id": 2438,
+            "filter": "art=2438",
+            "tag": "Eric Melin",
+            "text": "This was Sidney Lumet's first movie and it's as riveting as it was back in the late 50s, when everything was changing.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.scene-stealers.com/reviews/criterion-12-angry-men-review-and-friends-with-benefits-blu-ray/",
+            "source": "Scene-Stealers.com"
+          },
+          {
+            "id": 6131,
+            "filter": "art=6131",
+            "tag": "James Kendrick",
+            "text": "an incisive and gripping film",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.qnetwork.com/index.php?page=review&id=2679",
+            "source": "Q Network Film Desk"
+          },
+          {
+            "id": 6129,
+            "filter": "art=6129",
+            "tag": "Fernando F. Croce",
+            "text": "Lumet in his first film records it as a meticulous laboratory experiment, a clammy orchestra",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://www.cinepassion.org/Reviews/t/12AngryMen.html",
+            "source": "CinePassion"
+          },
+          {
+            "id": 2541,
+            "filter": "art=2541",
+            "tag": "David Nusair",
+            "text": "...the film has aged surprisingly well in the years since its 1957 release.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://reelfilm.com/lumet.htm#12",
+            "source": "Reel Film Reviews"
+          },
+          {
+            "id": 6132,
+            "filter": "art=6132",
+            "tag": "Dan Jardine",
+            "text": "There is real value is how it allows each member of the cultural mosaic of a jury to develop into distinct, damaged, and interesting characters",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://djardine.blogspot.ca/2013/08/12-angry-men-usa-1957-sidney-lumet.html",
+            "source": "Cinemania"
+          },
+          {
+            "id": 29410,
+            "filter": "art=29410",
+            "tag": "Edward Kosmal",
+            "text": "Sidney Lumet's solid success is achieved without even once resorting to flashbacks or other standard procedures of the film trade. The secret rests in spirited dialogue, realistic setting and, of course, the excellent cast of outstanding character actors.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://www.newspapers.com/clip/117675360/12-angry-men-one-step-to-eternity/",
+            "source": "St. Louis Post-Dispatch"
+          },
+          {
+            "id": 29412,
+            "filter": "art=29412",
+            "tag": "Jonathan Baumbach",
+            "text": "Within its simplicity there is a freshness and ingenuousness about Twelve Angry Men uncommon in a slickly sophisticated film industry.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://archive.org/details/sim_film-culture_1957_3_2/page/14/mode/2up",
+            "source": "Film Culture"
+          },
+          {
+            "id": 29023,
+            "filter": "art=29023",
+            "tag": "Sarah Brinks",
+            "text": "If you have never seen the film I cannot recommend it enough.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://battleshippretension.com/bps-top-100-challenge-18-12-angry-men-by-sarah-brinks/",
+            "source": "Battleship Pretension"
+          },
+          {
+            "id": 29413,
+            "filter": "art=29413",
+            "tag": "Richard Propes",
+            "text": "Reginald Rose's script is one of deep revelation.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://theindependentcritic.com/12_angry_men",
+            "source": "TheIndependentCritic.com"
+          },
+          {
+            "id": 2447,
+            "filter": "art=2447",
+            "tag": "Mike Massie",
+            "text": "Thought-provoking, continually riveting, and absolutely unforgettable - and surprisingly designed around a very simple, tightly budgeted, special-effects-free premise.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "http://gonewiththetwins.com/new/12-angry-men-1957/",
+            "source": "Gone With The Twins"
+          },
+          {
+            "id": 29411,
+            "filter": "art=29411",
+            "tag": "Mark Jackson",
+            "text": "\"12 Angry Men\" puts the full range of human good and evil on display. It posits that, ultimately, the universe is benevolent, and our job, regarding each other, is to attempt with our best effort and greatest compassion to elucidate and clarify the truth.",
+            "image": "rottentomatoes://image.review.fresh",
+            "link": "https://www.theepochtimes.com/film-review-12-angry-men-a-prime-example-of-not-bowing-to-peer-pressure_3154637.html",
+            "source": "Epoch Times"
+          }
+        ],
+        "Preferences": {
+          "Setting": [
+            {
+              "id": "languageOverride",
+              "label": "Metadata language",
+              "summary": "Language to use for item metadata such as synopsis and title.",
+              "type": "text",
+              "default": "",
+              "value": "",
+              "hidden": false,
+              "advanced": false,
+              "group": "",
+              "enumValues": ":Library default|ca-ES:català|cs-CZ:Čeština|da-DK:Dansk|de-DE:Deutsch|et-EE:eesti|en-US:English|en-AU:English (Australia)|en-CA:English (Canada)|en-GB:English (UK)|es-ES:Español|es-MX:Español (México)|fr-FR:Français|fr-CA:Français (Canada)|hr-HR:Hrvatski|id-ID:Indonesia|it-IT:Italiano|lv-LV:latviešu|lt-LT:lietuvių|hu-HU:magyar|nl-NL:Nederlands|nb-NO:norsk bokmål|pl-PL:polski|pt-BR:Português|pt-PT:Português (Portugal)|ro-RO:română|sk-SK:Slovenčina|fi-FI:Suomi|sv-SE:Svenska|vi-VN:Tiếng Việt|tr-TR:Türkçe|el-GR:Ελληνικά|bg-BG:български|ru-RU:Русский|uk-UA:Українська|he-IL:עברית|ar-SA:العربية (المملكة العربية السعودية)|fa-IR:فارسی|hi-IN:हिन्दी|th-TH:ไทย|ko-KR:한국어|zh-CN:中文|zh-HK:中文（中國香港）|zh-TW:中文（台灣）|ja-JP:日本語"
+            },
+            {
+              "id": "useOriginalTitle",
+              "label": "Use original title",
+              "summary": "Use the original title for this item regardless of the library language.",
+              "type": "int",
+              "default": "-1",
+              "value": "-1",
+              "hidden": false,
+              "advanced": false,
+              "group": "",
+              "enumValues": "-1:Library default|0:No|1:Yes"
+            },
+            {
+              "id": "enableCreditsMarkerGeneration",
+              "label": "Enable credits detection",
+              "summary": "Generate credits markers for this item.",
+              "type": "int",
+              "default": "-1",
+              "value": "-1",
+              "hidden": false,
+              "advanced": false,
+              "group": "",
+              "enumValues": "-1:Library default|0:Disabled"
+            }
+          ]
+        },
+        "Extras": {
+          "size": 3,
+          "Metadata": [
+            {
+              "ratingKey": "1045",
+              "key": "/library/metadata/1045",
+              "guid": "iva://api.internetvideoarchive.com/2.0/DataService/VideoAssets(606457)",
+              "type": "clip",
+              "title": "12 Angry Men",
+              "summary": "",
+              "index": 1,
+              "thumb": "/library/metadata/1045/thumb/1668123291",
+              "primaryGuid": "plex://movie/5d776d147a53e9001e75042e",
+              "subtype": "trailer",
+              "duration": 94000,
+              "addedAt": 1668123291,
+              "extraType": 1,
+              "Media": [
+                {
+                  "id": 2582,
+                  "duration": 94000,
+                  "bitrate": 5000,
+                  "width": 1920,
+                  "height": 1080,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "1080",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2582,
+                      "duration": 94000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/606457/video.mp4?fmt=4&bitrate=5000",
+                      "Stream": [
+                        {
+                          "id": 5628,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 5000,
+                          "height": 1080,
+                          "width": 1920,
+                          "displayTitle": "1080p (H.264)",
+                          "extendedDisplayTitle": "1080p (H.264)"
+                        },
+                        {
+                          "id": 5629,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2583,
+                  "duration": 94000,
+                  "bitrate": 2500,
+                  "width": 1280,
+                  "height": 720,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "720",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2583,
+                      "duration": 94000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/606457/video.mp4?fmt=4&bitrate=2500",
+                      "Stream": [
+                        {
+                          "id": 5630,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 2500,
+                          "height": 720,
+                          "width": 1280,
+                          "displayTitle": "720p (H.264)",
+                          "extendedDisplayTitle": "720p (H.264)"
+                        },
+                        {
+                          "id": 5631,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2584,
+                  "duration": 94000,
+                  "bitrate": 750,
+                  "width": 480,
+                  "height": 270,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "sd",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2584,
+                      "duration": 94000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/606457/video.mp4?fmt=4&bitrate=750",
+                      "Stream": [
+                        {
+                          "id": 5632,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 750,
+                          "height": 270,
+                          "width": 480,
+                          "displayTitle": "SD (H.264)",
+                          "extendedDisplayTitle": "SD (H.264)"
+                        },
+                        {
+                          "id": 5633,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "ratingKey": "1046",
+              "key": "/library/metadata/1046",
+              "guid": "iva://api.internetvideoarchive.com/2.0/DataService/VideoAssets(474983)",
+              "type": "clip",
+              "title": "12 Angry Men (Trailer 1)",
+              "summary": "",
+              "index": 2,
+              "thumb": "/library/metadata/1046/thumb/1668123291",
+              "primaryGuid": "plex://movie/5d776d147a53e9001e75042e",
+              "subtype": "trailer",
+              "duration": 134000,
+              "addedAt": 1668123291,
+              "extraType": 1,
+              "Media": [
+                {
+                  "id": 2585,
+                  "duration": 134000,
+                  "bitrate": 5000,
+                  "width": 1920,
+                  "height": 1080,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "1080",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2585,
+                      "duration": 134000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/474983/video.mp4?fmt=4&bitrate=5000",
+                      "Stream": [
+                        {
+                          "id": 5634,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 5000,
+                          "height": 1080,
+                          "width": 1920,
+                          "displayTitle": "1080p (H.264)",
+                          "extendedDisplayTitle": "1080p (H.264)"
+                        },
+                        {
+                          "id": 5635,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2586,
+                  "duration": 134000,
+                  "bitrate": 2500,
+                  "width": 1280,
+                  "height": 720,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "720",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2586,
+                      "duration": 134000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/474983/video.mp4?fmt=4&bitrate=2500",
+                      "Stream": [
+                        {
+                          "id": 5636,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 2500,
+                          "height": 720,
+                          "width": 1280,
+                          "displayTitle": "720p (H.264)",
+                          "extendedDisplayTitle": "720p (H.264)"
+                        },
+                        {
+                          "id": 5637,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2587,
+                  "duration": 134000,
+                  "bitrate": 750,
+                  "width": 480,
+                  "height": 270,
+                  "aspectRatio": 1.78,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "sd",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2587,
+                      "duration": 134000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/474983/video.mp4?fmt=4&bitrate=750",
+                      "Stream": [
+                        {
+                          "id": 5638,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 750,
+                          "height": 270,
+                          "width": 480,
+                          "displayTitle": "SD (H.264)",
+                          "extendedDisplayTitle": "SD (H.264)"
+                        },
+                        {
+                          "id": 5639,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "ratingKey": "1047",
+              "key": "/library/metadata/1047",
+              "guid": "iva://api.internetvideoarchive.com/2.0/DataService/VideoAssets(392509)",
+              "type": "clip",
+              "title": "12 Angry Men: A Very Unusual Knife",
+              "summary": "",
+              "index": 3,
+              "thumb": "/library/metadata/1047/thumb/1668123291",
+              "subtype": "sceneOrSample",
+              "duration": 223000,
+              "addedAt": 1668123291,
+              "extraType": 6,
+              "Media": [
+                {
+                  "id": 2588,
+                  "duration": 223000,
+                  "bitrate": 2500,
+                  "width": 1280,
+                  "height": 768,
+                  "aspectRatio": 1.66,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "720",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2588,
+                      "duration": 223000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/392509/video.mp4?fmt=4&bitrate=2500",
+                      "Stream": [
+                        {
+                          "id": 5640,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 2500,
+                          "height": 768,
+                          "width": 1280,
+                          "displayTitle": "720p (H.264)",
+                          "extendedDisplayTitle": "720p (H.264)"
+                        },
+                        {
+                          "id": 5641,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2589,
+                  "duration": 223000,
+                  "bitrate": 1500,
+                  "width": 720,
+                  "height": 432,
+                  "aspectRatio": 1.66,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "sd",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2589,
+                      "duration": 223000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/392509/video.mp4?fmt=4&bitrate=1500",
+                      "Stream": [
+                        {
+                          "id": 5642,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 1500,
+                          "height": 432,
+                          "width": 720,
+                          "displayTitle": "SD (H.264)",
+                          "extendedDisplayTitle": "SD (H.264)"
+                        },
+                        {
+                          "id": 5643,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": 2590,
+                  "duration": 223000,
+                  "bitrate": 750,
+                  "width": 480,
+                  "height": 288,
+                  "aspectRatio": 1.66,
+                  "audioCodec": "aac",
+                  "videoCodec": "h264",
+                  "videoResolution": "sd",
+                  "container": "mp4",
+                  "optimizedForStreaming": 1,
+                  "protocol": "mp4",
+                  "premium": true,
+                  "Part": [
+                    {
+                      "id": 2590,
+                      "duration": 223000,
+                      "container": "mp4",
+                      "key": "/services/iva/assets/392509/video.mp4?fmt=4&bitrate=750",
+                      "Stream": [
+                        {
+                          "id": 5644,
+                          "streamType": 1,
+                          "codec": "h264",
+                          "index": 0,
+                          "bitrate": 750,
+                          "height": 288,
+                          "width": 480,
+                          "displayTitle": "SD (H.264)",
+                          "extendedDisplayTitle": "SD (H.264)"
+                        },
+                        {
+                          "id": 5645,
+                          "streamType": 2,
+                          "selected": true,
+                          "codec": "aac",
+                          "index": 1,
+                          "channels": 2,
+                          "language": "English",
+                          "languageTag": "en",
+                          "languageCode": "eng",
+                          "displayTitle": "English (AAC Stereo)",
+                          "extendedDisplayTitle": "English (AAC Stereo)"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "Related": {
+          "Hub": [
+            {
+              "hubKey": "/library/metadata/8670",
+              "key": "/library/metadata/994/similar",
+              "title": "Related Movies",
+              "type": "movie",
+              "hubIdentifier": "movie.similar",
+              "context": "hub.movie.similar",
+              "size": 1,
+              "more": true,
+              "style": "shelf",
+              "Metadata": [
+                {
+                  "ratingKey": "8670",
+                  "key": "/library/metadata/8670",
+                  "guid": "plex://movie/5d776d3dad5437001f7d0d50",
+                  "studio": "Apple Studios",
+                  "type": "movie",
+                  "title": "Killers of the Flower Moon",
+                  "librarySectionTitle": "Movies",
+                  "librarySectionID": 1,
+                  "librarySectionKey": "/library/sections/1",
+                  "contentRating": "R",
+                  "summary": "The story takes place in the 1920s around the Osage Indian tribe living in Oklahoma. Native Americans are being killed one by one after the tribe becomes rich by discovering oil. The Osage massacre attracts the attention of the FBI, which begins an investigation.",
+                  "rating": 9.3,
+                  "audienceRating": 8.4,
+                  "viewCount": 1,
+                  "lastViewedAt": 1705289009,
+                  "year": 2023,
+                  "tagline": "Greed is an animal that hungers for blood.",
+                  "thumb": "/library/metadata/8670/thumb/1708141723",
+                  "art": "/library/metadata/8670/art/1708141723",
+                  "duration": 12489893,
+                  "originallyAvailableAt": "2023-10-18",
+                  "addedAt": 1705272164,
+                  "updatedAt": 1708141723,
+                  "audienceRatingImage": "rottentomatoes://image.rating.upright",
+                  "primaryExtraKey": "/library/metadata/8672",
+                  "ratingImage": "rottentomatoes://image.rating.ripe",
+                  "Media": [
+                    {
+                      "id": 15612,
+                      "duration": 12489893,
+                      "bitrate": 15181,
+                      "width": 3840,
+                      "height": 1600,
+                      "aspectRatio": 2.35,
+                      "audioChannels": 6,
+                      "audioCodec": "eac3",
+                      "videoCodec": "hevc",
+                      "videoResolution": "4k",
+                      "container": "mkv",
+                      "videoFrameRate": "24p",
+                      "videoProfile": "main",
+                      "Part": [
+                        {
+                          "id": 15674,
+                          "key": "/library/parts/15674/1705271623/file.mkv",
+                          "duration": 12489893,
+                          "file": "/movies/Drama/Killers of the Flower Moon.mkv",
+                          "size": 23708886579,
+                          "container": "mkv",
+                          "deepAnalysisVersion": "6",
+                          "requiredBandwidths": "15770,15767,15757,15743,15743,15743,15743,15743",
+                          "videoProfile": "main",
+                          "Stream": [
+                            {
+                              "id": 41087,
+                              "streamType": 1,
+                              "default": true,
+                              "codec": "hevc",
+                              "index": 0,
+                              "bitrate": 14419,
+                              "language": "English",
+                              "languageTag": "en",
+                              "languageCode": "eng",
+                              "bitDepth": 8,
+                              "chromaLocation": "left",
+                              "chromaSubsampling": "4:2:0",
+                              "codedHeight": 1600,
+                              "codedWidth": 3840,
+                              "colorPrimaries": "bt709",
+                              "colorRange": "tv",
+                              "colorSpace": "bt709",
+                              "colorTrc": "bt709",
+                              "frameRate": 23.976,
+                              "height": 1600,
+                              "level": 150,
+                              "original": true,
+                              "profile": "main",
+                              "refFrames": 1,
+                              "requiredBandwidths": "14999,14996,14986,14972,14972,14972,14972,14972",
+                              "width": 3840,
+                              "displayTitle": "4K (HEVC Main)",
+                              "extendedDisplayTitle": "4K (HEVC Main)"
+                            },
+                            {
+                              "id": 41088,
+                              "streamType": 2,
+                              "selected": true,
+                              "default": true,
+                              "codec": "eac3",
+                              "index": 1,
+                              "channels": 6,
+                              "bitrate": 760,
+                              "language": "English",
+                              "languageTag": "en",
+                              "languageCode": "eng",
+                              "audioChannelLayout": "5.1(side)",
+                              "original": true,
+                              "requiredBandwidths": "768,768,768,768,768,768,768,768",
+                              "samplingRate": 48000,
+                              "displayTitle": "English (EAC3 5.1)",
+                              "extendedDisplayTitle": "English (EAC3 5.1)"
+                            },
+                            {
+                              "id": 41089,
+                              "streamType": 3,
+                              "default": true,
+                              "codec": "srt",
+                              "index": 2,
+                              "bitrate": 0,
+                              "language": "English",
+                              "languageTag": "en",
+                              "languageCode": "eng",
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Forced",
+                              "displayTitle": "English (SRT)",
+                              "extendedDisplayTitle": "Forced (English SRT)"
+                            },
+                            {
+                              "id": 41090,
+                              "streamType": 3,
+                              "default": true,
+                              "codec": "srt",
+                              "index": 3,
+                              "bitrate": 0,
+                              "language": "English",
+                              "languageTag": "en",
+                              "languageCode": "eng",
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "SDH",
+                              "displayTitle": "English (SRT)",
+                              "extendedDisplayTitle": "SDH (English SRT)"
+                            },
+                            {
+                              "id": 41091,
+                              "streamType": 3,
+                              "default": true,
+                              "codec": "srt",
+                              "index": 4,
+                              "bitrate": 0,
+                              "language": "English",
+                              "languageTag": "en",
+                              "languageCode": "eng",
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "English (SRT)",
+                              "extendedDisplayTitle": "English (SRT)"
+                            },
+                            {
+                              "id": 41092,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 5,
+                              "bitrate": 0,
+                              "language": "العربية",
+                              "languageTag": "ar",
+                              "languageCode": "ara",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "العربية (SRT)",
+                              "extendedDisplayTitle": "العربية (SRT)"
+                            },
+                            {
+                              "id": 41093,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 6,
+                              "bitrate": 0,
+                              "language": "български",
+                              "languageTag": "bg",
+                              "languageCode": "bul",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "български (SRT)",
+                              "extendedDisplayTitle": "български (SRT)"
+                            },
+                            {
+                              "id": 41094,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 7,
+                              "bitrate": 0,
+                              "language": "中文",
+                              "languageTag": "zh",
+                              "languageCode": "zho",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Simplified",
+                              "displayTitle": "中文 (SRT)",
+                              "extendedDisplayTitle": "Simplified (中文 SRT)"
+                            },
+                            {
+                              "id": 41095,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 8,
+                              "bitrate": 0,
+                              "language": "中文",
+                              "languageTag": "zh",
+                              "languageCode": "zho",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Traditional",
+                              "displayTitle": "中文 (SRT)",
+                              "extendedDisplayTitle": "Traditional (中文 SRT)"
+                            },
+                            {
+                              "id": 41096,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 9,
+                              "bitrate": 0,
+                              "language": "Čeština",
+                              "languageTag": "cs",
+                              "languageCode": "ces",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Čeština (SRT)",
+                              "extendedDisplayTitle": "Čeština (SRT)"
+                            },
+                            {
+                              "id": 41097,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 10,
+                              "bitrate": 0,
+                              "language": "Dansk",
+                              "languageTag": "da",
+                              "languageCode": "dan",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Dansk (SRT)",
+                              "extendedDisplayTitle": "Dansk (SRT)"
+                            },
+                            {
+                              "id": 41098,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 11,
+                              "bitrate": 0,
+                              "language": "Deutsch",
+                              "languageTag": "de",
+                              "languageCode": "deu",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Deutsch (SRT)",
+                              "extendedDisplayTitle": "Deutsch (SRT)"
+                            },
+                            {
+                              "id": 41099,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 12,
+                              "bitrate": 0,
+                              "language": "Ελληνικά",
+                              "languageTag": "el",
+                              "languageCode": "ell",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Ελληνικά (SRT)",
+                              "extendedDisplayTitle": "Ελληνικά (SRT)"
+                            },
+                            {
+                              "id": 41100,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 13,
+                              "bitrate": 0,
+                              "language": "Español",
+                              "languageTag": "es",
+                              "languageCode": "spa",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Latin American",
+                              "displayTitle": "Español (SRT)",
+                              "extendedDisplayTitle": "Latin American (Español SRT)"
+                            },
+                            {
+                              "id": 41101,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 14,
+                              "bitrate": 0,
+                              "language": "Español",
+                              "languageTag": "es",
+                              "languageCode": "spa",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Español (SRT)",
+                              "extendedDisplayTitle": "Español (SRT)"
+                            },
+                            {
+                              "id": 41102,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 15,
+                              "bitrate": 0,
+                              "language": "eesti",
+                              "languageTag": "et",
+                              "languageCode": "est",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "eesti (SRT)",
+                              "extendedDisplayTitle": "eesti (SRT)"
+                            },
+                            {
+                              "id": 41103,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 16,
+                              "bitrate": 0,
+                              "language": "Suomi",
+                              "languageTag": "fi",
+                              "languageCode": "fin",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Suomi (SRT)",
+                              "extendedDisplayTitle": "Suomi (SRT)"
+                            },
+                            {
+                              "id": 41104,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 17,
+                              "bitrate": 0,
+                              "language": "Français",
+                              "languageTag": "fr",
+                              "languageCode": "fra",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Canadian",
+                              "displayTitle": "Français (SRT)",
+                              "extendedDisplayTitle": "Canadian (Français SRT)"
+                            },
+                            {
+                              "id": 41105,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 18,
+                              "bitrate": 0,
+                              "language": "Français",
+                              "languageTag": "fr",
+                              "languageCode": "fra",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Français (SRT)",
+                              "extendedDisplayTitle": "Français (SRT)"
+                            },
+                            {
+                              "id": 41106,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 19,
+                              "bitrate": 0,
+                              "language": "עברית",
+                              "languageTag": "he",
+                              "languageCode": "heb",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "עברית (SRT)",
+                              "extendedDisplayTitle": "עברית (SRT)"
+                            },
+                            {
+                              "id": 41107,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 20,
+                              "bitrate": 0,
+                              "language": "हिन्दी",
+                              "languageTag": "hi",
+                              "languageCode": "hin",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "हिन्दी (SRT)",
+                              "extendedDisplayTitle": "हिन्दी (SRT)"
+                            },
+                            {
+                              "id": 41108,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 21,
+                              "bitrate": 0,
+                              "language": "magyar",
+                              "languageTag": "hu",
+                              "languageCode": "hun",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "magyar (SRT)",
+                              "extendedDisplayTitle": "magyar (SRT)"
+                            },
+                            {
+                              "id": 41109,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 22,
+                              "bitrate": 0,
+                              "language": "Indonesia",
+                              "languageTag": "id",
+                              "languageCode": "ind",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Indonesia (SRT)",
+                              "extendedDisplayTitle": "Indonesia (SRT)"
+                            },
+                            {
+                              "id": 41110,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 23,
+                              "bitrate": 0,
+                              "language": "Italiano",
+                              "languageTag": "it",
+                              "languageCode": "ita",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Italiano (SRT)",
+                              "extendedDisplayTitle": "Italiano (SRT)"
+                            },
+                            {
+                              "id": 41111,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 24,
+                              "bitrate": 0,
+                              "language": "한국어",
+                              "languageTag": "ko",
+                              "languageCode": "kor",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "한국어 (SRT)",
+                              "extendedDisplayTitle": "한국어 (SRT)"
+                            },
+                            {
+                              "id": 41112,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 25,
+                              "bitrate": 0,
+                              "language": "lietuvių",
+                              "languageTag": "lt",
+                              "languageCode": "lit",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "lietuvių (SRT)",
+                              "extendedDisplayTitle": "lietuvių (SRT)"
+                            },
+                            {
+                              "id": 41113,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 26,
+                              "bitrate": 0,
+                              "language": "latviešu",
+                              "languageTag": "lv",
+                              "languageCode": "lav",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "latviešu (SRT)",
+                              "extendedDisplayTitle": "latviešu (SRT)"
+                            },
+                            {
+                              "id": 41114,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 27,
+                              "bitrate": 0,
+                              "language": "Melayu",
+                              "languageTag": "ms",
+                              "languageCode": "msa",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Melayu (SRT)",
+                              "extendedDisplayTitle": "Melayu (SRT)"
+                            },
+                            {
+                              "id": 41115,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 28,
+                              "bitrate": 0,
+                              "language": "Nederlands",
+                              "languageTag": "nl",
+                              "languageCode": "nld",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Nederlands (SRT)",
+                              "extendedDisplayTitle": "Nederlands (SRT)"
+                            },
+                            {
+                              "id": 41116,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 29,
+                              "bitrate": 0,
+                              "language": "norsk",
+                              "languageTag": "no",
+                              "languageCode": "nor",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "norsk (SRT)",
+                              "extendedDisplayTitle": "norsk (SRT)"
+                            },
+                            {
+                              "id": 41117,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 30,
+                              "bitrate": 0,
+                              "language": "polski",
+                              "languageTag": "pl",
+                              "languageCode": "pol",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "polski (SRT)",
+                              "extendedDisplayTitle": "polski (SRT)"
+                            },
+                            {
+                              "id": 41118,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 31,
+                              "bitrate": 0,
+                              "language": "Português",
+                              "languageTag": "pt",
+                              "languageCode": "por",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Português (SRT)",
+                              "extendedDisplayTitle": "Português (SRT)"
+                            },
+                            {
+                              "id": 41119,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 32,
+                              "bitrate": 0,
+                              "language": "Русский",
+                              "languageTag": "ru",
+                              "languageCode": "rus",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Русский (SRT)",
+                              "extendedDisplayTitle": "Русский (SRT)"
+                            },
+                            {
+                              "id": 41120,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 33,
+                              "bitrate": 0,
+                              "language": "Slovenčina",
+                              "languageTag": "sk",
+                              "languageCode": "slk",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Slovenčina (SRT)",
+                              "extendedDisplayTitle": "Slovenčina (SRT)"
+                            },
+                            {
+                              "id": 41121,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 34,
+                              "bitrate": 0,
+                              "language": "slovenščina",
+                              "languageTag": "sl",
+                              "languageCode": "slv",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "slovenščina (SRT)",
+                              "extendedDisplayTitle": "slovenščina (SRT)"
+                            },
+                            {
+                              "id": 41122,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 35,
+                              "bitrate": 0,
+                              "language": "Svenska",
+                              "languageTag": "sv",
+                              "languageCode": "swe",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Svenska (SRT)",
+                              "extendedDisplayTitle": "Svenska (SRT)"
+                            },
+                            {
+                              "id": 41123,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 36,
+                              "bitrate": 0,
+                              "language": "தமிழ்",
+                              "languageTag": "ta",
+                              "languageCode": "tam",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "தமிழ் (SRT)",
+                              "extendedDisplayTitle": "தமிழ் (SRT)"
+                            },
+                            {
+                              "id": 41124,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 37,
+                              "bitrate": 0,
+                              "language": "తెలుగు",
+                              "languageTag": "te",
+                              "languageCode": "tel",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "తెలుగు (SRT)",
+                              "extendedDisplayTitle": "తెలుగు (SRT)"
+                            },
+                            {
+                              "id": 41125,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 38,
+                              "bitrate": 0,
+                              "language": "ไทย",
+                              "languageTag": "th",
+                              "languageCode": "tha",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "ไทย (SRT)",
+                              "extendedDisplayTitle": "ไทย (SRT)"
+                            },
+                            {
+                              "id": 41126,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 39,
+                              "bitrate": 0,
+                              "language": "Türkçe",
+                              "languageTag": "tr",
+                              "languageCode": "tur",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Türkçe (SRT)",
+                              "extendedDisplayTitle": "Türkçe (SRT)"
+                            },
+                            {
+                              "id": 41127,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 40,
+                              "bitrate": 0,
+                              "language": "Українська",
+                              "languageTag": "uk",
+                              "languageCode": "ukr",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Українська (SRT)",
+                              "extendedDisplayTitle": "Українська (SRT)"
+                            },
+                            {
+                              "id": 41128,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 41,
+                              "bitrate": 0,
+                              "language": "Tiếng Việt",
+                              "languageTag": "vi",
+                              "languageCode": "vie",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "displayTitle": "Tiếng Việt (SRT)",
+                              "extendedDisplayTitle": "Tiếng Việt (SRT)"
+                            },
+                            {
+                              "id": 41129,
+                              "streamType": 3,
+                              "codec": "srt",
+                              "index": 42,
+                              "bitrate": 0,
+                              "language": "中文",
+                              "languageTag": "zh",
+                              "languageCode": "zho",
+                              "dub": true,
+                              "requiredBandwidths": "1,1,1,1,1,1,1,1",
+                              "title": "Traditional",
+                              "displayTitle": "中文 (SRT)",
+                              "extendedDisplayTitle": "Traditional (中文 SRT)"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "Genre": [
+                    {
+                      "id": 162,
+                      "filter": "genre=162",
+                      "tag": "History"
+                    },
+                    {
+                      "id": 257,
+                      "filter": "genre=257",
+                      "tag": "Crime"
+                    },
+                    {
+                      "id": 7,
+                      "filter": "genre=7",
+                      "tag": "Drama"
+                    },
+                    {
+                      "id": 498,
+                      "filter": "genre=498",
+                      "tag": "Mystery"
+                    },
+                    {
+                      "id": 2455,
+                      "filter": "genre=2455",
+                      "tag": "Romance"
+                    },
+                    {
+                      "id": 2456,
+                      "filter": "genre=2456",
+                      "tag": "Western"
+                    }
+                  ],
+                  "Country": [
+                    {
+                      "id": 102,
+                      "filter": "country=102",
+                      "tag": "United States of America"
+                    }
+                  ],
+                  "Guid": [
+                    {
+                      "id": "imdb://tt5537002"
+                    },
+                    {
+                      "id": "tmdb://466420"
+                    },
+                    {
+                      "id": "tvdb://135852"
+                    }
+                  ],
+                  "Rating": [
+                    {
+                      "image": "imdb://image.rating",
+                      "value": 7.7,
+                      "type": "audience"
+                    },
+                    {
+                      "image": "rottentomatoes://image.rating.ripe",
+                      "value": 9.3,
+                      "type": "critic"
+                    },
+                    {
+                      "image": "rottentomatoes://image.rating.upright",
+                      "value": 8.4,
+                      "type": "audience"
+                    },
+                    {
+                      "image": "themoviedb://image.rating",
+                      "value": 7.5,
+                      "type": "audience"
+                    }
+                  ],
+                  "Director": [
+                    {
+                      "id": 9479,
+                      "filter": "director=9479",
+                      "tag": "Martin Scorsese",
+                      "tagKey": "5d776824961905001eb90983",
+                      "thumb": "https://metadata-static.plex.tv/d/people/d1f9b6fe07a96dcac480d6ff4a286f10.jpg"
+                    }
+                  ],
+                  "Writer": [
+                    {
+                      "id": 15102,
+                      "filter": "writer=15102",
+                      "tag": "Eric Roth",
+                      "tagKey": "5d77682654f42c001f8c268d",
+                      "thumb": "https://metadata-static.plex.tv/a/people/a3c300b9770117ad5e2d699644031ea1.jpg"
+                    },
+                    {
+                      "id": 43814,
+                      "filter": "writer=43814",
+                      "tag": "Martin Scorsese",
+                      "tagKey": "5d776824961905001eb90983",
+                      "thumb": "https://metadata-static.plex.tv/d/people/d1f9b6fe07a96dcac480d6ff4a286f10.jpg"
+                    },
+                    {
+                      "id": 43815,
+                      "filter": "writer=43815",
+                      "tag": "David Grann",
+                      "tagKey": "5dce731d5ecbb0001f877daf",
+                      "thumb": "https://metadata-static.plex.tv/7/people/7c01acb2788cd2ee1e006647fb9209e9.jpg"
+                    },
+                    {
+                      "id": 43816,
+                      "filter": "writer=43816",
+                      "tag": "Troy Caballero",
+                      "tagKey": "653ba748fed3ef78d606c62b"
+                    }
+                  ],
+                  "Role": [
+                    {
+                      "id": 7028,
+                      "filter": "actor=7028",
+                      "tag": "Leonardo DiCaprio",
+                      "tagKey": "5d77682685719b001f3a0b79",
+                      "role": "Ernest Burkhart",
+                      "thumb": "https://metadata-static.plex.tv/2/people/2c2b2f51686f0642e381a401f653c02e.jpg"
+                    },
+                    {
+                      "id": 43817,
+                      "filter": "actor=43817",
+                      "tag": "Lily Gladstone",
+                      "tagKey": "5d7769cef617c900201650a7",
+                      "role": "Mollie Burkhart",
+                      "thumb": "https://metadata-static.plex.tv/e/people/e399986f7342f0ae98bb06477e44ca23.jpg"
+                    },
+                    {
+                      "id": 2627,
+                      "filter": "actor=2627",
+                      "tag": "Robert De Niro",
+                      "tagKey": "5d776824961905001eb90984",
+                      "role": "William Hale",
+                      "thumb": "https://metadata-static.plex.tv/3/people/391b330454d8713896ab8a2834ae052a.jpg"
+                    },
+                    {
+                      "id": 6885,
+                      "filter": "actor=6885",
+                      "tag": "Jesse Plemons",
+                      "tagKey": "5d77683c6f4521001ea9d771",
+                      "role": "Tom White",
+                      "thumb": "https://metadata-static.plex.tv/2/people/20c32903725629f5997cf07959bf5cbf.jpg"
+                    },
+                    {
+                      "id": 6884,
+                      "filter": "actor=6884",
+                      "tag": "Scott Shepherd",
+                      "tagKey": "5d7769d07a53e9001e6f13da",
+                      "role": "Byron Burkhart",
+                      "thumb": "https://metadata-static.plex.tv/3/people/34bcc2b1e671b35856d16b985f3a6762.jpg"
+                    },
+                    {
+                      "id": 43819,
+                      "filter": "actor=43819",
+                      "tag": "Cara Jade Myers",
+                      "tagKey": "604b90ad002f2a002c51167b",
+                      "role": "Anna",
+                      "thumb": "https://metadata-static.plex.tv/0/people/01996a6ad8036e26e9263af218d21dbc.jpg"
+                    },
+                    {
+                      "id": 43820,
+                      "filter": "actor=43820",
+                      "tag": "JaNae Collins",
+                      "tagKey": "604b90ad002f2a002c51167c",
+                      "role": "Reta",
+                      "thumb": "https://metadata-static.plex.tv/6/people/6ad0d7648dca659eef4b5018587128f0.jpg"
+                    },
+                    {
+                      "id": 43823,
+                      "filter": "actor=43823",
+                      "tag": "William Belleau",
+                      "tagKey": "5d776897594b2b001e6906a8",
+                      "role": "Henry Roan",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776897594b2b001e6906a8.jpg"
+                    },
+                    {
+                      "id": 43822,
+                      "filter": "actor=43822",
+                      "tag": "Jason Isbell",
+                      "tagKey": "5d7768a47a53e9001e6d4fdb",
+                      "role": "Bill Smith",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768a47a53e9001e6d4fdb.jpg"
+                    },
+                    {
+                      "id": 13834,
+                      "filter": "actor=13834",
+                      "tag": "Louis Cancelmi",
+                      "tagKey": "5d7768bbdecfcd001f2f1479",
+                      "role": "Kelsie Morrison",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768bbdecfcd001f2f1479.jpg"
+                    },
+                    {
+                      "id": 6621,
+                      "filter": "actor=6621",
+                      "tag": "John Lithgow",
+                      "tagKey": "5d77682861141d001fb13808",
+                      "role": "Prosecutor Peter Leaward",
+                      "thumb": "https://metadata-static.plex.tv/f/people/f589e961037998998644e26de9d7e3f7.jpg"
+                    },
+                    {
+                      "id": 43818,
+                      "filter": "actor=43818",
+                      "tag": "Tantoo Cardinal",
+                      "tagKey": "5d776828a091de001f2e63e9",
+                      "role": "Lizzie Q",
+                      "thumb": "https://metadata-static.plex.tv/7/people/7d8ee333d9ae8b937b1338da738fe8ac.jpg"
+                    },
+                    {
+                      "id": 43821,
+                      "filter": "actor=43821",
+                      "tag": "Jillian Dion",
+                      "tagKey": "5f405f7204a8650040a73d97",
+                      "role": "Minnie",
+                      "thumb": "https://metadata-static.plex.tv/6/people/6f2215760539098daa5b2600ecccffd1.jpg"
+                    },
+                    {
+                      "id": 43824,
+                      "filter": "actor=43824",
+                      "tag": "Brendan Fraser",
+                      "tagKey": "5d7768274de0ee001fcc89cb",
+                      "role": "W.S. Hamilton",
+                      "thumb": "https://metadata-static.plex.tv/2/people/28bdcc2f5af96204c36be4817b1b090a.jpg"
+                    },
+                    {
+                      "id": 43825,
+                      "filter": "actor=43825",
+                      "tag": "Everett Waller",
+                      "tagKey": "6533bde3d99cc1ce478dc7e2",
+                      "role": "Paul Red Eagle"
+                    },
+                    {
+                      "id": 43826,
+                      "filter": "actor=43826",
+                      "tag": "Tahlee Redcorn",
+                      "tagKey": "63d903224b83c83017a3c8dd",
+                      "role": "Non-Hon-Zhin-Ga / Traditional Leader"
+                    },
+                    {
+                      "id": 43827,
+                      "filter": "actor=43827",
+                      "tag": "Yancey Red Corn",
+                      "tagKey": "650ed3b7c6ffd964e87c3d09",
+                      "role": "Chief Bonnicastle"
+                    },
+                    {
+                      "id": 43828,
+                      "filter": "actor=43828",
+                      "tag": "Tatanka Means",
+                      "tagKey": "5d7768b46f6af7001ee5b4de",
+                      "role": "John Wren",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768b46f6af7001ee5b4de.jpg"
+                    },
+                    {
+                      "id": 43829,
+                      "filter": "actor=43829",
+                      "tag": "Tommy Schultz",
+                      "tagKey": "6527e086d0614eccd3b10605",
+                      "role": "Blackie Thompson",
+                      "thumb": "https://metadata-static.plex.tv/5/people/57c09d3ff77cfce1063d124405f803d6.jpg"
+                    },
+                    {
+                      "id": 43830,
+                      "filter": "actor=43830",
+                      "tag": "Sturgill Simpson",
+                      "tagKey": "5d776becfb0d55001f5774ca",
+                      "role": "Henry Grammer",
+                      "thumb": "https://metadata-static.plex.tv/8/people/8214164b7918dfb4abe67a81db7a64bf.jpg"
+                    },
+                    {
+                      "id": 43831,
+                      "filter": "actor=43831",
+                      "tag": "Ty Mitchell",
+                      "tagKey": "604338fe0a01ff002da97fd0",
+                      "role": "John Ramsey",
+                      "thumb": "https://metadata-static.plex.tv/0/people/0c3885813b66f80bf432b998c98680d0.jpg"
+                    },
+                    {
+                      "id": 14354,
+                      "filter": "actor=14354",
+                      "tag": "Gary Basaraba",
+                      "tagKey": "5d7768294de0ee001fcc9338",
+                      "role": "Detective Burns",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768294de0ee001fcc9338.jpg"
+                    },
+                    {
+                      "id": 43832,
+                      "filter": "actor=43832",
+                      "tag": "Charlie Musselwhite",
+                      "tagKey": "5d77684a7e9a3c0020c70202",
+                      "role": "Alvin Reynolds",
+                      "thumb": "https://metadata-static.plex.tv/9/people/90bc79c0345b475cac0a267ca9f26e6a.jpg"
+                    },
+                    {
+                      "id": 10019,
+                      "filter": "actor=10019",
+                      "tag": "Pat Healy",
+                      "tagKey": "5d7768253c3c2a001fbcac69",
+                      "role": "Agent John Burger",
+                      "thumb": "https://metadata-static.plex.tv/9/people/98409a39a67b8eee51b7b08a491650d7.jpg"
+                    },
+                    {
+                      "id": 4300,
+                      "filter": "actor=4300",
+                      "tag": "Steve Witting",
+                      "tagKey": "5d776826999c64001ec2c37a",
+                      "role": "Dr. James Shoun",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776826999c64001ec2c37a.jpg"
+                    },
+                    {
+                      "id": 14419,
+                      "filter": "actor=14419",
+                      "tag": "Steve Routman",
+                      "tagKey": "5d7768427228e5001f1e090e",
+                      "role": "Dr. David Shoun",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768427228e5001f1e090e.jpg"
+                    },
+                    {
+                      "id": 43833,
+                      "filter": "actor=43833",
+                      "tag": "Gene Jones",
+                      "tagKey": "5d7768313c3c2a001fbcd469",
+                      "role": "Pitts Beatty",
+                      "thumb": "https://metadata-static.plex.tv/d/people/d5c0d42ae0287879d10ff33f6498d745.jpg"
+                    },
+                    {
+                      "id": 20307,
+                      "filter": "actor=20307",
+                      "tag": "Michael Abbott Jr.",
+                      "tagKey": "5d7768397228e5001f1df3a8",
+                      "role": "Agent Frank Smith",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768397228e5001f1df3a8.jpg"
+                    },
+                    {
+                      "id": 44106,
+                      "filter": "actor=44106",
+                      "tag": "J.C. MacKenzie",
+                      "tagKey": "5d776828880197001ec90ddd",
+                      "role": "Radio Announcer",
+                      "thumb": "https://metadata-static.plex.tv/4/people/4530cfbf14e634886706c267a74956af.jpg"
+                    },
+                    {
+                      "id": 43834,
+                      "filter": "actor=43834",
+                      "tag": "Jack White",
+                      "tagKey": "5d77682985719b001f3a132b",
+                      "role": "Radio Show Actor",
+                      "thumb": "https://metadata-static.plex.tv/1/people/18b132606d9521b296ff478865293826.jpg"
+                    },
+                    {
+                      "id": 43835,
+                      "filter": "actor=43835",
+                      "tag": "Larry Sellers",
+                      "tagKey": "5d776850594b2b001e688551",
+                      "role": "Non-Hon-Zhin-Ga",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776850594b2b001e688551.jpg"
+                    },
+                    {
+                      "id": 31192,
+                      "filter": "actor=31192",
+                      "tag": "Barry Corbin",
+                      "tagKey": "5d7768286f4521001ea9940e",
+                      "role": "Undertaker Turton",
+                      "thumb": "https://metadata-static.plex.tv/1/people/12fb7e3cc920970a2d26f031b96d65dc.jpg"
+                    },
+                    {
+                      "id": 43836,
+                      "filter": "actor=43836",
+                      "tag": "Gabriel Casdorph",
+                      "tagKey": "5d776bccad5437001f7aa935",
+                      "role": "Agent Joe Jones",
+                      "thumb": "https://image.tmdb.org/t/p/original/jdVLnMl27bUXBX5RGtOfbXOXJZE.jpg"
+                    },
+                    {
+                      "id": 43837,
+                      "filter": "actor=43837",
+                      "tag": "Samuel French",
+                      "tagKey": "5f94503f29ef1d002d4321a0",
+                      "role": "Agent CJ Robinson",
+                      "thumb": "https://metadata-static.plex.tv/people/5f94503f29ef1d002d4321a0.jpg"
+                    },
+                    {
+                      "id": 43838,
+                      "filter": "actor=43838",
+                      "tag": "Wally Welch",
+                      "tagKey": "5d7768317e9a3c0020c6bfef",
+                      "role": "Bob Mount"
+                    },
+                    {
+                      "id": 43839,
+                      "filter": "actor=43839",
+                      "tag": "James Roman Dailey Jr.",
+                      "tagKey": "6533bde3ff5dd3684a1c3987",
+                      "role": "Baby Namer"
+                    },
+                    {
+                      "id": 43840,
+                      "filter": "actor=43840",
+                      "tag": "Christopher Cote",
+                      "tagKey": "6533bde4bab98c51595d1f5e",
+                      "role": "Baby Namer (for Anna)"
+                    },
+                    {
+                      "id": 43841,
+                      "filter": "actor=43841",
+                      "tag": "Randy Houser",
+                      "tagKey": "64a55be9ce71f6aa1783ef63",
+                      "role": "Scott Mathis",
+                      "thumb": "https://metadata-static.plex.tv/a/people/a4236d4a9edd2853922a61813556f87f.jpg"
+                    },
+                    {
+                      "id": 43842,
+                      "filter": "actor=43842",
+                      "tag": "Moe Headrick",
+                      "tagKey": "5e16554261c6140040d8bc91",
+                      "role": "Sheriff Freas"
+                    },
+                    {
+                      "id": 43843,
+                      "filter": "actor=43843",
+                      "tag": "Pete Yorn",
+                      "tagKey": "5dcd37929315910020a080bd",
+                      "role": "Acie Kirby"
+                    },
+                    {
+                      "id": 43844,
+                      "filter": "actor=43844",
+                      "tag": "Margaret Shannon-Sisk",
+                      "tagKey": "6533bde45e7b825c591733f8",
+                      "role": "Wife of Pipe Keeper / Wailing Relative"
+                    },
+                    {
+                      "id": 43845,
+                      "filter": "actor=43845",
+                      "tag": "Moira Redcorn",
+                      "tagKey": "6533bde3bab98c51595d1f5b",
+                      "role": "Prologue Wailer"
+                    },
+                    {
+                      "id": 43846,
+                      "filter": "actor=43846",
+                      "tag": "Eric Parkinson",
+                      "tagKey": "5d77685e7a53e9001e6ce284",
+                      "role": "Deputy Marshal",
+                      "thumb": "https://metadata-static.plex.tv/7/people/74d3e96b5d40332a85e29424c88b7b02.jpg"
+                    },
+                    {
+                      "id": 43847,
+                      "filter": "actor=43847",
+                      "tag": "Chase Parker",
+                      "tagKey": "63242f700eb54de2b00244ab",
+                      "role": "Osage at oil Discovery / Fairfax Explosion Responder"
+                    },
+                    {
+                      "id": 43848,
+                      "filter": "actor=43848",
+                      "tag": "Jarad Looper",
+                      "tagKey": "6533bde4f12ffcb697f30500",
+                      "role": "Osage at oil Discovery"
+                    },
+                    {
+                      "id": 41704,
+                      "filter": "actor=41704",
+                      "tag": "John Gibbs",
+                      "tagKey": "5e6b876599ad4800376cd0ce",
+                      "role": "Osage at oil Discovery",
+                      "thumb": "https://metadata-static.plex.tv/5/people/5220536cffacefd3c06155ff6fdc4af3.jpg"
+                    },
+                    {
+                      "id": 43849,
+                      "filter": "actor=43849",
+                      "tag": "Jerry Logsdon",
+                      "tagKey": "6533bde4d99cc1ce478dc7e9",
+                      "role": "Osage at oil Discovery"
+                    },
+                    {
+                      "id": 43850,
+                      "filter": "actor=43850",
+                      "tag": "Jacob Lux",
+                      "tagKey": "6533bde45e7b825c591733fa",
+                      "role": "Osage at oil Discovery"
+                    },
+                    {
+                      "id": 43851,
+                      "filter": "actor=43851",
+                      "tag": "Xavier Toehay",
+                      "tagKey": "6533bde4bab98c51595d1f60",
+                      "role": "Osage at oil Discovery"
+                    },
+                    {
+                      "id": 43852,
+                      "filter": "actor=43852",
+                      "tag": "Mike Cook",
+                      "tagKey": "64fd79e008209647cbaca761",
+                      "role": "Hawker at Train"
+                    },
+                    {
+                      "id": 43853,
+                      "filter": "actor=43853",
+                      "tag": "Katherine Willis",
+                      "tagKey": "5d776833103a2d001f5672ae",
+                      "role": "Myrtie Hale",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776833103a2d001f5672ae.jpg"
+                    },
+                    {
+                      "id": 43854,
+                      "filter": "actor=43854",
+                      "tag": "Delani Chambers",
+                      "tagKey": "5f3fd2f504a865004098404f",
+                      "role": "Willie Hale"
+                    },
+                    {
+                      "id": 43855,
+                      "filter": "actor=43855",
+                      "tag": "Zachary Hokeah",
+                      "tagKey": "5d777064fb0d55001f5ef3e9",
+                      "role": "Osage dying from poison"
+                    },
+                    {
+                      "id": 43856,
+                      "filter": "actor=43856",
+                      "tag": "Talon Satepauhoodle",
+                      "tagKey": "6533bde3d00aa8dbe22a6f55",
+                      "role": "John Whitehair"
+                    },
+                    {
+                      "id": 43857,
+                      "filter": "actor=43857",
+                      "tag": "Jennifer Rader",
+                      "tagKey": "63455b519fe7d1513ef4bfa6",
+                      "role": "Sara Butler"
+                    },
+                    {
+                      "id": 43858,
+                      "filter": "actor=43858",
+                      "tag": "Chance Rush",
+                      "tagKey": "6533bde440cf0ab8b51f8329",
+                      "role": "Bill Stepson"
+                    },
+                    {
+                      "id": 43859,
+                      "filter": "actor=43859",
+                      "tag": "Dana Daylight",
+                      "tagKey": "6533bde4bab98c51595d1f62",
+                      "role": "Anna Sanford"
+                    },
+                    {
+                      "id": 43860,
+                      "filter": "actor=43860",
+                      "tag": "Mahada Sanders",
+                      "tagKey": "6533bde4bab98c51595d1f61",
+                      "role": "Rose Lewis"
+                    },
+                    {
+                      "id": 43861,
+                      "filter": "actor=43861",
+                      "tag": "Ben Hall",
+                      "tagKey": "5d7768418718ba001e31724c",
+                      "role": "Sara's Murderer",
+                      "thumb": "https://image.tmdb.org/t/p/original/kz9OvAxM8n6ouUeireS7W0IlHEO.jpg"
+                    },
+                    {
+                      "id": 43862,
+                      "filter": "actor=43862",
+                      "tag": "John Q. Wilson",
+                      "tagKey": "6533bde3b81570b858a295bd",
+                      "role": "Bank Clerk"
+                    },
+                    {
+                      "id": 10602,
+                      "filter": "actor=10602",
+                      "tag": "Beau Smith",
+                      "tagKey": "5d77683161141d001fb14bd5",
+                      "role": "Photos Hustler #1",
+                      "thumb": "https://metadata-static.plex.tv/7/people/7bac755b005b6aa5671dfe15b2191538.jpg"
+                    },
+                    {
+                      "id": 6520,
+                      "filter": "actor=6520",
+                      "tag": "Victor McCay",
+                      "tagKey": "5d7768ad431c830024c12ce4",
+                      "role": "Photos Hustler #2",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768ad431c830024c12ce4.jpg"
+                    },
+                    {
+                      "id": 43863,
+                      "filter": "actor=43863",
+                      "tag": "Nathalie Standingcloud",
+                      "tagKey": "5fd63aee357c02002d43aefc",
+                      "role": "Roan Girlfriend",
+                      "thumb": "https://metadata-static.plex.tv/3/people/3375a2d28162e85a435292ba32283a46.jpg"
+                    },
+                    {
+                      "id": 43864,
+                      "filter": "actor=43864",
+                      "tag": "Jay Paulson",
+                      "tagKey": "5d7768498718ba001e318226",
+                      "role": "Car Salesman",
+                      "thumb": "https://metadata-static.plex.tv/a/people/a1396a940d8fe027c3eb51b64ea0c7ae.jpg"
+                    },
+                    {
+                      "id": 43865,
+                      "filter": "actor=43865",
+                      "tag": "Marvin E. Stepson Jr.",
+                      "tagKey": "6533bde3f5cade3ed5fbc313",
+                      "role": "Osage Family Buying Car"
+                    },
+                    {
+                      "id": 43866,
+                      "filter": "actor=43866",
+                      "tag": "Tracey Ann Moore",
+                      "tagKey": "6533bde453c3c2a7f42d0bb2",
+                      "role": "Osage Family Buying Car"
+                    },
+                    {
+                      "id": 43867,
+                      "filter": "actor=43867",
+                      "tag": "Easton Wade Yellowfish",
+                      "tagKey": "6533bde3bab98c51595d1f5c",
+                      "role": "Osage Family Buying Car"
+                    },
+                    {
+                      "id": 43868,
+                      "filter": "actor=43868",
+                      "tag": "Reignen Yellowfish",
+                      "tagKey": "63c299af7aa77f46b032139c",
+                      "role": "Osage Family Buying Car"
+                    },
+                    {
+                      "id": 43869,
+                      "filter": "actor=43869",
+                      "tag": "Candice Costello",
+                      "tagKey": "5d776848103a2d001f56c18f",
+                      "role": "Catherine Cole"
+                    },
+                    {
+                      "id": 43870,
+                      "filter": "actor=43870",
+                      "tag": "Father Chris Daigle",
+                      "tagKey": "6533bde4095ba708eba1fa57",
+                      "role": "Catholic Priest"
+                    },
+                    {
+                      "id": 28569,
+                      "filter": "actor=28569",
+                      "tag": "Justin France",
+                      "tagKey": "5d776eef96b655001fe7934b",
+                      "role": "Card Player",
+                      "thumb": "https://metadata-static.plex.tv/a/people/a40b1a9dfe96b054fa5934327647d5b9.jpg"
+                    },
+                    {
+                      "id": 43871,
+                      "filter": "actor=43871",
+                      "tag": "Jerry Wolf",
+                      "tagKey": "60d35bb64fce2e002c937ee8",
+                      "role": "Fred Denoya (robbed)"
+                    },
+                    {
+                      "id": 43872,
+                      "filter": "actor=43872",
+                      "tag": "Addie Roanhorse",
+                      "tagKey": "6533bde4d00aa8dbe22a6f5f",
+                      "role": "Mrs. DeNoya (robbed)"
+                    },
+                    {
+                      "id": 43873,
+                      "filter": "actor=43873",
+                      "tag": "Erica Pretty Eagle Moore",
+                      "tagKey": "6533bde3d00aa8dbe22a6f57",
+                      "role": "Baby Naming Mother #1 / Bridesmaid"
+                    },
+                    {
+                      "id": 43874,
+                      "filter": "actor=43874",
+                      "tag": "Mason Cunningham",
+                      "tagKey": "6533bde4b153fbbe5e6a2d6f",
+                      "role": "Baby Naming Father"
+                    },
+                    {
+                      "id": 43875,
+                      "filter": "actor=43875",
+                      "tag": "Norma Jean",
+                      "tagKey": "5e163da31493cd003f0e50d5",
+                      "role": "Vera (Mollie's housekeeper)",
+                      "thumb": "https://metadata-static.plex.tv/c/people/c3f45dbe16f1f735036dee16aafcbe55.jpg"
+                    },
+                    {
+                      "id": 43876,
+                      "filter": "actor=43876",
+                      "tag": "Elisha Pratt",
+                      "tagKey": "5d7770b7ad5437001f82943a",
+                      "role": "Joseph Bigheart"
+                    },
+                    {
+                      "id": 43877,
+                      "filter": "actor=43877",
+                      "tag": "Desireee Storm Brave",
+                      "tagKey": "6533bde4d99cc1ce478dc7ed",
+                      "role": "Bertha Bigheart"
+                    },
+                    {
+                      "id": 43878,
+                      "filter": "actor=43878",
+                      "tag": "Margaret Gray",
+                      "tagKey": "6533bde4ff5dd3684a1c3994",
+                      "role": "Grace Bigheart"
+                    },
+                    {
+                      "id": 43879,
+                      "filter": "actor=43879",
+                      "tag": "Christopher Hill",
+                      "tagKey": "6533bde5f5cade3ed5fbc316",
+                      "role": "John Bigheart"
+                    },
+                    {
+                      "id": 43880,
+                      "filter": "actor=43880",
+                      "tag": "Dolan Wilson",
+                      "tagKey": "5d77682585719b001f3a0533",
+                      "role": "Justice of the Peace"
+                    },
+                    {
+                      "id": 43881,
+                      "filter": "actor=43881",
+                      "tag": "Jackie Wyatt",
+                      "tagKey": "6533bde5ff5dd3684a1c3995",
+                      "role": "Wedding Photographer"
+                    },
+                    {
+                      "id": 43882,
+                      "filter": "actor=43882",
+                      "tag": "Rayna Gellert",
+                      "tagKey": "5d776eb57a53e9001e77fdb9",
+                      "role": "Wedding Band Lead Fiddle",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776eb57a53e9001e77fdb9.jpg"
+                    },
+                    {
+                      "id": 43883,
+                      "filter": "actor=43883",
+                      "tag": "Nokosee Fields",
+                      "tagKey": "6533bde4bab98c51595d1f5f",
+                      "role": "Wedding Band"
+                    },
+                    {
+                      "id": 43884,
+                      "filter": "actor=43884",
+                      "tag": "Kieran Kane",
+                      "tagKey": "6533bde4ccc623a2dc025476",
+                      "role": "Wedding Band"
+                    },
+                    {
+                      "id": 43885,
+                      "filter": "actor=43885",
+                      "tag": "Lucas Ross",
+                      "tagKey": "5d776b6247dd6e001f6de915",
+                      "role": "Wedding Band",
+                      "thumb": "https://metadata-static.plex.tv/5/people/549c9ac75730391140e3c72e88ce592b.jpg"
+                    },
+                    {
+                      "id": 43886,
+                      "filter": "actor=43886",
+                      "tag": "Elijah Cemp Ragsdale",
+                      "tagKey": "6533bde4f12ffcb697f30503",
+                      "role": "Wedding Band"
+                    },
+                    {
+                      "id": 43887,
+                      "filter": "actor=43887",
+                      "tag": "Vanessa Rose Pham",
+                      "tagKey": "6533bde4d99cc1ce478dc7e6",
+                      "role": "Elizabeth Burkhart (baby)"
+                    },
+                    {
+                      "id": 43888,
+                      "filter": "actor=43888",
+                      "tag": "Terry Allen",
+                      "tagKey": "5d776e3ffb0d55001f5ba906",
+                      "role": "Uncle Jim"
+                    },
+                    {
+                      "id": 43889,
+                      "filter": "actor=43889",
+                      "tag": "Jo Harvey Allen",
+                      "tagKey": "5d7768294de0ee001fcc9339",
+                      "role": "Aunt Annie",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768294de0ee001fcc9339.jpg"
+                    },
+                    {
+                      "id": 43890,
+                      "filter": "actor=43890",
+                      "tag": "Sarah Spurger",
+                      "tagKey": "6533bde4d99cc1ce478dc7e7",
+                      "role": "Martha (Nanny)"
+                    },
+                    {
+                      "id": 43891,
+                      "filter": "actor=43891",
+                      "tag": "Joshua Close",
+                      "tagKey": "5d776832a091de001f2e79a2",
+                      "role": "Horace Burkhart",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776832a091de001f2e79a2.jpg"
+                    },
+                    {
+                      "id": 12522,
+                      "filter": "actor=12522",
+                      "tag": "Elden Henson",
+                      "tagKey": "5d77682754f42c001f8c2a51",
+                      "role": "Duke Burkhart",
+                      "thumb": "https://metadata-static.plex.tv/9/people/903e72aec8a5a58aedd3adf53bc83a5a.jpg"
+                    },
+                    {
+                      "id": 43892,
+                      "filter": "actor=43892",
+                      "tag": "Kinsleigh McNac",
+                      "tagKey": "6533bde440cf0ab8b51f832a",
+                      "role": "Elizabeth Burkhart (2-3 years)"
+                    },
+                    {
+                      "id": 43893,
+                      "filter": "actor=43893",
+                      "tag": "Roanin Davis",
+                      "tagKey": "6257d685c277b10ebb77a789",
+                      "role": "Cowboy Burkhart (baby)"
+                    },
+                    {
+                      "id": 43894,
+                      "filter": "actor=43894",
+                      "tag": "David Fields",
+                      "tagKey": "5f3fd70e1ae7100041feac61",
+                      "role": "Bob The Cab Driver"
+                    },
+                    {
+                      "id": 43895,
+                      "filter": "actor=43895",
+                      "tag": "Anthony J. Harvey",
+                      "tagKey": "6533bde4d99cc1ce478dc7e8",
+                      "role": "Charlie Whitehorn"
+                    },
+                    {
+                      "id": 43896,
+                      "filter": "actor=43896",
+                      "tag": "Stephen Berkman",
+                      "tagKey": "604a456f7e0315002c082488",
+                      "role": "Studio Photographer"
+                    },
+                    {
+                      "id": 43897,
+                      "filter": "actor=43897",
+                      "tag": "William Alyn Hill",
+                      "tagKey": "64885acbb14d1dbcf9a78e47",
+                      "role": "Studio Vagrant #1"
+                    },
+                    {
+                      "id": 43898,
+                      "filter": "actor=43898",
+                      "tag": "Joseph Spinelli",
+                      "tagKey": "6533bde4ff5dd3684a1c3990",
+                      "role": "Friendly Joe"
+                    },
+                    {
+                      "id": 43899,
+                      "filter": "actor=43899",
+                      "tag": "Blaine Hall",
+                      "tagKey": "6533bde416bc86ee64edeef1",
+                      "role": "Studio Vagrant #2"
+                    },
+                    {
+                      "id": 10030,
+                      "filter": "actor=10030",
+                      "tag": "Brent Langdon",
+                      "tagKey": "5d776c31fb0d55001f57fc01",
+                      "role": "Barney McBride",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776c31fb0d55001f57fc01.jpg"
+                    },
+                    {
+                      "id": 43900,
+                      "filter": "actor=43900",
+                      "tag": "Leland Prater",
+                      "tagKey": "6323b2cac0260e8d20848cc2",
+                      "role": "Rex Theater Manager"
+                    },
+                    {
+                      "id": 43901,
+                      "filter": "actor=43901",
+                      "tag": "DJ Whited",
+                      "tagKey": "6533bde453c3c2a7f42d0bb3",
+                      "role": "Cave Outlaw"
+                    },
+                    {
+                      "id": 43902,
+                      "filter": "actor=43902",
+                      "tag": "Elizabeth Waller",
+                      "tagKey": "6533bde4f12ffcb697f30504",
+                      "role": "Elizabeth Burkhart (3-5 years)"
+                    },
+                    {
+                      "id": 43903,
+                      "filter": "actor=43903",
+                      "tag": "Jessica Harjo",
+                      "tagKey": "6533bde5d99cc1ce478dc7f1",
+                      "role": "Pearl (Henry's girlfriend)"
+                    },
+                    {
+                      "id": 43904,
+                      "filter": "actor=43904",
+                      "tag": "Joey Oglesby",
+                      "tagKey": "62fb7ce7c1e63b9c4c89bd8c",
+                      "role": "Roy Bunch",
+                      "thumb": "https://metadata-static.plex.tv/4/people/4311a63631655a71b160e236b28a1a9b.jpg"
+                    },
+                    {
+                      "id": 43905,
+                      "filter": "actor=43905",
+                      "tag": "Alexis Ann",
+                      "tagKey": "6533bde5ff5dd3684a1c3997",
+                      "role": "Mary Roan"
+                    },
+                    {
+                      "id": 43906,
+                      "filter": "actor=43906",
+                      "tag": "Lee Eddy",
+                      "tagKey": "5d776ab07a53e9001e70cbd2",
+                      "role": "Mrs. Mackie",
+                      "thumb": "https://metadata-static.plex.tv/people/5d776ab07a53e9001e70cbd2.jpg"
+                    },
+                    {
+                      "id": 43907,
+                      "filter": "actor=43907",
+                      "tag": "Gary S. Pratt",
+                      "tagKey": "6533bde4d00aa8dbe22a6f5e",
+                      "role": "Bank Manager"
+                    },
+                    {
+                      "id": 25867,
+                      "filter": "actor=25867",
+                      "tag": "Nathaniel Arcand",
+                      "tagKey": "5d77682a85719b001f3a15de",
+                      "role": "Ancestor Warrior",
+                      "thumb": "https://metadata-static.plex.tv/9/people/96a37d310a6376c23e22133dde555dec.jpg"
+                    },
+                    {
+                      "id": 43908,
+                      "filter": "actor=43908",
+                      "tag": "Kristin Keith",
+                      "tagKey": "632094f40bbf0b811fca548c",
+                      "role": "Speakeasy Prostitute",
+                      "thumb": "https://metadata-static.plex.tv/4/people/48d9c369c38aa888387ca0ca9bd5bb4b.jpg"
+                    },
+                    {
+                      "id": 43909,
+                      "filter": "actor=43909",
+                      "tag": "Bravery Nowlin",
+                      "tagKey": "6533bde5bab98c51595d1f69",
+                      "role": "Cowboy (2-3 years)"
+                    },
+                    {
+                      "id": 43910,
+                      "filter": "actor=43910",
+                      "tag": "Edward Gray Sr.",
+                      "tagKey": "6533bde55e7b825c591733ff",
+                      "role": "Fleeing Osage Family"
+                    },
+                    {
+                      "id": 43911,
+                      "filter": "actor=43911",
+                      "tag": "Angela Pratt",
+                      "tagKey": "6533bde5f12ffcb697f30512",
+                      "role": "Fleeing Osage Family"
+                    },
+                    {
+                      "id": 43912,
+                      "filter": "actor=43912",
+                      "tag": "Henry Amos Gray",
+                      "tagKey": "6533bde5d00aa8dbe22a6f65",
+                      "role": "Fleeing Osage Family"
+                    },
+                    {
+                      "id": 43913,
+                      "filter": "actor=43913",
+                      "tag": "Samuel Gray",
+                      "tagKey": "6533bde5b81570b858a295c1",
+                      "role": "Fleeing Osage Family"
+                    },
+                    {
+                      "id": 43914,
+                      "filter": "actor=43914",
+                      "tag": "Edward Gray Jr.",
+                      "tagKey": "6533bde5bab98c51595d1f6b",
+                      "role": "Fleeing Osage Family"
+                    },
+                    {
+                      "id": 43915,
+                      "filter": "actor=43915",
+                      "tag": "Mamie Cozad",
+                      "tagKey": "6533bde5bac8a36c65c829d7",
+                      "role": "Baby Anna (at naming)"
+                    },
+                    {
+                      "id": 43916,
+                      "filter": "actor=43916",
+                      "tag": "Shonagh Smith",
+                      "tagKey": "5e16554cbc1372003ea8bc53",
+                      "role": "Nettie Brookshire",
+                      "thumb": "https://metadata-static.plex.tv/7/people/7afbab7fdf1ba1f90ad59841da0ad75a.jpg"
+                    },
+                    {
+                      "id": 43917,
+                      "filter": "actor=43917",
+                      "tag": "Joel Tallchief Lemon",
+                      "tagKey": "6533bde5d00aa8dbe22a6f64",
+                      "role": "Fairfax Explosion Responder"
+                    },
+                    {
+                      "id": 43918,
+                      "filter": "actor=43918",
+                      "tag": "Richard Lookout RulingHisSun",
+                      "tagKey": "6533bde516bc86ee64edeef2",
+                      "role": "Fairfax Explosion Responder"
+                    },
+                    {
+                      "id": 43919,
+                      "filter": "actor=43919",
+                      "tag": "Brett Bower",
+                      "tagKey": "5d7768418718ba001e31724e",
+                      "role": "Fairfax Explosion Responder"
+                    },
+                    {
+                      "id": 43920,
+                      "filter": "actor=43920",
+                      "tag": "Garrison Panzer",
+                      "tagKey": "6533bde6f12ffcb697f30563",
+                      "role": "Radio Announcer"
+                    },
+                    {
+                      "id": 43921,
+                      "filter": "actor=43921",
+                      "tag": "River Rhoades",
+                      "tagKey": "6533bde7f5cade3ed5fbc31c",
+                      "role": "Cowboy (4-5 years)"
+                    },
+                    {
+                      "id": 43922,
+                      "filter": "actor=43922",
+                      "tag": "Zack T. Morris",
+                      "tagKey": "6533bde7095ba708eba1fa5f",
+                      "role": "Osage Delegation Member"
+                    },
+                    {
+                      "id": 43923,
+                      "filter": "actor=43923",
+                      "tag": "Harrison Shackelford",
+                      "tagKey": "6533bde7554f8f85c86453af",
+                      "role": "Osage Delegation Member"
+                    },
+                    {
+                      "id": 43924,
+                      "filter": "actor=43924",
+                      "tag": "Alexis Waller",
+                      "tagKey": "6533bde7daf363957d8fc0c3",
+                      "role": "Elizabeth Burkhart (5-6 years)"
+                    },
+                    {
+                      "id": 43925,
+                      "filter": "actor=43925",
+                      "tag": "Mark Landon Smith",
+                      "tagKey": "632879959e0f8364b8616b6a",
+                      "role": "President Coolidge"
+                    },
+                    {
+                      "id": 43926,
+                      "filter": "actor=43926",
+                      "tag": "Tom Ashmore",
+                      "tagKey": "6533bde7d00aa8dbe22a6f7b",
+                      "role": "Tribal Council Interpreter"
+                    },
+                    {
+                      "id": 43927,
+                      "filter": "actor=43927",
+                      "tag": "Myron F. Red Eagle",
+                      "tagKey": "6533bde6d00aa8dbe22a6f74",
+                      "role": "Osage Man Town Dance"
+                    },
+                    {
+                      "id": 43928,
+                      "filter": "actor=43928",
+                      "tag": "Dolores Marie Goodeagle",
+                      "tagKey": "6533bde6bac8a36c65c829da",
+                      "role": "Osage Woman Town Dance"
+                    },
+                    {
+                      "id": 43929,
+                      "filter": "actor=43929",
+                      "tag": "Matt Tolentino",
+                      "tagKey": "6533bde65e7b825c59173416",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43930,
+                      "filter": "actor=43930",
+                      "tag": "Johnny Baier",
+                      "tagKey": "6533bde653c3c2a7f42d0c10",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43931,
+                      "filter": "actor=43931",
+                      "tag": "Gregory Fallis",
+                      "tagKey": "6533bde7f12ffcb697f30567",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43932,
+                      "filter": "actor=43932",
+                      "tag": "Patrick Bubert",
+                      "tagKey": "6533bde6f12ffcb697f30566",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43933,
+                      "filter": "actor=43933",
+                      "tag": "TJ Muller",
+                      "tagKey": "6533bde8f5cade3ed5fbc31d",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43934,
+                      "filter": "actor=43934",
+                      "tag": "Will Reardon-Anderson",
+                      "tagKey": "63aed330ac574492e2f21a31",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43935,
+                      "filter": "actor=43935",
+                      "tag": "Peter Reardon-Anderson",
+                      "tagKey": "6533bde7bab98c51595d1f76",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43936,
+                      "filter": "actor=43936",
+                      "tag": "Kyle Dillingham",
+                      "tagKey": "6533bde8d00aa8dbe22a6f7c",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43937,
+                      "filter": "actor=43937",
+                      "tag": "Jacob Johnson",
+                      "tagKey": "6533bde85e7b825c59173418",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43938,
+                      "filter": "actor=43938",
+                      "tag": "Jeffrey Stevenson",
+                      "tagKey": "6533bde8bab98c51595d1f77",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43939,
+                      "filter": "actor=43939",
+                      "tag": "Clint Rohr",
+                      "tagKey": "6533bde7d99cc1ce478dc804",
+                      "role": "Town Dance Band"
+                    },
+                    {
+                      "id": 43940,
+                      "filter": "actor=43940",
+                      "tag": "D. Reride Smith",
+                      "tagKey": "64ce3a56d732ee7e3b764786",
+                      "role": "Hale's Ranch Hand"
+                    },
+                    {
+                      "id": 43941,
+                      "filter": "actor=43941",
+                      "tag": "James Healy Jr.",
+                      "tagKey": "5d776a497a53e9001e700582",
+                      "role": "2nd Insurance Man",
+                      "thumb": "https://metadata-static.plex.tv/d/people/df2792aa706fd93431b279039c09e613.jpg"
+                    },
+                    {
+                      "id": 43942,
+                      "filter": "actor=43942",
+                      "tag": "Jeremy Goodvoice",
+                      "tagKey": "6533bde7d00aa8dbe22a6f78",
+                      "role": "Pony Watching Man"
+                    },
+                    {
+                      "id": 43943,
+                      "filter": "actor=43943",
+                      "tag": "Ron McMahan",
+                      "tagKey": "6533bde7f5cade3ed5fbc31b",
+                      "role": "Old Timer"
+                    },
+                    {
+                      "id": 43944,
+                      "filter": "actor=43944",
+                      "tag": "Seth Buckminster",
+                      "tagKey": "6533bde785decb9532fff0c6",
+                      "role": "Barber"
+                    },
+                    {
+                      "id": 43945,
+                      "filter": "actor=43945",
+                      "tag": "Penny Potts",
+                      "tagKey": "6533bde785decb9532fff0c7",
+                      "role": "Ballet Instructor"
+                    },
+                    {
+                      "id": 43946,
+                      "filter": "actor=43946",
+                      "tag": "Melissa Tiger",
+                      "tagKey": "6533bde753c3c2a7f42d0c12",
+                      "role": "Pony Watching Woman"
+                    },
+                    {
+                      "id": 43947,
+                      "filter": "actor=43947",
+                      "tag": "Karen Garlitz",
+                      "tagKey": "5f3fc9dbce2564003f85e3c3",
+                      "role": "Tillie Stepson",
+                      "thumb": "https://metadata-static.plex.tv/2/people/2777fa2ef6e1f9efda493ed3a052aab9.jpg"
+                    },
+                    {
+                      "id": 43948,
+                      "filter": "actor=43948",
+                      "tag": "Bronson Redeagle",
+                      "tagKey": "6533bde7daf363957d8fc0be",
+                      "role": "Tillie's son"
+                    },
+                    {
+                      "id": 43949,
+                      "filter": "actor=43949",
+                      "tag": "Jenny Paige Lynn",
+                      "tagKey": "6533bde6d00aa8dbe22a6f77",
+                      "role": "Tillie's daughter"
+                    },
+                    {
+                      "id": 43950,
+                      "filter": "actor=43950",
+                      "tag": "David Born",
+                      "tagKey": "5d77684b61141d001fb17fc3",
+                      "role": "Kelsie's lawyer",
+                      "thumb": "https://metadata-static.plex.tv/people/5d77684b61141d001fb17fc3.jpg"
+                    },
+                    {
+                      "id": 43951,
+                      "filter": "actor=43951",
+                      "tag": "Mary Buss",
+                      "tagKey": "5d77704efb0d55001f5ed324",
+                      "role": "John Ramsey's Wife",
+                      "thumb": "https://metadata-static.plex.tv/people/5d77704efb0d55001f5ed324.jpg"
+                    },
+                    {
+                      "id": 43952,
+                      "filter": "actor=43952",
+                      "tag": "Ted Welch",
+                      "tagKey": "5d77688a374a5b001fec89ee",
+                      "role": "Reporter #1",
+                      "thumb": "https://metadata-static.plex.tv/people/5d77688a374a5b001fec89ee.jpg"
+                    },
+                    {
+                      "id": 43953,
+                      "filter": "actor=43953",
+                      "tag": "Carl Palmer",
+                      "tagKey": "5d7768b733f255001e85dafc",
+                      "role": "Reporter #2",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7768b733f255001e85dafc.jpg"
+                    },
+                    {
+                      "id": 43954,
+                      "filter": "actor=43954",
+                      "tag": "Tanner Brantley",
+                      "tagKey": "6533bde645f237e769576e75",
+                      "role": "Marshall Gunman"
+                    },
+                    {
+                      "id": 43955,
+                      "filter": "actor=43955",
+                      "tag": "Jezy Gray",
+                      "tagKey": "6533bde8d99cc1ce478dc808",
+                      "role": "Hale's Secretary"
+                    },
+                    {
+                      "id": 7033,
+                      "filter": "actor=7033",
+                      "tag": "Steve Eastin",
+                      "tagKey": "5d7768273c3c2a001fbcb1ec",
+                      "role": "Judge John C. Pollock",
+                      "thumb": "https://metadata-static.plex.tv/1/people/1513fec752d99c5acd2ab06a36d3db58.jpg"
+                    },
+                    {
+                      "id": 9686,
+                      "filter": "actor=9686",
+                      "tag": "Joe Chrest",
+                      "tagKey": "5d776828a091de001f2e64ab",
+                      "role": "Lawyer Freeling",
+                      "thumb": "https://metadata-static.plex.tv/e/people/ea1144d2ef77c13e841fde0683cef3dd.jpg"
+                    },
+                    {
+                      "id": 43956,
+                      "filter": "actor=43956",
+                      "tag": "Brian Shoop",
+                      "tagKey": "5d77689efb0d55001f5158d9",
+                      "role": "Mr. Kraceon"
+                    },
+                    {
+                      "id": 43957,
+                      "filter": "actor=43957",
+                      "tag": "James Carroll",
+                      "tagKey": "5d7768786f4521001eaa8745",
+                      "role": "Mr. Solowey",
+                      "thumb": "https://metadata-static.plex.tv/5/people/589e00e5a6471942781312686acb329c.jpg"
+                    },
+                    {
+                      "id": 43958,
+                      "filter": "actor=43958",
+                      "tag": "Lux Britni Malaske",
+                      "tagKey": "6533bde8b153fbbe5e6a2d76",
+                      "role": "Baby Anna (2 years)"
+                    },
+                    {
+                      "id": 43959,
+                      "filter": "actor=43959",
+                      "tag": "Adam Washington",
+                      "tagKey": "6533bde7b81570b858a295c5",
+                      "role": "Acolyte"
+                    },
+                    {
+                      "id": 43960,
+                      "filter": "actor=43960",
+                      "tag": "Larry Jack Dotson",
+                      "tagKey": "5d7769957a53e9001e6ea469",
+                      "role": "Jailer",
+                      "thumb": "https://metadata-static.plex.tv/people/5d7769957a53e9001e6ea469.jpg"
+                    },
+                    {
+                      "id": 43961,
+                      "filter": "actor=43961",
+                      "tag": "Larry Fessenden",
+                      "tagKey": "5d776826999c64001ec2c313",
+                      "role": "Radio Voice (for Hale)",
+                      "thumb": "https://metadata-static.plex.tv/f/people/fed82504d399663dfa2b5e4474a2b79e.jpg"
+                    },
+                    {
+                      "id": 14353,
+                      "filter": "actor=14353",
+                      "tag": "Welker White",
+                      "tagKey": "5d7768282ec6b5001f6ba5e4",
+                      "role": "Radio Voice (Hale's relative)",
+                      "thumb": "https://metadata-static.plex.tv/8/people/8c9e99649700951f19a6b4348738bb13.jpg"
+                    },
+                    {
+                      "id": 9508,
+                      "filter": "actor=9508",
+                      "tag": "Martin Scorsese",
+                      "tagKey": "5d776824961905001eb90983",
+                      "role": "Radio Show Producer",
+                      "thumb": "https://metadata-static.plex.tv/d/people/d1f9b6fe07a96dcac480d6ff4a286f10.jpg"
+                    },
+                    {
+                      "id": 43962,
+                      "filter": "actor=43962",
+                      "tag": "Marko Costanzo",
+                      "tagKey": "5d776c4196b655001fe2b1be",
+                      "role": "Radio Sound Effects"
+                    },
+                    {
+                      "id": 43963,
+                      "filter": "actor=43963",
+                      "tag": "Nicholas White",
+                      "tagKey": "62bc6131260e587a8f3a6591",
+                      "role": "Radio Sound Effects"
+                    },
+                    {
+                      "id": 43964,
+                      "filter": "actor=43964",
+                      "tag": "Rob Fisher",
+                      "tagKey": "6533bde7554f8f85c86453ad",
+                      "role": "Radio Show Conductor"
+                    },
+                    {
+                      "id": 43965,
+                      "filter": "actor=43965",
+                      "tag": "Vince Giordano",
+                      "tagKey": "5d77682b85719b001f3a1b91",
+                      "role": "Radio Show Band Leader",
+                      "thumb": "https://metadata-static.plex.tv/people/5d77682b85719b001f3a1b91.jpg"
+                    },
+                    {
+                      "id": 43966,
+                      "filter": "actor=43966",
+                      "tag": "Paul Woodiel",
+                      "tagKey": "6533bde749204d5a51710e7c",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43967,
+                      "filter": "actor=43967",
+                      "tag": "Andy Stein",
+                      "tagKey": "6533bde885decb9532fff0cc",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43968,
+                      "filter": "actor=43968",
+                      "tag": "Sam Bardfeld",
+                      "tagKey": "6533bde745f237e769576e77",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43969,
+                      "filter": "actor=43969",
+                      "tag": "Joe Boga",
+                      "tagKey": "6533bde7daf363957d8fc0bc",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43970,
+                      "filter": "actor=43970",
+                      "tag": "Jon-Erik Kellso",
+                      "tagKey": "63aed330418d6d9f22283483",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43971,
+                      "filter": "actor=43971",
+                      "tag": "Jim Fryer",
+                      "tagKey": "6533bde8554f8f85c86453b2",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43972,
+                      "filter": "actor=43972",
+                      "tag": "Marc Phaneuf",
+                      "tagKey": "62a9e029bed32e05c5d4182e",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43973,
+                      "filter": "actor=43973",
+                      "tag": "Mark Lopeman",
+                      "tagKey": "62a9e029bed32e05c5d4182d",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43974,
+                      "filter": "actor=43974",
+                      "tag": "Chris Byars",
+                      "tagKey": "6533bde740cf0ab8b51f8330",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43975,
+                      "filter": "actor=43975",
+                      "tag": "Vinny Raniolo",
+                      "tagKey": "5e162586b6f1fe003e4430f8",
+                      "role": "Radio Show Orchestra",
+                      "thumb": "https://metadata-static.plex.tv/people/5e162586b6f1fe003e4430f8.jpg"
+                    },
+                    {
+                      "id": 43976,
+                      "filter": "actor=43976",
+                      "tag": "Paul Wells",
+                      "tagKey": "6533bde8d99cc1ce478dc806",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43977,
+                      "filter": "actor=43977",
+                      "tag": "Peter Yarin",
+                      "tagKey": "6533bde71f9094fac8418c67",
+                      "role": "Radio Show Orchestra"
+                    },
+                    {
+                      "id": 43978,
+                      "filter": "actor=43978",
+                      "tag": "Scott George",
+                      "tagKey": "6533bde7daf363957d8fc0c7",
+                      "role": "End Celebration Osage Head Singer"
+                    },
+                    {
+                      "id": 43979,
+                      "filter": "actor=43979",
+                      "tag": "Kenneth Bighorse Jr.",
+                      "tagKey": "6533bde853c3c2a7f42d0c13",
+                      "role": "End Celebration Osage Head Singer"
+                    },
+                    {
+                      "id": 43980,
+                      "filter": "actor=43980",
+                      "tag": "Vann Bighorse",
+                      "tagKey": "6533bde7daf363957d8fc0c4",
+                      "role": "End Celebration Osage Head Singer"
+                    },
+                    {
+                      "id": 43981,
+                      "filter": "actor=43981",
+                      "tag": "Anna L. Bighorse",
+                      "tagKey": "6533bde8d99cc1ce478dc809",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43982,
+                      "filter": "actor=43982",
+                      "tag": "Mason Bighorse",
+                      "tagKey": "6533bde8ccc623a2dc02547e",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43983,
+                      "filter": "actor=43983",
+                      "tag": "Norris Bighorse",
+                      "tagKey": "6533bde8bab98c51595d1f78",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43984,
+                      "filter": "actor=43984",
+                      "tag": "Scott Bighorse",
+                      "tagKey": "6533bde7bab98c51595d1f75",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43985,
+                      "filter": "actor=43985",
+                      "tag": "Paul Bighorse",
+                      "tagKey": "6533bde7daf363957d8fc0c0",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43986,
+                      "filter": "actor=43986",
+                      "tag": "Taveah Ann George",
+                      "tagKey": "6533bde7b81570b858a295c6",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43987,
+                      "filter": "actor=43987",
+                      "tag": "Wahwastoas J. Jones",
+                      "tagKey": "6533bde7daf363957d8fc0c1",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43988,
+                      "filter": "actor=43988",
+                      "tag": "Dobbin Monoessy Knifechief",
+                      "tagKey": "6533bde71f9094fac8418c68",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43989,
+                      "filter": "actor=43989",
+                      "tag": "Julia Lookout",
+                      "tagKey": "6533bde8d00aa8dbe22a6f81",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43990,
+                      "filter": "actor=43990",
+                      "tag": "Jennifer Moses",
+                      "tagKey": "6533bde7095ba708eba1fa60",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43991,
+                      "filter": "actor=43991",
+                      "tag": "Francis Pipestem Jr.",
+                      "tagKey": "6533bde8f12ffcb697f3056a",
+                      "role": "End Celebration Osage Singer"
+                    },
+                    {
+                      "id": 43992,
+                      "filter": "actor=43992",
+                      "tag": "Michael Paul Pahsetopah",
+                      "tagKey": "6533bde816bc86ee64edeef9",
+                      "role": "End Celebration Osage Singer"
+                    }
+                  ],
+                  "Producer": [
+                    {
+                      "id": 14489,
+                      "filter": "producer=14489",
+                      "tag": "Martin Scorsese",
+                      "tagKey": "5d776824961905001eb90983",
+                      "thumb": "https://metadata-static.plex.tv/d/people/d1f9b6fe07a96dcac480d6ff4a286f10.jpg"
+                    },
+                    {
+                      "id": 43993,
+                      "filter": "producer=43993",
+                      "tag": "Daniel Lupi",
+                      "tagKey": "5d7768253c3c2a001fbcac55",
+                      "thumb": "https://metadata-static.plex.tv/7/people/7c415be4bda4a8e21bf475f21b441cc5.jpg"
+                    },
+                    {
+                      "id": 3301,
+                      "filter": "producer=3301",
+                      "tag": "Bradley Thomas",
+                      "tagKey": "5d776826999c64001ec2c604",
+                      "thumb": "https://metadata-static.plex.tv/f/people/f1435decdd4efcced4869ad659666f8e.jpg"
+                    },
+                    {
+                      "id": 43994,
+                      "filter": "producer=43994",
+                      "tag": "Dan Friedkin",
+                      "tagKey": "6322056f29e20b05ce45c7dd",
+                      "thumb": "https://metadata-static.plex.tv/c/people/cdc3c343e510f1c05fcdb8a00853753a.jpg"
+                    }
+                  ],
+                  "Chapter": [
+                    {
+                      "id": 26723,
+                      "filter": "thumb=26723",
+                      "tag": "Main",
+                      "index": 1,
+                      "startTimeOffset": 0,
+                      "endTimeOffset": 12489900,
+                      "thumb": "/library/media/15612/chapterImages/1"
+                    }
+                  ],
+                  "Marker": [
+                    {
+                      "final": true,
+                      "id": 28381,
+                      "type": "credits",
+                      "startTimeOffset": 11916904,
+                      "endTimeOffset": 12489894,
+                      "Attributes": {
+                        "id": 28381,
+                        "version": 4
+                      }
+                    }
+                  ],
+                  "Review": [
+                    {
+                      "id": 2532,
+                      "filter": "art=2532",
+                      "tag": "A.A. Dowd",
+                      "text": "Killers of the Flower Moon takes its time, but doesn't drag. How could it, with editor Thelma Schoonmaker once more shaping the flowing path of conspiratorial incident, like a river winding steadily and unstoppably across open country?",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.digitaltrends.com/movies/killers-of-the-flower-moon-movie-review/",
+                      "source": "Digital Trends"
+                    },
+                    {
+                      "id": 3397,
+                      "filter": "art=3397",
+                      "tag": "Bob Mondello",
+                      "text": "Along with sweeping vistas, rampant criminality and gaslit marital melodrama, the film is a gangster tale of greed, racism, lies and violence. It is, in short, American history.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.npr.org/2023/10/19/1207243738/killers-of-the-flower-moon-is-a-monstrous-story-of-greed-masterfully-told",
+                      "source": "NPR"
+                    },
+                    {
+                      "id": 1496,
+                      "filter": "art=1496",
+                      "tag": "Jordan Hoffman",
+                      "text": "Massive in scope but simple in purpose",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "http://web.archive.org/web/20240126011900/https://themessenger.com/entertainment/killers-of-the-flower-moon-review-martin-scorseses-native-american-epic-asks-some-simple-questions",
+                      "source": "The Messenger"
+                    },
+                    {
+                      "id": 1308,
+                      "filter": "art=1308",
+                      "tag": "Leonard Maltin",
+                      "text": "'Killers of the Flower Moon' is magnificent, a work of beauty, even though the world it portrays is squalid. I admire and respect it, but I would like it better if it weren't so difficult to sit through\n",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://leonardmaltin.com/killers-of-the-flower-moon/",
+                      "source": "leonardmaltin.com"
+                    },
+                    {
+                      "id": 1238,
+                      "filter": "art=1238",
+                      "tag": "John Anderson",
+                      "text": "[Scorsese] continues as an octogenarian to explore and expand the possibilities of the medium and scour his own soul. He has created, with the sweep of grand opera, a film unlike anything he has ever done.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.americamagazine.org/arts-culture/2023/10/20/review-killers-flower-moon-246348",
+                      "source": "America Magazine"
+                    },
+                    {
+                      "id": 726,
+                      "filter": "art=726",
+                      "tag": "Richard Brody",
+                      "text": "There's a way of looking at this movie, a colossal tale of the sociopathy of American history, that's a matter of listening to what's said and what isn't. The movie raises the idea of silence to a nearly transcendent pitch of passion.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.newyorker.com/culture/the-front-row/the-silent-thunder-of-killers-of-the-flower-moon",
+                      "source": "New Yorker"
+                    },
+                    {
+                      "id": 108,
+                      "filter": "art=108",
+                      "tag": "Thelma Adams",
+                      "text": "The juicy period piece based on the nonfiction bestseller by David Grann gets the Hollywood star treatment, but a multipart series with age-appropriate male stars might have better-served the grim chapter's complexities. ",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.aarp.org/entertainment/television/info-2023/what-to-watch-best-new-movies-shows-streaming.html",
+                      "source": "AARP Movies for Grownups"
+                    },
+                    {
+                      "id": 204,
+                      "filter": "art=204",
+                      "tag": "Peter Rainer",
+                      "text": "An honorable try, the movie nevertheless doesn't fully capture the enormity of the tragedy. At best it's a sorrowful, necessary dirge. Other times, it's like Goodfellas on the range but, understandably, without the spring-coiled momentum of that film.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.csmonitor.com/The-Culture/Movies/2023/1019/Flower-Moon-A-true-tale-of-oil-Native-rights-and-murder",
+                      "source": "Christian Science Monitor"
+                    },
+                    {
+                      "id": 146,
+                      "filter": "art=146",
+                      "tag": "James Berardinelli",
+                      "text": "This is not great Scorsese. It doesn't achieve the high level he has reached with his best productions. But it's nevertheless a very good motion picture (as is true of the director's \"second tier\" efforts).",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.reelviews.net/reelviews/killers-of-the-flower-moon",
+                      "source": "ReelViews"
+                    },
+                    {
+                      "id": 659,
+                      "filter": "art=659",
+                      "tag": "Katie Walsh",
+                      "text": "He's always been a dynamic, invigorating filmmaker, and here he is just as bold as he's always been. The film is deeply moving, at once sobering and enraging. It is simply an astonishing work, a true masterpiece.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://journalstar.com/life-entertainment/local/review-scorceses-killers-of-the-flower-moon-a-vital-daring-masterpiece/article_749e3a14-6d23-11ee-8080-231a0e781675.html",
+                      "source": "Tribune News Service"
+                    },
+                    {
+                      "id": 559,
+                      "filter": "art=559",
+                      "tag": "Rex Reed",
+                      "text": "In the end, I recommend seeing it, but I think Killers of the Flower Moon is the kind of movie you respect and admire without much actual enjoyment. ",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://observer.com/2023/10/killers-of-the-flower-moon-movie-review-see-it-but-dont-expect-to-enjoy-it/",
+                      "source": "Observer"
+                    },
+                    {
+                      "id": 43995,
+                      "filter": "art=43995",
+                      "tag": "Joel Robinson",
+                      "text": "A length of three and a half hours is more than justified. Besides, the masterful performances by everyone involved help to keep you locked in.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://slate.com/culture/2023/10/killers-of-the-flower-moon-movie-osage-martin-scorsese.html?via=rss",
+                      "source": "Slate"
+                    },
+                    {
+                      "id": 118,
+                      "filter": "art=118",
+                      "tag": "Max Weiss",
+                      "text": "Yes, the film is three and a half hours. What's so impressive about it is how Scorsese manages to inject urgency into even small moments.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.baltimoremagazine.com/section/artsentertainment/movie-review-killers-of-the-flower-moon/",
+                      "source": "Baltimore Magazine"
+                    },
+                    {
+                      "id": 339,
+                      "filter": "art=339",
+                      "tag": "Dwight Brown",
+                      "text": "It's an opulent, indulgent crime/drama/history film made from bits of facts and padded with fiction. Nothing more.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://dwightbrownink.com/killers-of-the-flower-moon/",
+                      "source": "DwightBrownInk.com"
+                    },
+                    {
+                      "id": 103,
+                      "filter": "art=103",
+                      "tag": "Adam Nayman",
+                      "text": "Telling the story of the mass murder of the Osage Nation, Martin Scorsese wrestles with himself, Hollywood as a whole, and the original sin of America itself.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.theringer.com/movies/2023/10/24/23929317/killers-of-the-flower-moon-review-martin-scorsese",
+                      "source": "The Ringer"
+                    },
+                    {
+                      "id": 43996,
+                      "filter": "art=43996",
+                      "tag": "David Klion",
+                      "text": "Scorsese's film is a benchmark in how popular culture understands the American West and the Indigenous experience.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://newrepublic.com/article/175073/killers-flower-moon-groundbreaking-achievement-martin-scorsese-review",
+                      "source": "The New Republic"
+                    },
+                    {
+                      "id": 1494,
+                      "filter": "art=1494",
+                      "tag": "Adam Kempenaar",
+                      "text": "Who is Ernest, really, but a much dimmer, more passive Henry Hill?",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://www.filmspotting.net/episodes-archive/2023/10/27/942-killers-of-the-flower-moon-scorsese-ranked",
+                      "source": "Filmspotting"
+                    },
+                    {
+                      "id": 655,
+                      "filter": "art=655",
+                      "tag": "Stephanie Zacharek",
+                      "text": "Scorsese has made a somber, poetic adaptation of David Grann's account of how a group of greedy white men systematically murdered members of the Osage Nation in early 1920s Oklahoma.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://time.com/6341118/best-movies-2023/",
+                      "source": "TIME Magazine"
+                    },
+                    {
+                      "id": 119,
+                      "filter": "art=119",
+                      "tag": "Alonso Duralde",
+                      "text": "A haunting examination of entitlement and colonization, Scorsese's exquisitely produced, powerfully acted look at American history hits hard - and then acknowledges the shortcomings of attempting to turn this level of tragedy into narrative entertainment.",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "link": "https://thefilmverdict.com/alonso-duralde-top-10-films-of-2023/",
+                      "source": "The Film Verdict"
+                    },
+                    {
+                      "id": 2443,
+                      "filter": "art=2443",
+                      "tag": "Keith Phipps",
+                      "text": "Lily Gladstone provides the soulful counterweight to the amorality of those who see her and those like her less as humans than resources to be exploited and discarded when used up. ",
+                      "image": "rottentomatoes://image.review.fresh",
+                      "source": "Uproxx"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
