@@ -16,50 +16,57 @@ func NewTrackHandlers(db *gorm.DB) *trackHandlers {
 	return &trackHandlers{db: db}
 }
 
-func (h *trackHandlers) GetTracks(c *fiber.Ctx) error {
-	var tracks []models.Track
-
-	err := h.db.Find(&tracks).Error
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": tracks})
-}
-
 func (h *trackHandlers) GetTrackByID(c *fiber.Ctx) error {
-	var t models.Track
+	var track models.Track
 	id := c.Params("id")
 
 	trackId, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	err = h.db.First(&t, uint(trackId)).Error
+	err = h.db.First(&track, uint(trackId)).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err})
-		}
+		statusCode := getStatusCode(err)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": t})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error": false,
+		"item":  track,
+	})
 }
 
 func (h *trackHandlers) CreateTrack(c *fiber.Ctx) error {
-	var t models.Track
+	var track models.Track
 
-	err := c.BodyParser(&t)
+	err := c.BodyParser(&track)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	err = h.db.Create(&t).Error
+	err = h.db.Create(&track).Error
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		statusCode := getStatusCode(err)
+
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"item": t})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"error": false,
+		"item":  track,
+	})
 }

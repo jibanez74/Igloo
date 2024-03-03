@@ -53,7 +53,6 @@ func trackRoutes(app *fiber.App, db *gorm.DB) {
 	group := app.Group("/api/v1/track")
 
 	group.Get("/:id", h.GetTrackByID)
-	group.Get("", h.GetTracks)
 	group.Post("", h.CreateTrack)
 }
 

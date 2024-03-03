@@ -16,44 +16,63 @@ func NewMusicMoodHandlers(db *gorm.DB) *musicMoodHandlers {
 }
 
 func (h *musicMoodHandlers) GetMusicMoodByTag(c *fiber.Ctx) error {
-	var m models.MusicMood
-	t := c.Params("tag")
+	var mood models.MusicMood
+	tag := c.Params("tag")
 
-	err := h.db.First(&m).Where("tag = ?", t).Error
+	err := h.db.Where("tag = ?", tag).First(&mood).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err})
-		}
+		statusCode := getStatusCode(err)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error": false,
+		"item":  mood,
+	})
 }
 
 func (h *musicMoodHandlers) GetMusicMoods(c *fiber.Ctx) error {
-	var m []models.MusicMood
+	var moods []models.MusicMood
 
-	err := h.db.Find(&m).Error
+	err := h.db.Find(&moods).Error
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": m})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error": false,
+		"items": moods,
+	})
 }
 
 func (h *musicMoodHandlers) FindOrCreateMusicMood(c *fiber.Ctx) error {
-	var m models.MusicMood
+	var mood models.MusicMood
 
-	err := c.BodyParser(&m)
+	err := c.BodyParser(&mood)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	err = h.db.FirstOrCreate(&m).Error
+	err = h.db.FirstOrCreate(&mood).Error
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error":   false,
+		"message": err,
+	})
 }
