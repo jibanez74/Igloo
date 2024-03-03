@@ -56,6 +56,24 @@ func trackRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("", h.CreateTrack)
 }
 
+func castRoutes(app *fiber.App, db *gorm.DB) {
+	h := handlers.NewCastHandlers(db)
+
+	group := app.Group("/api/v1/cast")
+
+	group.Get("/name/:name", h.GetCastMemberByName)
+	group.Post("", h.FindOrCreateCastMember)
+}
+
+func crewRoutes(app *fiber.App, db *gorm.DB) {
+	h := handlers.NewCrewHandlers(db)
+
+	group := app.Group("/api/v1/crew")
+
+	group.Get("/name/:name", h.GetCrewMemberByName)
+	group.Post("", h.FindOrCreateCrewMember)
+}
+
 func movieRoutes(app *fiber.App, db *gorm.DB) {
 	h := handlers.NewMovieHandlers(db)
 

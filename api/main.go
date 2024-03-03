@@ -25,6 +25,8 @@ func main() {
 	musicianRoutes(app, db)
 	albumRoutes(app, db)
 	trackRoutes(app, db)
+	castRoutes(app, db)
+	crewRoutes(app, db)
 	movieRoutes(app, db)
 
 	app.Listen(PORT)
