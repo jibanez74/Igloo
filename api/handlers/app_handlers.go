@@ -7,5 +7,5 @@ type appHandlers struct {
 }
 
 func NewAppHandlers(db *gorm.DB) *appHandlers {
-	return &appHandlers{db}
+	return &appHandlers{db: db}
 }

@@ -1,4 +1,3 @@
-// description: This package is responsible for running all the migrations
 package database
 
 import (
@@ -8,13 +7,33 @@ import (
 )
 
 func RunMigrations(db *gorm.DB) {
-	err := db.AutoMigrate(&models.User{}, &models.MusicGenre{}, &models.MusicMood{}, &models.Musician{}, &models.Album{}, &models.Track{}, &models.Playlist{}, &models.TrackHistory{})
+	err := db.AutoMigrate(
+		&models.Album{},
+		&models.Musician{},
+		&models.MusicGenre{},
+		&models.MusicMood{},
+		&models.Track{},
+		&models.TrackHistory{},
+		&models.Playlist{},
+
+		// movie data migrations
+		&models.Artist{},
+		&models.CastMember{},
+		&models.CrewMember{},
+		&models.Studio{},
+		&models.MovieGenre{},
+		&models.Movie{},
+
+		// user data migrations
+		&models.User{},
+	)
+
 	if err != nil {
 		panic("Error: Unable to run user migrations")
 	}
 
-	err = db.AutoMigrate(&models.User{})
 	if err != nil {
 		panic("Error: Unable to run user migrations")
 	}
+
 }

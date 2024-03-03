@@ -12,14 +12,14 @@ type User struct {
 	Email               string         `gorm:"not null;uniqueIndex" json:"email"`
 	Username            string         `gorm:"size:20;not null;uniqueIndex" json:"username"`
 	Password            string         `gorm:"size:128;not null" json:"password"`
-	Avatar              string         `gorm:"default:'/public/images/no_avatar.jpg'" json:"avatar"`
+	Thumb               string         `gorm:"default:'/public/images/no_thumb.jpg'" json:"thumb"`
 	IsAdmin             bool           `gorm:"default:false; not null"`
 	FavoriteMusicians   []*Musician    `gorm:"many2many:user_musicians" json:"favoriteMusicians"`
-	FavoriteMusicGenres []*MusicGenre  `gorm:"many2many:user_genres" json:"favoriteGenres"`
+	FavoriteMusicGenres []*MusicGenre  `gorm:"many2many:user_music_genres" json:"favoriteGenres"`
 	Playlists           []*Playlist    `gorm:"constraint:OnDelete:CASCADE" json:"playlists"`
 	TrackHistory        []TrackHistory `gorm:"constraint:OnDelete:CASCADE" json:"trackHistory"`
-	FavoriteMovies      []*Movie       `gorm:"many2many:user_movies" json:"favoriteMovies"`
-	FavoriteMovieGenres []*MovieGenre  `gorm:"many2many:user_genres" json:"favoriteMovieGenres"`
+	FavoriteMovies      []*Movie       `gorm:"many2many:user_movie" json:"favoriteMovies"`
+	FavoriteMovieGenres []*MovieGenre  `gorm:"many2many:user_movie_genre" json:"favoriteMovieGenres"`
 }
 
 func (m *User) BeforeSave(tx *gorm.DB) (err error) {

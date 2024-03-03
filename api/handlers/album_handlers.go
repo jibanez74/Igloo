@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultPageSize = 20
+const defaultPageSize = 10
 
 func (h *appHandlers) GetAlbums(c *fiber.Ctx) error {
 	page, err := strconv.Atoi(c.Query("page", "1"))
