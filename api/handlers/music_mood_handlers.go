@@ -7,7 +7,15 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h *appHandlers) GetMusicMoodByTag(c *fiber.Ctx) error {
+type musicMoodHandlers struct {
+	db *gorm.DB
+}
+
+func NewMusicMoodHandlers(db *gorm.DB) *musicMoodHandlers {
+	return &musicMoodHandlers{db: db}
+}
+
+func (h *musicMoodHandlers) GetMusicMoodByTag(c *fiber.Ctx) error {
 	var m models.MusicMood
 	t := c.Params("tag")
 
@@ -23,7 +31,7 @@ func (h *appHandlers) GetMusicMoodByTag(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
 }
 
-func (h *appHandlers) GetMusicMoods(c *fiber.Ctx) error {
+func (h *musicMoodHandlers) GetMusicMoods(c *fiber.Ctx) error {
 	var m []models.MusicMood
 
 	err := h.db.Find(&m).Error
@@ -34,7 +42,7 @@ func (h *appHandlers) GetMusicMoods(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": m})
 }
 
-func (h *appHandlers) FindOrCreateMusicMood(c *fiber.Ctx) error {
+func (h *musicMoodHandlers) FindOrCreateMusicMood(c *fiber.Ctx) error {
 	var m models.MusicMood
 
 	err := c.BodyParser(&m)

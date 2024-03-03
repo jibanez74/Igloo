@@ -20,6 +20,11 @@ func main() {
 	app.Use(recover.New())
 	app.Use(cors.New())
 
+	musicGenreRoutes(app, db)
+	musicMoodRoutes(app, db)
+	musicianRoutes(app, db)
+	albumRoutes(app, db)
+	trackRoutes(app, db)
 	movieRoutes(app, db)
 
 	app.Listen(PORT)

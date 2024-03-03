@@ -8,7 +8,15 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h *appHandlers) GetTracks(c *fiber.Ctx) error {
+type trackHandlers struct {
+	db *gorm.DB
+}
+
+func NewTrackHandlers(db *gorm.DB) *trackHandlers {
+	return &trackHandlers{db: db}
+}
+
+func (h *trackHandlers) GetTracks(c *fiber.Ctx) error {
 	var tracks []models.Track
 
 	err := h.db.Find(&tracks).Error
@@ -19,7 +27,7 @@ func (h *appHandlers) GetTracks(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": tracks})
 }
 
-func (h *appHandlers) GetTrackByID(c *fiber.Ctx) error {
+func (h *trackHandlers) GetTrackByID(c *fiber.Ctx) error {
 	var t models.Track
 	id := c.Params("id")
 
@@ -40,7 +48,7 @@ func (h *appHandlers) GetTrackByID(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": t})
 }
 
-func (h *appHandlers) CreateTrack(c *fiber.Ctx) error {
+func (h *trackHandlers) CreateTrack(c *fiber.Ctx) error {
 	var t models.Track
 
 	err := c.BodyParser(&t)

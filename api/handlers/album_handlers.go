@@ -8,45 +8,15 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultPageSize = 10
-
-func (h *appHandlers) GetAlbums(c *fiber.Ctx) error {
-	page, err := strconv.Atoi(c.Query("page", "1"))
-	if err != nil || page < 1 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid page number"})
-	}
-
-	pageSize, err := strconv.Atoi(c.Query("pageSize", strconv.Itoa(defaultPageSize)))
-	if err != nil || pageSize < 1 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid page size"})
-	}
-
-	var totalAlbumsCount int64
-	if err := h.db.Model(&models.Musician{}).Count(&totalAlbumsCount).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
-	}
-
-	offset := (page - 1) * pageSize
-
-	var m []models.Musician
-
-	err = h.db.Offset(offset).Limit(pageSize).Find(&m).Error
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
-	}
-
-	totalPages := int(totalAlbumsCount) / pageSize
-	if int(totalAlbumsCount)%pageSize != 0 {
-		totalPages++
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"items":      m,
-		"totalPages": totalPages,
-	})
+type albumHandlers struct {
+	db *gorm.DB
 }
 
-func (h *appHandlers) GetAlbumByTitle(c *fiber.Ctx) error {
+func NewAlbumHandlers(db *gorm.DB) *albumHandlers {
+	return &albumHandlers{db: db}
+}
+
+func (h *albumHandlers) GetAlbumByTitle(c *fiber.Ctx) error {
 	var a models.Album
 	t := c.Params("title")
 
@@ -62,7 +32,7 @@ func (h *appHandlers) GetAlbumByTitle(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": a})
 }
 
-func (h *appHandlers) GetAlbumByID(c *fiber.Ctx) error {
+func (h *albumHandlers) GetAlbumByID(c *fiber.Ctx) error {
 	var a models.Album
 	id := c.Params("id")
 
@@ -83,7 +53,7 @@ func (h *appHandlers) GetAlbumByID(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": a})
 }
 
-func (h *appHandlers) CreateAlbum(c *fiber.Ctx) error {
+func (h *albumHandlers) CreateAlbum(c *fiber.Ctx) error {
 	var a models.Album
 
 	err := c.BodyParser(&a)

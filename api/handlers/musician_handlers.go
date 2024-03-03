@@ -8,7 +8,15 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h *appHandlers) GetMusicianByID(c *fiber.Ctx) error {
+type musicianHandlers struct {
+	db *gorm.DB
+}
+
+func NewMusicianHandlers(db *gorm.DB) *musicianHandlers {
+	return &musicianHandlers{db: db}
+}
+
+func (h *musicianHandlers) GetMusicianByID(c *fiber.Ctx) error {
 	var m models.Musician
 	id := c.Params("id")
 
@@ -29,7 +37,7 @@ func (h *appHandlers) GetMusicianByID(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
 }
 
-func (h *appHandlers) GetMusicianByName(c *fiber.Ctx) error {
+func (h *musicianHandlers) GetMusicianByName(c *fiber.Ctx) error {
 	var m models.Musician
 	n := c.Params("name")
 
@@ -45,7 +53,7 @@ func (h *appHandlers) GetMusicianByName(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": m})
 }
 
-func (h *appHandlers) CreateMusician(c *fiber.Ctx) error {
+func (h *musicianHandlers) CreateMusician(c *fiber.Ctx) error {
 	var m models.Musician
 
 	err := c.BodyParser(&m)

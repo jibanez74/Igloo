@@ -7,45 +7,74 @@ import (
 	"gorm.io/gorm"
 )
 
-func (h *appHandlers) GetMusicGenreByTag(c *fiber.Ctx) error {
-	var g models.MusicGenre
-	t := c.Params("tag")
-
-	err := h.db.First(&g).Where("Tag = ?", t).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": err})
-		}
-
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": g})
+type musicGenreHandlers struct {
+	db *gorm.DB
 }
 
-func (h *appHandlers) GetMusicGenres(c *fiber.Ctx) error {
-	var g []models.MusicGenre
-
-	err := h.db.Find(&g).Error
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": g})
+func NewMusicGenreHandlers(db *gorm.DB) *musicGenreHandlers {
+	return &musicGenreHandlers{db: db}
 }
 
-func (h *appHandlers) FindOrCreateMusicGenre(c *fiber.Ctx) error {
-	var g models.MusicGenre
+func (h *musicGenreHandlers) GetMusicGenreByTag(c *fiber.Ctx) error {
+	var genre models.MusicGenre
+	tag := c.Params("tag")
 
-	err := c.BodyParser(&g)
+	err := h.db.Where("tag = ?", tag).First(&genre).Error
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err})
+		statusCode := getStatusCode(err)
+
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	err = h.db.FirstOrCreate(&g).Error
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error": false,
+		"item":  genre,
+	})
+}
+
+func (h *musicGenreHandlers) GetMusicGenres(c *fiber.Ctx) error {
+	var genres []models.MusicGenre
+
+	err := h.db.Find(&genres).Error
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err})
+		statusCode := getStatusCode(err)
+
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"item": g})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error": false,
+		"items": genres,
+	})
+}
+
+func (h *musicGenreHandlers) FindOrCreateMusicGenre(c *fiber.Ctx) error {
+	var genre models.MusicGenre
+
+	err := c.BodyParser(&genre)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":   true,
+			"message": err,
+		})
+	}
+
+	err = h.db.FirstOrCreate(&genre).Error
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":    true,
+			"messsage": err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"error":   false,
+		"message": err,
+	})
 }
