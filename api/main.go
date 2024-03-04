@@ -26,5 +26,10 @@ func main() {
 	routes.AlbumRoutes(app, db)
 	routes.TrackRoutes(app, db)
 
+	// movie routes
+	routes.ArtistRoutes(app, db)
+	routes.MovieGenreRoutes(app, db)
+	routes.MovieRoutes(app, db)
+
 	app.Listen(PORT)
 }
