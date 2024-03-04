@@ -2,9 +2,9 @@ package main
 
 import (
 	"igloo/database"
+	"igloo/routes"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
@@ -18,16 +18,13 @@ func main() {
 
 	app := fiber.New()
 	app.Use(recover.New())
-	app.Use(cors.New())
 
-	musicGenreRoutes(app, db)
-	musicMoodRoutes(app, db)
-	musicianRoutes(app, db)
-	albumRoutes(app, db)
-	trackRoutes(app, db)
-	castRoutes(app, db)
-	crewRoutes(app, db)
-	movieRoutes(app, db)
+	// music routes
+	routes.MusicGenreRoutes(app, db)
+	routes.MusicMoodRoutes(app, db)
+	routes.MusicianRoutes(app, db)
+	routes.AlbumRoutes(app, db)
+	routes.TrackRoutes(app, db)
 
 	app.Listen(PORT)
 }

@@ -40,6 +40,8 @@ async function saveMovies() {
       if (newMovie.tmdbID) {
         const tmdbMovie = await tmdb.get(`/movie/${newMovie.tmdbID}`);
 
+        await saveMovieCredits(newMovie.tmdbID);
+
         newMovie.title = tmdbMovie.data.title;
         newMovie.tagline = tmdbMovie.data.tagline;
         newMovie.summary = tmdbMovie.data.overview;
@@ -128,6 +130,20 @@ async function saveSpokenLanguages(spokenLanguages) {
 
       results.push(data.item);
     }
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function saveMovieCredits(id) {
+  try {
+    const { data } = await tmdb.get(`/movie/${id}/credits`);
+
+    // write the data to a json file
+    fs.writeFileSync(
+      path.join(__dirname, "movieCredits.json"),
+      JSON.stringify(data, null, 2)
+    );
   } catch (err) {
     throw err;
   }

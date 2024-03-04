@@ -5,10 +5,13 @@ const path = require("path");
 const api = require("./config/api");
 const saveImage = require("./utils/savePlexImage");
 const plex = require("./config/plex");
-const querystring = require("querystring");
 
-// saveMusicians();
-// saveAlbums();
+main();
+
+async function main() {
+  await saveMusicians();
+  await saveAlbums();
+}
 
 async function saveTracks(key, album) {
   try {
@@ -54,9 +57,12 @@ async function saveTracks(key, album) {
 async function saveAlbums() {
   try {
     const res = await plex.get("/library/sections/11/albums");
-    const plexAlbums = res.data.MediaContainer.Metadata;
 
-    for (const a of plexAlbums) {
+    console.log(
+      `Got ${res.data.MediaContainer.size} albums from plex.  About to start loop to save data into igloo.`
+    );
+
+    for (const a of res.data.MediaContainer.Metadata) {
       const album = {
         title: a.title,
         numberOfTracks: a.leafCount,
@@ -66,11 +72,9 @@ async function saveAlbums() {
       };
 
       if (a.parentTitle) {
-        const encodedName = querystring.escape(a.parentTitle);
+        const res = await api.post("/musician/name", { name: a.parentTitle });
 
-        const { data } = await api.get(`/musician/name/${encodedName}`);
-
-        album.musicians = [data.item];
+        album.musicians = [res.data.musician];
       }
 
       if (a.Genre && Array.isArray(a.Genre)) {
@@ -92,7 +96,7 @@ async function saveAlbums() {
 
       const result = await api.post("/album", album);
 
-      await saveTracks(a.key, result.data.item);
+      await saveTracks(a.key, result.data.album);
     }
 
     console.log("done saving albums");
@@ -104,11 +108,12 @@ async function saveAlbums() {
 async function saveMusicians() {
   try {
     const { data } = await plex.get("/library/sections/11/all");
-    const plexArtistData = data.MediaContainer.Metadata;
 
-    console.log("about to start loop over plex artists");
+    console.log(
+      `Got ${data.MediaContainer.Metadata.length} musicians from plex.  About to start loop to save data into igloo.`
+    );
 
-    for (const artist of plexArtistData) {
+    for (const artist of data.MediaContainer.Metadata) {
       const a = {
         name: artist.title,
         summary: artist.summary ? artist.summary : "",
@@ -132,58 +137,37 @@ async function saveMusicians() {
 
     console.log("done saving musicians");
   } catch (err) {
-    console.error(err.response.data);
+    console.error(err);
   }
 }
 
 async function saveGenres(genres) {
-  const genreList = [];
-
-  if (!genres) {
-    const res = await api.post("/music-genre", { tag: "unknown" });
-
-    genreList.push(res.data.item);
-
-    return genreList;
+  if (!genres || !Array.isArray(genres) || genres.length === 0) {
+    return [];
   }
 
+  const genreList = [];
+
   for (const g of genres) {
-    try {
-      const res = await api.post("/music-genre", { tag: g.tag });
+    const res = await api.post("music-genre", { tag: g.tag });
 
-      genreList.push(res.data.item);
-    } catch (err) {
-      console.log("error saving genre", err);
-      const errorFilePath = path.join(__dirname, "errors.json");
-      fs.writeFileSync(errorFilePath, JSON.stringify(err));
-
-      process.exit(3);
-    }
+    genreList.push(res.data.genre);
   }
 
   return genreList;
 }
 
 async function saveMoods(moods) {
-  const moodList = [];
-
-  if (!Array.isArray(moods)) {
-    const res = await api.post("/music-mood", { tag: "unknown" });
-
-    moodList = [res.data.item];
-
-    return moodList;
+  if (!moods || !Array.isArray(moods) || moods.length === 0) {
+    return [];
   }
 
-  for (const m of moods) {
-    try {
-      const res = await api.post("/music-mood", { tag: m.tag });
+  const moodList = [];
 
-      moodList.push(res.data.item);
-    } catch (err) {
-      console.error(err);
-      process.exit(3);
-    }
+  for (const m of moods) {
+    const res = await api.post("/music-mood", { tag: m.tag });
+
+    moodList.push(res.data.mood);
   }
 
   return moodList;
