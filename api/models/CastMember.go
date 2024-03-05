@@ -8,6 +8,6 @@ type CastMember struct {
 	ArtistID  uint
 	Movie     Movie
 	MovieID   uint
-	Character string `gorm:"size:80;default:'unknown'" json:"character"`
+	Character string `gorm:"default:'unknown'" json:"character"`
 	Order     uint   `json:"order"`
 }

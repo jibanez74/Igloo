@@ -18,13 +18,25 @@ async function saveMovies() {
 
     const res = await plex.get("/library/sections/1/all");
 
+    console.log(
+      `Got ${res.data.MediaContainer.Metadata.length} movies from plex.  About to start loop to save data into igloo.`
+    );
+
     for (const m of res.data.MediaContainer.Metadata) {
       const plexMovieData = await plex.get(m.key + urlQueries);
 
       const plexMovie = plexMovieData.data.MediaContainer.Metadata[0];
 
-      const newMovie = {};
+      // basic data from plex
+      const newMovie = {
+        duration: plexMovie.duration,
+        contentRating: plexMovie.contentRating,
+        year: plexMovie.year,
+        criticRating: plexMovie.rating,
+        audienceRating: plexMovie.audienceRating,
+      };
 
+      // check if the movie has a tmdb or imdb id
       if (plexMovie.Guid && plexMovie.Guid.length > 0) {
         plexMovie.Guid.forEach(g => {
           if (g.id.includes("tmdb")) {
@@ -37,18 +49,16 @@ async function saveMovies() {
         });
       }
 
+      // check if we have a tmdb id, if so get movie info from tmdb db
       if (newMovie.tmdbID) {
         const tmdbMovie = await tmdb.get(`/movie/${newMovie.tmdbID}`);
 
-        await saveMovieCredits(newMovie.tmdbID);
-
         newMovie.title = tmdbMovie.data.title;
-        newMovie.tagline = tmdbMovie.data.tagline;
         newMovie.summary = tmdbMovie.data.overview;
+        newMovie.tagline = tmdbMovie.data.tagline;
         newMovie.releaseDate = new Date(tmdbMovie.data.release_date);
         newMovie.budget = tmdbMovie.data.budget;
         newMovie.revenue = tmdbMovie.data.revenue;
-        newMovie.adult = tmdbMovie.data.adult;
 
         newMovie.genres = await saveGenres(tmdbMovie.data.genres);
 
@@ -56,95 +66,127 @@ async function saveMovies() {
           tmdbMovie.data.production_companies
         );
 
-        newMovie.thumb = await saveTmdbImage(
-          tmdbMovie.data.poster_path,
-          "public/images/thumb"
-        );
+        if (tmdbMovie.data.spoken_languages) {
+          newMovie.spokenLanguages = tmdbMovie.data.spoken_languages
+            .map(l => l.english_name)
+            .join("");
+        }
 
-        newMovie.art = await saveTmdbImage(
-          tmdbMovie.data.backdrop_path,
-          "public/images/movies/art"
-        );
+        if (tmdbMovie.data.poster_path) {
+          newMovie.thumb = await saveTmdbImage(
+            tmdbMovie.data.poster_path,
+            "public/images/thumb"
+          );
+        }
+
+        if (tmdbMovie.data.backdrop_path) {
+          newMovie.art = await saveTmdbImage(
+            tmdbMovie.data.backdrop_path,
+            "public/images/movies/art"
+          );
+        }
+
+        const { crew, cast } = await saveMovieCredits(newMovie.tmdbID);
+
+        const movieResult = await api.post("/movie", {
+          movie: newMovie,
+          crew,
+          cast,
+        });
       } else {
         newMovie.title = plexMovie.title;
         newMovie.tagline = plexMovie.tagline;
         newMovie.summary = plexMovie.summary;
         newMovie.releaseDate = new Date(plexMovie.originallyAvailableAt);
-      }
 
-      newMovie.year = plexMovie.year;
+        await api.post("/movie", newMovie);
+      }
     }
+
+    console.log("done saving movies");
   } catch (err) {
-    console.error(err);
+    console.error(err.message);
+    console.error(JSON.stringify(err.response.data));
   }
 }
 
 async function saveGenres(genres) {
+  if (!genres || !Array.isArray(genres) || genres.length === 0) {
+    return [];
+  }
+
   const result = [];
 
-  try {
-    for (const g of genres) {
-      const { data } = await api.post("/movie/genre", {
-        tag: g.name,
-      });
+  for (const g of genres) {
+    const res = await api.post("/movie-genre", {
+      tag: g.name,
+    });
 
-      result.push(data.item);
-    }
-
-    return result;
-  } catch (err) {
-    throw err;
+    result.push(res.data.genre);
   }
+
+  return result;
 }
 
 async function saveStudios(studios) {
+  if (!studios || !Array.isArray(studios) || studios.length === 0) {
+    return [];
+  }
+
   const results = [];
 
-  try {
-    for (const s of studios) {
-      const { data } = await api.post("/movie/studio", {
-        title: s.name,
-        logo: s.logo_path,
-        country: s.origin_country,
-      });
+  for (const s of studios) {
+    const res = await api.post("/studio", {
+      title: s.name,
+      thumb: s.logo_path,
+      country: s.origin_country,
+    });
 
-      results.push(data.item);
-    }
-
-    return results;
-  } catch (err) {
-    throw err;
+    results.push(res.data.studio);
   }
+
+  return results;
 }
 
-async function saveSpokenLanguages(spokenLanguages) {
-  const results = [];
+async function saveMovieCredits(tmdbMovieId) {
+  const res = await tmdb.get(`/movie/${tmdbMovieId}/credits`);
+  const cast = [];
+  const crew = [];
+  const staff = [...res.data.cast, ...res.data.crew];
 
-  try {
-    for (const lang of spokenLanguages) {
-      const { data } = await api.post("/movie/language", {
-        title: lang.name,
-        shortTitle: lang.iso_639_1,
-        englishTitle: lang.english_name,
-      });
+  for (const c of res.data.cast) {
+    const res = await api.post("/artist", {
+      KnownFor: c.known_for_department,
+      name: c.name,
+      originalName: c.original_name,
+      thumb: c.profile_path,
+    });
 
-      results.push(data.item);
+    const { artist } = res.data;
+
+    const member = {
+      KnownFor: artist.known_for_department,
+      name: artist.name,
+      originalName: artist.original_name,
+      thumb: artist.profile_path,
+      artist,
+    };
+
+    if (Object.keys(c).includes("character")) {
+      member.character = c.character;
+      member.order = c.order;
+
+      cast.push(member);
+    } else {
+      member.job = c.job;
+      member.department = c.department;
+
+      crew.push(member);
     }
-  } catch (err) {
-    throw err;
   }
-}
 
-async function saveMovieCredits(id) {
-  try {
-    const { data } = await tmdb.get(`/movie/${id}/credits`);
-
-    // write the data to a json file
-    fs.writeFileSync(
-      path.join(__dirname, "movieCredits.json"),
-      JSON.stringify(data, null, 2)
-    );
-  } catch (err) {
-    throw err;
-  }
+  return {
+    crew,
+    cast,
+  };
 }

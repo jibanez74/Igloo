@@ -9,7 +9,7 @@ import (
 )
 
 func MovieGenreRoutes(app *fiber.App, db *gorm.DB) {
-	route := app.Group("/api/v1/movie_genre")
+	route := app.Group("/api/v1/movie-genre")
 
 	route.Get("/:id", func(c *fiber.Ctx) error {
 		var movieGenre models.MovieGenre

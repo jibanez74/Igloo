@@ -29,7 +29,10 @@ func main() {
 	// movie routes
 	routes.ArtistRoutes(app, db)
 	routes.MovieGenreRoutes(app, db)
+	routes.StudioRoutes(app, db)
 	routes.MovieRoutes(app, db)
+	routes.CastRoutes(app, db)
+	routes.CrewRoutes(app, db)
 
 	app.Listen(PORT)
 }
