@@ -19,6 +19,9 @@ func main() {
 	app := fiber.New()
 	app.Use(recover.New())
 
+	// routes for home screen
+	routes.HomeRoutes(app, db)
+
 	// music routes
 	routes.MusicGenreRoutes(app, db)
 	routes.MusicMoodRoutes(app, db)
@@ -31,8 +34,6 @@ func main() {
 	routes.MovieGenreRoutes(app, db)
 	routes.StudioRoutes(app, db)
 	routes.MovieRoutes(app, db)
-	routes.CastRoutes(app, db)
-	routes.CrewRoutes(app, db)
 
 	app.Listen(PORT)
 }

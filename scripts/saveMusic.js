@@ -32,17 +32,22 @@ async function saveTracks(key, album) {
         audioChannels: t.Media[0].saveAlbums,
         codec: t.Media[0].audioCodec,
         album: album.ID,
-        musicians: album.musicians,
         genres: album.genres,
         album,
       };
+
+      track.musicians = [album.musician];
 
       if (t.parentYear) {
         track.year = t.parentYear;
       }
 
-      if (t.Mood && Array.isArray(t.Mood)) {
-        track.moods = await saveMoods(t.Mood);
+      if (t.Mood) {
+        track.moods = t.Mood.map(m => ({
+          tag: m.tag,
+        }));
+      } else {
+        track.moods = [{ tag: "unknown" }];
       }
 
       await api.post("/track", track);
@@ -50,7 +55,7 @@ async function saveTracks(key, album) {
 
     return true;
   } catch (err) {
-    throw err;
+    throw err.response.data;
   }
 }
 
@@ -74,11 +79,19 @@ async function saveAlbums() {
       if (a.parentTitle) {
         const res = await api.post("/musician/name", { name: a.parentTitle });
 
-        album.musicians = [res.data.musician];
+        album.musician = res.data.musician;
       }
 
-      if (a.Genre && Array.isArray(a.Genre)) {
-        album.genres = await saveGenres(a.Genre);
+      if (a.Genre) {
+        album.genres = a.Genre.map(g => ({
+          tag: g.tag,
+        }));
+      } else {
+        album.genres = [
+          {
+            tag: "unknown",
+          },
+        ];
       }
 
       if (a.thumb) {
@@ -96,7 +109,9 @@ async function saveAlbums() {
 
       const result = await api.post("/album", album);
 
-      await saveTracks(a.key, result.data.album);
+      album.ID = result.data.album.ID;
+
+      await saveTracks(a.key, album);
     }
 
     console.log("done saving albums");
@@ -117,6 +132,8 @@ async function saveMusicians() {
       const a = {
         name: artist.title,
         summary: artist.summary ? artist.summary : "",
+        genres: [],
+        genres: [],
       };
 
       if (artist.thumb) {
@@ -130,45 +147,15 @@ async function saveMusicians() {
         a.art = await saveImage(artist.art, "public/images/musicians/art");
       }
 
-      a.genres = await saveGenres(artist.Genre);
+      if (artist.Genre) {
+        a.genres = artist.Genre.map(g => ({ tag: g.tag }));
+      }
 
       await api.post("/musician", a);
     }
 
     console.log("done saving musicians");
   } catch (err) {
-    console.error(err);
+    console.error(err.response.data);
   }
-}
-
-async function saveGenres(genres) {
-  if (!genres || !Array.isArray(genres) || genres.length === 0) {
-    return [];
-  }
-
-  const genreList = [];
-
-  for (const g of genres) {
-    const res = await api.post("music-genre", { tag: g.tag });
-
-    genreList.push(res.data.genre);
-  }
-
-  return genreList;
-}
-
-async function saveMoods(moods) {
-  if (!moods || !Array.isArray(moods) || moods.length === 0) {
-    return [];
-  }
-
-  const moodList = [];
-
-  for (const m of moods) {
-    const res = await api.post("/music-mood", { tag: m.tag });
-
-    moodList.push(res.data.mood);
-  }
-
-  return moodList;
 }

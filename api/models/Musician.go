@@ -11,7 +11,7 @@ type Musician struct {
 	Art     string        `gorm:"default:'/public/images/no_art.jpg'" json:"art"`
 	Summary string        `gorm:"type:text;default:'unknown'" json:"summary"`
 	Genres  []*MusicGenre `gorm:"many2many:musician_genres" json:"genres"`
-	Albums  []*Album      `gorm:"many2many:musician_albums" json:"albums"`
+	Albums  []Album       `json:"albums"`
 	Tracks  []*Track      `gorm:"many2many:musician_tracks" json:"tracks"`
 	Users   []*User       `gorm:"many2many:user_musicians;" json:"users"`
 }

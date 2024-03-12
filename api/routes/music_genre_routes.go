@@ -9,9 +9,9 @@ import (
 )
 
 func MusicGenreRoutes(app *fiber.App, db *gorm.DB) {
-	route := app.Group("/api/v1/music-genre")
+	routes := app.Group("/api/v1/music-genre")
 
-	route.Get("/:id", func(c *fiber.Ctx) error {
+	routes.Get("/:id", func(c *fiber.Ctx) error {
 		var genre models.MusicGenre
 
 		id := c.Params("id")
@@ -37,7 +37,7 @@ func MusicGenreRoutes(app *fiber.App, db *gorm.DB) {
 		})
 	})
 
-	route.Get("", func(c *fiber.Ctx) error {
+	routes.Get("", func(c *fiber.Ctx) error {
 		var genres []models.MusicGenre
 
 		if err := db.Find(&genres).Error; err != nil {
@@ -53,7 +53,7 @@ func MusicGenreRoutes(app *fiber.App, db *gorm.DB) {
 		})
 	})
 
-	route.Post("", func(c *fiber.Ctx) error {
+	routes.Post("", func(c *fiber.Ctx) error {
 		var genre models.MusicGenre
 
 		if err := c.BodyParser(&genre); err != nil {

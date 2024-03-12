@@ -41,3 +41,8 @@ todo.txt
 
 # ignore http folder
 http/
+
+# ignore sh and config files
+clean.sh
+smb.conf
+init.sh

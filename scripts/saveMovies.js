@@ -27,7 +27,6 @@ async function saveMovies() {
 
       const plexMovie = plexMovieData.data.MediaContainer.Metadata[0];
 
-      // basic data from plex
       const newMovie = {
         duration: plexMovie.duration,
         contentRating: plexMovie.contentRating,
@@ -49,7 +48,6 @@ async function saveMovies() {
         });
       }
 
-      // check if we have a tmdb id, if so get movie info from tmdb db
       if (newMovie.tmdbID) {
         const tmdbMovie = await tmdb.get(`/movie/${newMovie.tmdbID}`);
 
@@ -60,11 +58,13 @@ async function saveMovies() {
         newMovie.budget = tmdbMovie.data.budget;
         newMovie.revenue = tmdbMovie.data.revenue;
 
-        newMovie.genres = await saveGenres(tmdbMovie.data.genres);
+        newMovie.genres = tmdbMovie.data.genres.map(g => ({ tag: g.name }));
 
-        newMovie.studios = await saveStudios(
-          tmdbMovie.data.production_companies
-        );
+        newMovie.studios = tmdbMovie.data.production_companies.map(s => ({
+          title: s.name,
+          thumb: s.logo_path,
+          country: s.origin_country,
+        }));
 
         if (tmdbMovie.data.spoken_languages) {
           newMovie.spokenLanguages = tmdbMovie.data.spoken_languages
@@ -86,13 +86,29 @@ async function saveMovies() {
           );
         }
 
-        const { crew, cast } = await saveMovieCredits(newMovie.tmdbID);
+        const credits = await tmdb.get(`/movie/${newMovie.tmdbID}/credits`);
 
-        const movieResult = await api.post("/movie", {
-          movie: newMovie,
-          crew,
-          cast,
-        });
+        const cast = credits.data.cast.map(c => ({
+          KnownFor: c.known_for_department,
+          name: c.name,
+          originalName: c.original_name,
+          thumb: c.profile_path,
+          character: c.character,
+          order: c.order,
+        }));
+
+        const crew = credits.data.crew.map(c => ({
+          KnownFor: c.known_for_department,
+          name: c.name,
+          originalName: c.original_name,
+          thumb: c.profile_path,
+          job: c.job,
+          department: c.department,
+        }));
+
+        newMovie.artists = [...crew, ...cast];
+
+        await api.post("/movie", newMovie);
       } else {
         newMovie.title = plexMovie.title;
         newMovie.tagline = plexMovie.tagline;
@@ -106,87 +122,5 @@ async function saveMovies() {
     console.log("done saving movies");
   } catch (err) {
     console.error(err.message);
-    console.error(JSON.stringify(err.response.data));
   }
-}
-
-async function saveGenres(genres) {
-  if (!genres || !Array.isArray(genres) || genres.length === 0) {
-    return [];
-  }
-
-  const result = [];
-
-  for (const g of genres) {
-    const res = await api.post("/movie-genre", {
-      tag: g.name,
-    });
-
-    result.push(res.data.genre);
-  }
-
-  return result;
-}
-
-async function saveStudios(studios) {
-  if (!studios || !Array.isArray(studios) || studios.length === 0) {
-    return [];
-  }
-
-  const results = [];
-
-  for (const s of studios) {
-    const res = await api.post("/studio", {
-      title: s.name,
-      thumb: s.logo_path,
-      country: s.origin_country,
-    });
-
-    results.push(res.data.studio);
-  }
-
-  return results;
-}
-
-async function saveMovieCredits(tmdbMovieId) {
-  const res = await tmdb.get(`/movie/${tmdbMovieId}/credits`);
-  const cast = [];
-  const crew = [];
-  const staff = [...res.data.cast, ...res.data.crew];
-
-  for (const c of res.data.cast) {
-    const res = await api.post("/artist", {
-      KnownFor: c.known_for_department,
-      name: c.name,
-      originalName: c.original_name,
-      thumb: c.profile_path,
-    });
-
-    const { artist } = res.data;
-
-    const member = {
-      KnownFor: artist.known_for_department,
-      name: artist.name,
-      originalName: artist.original_name,
-      thumb: artist.profile_path,
-      artist,
-    };
-
-    if (Object.keys(c).includes("character")) {
-      member.character = c.character;
-      member.order = c.order;
-
-      cast.push(member);
-    } else {
-      member.job = c.job;
-      member.department = c.department;
-
-      crew.push(member);
-    }
-  }
-
-  return {
-    crew,
-    cast,
-  };
 }
