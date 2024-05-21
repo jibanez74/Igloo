@@ -4,9 +4,11 @@ import "gorm.io/gorm"
 
 type Subtitles struct {
 	gorm.Model
-	Title    string `gorm:"not null" json:"title"`
-	Language string `gorm:"not null" json:"language"`
-	Codec    string `gorm:"not null" json:"codec"`
-	MovieID  uint
-	Movie    Movie
+	Title     string `gorm:"not null;default:'unknown'"`
+	Language  string `gorm:"not null;default:'unknown'"`
+	Codec     string `gorm:"not null;default:'unknown'"`
+	IsDefault bool   `gorm:"default:false"`
+	IsForced  bool   `gorm:"default:false"`
+	MovieID   uint
+	Movie     Movie
 }

@@ -4,8 +4,8 @@ import "gorm.io/gorm"
 
 type Trailer struct {
 	gorm.Model
-	Title   string `gorm:"not nul" json:"title"`
-	Url     string `gorm:"not null" json:"url"`
-	Movie   Movie  `json:"movie"`
-	MovieID uint   `json:"movieID"`
+	Title   string `gorm:"not nul;default:'unknown'"`
+	Url     string `gorm:"not null"`
+	MovieID uint
+	Movie   Movie
 }

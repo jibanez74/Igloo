@@ -8,29 +8,34 @@ import (
 
 type Movie struct {
 	gorm.Model
-	Title           string      `gorm:"not null;index" json:"title"`
-	FilePath        string      `gorm:"not null;uniqueIndex" json:"filePath"`
-	TagLine         string      `json:"tagLine"`
-	Summary         string      `gorm:"type:text" json:"summary"`
-	Thumb           string      `gorm:"default:'no_thumb.png'" json:"thumb"`
-	Art             string      `gorm:"default:'no_art.png'" json:"art"`
-	TmdbID          string      `json:"tmdbID"`
-	ImdbID          string      `json:"imdbID"`
-	Year            uint        `json:"year"`
-	ReleaseDate     time.Time   `json:"releaseDate"`
-	Budget          uint        `json:"budget"`
-	Revenue         uint        `json:"revenue"`
-	ContentRating   string      `json:"contentRating"`
-	AudienceRating  float32     `gorm:"default:0" json:"audienceRating"`
-	CriticRating    float32     `gorm:"default:0" json:"criticRating"`
-	SpokenLanguages string      `json:"spokenLanguages"`
-	Resolution      string      `json:"resolution"`
-	Genres          []*Genre    `gorm:"many2many:movie_genres" json:"genres"`
-	Studios         []*Studio   `gorm:"many2many:movie_studios" json:"studios"`
-	Casts           []Cast      `json:"casts"`
-	Crew            []Crew      `json:"crew"`
-	Trailers        []Trailer   `json:"trailers"`
-	VideoList       []Video     `json:"videoList"`
-	AudioList       []Audio     `json:"audioList"`
-	SubtitleList    []Subtitles `json:"subtitles"`
+	Title           string `gorm:"not null;index"`
+	FilePath        string `gorm:"not null"
+	`
+	Size            uint
+	Container       string `gorm:"not null;default:'unknown'"`
+	Resolution      string `gorm:"not null;default:'unknown'"`
+	RunTime         uint
+	TagLine         string `gorm:"not null;default:'unknown'"`
+	Summary         string `gorm:"type:text;default:'unknown'"`
+	Thumb           string `gorm:"not null;default:'no_thumb.png'"`
+	Art             string `gorm:"not null;default:'no_art.png'"`
+	TmdbID          string `gorn:"not null;default:'unknown';index"`
+	ImdbID          string `gorm:"not null;default:'unknown'"`
+	Year            uint
+	ReleaseDate     time.Time
+	Budget          uint
+	Revenue         uint
+	ContentRating   string `gorm:"not null;default:'unknown'"`
+	AudienceRating  float32
+	CriticRating    float32
+	SpokenLanguages string    `gorm:"not null;default:'unknown'"`
+	Genres          []*Genre  `gorm:"many2many:movie_genres"`
+	Studios         []*Studio `gorm:"many2many:movie_studios"`
+	Casts           []Cast
+	Crew            []Crew
+	Trailers        []Trailer
+	VideoList       []Video
+	AudioList       []Audio
+	SubtitleList    []Subtitles
+	ChapterList     []Chapter
 }

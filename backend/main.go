@@ -7,6 +7,7 @@ import (
 	"igloo/models"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -22,6 +23,7 @@ func startUpServer(lc fx.Lifecycle, appHandlers *handlers.AppHandlers) *fiber.Ap
 	api.Use(recover.New())
 	api.Use(logger.New())
 	api.Use(healthcheck.New())
+	api.Use(cors.New())
 
 	artistRoutes := api.Group("/api/v1/artist")
 	artistRoutes.Get("/:id", appHandlers.GetArtistByID)
@@ -62,6 +64,9 @@ func connectToDB() *gorm.DB {
 
 	db.AutoMigrate(
 		&models.Movie{},
+		&models.Artist{},
+		&models.Chapter{},
+		&models.Trailer{},
 		&models.Genre{},
 		&models.Studio{},
 		&models.Cast{},
@@ -70,6 +75,7 @@ func connectToDB() *gorm.DB {
 		&models.Audio{},
 		&models.Subtitles{},
 	)
+
 	return db
 }
 

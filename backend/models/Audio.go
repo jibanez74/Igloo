@@ -4,14 +4,13 @@ import "gorm.io/gorm"
 
 type Audio struct {
 	gorm.Model
-	Title          string  `gorm:"not null" json:"title"`
-	IsDefault      bool    `gorm:"default:false" json:"isDefault"`
-	Codec          string  `json:"codec"`
-	Container      string  `json:"container"`
-	Language       string  `json:"language"`
-	Channels       float32 `json:"channels"`
-	ChannelsLayout string  `json:"channelsLayout"`
-	Bitrate        uint    `json:"bitrate"`
-	Movie          Movie
-	MovieID        uint
+	Title         string `gorm:"not null;default:'unknown'"`
+	IsDefault     bool   `gorm:"default:false"`
+	Codec         string `gorm:"not null;default:'unknown'`
+	Language      string `gorm:"not null;default:'unknown'`
+	Channels      float32
+	ChannelLayout string `gorm:"not null;default:'unknown'"`
+	Bitrate       uint
+	Movie         Movie
+	MovieID       uint
 }
