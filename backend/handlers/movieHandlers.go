@@ -18,7 +18,7 @@ func (h *AppHandlers) GetMovieCount(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"count": count,
+		"Count": count,
 	})
 }
 
@@ -50,9 +50,9 @@ func (h *AppHandlers) GetMoviesWithPagination(c *fiber.Ctx) error {
 
 	var movies []struct {
 		ID    uint
-		Title string `json:"title"`
-		Thumb string `json:"thumb"`
-		Year  uint   `json:"year"`
+		Title string
+		Thumb string
+		Year  uint
 	}
 
 	err = h.db.Model(&models.Movie{}).Limit(limit).Offset(offset).Order("title asc").Select("id, title, thumb, year").Find(&movies).Error
@@ -69,11 +69,11 @@ func (h *AppHandlers) GetMoviesWithPagination(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"items": fiber.Map{
-			"movies": movies,
-			"count":  count,
-			"page":   page,
-			"pages":  pages,
+		"Items": fiber.Map{
+			"Movies": movies,
+			"Count":  count,
+			"Page":   page,
+			"Pages":  pages,
 		},
 	})
 }
@@ -96,7 +96,7 @@ func (h *AppHandlers) GetMovieByID(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"item": movie,
+		"Item": movie,
 	})
 }
 
@@ -118,6 +118,6 @@ func (h *AppHandlers) CreateMovie(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"item": movie,
+		"Item": movie,
 	})
 }

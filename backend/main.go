@@ -25,6 +25,9 @@ func startUpServer(lc fx.Lifecycle, appHandlers *handlers.AppHandlers) *fiber.Ap
 	api.Use(healthcheck.New())
 	api.Use(cors.New())
 
+	homeRoutes := api.Group("/api/v1/recent")
+	homeRoutes.Get("", appHandlers.GetRecent)
+
 	artistRoutes := api.Group("/api/v1/artist")
 	artistRoutes.Get("/:id", appHandlers.GetArtistByID)
 	artistRoutes.Post("", appHandlers.FindOrCreateArtist)
@@ -41,6 +44,9 @@ func startUpServer(lc fx.Lifecycle, appHandlers *handlers.AppHandlers) *fiber.Ap
 	movieRoutes.Get("/:id", appHandlers.GetMovieByID)
 	movieRoutes.Get("", appHandlers.GetMoviesWithPagination)
 	movieRoutes.Post("", appHandlers.CreateMovie)
+
+	playbackRoutes := api.Group("/api/v1/playback")
+	playbackRoutes.Get("/direct/:id", appHandlers.DirectPlayVideo)
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {

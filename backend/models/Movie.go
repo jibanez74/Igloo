@@ -9,8 +9,7 @@ import (
 type Movie struct {
 	gorm.Model
 	Title           string `gorm:"not null;index"`
-	FilePath        string `gorm:"not null"
-	`
+	FilePath        string `gorm:"not null"`
 	Size            uint
 	Container       string `gorm:"not null;default:'unknown'"`
 	Resolution      string `gorm:"not null;default:'unknown'"`
