@@ -7,7 +7,6 @@ import (
 	"igloo/models"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -23,7 +22,8 @@ func startUpServer(lc fx.Lifecycle, appHandlers *handlers.AppHandlers) *fiber.Ap
 	api.Use(recover.New())
 	api.Use(logger.New())
 	api.Use(healthcheck.New())
-	api.Use(cors.New())
+
+	api.Static("/api/v1/public", "./public")
 
 	homeRoutes := api.Group("/api/v1/recent")
 	homeRoutes.Get("", appHandlers.GetRecent)

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"igloo/helpers"
 	"igloo/models"
 	"strconv"
@@ -89,7 +88,7 @@ func (h *AppHandlers) GetMovieByID(c *fiber.Ctx) error {
 
 	var movie models.Movie
 
-	err = h.db.First(&movie, uint(movieId)).Error
+	err = h.db.Preload("CrewList").Preload("CastList").Preload("Studios").Preload("Genres").Preload("ChapterList").First(&movie, uint(movieId)).Error
 	if err != nil {
 		return c.Status(helpers.GetStatusCode(err)).JSON(fiber.Map{
 			"error": err.Error(),
@@ -117,10 +116,6 @@ func (h *AppHandlers) CreateMovie(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
-
-	go helpers.DownloadImage(movie.Thumb, fmt.Sprintf("./public/images/movies/thumb/%s.jpg", movie.Title))
-
-	go helpers.DownloadImage(movie.Art, fmt.Sprintf("./public/images/movies/art/%s.jpg", movie.Title))
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"Item": movie,

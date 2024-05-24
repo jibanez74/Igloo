@@ -2,7 +2,22 @@
   export let data;
 </script>
 
-<video controls autoplay muted height="100%" width="100%">
-  <source src={data.url} type="video/mp4" />
-  Your browser does not support the video tag.
-</video>
+<h1>
+  {data.Title}
+</h1>
+
+<a href={`/movies/${data.ID}/play`}>
+Play Movie
+</a>
+
+<p>
+  Release Date: {data.ReleaseDate}
+</p>
+
+<p>
+  {data.TagLine}
+</p>
+
+<p>
+  {data.Summary}
+</p>

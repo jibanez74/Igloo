@@ -7,7 +7,7 @@
 
 <div class="movie-card">
   <a href={`/movies/${id}`}>
-  <img src={thumb} alt={title} />
+    <img src={thumb} alt={title} />
   </a>
 
   <div class="movie-card-info">
