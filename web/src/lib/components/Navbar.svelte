@@ -36,11 +36,7 @@
       <div class="flex flex-1 items-center justify-center md:items-stretch md:justify-start">
         <!-- Logo -->
         <a class="flex flex-shrink-0 items-center" href="/index.html">
-          <enhanced:img
-            class="h-10 w-auto"
-            src="/static/images/igloo-icon.png"
-            alt="PropertyPulse"
-          />
+          <enhanced:img class="h-10 w-auto" src="/static/images/igloo-icon.png" alt="logo" />
 
           <span class="hidden md:block text-white text-2xl font-bold ml-2">Igloo</span>
         </a>
