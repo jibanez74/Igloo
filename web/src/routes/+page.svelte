@@ -1,13 +1,13 @@
 <script>
-  import MovieCard from '$lib/components/MovieCard.svelte'
+  import MovieCard from '$lib/components/MovieCard.svelte';
 
-export let data;
+  export let data;
 </script>
 
-<h1>Welcome to Igloo</h1>
-
-<div>
-  {#each data.movies as movie(movie.ID)}
-  <MovieCard id={movie.ID} title={movie.Title} thumb={movie.Thumb} year={movie.Year} />
-  {/each}
+<div class="container mx-auto p-4">
+  <div class="grid gap-5 grid-cols-2 md:grid-cols-4 lg:grid-cols-3">
+    {#each data.movies as movie (movie.ID)}
+      <MovieCard title={movie.Title} thumb={movie.Thumb} year={movie.Year} id={movie.ID} />
+    {/each}
+  </div>
 </div>
