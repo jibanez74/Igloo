@@ -7,5 +7,5 @@ type Artist struct {
 	Name         string `gorm:"not null;index"`
 	OriginalName string `gorm:"not null;index"`
 	Thumb        string `gorm:"not null;default:'no_thumb.png'"`
-	KnownFor     string `gorn:"not null;default:'unknown'`
+	KnownFor     string `gorn:"not null;default:'unknown'"`
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/session"
 	"go.uber.org/fx"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -40,13 +41,11 @@ func startUpServer(lc fx.Lifecycle, appHandlers *handlers.AppHandlers) *fiber.Ap
 	studioRoutes.Post("", appHandlers.CreateStudio)
 
 	movieRoutes := api.Group("/api/v1/movie")
+	movieRoutes.Get("/direct-play", appHandlers.DirectPlayMovie)
 	movieRoutes.Get("/count", appHandlers.GetMovieCount)
 	movieRoutes.Get("/:id", appHandlers.GetMovieByID)
 	movieRoutes.Get("", appHandlers.GetMoviesWithPagination)
 	movieRoutes.Post("", appHandlers.CreateMovie)
-
-	playbackRoutes := api.Group("/api/v1/playback")
-	playbackRoutes.Get("/direct/:id", appHandlers.DirectPlayVideo)
 
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
@@ -85,10 +84,17 @@ func connectToDB() *gorm.DB {
 	return db
 }
 
+func initSessions() *session.Store {
+	store := session.New()
+
+	return store
+}
+
 func main() {
 	fx.New(
 		fx.Provide(
 			connectToDB,
+			initSessions,
 			handlers.New,
 		),
 		fx.Invoke(startUpServer),

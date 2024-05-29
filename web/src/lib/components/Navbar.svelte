@@ -54,12 +54,13 @@
       <!-- Right Side Menu (Logged Out) -->
       <div class="hidden md:block md:ml-6">
         <div class="flex items-center">
-          <button
+          <a
+            href="/auth"
             class="flex items-center text-white bg-gray-700 hover:bg-gray-900 hover:text-white rounded-md px-3 py-2"
           >
             <i class="fa-brands fa-google text-white mr-2"></i>
             <span>Login or Register</span>
-          </button>
+          </a>
         </div>
       </div>
 
