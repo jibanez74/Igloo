@@ -90,7 +90,7 @@ func (h *AppHandlers) GetMovieByID(c *fiber.Ctx) error {
 
 	var movie models.Movie
 
-	err = h.db.Preload("CrewList").Preload("CastList").Preload("Studios").Preload("Genres").Preload("ChapterList").First(&movie, uint(movieId)).Error
+	err = h.db.Preload("CrewList").Preload("CastList").Preload("Studios").Preload("Genres").Preload("ChapterList").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").First(&movie, uint(movieId)).Error
 	if err != nil {
 		return c.Status(helpers.GetStatusCode(err)).JSON(fiber.Map{
 			"error": err.Error(),
@@ -191,4 +191,3 @@ func (h *AppHandlers) DirectPlayMovie(c *fiber.Ctx) error {
 
 	return c.SendFile(filePath)
 }
-
