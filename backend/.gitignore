@@ -1,4 +1,7 @@
-.vscode
+.idea/
+.vscode/
 .DS_Store
+Thumbs.db
 igloo.db
-public
+igloo_server
+db-data

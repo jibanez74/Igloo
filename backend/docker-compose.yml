@@ -1,0 +1,22 @@
+services:
+  igloo_db:
+    container_name: igloo_db
+    image: postgres
+    ports:
+      - "5432:5432"
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: igloo
+    volumes:
+      - ./db-data/postgres/:/var/lib/postgresql/data/
+
+  igloo_cache:
+    container_name: igloo_cache
+    image: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - ./db-data/redis/:/data
