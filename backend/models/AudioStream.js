@@ -27,13 +27,13 @@ const AudioStream = {
   },
 
   channelLayout: {
-    type: Number,
+    type: String,
     required: [true, "channel layout is required"],
   },
 
   bps: {
     type: Number,
-    required: [true, "bps is required"],
+    default: 0,
   },
 
   language: {

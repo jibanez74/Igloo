@@ -75,28 +75,28 @@ const VideoStream = {
   },
 
   frameRate: {
-    type: Number,
+    type: String,
     default: 0,
   },
 
   avgFrameRate: {
-    type: Number,
+    type: String,
     default: 0,
   },
 
   bps: {
     type: Number,
-    required: [true, "bps is required"],
+    default: 0,
   },
 
   numberOfFrames: {
     type: Number,
-    required: [true, "number of frames is required"],
+    default: 0,
   },
 
   numberOfBytes: {
     type: Number,
-    required: [true, "number of bytes is required"],
+    default: 0,
   },
 };
 

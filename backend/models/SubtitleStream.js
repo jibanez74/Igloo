@@ -1,8 +1,8 @@
 const SubtitleStream = {
   title: {
     type: String,
-    required: [true, "title is required"],
     trim: true,
+    default: "unknown",
   },
 
   index: {
