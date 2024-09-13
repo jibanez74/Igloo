@@ -1,7 +1,8 @@
-.idea/
-.vscode/
+.idea
+.vscode
 .DS_Store
-Thumbs.db
-igloo.db
-igloo_server
-db-data
+.env
+node_modules
+db_data
+db_config
+redis_data
