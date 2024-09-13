@@ -5,7 +5,7 @@ import Trailer from "./Trailer";
 import Artist from "./Artist";
 import Crew from "./Crew";
 import Cast from "./Cast";
-// import MediaContainer from "./MediaContainer";
+import MediaContainer from "./MediaContainer";
 
 const MovieSchema = new mongoose.Schema(
   {
@@ -123,7 +123,7 @@ const MovieSchema = new mongoose.Schema(
       default: [],
     },
 
-    // mediaContainer: MediaContainer,
+    mediaContainer: MediaContainer,
   },
   {
     timestamps: true,

@@ -1,8 +1,8 @@
 const VideoStream = {
   title: {
     type: String,
-    required: [true, "title is required"],
     trim: true,
+    default: "unknown",
   },
 
   index: {
@@ -18,6 +18,11 @@ const VideoStream = {
   bitDepth: {
     type: String,
     required: [true, "bit depth is required"],
+  },
+
+  level: {
+    type: Number,
+    required: [true, "level is required"],
   },
 
   codec: {
@@ -46,6 +51,12 @@ const VideoStream = {
   },
 
   aspectRatio: {
+    type: String,
+    default: "unknown",
+    trim: true,
+  },
+
+  colorTransfer: {
     type: String,
     default: "unknown",
     trim: true,

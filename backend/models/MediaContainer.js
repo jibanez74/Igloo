@@ -8,7 +8,7 @@ const MediaContainer = {
     required: [true, "duration is required"],
   },
 
-  container: {
+  format: {
     type: String,
     required: [true, "container is required"],
     trim: true,

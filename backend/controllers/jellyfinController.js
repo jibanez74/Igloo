@@ -5,6 +5,7 @@ import Movie from "../models/Movie";
 import Genre from "../models/Genre";
 import Studio from "../models/Studio";
 import Artist from "../models/Artist";
+import { getVideoMetadata } from "../lib/ffmpeg";
 
 // todo
 // this controller needs to be updated to process multiple badges
@@ -143,6 +144,8 @@ export const saveJellyfinMovies = asyncHandler(async (req, res, next) => {
             return { artist: artist._id, job: c.job, department: c.department };
           })
         );
+
+        newMovie.mediaContainer = await getVideoMetadata(newMovie.filePath);
 
         return newMovie;
       }
