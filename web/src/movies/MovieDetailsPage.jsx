@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getMovie } from "./httpMovie";
+import { getMovieByID } from "./httpMovie";
 import Spinner from "../shared/Spinner";
 import Alert from "../shared/Alert";
 import formatDate from "../utils/formatDate";
@@ -15,7 +15,7 @@ export default function MovieDetailsPage() {
     error,
   } = useQuery({
     queryKey: ["movie", id],
-    queryFn: () => getMovie(id),
+    queryFn: () => getMovieByID(id),
     refetchOnWindowFocus: false,
   });
 

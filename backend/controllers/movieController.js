@@ -24,19 +24,19 @@ export const getLatestMovies = asyncHandler(async (req, res, next) => {
 
 export const getMovieByID = asyncHandler(async (req, res, next) => {
   const movie = await Movie.findById(req.params.id)
-    .populate("Genres")
-    .populate("Studios")
+    .populate("genres")
+    .populate("studios")
     .populate({
-      path: "CrewList",
+      path: "crewList",
       populate: {
-        path: "Artist",
+        path: "artist",
         model: "Artist",
       },
     })
     .populate({
-      path: "CastList",
+      path: "castList",
       populate: {
-        path: "Artist",
+        path: "artist",
         model: "Artist",
       },
     });

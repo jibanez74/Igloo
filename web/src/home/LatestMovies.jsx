@@ -8,7 +8,7 @@ export default function LatestMovies() {
   const {
     data: movies,
     isPending,
-    error,
+    // error,
     isError,
   } = useQuery({
     queryKey: ["recent-movies"],
