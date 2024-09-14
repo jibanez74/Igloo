@@ -30,14 +30,14 @@ export const getMovieByID = asyncHandler(async (req, res, next) => {
       path: "crewList",
       populate: {
         path: "artist",
-        model: "Artist",
+        model: "artist",
       },
     })
     .populate({
       path: "castList",
       populate: {
         path: "artist",
-        model: "Artist",
+        model: "artist",
       },
     });
 
