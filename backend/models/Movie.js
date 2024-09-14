@@ -1,3 +1,5 @@
+import path from "path";
+import fs from "fs";
 import mongoose from "mongoose";
 import Genre from "./Genre";
 import Studio from "./Studio";
@@ -21,6 +23,11 @@ const MovieSchema = new mongoose.Schema(
       required: [true, "file path is required"],
       trim: true,
       unique: true,
+    },
+
+    container: {
+      type: String,
+      default: "unknown",
     },
 
     resolution: {
@@ -129,6 +136,20 @@ const MovieSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+MovieSchema.pre("save", function (next) {
+  fs.stat(this.filePath, (err, stats) => {
+    if (err) {
+      return next(err);
+    }
+
+    this.container = path.extname(this.filePath);
+
+    if (!this.mediaContainer.size || this.mediaContainer.size === 0) {
+      this.mediaContainer.size = stats.size;
+    }
+  });
+});
 
 const Movie = mongoose.model("movie", MovieSchema);
 

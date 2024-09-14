@@ -61,3 +61,59 @@ export const createMovie = asyncHandler(async (req, res, next) => {
     movie,
   });
 });
+
+export const deleteMovie = asyncHandler(async (req, res) => {
+  const movie = await Movie.findById(req.params.id);
+
+  if (!movie) {
+    return next(
+      new ErrorResponse(`unable movie with id of ${req.params.id}`, 404)
+    );
+  }
+
+  await movie.remove();
+
+  res.status(200).json({
+    success: true,
+    message: "movie was deleted successfully",
+  });
+});
+
+export const streamMovie = asyncHandler(async (req, res, next) => {
+  const movie = await Movie.findById(req.params.id);
+
+  if (!movie) {
+    return next(
+      new ErrorResponse(`Unable to find movie with id of ${req.params.id}`, 404)
+    );
+  }
+
+  if (!fs.existsSync(movie.filePath)) {
+    return next(
+      new ErrorResponse(`File not found at path ${movie.filePath}`, 404)
+    );
+  }
+
+  const range = req.headers.range;
+  if (!range) {
+    return next(new ErrorResponse(`Please provide a range`, 400));
+  }
+
+  const fileSize = movie.mediaContainer.size;
+  const chunkSize = 10 ** 6; // 1MB
+  const start = Number(range.replace(/\D/g, ""));
+  const end = Math.min(start + chunkSize, fileSize - 1);
+  const contentLength = end - start + 1;
+
+  const headers = {
+    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+    "Accept-Ranges": "bytes",
+    "Content-Length": contentLength,
+    "Content-Type": `video/${movie.mediaContainer.format}`,
+  };
+
+  res.writeHead(206, headers);
+
+  const videoStream = fs.createReadStream(movie.filePath, { start, end });
+  videoStream.pipe(res);
+});
