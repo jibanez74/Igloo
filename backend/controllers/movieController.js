@@ -12,7 +12,9 @@ export const getMovieCount = asyncHandler(async (req, res, next) => {
 });
 
 export const getLatestMovies = asyncHandler(async (req, res, next) => {
-  const movies = await Movie.find().sort({ createdAt: -1 }).limit(12);
+  const movies = await Movie.find({}, { _id: 1, title: 1, thumb: 1, year: 1 })
+    .sort({ createdAt: -1 })
+    .limit(12);
 
   res.status(200).json({
     success: true,
