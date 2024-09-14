@@ -23,7 +23,23 @@ export const getLatestMovies = asyncHandler(async (req, res, next) => {
 });
 
 export const getMovieByID = asyncHandler(async (req, res, next) => {
-  const movie = await Movie.findById(req.params.id);
+  const movie = await Movie.findById(req.params.id)
+    .populate("Genres")
+    .populate("Studios")
+    .populate({
+      path: "CrewList",
+      populate: {
+        path: "Artist",
+        model: "Artist",
+      },
+    })
+    .populate({
+      path: "CastList",
+      populate: {
+        path: "Artist",
+        model: "Artist",
+      },
+    });
 
   if (!movie) {
     return next(
