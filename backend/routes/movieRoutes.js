@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getMovieCount,
+  getLatestMovies,
   getMovieByID,
   getMoviesWithPagination,
   createMovie,
@@ -11,6 +12,8 @@ import {
 const router = express.Router();
 
 router.get("/count", getMovieCount);
+
+router.get("/latest", getLatestMovies);
 
 router.get("/stream/:id", streamMovie);
 
