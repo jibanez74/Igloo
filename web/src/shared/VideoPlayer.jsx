@@ -1,65 +1,24 @@
-import PropTypes from "prop-types";
-import { useEffect, useRef, useState } from "react";
-import shaka from "shaka-player";
+import { useRef } from "react";
+import { useParams } from "react-router-dom";
+import ReactPlayer from "react-player";
+import { FaPlay } from "react-icons/fa";
 
-export default function VideoPlayer({ src, onError }) {
-  const videoRef = useRef(null);
-  const [isLoading, setIsLoading] = useState(true);
+export default function VideoPlayer() {
+  const videoRef = useRef();
+  const { id } = useParams();
 
-  useEffect(() => {
-    const video = videoRef.current;
-    const player = new shaka.Player(video);
-
-    const onErrorEvent = event => {
-      onError(event.detail);
-    };
-
-    player.addEventListener("error", onErrorEvent);
-
-    setIsLoading(true);
-    player
-      .load(src)
-      .then(() => {
-        console.log("The video has now been loaded!");
-        setIsLoading(false);
-      })
-      .catch(onError);
-
-    return () => {
-      player.removeEventListener("error", onErrorEvent);
-      player.destroy();
-    };
-  }, [src, onError]);
+  const url = `/api/v1/movie/stream/${id}`;
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {isLoading && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          Loading...
-        </div>
-      )}
-      <video
+    <div className='container mx-auto'>
+      <ReactPlayer
+        controls={true}
+        url={url}
+        playIcon={<FaPlay />}
+        height={100}
+        width={100}
         ref={videoRef}
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-        controls
-        aria-label='Video player'
       />
     </div>
   );
 }
-
-VideoPlayer.propTypes = {
-  src: PropTypes.string.isRequired,
-  onError: PropTypes.func,
-};

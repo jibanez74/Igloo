@@ -4,7 +4,7 @@ import LoginPage from "../auth/LoginPage";
 import HomePage from "../home/HomePage";
 import MoviesPage, { loader as getMovies } from "../movies/MoviesPage";
 import MovieDetailsPage from "../movies/MovieDetailsPage";
-import PlayMoviePage from "../movies/PlayMovie";
+import PlayMoviePage, { loader as getMovie } from "../movies/PlayMovie";
 
 const router = createBrowserRouter([
   {
@@ -13,11 +13,11 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <LoginPage />,
+        element: <HomePage />,
       },
       {
         path: "login",
-        element: <HomePage />,
+        element: <LoginPage />,
       },
       {
         path: "movies",
@@ -39,6 +39,7 @@ const router = createBrowserRouter([
           {
             path: "play/:id",
             element: <PlayMoviePage />,
+            loader: getMovie,
           },
         ],
       },
