@@ -1,8 +1,10 @@
+import { ffmpegInstance } from "../lib/ffmpeg.js";
 import fs from "fs";
 import path from "path";
 import asyncHandler from "../lib/asyncHandler";
 import Movie from "../models/Movie";
 import ErrorResponse from "../lib/errorResponse";
+import { ffmpegInstance as ffmpeg } from "../lib/ffmpeg";
 
 export const getMovieCount = asyncHandler(async (req, res, next) => {
   const count = await Movie.countDocuments();
@@ -124,25 +126,71 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
   }
 
   const range = req.headers.range;
-  if (!range) {
-    return next(new ErrorResponse(`Please provide a range`, 400));
-  }
-
   const fileSize = movie.mediaContainer.size;
-  const chunkSize = 10 ** 6; // 1MB
-  const start = Number(range.replace(/\D/g, ""));
-  const end = Math.min(start + chunkSize, fileSize - 1);
-  const contentLength = end - start + 1;
 
-  const headers = {
-    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-    "Accept-Ranges": "bytes",
-    "Content-Length": contentLength,
-    "Content-Type": `video/${movie.mediaContainer.format}`,
-  };
+  if (req.query.transcode === "yes") {
+    // Transcoding logic
+    const start = range ? Number(range.replace(/\D/g, "")) : 0;
+    
+    res.writeHead(206, {
+      'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
+      'Content-Range': `bytes ${start}-${fileSize-1}/${fileSize}`,
+      'Transfer-Encoding': 'chunked'
+    });
 
-  res.writeHead(206, headers);
+    const ffmpeg = ffmpegInstance()
+      .input(movie.filePath)
+      .videoCodec('libx264')
+      .audioCodec('aac')
+      .format('mp4')
+      .outputOptions([
+        '-movflags frag_keyframe+empty_moov+default_base_moof',
+        '-vsync 2',
+        '-preset ultrafast',
+        '-crf 23',
+        '-maxrate 5M',
+        '-bufsize 10M'
+      ]);
 
-  const videoStream = fs.createReadStream(movie.filePath, { start, end });
-  videoStream.pipe(res);
+    if (range) {
+      ffmpeg.seekInput(start / fileSize * movie.mediaContainer.duration);
+    }
+
+    ffmpeg
+      .on('start', (commandLine) => {
+        console.log('Spawned FFmpeg with command: ' + commandLine);
+      })
+      .on('error', (err, stdout, stderr) => {
+        console.error('FFmpeg error:', err.message);
+        console.error('FFmpeg stderr:', stderr);
+      })
+      .on('end', () => {
+        console.log('FFmpeg transcoding ended');
+      })
+      .pipe(res, { end: true });
+
+  } else {
+    // Direct streaming logic (unchanged)
+    if (!range) {
+      return next(new ErrorResponse(`Please provide a range`, 400));
+    }
+
+    const chunkSize = 10 ** 6; // 1MB
+    const start = Number(range.replace(/\D/g, ""));
+    const end = Math.min(start + chunkSize, fileSize - 1);
+    const contentLength = end - start + 1;
+
+    const headers = {
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength,
+      "Content-Type": `video/${movie.mediaContainer.format}`,
+    };
+
+    res.writeHead(206, headers);
+
+    const videoStream = fs.createReadStream(movie.filePath, { start, end });
+    videoStream.pipe(res);
+  }
 });

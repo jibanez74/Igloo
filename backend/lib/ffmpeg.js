@@ -18,6 +18,8 @@ const ffprobePath = path.join(
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
+export const ffmpegInstance = ffmpeg;
+
 export const getVideoMetadata = filePath => {
   return new Promise((resolve, reject) => {
     if (filePath === "") {
