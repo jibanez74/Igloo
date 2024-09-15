@@ -130,13 +130,18 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       "Content-Type": "application/x-mpegURL",
     });
 
-    const cmd = ffmpeg(fs.createReadStream(filePath))
+    const cmd = ffmpeg(fs.createReadStream(movie.filePath))
       .audioChannels(2)
       .size("1920x1080")
       .videoCodec("libx264")
-      .audioCodec("libfdk_aac")
-      .format("mp4")
-      .outputOptions(["-movflags frag_keyframe+empty_moov"]);
+      .audioCodec("aac") // Changed from libfdk_aac to aac
+      .format("hls") // Output in HLS format
+      .outputOptions([
+        "-hls_time 10", // Segment duration
+        "-hls_list_size 0", // Show all segments in the playlist
+        "-hls_flags delete_segments",
+        "-start_number 0",
+      ]);
 
     cmd
       .on("start", commandLine => {

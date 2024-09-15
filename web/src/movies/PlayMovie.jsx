@@ -69,16 +69,6 @@ export default function PlayMovie() {
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
-  useEffect(() => {
-    const hideControlsTimer = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 3000);
-
-    return () => clearTimeout(hideControlsTimer);
-  }, [isPlaying, showControls]);
-
   return (
     <div className='container mx-auto' ref={containerRef}>
       <Suspense fallback={<Spinner />}>
