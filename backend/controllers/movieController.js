@@ -130,27 +130,15 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       "Content-Type": "application/x-mpegURL",
     });
 
-    const ffmpeg = ffmpegInstance()
-      .input(movie.filePath)
-      .videoCodec("libx264")
-      .audioCodec("aac")
+    const cmd = ffmpeg(fs.createReadStream(filePath))
       .audioChannels(2)
-      .audioBitrate("128k")
-      .outputOptions([
-        "-hls_time 10",
-        "-hls_list_size 0",
-        "-hls_segment_type mpegts",
-        "-hls_playlist_type event",
-        "-preset ultrafast",
-        "-crf 23",
-        "-maxrate 5M",
-        "-bufsize 10M",
-        "-movflags faststart",
-        "-af aresample=async=1:first_pts=0",
-      ])
-      .format("hls");
+      .size("1920x1080")
+      .videoCodec("libx264")
+      .audioCodec("libfdk_aac")
+      .format("mp4")
+      .outputOptions(["-movflags frag_keyframe+empty_moov"]);
 
-    ffmpeg
+    cmd
       .on("start", commandLine => {
         console.log("Spawned FFmpeg with command: " + commandLine);
       })
@@ -163,7 +151,6 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       })
       .pipe(res, { end: true });
   } else {
-    // Direct streaming logic (unchanged)
     const range = req.headers.range;
     if (!range) {
       return next(new ErrorResponse(`Please provide a range`, 400));
