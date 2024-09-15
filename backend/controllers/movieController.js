@@ -141,10 +141,10 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     const ffmpeg = ffmpegInstance()
       .input(movie.filePath)
       .videoCodec("libx264")
-      .audioCodec("aac")
+      .withAudioCodec("aac")
       .audioChannels(2)
       .audioBitrate("128k")
-      .format("fmp4")
+      .format("mp4")
       .outputOptions([
         "-movflags frag_keyframe+empty_moov+default_base_moof",
         "-vsync 2",
