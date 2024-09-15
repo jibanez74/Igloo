@@ -148,11 +148,10 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
         "-movflags faststart",
         "-af aresample=async=1:first_pts=0",
       ])
-      .output("pipe:1")
       .format("hls");
 
     ffmpeg
-      .on("start", (commandLine) => {
+      .on("start", commandLine => {
         console.log("Spawned FFmpeg with command: " + commandLine);
       })
       .on("error", (err, stdout, stderr) => {
