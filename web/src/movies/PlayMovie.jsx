@@ -3,6 +3,7 @@ import { Await, defer, useLoaderData } from "react-router-dom";
 import queryClient from "../utils/queryClient";
 import { getMovieByID } from "./httpMovie";
 import Spinner from "../shared/Spinner";
+import Hls from "hls.js";
 import {
   FaPlay,
   FaPause,
@@ -23,6 +24,27 @@ export default function PlayMovie() {
   const [duration, setDuration] = useState(0);
   const videoRef = useRef(null);
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (data) {
+      const video = videoRef.current;
+      const url = `/api/v1/movie/stream/${data._id}?transcode=yes`;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {
+          video.play();
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = url;
+        video.addEventListener("loadedmetadata", function () {
+          video.play();
+        });
+      }
+    }
+  }, [data]);
 
   const togglePlay = () => {
     if (videoRef.current.paused) {

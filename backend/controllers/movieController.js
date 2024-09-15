@@ -125,11 +125,10 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const range = req.headers.range;
-  const fileSize = movie.mediaContainer.size;
-
   if (req.query.transcode === "yes") {
-    const start = range ? Number(range.replace(/\D/g, "")) : 0;
+    res.writeHead(200, {
+      "Content-Type": "application/x-mpegURL",
+    });
 
     const ffmpeg = ffmpegInstance()
       .input(movie.filePath)
@@ -137,30 +136,23 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       .audioCodec("aac")
       .audioChannels(2)
       .audioBitrate("128k")
-      .outputFormat("mp4")
       .outputOptions([
-        "-movflags frag_keyframe+empty_moov+default_base_moof+faststart",
-        "-preset veryfast",
+        "-hls_time 10",
+        "-hls_list_size 0",
+        "-hls_segment_type mpegts",
+        "-hls_playlist_type event",
+        "-preset ultrafast",
         "-crf 23",
         "-maxrate 5M",
         "-bufsize 10M",
-        "-profile:v main",
-        "-level 3.1",
-        "-tune fastdecode",
-        "-g 48",
-        "-keyint_min 48",
-        "-sc_threshold 0",
+        "-movflags faststart",
         "-af aresample=async=1:first_pts=0",
-        "-map 0:v:0",
-        "-map 0:a:0",
-      ]);
-
-    if (range) {
-      ffmpeg.seekInput((start / fileSize) * movie.mediaContainer.duration);
-    }
+      ])
+      .output("pipe:1")
+      .format("hls");
 
     ffmpeg
-      .on("start", commandLine => {
+      .on("start", (commandLine) => {
         console.log("Spawned FFmpeg with command: " + commandLine);
       })
       .on("error", (err, stdout, stderr) => {
@@ -173,10 +165,12 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       .pipe(res, { end: true });
   } else {
     // Direct streaming logic (unchanged)
+    const range = req.headers.range;
     if (!range) {
       return next(new ErrorResponse(`Please provide a range`, 400));
     }
 
+    const fileSize = movie.mediaContainer.size;
     const chunkSize = 10 ** 6; // 1MB
     const start = Number(range.replace(/\D/g, ""));
     const end = Math.min(start + chunkSize, fileSize - 1);
