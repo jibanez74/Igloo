@@ -141,7 +141,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     const ffmpeg = ffmpegInstance()
       .input(movie.filePath)
       .videoCodec("libx264")
-      .withAudioCodec("aac")
+      .audioCodec("aac")
       .audioChannels(2)
       .audioBitrate("128k")
       .format("mp4")
@@ -154,7 +154,9 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
         "-bufsize 10M",
         "-af aresample=async=1:first_pts=0",
         "-map 0:v:0",
-        "-map 0:a?",
+        "-map 0:a:0",
+        "-c:a aac",
+        "-strict experimental"
       ]);
 
     let hasAudioStream = false;
