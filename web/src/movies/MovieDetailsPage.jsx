@@ -29,6 +29,10 @@ export default function MovieDetailsPage() {
       <Alert title='Error' msg={error.message} time={6000} variant='danger' />
     );
 
+  if (movie) {
+    alert(movie.mediaContainer.format);
+  }
+
   return (
     <div className='bg-gray-900 text-white min-h-screen'>
       {/* Backdrop */}

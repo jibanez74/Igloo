@@ -129,47 +129,38 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
   const fileSize = movie.mediaContainer.size;
 
   if (req.query.transcode === "yes") {
-    // Transcoding logic
     const start = range ? Number(range.replace(/\D/g, "")) : 0;
-    
+
     res.writeHead(206, {
-      'Content-Type': 'video/mp4',
-      'Accept-Ranges': 'bytes',
-      'Content-Range': `bytes ${start}-${fileSize-1}/${fileSize}`,
-      'Transfer-Encoding': 'chunked'
+      "Content-Type": "video/mp4",
+      "Accept-Ranges": "bytes",
+      "Content-Range": `bytes ${start}-${fileSize - 1}/${fileSize}`,
+      "Transfer-Encoding": "chunked",
     });
 
     const ffmpeg = ffmpegInstance()
       .input(movie.filePath)
-      .videoCodec('libx264')
-      .audioCodec('aac')
-      .format('mp4')
-      .outputOptions([
-        '-movflags frag_keyframe+empty_moov+default_base_moof',
-        '-vsync 2',
-        '-preset ultrafast',
-        '-crf 23',
-        '-maxrate 5M',
-        '-bufsize 10M'
-      ]);
+      .videoCodec("libx264")
+      .audioCodec("aac")
+      .format("mp4")
+      .outputOptions(["-movflags frag_keyframe+empty_moov+default_base_moof"]);
 
     if (range) {
-      ffmpeg.seekInput(start / fileSize * movie.mediaContainer.duration);
+      ffmpeg.seekInput((start / fileSize) * movie.mediaContainer.duration);
     }
 
     ffmpeg
-      .on('start', (commandLine) => {
-        console.log('Spawned FFmpeg with command: ' + commandLine);
+      .on("start", commandLine => {
+        console.log("Spawned FFmpeg with command: " + commandLine);
       })
-      .on('error', (err, stdout, stderr) => {
-        console.error('FFmpeg error:', err.message);
-        console.error('FFmpeg stderr:', stderr);
+      .on("error", (err, stdout, stderr) => {
+        console.error("FFmpeg error:", err.message);
+        console.error("FFmpeg stderr:", stderr);
       })
-      .on('end', () => {
-        console.log('FFmpeg transcoding ended');
+      .on("end", () => {
+        console.log("FFmpeg transcoding ended");
       })
       .pipe(res, { end: true });
-
   } else {
     // Direct streaming logic (unchanged)
     if (!range) {

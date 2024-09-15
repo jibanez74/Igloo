@@ -38,7 +38,7 @@ export default function PlayMovie() {
     setIsMuted(!isMuted);
   };
 
-  const handleVolumeChange = (e) => {
+  const handleVolumeChange = e => {
     const newVolume = parseFloat(e.target.value);
     videoRef.current.volume = newVolume;
     setVolume(newVolume);
@@ -63,10 +63,10 @@ export default function PlayMovie() {
     setDuration(videoRef.current.duration);
   };
 
-  const formatTime = (time) => {
+  const formatTime = time => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
   useEffect(() => {
@@ -83,90 +83,101 @@ export default function PlayMovie() {
     <div className='container mx-auto' ref={containerRef}>
       <Suspense fallback={<Spinner />}>
         <Await resolve={data}>
-          {data => (
-            <div
-              className='relative'
-              onMouseEnter={() => setShowControls(true)}
-              onMouseLeave={() => isPlaying && setShowControls(false)}
-            >
-              <video
-                ref={videoRef}
-                className='w-full h-auto'
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onTimeUpdate={handleTimeUpdate}
-                onDurationChange={handleDurationChange}
-              >
-                <source
-                  src={`/api/v1/movie/stream/${data._id}`}
-                  type='video/mp4'
-                />
-                Your browser does not support the video tag.
-              </video>
+          {data => {
+            let transcode = "yes";
+            if (data.container === "mp4") {
+              transcode = "no";
+            }
+
+            const url = `/api/v1/movie/stream/${data._id}?transcode=${transcode}`;
+
+            return (
               <div
-                className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 ${
-                  showControls ? "opacity-100" : "opacity-0"
-                }`}
+                className='relative'
+                onMouseEnter={() => setShowControls(true)}
+                onMouseLeave={() => isPlaying && setShowControls(false)}
               >
-                <div className='flex items-center justify-between'>
-                  <button
-                    onClick={togglePlay}
-                    className='text-white text-2xl focus:outline-none'
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                  >
-                    {isPlaying ? <FaPause /> : <FaPlay />}
-                  </button>
-                  <div className='flex items-center'>
+                <video
+                  ref={videoRef}
+                  className='w-full h-auto'
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onTimeUpdate={handleTimeUpdate}
+                  onDurationChange={handleDurationChange}
+                >
+                  <source
+                    src={`/api/v1/movie/stream/${data._id}`}
+                    type='video/mp4'
+                  />
+                  Your browser does not support the video tag.
+                </video>
+                <div
+                  className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 ${
+                    showControls ? "opacity-100" : "opacity-0"
+                  }`}
+                >
+                  <div className='flex items-center justify-between'>
                     <button
-                      onClick={toggleMute}
-                      className='text-white text-xl mr-2 focus:outline-none'
-                      aria-label={isMuted ? "Unmute" : "Mute"}
+                      onClick={togglePlay}
+                      className='text-white text-2xl focus:outline-none'
+                      aria-label={isPlaying ? "Pause" : "Play"}
                     >
-                      {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+                      {isPlaying ? <FaPause /> : <FaPlay />}
                     </button>
-                    <input
-                      type='range'
-                      min='0'
-                      max='1'
-                      step='0.1'
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      className='w-20 mr-4 accent-white'
-                      aria-label='Volume'
+                    <div className='flex items-center'>
+                      <button
+                        onClick={toggleMute}
+                        className='text-white text-xl mr-2 focus:outline-none'
+                        aria-label={isMuted ? "Unmute" : "Mute"}
+                      >
+                        {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+                      </button>
+                      <input
+                        type='range'
+                        min='0'
+                        max='1'
+                        step='0.1'
+                        value={volume}
+                        onChange={handleVolumeChange}
+                        className='w-20 mr-4 accent-white'
+                        aria-label='Volume'
+                        aria-valuemin='0'
+                        aria-valuemax='100'
+                        aria-valuenow={volume * 100}
+                      />
+                      <button
+                        onClick={toggleFullscreen}
+                        className='text-white text-xl focus:outline-none'
+                        aria-label={
+                          isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                        }
+                      >
+                        {isFullscreen ? <FaCompress /> : <FaExpand />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className='w-full bg-gray-200 rounded-full h-1.5 mt-2'>
+                    <div
+                      className='bg-white h-1.5 rounded-full'
+                      style={{
+                        width: `${(currentTime / duration) * 100 || 0}%`,
+                      }}
+                      role='progressbar'
+                      aria-label='Video progress'
                       aria-valuemin='0'
-                      aria-valuemax='100'
-                      aria-valuenow={volume * 100}
-                    />
-                    <button
-                      onClick={toggleFullscreen}
-                      className='text-white text-xl focus:outline-none'
-                      aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                    >
-                      {isFullscreen ? <FaCompress /> : <FaExpand />}
-                    </button>
+                      aria-valuemax={duration}
+                      aria-valuenow={currentTime}
+                    ></div>
+                  </div>
+                  <div className='text-white text-sm mt-1'>
+                    <span aria-live='polite'>
+                      {formatTime(currentTime)} / {formatTime(duration)}
+                    </span>
                   </div>
                 </div>
-                <div className='w-full bg-gray-200 rounded-full h-1.5 mt-2'>
-                  <div
-                    className='bg-white h-1.5 rounded-full'
-                    style={{
-                      width: `${(currentTime / duration) * 100 || 0}%`,
-                    }}
-                    role="progressbar"
-                    aria-label="Video progress"
-                    aria-valuemin="0"
-                    aria-valuemax={duration}
-                    aria-valuenow={currentTime}
-                  ></div>
-                </div>
-                <div className="text-white text-sm mt-1">
-                  <span aria-live="polite">
-                    {formatTime(currentTime)} / {formatTime(duration)}
-                  </span>
-                </div>
               </div>
-            </div>
-          )}
+            );
+          }}
         </Await>
       </Suspense>
     </div>
