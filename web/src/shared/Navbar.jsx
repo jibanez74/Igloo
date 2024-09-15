@@ -3,8 +3,6 @@ import { NavLink, Link } from "react-router-dom";
 import logo from "../assets/images/igloo-icon.png";
 import profileDefault from "../assets/images/profile.png";
 import { FaUser } from "react-icons/fa";
-import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
 
 export default function Navbar() {
   const user = null;
@@ -12,24 +10,27 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <nav className='bg-blue-700 border-b border-blue-500'>
       <div className='mx-auto max-w-7xl px-2 sm:px-6 lg:px-8'>
         <div className='relative flex h-20 items-center justify-between'>
-          <div className='absolute inset-y-0 left-0 flex items-center md:hidden'>
-            {/* <!-- Mobile menu button--> */}
+          <div className='absolute inset-y-0 left-0 flex items-center sm:hidden'>
+            {/* Mobile menu button */}
             <button
               type='button'
-              id='mobile-dropdown-button'
               className='relative inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white'
               aria-controls='mobile-menu'
               aria-expanded={isMobileMenuOpen}
-              onClick={() => setIsMobileMenuOpen(prev => !prev)}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               <span className='absolute -inset-0.5'></span>
               <span className='sr-only'>Open main menu</span>
               <svg
-                className='block h-6 w-6'
+                className={`${isMobileMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
                 fill='none'
                 viewBox='0 0 24 24'
                 strokeWidth='1.5'
@@ -42,80 +43,63 @@ export default function Navbar() {
                   d='M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5'
                 />
               </svg>
+              <svg
+                className={`${isMobileMenuOpen ? 'block' : 'hidden'} h-6 w-6`}
+                fill='none'
+                viewBox='0 0 24 24'
+                strokeWidth='1.5'
+                stroke='currentColor'
+                aria-hidden='true'
+              >
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  d='M6 18L18 6M6 6l12 12'
+                />
+              </svg>
             </button>
           </div>
 
-          <div className='flex flex-1 items-center justify-center md:items-stretch md:justify-start'>
-            {/* <!-- Logo --> */}
+          {/* Logo and desktop menu */}
+          <div className='flex flex-1 items-center justify-center sm:items-stretch sm:justify-start'>
             <Link className='flex flex-shrink-0 items-center' to='/'>
               <img className='h-10 w-auto' src={logo} alt='Igloo logo' />
-
-              <span className='hidden md:block text-white text-2xl font-bold ml-2'>
+              <span className='hidden sm:block text-white text-2xl font-bold ml-2'>
                 Igloo
               </span>
             </Link>
 
-            {/* <!-- Desktop Menu Hidden below md screens --> */}
-            <div className='hidden md:ml-6 md:block'>
+            <div className='hidden sm:ml-6 sm:block'>
               <div className='flex space-x-2'>
-                <NavLink
-                  to='/'
-                  className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
+                <NavLink to='/home' className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
                   Home
                 </NavLink>
-
-                <NavLink
-                  to='/movies/1'
-                  className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
+                <NavLink to='/movies' className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
                   Movies
                 </NavLink>
-
-                <NavLink
-                  to='/tv-shows'
-                  className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
+                <NavLink to='/tv-shows' className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
                   TV Shows
                 </NavLink>
-
-                <NavLink
-                  to='/music'
-                  className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
+                <NavLink to='/music' className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
                   Music
                 </NavLink>
-
-                <NavLink
-                  to='/photos'
-                  className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
+                <NavLink to='/photos' className='text-white hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
                   Photos
                 </NavLink>
               </div>
             </div>
           </div>
 
-          {/* <!-- Right Side Menu (Logged Out) --> */}
-          {!user && (
-            <div className='hidden md:block md:ml-6'>
-              <div className='flex items-center'>
-                <Link
-                  to='/login'
-                  className='flex items-center text-white bg-gray-700 hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'
-                >
-                  <FaUser className='text-white mr-2' />
-                  <span>Login or Register</span>
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {/* <!-- Right Side Menu (Logged In) --> */}
-          {user && (
-            <div className='absolute inset-y-0 right-0 flex items-center pr-2 md:static md:inset-auto md:ml-6 md:pr-0'>
-              {/* <!-- Profile dropdown button --> */}
+          {/* Right side menu */}
+          <div className='absolute inset-y-0 right-0 flex items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0'>
+            {!user ? (
+              <Link to='/login' className='hidden sm:flex items-center text-white bg-gray-700 hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
+                <FaUser className='text-white mr-2' />
+                <span>Login or Register</span>
+              </Link>
+            ) : (
               <div className='relative ml-3'>
+                {/* Profile dropdown button */}
                 <div>
                   <button
                     type='button'
@@ -137,7 +121,7 @@ export default function Navbar() {
                   </button>
                 </div>
 
-                {/* <!-- Profile dropdown --> */}
+                {/* Profile dropdown */}
                 {isProfileMenuOpen && (
                   <div
                     id='user-menu'
@@ -188,58 +172,37 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* <!-- Mobile menu, show/hide based on menu state. --> */}
-      {isMobileMenuOpen && (
-        <div id='mobile-menu'>
-          <div className='space-y-1 px-2 pb-3 pt-2'>
-            <NavLink
-              to='/'
-              className='text-white block rounded-md px-3 py-2 text-base font-medium'
-            >
-              Home
-            </NavLink>
-
-            <NavLink
-              to='/movies/1'
-              className='text-white block rounded-md px-3 py-2 text-base font-medium'
-            >
-              Movies
-            </NavLink>
-
-            <NavLink
-              to='/tv-shows'
-              className='text-white block rounded-md px-3 py-2 text-base font-medium'
-            >
-              TV Shows
-            </NavLink>
-
-            <NavLink
-              to='/music'
-              className='text-white block rounded-md px-3 py-2 text-base font-medium'
-            >
-              Music
-            </NavLink>
-
-            <NavLink
-              to='/photos'
-              className='text-white block rounded-md px-3 py-2 text-base font-medium'
-            >
-              Photos
-            </NavLink>
-
-            {!user && (
-              <button className='flex items-center text-white bg-gray-700 hover:bg-gray-900 hover:text-white rounded-md px-3 py-2'>
-                <span>Login or Register</span>
-              </button>
             )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Mobile menu */}
+      <div className={`sm:hidden ${isMobileMenuOpen ? 'block' : 'hidden'}`} id='mobile-menu'>
+        <div className='space-y-1 px-2 pb-3 pt-2'>
+          <NavLink to='/home' className='text-white block rounded-md px-3 py-2 text-base font-medium' onClick={closeMobileMenu}>
+            Home
+          </NavLink>
+          <NavLink to='/movies' className='text-white block rounded-md px-3 py-2 text-base font-medium' onClick={closeMobileMenu}>
+            Movies
+          </NavLink>
+          <NavLink to='/tv-shows' className='text-white block rounded-md px-3 py-2 text-base font-medium' onClick={closeMobileMenu}>
+            TV Shows
+          </NavLink>
+          <NavLink to='/music' className='text-white block rounded-md px-3 py-2 text-base font-medium' onClick={closeMobileMenu}>
+            Music
+          </NavLink>
+          <NavLink to='/photos' className='text-white block rounded-md px-3 py-2 text-base font-medium' onClick={closeMobileMenu}>
+            Photos
+          </NavLink>
+          {!user && (
+            <Link to='/login' className='flex items-center text-white bg-gray-700 hover:bg-gray-900 hover:text-white rounded-md px-3 py-2' onClick={closeMobileMenu}>
+              <FaUser className='text-white mr-2' />
+              <span>Login or Register</span>
+            </Link>
+          )}
+        </div>
+      </div>
     </nav>
   );
 }

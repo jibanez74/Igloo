@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import asyncHandler from "../lib/asyncHandler";
 import Movie from "../models/Movie";
 import ErrorResponse from "../lib/errorResponse";

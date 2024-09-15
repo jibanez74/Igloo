@@ -10,3 +10,19 @@ export const getMovieByID = async id => {
     throw err;
   }
 };
+
+export const getMoviesWithPagination = async (page, keyword) => {
+  try {
+    const res = await api.get("/movie", {
+      params: {
+        keyword,
+        page,
+      },
+    });
+
+    return res.data;
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+};
