@@ -129,6 +129,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
   }
 
   if (req.query.transcode === "yes") {
+    console.log("will play movie using ffmpeg");
     res.writeHead(200, {
       "Content-Type": "video/mp4",
     });
@@ -153,6 +154,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
 
     cmd.pipe(res, { end: true });
   } else {
+    console.log("will play movie in direct mode");
     const range = req.headers.range;
     if (!range) {
       return next(new ErrorResponse(`Please provide a range`, 400));

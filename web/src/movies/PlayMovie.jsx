@@ -75,7 +75,7 @@ export default function PlayMovie() {
         <Await resolve={data}>
           {data => {
             let transcode = "yes";
-            if (data.container === "mp4") {
+            if (data.contentType === "video/mp4") {
               transcode = "no";
             }
 
