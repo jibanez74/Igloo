@@ -25,16 +25,10 @@ const MovieSchema = new mongoose.Schema(
       unique: true,
     },
 
-    container: {
-      type: String,
-      default: "unknown",
-    },
-
-    resolution: {
+    contentType: {
       type: String,
       default: "unknown",
       trim: true,
-      enum: ["unknown", "480p", "720p", "1080p", "2160p"],
     },
 
     runTime: {

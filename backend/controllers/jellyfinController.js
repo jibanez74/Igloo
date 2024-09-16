@@ -76,14 +76,16 @@ export const saveJellyfinMovies = asyncHandler(async (req, res, next) => {
         });
 
         const file = Bun.file(newMovie.filePath);
-        newMovie.container = file.type;
-        newMovie.mediaContainer.size = file.size;
+
         const exist = await file.exists();
         if (!exist) {
           return next(
             new ErrorResponse(`No file found for ${newMovie.filePath}`, 404)
           );
         }
+
+        newMovie.contentType = file.type;
+        newMovie.mediaContainer.size = file.size;
 
         newMovie.genres = tmdbMovie.genres.map(g => {
           let genre = genreMap.get(g.name);

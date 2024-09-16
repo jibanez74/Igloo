@@ -119,7 +119,10 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     );
   }
 
-  if (!fs.existsSync(movie.filePath)) {
+  const file = Bun.file(movie.filePath);
+
+  const exist = await file.exists();
+  if (!exist) {
     return next(
       new ErrorResponse(`File not found at path ${movie.filePath}`, 404)
     );
@@ -156,7 +159,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     }
 
     const fileSize = movie.mediaContainer.size;
-    const chunkSize = 10 ** 6; // 1MB
+    const chunkSize = 10 ** 6;
     const start = Number(range.replace(/\D/g, ""));
     const end = Math.min(start + chunkSize, fileSize - 1);
     const contentLength = end - start + 1;
@@ -165,7 +168,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
       "Accept-Ranges": "bytes",
       "Content-Length": contentLength,
-      "Content-Type": `video/${movie.mediaContainer.format}`,
+      "Content-Type": movie.contentType,
     };
 
     res.writeHead(206, headers);
