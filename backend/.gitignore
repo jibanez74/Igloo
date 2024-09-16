@@ -1,8 +1,5 @@
-.idea
-.vscode
-.DS_Store
 .env
-node_modules
-db_data
-db_config
-redis_data
+.vscode
+.idea
+.DS_Store
+node_modules/

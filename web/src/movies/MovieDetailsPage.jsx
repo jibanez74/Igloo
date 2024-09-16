@@ -23,10 +23,6 @@ export default function MovieDetailsPage() {
 
   const playMovie = () => navigate(`/movies/play/${id}`);
 
-  if (movie) {
-    alert(movie.mediaContainer.videos[0].);
-  }
-
   if (isPending) return <Spinner />;
   if (isError)
     return (
