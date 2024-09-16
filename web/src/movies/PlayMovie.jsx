@@ -95,10 +95,7 @@ export default function PlayMovie() {
                   onTimeUpdate={handleTimeUpdate}
                   onDurationChange={handleDurationChange}
                 >
-                  <source
-                    src={`/api/v1/movie/stream/${data._id}`}
-                    type='video/mp4'
-                  />
+                  <source src={url} type='video/mp4' />
                   Your browser does not support the video tag.
                 </video>
                 <div

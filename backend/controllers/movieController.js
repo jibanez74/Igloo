@@ -127,34 +127,28 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
 
   if (req.query.transcode === "yes") {
     res.writeHead(200, {
-      "Content-Type": "application/x-mpegURL",
+      "Content-Type": "video/mp4",
     });
 
     const cmd = ffmpeg(fs.createReadStream(movie.filePath))
       .audioChannels(2)
-      .size("1920x1080")
+      .audioBitrate("196k")
+      .audioCodec("aac")
       .videoCodec("libx264")
-      .audioCodec("aac") // Changed from libfdk_aac to aac
-      .format("hls") // Output in HLS format
-      .outputOptions([
-        "-hls_time 10", // Segment duration
-        "-hls_list_size 0", // Show all segments in the playlist
-        "-hls_flags delete_segments",
-        "-start_number 0",
-      ]);
+      .format("fmp4")
+      .outputOptions(["-movflags +faststart"])
+      .on("error", err => {
+        console.error(err);
 
-    cmd
-      .on("start", commandLine => {
-        console.log("Spawned FFmpeg with command: " + commandLine);
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "text/plain" });
+          res.end("An error occurred while processing the video");
+        }
       })
-      .on("error", (err, stdout, stderr) => {
-        console.error("FFmpeg error:", err.message);
-        console.error("FFmpeg stderr:", stderr);
-      })
-      .on("end", () => {
-        console.log("FFmpeg transcoding ended");
-      })
-      .pipe(res, { end: true });
+      .on("start", info => console.log(`ffmpeg command started:\n ${info}`))
+      .on("end", () => console.log("ffmpeg process ended"));
+
+    cmd.pipe(res, { end: true });
   } else {
     const range = req.headers.range;
     if (!range) {
