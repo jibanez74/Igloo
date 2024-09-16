@@ -134,6 +134,8 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       "Content-Type": "video/mp4",
     });
 
+    let ffmpegCommand;
+
     const cmd = ffmpeg(fs.createReadStream(movie.filePath))
       .audioChannels(2)
       .audioBitrate("196k")
@@ -149,12 +151,21 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
           res.end("An error occurred while processing the video");
         }
       })
-      .on("start", info => console.log(`ffmpeg command started:\n ${info}`))
+      .on("start", info => {
+        console.log(`ffmpeg command started:\n ${info}`);
+        ffmpegCommand = cmd;
+      })
       .on("end", () => console.log("ffmpeg process ended"));
 
     cmd.pipe(res, { end: true });
+
+    req.on("close", () => {
+      if (ffmpegCommand) {
+        console.log("Client disconnected, stopping ffmpeg process");
+        ffmpegCommand.kill("SIGKILL");
+      }
+    });
   } else {
-    console.log("will play movie in direct mode");
     const range = req.headers.range;
     if (!range) {
       return next(new ErrorResponse(`Please provide a range`, 400));
