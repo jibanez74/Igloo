@@ -135,8 +135,8 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       .audioBitrate("196k")
       .audioCodec("aac")
       .videoCodec("libx264")
-    .format("mp4")
-      .outputOptions(["-movflags +faststart"])
+      .format("mp4")
+      .outputOptions(["-movflags frag_keyframe+empty_moov"])
       .on("error", err => {
         console.error(err);
 
