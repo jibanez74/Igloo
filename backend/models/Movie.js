@@ -137,20 +137,6 @@ const MovieSchema = new mongoose.Schema(
   }
 );
 
-MovieSchema.pre("save", function (next) {
-  fs.stat(this.filePath, (err, stats) => {
-    if (err) {
-      return next(err);
-    }
-
-    this.container = path.extname(this.filePath);
-
-    if (!this.mediaContainer.size || this.mediaContainer.size === 0) {
-      this.mediaContainer.size = stats.size;
-    }
-  });
-});
-
 const Movie = mongoose.model("movie", MovieSchema);
 
 export default Movie;

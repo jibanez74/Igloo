@@ -6,6 +6,7 @@ import Genre from "../models/Genre";
 import Studio from "../models/Studio";
 import Artist from "../models/Artist";
 import { getVideoMetadata } from "../lib/ffmpeg";
+import ErrorResponse from "../lib/errorResponse";
 
 // todo
 // this controller needs to be updated to process multiple badges
@@ -73,6 +74,16 @@ export const saveJellyfinMovies = asyncHandler(async (req, res, next) => {
             ? tmdbMovie.spoken_languages.map(l => l.english_name).join(", ")
             : undefined,
         });
+
+        const file = Bun.file(newMovie.filePath);
+        newMovie.container = file.type;
+        newMovie.mediaContainer.size = file.size;
+        const exist = await file.exists();
+        if (!exist) {
+          return next(
+            new ErrorResponse(`No file found for ${newMovie.filePath}`, 404)
+          );
+        }
 
         newMovie.genres = tmdbMovie.genres.map(g => {
           let genre = genreMap.get(g.name);
