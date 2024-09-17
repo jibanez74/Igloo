@@ -84,13 +84,14 @@ export const streamMovie = async c => {
 
   if (transcode === "yes") {
     const videoStream = await videoFile.stream();
+    let cmd = null;
 
     return new Response(
       new ReadableStream({
         async start(controller) {
           const inputStream = Readable.from(videoStream);
 
-          const cmd = ffmpeg(inputStream)
+          cmd = ffmpeg(inputStream)
             .audioChannels(2)
             .audioBitrate("196k")
             .audioCodec("aac")
@@ -119,6 +120,13 @@ export const streamMovie = async c => {
 
           outputStream.on("end", () => {
             controller.close();
+          });
+        },
+        cancel() {
+          c.req.raw.on("close", () => {
+            if (cmd) {
+              cmd.kill();
+            }
           });
         },
       }),
