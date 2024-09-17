@@ -3,3 +3,6 @@
 .idea
 .DS_Store
 node_modules/
+db_data
+db_config
+redis_data

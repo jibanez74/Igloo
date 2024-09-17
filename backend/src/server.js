@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import connectToDB from "./lib/db";
 import {
-  getMovieCount,
-  getMovies,
-  getMovieByID,
-  getLatestMovies,
+getMovieCount,
+getMovies,
+getMovieByID,
+getLatestMovies,
+streamMovie,
 } from "./handlers/movieController";
 import { saveJellyfinMovies } from "./handlers/jellyfinController";
 
@@ -19,6 +20,7 @@ app.get("/api/v1/jellyfin/transfer", saveJellyfinMovies);
 app.get("/api/v1/movie/count", getMovieCount);
 app.get("/api/v1/movie/latest", getLatestMovies);
 app.get("/api/v1/movie/:id", getMovieByID);
+app.get("/api/v1/movie/stream/:id", streamMovie);
 app.get("/api/v1/movie", getMovies);
 
 export default app;

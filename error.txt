@@ -1,0 +1,70 @@
+romany@swifty:/warehouse/HomeLab/Igloo/backend$ bun run dev
+$ NODE_ENV=dev bun run --watch src/server.js
+Started server http://localhost:8080
+Connected to mongo using mongodb://localhost:27017/igloo-dev
+FFmpeg command started: ffmpeg -ac 2 -b:a 196k -acodec aac -vcodec h264_nvenc -f mp4 -movflags frag_keyframe+empty_moov pipe:1
+FFmpeg error: ffmpeg exited with code 1: 
+FFmpeg stderr: ffmpeg version 6.0.1-Jellyfin Copyright (c) 2000-2023 the FFmpeg developers
+  built with gcc 14.1.0 (crosstool-NG 1.26.0.93_a87bf7f)
+  configuration: --prefix=/ffbuild/prefix --pkg-config=pkg-config --pkg-config-flags=--static --cross-prefix=x86_64-ffbuild-linux-gnu- --arch=x86_64 --target-os=linux --extra-version=Jellyfin --extra-cflags= --extra-cxxflags= --extra-ldflags= --extra-ldexeflags=-pie --extra-libs=-ldl --enable-gpl --enable-version3 --enable-lto --disable-ffplay --disable-debug --disable-doc --disable-ptx-compression --disable-sdl2 --disable-libxcb --disable-xlib --enable-iconv --enable-zlib --enable-libfreetype --enable-libfribidi --enable-gmp --enable-libxml2 --enable-openssl --enable-lzma --enable-fontconfig --enable-libvorbis --enable-opencl --enable-amf --enable-chromaprint --enable-libdav1d --enable-libfdk-aac --enable-ffnvcodec --enable-cuda --enable-cuda-llvm --enable-cuvid --enable-nvdec --enable-nvenc --enable-libass --enable-libbluray --enable-libmp3lame --enable-libopus --enable-libtheora --enable-libvpl --enable-libvpx --enable-libwebp --enable-libopenmpt --disable-rkmpp --disable-rkrga --enable-libsrt --enable-libsvtav1 --enable-libdrm --enable-vaapi --enable-vulkan --enable-libshaderc --enable-libplacebo --enable-libx264 --enable-libx265 --enable-libzimg --enable-libzvbi
+  libavutil      58.  2.100 / 58.  2.100
+  libavcodec     60.  3.100 / 60.  3.100
+  libavformat    60.  3.100 / 60.  3.100
+  libavdevice    60.  1.100 / 60.  1.100
+  libavfilter     9.  3.100 /  9.  3.100
+  libswscale      7.  1.100 /  7.  1.100
+  libswresample   4. 10.100 /  4. 10.100
+  libpostproc    57.  1.100 / 57.  1.100
+Output #0, mp4, to 'pipe:1':
+[out#0/mp4 @ 0x5736bf0778c0] Output file does not contain any stream
+
+175 |         processExited = true;
+176 | 
+177 |         if (signal) {
+178 |           handleExit(new Error('ffmpeg was killed with signal ' + signal));
+179 |         } else if (code) {
+180 |           handleExit(new Error('ffmpeg exited with code ' + code));
+                           ^
+error: ffmpeg exited with code 1: 
+      at /warehouse/HomeLab/Igloo/backend/node_modules/fluent-ffmpeg/lib/processor.js:180:22
+      at emit (node:events:201:48)
+      at #handleOnExit (node:child_process:627:16)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

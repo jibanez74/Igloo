@@ -1,7 +1,7 @@
-import fs from "fs";
 import path from "path";
 import Movie from "../models/Movie";
 import { ffmpegInstance as ffmpeg } from "../lib/ffmpeg";
+import { Readable } from "stream";
 
 export const getMovieCount = async c => {
   const count = await Movie.countDocuments();
@@ -18,7 +18,7 @@ export const getLatestMovies = async c => {
 };
 
 export const getMovieByID = async c => {
-  const id = c.req.params("id");
+  const id = c.req.param("id");
 
   if (!id) {
     return c.json({ error: "no id provided" }, 400);
@@ -50,88 +50,106 @@ export const getMovieByID = async c => {
 };
 
 export const getMovies = async c => {
-  const movies = await Movie.find({}, { _id: 1, title: 1, thumb: 1, year: 1 });
+  const movies = await Movie.find(
+    {},
+    { _id: 1, title: 1, thumb: 1, year: 1 }
+  ).sort({ title: 1 });
 
   return c.json({ movies }, 200);
 };
 
-// export const streamMovie = asyncHandler(async (req, res, next) => {
-//   const movie = await Movie.findById(req.params.id);
+export const streamMovie = async c => {
+  const id = c.req.param("id");
+  const transcode = c.req.query("transcode");
 
-//   if (!movie) {
-//     return next(
-//       new ErrorResponse(`Unable to find movie with id of ${req.params.id}`, 404)
-//     );
-//   }
+  if (!id) {
+    return c.json({ error: "no id provided" }, 400);
+  }
 
-//   const file = Bun.file(movie.filePath);
+  const movie = await Movie.findById(id);
 
-//   const exist = await file.exists();
-//   if (!exist) {
-//     return next(
-//       new ErrorResponse(`File not found at path ${movie.filePath}`, 404)
-//     );
-//   }
+  if (!movie) {
+    return c.json({ error: `unable to find movie with id of ${id}` }, 404);
+  }
 
-//   if (req.query.transcode === "yes") {
-//     console.log("will play movie using ffmpeg");
-//     res.writeHead(200, {
-//       "Content-Type": "video/mp4",
-//     });
+  const videoFile = Bun.file(movie.filePath);
 
-//     let ffmpegCommand;
+  const exists = await videoFile.exists();
+  if (!exists) {
+    return c.json(
+      { error: `unable to find a video file for movie with id ${id}` },
+      404
+    );
+  }
 
-//     const cmd = ffmpeg(fs.createReadStream(movie.filePath))
-//       .audioChannels(2)
-//       .audioBitrate("196k")
-//       .audioCodec("aac")
-//       .videoCodec("h264_nvenc")
-//       .format("mp4")
-//       .outputOptions(["-movflags frag_keyframe+empty_moov"])
-//       .on("error", err => {
-//         console.error(err);
+  if (transcode === "yes") {
+    const videoStream = await videoFile.stream();
 
-//         if (!res.headersSent) {
-//           res.writeHead(500, { "Content-Type": "text/plain" });
-//           res.end("An error occurred while processing the video");
-//         }
-//       })
-//       .on("start", info => {
-//         console.log(`ffmpeg command started:\n ${info}`);
-//         ffmpegCommand = cmd;
-//       })
-//       .on("end", () => console.log("ffmpeg process ended"));
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          const inputStream = Readable.from(videoStream);
 
-//     cmd.pipe(res, { end: true });
+          const cmd = ffmpeg(inputStream)
+            .audioChannels(2)
+            .audioBitrate("196k")
+            .audioCodec("aac")
+            .videoCodec("h264_nvenc")
+            .outputOptions([
+              "-movflags frag_keyframe+empty_moov",
+              "-preset ultrafast",
+              "-crf 18",
+            ])
+            .format("mp4")
+            .on("error", (err, stdout, stderr) => {
+              console.error(`FFmpeg error: ${err.message}`);
+              console.error(`FFmpeg stderr: ${stderr}`);
+              controller.error(err);
+            })
+            .on("end", () => {
+              console.log("FFmpeg command ended");
+              controller.close();
+            });
 
-//     req.on("close", () => {
-//       if (ffmpegCommand) {
-//         console.log("Client disconnected, stopping ffmpeg process");
-//         ffmpegCommand.kill("SIGKILL");
-//       }
-//     });
-//   } else {
-//     const range = req.headers.range;
-//     if (!range) {
-//       return next(new ErrorResponse(`Please provide a range`, 400));
-//     }
+          const outputStream = cmd.pipe();
 
-//     const fileSize = movie.mediaContainer.size;
-//     const chunkSize = 10 ** 6;
-//     const start = Number(range.replace(/\D/g, ""));
-//     const end = Math.min(start + chunkSize, fileSize - 1);
-//     const contentLength = end - start + 1;
+          outputStream.on("data", chunk => {
+            controller.enqueue(chunk);
+          });
 
-//     const headers = {
-//       "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-//       "Accept-Ranges": "bytes",
-//       "Content-Length": contentLength,
-//       "Content-Type": movie.contentType,
-//     };
+          outputStream.on("end", () => {
+            controller.close();
+          });
+        },
+      }),
+      {
+        headers: {
+          "Content-Type": "video/mp4",
+        },
+      }
+    );
+  } else {
+    const fileSize = videoFile.size;
+    const range = c.req.header("range");
 
-//     res.writeHead(206, headers);
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
 
-//     const videoStream = fs.createReadStream(movie.filePath, { start, end });
-//     videoStream.pipe(res);
-//   }
-// });
+      c.status(206);
+      c.header("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+      c.header("Accept-Ranges", "bytes");
+      c.header("Content-Length", chunkSize.toString());
+      c.header("Content-Type", movie.contentType);
+
+      return c.body(videoFile.slice(start, end + 1));
+    }
+
+    c.header("Content-Length", fileSize.toString());
+    c.header("Content-Type", movie.contentType);
+
+    return c.body(videoFile);
+  }
+};
