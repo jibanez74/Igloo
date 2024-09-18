@@ -175,12 +175,17 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-      const chunksize = (end - start + 1);
+      const chunksize = end - start + 1;
 
-      // Ensure chunksize is a positive number and doesn't exceed the file size
-      if (isNaN(chunksize) || chunksize <= 0 || start >= total || end >= total) {
+      if (
+        isNaN(start) ||
+        isNaN(end) ||
+        start >= total ||
+        end >= total ||
+        start > end
+      ) {
         res.writeHead(416, {
-          'Content-Range': `bytes */${total}`
+          "Content-Range": `bytes */${total}`,
         });
         return res.end();
       }
@@ -205,6 +210,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       res.writeHead(200, {
         "Content-Length": total,
         "Content-Type": movie.contentType,
+        "Accept-Ranges": "bytes",
       });
 
       readStream.pipe(res);
