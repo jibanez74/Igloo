@@ -110,6 +110,11 @@ export const deleteMovie = asyncHandler(async (req, res) => {
 });
 
 export const streamMovie = asyncHandler(async (req, res, next) => {
+  const range = req.headers.range;
+  if (!range) {
+    return next(new ErrorResponse(`Please provide a range`, 400));
+  }
+
   const movie = await Movie.findById(req.params.id);
 
   if (!movie) {
