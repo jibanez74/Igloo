@@ -168,7 +168,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       }
     });
   } else {
-    const total = movie.mediaContainer.size;
+    const total = file.size;
     const range = req.headers.range;
 
     if (range) {
