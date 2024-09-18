@@ -157,12 +157,12 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
 
     cmd.pipe(res, { end: true });
 
-    req.on("close", () => {
-      if (ffmpegProcess) {
-        console.log("Client disconnected, stopping ffmpeg process");
-        ffmpegProcess.kill("SIGKILL");
-      }
-    });
+    // req.on("close", () => {
+    //   if (ffmpegProcess) {
+    //     console.log("Client disconnected, stopping ffmpeg process");
+    //     ffmpegProcess.kill("SIGKILL");
+    //   }
+    // });
   } else {
     const size = movie.mediaContainer.size;
     const chunkSize = 10 ** 6;
