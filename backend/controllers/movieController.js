@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import asyncHandler from "../lib/asyncHandler";
 import Movie from "../models/Movie";
@@ -117,28 +118,18 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const file = Bun.file(movie.filePath);
-
-  const exist = await file.exists();
-  if (!exist) {
-    return next(
-      new ErrorResponse(`File not found at path ${movie.filePath}`, 404)
-    );
-  }
-
   if (req.query.transcode === "yes") {
     res.writeHead(200, {
       "Content-Type": "video/mp4",
     });
 
-    const inputStream = await file.stream();
     const audioChannels = Number(req.query.channels) || 2;
     const audioCodec = req.query.acodec || "aac";
     const audioBitRate = req.query.abitrate || "196k";
     const videoCodec = req.query.vcodec || "libx264";
     let ffmpegProcess = null;
 
-    const cmd = ffmpeg(inputStream)
+    const cmd = ffmpeg(fs.createReadStream(movie.filePath))
       .audioChannels(audioChannels)
       .audioBitrate(audioBitRate)
       .audioCodec(audioCodec)
@@ -168,60 +159,19 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       }
     });
   } else {
-    const total = movie.mediaContainer.size;
-    const range = req.headers.range;
+    const size = movie.mediaContainer.size;
+    const chunkSize = 10 ** 6;
+    const start = Number(range.replace(/\D/g, ""));
+    const end = Math.min(start + chunkSize, size - 1);
+    const contentLength = end - start + 1;
 
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-      const chunksize = end - start + 1;
+    res.writeHead(206, {
+      "Content-Range": `bytes ${start}-${end}/${size}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength,
+      "Content-Type": movie.contentType,
+    });
 
-      if (
-        isNaN(start) ||
-        isNaN(end) ||
-        start >= total ||
-        end >= total ||
-        start > end
-      ) {
-        res.writeHead(416, {
-          "Content-Range": `bytes */${total}`,
-        });
-        return res.end();
-      }
-
-      // Ensure start and end are valid numbers
-      const validStart = Math.max(0, start);
-      const validEnd = Math.min(total - 1, end);
-
-      const readStream = await file.stream({ start: validStart, end: validEnd });
-
-      res.writeHead(206, {
-        "Content-Range": `bytes ${validStart}-${validEnd}/${total}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": validEnd - validStart + 1,
-        "Content-Type": movie.contentType,
-      });
-
-      readStream.pipe(res);
-
-      req.on("close", () => {
-        readStream.destroy();
-      });
-    } else {
-      const readStream = await file.stream();
-
-      res.writeHead(200, {
-        "Content-Length": total,
-        "Content-Type": movie.contentType,
-        "Accept-Ranges": "bytes",
-      });
-
-      readStream.pipe(res);
-
-      req.on("close", () => {
-        readStream.destroy();
-      });
-    }
+    fs.createReadStream(movie.filePath, { start, end }).pipe(res);
   }
 });
