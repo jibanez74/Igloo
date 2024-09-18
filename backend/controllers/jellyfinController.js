@@ -1,3 +1,4 @@
+import asyncHandler from "../lib/asyncHandler";
 import jellyfin from "../lib/jellyfin";
 import tmdb from "../lib/tmdb";
 import Movie from "../models/Movie";
@@ -7,7 +8,9 @@ import Artist from "../models/Artist";
 import { getVideoMetadata } from "../lib/ffmpeg";
 import ErrorResponse from "../lib/errorResponse";
 
-export const saveJellyfinMovies = async c => {
+// todo
+// this controller needs to be updated to process multiple badges
+export const saveJellyfinMovies = asyncHandler(async (req, res, next) => {
   const batchSize = 400;
   let processedCount = 0;
 
@@ -76,9 +79,8 @@ export const saveJellyfinMovies = async c => {
 
         const exist = await file.exists();
         if (!exist) {
-          return c.json(
-            { error: `unable to find a file for the movie ${newMovie.title}` },
-            404
+          return next(
+            new ErrorResponse(`No file found for ${newMovie.filePath}`, 404)
           );
         }
 
@@ -171,10 +173,7 @@ export const saveJellyfinMovies = async c => {
     }
   }
 
-  return c.json(
-    {
-      message: `${processedCount} Jellyfin movies were transferred successfully`,
-    },
-    201
-  );
-};
+  res.status(201).json({
+    message: `${processedCount} Jellyfin movies were transferred successfully`,
+  });
+});

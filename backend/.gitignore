@@ -1,8 +1,8 @@
-.env
-.vscode
 .idea
+.vscode
 .DS_Store
-node_modules/
+.env
+node_modules
 db_data
 db_config
 redis_data
