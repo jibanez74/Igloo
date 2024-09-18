@@ -1,0 +1,74 @@
+romany@swifty:/warehouse/HomeLab/Igloo/backend$ bun run dev
+$ MODE=dev bun server.js --watch
+server is running in dev mode on port 8080
+Connected to mongo using mongodb://localhost:27017/igloo-dev
+188 |           "Content-Range": `bytes */${total}`,
+189 |         });
+190 |         return res.end();
+191 |       }
+192 | 
+193 |       const readStream = await file.stream({ start, end });
+      ^
+TypeError: chunkSize must be a number
+ code: "ERR_INVALID_ARG_TYPE"
+
+      at stream (native:1:1)
+      at /warehouse/HomeLab/Igloo/backend/controllers/movieController.js:193:37
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

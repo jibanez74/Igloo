@@ -168,7 +168,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       }
     });
   } else {
-    const total = file.size;
+    const total = movie.mediaContainer.size;
     const range = req.headers.range;
 
     if (range) {
@@ -190,12 +190,16 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
         return res.end();
       }
 
-      const readStream = await file.stream({ start, end });
+      // Ensure start and end are valid numbers
+      const validStart = Math.max(0, start);
+      const validEnd = Math.min(total - 1, end);
+
+      const readStream = await file.stream({ start: validStart, end: validEnd });
 
       res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${total}`,
+        "Content-Range": `bytes ${validStart}-${validEnd}/${total}`,
         "Accept-Ranges": "bytes",
-        "Content-Length": chunksize,
+        "Content-Length": validEnd - validStart + 1,
         "Content-Type": movie.contentType,
       });
 
