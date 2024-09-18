@@ -129,9 +129,6 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
   if (req.query.transcode === "yes") {
     res.writeHead(200, {
       "Content-Type": "video/mp4",
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Content-Disposition": `inline; filename="${movie.title}.mp4"`,
     });
 
     const inputStream = await file.stream();
@@ -178,7 +175,16 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-      const chunksize = end - start + 1;
+      const chunksize = (end - start + 1);
+
+      // Ensure chunksize is a positive number and doesn't exceed the file size
+      if (isNaN(chunksize) || chunksize <= 0 || start >= total || end >= total) {
+        res.writeHead(416, {
+          'Content-Range': `bytes */${total}`
+        });
+        return res.end();
+      }
+
       const readStream = await file.stream({ start, end });
 
       res.writeHead(206, {
