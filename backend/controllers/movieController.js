@@ -110,11 +110,6 @@ export const deleteMovie = asyncHandler(async (req, res) => {
 });
 
 export const streamMovie = asyncHandler(async (req, res, next) => {
-  const range = req.headers.range;
-  if (!range) {
-    return next(new ErrorResponse(`Please provide a range`, 400));
-  }
-
   const movie = await Movie.findById(req.params.id);
 
   if (!movie) {
@@ -123,10 +118,29 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     );
   }
 
+  const size = movie.mediaContainer.size;
+  const range = req.headers.range;
+  let start = 0;
+  let end = size - 1;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    start = parseInt(parts[0], 10);
+    end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+  }
+
+  const contentLength = end - start + 1;
+
+  const headers = {
+    "Content-Range": `bytes ${start}-${end}/${size}`,
+    "Accept-Ranges": "bytes",
+    "Content-Length": contentLength,
+    "Content-Type": movie.contentType,
+  };
+
   if (req.query.transcode === "yes") {
-    res.writeHead(200, {
-      "Content-Type": "video/mp4",
-    });
+    headers["Content-Type"] = "video/mp4";
+    res.writeHead(206, headers);
 
     const audioChannels = Number(req.query.channels) || 2;
     const audioCodec = req.query.acodec || "aac";
@@ -134,7 +148,7 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
     const videoCodec = req.query.vcodec || "libx264";
     let ffmpegProcess = null;
 
-    const cmd = ffmpeg(fs.createReadStream(movie.filePath))
+    const cmd = ffmpeg(fs.createReadStream(movie.filePath, { start, end }))
       .audioChannels(audioChannels)
       .audioBitrate(audioBitRate)
       .audioCodec(audioCodec)
@@ -143,7 +157,6 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
       .outputOptions(["-movflags frag_keyframe+empty_moov"])
       .on("error", err => {
         console.error(err);
-
         if (!res.headersSent) {
           res.writeHead(500, { "Content-Type": "text/plain" });
           res.end("An error occurred while processing the video");
@@ -159,24 +172,12 @@ export const streamMovie = asyncHandler(async (req, res, next) => {
 
     req.on("close", () => {
       if (ffmpegProcess) {
-        console.log("Client disconnected, stopping ffmpeg process");
-        ffmpegProcess.kill("SIGKILL");
+        ffmpegProcess.kill();
+        console.log("ffmpeg process killed due to client disconnect");
       }
     });
   } else {
-    const size = movie.mediaContainer.size;
-    const chunkSize = 10 ** 6;
-    const start = Number(range.replace(/\D/g, ""));
-    const end = Math.min(start + chunkSize, size - 1);
-    const contentLength = end - start + 1;
-
-    res.writeHead(206, {
-      "Content-Range": `bytes ${start}-${end}/${size}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": contentLength,
-      "Content-Type": movie.contentType,
-    });
-
+    res.writeHead(206, headers);
     fs.createReadStream(movie.filePath, { start, end }).pipe(res);
   }
 });
