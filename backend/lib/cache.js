@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { createClient } from "redis";
 
 const client = createClient({ url: process.env.REDIS_HOST });
-client.connect(); // Connect to Redisimport { createClient } from "redis";
+client.connect(); // Connect to Redis
 
 const exec = mongoose.Query.prototype.exec;
 
@@ -43,7 +43,6 @@ mongoose.Query.prototype.exec = async function () {
   return result;
 };
 
-mongoose.set("strictQuery", true);
-
-export const db = mongoose;
-export const redis = client;
+export const clearHash = async (hashKey) => {
+  await client.del(JSON.stringify(hashKey));
+};

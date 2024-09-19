@@ -1,10 +1,10 @@
 import express from "express";
 import errorHandler from "./middleware/error";
-import connectToDB from "./lib/db";
+import { db } from "./lib/db";
 import movieRouter from "./routes/movieRoutes";
 import jellyfinRouter from "./routes/jellyfinRoutes";
 
-connectToDB();
+await db.connect(process.env.MONGO_URI);
 
 const app = express();
 
