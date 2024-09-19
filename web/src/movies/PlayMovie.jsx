@@ -74,14 +74,7 @@ export default function PlayMovie() {
       <Suspense fallback={<Spinner />}>
         <Await resolve={data}>
           {data => {
-            let url = `/api/v1/movie/stream/${data._id}?transcode=yes&vcodec=h264_nvenc&channels=2&acodec=aac&abitrate=320k`;
-
-            if (data.contentType === "video/mp4") {
-              url = `/api/v1/movie/stream/${data._id}?transcode=no`;
-            }
-
-            alert(url);
-
+            const url = `/api/v1/movie/stream/${data._id}?transcode=yes&vcodec=copy&channels=2&acodec=aac&abitrate=320k`;
             return (
               <div
                 className='relative'
