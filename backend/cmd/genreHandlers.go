@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func (app *config) FIndOrCreateGenre(w http.ResponseWriter, r *http.Request) {
+func (app *config) FindOrCreateGenre(w http.ResponseWriter, r *http.Request) {
 	var genre models.Genre
 
 	err := helpers.ReadJSON(w, r, &genre)

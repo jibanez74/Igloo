@@ -16,7 +16,7 @@ func (app *config) routes() http.Handler {
 	})
 
 	router.Route("/api/v1/genre", func(r chi.Router) {
-		r.Post("/create", app.FindOrCreateArtist)
+		r.Post("/create", app.FindOrCreateGenre)
 	})
 
 	router.Route("/api/v1/studio", func(r chi.Router) {
