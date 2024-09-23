@@ -1,0 +1,5 @@
+.DS_Store
+.vscode
+.idea
+error.txt
+db-data/
