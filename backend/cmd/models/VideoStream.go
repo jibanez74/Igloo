@@ -20,8 +20,6 @@ type VideoStream struct {
 	FrameRate      string `gorm:"not null;default:'unknown'" json:"frameRate"`
 	AvgFrameRate   string `gorm:"not nulldefault:'unknown'" json:"avgFrameRate"`
 	BPS            uint   `json:"bps"`
-	NumberOfBytes  uint   `json:"numberOfBytes"`
-	NumberOfFrames uint   `json:"numberOfFrames"`
 	MovieID        uint   `json:"movieID"`
 	Movie          Movie  `json:"movie"`
 }
