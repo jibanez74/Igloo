@@ -15,6 +15,14 @@ func (app *config) routes() http.Handler {
 		r.Post("/create", app.FindOrCreateArtist)
 	})
 
+	router.Route("/api/v1/genre", func(r chi.Router) {
+		r.Post("/create", app.FindOrCreateArtist)
+	})
+
+	router.Route("/api/v1/studio", func(r chi.Router) {
+		r.Post("/create", app.FindOrCreateStudio)
+	})
+
 	router.Route("/api/v1/movie", func(r chi.Router) {
 		r.Get("/all", app.GetMovies)
 		r.Get("/{id}", app.GetMovieByID)
