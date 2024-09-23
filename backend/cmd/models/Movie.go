@@ -31,7 +31,7 @@ type Movie struct {
 	SpokenLanguages string        `gorm:"not null;default:'unknown'" json:"spokenLanguages"`
 	Trailers        []Trailer     `json:"trailers"`
 	Studios         []*Studio     `gorm:"many2many;movie_studios" json:"studios"`
-	Genres          []*Genre      `gorm:"many2many;track_genres" json:"genres"`
+	Genres          []*Genre      `gorm:"many2many;movie_genres" json:"genres"`
 	CastList        []Cast        `json:"castList"`
 	CrewList        []Crew        `json:"crewList"`
 	VideoList       []VideoStream `json:"videoList"`
