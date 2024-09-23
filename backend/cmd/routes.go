@@ -12,7 +12,7 @@ func (app *config) routes() http.Handler {
 	router.Use(middleware.Recoverer)
 
 	router.Route("/api/v1/artist", func(r chi.Router) {
-		r.Post("/create", app.FindOrCreateArtists)
+		r.Post("/create", app.FindOrCreateArtist)
 	})
 
 	router.Route("/api/v1/movie", func(r chi.Router) {

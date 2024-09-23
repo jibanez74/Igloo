@@ -6,34 +6,25 @@ import (
 	"net/http"
 )
 
-func (app *config) FindOrCreateArtists(w http.ResponseWriter, r *http.Request) {
-	var artists []models.Artist
+func (app *config) FindOrCreateArtist(w http.ResponseWriter, r *http.Request) {
+	var artist models.Artist
 
-	err := helpers.ReadJSON(w, r, &artists)
+	err := helpers.ReadJSON(w, r, &artist)
 	if err != nil {
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
-	tx := app.DB.Begin()
-
-	for _, artist := range artists {
-		err = tx.Where("name = ?", artist.Name).FirstOrCreate(&artist).Error
-		if err != nil {
-			tx.Rollback()
-			helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
-			return
-		}
-
-		artists = append(artists, artist)
+	err = app.DB.Where("name = ?", artist.Name).FirstOrCreate(&artist).Error
+	if err != nil {
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
 	}
-
-	tx.Commit()
 
 	res := helpers.JSONResponse{
 		Error:   false,
 		Message: "artists was returned successfully",
-		Data:    artists,
+		Data:    artist,
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
