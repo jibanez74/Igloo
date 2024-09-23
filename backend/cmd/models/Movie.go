@@ -32,9 +32,9 @@ type Movie struct {
 	Trailers        []Trailer     `json:"trailers"`
 	Studios         []*Studio     `gorm:"many2many;movie_studios" json:"studios"`
 	Genres          []*Genre      `gorm:"many2many;track_genres" json:"genres"`
-	CastList        []Cast        `json:"cast"`
-	CrewList        []Crew        `json:"crew"`
-	VideoList       []VideoStream `json:"videos"`
+	CastList        []Cast        `json:"castList"`
+	CrewList        []Crew        `json:"crewList"`
+	VideoList       []VideoStream `json:"videoList"`
 	AudioList       []AudioStream `json:"audioList"`
 	SubtitleList    []Subtitles   `json:"subtitles"`
 	ChapterList     []Chapter     `json:"chapters"`
