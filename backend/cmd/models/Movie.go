@@ -50,7 +50,7 @@ func (m *Movie) BeforeSave(tx *gorm.DB) error {
 		m.Title = info.Name()
 	}
 
-	m.Size = info.Size()
+	m.Size = uint(info.Size())
 
 	return nil
 }
