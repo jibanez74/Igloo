@@ -11,7 +11,6 @@ type AudioStream struct {
 	Channels      int64  `json:"channels"`
 	ChannelLayout string `gorm:"not null;default:'unknown'" json:"channelLayout"`
 	Language      string `gorm:"not null;default:'unknown'" json:"language"`
-	BPS           int64  `json:"bps"`
 	MovieID       uint   `json:"movieID"`
 	Movie         Movie  `json:"movie"`
 }
