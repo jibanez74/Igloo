@@ -1,0 +1,18 @@
+services:
+  igloo_db:
+    image: mongo
+    container_name: igloo_db
+    volumes:
+      - ./db_data:/data/db
+      - ./db_config:/data/configdb
+    ports:
+      - "27017:27017"
+
+  igloo_cache:
+    container_name: igloo_cache
+    image: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - ./redis_data:/data
