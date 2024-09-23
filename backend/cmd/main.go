@@ -52,6 +52,7 @@ func initDB() (*gorm.DB, error) {
 		&models.VideoStream{},
 		&models.AudioStream{},
 		&models.Subtitles{},
+		&models.Chapter{},
 	)
 
 	return db, nil

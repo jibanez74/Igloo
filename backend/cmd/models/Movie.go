@@ -37,6 +37,7 @@ type Movie struct {
 	VideoList       []VideoStream `json:"videos"`
 	AudioList       []AudioStream `json:"audioList"`
 	SubtitleList    []Subtitles   `json:"subtitles"`
+	ChapterList     []Chapter     `json:"chapters"`
 }
 
 func (m *Movie) BeforeSave(tx *gorm.DB) error {
