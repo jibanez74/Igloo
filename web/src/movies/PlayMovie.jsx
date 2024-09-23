@@ -74,7 +74,8 @@ export default function PlayMovie() {
       <Suspense fallback={<Spinner />}>
         <Await resolve={data}>
           {data => {
-            const url = `/api/v1/movie/stream/${data._id}?transcode=yes&vcodec=copy&channels=2&acodec=aac&abitrate=320k`;
+            // const url = `/api/v1/movie/stream/${data._id}?transcode=yes&vcodec=copy&channels=2&acodec=aac&abitrate=320k`;
+            const url = `http://localhost:8080/ffmpeg`;
             return (
               <div
                 className='relative'
