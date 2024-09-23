@@ -15,7 +15,7 @@ func (app *config) FindOrCreateStudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.DB.Where("name = ?", studio.Name).First(&studio).Error
+	err = app.DB.Where("name = ?", studio.Name).FirstOrCreate(&studio).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return

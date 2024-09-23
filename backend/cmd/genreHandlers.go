@@ -15,7 +15,7 @@ func (app *config) FIndOrCreateGenre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.DB.Where("tag = ?", genre.Tag).First(&genre).Error
+	err = app.DB.Where("tag = ?", genre.Tag).FirstOrCreate(&genre).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
