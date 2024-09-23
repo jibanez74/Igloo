@@ -30,8 +30,8 @@ type Movie struct {
 	CriticRating    float32       `gorm:"default:0" json:"criticRating"`
 	SpokenLanguages string        `gorm:"not null;default:'unknown'" json:"spokenLanguages"`
 	Trailers        []Trailer     `json:"trailers"`
-	Studios         []*Studio     `gorm:"many2many;movie_studios" json:"studios"`
-	Genres          []*Genre      `gorm:"many2many;movie_genres" json:"genres"`
+	Studios         []*Studio     `gorm:"many2many:movie_studios" json:"studios"`
+	Genres          []*Genre      `gorm:"many2many:movie_genres" json:"genres"`
 	CastList        []Cast        `json:"castList"`
 	CrewList        []Crew        `json:"crewList"`
 	VideoList       []VideoStream `json:"videoList"`
