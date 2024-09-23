@@ -11,10 +11,10 @@ type Movie struct {
 	gorm.Model
 	Title           string        `gorm:"not null;index" json:"title"`
 	FilePath        string        `gorm:"not null;uniqueIndex" json:"filePath"`
-	Size            int64         `json:"size"`
+	Size            uint          `json:"size"`
 	Container       string        `gorm:"not null;default:'unknown'" json:"container"`
 	Resolution      string        `gorm:"not null;default:'unknown'" json:"resolution"`
-	RunTime         int64         `json:"runTime"`
+	RunTime         uint          `json:"runTime"`
 	TagLine         string        `gorm:"not null;default:'unknown'" json:"tagLine"`
 	Summary         string        `gorm:"type:text;not null;default:'unknown'" json:"summary"`
 	Art             string        `gorm:"not null;default:'no_art.png'" json:"art"`
@@ -23,11 +23,11 @@ type Movie struct {
 	ImdbID          string        `gorm:"not null;default'unknown'" json:"imdbID"`
 	Year            int64         `json:"year"`
 	ReleaseDate     time.Time     `json:"releaseDate"`
-	Budget          int64         `json:"budget"`
-	Revenue         int64         `json:"revenue"`
+	Budget          uint          `json:"budget"`
+	Revenue         uint          `json:"revenue"`
 	ContentRating   string        `gorm:"not null;default:'unknown'" json:"contentRating"`
-	AudienceRating  int64         `gorm:"default:0" json:"audienceRating"`
-	CriticRating    int64         `gorm:"default:0" json:"criticRating"`
+	AudienceRating  float32       `gorm:"default:0" json:"audienceRating"`
+	CriticRating    float32       `gorm:"default:0" json:"criticRating"`
 	SpokenLanguages string        `gorm:"not null;default:'unknown'" json:"spokenLanguages"`
 	Trailers        []Trailer     `json:"trailers"`
 	Studios         []*Studio     `gorm:"many2many;movie_studios" json:"studios"`
