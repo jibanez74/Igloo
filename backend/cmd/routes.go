@@ -18,7 +18,6 @@ func (app *config) routes() http.Handler {
 	router.Route("/api/v1/movie", func(r chi.Router) {
 		r.Get("/all", app.GetMovies)
 		r.Get("/{id}", app.GetMovieByID)
-
 		r.Post("/create", app.CreateMovie)
 	})
 

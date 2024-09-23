@@ -27,7 +27,7 @@ func main() {
 
 	err = http.ListenAndServe(os.Getenv("PORT"), app.routes())
 	if err != nil {
-		errorLog.Fatal(err)
+		panic(err)
 	}
 }
 

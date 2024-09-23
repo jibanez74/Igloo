@@ -13,7 +13,7 @@ build:
 ## run: builds and runs the application
 run: build
 	@echo "Starting..."
-	@env MODE=${MODE} DSN=${DSN} REDIS=${REDIS} ./${BINARY_NAME} &
+	@env PORT=${PORT} MODE=${MODE} DSN=${DSN} REDIS=${REDIS} ./${BINARY_NAME} &
 	@echo "Started!"
 
 ## clean: runs go clean and deletes binaries
