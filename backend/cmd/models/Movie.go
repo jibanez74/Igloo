@@ -36,7 +36,7 @@ type Movie struct {
 	CrewList        []Crew        `json:"crewList"`
 	VideoList       []VideoStream `json:"videoList"`
 	AudioList       []AudioStream `json:"audioList"`
-	SubtitleList    []Subtitles   `json:"subtitles"`
+	SubtitleList    []Subtitles   `json:"subtitleList"`
 	ChapterList     []Chapter     `json:"chapters"`
 }
 
