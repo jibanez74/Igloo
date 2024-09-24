@@ -7,6 +7,14 @@ import (
 	"gorm.io/gorm"
 )
 
+type SimpleMovie struct {
+	ID            uint
+	Title         string `json:"title"`
+	Thumb         string `json:"thumb"`
+	Year          uint   `json:"year"`
+	ContentRating string `json:"contentRating"`
+}
+
 type Movie struct {
 	gorm.Model
 	Title           string        `gorm:"not null;index" json:"title"`

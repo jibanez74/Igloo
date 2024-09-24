@@ -3,6 +3,7 @@ package main
 import (
 	"igloo/cmd/helpers"
 	"igloo/cmd/models"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -52,19 +53,46 @@ func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) GetMovies(w http.ResponseWriter, r *http.Request) {
-	// get all movies in alphabetical order
-	var movies []models.Movie
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
 
-	err := app.DB.Order("title").Find(&movies).Error
+	pageSize, err := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if err != nil || pageSize < 1 || pageSize > 100 {
+		pageSize = 24
+	}
+
+	offset := (page - 1) * pageSize
+
+	var totalCount int64
+
+	err = app.DB.Model(&models.Movie{}).Count(&totalCount).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
 	}
 
+	var movies []models.SimpleMovie
+
+	err = app.DB.Model(&models.Movie{}).Order("title").Offset(offset).Limit(pageSize).Find(&movies).Error
+	if err != nil {
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(totalCount) / float64(pageSize)))
+
 	res := helpers.JSONResponse{
 		Error:   false,
 		Message: "movies were returned successfully",
-		Data:    movies,
+		Data: map[string]any{
+			"movies":      movies,
+			"currentPage": page,
+			"pageSize":    pageSize,
+			"totalPages":  totalPages,
+			"totalCount":  totalCount,
+		},
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
