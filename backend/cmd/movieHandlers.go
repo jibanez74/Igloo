@@ -9,6 +9,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
+	var movies [12]models.Movie
+
+	err := app.DB.Order("created_at desc").Limit(12).Find(&movies).Error
+	if err != nil {
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "latest movies were returned successfully",
+		Data:    movies,
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
