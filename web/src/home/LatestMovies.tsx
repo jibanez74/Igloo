@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { getLatestMovies } from "./httpHome";
 import Spinner from "../shared/Spinner";
 import MovieCard from "../shared/MovieCard";

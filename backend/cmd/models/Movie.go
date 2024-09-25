@@ -8,11 +8,10 @@ import (
 )
 
 type SimpleMovie struct {
-	ID            uint
-	Title         string `json:"title"`
-	Thumb         string `json:"thumb"`
-	Year          uint   `json:"year"`
-	ContentRating string `json:"contentRating"`
+	ID    uint
+	Title string `json:"title"`
+	Thumb string `json:"thumb"`
+	Year  uint   `json:"year"`
 }
 
 type Movie struct {
@@ -21,18 +20,18 @@ type Movie struct {
 	FilePath        string        `gorm:"not null;uniqueIndex" json:"filePath"`
 	Size            uint          `json:"size"`
 	Container       string        `gorm:"not null;default:'unknown'" json:"container"`
-	Resolution      string        `gorm:"not null;default:'unknown'" json:"resolution"`
-	RunTime         uint          `json:"runTime"`
+	Resolution      uint          `gorm:"default:0" json:"resolution"`
+	RunTime         uint          `gorm:"default:0" json:"runTime"`
 	TagLine         string        `gorm:"not null;default:'unknown'" json:"tagLine"`
 	Summary         string        `gorm:"type:text;not null;default:'unknown'" json:"summary"`
 	Art             string        `gorm:"not null;default:'no_art.png'" json:"art"`
 	Thumb           string        `gorm:"not null;default:'unknown'" json:"thumb"`
 	TmdbID          string        `gorm:"not null;default:'unknown'" json:"tmdbID"`
 	ImdbID          string        `gorm:"not null;default'unknown'" json:"imdbID"`
-	Year            int64         `json:"year"`
+	Year            int64         `gorm:"default:0" json:"year"`
 	ReleaseDate     time.Time     `json:"releaseDate"`
-	Budget          uint          `json:"budget"`
-	Revenue         uint          `json:"revenue"`
+	Budget          uint          `gorm:"default:0" json:"budget"`
+	Revenue         uint          `gorm:"default:0" json:"revenue"`
 	ContentRating   string        `gorm:"not null;default:'unknown'" json:"contentRating"`
 	AudienceRating  float32       `gorm:"default:0" json:"audienceRating"`
 	CriticRating    float32       `gorm:"default:0" json:"criticRating"`
