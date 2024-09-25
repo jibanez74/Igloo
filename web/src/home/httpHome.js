@@ -1,11 +1,11 @@
-import api from "../utils/api";
-
 export const getLatestMovies = async () => {
-  try {
-    const res = await api.get("/movie/latest");
+  const res = await fetch("/api/v1/movie/latest");
 
-    return res.data.movies;
-  } catch (err) {
-    console.error(err);
+  const r = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`${res.status} - ${r.Message}`);
   }
+
+  return r.data;
 };

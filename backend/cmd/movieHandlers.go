@@ -11,9 +11,9 @@ import (
 )
 
 func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
-	var movies [12]models.Movie
+	var movies [12]models.SimpleMovie
 
-	err := app.DB.Order("created_at desc").Limit(12).Find(&movies).Error
+	err := app.DB.Model(&models.Movie{}).Order("created_at desc").Limit(12).Find(&movies).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
@@ -75,7 +75,7 @@ func (app *config) GetMovies(w http.ResponseWriter, r *http.Request) {
 
 	var movies []models.SimpleMovie
 
-	err = app.DB.Model(&models.Movie{}).Order("title").Offset(offset).Limit(pageSize).Find(&movies).Error
+	err = app.DB.Model(&models.Movie{}).Preload("CastList").Preload("CrewList").Preload("Genres").Preload("Studios").Preload("Trailers").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").Order("title").Offset(offset).Limit(pageSize).Find(&movies).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
