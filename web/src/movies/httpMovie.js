@@ -2,7 +2,7 @@ import api from "../utils/api";
 
 export const getMovieByID = async id => {
   try {
-    const res = await fetc(`/api/v1/movie/${id}`);
+    const res = await fetch(`/api/v1/movie/by-id/${id}`);
 
     const r = await res.json();
 

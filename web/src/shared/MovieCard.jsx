@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 export default function MovieCard({ movie }) {
   return (
     <div className='bg-primary hover:bg-secondary rounded-lg shadow-lg overflow-hidden transition-colors duration-300'>
-      <Link to={`/movies/details/${movie._id}`}>
+      <Link to={`/movies/details/${movie.ID}`}>
         <img
           src={movie.thumb}
           alt={movie.title}
@@ -24,7 +24,7 @@ export default function MovieCard({ movie }) {
 
 MovieCard.propTypes = {
   movie: PropTypes.shape({
-    _id: PropTypes.string.isRequired,
+    ID: PropTypes.number.isRequired,
     title: PropTypes.string.isRequired,
     thumb: PropTypes.string.isRequired,
     year: PropTypes.number.isRequired,
