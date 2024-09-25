@@ -2,12 +2,17 @@ import api from "../utils/api";
 
 export const getMovieByID = async id => {
   try {
-    const res = await api.get(`/movie/${id}`);
+    const res = await fetc(`/api/v1/movie/${id}`);
 
-    return res.data.movie;
+    const r = await res.json();
+
+    if (r.Error) {
+      throw new Error(r.message);
+    }
+
+    return r.data;
   } catch (err) {
-    console.error(err);
-    throw err;
+    throw new Error(`Unable to process request`);
   }
 };
 

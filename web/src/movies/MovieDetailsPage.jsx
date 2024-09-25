@@ -24,10 +24,10 @@ export default function MovieDetailsPage() {
   const playMovie = () => navigate(`/movies/play/${id}`);
 
   if (isPending) return <Spinner />;
-  if (isError)
-    return (
-      <Alert title='Error' msg={error.message} time={6000} variant='danger' />
-    );
+
+  if (isError) {
+    alert(error);
+  }
 
   return (
     <div className='bg-gray-900 text-white min-h-screen'>
