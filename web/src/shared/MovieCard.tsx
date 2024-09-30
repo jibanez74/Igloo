@@ -1,3 +1,4 @@
+import { A } from "@solidjs/router";
 import type { Component } from "solid-js";
 import type { SimpleMovie } from "../types/Movie";
 
@@ -7,14 +8,14 @@ type MovieCardProps = {
 
 const MovieCard: Component<MovieCardProps> = props => (
   <div class='bg-primary hover:bg-secondary rounded-lg shadow-lg overflow-hidden transition-colors duration-300'>
-    <a href={`/movies/details/${props.movie.ID}`}>
+    <A href={`/movies/details/${props.movie.ID}`}>
       <img
         src={props.movie.thumb}
         alt={props.movie.title}
         class='w-full h-64 object-cover'
         loading='lazy'
       />
-    </a>
+    </A>
 
     <div class='p-4'>
       <h3 class='text-light text-xl font-bold mb-2'>{props.movie.title}</h3>

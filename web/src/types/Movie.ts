@@ -9,10 +9,9 @@ import type { SubtitleStream } from "./SubtitleStream";
 
 export type SimpleMovie = {
   ID: number;
-  Title: string;
+  title: string;
   thumb: string;
   year: number;
-  contentRating: string;
 };
 
 export type MoviePagination = {
