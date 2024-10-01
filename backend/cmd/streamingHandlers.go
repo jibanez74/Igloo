@@ -34,7 +34,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	size := fileInfo.Size()
 
 	contentType := r.URL.Query().Get("contentType")
-	if container == "" {
+	if contentType == "" {
 		helpers.ErrorJSON(w, errors.New("container is required"), http.StatusBadRequest)
 		return
 	}
