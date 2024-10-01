@@ -1,10 +1,12 @@
+import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import RouterLayout from "./RouterLayout";
-import LoginPage from "../auth/LoginPage";
-import HomePage from "../home/HomePage";
-import MoviesPage, { loader as getMovies } from "../movies/MoviesPage";
-import MovieDetailsPage from "../movies/MovieDetailsPage";
-import PlayMoviePage, { loader as getMovie } from "../movies/PlayMovie";
+import Spinner from "../shared/Spinner";
+
+const HomePage = lazy(() => import("../pages/HomePage"));
+const LoginPage = lazy(() => import("../pages/LoginPage"));
+const MoviesPage = lazy(() => import("../pages/MoviesPage"));
+const MovieDetailsPage = lazy(() => import("../pages/MovieDetailsPage"));
 
 const router = createBrowserRouter([
   {
@@ -13,19 +15,32 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />,
+        element: (
+          <Suspense fallback={<Spinner />}>
+            <HomePage />
+          </Suspense>
+        ),
       },
+
       {
         path: "login",
-        element: <LoginPage />,
+        element: (
+          <Suspense fallback={<Spinner />}>
+            <LoginPage />
+          </Suspense>
+        ),
       },
+
       {
         path: "movies",
         children: [
           {
             index: true,
-            element: <MoviesPage />,
-            loader: getMovies,
+            element: (
+              <Suspense fallback={<Spinner />}>
+                <MoviesPage />
+              </Suspense>
+            ),
           },
           {
             path: ":page",
@@ -35,10 +50,6 @@ const router = createBrowserRouter([
           {
             path: "details/:id",
             element: <MovieDetailsPage />,
-          },
-          {
-            path: "play/:id",
-            element: <PlayMoviePage />,
             loader: getMovie,
           },
         ],

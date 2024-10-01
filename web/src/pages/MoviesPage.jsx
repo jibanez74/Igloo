@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Await, useLoaderData, defer, useParams } from "react-router-dom";
 import queryClient from "../utils/queryClient";
-import { getMoviesWithPagination } from "./httpMovie";
+import { getMoviesWithPagination } from "../http/movieRequest";
 import Spinner from "../shared/Spinner";
 import MovieCard from "../shared/MovieCard";
 import Pagination from "../shared/Pagination";
@@ -24,9 +24,9 @@ export default function MoviesPage() {
 
               <Pagination
                 currentPage={Number(page) || 1}
-                pageSize={24}
-                totalItems={data.count}
-                totalPages={data.pages}
+                pageSize={data.pageSize}
+                totalItems={data.totalCount}
+                totalPages={data.totalPages}
                 urlPrefix='/movies'
               />
             </>
@@ -37,20 +37,3 @@ export default function MoviesPage() {
   );
 }
 
-async function getMovies(page = "1", keyword = "") {
-  return queryClient.fetchQuery({
-    queryKey: ["movies", page, keyword],
-    queryFn: () => getMoviesWithPagination(page, keyword),
-  });
-}
-
-export async function loader({ params }) {
-  let { page, keyword } = params;
-
-  if (!page) page = "1";
-  if (keyword) keyword = "";
-
-  return defer({
-    data: await getMovies(page, keyword),
-  });
-}

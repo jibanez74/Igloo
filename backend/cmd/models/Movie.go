@@ -19,7 +19,7 @@ type Movie struct {
 	Title           string        `gorm:"not null;index" json:"title"`
 	FilePath        string        `gorm:"not null;uniqueIndex" json:"filePath"`
 	Size            uint          `json:"size"`
-	Container       string        `gorm:"not null;default:'unknown'" json:"container"`
+	ContentType     string        `gorm:"not null" json:"contentType"`
 	Resolution      uint          `gorm:"default:0" json:"resolution"`
 	RunTime         uint          `gorm:"default:0" json:"runTime"`
 	TagLine         string        `gorm:"not null;default:'unknown'" json:"tagLine"`
