@@ -97,6 +97,13 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request) {
+	pid := r.URL.Query().Get("pid")
+	if pid == "" {
+		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
+		return
+	}
+	app.InfoLog.Print(pid)
+
 	var cmdArgs []string
 
 	filePath := r.URL.Query().Get("filePath")

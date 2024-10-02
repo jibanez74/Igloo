@@ -31,6 +31,7 @@ func (app *config) routes() http.Handler {
 	})
 
 	router.Route("/api/v1/straming", func(r chi.Router) {
+		r.Get("/video/transcode", app.StreamTranscodedVideo)
 		r.Get("/direct/video", app.DirectStreamVideo)
 	})
 

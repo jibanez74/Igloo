@@ -1,11 +1,16 @@
 package main
 
 import (
+	"encoding/gob"
 	"igloo/cmd/models"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/alexedwards/scs/redisstore"
+	"github.com/alexedwards/scs/v2"
+	"github.com/gomodule/redigo/redis"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -19,10 +24,13 @@ func main() {
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	session := initSession()
+
 	app := config{
 		DB:       db,
 		InfoLog:  infoLog,
 		ErrorLog: errorLog,
+		Session:  session,
 	}
 
 	err = http.ListenAndServe(os.Getenv("PORT"), app.routes())
@@ -39,7 +47,6 @@ func initDB() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// run migrations
 	db.AutoMigrate(
 		&models.User{},
 		&models.Artist{},
@@ -56,4 +63,31 @@ func initDB() (*gorm.DB, error) {
 	)
 
 	return db, nil
+}
+
+func initSession() *scs.SessionManager {
+	gob.Register(models.User{})
+
+	session := scs.New()
+
+	session.Store = redisstore.New(initRedis())
+
+	session.Lifetime = 30 * time.Minute
+	session.Cookie.Persist = true
+	session.Cookie.SameSite = http.SameSiteLaxMode
+	session.Cookie.Secure = false
+	session.Cookie.Name = os.Getenv("JWT_COOKIE_NAME")
+
+	return session
+}
+
+func initRedis() *redis.Pool {
+	redisPool := &redis.Pool{
+		MaxIdle: 10,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", os.Getenv("REDIS"))
+		},
+	}
+
+	return redisPool
 }

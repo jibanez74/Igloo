@@ -46,6 +46,7 @@ type Movie struct {
 	AudioList       []AudioStream `json:"audioList"`
 	SubtitleList    []Subtitles   `json:"subtitleList"`
 	ChapterList     []Chapter     `json:"chapters"`
+	Users []*User `gorm:"many2many:user_movies" json:"users"`
 }
 
 func (m *Movie) BeforeSave(tx *gorm.DB) error {

@@ -8,12 +8,13 @@ import (
 
 type User struct {
 	gorm.Model
-	Name     string `gorm:"not null" json:"name"`
-	Username string `gorm:"not null;uniqueIndex" json:"username"`
-	Email    string `gorm:"not null;uniqueIndex" json:"email"`
-	Password string `gorm:"not null" json:"password"`
-	Thumb    string `gorm:"not null;default:'no_thumb.png'" json:"thumb"`
-	Active   bool   `gorm:"not null;default:false" json:"active"`
+	Name           string   `gorm:"not null" json:"name"`
+	Username       string   `gorm:"not null;uniqueIndex" json:"username"`
+	Email          string   `gorm:"not null;uniqueIndex" json:"email"`
+	Password       string   `gorm:"not null" json:"password"`
+	Thumb          string   `gorm:"not null;default:'no_thumb.png'" json:"thumb"`
+	Active         bool     `gorm:"not null;default:false" json:"active"`
+	FavoriteMovies []*Movie `gorm:"many2many:user_movies" json:"favoriteMovies"`
 }
 
 func (u *User) BeforeSave(tx *gorm.DB) error {
