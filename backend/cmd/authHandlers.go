@@ -61,3 +61,18 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
+
+func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
+	err := app.Session.Destroy(r.Context())
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Logout successful",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
