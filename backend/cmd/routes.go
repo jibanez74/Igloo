@@ -10,11 +10,11 @@ import (
 func (app *config) routes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
+	router.Use(app.SessionLoad)
+	router.Use(app.RenewToken)
 
-	router.Route("/api/v1/auth", func(r chi.Router) {
-		r.Get("/logout", app.Logout)
-		r.Post("/login", app.Login)
-	})
+	router.Get("/api/v1/logout", app.Logout)
+	router.Post("/api/v1/login", app.Login)
 
 	router.Route("/api/v1/artist", func(r chi.Router) {
 		r.Post("/create", app.FindOrCreateArtist)
