@@ -11,6 +11,10 @@ func (app *config) routes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
 
+	router.Route("/api/v1/auth", func(r chi.Router) {
+		r.Post("/login", app.Login)
+	})
+
 	router.Route("/api/v1/artist", func(r chi.Router) {
 		r.Post("/create", app.FindOrCreateArtist)
 	})
