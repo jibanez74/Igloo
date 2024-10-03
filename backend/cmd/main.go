@@ -72,11 +72,14 @@ func initSession() *scs.SessionManager {
 
 	session.Store = redisstore.New(initRedis())
 
-	session.Lifetime = 30 * time.Minute
+	session.Lifetime = 24 * time.Hour
 	session.Cookie.Persist = true
 	session.Cookie.SameSite = http.SameSiteLaxMode
-	session.Cookie.Secure = false
-	session.Cookie.Name = os.Getenv("JWT_COOKIE_NAME")
+	session.Cookie.Secure = true
+	session.Cookie.Name = os.Getenv("COOKIE_NAME")
+	session.Cookie.HttpOnly = true
+	session.Cookie.Domain = os.Getenv("COOKIE_DOMAIN")
+	session.Cookie.Path = "/"
 
 	return session
 }

@@ -102,7 +102,6 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
 		return
 	}
-	app.InfoLog.Print(pid)
 
 	var cmdArgs []string
 
@@ -187,6 +186,8 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		helpers.ErrorJSON(w, err)
 		return
 	}
+
+	app.Session.Put(r.Context(), pid, cmd.Process.Pid)
 
 	_, err = io.Copy(w, cmdOut)
 	if err != nil {

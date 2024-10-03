@@ -27,7 +27,7 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 
-	err = app.DB.Where("email = ? AND username = ?", req.Email, req.Username).First(&User).Error
+	err = app.DB.Where("email = ? AND username = ?", req.Email, req.Username).First(&user).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
