@@ -183,18 +183,6 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = cmd.Start()
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	_, err = io.Copy(w, cmdOut)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
 	job := transcodeJob{
 		ID:      processUUID,
 		UserID:  uint(app.Session.GetInt(r.Context(), "user_id")),
@@ -202,6 +190,14 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	app.TranscodeJobs = append(app.TranscodeJobs, job)
+
+	w.Header().Set("Content-Type", fmt.Sprintf("video/%s", container))
+
+	_, err = io.Copy(w, cmdOut)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
 
 	err = cmd.Wait()
 	if err != nil {
@@ -235,7 +231,6 @@ func (app *config) KillTranscodeJob(w http.ResponseWriter, r *http.Request) {
 			Error:   false,
 			Message: "No process was terminated because none was found",
 		}
-
 		helpers.WriteJSON(w, http.StatusOK, res)
 		return
 	}
