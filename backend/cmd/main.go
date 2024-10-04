@@ -49,6 +49,7 @@ func initDB() (*gorm.DB, error) {
 
 	db.AutoMigrate(
 		&models.User{},
+		&models.UserSettings{},
 		&models.Artist{},
 		&models.Genre{},
 		&models.Studio{},

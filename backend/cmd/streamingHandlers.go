@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 const ffmpegPath = "/bin/ffmpeg"
@@ -97,8 +99,8 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request) {
-	pid := r.URL.Query().Get("pid")
-	if pid == "" {
+	processUUID := r.URL.Query().Get("processUUID")
+	if processUUID == "" {
 		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
 		return
 	}
@@ -187,17 +189,71 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	app.Session.Put(r.Context(), pid, cmd.Process.Pid)
-
 	_, err = io.Copy(w, cmdOut)
 	if err != nil {
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
+	job := transcodeJob{
+		ID:      processUUID,
+		UserID:  uint(app.Session.GetInt(r.Context(), "user_id")),
+		Process: cmd,
+	}
+
+	app.TranscodeJobs = append(app.TranscodeJobs, job)
+
 	err = cmd.Wait()
 	if err != nil {
 		helpers.ErrorJSON(w, err)
 		return
 	}
+}
+
+func (app *config) KillTranscodeJob(w http.ResponseWriter, r *http.Request) {
+	processUUID := chi.URLParam(r, "uuid")
+	if processUUID == "" {
+		helpers.ErrorJSON(w, errors.New("process UUID is required"), http.StatusBadRequest)
+		return
+	}
+
+	userID := app.Session.GetInt(r.Context(), "user_id")
+
+	var jobToKill *transcodeJob
+	var jobIndex int = -1
+
+	for i, job := range app.TranscodeJobs {
+		if job.ID == processUUID && job.UserID == uint(userID) {
+			jobToKill = &app.TranscodeJobs[i]
+			jobIndex = i
+			break
+		}
+	}
+
+	if jobToKill == nil {
+		res := helpers.JSONResponse{
+			Error:   false,
+			Message: "No process was terminated because none was found",
+		}
+
+		helpers.WriteJSON(w, http.StatusOK, res)
+		return
+	}
+
+	err := jobToKill.Process.Process.Kill()
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("failed to kill the process"), http.StatusInternalServerError)
+		return
+	}
+
+	if jobIndex != -1 {
+		app.TranscodeJobs = append(app.TranscodeJobs[:jobIndex], app.TranscodeJobs[jobIndex+1:]...)
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Transcode job terminated successfully",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
 }

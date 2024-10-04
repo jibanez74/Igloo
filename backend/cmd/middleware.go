@@ -22,13 +22,13 @@ func (app *config) RenewToken(next http.Handler) http.Handler {
 	})
 }
 
-func (app *config) isAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !app.Session.Exists(r.Context(), "user_id") {
-			helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
-			return
-		}
+// func (app *config) isAuth(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		if !app.Session.Exists(r.Context(), "user_id") {
+// 			helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+// 			return
+// 		}
 
-		next.ServeHTTP(w, r)
-	})
-}
+// 		next.ServeHTTP(w, r)
+// 	})
+// }
