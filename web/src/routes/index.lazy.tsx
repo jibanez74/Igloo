@@ -1,6 +1,11 @@
-import LatestMovies from "./LatestMovies";
+import { createLazyFileRoute } from "@tanstack/react-router";
+import LatestMovies from "@/components/LatestMovies";
 
-export default function HomePage() {
+export const Route = createLazyFileRoute("/")({
+  component: HomePage,
+});
+
+function HomePage() {
   return (
     <div className='min-h-screen'>
       <div className='container mx-auto px-4 py-8'>

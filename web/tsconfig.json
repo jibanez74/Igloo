@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "~routes/*": [
+        "src/routes/*"
+      ],
+
+      "@/*": [
+        "src/*"
+      ]
+    }
+  }
+}

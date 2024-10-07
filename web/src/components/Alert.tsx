@@ -1,7 +1,18 @@
-import PropTypes from "prop-types";
 import { useState, useEffect } from "react";
 
-export default function Alert({ title, msg, time, variant }) {
+type AlertProps = {
+  title?: string;
+  msg?: string;
+  variant?: "danger" | "success" | "warning";
+  time?: number;
+};
+
+export default function Alert({
+  title = "Error",
+  msg = "an error occurred",
+  time = 5000,
+  variant = "danger",
+}: AlertProps) {
   const [show, setShow] = useState(true);
 
   useEffect(() => {
@@ -19,10 +30,3 @@ export default function Alert({ title, msg, time, variant }) {
 }
 
 // ... existing component code ...
-
-Alert.propTypes = {
-  title: PropTypes.string.isRequired,
-  msg: PropTypes.string.isRequired,
-  time: PropTypes.number.isRequired,
-  variant: PropTypes.string.isRequired,
-};
