@@ -46,9 +46,7 @@ export default function LatestMovies() {
             aria-label='Latest movies grid'
           >
             {movies.map(m => (
-              <div role='gridcell' key={m.ID}>
-                <MovieCard movie={m} />
-              </div>
+              <MovieCard key={m.ID} movie={m} />
             ))}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
+import AppContextProvider from "@/AppContext";
 import Navbar from "@/components/Navbar";
 
 export const Route = createRootRoute({
@@ -8,7 +9,7 @@ export const Route = createRootRoute({
 
 function Index() {
   return (
-    <>
+    <AppContextProvider>
       <header>
         <Navbar />
       </header>
@@ -17,6 +18,6 @@ function Index() {
       </main>
 
       <TanStackRouterDevtools />
-    </>
+    </AppContextProvider>
   );
 }

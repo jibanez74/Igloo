@@ -3,7 +3,6 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { FaEnvelope, FaLock, FaSignInAlt } from "react-icons/fa";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
-import type { FormEvent } from "react";
 import type { User } from "@/types/User";
 import type { Res } from "@/types/Response";
 
@@ -15,7 +14,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     if (error) setError("");
