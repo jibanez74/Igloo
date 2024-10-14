@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { z } from "zod";
-import ReactPlayer from "react-player";
+import z from "zod";
 import {
   FaPlay,
   FaPause,
@@ -30,44 +29,30 @@ export const Route = createFileRoute("/movies/play")({
 
 function PlayMoviePage() {
   const search = useSearch({ from: "/movies/play" });
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(0.5);
-  const [played, setPlayed] = useState(0);
-  const [seeking, setSeeking] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const playerRef = useRef<ReactPlayer>(null);
-  const playerContainerRef = useRef<HTMLDivElement>(null);
 
-  const togglePlay = () => setIsPlaying(!isPlaying);
-  const toggleMute = () => setIsMuted(!isMuted);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.5);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseFloat(e.target.value));
-  };
-
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPlayed(parseFloat(e.target.value));
-  };
-
-  const handleSeekMouseDown = () => {
-    setSeeking(true);
-  };
-
-  const handleSeekMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
-    setSeeking(false);
-    playerRef.current?.seekTo(parseFloat((e.target as HTMLInputElement).value));
-  };
-
-  const handleProgress = (state: { played: number }) => {
-    if (!seeking) {
-      setPlayed(state.played);
+    const newVolume = parseFloat(e.target.value);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
     }
+    setVolume(newVolume);
+    setIsMuted(newVolume === 0);
   };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      playerContainerRef.current?.requestFullscreen();
+      containerRef.current?.requestFullscreen();
       setIsFullscreen(true);
     } else {
       document.exitFullscreen();
@@ -75,45 +60,79 @@ function PlayMoviePage() {
     }
   };
 
-  const videoUrl = `/api/v1/streaming?filePath=${encodeURIComponent(search.filePath)}&directPlay=${search.directPlay}&videoCodec=${search.videoCodec}&videoBitRate=${search.videoBitRate}&videoHeight=${search.videoHeight}&audioCodec=${search.audioCodec}&audioBitRate=${search.audioBitRate}&audioChannels=${search.audioChannels}&container=${search.container}`;
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+      } else {
+        videoRef.current.pause();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(!videoRef.current.muted);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleDurationChange = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+  };
+
+  const url = `/api/v1/streaming/video?contentType=${encodeURIComponent("video/mp4")}&filePath=${encodeURIComponent(search.filePath)}`;
 
   return (
-    <div className='container mx-auto px-4 py-8'>
-      <div ref={playerContainerRef} className='relative'>
-        <ReactPlayer
-          ref={playerRef}
-          url={videoUrl}
-          width='100%'
-          height='auto'
-          playing={isPlaying}
-          volume={volume}
-          muted={isMuted}
-          onProgress={handleProgress}
-          className='react-player'
-        />
-        <div className='absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4'>
-          <div className='flex items-center justify-between mb-2'>
+    <div className='container' ref={containerRef}>
+      <div
+        className='relative'
+        onMouseEnter={() => setShowControls(true)}
+        onMouseLeave={() => isPlaying && setShowControls(false)}
+      >
+        <video
+          ref={videoRef}
+          className='w-full h-auto'
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onTimeUpdate={handleTimeUpdate}
+          onDurationChange={handleDurationChange}
+        >
+          <source src={url} type='video/mp4' />
+        </video>
+        <div
+          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 transition-opacity duration-300 ${
+            showControls ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className='flex items-center justify-between'>
             <button
               onClick={togglePlay}
-              className='text-white hover:text-secondary'
+              className='text-white text-2xl focus:outline-none'
+              aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <FaPause /> : <FaPlay />}
             </button>
-            <input
-              type='range'
-              min={0}
-              max={1}
-              step='any'
-              value={played}
-              onMouseDown={handleSeekMouseDown}
-              onChange={handleSeekChange}
-              onMouseUp={handleSeekMouseUp}
-              className='w-full mx-4 accent-secondary'
-            />
             <div className='flex items-center'>
               <button
                 onClick={toggleMute}
-                className='text-white hover:text-secondary mr-2'
+                className='text-white text-xl mr-2 focus:outline-none'
+                aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
               </button>
@@ -121,18 +140,43 @@ function PlayMoviePage() {
                 type='range'
                 min={0}
                 max={1}
-                step='any'
+                step={0.1}
                 value={volume}
                 onChange={handleVolumeChange}
-                className='w-20 accent-secondary'
+                className='w-20 mr-4 accent-white'
+                aria-label='Volume'
+                aria-valuemin={0} // Change to a number
+                aria-valuemax={1} // Change to a number
+                aria-valuenow={volume * 100} // Change to a number
               />
               <button
                 onClick={toggleFullscreen}
-                className='text-white hover:text-secondary ml-2'
+                className='text-white text-xl focus:outline-none'
+                aria-label={
+                  isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                }
               >
                 {isFullscreen ? <FaCompress /> : <FaExpand />}
               </button>
             </div>
+          </div>
+          <div className='w-full bg-gray-200 rounded-full h-1.5 mt-2'>
+            <div
+              className='bg-white h-1.5 rounded-full'
+              style={{
+                width: `${(currentTime / duration) * 100 || 0}%`,
+              }}
+              role='progressbar'
+              aria-label='Video progress'
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              aria-valuenow={currentTime}
+            ></div>
+          </div>
+          <div className='text-white text-sm mt-1'>
+            <span aria-live='polite'>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
           </div>
         </div>
       </div>
