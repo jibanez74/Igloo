@@ -35,7 +35,7 @@ func (app *config) routes() http.Handler {
 		r.Post("/create", app.CreateMovie)
 	})
 
-	router.Route("/api/v1/straming", func(r chi.Router) {
+	router.Route("/api/v1/streaming", func(r chi.Router) {
 		r.Get("/kill/{uuid}", app.KillTranscodeJob)
 		r.Get("/video/transcode", app.StreamTranscodedVideo)
 		r.Get("/video", app.DirectStreamVideo)
