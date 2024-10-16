@@ -37,7 +37,7 @@ func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
 
 	var movie models.Movie
 
-	err = app.DB.Preload("CastList").Preload("CrewList").Preload("Genres").Preload("Studios").Preload("Trailers").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").First(&movie, uint(id)).Error
+	err = app.DB.Preload("CastList.Artist").Preload("CrewList.Artist").Preload("Genres").Preload("Studios").Preload("Trailers").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").First(&movie, uint(id)).Error
 	if err != nil {
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
