@@ -31,16 +31,17 @@ function MovieDetailsPage() {
 
   const navigate = useNavigate();
 
-  const playHandler = () =>
+  const playHandler = () => {
     navigate({
       to: "/movies/play",
       search: {
-        filePath: movie.filePath,
-        directPlay: true,
-        videoHeight: movie.videoList[0]?.height,
         container: "mp4",
+        contentType: movie.contentType,
+        filePath: movie.filePath,
+        thumb: movie.thumb,
       },
     });
+  };
 
   return (
     <div className='bg-dark text-light min-h-screen p-4'>
@@ -183,7 +184,7 @@ function MovieDetailsPage() {
                     className='w-24 h-24 rounded-full shadow-lg'
                   />
                   <p className='text-light'>
-                    {crew.artist.   name} - {crew.job}
+                    {crew.artist.name} - {crew.job}
                   </p>
                 </div>
               ))}
