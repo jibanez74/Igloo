@@ -26,7 +26,7 @@ export default function LatestMovies() {
   });
 
   return (
-    <section aria-label='Latest Movies'>
+    <section className='mt-4' aria-label='Latest Movies'>
       <h2 className='text-2xl font-bold mb-4'>Latest Movies</h2>
 
       <div aria-live='polite'>

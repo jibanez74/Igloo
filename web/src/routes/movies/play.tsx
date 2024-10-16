@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import z from "zod";
+import { v4 } from "uuid";
 import {
   FaPlay,
   FaPause,
@@ -96,7 +97,8 @@ function PlayMoviePage() {
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
-  const url = `/api/v1/streaming/video?contentType=${encodeURIComponent("video/mp4")}&filePath=${encodeURIComponent(search.filePath)}`;
+  const url = search.directPlay ? `/api/v1/streaming/video?contentType=${encodeURIComponent("video/mp4")}&filePath=${encodeURIComponent(search.filePath)}`
+  : `/api/v1/streaming/video/transcode?`
 
   return (
     <div className='container' ref={containerRef}>

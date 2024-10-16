@@ -23,6 +23,7 @@ import { Route as MoviesMovieIDImport } from './routes/movies/$movieID'
 
 const LoginLazyImport = createFileRoute('/login')()
 const IndexLazyImport = createFileRoute('/')()
+const SettingsIndexLazyImport = createFileRoute('/settings/')()
 
 // Create/Update Routes
 
@@ -35,6 +36,13 @@ const IndexLazyRoute = IndexLazyImport.update({
   path: '/',
   getParentRoute: () => rootRoute,
 } as any).lazy(() => import('./routes/index.lazy').then((d) => d.Route))
+
+const SettingsIndexLazyRoute = SettingsIndexLazyImport.update({
+  path: '/settings/',
+  getParentRoute: () => rootRoute,
+} as any).lazy(() =>
+  import('./routes/settings/index.lazy').then((d) => d.Route),
+)
 
 const TvShowsIndexRoute = TvShowsIndexImport.update({
   path: '/tv-shows/',
@@ -114,6 +122,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TvShowsIndexImport
       parentRoute: typeof rootRoute
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsIndexLazyImport
+      parentRoute: typeof rootRoute
+    }
   }
 }
 
@@ -127,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/movies': typeof MoviesIndexRoute
   '/music': typeof MusicIndexRoute
   '/tv-shows': typeof TvShowsIndexRoute
+  '/settings': typeof SettingsIndexLazyRoute
 }
 
 export interface FileRoutesByTo {
@@ -137,6 +153,7 @@ export interface FileRoutesByTo {
   '/movies': typeof MoviesIndexRoute
   '/music': typeof MusicIndexRoute
   '/tv-shows': typeof TvShowsIndexRoute
+  '/settings': typeof SettingsIndexLazyRoute
 }
 
 export interface FileRoutesById {
@@ -148,6 +165,7 @@ export interface FileRoutesById {
   '/movies/': typeof MoviesIndexRoute
   '/music/': typeof MusicIndexRoute
   '/tv-shows/': typeof TvShowsIndexRoute
+  '/settings/': typeof SettingsIndexLazyRoute
 }
 
 export interface FileRouteTypes {
@@ -160,6 +178,7 @@ export interface FileRouteTypes {
     | '/movies'
     | '/music'
     | '/tv-shows'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -169,6 +188,7 @@ export interface FileRouteTypes {
     | '/movies'
     | '/music'
     | '/tv-shows'
+    | '/settings'
   id:
     | '__root__'
     | '/'
@@ -178,6 +198,7 @@ export interface FileRouteTypes {
     | '/movies/'
     | '/music/'
     | '/tv-shows/'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 
@@ -189,6 +210,7 @@ export interface RootRouteChildren {
   MoviesIndexRoute: typeof MoviesIndexRoute
   MusicIndexRoute: typeof MusicIndexRoute
   TvShowsIndexRoute: typeof TvShowsIndexRoute
+  SettingsIndexLazyRoute: typeof SettingsIndexLazyRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
@@ -199,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   MoviesIndexRoute: MoviesIndexRoute,
   MusicIndexRoute: MusicIndexRoute,
   TvShowsIndexRoute: TvShowsIndexRoute,
+  SettingsIndexLazyRoute: SettingsIndexLazyRoute,
 }
 
 export const routeTree = rootRoute
@@ -219,7 +242,8 @@ export const routeTree = rootRoute
         "/movies/play",
         "/movies/",
         "/music/",
-        "/tv-shows/"
+        "/tv-shows/",
+        "/settings/"
       ]
     },
     "/": {
@@ -242,6 +266,9 @@ export const routeTree = rootRoute
     },
     "/tv-shows/": {
       "filePath": "tv-shows/index.tsx"
+    },
+    "/settings/": {
+      "filePath": "settings/index.lazy.tsx"
     }
   }
 }
