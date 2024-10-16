@@ -5,10 +5,17 @@ import ReactPlayer from "react-player";
 import { FaPlay } from "react-icons/fa";
 
 const searchSchema = z.object({
+  transcode: z.boolean(),
   container: z.string(),
   filePath: z.string(),
   contentType: z.string(),
   thumb: z.string().optional(),
+  videoCodec: z.string().optional(),
+  videoBitRate: z.string().optional(),
+  videoHeight: z.number().optional(),
+  audioCodec: z.string().optional(),
+  audioBitRate: z.string().optional(),
+  audioChannels: z.number().optional(),
 });
 
 export const Route = createFileRoute("/movies/play")({
@@ -21,7 +28,14 @@ function PlayMoviePage() {
 
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const url = `/api/v1/streaming/video?filePath=${encodeURIComponent(search.filePath)}&contentType=${encodeURIComponent(search.contentType)}`;
+  const filePath = encodeURIComponent(search.filePath);
+  const contentType = encodeURIComponent(search.contentType);
+
+  let url = `/api/v1/streaming/video?filePath=${filePath}&contentType=${contentType}`;
+
+  if (search.transcode) {
+    url = `/api/v1/streaming/video/transcode?container=${search.container}&filePath=${filePath}&contentType=${contentType}&videoHeight=${search.videoHeight}&videoCodec=${search.videoCodec}&videoBitRate=${search.videoBitRate}&audioCodec=${search.audioCodec}&audioBitRate=${search.audioBitRate}&audioChannels=${search.audioChannels}`;
+  }
 
   return (
     <div className='p-4 rounded-lg shadow-lg max-w-full'>
