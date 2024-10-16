@@ -2,8 +2,9 @@ import {
   createFileRoute,
   useLoaderData,
   useNavigate,
+  Link,
 } from "@tanstack/react-router";
-import { FaCog, FaPlay, FaCheck } from "react-icons/fa";
+import { FaArrowLeft, FaCog, FaPlay, FaCheck } from "react-icons/fa";
 import type { Movie } from "@/types/Movie";
 import type { Res } from "@/types/Response";
 
@@ -42,120 +43,164 @@ function MovieDetailsPage() {
     });
 
   return (
-    <div className='container p-4'>
-      <div className='flex flex-col lg:flex-row gap-4'>
-        {/* Poster and Backdrop */}
-        <div className='flex-shrink-0'>
-          <img
-            src={`https://image.tmdb.org/t/p/original${movie.thumb}`}
-            alt={movie.title}
-            className='w-full lg:w-64 mb-4'
-          />
-          <img
-            src={`https://image.tmdb.org/t/p/original${movie.art}`}
-            alt={`${movie.title} backdrop`}
-            className='w-full lg:w-96'
-          />
+    <div className='bg-dark text-light min-h-screen p-4'>
+      <div className='container max-w-4xl mx-auto'>
+        {/* Back Button */}
+        <Link
+          to='/movies'
+          className='flex items-center space-x-2 bg-secondary text-dark px-4 py-2 rounded mb-4'
+        >
+          <FaArrowLeft />
+          <span>Back to Movies</span>
+        </Link>
+
+        {/* Movie Header */}
+        <div
+          className='relative h-64 bg-cover bg-center rounded-lg'
+          style={{ backgroundImage: `url(${movie.art})` }}
+        >
+          <div className='absolute inset-0 bg-dark bg-opacity-75 flex flex-col justify-center items-center'>
+            <h1 className='text-4xl font-bold text-light'>
+              {movie.title} ({movie.year})
+            </h1>
+            <p className='text-lg text-info'>{movie.tagLine}</p>
+          </div>
+        </div>
+
+        {/* Button Group */}
+        <div className='mt-4 flex justify-center space-x-4'>
+          <button
+            onClick={playHandler}
+            className='bg-success text-white px-4 py-2 rounded flex items-center space-x-2'
+          >
+            <FaPlay />
+            <span>Play</span>
+          </button>
+          <button className='bg-primary text-white px-4 py-2 rounded flex items-center space-x-2'>
+            <FaCheck />
+            <span>Mark as Watched</span>
+          </button>
+          <button className='bg-secondary text-dark px-4 py-2 rounded flex items-center space-x-2'>
+            <FaCog />
+            <span>Playback Settings</span>
+          </button>
         </div>
 
         {/* Movie Information */}
-        <div className='flex-grow'>
-          <h1 className='text-3xl font-bold text-dark mb-2'>{movie.title}</h1>
-          <p className='text-lg text-secondary italic'>{movie.tagLine}</p>
-          <p className='text-sm text-light'>{movie.summary}</p>
+        <div className='mt-6'>
+          <h2 className='text-2xl font-bold text-secondary'>Summary</h2>
+          <p className='mt-2'>{movie.summary}</p>
 
-          {/* Additional Info */}
-          <div className='mt-4'>
-            <p>
-              <strong>Release Date:</strong>{" "}
-              {new Date(movie.releaseDate).toLocaleDateString()}
-            </p>
-            <p>
-              <strong>Runtime:</strong> {movie.runTime} minutes
-            </p>
-            <p>
-              <strong>Budget:</strong> ${movie.budget.toLocaleString()}
-            </p>
-            <p>
-              <strong>Revenue:</strong> ${movie.revenue.toLocaleString()}
-            </p>
-            <p>
-              <strong>Content Rating:</strong> {movie.contentRating}
-            </p>
-            <p>
-              <strong>Audience Rating:</strong> {movie.audienceRating}
-            </p>
-            <p>
-              <strong>Critic Rating:</strong> {movie.criticRating}
-            </p>
-            <p>
-              <strong>Languages:</strong> {movie.spokenLanguages}
-            </p>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mt-6'>
+            {/* Poster */}
+            <div>
+              <img
+                src={movie.thumb}
+                alt={movie.title}
+                className='rounded-lg shadow-lg'
+              />
+            </div>
+
+            {/* Movie Details */}
+            <div className='space-y-4'>
+              <div>
+                <h3 className='text-xl font-semibold text-secondary'>
+                  Details
+                </h3>
+                <p>
+                  <strong>Release Date:</strong>{" "}
+                  {new Date(movie.releaseDate).toLocaleDateString()}
+                </p>
+                <p>
+                  <strong>Runtime:</strong> {movie.runTime} minutes
+                </p>
+                <p>
+                  <strong>Budget:</strong> ${movie.budget.toLocaleString()}
+                </p>
+                <p>
+                  <strong>Revenue:</strong> ${movie.revenue.toLocaleString()}
+                </p>
+                <p>
+                  <strong>Content Rating:</strong> {movie.contentRating}
+                </p>
+              </div>
+
+              <div>
+                <h3 className='text-xl font-semibold text-secondary'>
+                  Ratings
+                </h3>
+                <p>
+                  <strong>Audience Rating:</strong> {movie.audienceRating}
+                </p>
+                <p>
+                  <strong>Critic Rating:</strong> {movie.criticRating}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Genres */}
-          <div className='mt-4'>
-            <h2 className='text-xl font-semibold text-primary'>Genres</h2>
-            <div className='flex flex-wrap gap-2'>
+          <div className='mt-6'>
+            <h3 className='text-xl font-bold text-secondary'>Genres</h3>
+            <div className='flex flex-wrap gap-2 mt-2'>
               {movie.genres.map(genre => (
-                <span
+                <div
                   key={genre.ID}
-                  className='bg-secondary text-dark px-2 py-1 rounded'
+                  className='bg-info text-dark px-4 py-2 rounded-lg shadow-sm'
                 >
                   {genre.tag}
-                </span>
+                </div>
               ))}
             </div>
           </div>
 
           {/* Cast */}
-          <div className='mt-4'>
-            <h2 className='text-xl font-semibold text-primary'>Cast</h2>
-            <div className='flex flex-wrap gap-2'>
+          <div className='mt-6'>
+            <h3 className='text-xl font-bold text-secondary'>Cast</h3>
+            <div className='flex flex-wrap gap-4 mt-2'>
               {movie.castList.map(cast => (
-                <div
-                  key={cast.ID}
-                  className='flex flex-col items-center text-center'
-                >
-                  <p className='font-medium'>{cast.artist.name}</p>
-                  <p className='text-sm text-light'>{cast.character}</p>
+                <div key={cast.ID} className='flex flex-col items-center'>
+                  <img
+                    src={cast.artist.thumb}
+                    alt={cast.artist.name}
+                    className='w-24 h-24 rounded-full shadow-lg'
+                  />
+                  <p className='text-light'>{cast.artist.name}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Crew */}
-          <div className='mt-4'>
-            <h2 className='text-xl font-semibold text-primary'>Crew</h2>
-            <div className='flex flex-wrap gap-2'>
+          <div className='mt-6'>
+            <h3 className='text-xl font-bold text-secondary'>Crew</h3>
+            <div className='flex flex-wrap gap-4 mt-2'>
               {movie.crewList.map(crew => (
-                <div
-                  key={crew.ID}
-                  className='flex flex-col items-center text-center'
-                >
-                  <p className='font-medium'>{crew.artist.name}</p>
-                  <p className='text-sm text-light'>{crew.job}</p>
+                <div key={crew.ID} className='flex flex-col items-center'>
+                  <img
+                    src={crew.artist.thumb}
+                    alt={crew.artist.name}
+                    className='w-24 h-24 rounded-full shadow-lg'
+                  />
+                  <p className='text-light'>
+                    {crew.artist.   name} - {crew.job}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className='mt-6 flex space-x-4'>
-            <button
-              onClick={playHandler}
-              className='bg-success text-white px-4 py-2 rounded flex items-center space-x-2 hover:bg-opacity-80'
-            >
-              <FaPlay className='mr-2' /> Play
-            </button>
-
-            <button className='bg-primary text-white px-4 py-2 rounded flex items-center space-x-2 hover:bg-opacity-80'>
-              <FaCheck className='mr-2' /> Mark as Watched
-            </button>
-
-            <button className='bg-secondary text-white px-4 py-2 rounded flex items-center space-x-2 hover:bg-opacity-80'>
-              <FaCog className='mr-2' /> Playback Settings
-            </button>
+          {/* Studios */}
+          <div className='mt-6'>
+            <h3 className='text-xl font-bold text-secondary'>Studio</h3>
+            <div className='flex flex-col items-center'>
+              <img
+                src={movie.studios.logo}
+                alt={movie.studios.name}
+                className='w-32 h-32 rounded-lg shadow-lg'
+              />
+              <p className='text-light mt-2'>{movie.studios.name}</p>
+            </div>
           </div>
         </div>
       </div>
