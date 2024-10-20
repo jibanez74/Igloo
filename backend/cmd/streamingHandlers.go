@@ -20,18 +20,23 @@ const ffmpegPath = "/bin/ffmpeg"
 func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("filePath")
 	if filePath == "" {
+		app.ErrorLog.Print("file path is required")
 		helpers.ErrorJSON(w, errors.New("file path is required"), http.StatusBadRequest)
 		return
 	}
 
 	fileInfo, err := os.Stat(filePath)
 	if err != nil || os.IsNotExist(err) {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to locate video file")
 		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
 		return
 	}
 
 	file, err := os.Open(filePath)
 	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to open video file for streaming")
 		helpers.ErrorJSON(w, errors.New("unable to open file"), http.StatusInternalServerError)
 		return
 	}
@@ -41,6 +46,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 
 	contentType := r.URL.Query().Get("contentType")
 	if contentType == "" {
+		app.ErrorLog.Print("content type for video is required")
 		helpers.ErrorJSON(w, errors.New("container is required"), http.StatusBadRequest)
 		return
 	}
@@ -59,6 +65,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		if parts[0] != "" {
 			start, err = strconv.ParseInt(parts[0], 10, 64)
 			if err != nil || start < 0 || start >= size {
+				app.ErrorLog.Print(err)
 				helpers.ErrorJSON(w, errors.New("invalid start range"), http.StatusBadRequest)
 				return
 			}
@@ -72,7 +79,9 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if start > end {
-			helpers.ErrorJSON(w, errors.New("invalid range"), http.StatusBadRequest)
+			err = errors.New("invalid range")
+			app.ErrorLog.Print(err)
+			helpers.ErrorJSON(w, err, http.StatusBadRequest)
 			return
 		}
 
@@ -85,6 +94,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 
 		_, err = file.Seek(start, 0)
 		if err != nil {
+			app.ErrorLog.Print(err)
 			helpers.ErrorJSON(w, errors.New("unable to seek file"), http.StatusInternalServerError)
 			return
 		}
@@ -101,6 +111,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request) {
 	processUUID := r.URL.Query().Get("processUUID")
 	if processUUID == "" {
+		app.ErrorLog.Print("uuid for pid is required")
 		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
 		return
 	}
@@ -109,12 +120,15 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	filePath := r.URL.Query().Get("filePath")
 	if filePath == "" {
+		app.ErrorLog.Print("file path is required")
 		helpers.ErrorJSON(w, errors.New("file path is required"), http.StatusBadRequest)
 		return
 	}
 
 	_, err := os.Stat(filePath)
 	if err != nil || os.IsNotExist(err) {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to locate video file")
 		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
 		return
 	}
@@ -122,12 +136,14 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	videoCodec := r.URL.Query().Get("videoCodec")
 	if videoCodec == "" {
+		app.InfoLog.Print("no video codec provided, defaulting to libx264")
 		videoCodec = "libx264"
 	}
 	cmdArgs = append(cmdArgs, "-c:v", videoCodec)
 
 	videoHeight := r.URL.Query().Get("videoHeight")
 	if videoHeight == "" {
+		app.ErrorLog.Print("video height is required")
 		helpers.ErrorJSON(w, errors.New("video height is required"), http.StatusBadRequest)
 		return
 	}
@@ -135,36 +151,42 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	videoBitRate := r.URL.Query().Get("videoBitRate")
 	if videoBitRate == "" {
-		videoBitRate = "2000k"
+		app.InfoLog.Print("video bit rate not provided, defaulting to 3mbps")
+		videoBitRate = "3000k"
 	}
 	cmdArgs = append(cmdArgs, "-b:v", videoBitRate)
 
 	audioCodec := r.URL.Query().Get("audioCodec")
 	if audioCodec == "" {
+		app.InfoLog.Print("audio codec not provided, defaulting to aac")
 		audioCodec = "aac"
 	}
 	cmdArgs = append(cmdArgs, "-c:a", audioCodec)
 
 	audioChannels := r.URL.Query().Get("audioChannels")
 	if audioChannels == "" {
+		app.InfoLog.Print("audio channels not provided, defaulting to 2 channels")
 		audioChannels = "2"
 	}
 	cmdArgs = append(cmdArgs, "-ac", audioChannels)
 
 	audioBitRate := r.URL.Query().Get("audioBitRate")
 	if audioBitRate == "" {
+		app.InfoLog.Print("audio bit rate not provided, defaulting to 128k")
 		audioBitRate = "128kk"
 	}
 	cmdArgs = append(cmdArgs, "-b:a", audioBitRate)
 
 	preset := r.URL.Query().Get("preset")
 	if preset == "" {
+		app.InfoLog.Print("preset not provided, defaulting to preset ultra fast")
 		preset = "ultrafast"
 	}
 	cmdArgs = append(cmdArgs, "-preset", preset)
 
 	container := r.URL.Query().Get("container")
 	if container == "" {
+		app.InfoLog.Print("container not provided, defaulting to mp4 container")
 		container = "mp4"
 	}
 	cmdArgs = append(cmdArgs, "-f", container)
@@ -179,6 +201,7 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
+		app.ErrorLog.Print(err)
 		helpers.ErrorJSON(w, err)
 		return
 	}
@@ -195,12 +218,16 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	_, err = io.Copy(w, cmdOut)
 	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to copy data to response")
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
 	err = cmd.Wait()
 	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to wait for ffmpeg process to finish")
 		helpers.ErrorJSON(w, err)
 		return
 	}
