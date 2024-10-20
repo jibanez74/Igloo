@@ -1,8 +1,6 @@
 package models
 
 import (
-	"errors"
-
 	"gorm.io/gorm"
 )
 
@@ -16,12 +14,4 @@ type UserSettings struct {
 	DownloadImages bool   `gorm:"default:false" json:"downloadImages"`
 	UserID         uint   `json:"userID"`
 	User           User   `json:"user"`
-}
-
-func (s *UserSettings) BeforeSave(tx *gorm.DB) error {
-	if s.TranscodeLimit < 0 {
-		return tx.AddError(errors.New("transcode limit must be 0 or greater"))
-	}
-
-	return nil
 }

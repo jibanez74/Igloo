@@ -8,9 +8,12 @@ import (
 
 type Genre struct {
 	gorm.Model
-	Tag       string   `gorm:"not null;index" json:"tag"`
-	GenreType string   `gorm:"not null" json:"genreType"`
-	Movies    []*Movie `gorm:"many2many;movie_genres" json:"movies"`
+	Tag       string      `gorm:"not null;index" json:"tag"`
+	GenreType string      `gorm:"not null" json:"genreType"`
+	Movies    []*Movie    `gorm:"many2many;movie_genres" json:"movies"`
+	Musicians []*Musician `gorm:"many2many:musician_genres" json:"musicians"`
+	Albums    []*Album    `gorm:"many2many:album_genres;" json:"albums"`
+	Tracks    []*Track    `gorm:"many2many:track_genres;" json:"tracks"`
 }
 
 func (g *Genre) BeforeSave(tx *gorm.DB) error {

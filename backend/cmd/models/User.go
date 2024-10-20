@@ -9,14 +9,17 @@ import (
 
 type User struct {
 	gorm.Model
-	Name           string   `gorm:"not null" json:"name"`
-	Username       string   `gorm:"not null;uniqueIndex" json:"username"`
-	Email          string   `gorm:"not null;uniqueIndex" json:"email"`
-	Password       string   `gorm:"not null" json:"password"`
-	Thumb          string   `gorm:"not null;default:'no_thumb.png'" json:"thumb"`
-	Active         bool     `gorm:"not null;default:false" json:"active"`
-	IsAdmin        bool     `gorm:"default:false" json:"isAdmin"`
-	FavoriteMovies []*Movie `gorm:"many2many:user_movies" json:"favoriteMovies"`
+	Name                string         `gorm:"not null;index" json:"name"`
+	Email               string         `gorm:"not null;uniqueIndex" json:"email"`
+	Username            string         `gorm:"not null;uniqueIndex" json:"username"`
+	Password            string         `gorm:"size:128;not null" json:"password"`
+	IsActive            bool           `gorm:"default:false" json:"isActive"`
+	IsAdmin             bool           `gorm:"default:false; not null"`
+	Thumb               string         `gorm:"default:'no_thumb.png'" json:"thumb"`
+	FavoriteMusicians   []*Musician    `gorm:"many2many:user_musicians" json:"favoriteMusicians"`
+	FavoriteMusicGenres []*Genre       `gorm:"many2many:user_music_genres" json:"favoriteGenres"`
+	Playlists           []*Playlist    `gorm:"constraint:OnDelete:CASCADE" json:"playlists"`
+	TrackHistory        []TrackHistory `gorm:"constraint:OnDelete:CASCADE" json:"trackHistory"`
 }
 
 func (u *User) BeforeSave(tx *gorm.DB) error {
