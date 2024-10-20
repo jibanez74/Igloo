@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { createLazyFileRoute } from "@tanstack/react-router";
-import { FaEnvelope, FaLock, FaSignInAlt } from "react-icons/fa";
+import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
+import { FaEnvelope, FaLock, FaSignInAlt, FaUser } from "react-icons/fa";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
+import { useAppContext } from "@/AppContext";
 import type { User } from "@/types/User";
 import type { Res } from "@/types/Response";
 
@@ -14,6 +15,10 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const navigate = useNavigate();
+
+  const { setUser } = useAppContext();
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -24,6 +29,7 @@ function LoginPage() {
 
     const authData = {
       email: formData.get("email") as string,
+      username: formData.get("username"),
       password: formData.get("password") as string,
     };
 
@@ -43,6 +49,15 @@ function LoginPage() {
         setError(`${res.status} - ${r.message}`);
         return;
       }
+
+      if (r.data) {
+        setUser(r.data);
+      }
+
+      navigate({
+        to: "/",
+        replace: true,
+      });
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "an unknown error occurred"
@@ -53,7 +68,7 @@ function LoginPage() {
   };
 
   return (
-    <div className='flex items-center justify-center min-h-screen'>
+    <section className='flex items-center justify-center min-h-screen'>
       <div className='w-full max-w-md'>
         <form
           onSubmit={handleLogin}
@@ -88,6 +103,30 @@ function LoginPage() {
                 className='shadow appearance-none border rounded w-full py-2 pl-10 pr-3 text-dark leading-tight focus:outline-none focus:shadow-outline'
                 id='email'
                 name='email'
+                required
+                disabled={loading}
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
+              />
+            </div>
+          </div>
+
+          <div className='mb-4'>
+            <label
+              className='block text-light text-sm font-bold mb-2'
+              htmlFor='username'
+            >
+              Username
+            </label>
+            <div className='relative'>
+              <span className='absolute inset-y-0 left-0 flex items-center pl-3'>
+                <FaUser className='text-gray-400' />
+              </span>
+              <input
+                type='text'
+                className='shadow appearance-none border rounded w-full py-2 pl-10 pr-3 text-dark leading-tight focus:outline-none focus:shadow-outline'
+                id='username'
+                name='username'
                 required
                 disabled={loading}
                 aria-invalid={!!error}
@@ -140,6 +179,6 @@ function LoginPage() {
           </div>
         </form>
       </div>
-    </div>
+    </section>
   );
 }

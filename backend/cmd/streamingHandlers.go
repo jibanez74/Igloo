@@ -206,6 +206,14 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	err = cmd.Start()
+	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to start ffmpeg command")
+		helpers.ErrorJSON(w, err)
+		return
+	}
+
 	job := transcodeJob{
 		ID:      processUUID,
 		UserID:  uint(app.Session.GetInt(r.Context(), "user_id")),
