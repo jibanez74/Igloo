@@ -40,9 +40,9 @@ function MovieDetailsPage() {
       to: "/movies/play",
       search: {
         transcode: true,
+        id: movie.ID,
         container: "mp4",
         contentType: "video/mp4",
-        filePath: movie.filePath,
         audioBitRate: "320k",
         audioChannels: 2,
         audioCodec: "aac",

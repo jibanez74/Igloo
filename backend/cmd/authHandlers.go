@@ -76,3 +76,30 @@ func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
+
+func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
+	id := app.Session.GetInt(r.Context(), "user_id")
+
+	var user models.User
+
+	err := app.DB.First(&user, uint(id)).Error
+	if err != nil {
+		app.ErrorLog.Print(err)
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "user fetched",
+		Data: map[string]any{
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"thumb":    user.Thumb,
+			"isAdmin":  user.IsAdmin,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}

@@ -6,8 +6,8 @@ import { FaPlay } from "react-icons/fa";
 
 const searchSchema = z.object({
   transcode: z.boolean(),
+  id: z.number(),
   container: z.string(),
-  filePath: z.string(),
   contentType: z.string(),
   thumb: z.string().optional(),
   videoCodec: z.string().optional(),
@@ -28,13 +28,12 @@ function PlayMoviePage() {
 
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const filePath = encodeURIComponent(search.filePath);
   const contentType = encodeURIComponent(search.contentType);
 
-  let url = `/api/v1/streaming/video?filePath=${filePath}&contentType=${contentType}`;
+  let url = `/api/v1/streaming/video?id=${search.id}&contentType=${contentType}`;
 
   if (search.transcode) {
-    url = `/api/v1/streaming/video/transcode?container=${search.container}&filePath=${filePath}&contentType=${contentType}&videoHeight=${search.videoHeight}&videoCodec=${search.videoCodec}&videoBitRate=${search.videoBitRate}&audioCodec=${search.audioCodec}&audioBitRate=${search.audioBitRate}&audioChannels=${search.audioChannels}`;
+    url = `/api/v1/streaming/video/transcode?container=${search.container}&id=${search.id}&contentType=${contentType}&videoHeight=${search.videoHeight}&videoCodec=${search.videoCodec}&videoBitRate=${search.videoBitRate}&audioCodec=${search.audioCodec}&audioBitRate=${search.audioBitRate}&audioChannels=${search.audioChannels}`;
   }
 
   return (

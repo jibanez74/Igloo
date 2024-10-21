@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"igloo/cmd/helpers"
+	"igloo/cmd/models"
 	"io"
 	"net/http"
 	"os"
@@ -18,14 +19,24 @@ import (
 const ffmpegPath = "/bin/ffmpeg"
 
 func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
-	filePath := r.URL.Query().Get("filePath")
-	if filePath == "" {
-		app.ErrorLog.Print("file path is required")
-		helpers.ErrorJSON(w, errors.New("file path is required"), http.StatusBadRequest)
+	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to parse id")
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
-	fileInfo, err := os.Stat(filePath)
+	var movie models.Movie
+
+	err = app.DB.First(&movie, uint(id)).Error
+	if err != nil {
+		app.ErrorLog.Print(err)
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
+	}
+
+	_, err = os.Stat(movie.FilePath)
 	if err != nil || os.IsNotExist(err) {
 		app.ErrorLog.Print(err)
 		app.InfoLog.Print("unable to locate video file")
@@ -33,7 +44,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(filePath)
+	file, err := os.Open(movie.FilePath)
 	if err != nil {
 		app.ErrorLog.Print(err)
 		app.InfoLog.Print("unable to open video file for streaming")
@@ -42,18 +53,11 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	size := fileInfo.Size()
-
-	contentType := r.URL.Query().Get("contentType")
-	if contentType == "" {
-		app.ErrorLog.Print("content type for video is required")
-		helpers.ErrorJSON(w, errors.New("container is required"), http.StatusBadRequest)
-		return
-	}
-
 	rangeHeader := r.Header.Get("Range")
 
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", movie.ContentType)
+
+	size := int64(movie.Size)
 
 	var start int64 = 0
 	var end int64 = size - 1
@@ -99,12 +103,12 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		http.ServeContent(w, r, filePath, time.Now(), file)
+		http.ServeContent(w, r, movie.FilePath, time.Now(), file)
 	} else {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
 		w.WriteHeader(http.StatusOK)
 
-		http.ServeContent(w, r, filePath, time.Now(), file)
+		http.ServeContent(w, r, movie.FilePath, time.Now(), file)
 	}
 }
 
