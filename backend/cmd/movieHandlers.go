@@ -1,15 +1,16 @@
 package main
 
 import (
+	"errors"
 	"igloo/cmd/helpers"
 	"igloo/cmd/models"
-	"math"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
 
+// get the latest movies in the system
 func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	var movies [12]models.SimpleMovie
 
@@ -28,10 +29,20 @@ func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// get a movie by its id
 func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
+	movieID := chi.URLParam(r, "id")
+	if movieID == "" {
+		msg := "movie id is required"
+		app.ErrorLog.Print(msg)
+		helpers.ErrorJSON(w, errors.New(msg), http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.ParseUint(movieID, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
+		app.ErrorLog.Print(err)
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -52,63 +63,28 @@ func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func (app *config) GetMovies(w http.ResponseWriter, r *http.Request) {
-	page, err := strconv.Atoi(r.URL.Query().Get("page"))
-	if err != nil || page < 1 {
-		page = 1
-	}
-
-	pageSize, err := strconv.Atoi(r.URL.Query().Get("pageSize"))
-	if err != nil || pageSize < 1 || pageSize > 100 {
-		pageSize = 24
-	}
-
-	offset := (page - 1) * pageSize
-
-	var totalCount int64
-
-	err = app.DB.Model(&models.Movie{}).Count(&totalCount).Error
-	if err != nil {
-		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
-		return
-	}
-
-	var movies []models.SimpleMovie
-
-	err = app.DB.Model(&models.Movie{}).Select("id, title, thumb, year").Order("title").Offset(offset).Limit(pageSize).Find(&movies).Error
-	if err != nil {
-		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
-		return
-	}
-
-	totalPages := int(math.Ceil(float64(totalCount) / float64(pageSize)))
-
-	res := helpers.JSONResponse{
-		Error:   false,
-		Message: "movies were returned successfully",
-		Data: map[string]any{
-			"movies":      movies,
-			"currentPage": page,
-			"pageSize":    pageSize,
-			"totalPages":  totalPages,
-			"totalCount":  totalCount,
-		},
-	}
-
-	helpers.WriteJSON(w, http.StatusOK, res)
-}
-
+// allows an admin to create a movie
 func (app *config) CreateMovie(w http.ResponseWriter, r *http.Request) {
 	var movie models.Movie
 
 	err := helpers.ReadJSON(w, r, &movie)
 	if err != nil {
-		helpers.ErrorJSON(w, err)
+		msg := "unable to read request body"
+		app.ErrorLog.Print(msg)
+		helpers.ErrorJSON(w, errors.New(msg), http.StatusBadRequest)
 		return
+	}
+
+	err = helpers.GetTmdbMovie(&movie, false)
+	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to get movie from tmdb")
 	}
 
 	err = app.DB.Create(&movie).Error
 	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to create movie")
 		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
 		return
 	}
@@ -120,4 +96,5 @@ func (app *config) CreateMovie(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusCreated, res)
+
 }

@@ -79,7 +79,7 @@ export default function AppContextProvider({
   return (
     <AppContext.Provider value={contextValue}>
       {error && <Alert msg={error} />}
-      {!loading ? <Spinner /> : children}
+      {loading ? <Spinner /> : children}
     </AppContext.Provider>
   );
 }

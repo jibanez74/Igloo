@@ -52,17 +52,17 @@ function LoginPage() {
 
       if (r.data) {
         setUser(r.data);
+
+        alert(JSOn.stringify(r.data));
+
+        navigate({
+          to: "/",
+          replace: true,
+        });
       }
-
-      navigate({
-        to: "/",
-        replace: true,
-      });
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "an unknown error occurred"
-      );
-
+      console.error(err);
+      setError("unable to process your request");
       setLoading(false);
     }
   };

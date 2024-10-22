@@ -5,6 +5,8 @@ REDIS="127.0.0.1:6379"
 PORT=":8080"
 COOKIE_NAME="igloo_auth"
 COOKIE_DOMAIN="https://swifty.hare-crocodile.ts.net"
+JELLYFIN_TOKEN="820260cfd6ad4e929d45c3427122f836"
+TMDB_API_KEY="cc32c7ce101a2a0967f83f392fffb873"
 
 
 ## build: Build binary
@@ -16,7 +18,7 @@ build:
 ## run: builds and runs the application
 run: build
 	@echo "Starting..."
-	@env COOKIE_DOMAIN=${COOKIE_DOMAIN} COOKIE_NAME=${COOKIE_NAME} PORT=${PORT} MODE=${MODE} DSN=${DSN} REDIS=${REDIS} ./${BINARY_NAME} &
+	@env TMDB_API_KEY=${TMDB_API_KEY} COOKIE_DOMAIN=${COOKIE_DOMAIN} COOKIE_NAME=${COOKIE_NAME} PORT=${PORT} MODE=${MODE} DSN=${DSN} REDIS=${REDIS} ./${BINARY_NAME} &
 	@echo "Started!"
 
 ## clean: runs go clean and deletes binaries

@@ -13,32 +13,29 @@ func (app *config) routes() http.Handler {
 	router.Use(app.SessionLoad)
 	router.Use(app.RenewToken)
 
-	router.Get("/api/v1/logout", app.Logout)
+	router.Get("/api/v1/latest-movies", app.GetLatestMovies)
 	router.Post("/api/v1/login", app.Login)
 
-	router.Route("/api/v1/artist", func(r chi.Router) {
-		r.Post("/create", app.FindOrCreateArtist)
-	})
+	router.Route("/api/v1/auth", func(r chi.Router) {
+		r.Use(app.isAuth)
 
-	router.Route("/api/v1/genre", func(r chi.Router) {
-		r.Post("/create", app.FindOrCreateGenre)
-	})
+		r.Get("/logout", app.Logout)
+		r.Get("/me", app.GetAuthUser)
 
-	router.Route("/api/v1/studio", func(r chi.Router) {
-		r.Post("/create", app.FindOrCreateStudio)
-	})
+		// movie routes
+		r.Get("/movie/{id}", app.GetMovieByID)
 
-	router.Route("/api/v1/movie", func(r chi.Router) {
-		r.Get("/latest", app.GetLatestMovies)
-		r.Get("/all", app.GetMovies)
-		r.Get("/by-id/{id}", app.GetMovieByID)
-		r.Post("/create", app.CreateMovie)
-	})
+		// admin routes
+		r.Route("/admin", func(r chi.Router) {
+			// manage movies
+			r.Post("/movie", app.CreateMovie)
 
-	router.Route("/api/v1/streaming", func(r chi.Router) {
-		r.Get("/kill/{uuid}", app.KillTranscodeJob)
-		r.Get("/video/transcode", app.StreamTranscodedVideo)
-		r.Get("/video", app.DirectStreamVideo)
+			// manage users
+			r.Get("/user", app.GetUsersWithPagination)
+			r.Get("/user/{id}", app.GetUserByID)
+			r.Post("/user/create", app.CreateUser)
+			r.Delete("/user/{id}", app.DeleteUserByID)
+		})
 	})
 
 	return router

@@ -1,5 +1,7 @@
+.env
 .DS_Store
 .vscode
 .idea
 db-data
 error.txt
+Makefile

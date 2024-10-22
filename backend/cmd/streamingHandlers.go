@@ -120,23 +120,33 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var cmdArgs []string
-
-	filePath := r.URL.Query().Get("filePath")
-	if filePath == "" {
-		app.ErrorLog.Print("file path is required")
-		helpers.ErrorJSON(w, errors.New("file path is required"), http.StatusBadRequest)
+	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		app.ErrorLog.Print(err)
+		app.InfoLog.Print("unable to parse id")
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
-	_, err := os.Stat(filePath)
+	var movie models.Movie
+
+	err = app.DB.First(&movie, uint(id)).Error
+	if err != nil {
+		app.ErrorLog.Print(err)
+		helpers.ErrorJSON(w, err, helpers.GormStatusCode(err))
+		return
+	}
+
+	var cmdArgs []string
+
+	_, err = os.Stat(movie.FilePath)
 	if err != nil || os.IsNotExist(err) {
 		app.ErrorLog.Print(err)
 		app.InfoLog.Print("unable to locate video file")
 		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
 		return
 	}
-	cmdArgs = append(cmdArgs, "-i", filePath)
+	cmdArgs = append(cmdArgs, "-i", movie.FilePath)
 
 	videoCodec := r.URL.Query().Get("videoCodec")
 	if videoCodec == "" {
@@ -147,9 +157,8 @@ func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request)
 
 	videoHeight := r.URL.Query().Get("videoHeight")
 	if videoHeight == "" {
-		app.ErrorLog.Print("video height is required")
-		helpers.ErrorJSON(w, errors.New("video height is required"), http.StatusBadRequest)
-		return
+		app.InfoLog.Print("video height not provided, defaulting to 480")
+		videoHeight = "480"
 	}
 	cmdArgs = append(cmdArgs, "-vf", fmt.Sprintf("scale=-1:%s", videoHeight))
 

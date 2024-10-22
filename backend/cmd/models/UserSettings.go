@@ -11,6 +11,7 @@ type UserSettings struct {
 	MusicDir       string `gorm:"not null;default:'/music'" json:"musicDir"`
 	TVShowsDir     string `gorm:"not null;default:'/tvshows'" json:"tvshowsDir"`
 	PhotosDir      string `gorm:"not null;default:'/photos'" json:"photosDir"`
+	TmdbKey        string `gorm:"not null" json:"tmdbKey"`
 	DownloadImages bool   `gorm:"default:false" json:"downloadImages"`
 	UserID         uint   `json:"userID"`
 	User           User   `json:"user"`
