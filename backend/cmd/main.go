@@ -69,8 +69,8 @@ func (app *config) runServer(p string) error {
 	api.Use(healthcheck.New())
 
 	movieRouter := api.Group("/api/v1/movie")
+	movieRouter.Get("/latest", app.GetLatestMovies)
 	movieRouter.Get("/:id", app.GetMovieByID)
-	movieRouter.Get("/api/v1/movie/latest", app.GetLatestMovies)
 	movieRouter.Get("", app.GetMoviesWithPagination)
 	movieRouter.Post("", app.CreateMovie)
 
