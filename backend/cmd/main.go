@@ -1,97 +1,83 @@
 package main
 
 import (
-	"encoding/gob"
-	"igloo/cmd/models"
-	"log"
-	"net/http"
-	"os"
-	"time"
+	"errors"
+	"igloo/cmd/database"
+	"igloo/cmd/repository"
+	"igloo/cmd/session"
+	"igloo/cmd/tmdb"
+	"strconv"
 
-	"github.com/alexedwards/scs/redisstore"
-	"github.com/alexedwards/scs/v2"
-	"github.com/gomodule/redigo/redis"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"os"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/healthcheck"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	ses "github.com/gofiber/fiber/v2/middleware/session"
 )
 
+type config struct {
+	repo    repository.Repo
+	session *ses.Store
+	tmdb    tmdb.Tmdb
+}
+
 func main() {
-	db, err := initDB()
+	var app config
+
+	db, err := database.New()
 	if err != nil {
 		panic(err)
 	}
+	app.repo = repository.New(db)
 
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
-
-	session := initSession()
-
-	app := config{
-		DB:       db,
-		InfoLog:  infoLog,
-		ErrorLog: errorLog,
-		Session:  session,
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		redisPort = "6379"
 	}
 
-	err = http.ListenAndServe(os.Getenv("PORT"), app.routes())
+	nport, err := strconv.Atoi(redisPort)
+	if err != nil {
+		panic(err)
+	}
+	app.session = session.New(nport)
+
+	tmdbKey := os.Getenv("TMDB_API_KEY")
+	if tmdbKey == "" {
+		panic(errors.New("TMDB_API_KEY is not set"))
+	}
+	app.tmdb = tmdb.New(tmdbKey)
+
+	// go app.listenForShutDown()
+
+	serverPort := os.Getenv("PORT")
+	if serverPort == "" {
+		serverPort = ":8080"
+	}
+
+	err = app.runServer(serverPort)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func initDB() (*gorm.DB, error) {
-	dsn := os.Getenv("DSN")
+func (app *config) runServer(p string) error {
+	api := fiber.New()
+	api.Use(recover.New())
+	api.Use(logger.New())
+	api.Use(healthcheck.New())
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
+	movieRouter := api.Group("/api/v1/movie")
+	movieRouter.Get("/:id", app.GetMovieByID)
+	movieRouter.Get("", app.GetMoviesWithPagination)
+	movieRouter.Post("/apiv1/movie", app.CreateMovie)
 
-	db.AutoMigrate(
-		&models.User{},
-		&models.UserSettings{},
-		&models.Artist{},
-		&models.Genre{},
-		&models.Studio{},
-		&models.Movie{},
-		&models.Crew{},
-		&models.Cast{},
-		&models.Trailer{},
-		&models.VideoStream{},
-		&models.AudioStream{},
-		&models.Subtitles{},
-		&models.Chapter{},
-	)
+	streamingRouter := api.Group("/api/v1/stream")
+	streamingRouter.Get("/video/:id", app.DirectStreamVideo)
 
-	return db, nil
+	return api.Listen(p)
 }
 
-func initSession() *scs.SessionManager {
-	gob.Register(models.User{})
-
-	session := scs.New()
-
-	session.Store = redisstore.New(initRedis())
-
-	session.Lifetime = 24 * time.Hour
-	session.Cookie.Persist = true
-	session.Cookie.SameSite = http.SameSiteLaxMode
-	session.Cookie.Secure = true
-	session.Cookie.Name = os.Getenv("COOKIE_NAME")
-	session.Cookie.HttpOnly = true
-	session.Cookie.Domain = os.Getenv("COOKIE_DOMAIN")
-	session.Cookie.Path = "/"
-
-	return session
-}
-
-func initRedis() *redis.Pool {
-	redisPool := &redis.Pool{
-		MaxIdle: 10,
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", os.Getenv("REDIS"))
-		},
-	}
-
-	return redisPool
-}
+// func (app *config) listenForShutDown() {
+// }

@@ -1,7 +1,8 @@
 BINARY_NAME="igloo_server"
 MODE="dev"
 DSN="host=localhost port=5432 user=postgres password=password dbname=igloo sslmode=disable timezone=UTC connect_timeout=5"
-REDIS="127.0.0.1:6379"
+REDIS_HOST="127.0.0.1"
+REDIS_PORT=6379
 PORT=":8080"
 COOKIE_NAME="igloo_auth"
 COOKIE_DOMAIN="https://swifty.hare-crocodile.ts.net"
@@ -18,7 +19,7 @@ build:
 ## run: builds and runs the application
 run: build
 	@echo "Starting..."
-	@env TMDB_API_KEY=${TMDB_API_KEY} COOKIE_DOMAIN=${COOKIE_DOMAIN} COOKIE_NAME=${COOKIE_NAME} PORT=${PORT} MODE=${MODE} DSN=${DSN} REDIS=${REDIS} ./${BINARY_NAME} &
+	@env TMDB_API_KEY=${TMDB_API_KEY} COOKIE_DOMAIN=${COOKIE_DOMAIN} COOKIE_NAME=${COOKIE_NAME} PORT=${PORT} MODE=${MODE} DSN=${DSN} REDIS_HOST=${REDI_HOSTS} ./${BINARY_NAME} &
 	@echo "Started!"
 
 ## clean: runs go clean and deletes binaries

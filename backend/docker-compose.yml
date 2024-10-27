@@ -10,8 +10,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: igloo
     volumes:
-      - ./db-data/postgres/:/var/lib/postgresql/data/         # Persistent database storage
-      - ./init:/docker-entrypoint-initdb.d/          # Mount SQL script directory
+      - ./db-data/postgres:/var/lib/postgresql/data
 
   igloo_cache:
     container_name: igloo_cache
