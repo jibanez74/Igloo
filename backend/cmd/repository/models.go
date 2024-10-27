@@ -8,6 +8,7 @@ import (
 
 type Repo interface {
 	gormStatusCode(err error) int
+	GetLatestMovies(movies *[]SimpleMovie) (int, error)
 	MovieExist(title string) (bool, error)
 	GetMovieCount() (int64, error)
 	GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error)

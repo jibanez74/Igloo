@@ -70,6 +70,7 @@ func (app *config) runServer(p string) error {
 
 	movieRouter := api.Group("/api/v1/movie")
 	movieRouter.Get("/:id", app.GetMovieByID)
+	movieRouter.Get("/api/v1/movie/latest", app.GetLatestMovies)
 	movieRouter.Get("", app.GetMoviesWithPagination)
 	movieRouter.Post("", app.CreateMovie)
 

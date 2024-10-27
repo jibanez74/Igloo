@@ -9,6 +9,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func (app *config) GetLatestMovies(c *fiber.Ctx) error {
+	var movies []repository.SimpleMovie
+
+	status, err := app.repo.GetLatestMovies(&movies)
+	if err != nil {
+		return c.Status(status).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(status).JSON(fiber.Map{
+		"movies": movies,
+	})
+}
+
 func (app *config) GetMoviesWithPagination(c *fiber.Ctx) error {
 	limit := c.QueryInt("id", 24)
 	page := c.QueryInt("page", 1)

@@ -7,6 +7,15 @@ import (
 	"gorm.io/gorm"
 )
 
+func (r *repo) GetLatestMovies(movies *[]SimpleMovie) (int, error) {
+	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, year").Limit(12).Order("created_at desc").Find(&movies).Error
+	if err != nil {
+		return r.gormStatusCode(err), err
+	}
+
+	return fiber.StatusOK, nil
+}
+
 func (r *repo) MovieExist(title string) (bool, error) {
 	var movie struct {
 		ID    uint
