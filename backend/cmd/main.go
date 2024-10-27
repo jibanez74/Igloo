@@ -71,7 +71,7 @@ func (app *config) runServer(p string) error {
 	movieRouter := api.Group("/api/v1/movie")
 	movieRouter.Get("/:id", app.GetMovieByID)
 	movieRouter.Get("", app.GetMoviesWithPagination)
-	movieRouter.Post("/apiv1/movie", app.CreateMovie)
+	movieRouter.Post("", app.CreateMovie)
 
 	streamingRouter := api.Group("/api/v1/stream")
 	streamingRouter.Get("/video/:id", app.DirectStreamVideo)
