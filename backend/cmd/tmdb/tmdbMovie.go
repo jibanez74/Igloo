@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -64,18 +65,18 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	movie.ImdbUrl = fmt.Sprintf("https://www.imdb.com/title/%s", tmdbObject.ImdbID)
 
 	if len(tmdbObject.SpokenLanguages) > 0 {
-		if len(tmdbObject.SpokenLanguages) == 1 {
-			movie.SpokenLanguages = tmdbObject.SpokenLanguages[0].Name
-		} else {
-			var languages = make([]string, 0)
+		var languages []string
 
-			for _, l := range tmdbObject.SpokenLanguages {
+		for _, l := range tmdbObject.SpokenLanguages {
+			if utf8.ValidString(l.Name) {
 				languages = append(languages, l.Name)
+			} else {
+				validLanguageName := sanitizeString(l.Name)
+				languages = append(languages, validLanguageName)
 			}
-
-			movie.SpokenLanguages = strings.Join(languages, ", ")
-			movie.SpokenLanguages = movie.SpokenLanguages[:len(movie.SpokenLanguages)-2]
 		}
+
+		movie.SpokenLanguages = strings.Join(languages, ", ")
 	}
 
 	releaseDate, err := t.formatReleaseDate(tmdbObject.ReleaseDate)
@@ -132,4 +133,16 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	return nil
+}
+
+// sanitizeString removes invalid UTF-8 characters
+func sanitizeString(input string) string {
+	validRunes := make([]rune, 0, len(input))
+	for _, r := range input {
+		if r == utf8.RuneError {
+			continue // skip invalid runes
+		}
+		validRunes = append(validRunes, r)
+	}
+	return string(validRunes)
 }

@@ -1,8 +1,66 @@
-POST http://100.107.177.6:8080/api/v1/movie
-Content-Type: application/json
+romany@swifty:~/Igloo$ git pull
+Already up to date.
+romany@swifty:~/Igloo$ cd backend/
+romany@swifty:~/Igloo/backend$ make restart
+Stopping...
+Stopped!
+Building...
+env CGO_ENABLED=0  go build -ldflags="-s -w" -o "igloo_server" ./cmd
+Built!
+Starting...
+Started!
+romany@swifty:~/Igloo/backend$ 
+ ┌───────────────────────────────────────────────────┐ 
+ │                   Fiber v2.52.5                   │ 
+ │               http://127.0.0.1:8080               │ 
+ │       (bound on host 0.0.0.0 and port 8080)       │ 
+ │                                                   │ 
+ │ Handlers ............ 10  Processes ........... 1 │ 
+ │ Prefork ....... Disabled  PID ............ 189615 │ 
+ └───────────────────────────────────────────────────┘ 
 
-{
-  "title": "Pearl Harbor",
-  "TmdbID": "676",
-  "FilePath": "/plexmedia/zfs/movies/historical/Pearl.Harbor.2001.mp4"
-}
+20:39:44 | 500 |  748.064003ms | 100.106.123.64 | POST | /api/v1/movie | -
+
+2024/10/26 20:40:41 /home/romany/Igloo/backend/cmd/repository/movieRepo.go:58 ERROR: invalid byte sequence for encoding "UTF8": 0xe8 (SQLSTATE 22021)
+[1.036ms] [rows:0] INSERT INTO "movies" ("created_at","updated_at","deleted_at","title","file_path","container","size","content_type","resolution","run_time","adult","tag_line","summary","art","thumb","tmdb_id","imdb_url","year","release_date","budget","revenue","content_rating","audience_rating","critic_rating","spoken_languages") VALUES ('2024-10-26 20:40:41.565','2024-10-26 20:40:41.565',NULL,'Pearl Harbor','/plexmedia/zfs/movies/historical/Pearl.Harbor.2001.mp4','mp4',2989008824,'video/mp4',0,183,false,'It takes a moment to change history. It takes love to change lives.','The lifelong friendship between Rafe McCawley and Danny Walker is put to the ultimate test when the two ace fighter pilots become entangled in a love triangle with beautiful Naval nurse Evelyn Johnson. But the rivalry between the friends-turned-foes is immediately put on hold when they find themselves at the center of Japan''s devastating attack on Pearl Harbor on Dec. 7, 1941.','https://image.tmdb.org/t/p/original/zv1xOEQzebKyku349qDZ085FZlO.jpg','https://image.tmdb.org/t/p/original/y8A0Cvp8WQmZ3bjbnsL53lY0dsC.jpg','676','https://www.imdb.com/title/tt0213149',2001,'2001-05-21 00:00:00',140000000,449200000,'unknown',6.938,0,'Français, English, 日本?') RETURNING "id"
+20:40:41 | 500 |  100.234121ms | 100.106.123.64 | POST | /api/v1/movie | -
+
+2024/10/26 20:42:12 /home/romany/Igloo/backend/cmd/repository/movieRepo.go:58 ERROR: invalid byte sequence for encoding "UTF8": 0xe8 (SQLSTATE 22021)
+[0.803ms] [rows:0] INSERT INTO "movies" ("created_at","updated_at","deleted_at","title","file_path","container","size","content_type","resolution","run_time","adult","tag_line","summary","art","thumb","tmdb_id","imdb_url","year","release_date","budget","revenue","content_rating","audience_rating","critic_rating","spoken_languages") VALUES ('2024-10-26 20:42:12.943','2024-10-26 20:42:12.943',NULL,'Pearl Harbor','/plexmedia/zfs/movies/historical/Pearl.Harbor.2001.mp4','mp4',2989008824,'video/mp4',0,183,false,'It takes a moment to change history. It takes love to change lives.','The lifelong friendship between Rafe McCawley and Danny Walker is put to the ultimate test when the two ace fighter pilots become entangled in a love triangle with beautiful Naval nurse Evelyn Johnson. But the rivalry between the friends-turned-foes is immediately put on hold when they find themselves at the center of Japan''s devastating attack on Pearl Harbor on Dec. 7, 1941.','https://image.tmdb.org/t/p/original/zv1xOEQzebKyku349qDZ085FZlO.jpg','https://image.tmdb.org/t/p/original/y8A0Cvp8WQmZ3bjbnsL53lY0dsC.jpg','676','https://www.imdb.com/title/tt0213149',2001,'2001-05-21 00:00:00',140000000,449200000,'unknown',6.938,0,'Français, English, 日本?') RETURNING "id"
+20:42:12 | 500 |  508.958142ms | 100.106.123.64 | POST | /api/v1/movie | -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
