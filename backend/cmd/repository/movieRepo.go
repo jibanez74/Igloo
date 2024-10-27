@@ -46,7 +46,7 @@ func (r *repo) GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset 
 }
 
 func (r *repo) GetMovieByID(movie *models.Movie) (int, error) {
-	err := r.db.First(&movie, movie.ID).Error
+	err := r.db.Preload("CastList.Artist").Preload("CrewList.Artist").Preload("Studios").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").Preload("Extras").Preload("Genres").First(&movie, movie.ID).Error
 	if err != nil {
 		return r.gormStatusCode(err), err
 	}
