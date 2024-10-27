@@ -2,8 +2,10 @@ package helpers
 
 import (
 	"encoding/json"
+	"fmt"
 	"igloo/cmd/database/models"
 	"mime"
+	"os"
 	"os/exec"
 	"path/filepath"
 )
@@ -11,12 +13,25 @@ import (
 const ffprobe = "/bin/ffprobe"
 
 func GetMovieMetadata(movie *models.Movie) error {
-	movie.Container = filepath.Ext(movie.FilePath)
-
-	movie.ContentType = mime.TypeByExtension(movie.Container)
-	if movie.ContentType == "" {
-		movie.ContentType = "application/octet-stream" // Fallback if type is unknown
+	fileInfo, err := os.Stat(movie.FilePath)
+	if err != nil {
+		return err
 	}
+
+	movie.Size = uint(fileInfo.Size())
+
+	if movie.Title == "" {
+		movie.Title = fileInfo.Name()
+	}
+
+	ext := filepath.Ext(movie.FilePath)
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		contentType = "application/octet-stream" // Fallback if type is unknown
+	}
+
+	movie.Container = ext
+	movie.ContentType = contentType
 
 	cmd := exec.Command(ffprobe, "-i", movie.FilePath,
 		"-show_streams",
@@ -85,6 +100,8 @@ func GetMovieMetadata(movie *models.Movie) error {
 	if len(probeResult.Chapters) > 0 {
 		movie.ChapterList = make([]models.Chapter, len(probeResult.Chapters))
 	}
+
+	movie.Resolution = fmt.Sprintf("%dx%d", movie.VideoList[0].Width, movie.VideoList[0].Height)
 
 	return nil
 }

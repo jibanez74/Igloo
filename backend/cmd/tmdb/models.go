@@ -50,21 +50,45 @@ type tmdbCredits struct {
 	} `json:"crew"`
 }
 
+type tmdbVideos struct {
+	Results []struct {
+		Key   string `json:"key"`
+		Kind  string `json:"type"`
+		Title string `json:"name"`
+		Site  string `json:"site"`
+	} `json:"results"`
+}
+
+type tmdbReleaseDate struct {
+	Country       string `json:"iso_3166_1"`
+	Certification string `json:"certification"`
+	ReleaseDate   string `json:"release_date"`
+}
+
+type tmdbReleaseDates struct {
+	Results []struct {
+		Country      string            `json:"iso_3166_1"`
+		ReleaseDates []tmdbReleaseDate `json:"release_dates"`
+	} `json:"results"`
+}
+
 type tmdbMovie struct {
-	Title           string         `json:"title"`
-	Adult           bool           `json:"adult"`
-	TagLine         string         `json:"tagline"`
-	Summary         string         `json:"overview"`
-	Budget          uint           `json:"budget"`
-	Revenue         uint           `json:"revenue"`
-	RunTime         uint           `json:"runtime"`
-	AudienceRating  float32        `json:"vote_average"`
-	ImdbID          string         `json:"imdb_id"`
-	ReleaseDate     string         `json:"release_date"`
-	Thumb           string         `json:"poster_path"`
-	Art             string         `json:"backdrop_path"`
-	SpokenLanguages []tmdbLanguage `json:"spoken_languages"`
-	Genres          []tmdbGenre    `json:"genres"`
-	Studios         []tmdbStudio   `json:"production_companies"`
-	Credits         tmdbCredits    `json:"credits"`
+	Title           string           `json:"title"`
+	Adult           bool             `json:"adult"`
+	TagLine         string           `json:"tagline"`
+	Summary         string           `json:"overview"`
+	Budget          uint             `json:"budget"`
+	Revenue         uint             `json:"revenue"`
+	RunTime         uint             `json:"runtime"`
+	AudienceRating  float32          `json:"vote_average"`
+	ImdbID          string           `json:"imdb_id"`
+	ReleaseDate     string           `json:"release_date"`
+	Thumb           string           `json:"poster_path"`
+	Art             string           `json:"backdrop_path"`
+	SpokenLanguages []tmdbLanguage   `json:"spoken_languages"`
+	Genres          []tmdbGenre      `json:"genres"`
+	Studios         []tmdbStudio     `json:"production_companies"`
+	Credits         tmdbCredits      `json:"credits"`
+	Videos          tmdbVideos       `json:"videos"`
+	ReleaseDates    tmdbReleaseDates `json:"release_dates"` // New field for content ratings and release dates
 }

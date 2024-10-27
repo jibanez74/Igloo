@@ -2,8 +2,8 @@ package main
 
 import (
 	"igloo/cmd/database/models"
+	"igloo/cmd/helpers"
 	"igloo/cmd/repository"
-	"os"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -80,15 +80,6 @@ func (app *config) CreateMovie(c *fiber.Ctx) error {
 		})
 	}
 
-	fileInfo, err := os.Stat(movie.FilePath)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	movie.Size = uint(fileInfo.Size())
-
 	if movie.TmdbID != "" {
 		err = app.tmdb.GetTmdbMovieByID(&movie)
 		if err != nil {
@@ -98,9 +89,7 @@ func (app *config) CreateMovie(c *fiber.Ctx) error {
 		}
 	}
 
-	if movie.Title == "" {
-		movie.Title = fileInfo.Name()
-	}
+	err = helpers.GetMovieMetadata(&movie)
 
 	status, err := app.repo.CreateMovie(&movie)
 	if err != nil {

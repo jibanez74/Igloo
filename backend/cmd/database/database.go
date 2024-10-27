@@ -23,7 +23,7 @@ func New() (*gorm.DB, error) {
 		&models.Crew{},
 		&models.Genre{},
 		&models.Studio{},
-		&models.Trailer{},
+		&models.MovieExtra{},
 		&models.Chapter{},
 		&models.Subtitles{},
 		&models.AudioStream{},

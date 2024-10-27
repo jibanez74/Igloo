@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"igloo/cmd/database/models"
+	"igloo/cmd/helpers"
 	"io"
 	"net/http"
 	"strings"
@@ -18,7 +19,7 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		return errors.New("tmdb id is required")
 	}
 
-	url := fmt.Sprintf("%s/movie/%s?api_key=%s&append_to_response=credits", t.baseUrl, movie.TmdbID, t.key)
+	url := fmt.Sprintf("%s/movie/%s?api_key=%s&append_to_response=credits,videos,release_dates", t.baseUrl, movie.TmdbID, t.key)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -71,7 +72,7 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 			if utf8.ValidString(l.Name) {
 				languages = append(languages, l.Name)
 			} else {
-				validLanguageName := sanitizeString(l.Name)
+				validLanguageName := helpers.SanitizeString(l.Name)
 				languages = append(languages, validLanguageName)
 			}
 		}
@@ -132,17 +133,28 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		})
 	}
 
-	return nil
-}
-
-// sanitizeString removes invalid UTF-8 characters
-func sanitizeString(input string) string {
-	validRunes := make([]rune, 0, len(input))
-	for _, r := range input {
-		if r == utf8.RuneError {
-			continue // skip invalid runes
+	for _, v := range tmdbObject.Videos.Results {
+		if v.Site == "YouTube" {
+			movie.Extras = append(movie.Extras, models.MovieExtra{
+				Title: v.Title,
+				Url:   fmt.Sprintf("https://www.youtube.com/watch?v=%s", v.Key),
+				Kind:  v.Kind,
+			})
 		}
-		validRunes = append(validRunes, r)
 	}
-	return string(validRunes)
+
+	for _, countryRelease := range tmdbObject.ReleaseDates.Results {
+		if countryRelease.Country == "US" { // Target the USA only
+			for _, release := range countryRelease.ReleaseDates {
+				if release.Certification != "" {
+					movie.ContentRating = release.Certification
+					break
+				}
+			}
+
+			break
+		}
+	}
+
+	return nil
 }

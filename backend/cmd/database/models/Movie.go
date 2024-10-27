@@ -14,7 +14,7 @@ type Movie struct {
 	Container       string        `gorm:"not null" json:"container"`
 	Size            uint          `json:"size"`
 	ContentType     string        `gorm:"not null" json:"contentType"`
-	Resolution      uint          `gorm:"default:0" json:"resolution"`
+	Resolution      string        `gorm:"not null;default:'unknown'" json:"resolution"`
 	RunTime         uint          `gorm:"default:0" json:"runTime"`
 	Adult           bool          `gorm:"default:false" json:"adult"`
 	TagLine         string        `gorm:"not null;default:'unknown'" json:"tagLine"`
@@ -31,7 +31,7 @@ type Movie struct {
 	AudienceRating  float32       `gorm:"default:0" json:"audienceRating"`
 	CriticRating    float64       `gorm:"default:0" json:"criticRating"`
 	SpokenLanguages string        `gorm:"not null;default:'unknown'" json:"spokenLanguages"`
-	Trailers        []Trailer     `json:"trailers"`
+	Extras          []MovieExtra  `json:"extras"`
 	Studios         []*Studio     `gorm:"many2many:movie_studios" json:"studios"`
 	Genres          []*Genre      `gorm:"many2many:movie_genres" json:"genres"`
 	CastList        []Cast        `json:"castList"`
