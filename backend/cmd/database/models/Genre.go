@@ -18,7 +18,7 @@ func (g *Genre) BeforeSave(tx *gorm.DB) error {
 		return tx.AddError(errors.New("genre tag is required"))
 	}
 
-	if g.GenreType != "tmdb" && g.GenreType != "music" {
+	if g.GenreType != "movie" && g.GenreType != "music" {
 		return tx.AddError(errors.New("genre type is invalid"))
 	}
 
