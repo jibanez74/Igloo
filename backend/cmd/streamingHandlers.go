@@ -100,7 +100,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 
 		bytesToRead := end - start + 1
 
-    _, err = io.CopyN(w, file, bytesToRead)
+		_, err = io.CopyN(w, file, bytesToRead)
 		if err != nil && err != io.EOF {
 			helpers.ErrorJSON(w, errors.New("error while copying file to response"), http.StatusInternalServerError)
 			return
@@ -109,11 +109,8 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
 		w.WriteHeader(http.StatusOK)
 
-		_, err = io.Copy(w, file)
-		if err != nil {
-			helpers.ErrorJSON(w, err)
-			return
-		}
+		http.ServeContent(w, r, movie.FileName, fileInfo.ModTime(), file)
+
 	}
 }
 
