@@ -11,12 +11,11 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
-const ffmpegPath = "/bin/ffmpeg"
+const ffmpeg = "/bin/ffmpeg"
 
 func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
@@ -34,6 +33,19 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fileInfo, err := os.Stat(movie.FilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
+		} else if os.IsPermission(err) {
+			helpers.ErrorJSON(w, errors.New("file access denied"), http.StatusForbidden)
+		} else {
+			helpers.ErrorJSON(w, errors.New("unable to retrieve file info"), http.StatusInternalServerError)
+		}
+
+		return
+	}
+
 	file, err := os.Open(movie.FilePath)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("unable to open file"), http.StatusInternalServerError)
@@ -42,13 +54,11 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	rangeHeader := r.Header.Get("Range")
-
 	w.Header().Set("Content-Type", movie.ContentType)
 
-	size := int64(movie.Size)
+	size := fileInfo.Size()
 
-	var start int64 = 0
-	var end int64 = size - 1
+	var start, end int64 = 0, size - 1
 
 	if rangeHeader != "" {
 		rangeHeader = strings.Replace(rangeHeader, "bytes=", "", 1)
@@ -57,8 +67,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		if parts[0] != "" {
 			start, err = strconv.ParseInt(parts[0], 10, 64)
 			if err != nil || start < 0 || start >= size {
-				err = errors.New("invalid range")
-				helpers.ErrorJSON(w, err, http.StatusBadRequest)
+				helpers.ErrorJSON(w, errors.New("invalid range"), http.StatusBadRequest)
 				return
 			}
 		}
@@ -71,31 +80,27 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if start > end {
-			err = errors.New("invalid range")
-			helpers.ErrorJSON(w, err, http.StatusBadRequest)
+			helpers.ErrorJSON(w, errors.New("invalid range"), http.StatusBadRequest)
 			return
 		}
 
 		contentLength := end - start + 1
-
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
 		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
 		w.WriteHeader(http.StatusPartialContent)
 
-		_, err = file.Seek(start, 0)
+		_, err = file.Seek(start, io.SeekStart)
 		if err != nil {
 			helpers.ErrorJSON(w, errors.New("unable to seek file"), http.StatusInternalServerError)
 			return
 		}
-
-		http.ServeContent(w, r, movie.FilePath, time.Now(), file)
 	} else {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
 		w.WriteHeader(http.StatusOK)
-
-		http.ServeContent(w, r, movie.FilePath, time.Now(), file)
 	}
+
+	http.ServeContent(w, r, movie.FilePath, fileInfo.ModTime(), file)
 }
 
 func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request) {

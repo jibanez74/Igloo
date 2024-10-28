@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import z from "zod";
 import ReactPlayer from "react-player";
@@ -26,8 +25,6 @@ export const Route = createFileRoute("/movies/play")({
 function PlayMoviePage() {
   const search = useSearch({ from: "/movies/play" });
 
-  const [isPlaying, setIsPlaying] = useState(true);
-
   const url = `/api/v1/stream/video/${search.id}`;
 
   return (
@@ -35,13 +32,7 @@ function PlayMoviePage() {
       <ReactPlayer
         url={url}
         controls={true}
-        playing={isPlaying}
-        onPause={() => setIsPlaying(false)}
-        onPlay={() => setIsPlaying(true)}
-        loop={false} // Don't loop the video
-        pip={true} // Enable Picture-in-Picture mode
         playIcon={<FaPlay />}
-        muted={true}
         width='100%'
         height='100%'
       />

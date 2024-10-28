@@ -38,7 +38,7 @@ function MovieDetailsPage() {
     navigate({
       to: "/movies/play",
       search: {
-        transcode: true,
+        transcode: false,
         id: movie.ID,
       },
     });
