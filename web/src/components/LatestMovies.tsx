@@ -3,7 +3,6 @@ import Spinner from "./Spinner";
 import Alert from "./Alert";
 import MovieCard from "./MovieCard";
 import type { SimpleMovie } from "@/types/Movie";
-import type { Res } from "@/types/Response";
 
 export default function LatestMovies() {
   const {
@@ -19,9 +18,9 @@ export default function LatestMovies() {
         throw new Error(`${res.status} - ${res.statusText}`);
       }
 
-      const r: Res<SimpleMovie[]> = await res.json();
+      const r = await res.json();
 
-      return r.data ? r.data : [];
+      return r.movies;
     },
   });
 

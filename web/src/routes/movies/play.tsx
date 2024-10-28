@@ -7,8 +7,8 @@ import { FaPlay } from "react-icons/fa";
 const searchSchema = z.object({
   transcode: z.boolean(),
   id: z.number(),
-  container: z.string(),
-  contentType: z.string(),
+  container: z.string().optional(),
+  contentType: z.string().optional(),
   thumb: z.string().optional(),
   videoCodec: z.string().optional(),
   videoBitRate: z.string().optional(),
@@ -28,13 +28,7 @@ function PlayMoviePage() {
 
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const contentType = encodeURIComponent(search.contentType);
-
-  let url = `/api/v1/streaming/video?id=${search.id}&contentType=${contentType}`;
-
-  if (search.transcode) {
-    url = `/api/v1/streaming/video/transcode?container=${search.container}&id=${search.id}&contentType=${contentType}&videoHeight=${search.videoHeight}&videoCodec=${search.videoCodec}&videoBitRate=${search.videoBitRate}&audioCodec=${search.audioCodec}&audioBitRate=${search.audioBitRate}&audioChannels=${search.audioChannels}`;
-  }
+  const url = `/api/v1/stream/video/${search.id}`;
 
   return (
     <div className='p-4 rounded-lg shadow-lg max-w-full'>

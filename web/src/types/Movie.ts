@@ -1,11 +1,11 @@
 import type { Genre } from "./Genre";
 import type { Studio } from "./Studio";
-import type { Trailer } from "./Trailer";
 import type { Crew } from "./Crew";
 import type { Cast } from "./Cast";
 import type { Video } from "./Video";
 import type { Audio } from "./Audio";
 import type { Subtitles } from "./Subtitles";
+import type { MovieExtras } from "./MovieExtras";
 
 export type SimpleMovie = {
   ID: number;
@@ -37,7 +37,6 @@ export type Movie = {
   audienceRating: number;
   criticRating: number;
   spokenLanguages: string;
-  tailers: Trailer[];
   genres: Genre[];
   studios: Studio;
   castList: Cast[];
@@ -45,6 +44,7 @@ export type Movie = {
   videoList: Video[];
   audioList: Audio[];
   subtitleList: Subtitles[];
+  extras: MovieExtras[];
   CreatedAt?: string | Date;
   UpdatedAt?: string | Date;
   DeletedAt?: string | Date | null;

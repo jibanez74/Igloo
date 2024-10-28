@@ -105,6 +105,11 @@ func (app *config) CreateMovie(c *fiber.Ctx) error {
 	}
 
 	err = helpers.GetMovieMetadata(&movie)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
 	status, err := app.repo.CreateMovie(&movie)
 	if err != nil {

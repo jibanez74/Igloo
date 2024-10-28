@@ -53,7 +53,7 @@ function LoginPage() {
       if (r.data) {
         setUser(r.data);
 
-        alert(JSOn.stringify(r.data));
+        alert(JSON.stringify(r.data));
 
         navigate({
           to: "/",

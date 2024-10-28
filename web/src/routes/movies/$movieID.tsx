@@ -8,20 +8,19 @@ import {
 import { FaArrowLeft, FaCog, FaPlay, FaCheck } from "react-icons/fa";
 import PlaybackSettingsModal from "@/components/PlaybackModal";
 import type { Movie } from "@/types/Movie";
-import type { Res } from "@/types/Response";
 
 export const Route = createFileRoute("/movies/$movieID")({
   component: MovieDetailsPage,
   loader: async ({ params }): Promise<Movie> => {
-    const res = await fetch(`/api/v1/movie/by-id/${params.movieID}`);
+    const res = await fetch(`/api/v1/movie/${params.movieID}`);
 
-    const r: Res<Movie> = await res.json();
-
-    if (r.error) {
-      throw new Error(`${res.status} - ${r.message}`);
+    if (!res.ok) {
+      throw new Error(`${res.status} - ${res.statusText}`);
     }
 
-    return r.data!;
+    const r = await res.json();
+
+    return r.movie;
   },
 });
 
@@ -41,15 +40,6 @@ function MovieDetailsPage() {
       search: {
         transcode: true,
         id: movie.ID,
-        container: "mp4",
-        contentType: "video/mp4",
-        audioBitRate: "320k",
-        audioChannels: 2,
-        audioCodec: "aac",
-        thumb: movie.thumb,
-        videoBitRate: "8000k",
-        videoCodec: "libx264",
-        videoHeight: movie.videoList[0].height,
       },
     });
   };
