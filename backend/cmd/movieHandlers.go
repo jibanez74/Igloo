@@ -1,38 +1,47 @@
 package main
 
 import (
+	"errors"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
 	"igloo/cmd/repository"
+	"net/http"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-chi/chi/v5"
 )
 
-func (app *config) GetLatestMovies(c *fiber.Ctx) error {
+func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	var movies []repository.SimpleMovie
 
 	status, err := app.repo.GetLatestMovies(&movies)
 	if err != nil {
-		return c.Status(status).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err, status)
+		return
 	}
 
-	return c.Status(status).JSON(fiber.Map{
+	helpers.WriteJSON(w, status, map[string]any{
 		"movies": movies,
 	})
 }
 
-func (app *config) GetMoviesWithPagination(c *fiber.Ctx) error {
-	limit := c.QueryInt("id", 24)
-	page := c.QueryInt("page", 1)
+func (app *config) GetMoviesWithPagination(w http.ResponseWriter, r *http.Request) {
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
 
 	count, err := app.repo.GetMovieCount()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err)
+		return
 	}
 
 	offset := (page - 1) * limit
@@ -41,14 +50,13 @@ func (app *config) GetMoviesWithPagination(c *fiber.Ctx) error {
 
 	status, err := app.repo.GetMoviesWithPagination(&movies, limit, offset)
 	if err != nil {
-		return c.Status(status).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err, status)
+		return
 	}
 
 	pages := count / int64(limit)
 
-	return c.Status(status).JSON(fiber.Map{
+	helpers.WriteJSON(w, status, map[string]any{
 		"movies": movies,
 		"pages":  pages,
 		"page":   page,
@@ -56,12 +64,10 @@ func (app *config) GetMoviesWithPagination(c *fiber.Ctx) error {
 	})
 }
 
-func (app *config) GetMovieByID(c *fiber.Ctx) error {
-	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 	}
 
 	var movie models.Movie
@@ -69,56 +75,50 @@ func (app *config) GetMovieByID(c *fiber.Ctx) error {
 
 	status, err := app.repo.GetMovieByID(&movie)
 	if err != nil {
-		return c.Status(status).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err)
+		return
 	}
 
-	return c.Status(status).JSON(fiber.Map{
+	helpers.WriteJSON(w, status, map[string]any{
 		"movie": movie,
 	})
 }
 
-func (app *config) CreateMovie(c *fiber.Ctx) error {
+func (app *config) CreateMovie(w http.ResponseWriter, r *http.Request) {
 	var movie models.Movie
 
-	err := c.BodyParser(&movie)
+	err := helpers.ReadJSON(w, r, &movie)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err)
+		return
 	}
 
 	if movie.FilePath == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "filepath is required",
-		})
+		helpers.ErrorJSON(w, errors.New("file path is required"))
+		return
 	}
 
 	if movie.TmdbID != "" {
 		err = app.tmdb.GetTmdbMovieByID(&movie)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			helpers.ErrorJSON(w, err, http.StatusInternalServerError)
+			return
 		}
 	}
 
 	err = helpers.GetMovieMetadata(&movie)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
+		return
 	}
 
 	status, err := app.repo.CreateMovie(&movie)
 	if err != nil {
-		return c.Status(status).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		helpers.ErrorJSON(w, err, status)
+		return
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+	helpers.WriteJSON(w, status, map[string]any{
 		"movie": movie,
 	})
 }

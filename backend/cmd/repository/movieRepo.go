@@ -3,8 +3,8 @@ package repository
 import (
 	"igloo/cmd/database/models"
 
-	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
+	"net/http"
 )
 
 func (r *repo) GetLatestMovies(movies *[]SimpleMovie) (int, error) {
@@ -13,7 +13,7 @@ func (r *repo) GetLatestMovies(movies *[]SimpleMovie) (int, error) {
 		return r.gormStatusCode(err), err
 	}
 
-	return fiber.StatusOK, nil
+	return http.StatusOK, nil
 }
 
 func (r *repo) MovieExist(title string) (bool, error) {
@@ -51,7 +51,7 @@ func (r *repo) GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset 
 		return r.gormStatusCode(err), err
 	}
 
-	return fiber.StatusOK, nil
+	return http.StatusOK, nil
 }
 
 func (r *repo) GetMovieByID(movie *models.Movie) (int, error) {
@@ -60,7 +60,7 @@ func (r *repo) GetMovieByID(movie *models.Movie) (int, error) {
 		return r.gormStatusCode(err), err
 	}
 
-	return fiber.StatusOK, nil
+	return http.StatusOK, nil
 }
 
 func (r *repo) CreateMovie(movie *models.Movie) (int, error) {
@@ -69,5 +69,5 @@ func (r *repo) CreateMovie(movie *models.Movie) (int, error) {
 		return r.gormStatusCode(err), err
 	}
 
-	return fiber.StatusCreated, nil
+	return http.StatusCreated, nil
 }

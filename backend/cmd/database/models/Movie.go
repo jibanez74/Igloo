@@ -11,6 +11,7 @@ type Movie struct {
 	gorm.Model
 	Title           string        `gorm:"not null;index" json:"title"`
 	FilePath        string        `gorm:"not null;uniqueIndex" json:"filePath"`
+	FileName        string        `gorm:"not null" json:"fileName"`
 	Container       string        `gorm:"not null" json:"container"`
 	Size            uint          `json:"size"`
 	ContentType     string        `gorm:"not null" json:"contentType"`
@@ -57,6 +58,10 @@ func (m *Movie) BeforeCreate(tx *gorm.DB) (err error) {
 
 	if m.ContentType == "" {
 		return errors.New("contentType is required")
+	}
+
+	if m.FileName == "" {
+		return errors.New("fileName is required")
 	}
 
 	return nil

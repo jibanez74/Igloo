@@ -11,7 +11,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gofiber/fiber/v2"
 )
 
 func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
@@ -35,8 +34,8 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != fiber.StatusOK {
-		if resp.StatusCode == fiber.StatusTooManyRequests {
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusTooManyRequests {
 			return errors.New("rate limit exceeded for tmdb")
 		}
 

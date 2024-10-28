@@ -4,23 +4,28 @@ import (
 	"errors"
 	"igloo/cmd/database"
 	"igloo/cmd/repository"
-	"igloo/cmd/session"
 	"igloo/cmd/tmdb"
-	"strconv"
+	"log"
+	"net/http"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"os"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/healthcheck"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	ses "github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/alexedwards/scs/redisstore"
+	"github.com/alexedwards/scs/v2"
+	"github.com/gomodule/redigo/redis"
 )
 
 type config struct {
-	repo    repository.Repo
-	session *ses.Store
-	tmdb    tmdb.Tmdb
+	repo     repository.Repo
+	tmdb     tmdb.Tmdb
+	wait     *sync.WaitGroup
+	session  *scs.SessionManager
+	infoLog  *log.Logger
+	errorLog *log.Logger
 }
 
 func main() {
@@ -32,53 +37,75 @@ func main() {
 	}
 	app.repo = repository.New(db)
 
-	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" {
-		redisPort = "6379"
-	}
-
-	nport, err := strconv.Atoi(redisPort)
-	if err != nil {
-		panic(err)
-	}
-	app.session = session.New(nport)
-
 	tmdbKey := os.Getenv("TMDB_API_KEY")
 	if tmdbKey == "" {
 		panic(errors.New("TMDB_API_KEY is not set"))
 	}
 	app.tmdb = tmdb.New(tmdbKey)
 
-	// go app.listenForShutDown()
+	app.session = initSession()
+	app.wait = &sync.WaitGroup{}
+	app.infoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	app.errorLog = log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
-	serverPort := os.Getenv("PORT")
-	if serverPort == "" {
-		serverPort = ":8080"
+	go app.listenForShutdown()
+
+	app.serve()
+}
+
+func (app *config) serve() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = ":8080"
 	}
 
-	err = app.runServer(serverPort)
+	srv := &http.Server{
+		Addr:    port,
+		Handler: app.routes(),
+	}
+
+	app.infoLog.Println("Starting web server...")
+
+	err := srv.ListenAndServe()
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (app *config) runServer(p string) error {
-	api := fiber.New()
-	api.Use(recover.New())
-	api.Use(logger.New())
-	api.Use(healthcheck.New())
+func initSession() *scs.SessionManager {
+	session := scs.New()
 
-	movieRouter := api.Group("/api/v1/movie")
-	movieRouter.Get("/latest", app.GetLatestMovies)
-	movieRouter.Get("/:id", app.GetMovieByID)
-	movieRouter.Get("", app.GetMoviesWithPagination)
-	movieRouter.Post("", app.CreateMovie)
+	session.Store = redisstore.New(initRedis())
+	session.Lifetime = 1 * time.Hour
+	session.Cookie.Persist = true
+	session.Cookie.SameSite = http.SameSiteLaxMode
+	session.Cookie.Secure = true
+	session.Cookie.Name = os.Getenv("COOKIE_NAME")
 
-	streamingRouter := api.Group("/api/v1/stream")
-	streamingRouter.Get("/video/:id", app.DirectStreamVideo)
-
-	return api.Listen(p)
+	return session
 }
 
-// func (app *config) listenForShutDown() {
-// }
+func initRedis() *redis.Pool {
+	redisPool := &redis.Pool{
+		MaxIdle: 10,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", os.Getenv("REDIS"))
+		},
+	}
+
+	return redisPool
+}
+
+func (app *config) listenForShutdown() {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	app.shutdown()
+	os.Exit(0)
+}
+
+func (app *config) shutdown() {
+	app.infoLog.Println("would run cleanup tasks...")
+	app.wait.Wait()
+	app.infoLog.Println("closing channels and shutting down application...")
+}

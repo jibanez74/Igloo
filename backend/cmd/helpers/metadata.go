@@ -19,6 +19,7 @@ func GetMovieMetadata(movie *models.Movie) error {
 	}
 
 	movie.Size = uint(fileInfo.Size())
+	movie.FileName = fileInfo.Name()
 
 	if movie.Title == "" {
 		movie.Title = fileInfo.Name()

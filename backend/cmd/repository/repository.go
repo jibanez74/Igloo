@@ -1,7 +1,8 @@
 package repository
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+
 	"gorm.io/gorm"
 )
 
@@ -12,18 +13,18 @@ func New(db *gorm.DB) Repo {
 func (r *repo) gormStatusCode(err error) int {
 	switch err {
 	case gorm.ErrInvalidValue:
-		return fiber.StatusBadRequest
+		return http.StatusBadRequest
 	case gorm.ErrInvalidData:
-		return fiber.StatusBadRequest
+		return http.StatusBadRequest
 	case gorm.ErrForeignKeyViolated:
-		return fiber.StatusConflict
+		return http.StatusConflict
 	case gorm.ErrInvalidTransaction:
-		return fiber.StatusBadRequest
+		return http.StatusBadRequest
 	case gorm.ErrDryRunModeUnsupported:
-		return fiber.StatusNotImplemented
+		return http.StatusNotImplemented
 	case gorm.ErrRecordNotFound:
-		return fiber.StatusNotFound
+		return http.StatusNotFound
 	default:
-		return fiber.StatusInternalServerError
+		return http.StatusInternalServerError
 	}
 }
