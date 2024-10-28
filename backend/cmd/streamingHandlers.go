@@ -44,7 +44,6 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	rangeHeader := r.Header.Get("Range")
 
 	w.Header().Set("Content-Type", movie.ContentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", movie.FileName))
 
 	size := int64(movie.Size)
 
