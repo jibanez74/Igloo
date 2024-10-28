@@ -15,7 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const ffmpeg = "/bin/ffmpeg"
+const ffmpegPath = "/bin/ffmpeg"
 
 func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
