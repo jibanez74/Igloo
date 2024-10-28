@@ -20,5 +20,9 @@ func (app *config) routes() http.Handler {
 		r.Post("/", app.CreateMovie)
 	})
 
+	router.Route("/api/v1/stream", func(r chi.Router) {
+		r.Get("/video/{id}", app.DirectStreamVideo)
+	})
+
 	return router
 }
