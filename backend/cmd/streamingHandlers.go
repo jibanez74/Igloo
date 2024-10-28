@@ -17,8 +17,6 @@ import (
 
 const ffmpegPath = "/bin/ffmpeg"
 
-const bufferSize = 64 * 1024
-
 func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -61,7 +59,8 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 
 	size := fileInfo.Size()
 
-	var start, end int64 = 0, size - 1
+	var start int64 = 0
+	var end int64 = size - 1
 
 	if rangeHeader != "" {
 		rangeHeader = strings.Replace(rangeHeader, "bytes=", "", 1)
@@ -99,53 +98,21 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		buffer := make([]byte, bufferSize)
-		bytesToRead := contentLength
+		bytesToRead := end - start + 1
 
-		for bytesToRead > 0 {
-			bytesRead, err := file.Read(buffer)
-			if err != nil && err != io.EOF {
-				helpers.ErrorJSON(w, errors.New("error reading file"), http.StatusInternalServerError)
-				return
-			}
-
-			if bytesRead == 0 {
-				break
-			}
-
-			if int64(bytesRead) > bytesToRead {
-				bytesRead = int(bytesToRead)
-			}
-
-			_, err = w.Write(buffer[:bytesRead])
-			if err != nil {
-				helpers.ErrorJSON(w, errors.New("error writing to response"), http.StatusInternalServerError)
-				return
-			}
-
-			bytesToRead -= int64(bytesRead)
+    _, err = io.CopyN(w, file, bytesToRead)
+		if err != nil && err != io.EOF {
+			helpers.ErrorJSON(w, errors.New("error while copying file to response"), http.StatusInternalServerError)
+			return
 		}
 	} else {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
 		w.WriteHeader(http.StatusOK)
 
-		buffer := make([]byte, bufferSize)
-		for {
-			bytesRead, err := file.Read(buffer)
-			if err != nil && err != io.EOF {
-				helpers.ErrorJSON(w, errors.New("error reading file"), http.StatusInternalServerError)
-				return
-			}
-
-			if bytesRead == 0 {
-				break
-			}
-
-			_, err = w.Write(buffer[:bytesRead])
-			if err != nil {
-				helpers.ErrorJSON(w, errors.New("error writing to response"), http.StatusInternalServerError)
-				return
-			}
+		_, err = io.Copy(w, file)
+		if err != nil {
+			helpers.ErrorJSON(w, err)
+			return
 		}
 	}
 }
