@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -53,65 +52,7 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	rangeHeader := r.Header.Get("Range")
-	w.Header().Set("Content-Type", movie.ContentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", movie.FileName))
-
-	size := fileInfo.Size()
-
-	var start int64 = 0
-	var end int64 = size - 1
-
-	if rangeHeader != "" {
-		rangeHeader = strings.Replace(rangeHeader, "bytes=", "", 1)
-		parts := strings.Split(rangeHeader, "-")
-
-		if parts[0] != "" {
-			start, err = strconv.ParseInt(parts[0], 10, 64)
-			if err != nil || start < 0 || start >= size {
-				helpers.ErrorJSON(w, errors.New("invalid range"), http.StatusBadRequest)
-				return
-			}
-		}
-
-		if parts[1] != "" {
-			end, err = strconv.ParseInt(parts[1], 10, 64)
-			if err != nil || end >= size {
-				end = size - 1
-			}
-		}
-
-		if start > end {
-			helpers.ErrorJSON(w, errors.New("invalid range"), http.StatusBadRequest)
-			return
-		}
-
-		contentLength := end - start + 1
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", contentLength))
-		w.WriteHeader(http.StatusPartialContent)
-
-		_, err = file.Seek(start, io.SeekStart)
-		if err != nil {
-			helpers.ErrorJSON(w, errors.New("unable to seek file"), http.StatusInternalServerError)
-			return
-		}
-
-		bytesToRead := end - start + 1
-
-		_, err = io.CopyN(w, file, bytesToRead)
-		if err != nil && err != io.EOF {
-			helpers.ErrorJSON(w, errors.New("error while copying file to response"), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
-		w.WriteHeader(http.StatusOK)
-
-		http.ServeContent(w, r, movie.FileName, fileInfo.ModTime(), file)
-
-	}
+	http.ServeContent(w, r, movie.FileName, fileInfo.ModTime(), file)
 }
 
 func (app *config) StreamTranscodedVideo(w http.ResponseWriter, r *http.Request) {
