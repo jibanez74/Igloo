@@ -52,6 +52,8 @@ func (app *config) DirectStreamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	w.Header().Set("Accept-Ranges", "bytes")
+
 	http.ServeContent(w, r, movie.FileName, fileInfo.ModTime(), file)
 }
 
