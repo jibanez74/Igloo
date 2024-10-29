@@ -84,16 +84,12 @@ func (app *config) StreamVideo(w http.ResponseWriter, r *http.Request) {
 		container = "mp4"
 	}
 
-	if container == "mp4" {
-		cmdArgs = append(cmdArgs, "-movflags", "frag_keyframe+empty_moov")
-	}
-
 	var cmdArgs []string
 
 	if videoCodec == "copy" && audioCodec == "copy" {
 		cmdArgs = []string{"-i", movie.FilePath, "-c", "copy", "-f", container, "-movflags", "+faststart", "pipe:1"}
 	} else {
-		cmdArgs = []string{"-i", movie.FilePath, "-c:v", videoCodec, "-c:a", audioCodec, "-b:v", videoBitRate, "-b:a", audioBitRate, "-vf", fmt.Sprintf("scale=-2:%s", videoHeight), "-preset", preset, "-f", container, "-
+		cmdArgs = []string{"-i", movie.FilePath, "-c:v", videoCodec, "-c:a", audioCodec, "-b:v", videoBitRate, "-b:a", audioBitRate, "-vf", fmt.Sprintf("scale=-2:%s", videoHeight), "-preset", preset, "-f", container, "-movflags", "+faststart", "pipe:1"}
 	}
 
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
