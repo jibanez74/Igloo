@@ -2,12 +2,10 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import z from "zod";
 import ReactPlayer from "react-player";
 import { FaPlay } from "react-icons/fa";
+import { v4 } from "uuid";
 
 const searchSchema = z.object({
-  transcode: z.boolean(),
   id: z.number(),
-  container: z.string().optional(),
-  contentType: z.string().optional(),
   thumb: z.string().optional(),
   videoCodec: z.string().optional(),
   videoBitRate: z.string().optional(),
@@ -25,7 +23,7 @@ export const Route = createFileRoute("/movies/play")({
 function PlayMoviePage() {
   const search = useSearch({ from: "/movies/play" });
 
-  const url = `/api/v1/stream/video/${search.id}`;
+  const url = `/api/v1/stream/video/${search.id}?videoCodec=${search.videoCodec}&audioCodec=${search.audioCodec}&videoHeight=${search.videoHeight}&processUUID=${v4()}`;
 
   return (
     <div className='p-4 rounded-lg shadow-lg max-w-full'>

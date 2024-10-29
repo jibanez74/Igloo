@@ -38,8 +38,11 @@ function MovieDetailsPage() {
     navigate({
       to: "/movies/play",
       search: {
-        transcode: false,
         id: movie.ID,
+        thumb: movie.thumb,
+        videoCodec: "copy",
+        audioCodec: "copy",
+        videoHeight: movie.videoList[0].height,
       },
     });
   };

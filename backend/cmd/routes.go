@@ -21,7 +21,7 @@ func (app *config) routes() http.Handler {
 	})
 
 	router.Route("/api/v1/stream", func(r chi.Router) {
-		r.Get("/video/{id}", app.DirectStreamVideo)
+		r.Get("/video/{id}", app.StreamVideo)
 	})
 
 	return router
