@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
 	"net/http"
@@ -42,5 +43,31 @@ func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
 
 	helpers.WriteJSON(w, http.StatusOK, map[string]any{
 		"message": "logout successful",
+	})
+}
+
+func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
+	id := app.session.GetInt(r.Context(), "user_id")
+
+	var user models.User
+	user.ID = uint(id)
+
+	status, err := app.repo.GetUserByID(&user)
+	if err != nil {
+		helpers.ErrorJSON(w, err, status)
+		return
+	}
+
+	if !user.IsActive {
+		helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+		return
+	}
+
+	helpers.WriteJSON(w, status, map[string]any{
+		"name":     user.Name,
+		"email":    user.Email,
+		"username": user.Username,
+		"isAdmin":  user.IsAdmin,
+		"thumb":    user.Thumb,
 	})
 }

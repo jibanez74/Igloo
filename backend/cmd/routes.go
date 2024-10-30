@@ -21,6 +21,11 @@ func (app *config) routes() http.Handler {
 
 		r.Get("/logout", app.Logout)
 
+		r.Route("/users", func(r chi.Router) {
+
+			r.Get("/me", app.GetAuthUser)
+		})})
+
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/{id}", app.GetMovieByID)
 			r.Get("/", app.GetMoviesWithPagination)
