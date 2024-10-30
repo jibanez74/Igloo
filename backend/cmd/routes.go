@@ -32,7 +32,7 @@ func (app *config) routes() http.Handler {
 	})
 
 	// temp route for adding movies
-	router.Get("/api/v1/movie/create", app.CreateMovie)
+	router.Post("/api/v1/movie/create", app.CreateMovie)
 
 	return router
 }
