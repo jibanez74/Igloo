@@ -13,16 +13,26 @@ func (app *config) routes() http.Handler {
 	router.Use(middleware.Logger)
 	router.Use(app.sessionLoad)
 
-	router.Route("/api/v1/movie", func(r chi.Router) {
-		r.Get("/latest", app.GetLatestMovies)
-		r.Get("/{id}", app.GetMovieByID)
-		r.Get("/", app.GetMoviesWithPagination)
-		r.Post("/", app.CreateMovie)
+	router.Get("/api/v1/latest-movies", app.GetLatestMovies)
+	router.Get("/api/v1/login", app.Login)
+
+	router.Route("/api/v1/auth", func(r chi.Router) {
+		r.Use(app.isAuth)
+
+		r.Get("/logout", app.Logout)
+
+		r.Route("/movies", func(r chi.Router) {
+			r.Get("/{id}", app.GetMovieByID)
+			r.Get("/", app.GetMoviesWithPagination)
+		})
+
+		r.Route("/stream", func(r chi.Router) {
+			r.Get("/video/direct/{id}", app.DirectPlayVideo)
+		})
 	})
 
-	router.Route("/api/v1/stream", func(r chi.Router) {
-		r.Get("/video/{id}", app.StreamVideo)
-	})
+	// temp route for adding movies
+	router.Get("/api/v1/movie/create", app.CreateMovie)
 
 	return router
 }

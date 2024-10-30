@@ -14,6 +14,9 @@ type Repo interface {
 	GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error)
 	GetMovieByID(movie *models.Movie) (int, error)
 	CreateMovie(*models.Movie) (int, error)
+
+	GetAuthUser(*models.User) (int, error)
+	GetUserByID(*models.User) (int, error)
 }
 
 type repo struct {

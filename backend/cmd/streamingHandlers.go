@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,11 +14,46 @@ import (
 )
 
 const ffmpegPath = "/bin/ffmpeg"
+const transcodePath = "/transcode"
 
-func (app *config) StreamVideo(w http.ResponseWriter, r *http.Request) {
-	processUUID := r.URL.Query().Get("processUUID")
-	if processUUID == "" {
-		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
+func (app *config) DirectPlayVideo(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	var movie models.Movie
+	movie.ID = uint(id)
+
+	status, err := app.repo.GetMovieByID(&movie)
+	if err != nil {
+		helpers.ErrorJSON(w, err, status)
+		return
+	}
+
+	_, err = os.Stat(movie.FilePath)
+	if err != nil || os.IsNotExist(err) {
+		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
+		return
+	}
+
+	file, err := os.Open(movie.FilePath)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Type", movie.ContentType)
+
+	http.ServeContent(w, r, movie.FileName, movie.CreatedAt, file)
+}
+
+func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Request) {
+	uuid := r.URL.Query().Get("uuid")
+	if uuid == "" {
+		helpers.ErrorJSON(w, errors.New("uuid is required"), http.StatusBadRequest)
 		return
 	}
 
@@ -44,87 +78,97 @@ func (app *config) StreamVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videoCodec := r.URL.Query().Get("videoCodec")
-	if videoCodec == "" {
-		videoCodec = "libx264"
-	}
+	fileName := fmt.Sprintf("%s/%s.mp4", transcodePath, uuid)
 
-	videoHeight := r.URL.Query().Get("videoHeight")
-	if videoHeight == "" {
-		videoHeight = "480"
-	}
+	cmd := exec.Command(ffmpegPath, "-i", movie.FilePath, "-c", "copy", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", fileName)
 
-	videoBitRate := r.URL.Query().Get("videoBitRate")
-	if videoBitRate == "" {
-		videoBitRate = "3000k"
-	}
-
-	audioCodec := r.URL.Query().Get("audioCodec")
-	if audioCodec == "" {
-		audioCodec = "aac"
-	}
-
-	audioChannels := r.URL.Query().Get("audioChannels")
-	if audioChannels == "" {
-		audioChannels = "2"
-	}
-
-	audioBitRate := r.URL.Query().Get("audioBitRate")
-	if audioBitRate == "" {
-		audioBitRate = "128kk"
-	}
-
-	preset := r.URL.Query().Get("preset")
-	if preset == "" {
-		preset = "ultrafast"
-	}
-
-	container := r.URL.Query().Get("container")
-	if container == "" {
-		container = "mp4"
-	}
-
-	var cmdArgs []string
-
-	if videoCodec == "copy" && audioCodec == "copy" {
-		cmdArgs = []string{"-i", movie.FilePath, "-c", "copy", "-f", container, "-movflags", "+faststart", "pipe:1"}
-	} else {
-		cmdArgs = []string{"-i", movie.FilePath, "-c:v", videoCodec, "-c:a", audioCodec, "-b:v", videoBitRate, "-b:a", audioBitRate, "-vf", fmt.Sprintf("scale=-2:%s", videoHeight), "-preset", preset, "-f", container, "-movflags", "+faststart", "pipe:1"}
-	}
-
-	cmd := exec.Command(ffmpegPath, cmdArgs...)
-
-	cmdOut, err := cmd.StdoutPipe()
+	err = cmd.Run()
 	if err != nil {
-		app.errorLog.Print(err)
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
-	err = cmd.Start()
+	file, err := os.Open(fileName)
 	if err != nil {
-		app.errorLog.Print(err)
-		app.infoLog.Print("unable to start ffmpeg command")
 		helpers.ErrorJSON(w, err)
 		return
 	}
+	defer file.Close()
 
-	w.Header().Set("Content-Type", fmt.Sprintf("video/%s", container))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", movie.FileName))
+	w.Header().Set("Content-Type", "video/mp4")
 
-	_, err = io.Copy(w, cmdOut)
-	if err != nil {
-		app.errorLog.Print(err)
-		app.infoLog.Print("unable to copy data to response")
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	err = cmd.Wait()
-	if err != nil {
-		app.errorLog.Print(err)
-		app.infoLog.Print("unable to wait for ffmpeg process to finish")
-		helpers.ErrorJSON(w, err)
-		return
-	}
+	http.ServeContent(w, r, fileName, movie.CreatedAt, file)
 }
+
+// func (app *config) StreamTranscodeVideo(w http.ResponseWriter, r *http.Request) {
+// 	processUUID := r.URL.Query().Get("processUUID")
+// 	if processUUID == "" {
+// 		helpers.ErrorJSON(w, errors.New("you must provide a pid as a uuid for ffmpeg process"), http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
+// 	if err != nil {
+// 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+// 		return
+// 	}
+
+// 	var movie models.Movie
+// 	movie.ID = uint(id)
+
+// 	status, err := app.repo.GetMovieByID(&movie)
+// 	if err != nil {
+// 		helpers.ErrorJSON(w, err, status)
+// 		return
+// 	}
+
+// 	_, err = os.Stat(movie.FilePath)
+// 	if err != nil || os.IsNotExist(err) {
+// 		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
+// 		return
+// 	}
+
+// 	videoCodec := r.URL.Query().Get("videoCodec")
+// 	if videoCodec == "" {
+// 		videoCodec = "libx264"
+// 	}
+
+// 	videoHeight := r.URL.Query().Get("videoHeight")
+// 	if videoHeight == "" {
+// 		videoHeight = "480"
+// 	}
+
+// 	videoBitRate := r.URL.Query().Get("videoBitRate")
+// 	if videoBitRate == "" {
+// 		videoBitRate = "3000k"
+// 	}
+
+// 	audioCodec := r.URL.Query().Get("audioCodec")
+// 	if audioCodec == "" {
+// 		audioCodec = "aac"
+// 	}
+
+// 	audioChannels := r.URL.Query().Get("audioChannels")
+// 	if audioChannels == "" {
+// 		audioChannels = "2"
+// 	}
+
+// 	audioBitRate := r.URL.Query().Get("audioBitRate")
+// 	if audioBitRate == "" {
+// 		audioBitRate = "128k" // Fixed typo from "128kk" to "128k"
+// 	}
+
+// 	preset := r.URL.Query().Get("preset")
+// 	if preset == "" {
+// 		preset = "ultrafast"
+// 	}
+
+// }
+
+// func (app *config) RemoveTranscodedVideo(w http.ResponseWriter, r *http.Request) {
+// 	fileName := r.URL.Query().Get("filename")
+// 	if fileName == "" {
+// 		helpers.ErrorJSON(w, errors.New("file name is required"), http.StatusBadRequest)
+// 		return
+// 	}
+// }

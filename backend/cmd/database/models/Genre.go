@@ -10,7 +10,7 @@ type Genre struct {
 	gorm.Model
 	Tag       string   `gorm:"not null;index" json:"tag"`
 	GenreType string   `gorm:"not null" json:"genreType"`
-	Movies    []*Movie `gorm:"many2many;movie_genres" json:"movies"`
+	Movies    []*Movie `gorm:"many2many:movie_genres" json:"movies"`
 }
 
 func (g *Genre) BeforeSave(tx *gorm.DB) error {
