@@ -26,7 +26,7 @@ func (app *config) routes() http.Handler {
 	}
 
 	router.Get("/api/v1/latest-movies", app.GetLatestMovies)
-	router.Get("/api/v1/login", app.Login)
+	router.Post("/api/v1/login", app.Login)
 
 	router.Route("/api/v1/auth", func(r chi.Router) {
 		r.Use(app.isAuth)
