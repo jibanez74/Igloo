@@ -2,11 +2,11 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 func (app *config) Login(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +44,8 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.session.Put(r.Context(), "user_id", user.ID)
-	app.session.Put(r.Context(), "is_admin", user.IsAdmin)
+	app.session.Put(r.Context(), "user_id", fmt.Sprintf("%d", user.ID))
+	app.session.Put(r.Context(), "is_admin", fmt.Sprintf("%t", user.IsAdmin))
 
 	helpers.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
@@ -71,13 +71,7 @@ func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseUint(app.session.GetString(r.Context(), "user_id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	log.Println("your id is ", id)
+	id := app.session.GetInt(r.Context(), "user_id")
 
 	var user models.User
 	user.ID = uint(id)
