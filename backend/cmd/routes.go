@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -15,12 +13,7 @@ func (app *config) routes() http.Handler {
 	router.Use(app.sessionLoad)
 	router.Use(app.reloadSessionToken)
 
-	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
-	if err != nil {
-		panic(err)
-	}
-
-	if debug {
+	if app.debug {
 		router.Use(middleware.Logger)
 		router.Use(middleware.RealIP)
 		router.Use(middleware.RequestID)
