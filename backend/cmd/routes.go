@@ -13,6 +13,7 @@ func (app *config) routes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
 	router.Use(app.sessionLoad)
+	router.Use(app.reloadSessionToken)
 
 	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 	if err != nil {
