@@ -17,6 +17,7 @@ type Repo interface {
 
 	GetAuthUser(*models.User) (int, error)
 	GetUserByID(*models.User) (int, error)
+	CreateUser(*models.User) (int, error)
 }
 
 type repo struct {

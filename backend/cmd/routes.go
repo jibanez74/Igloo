@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -10,8 +12,18 @@ import (
 func (app *config) routes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
-	router.Use(middleware.Logger)
 	router.Use(app.sessionLoad)
+
+	dbug, err := strconv.ParseBool(os.Getenv("DEBUG"))
+	if err != nil {
+		panic(err)
+	}
+
+	if dbug {
+		router.Use(middleware.Logger)
+		router.Use(middleware.RealIP)
+		router.Use(middleware.RequestID)
+	}
 
 	router.Get("/api/v1/latest-movies", app.GetLatestMovies)
 	router.Get("/api/v1/login", app.Login)
@@ -22,9 +34,8 @@ func (app *config) routes() http.Handler {
 		r.Get("/logout", app.Logout)
 
 		r.Route("/users", func(r chi.Router) {
-
 			r.Get("/me", app.GetAuthUser)
-		})})
+		})
 
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/{id}", app.GetMovieByID)
@@ -38,6 +49,9 @@ func (app *config) routes() http.Handler {
 
 	// temp route for adding movies
 	router.Post("/api/v1/movie/create", app.CreateMovie)
+
+	// temp route for adding users
+	router.Post("/api/v1/user/create", app.CreateUser)
 
 	return router
 }

@@ -22,3 +22,12 @@ func (r *repo) GetUserByID(user *models.User) (int, error) {
 
 	return http.StatusOK, nil
 }
+
+func (r *repo) CreateUser(user *models.User) (int, error) {
+	err := r.db.Create(&user).Error
+	if err != nil {
+		return r.gormStatusCode(err), err
+	}
+
+	return http.StatusCreated, nil
+}
