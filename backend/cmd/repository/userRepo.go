@@ -20,7 +20,7 @@ func (r *repo) GetAuthUser(user *models.User) error {
 }
 
 func (r *repo) GetUserByID(user *models.User) (int, error) {
-	err := r.db.First(&user, user.ID).Error
+	err := r.db.First(user, user.ID).Error
 	if err != nil {
 		return r.gormStatusCode(err), err
 	}

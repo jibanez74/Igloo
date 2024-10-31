@@ -4,7 +4,6 @@ import { FaEnvelope, FaLock, FaSignInAlt, FaUser } from "react-icons/fa";
 import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import { useAppContext } from "@/AppContext";
-import type { User } from "@/types/User";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
@@ -16,7 +15,7 @@ function LoginPage() {
 
   const navigate = useNavigate();
 
-  const { setUser } = useAppContext();
+  const { user, setUser } = useAppContext();
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -62,6 +61,10 @@ function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (user) {
+    alert("got user");
+  }
 
   return (
     <section className='flex items-center justify-center min-h-screen'>

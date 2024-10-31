@@ -12,7 +12,7 @@ import type { Movie } from "@/types/Movie";
 export const Route = createFileRoute("/movies/$movieID")({
   component: MovieDetailsPage,
   loader: async ({ params }): Promise<Movie> => {
-    const res = await fetch(`/api/v1/movie/${params.movieID}`);
+    const res = await fetch(`/api/v1/auth/movies/${params.movieID}`);
 
     if (!res.ok) {
       throw new Error(`${res.status} - ${res.statusText}`);

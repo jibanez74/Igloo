@@ -1,6 +1,5 @@
 import { useState, createContext, useEffect, useContext } from "react";
 import Spinner from "./components/Spinner";
-import Alert from "./components/Alert";
 import type { User } from "@/types/User";
 
 type AppContextType = {
@@ -35,29 +34,23 @@ export default function AppContextProvider({
   const [moviesPage, setMoviesPage] = useState(1);
 
   const getAuthUser = async () => {
-    try {
-      const res = await fetch("/api/v1/auth/users/me", {
-        method: "get",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+    const res = await fetch("/api/v1/auth/users/me", {
+      method: "get",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
-
-      const r = await res.json();
-
-      setUser(r.user);
+    if (!res.ok) {
       setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setError("unable to connect with server");
-      setLoading(false);
+      return;
     }
+
+    const r = await res.json();
+
+    setUser(r.user);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -73,7 +66,6 @@ export default function AppContextProvider({
 
   return (
     <AppContext.Provider value={contextValue}>
-      {error && <Alert msg={error} />}
       {loading ? <Spinner /> : children}
     </AppContext.Provider>
   );
