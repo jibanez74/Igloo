@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/helpers"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 func (app *config) Login(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +72,11 @@ func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
-	id := app.session.GetInt(r.Context(), "user_id")
+	id, err := strconv.ParseUint(app.session.Get(r.Context(), "user_id"), 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
 
 	log.Println(fmt.Sprintf("your id is %d", id))
 
