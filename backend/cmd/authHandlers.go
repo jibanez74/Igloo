@@ -73,7 +73,7 @@ func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
 func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
 	id := app.session.GetInt(r.Context(), "user_id")
 
-	lgo.Println(fmt.Sprintf("your id is %d", id))
+	log.Println(fmt.Sprintf("your id is %d", id))
 
 	var user models.User
 	user.ID = uint(id)
