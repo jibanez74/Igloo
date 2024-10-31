@@ -8,17 +8,41 @@ import (
 )
 
 func (app *config) Login(w http.ResponseWriter, r *http.Request) {
-	var user models.User
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
 
-	err := helpers.ReadJSON(w, r, &user)
+	err := helpers.ReadJSON(w, r, &req)
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
+	var user models.User
+	user.Username = req.Username
+	user.Email = req.Email
+
 	status, err := app.repo.GetAuthUser(&user)
 	if err != nil {
-		helpers.ErrorJSON(w, err, status)
+		if status == http.StatusInternalServerError {
+			helpers.ErrorJSON(w, err, status)
+		} else {
+			helpers.ErrorJSON(w, errors.New("invalid credentials"), status)
+		}
+
+		return
+	}
+
+	match, err := user.PasswordMatches(req.Password)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("unable to process request"))
+		return
+	}
+
+	if !match {
+		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
 		return
 	}
 
@@ -26,11 +50,13 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 	app.session.Put(r.Context(), "is_admin", user.IsAdmin)
 
 	helpers.WriteJSON(w, status, map[string]any{
-		"name":     user.Name,
-		"email":    user.Email,
-		"username": user.Username,
-		"thumb":    user.Thumb,
-		"isAdmin":  user.IsAdmin,
+		"user": map[string]any{
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"thumb":    user.Thumb,
+			"isAdmin":  user.IsAdmin,
+		},
 	})
 }
 
