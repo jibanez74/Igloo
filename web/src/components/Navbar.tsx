@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import logo from "@/assets/images/logo-alt.png";
 import profileDefault from "@/assets/images/profile.png";
 import { FaUser } from "react-icons/fa";
-import type { User } from "@/types/User";
 import { useAppContext } from "@/AppContext";
 
 export default function Navbar() {

@@ -12,7 +12,7 @@ export default function LatestMovies() {
   } = useQuery({
     queryKey: ["latest-movies"],
     queryFn: async (): Promise<SimpleMovie[]> => {
-      const res = await fetch("/api/v1/movie/latest");
+      const res = await fetch("/api/v1/latest-movies");
 
       if (!res.ok) {
         throw new Error(`${res.status} - ${res.statusText}`);

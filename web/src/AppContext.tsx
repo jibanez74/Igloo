@@ -2,7 +2,6 @@ import { useState, createContext, useEffect, useContext } from "react";
 import Spinner from "./components/Spinner";
 import Alert from "./components/Alert";
 import type { User } from "@/types/User";
-import type { Res } from "@/types/Response";
 
 type AppContextType = {
   user: User | null;
@@ -37,7 +36,7 @@ export default function AppContextProvider({
 
   const getAuthUser = async () => {
     try {
-      const res = await fetch("/api/v1/user", {
+      const res = await fetch("/api/v1/auth/users/me", {
         method: "get",
         credentials: "include",
         headers: {
@@ -45,18 +44,14 @@ export default function AppContextProvider({
         },
       });
 
-      const r: Res<User> = await res.json();
-
-      if (r.error) {
-        setError(r.message);
+      if (!res.ok) {
         setLoading(false);
         return;
       }
 
-      if (r.data) {
-        setUser(r.data);
-      }
+      const r = await res.json();
 
+      setUser(r.user);
       setLoading(false);
     } catch (err) {
       console.error(err);

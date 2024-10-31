@@ -86,11 +86,13 @@ func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	helpers.WriteJSON(w, status, map[string]any{
-		"name":     user.Name,
-		"email":    user.Email,
-		"username": user.Username,
-		"isAdmin":  user.IsAdmin,
-		"thumb":    user.Thumb,
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+		"user": map[string]any{
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"thumb":    user.Thumb,
+			"isAdmin":  user.IsAdmin,
+		},
 	})
 }
