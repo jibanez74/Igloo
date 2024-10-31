@@ -24,14 +24,9 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 	user.Username = req.Username
 	user.Email = req.Email
 
-	status, err := app.repo.GetAuthUser(&user)
+	err = app.repo.GetAuthUser(&user)
 	if err != nil {
-		if status == http.StatusInternalServerError {
-			helpers.ErrorJSON(w, err, status)
-		} else {
-			helpers.ErrorJSON(w, errors.New("invalid credentials"), status)
-		}
-
+		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
 		return
 	}
 
@@ -49,7 +44,7 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 	app.session.Put(r.Context(), "user_id", user.ID)
 	app.session.Put(r.Context(), "is_admin", user.IsAdmin)
 
-	helpers.WriteJSON(w, status, map[string]any{
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
 			"name":     user.Name,
 			"email":    user.Email,

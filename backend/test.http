@@ -1,0 +1,30 @@
+POST http://100.107.177.6:8080/api/v1/login
+Content-Type: application/json
+
+{
+  "email": "test@gmail.com",
+  "username": "test",
+  "password": "Testing.123."
+}
+
+
+
+POST http://100.107.177.6:8080/api/v1/user/create
+Content-Type: application/json
+
+{
+  "name": "test",
+  "email": "test@gmail.com",
+  "username": "test",
+  "password": "Testing.123.",
+  "isAdmin": true,
+  "isActive": true
+}
+
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+Vary: Cookie
+Date: Thu, 31 Oct 2024 18:59:49 GMT
+Content-Length: 31
+Connection: close
+

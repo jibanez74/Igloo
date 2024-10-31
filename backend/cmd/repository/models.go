@@ -15,7 +15,7 @@ type Repo interface {
 	GetMovieByID(movie *models.Movie) (int, error)
 	CreateMovie(*models.Movie) (int, error)
 
-	GetAuthUser(*models.User) (int, error)
+	GetAuthUser(*models.User) error
 	GetUserByID(*models.User) (int, error)
 	CreateUser(*models.User) (int, error)
 }
