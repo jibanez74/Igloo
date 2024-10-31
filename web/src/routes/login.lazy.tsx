@@ -5,7 +5,6 @@ import Spinner from "@/components/Spinner";
 import Alert from "@/components/Alert";
 import { useAppContext } from "@/AppContext";
 import type { User } from "@/types/User";
-import type { Res } from "@/types/Response";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
@@ -43,23 +42,15 @@ function LoginPage() {
         body: JSON.stringify(authData),
       });
 
-      const r: Res<User> = await res.json();
+      const r = await res.json();
 
       if (r.error) {
-        setError(`${res.status} - ${r.message}`);
+        setError(`${res.status} - ${r.error}`);
+        setLoading(false);
         return;
       }
 
-      if (r.data) {
-        setUser(r.data);
-
-        alert(JSON.stringify(r.data));
-
-        navigate({
-          to: "/",
-          replace: true,
-        });
-      }
+      alert(r.user);
     } catch (err: unknown) {
       console.error(err);
       setError("unable to process your request");

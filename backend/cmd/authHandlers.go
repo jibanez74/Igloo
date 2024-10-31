@@ -4,6 +4,7 @@ import (
 	"errors"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
+	"log"
 	"net/http"
 )
 
@@ -32,7 +33,8 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 
 	match, err := user.PasswordMatches(req.Password)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("unable to process request"))
+		log.Println(err)
+		helpers.ErrorJSON(w, err)
 		return
 	}
 

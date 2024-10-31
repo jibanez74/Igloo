@@ -40,8 +40,6 @@ function MovieDetailsPage() {
       search: {
         id: movie.ID,
         thumb: movie.thumb,
-        videoCodec: "copy",
-        audioCodec: "copy",
         videoHeight: movie.videoList[0].height,
       },
     });
