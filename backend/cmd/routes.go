@@ -14,12 +14,12 @@ func (app *config) routes() http.Handler {
 	router.Use(middleware.Recoverer)
 	router.Use(app.sessionLoad)
 
-	dbug, err := strconv.ParseBool(os.Getenv("DEBUG"))
+	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 	if err != nil {
 		panic(err)
 	}
 
-	if dbug {
+	if debug {
 		router.Use(middleware.Logger)
 		router.Use(middleware.RealIP)
 		router.Use(middleware.RequestID)
