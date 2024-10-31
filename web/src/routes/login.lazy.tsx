@@ -50,7 +50,12 @@ function LoginPage() {
         return;
       }
 
-      alert(r.user);
+      setUser(r.user);
+
+      navigate({
+        to: "/",
+        replace: true,
+      });
     } catch (err: unknown) {
       console.error(err);
       setError("unable to process your request");
