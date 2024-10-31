@@ -42,12 +42,14 @@ export default function AppContextProvider({
       },
     });
 
-    if (!res.ok) {
-      setLoading(false);
-      return;
-    }
+    // if (!res.ok) {
+    //   setLoading(false);
+    //   return;
+    // }
 
     const r = await res.json();
+
+    alert(r.error);
 
     setUser(r.user);
     setLoading(false);
