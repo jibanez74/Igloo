@@ -30,30 +30,8 @@ export default function AppContextProvider({
   const [loading, setLoading] = useState(true);
   const [jwt, setJwt] = useState("");
 
-  const getAuthUser = async () => {
-    const res = await fetch("/api/v1/refresh-token", {
-      method: "get",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    const r = await res.json();
-
-    if (r.error) {
-      alert(r.error);
-      setLoading(false);
-      return;
-    }
-
-    setUser(r.user);
-    setJwt(r.token);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    getAuthUser();
+    setLoading(false);
   }, []);
 
   const contextValue: AppContextType = {

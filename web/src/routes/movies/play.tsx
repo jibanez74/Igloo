@@ -23,7 +23,7 @@ export const Route = createFileRoute("/movies/play")({
 function PlayMoviePage() {
   const search = useSearch({ from: "/movies/play" });
 
-  const url = `/api/v1/stream/video/${search.id}?processUUID=${v4()}&videoCodec=copy&audioCodec=copy`;
+  const url = `/api/v1/auth/stream/video/simple-transcode/${search.id}?uuid=${v4()}`;
 
   return (
     <div className='p-4 rounded-lg shadow-lg max-w-full'>
