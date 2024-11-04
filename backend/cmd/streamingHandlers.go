@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -80,10 +81,12 @@ func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Req
 
 	fileName := fmt.Sprintf("%s/%s.mp4", transcodePath, uuid)
 
-	cmd := exec.Command(ffmpegPath, "-i", movie.FilePath, "-c", "copy", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", fileName)
+	cmd := exec.Command(ffmpegPath, "-i", movie.FilePath, "-c", "copy", "-movflags", "frag_keyframe+empty_moov", fileName)
 
 	err = cmd.Run()
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to run ffmpeg")
 		helpers.ErrorJSON(w, err)
 		return
 	}
