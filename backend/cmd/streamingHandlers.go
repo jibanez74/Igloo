@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
-
-const ffmpegPath = "/bin/ffmpeg"
 
 func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Request) {
 	uuid := r.URL.Query().Get("uuid")
@@ -72,14 +69,13 @@ func (app *config) DeleteTranscodedFile(w http.ResponseWriter, r *http.Request) 
 
 	fileName := fmt.Sprintf("%s.mp4", fileUUID)
 
-	err = os.Remove(fileName)
+	status, err := helpers.RemoveFile(fileName)
 	if err != nil {
-		log.Println("unable to delete file")
-		helpers.ErrorJSON(w, err)
+		helpers.ErrorJSON(w, err, status)
 		return
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+	helpers.WriteJSON(w, status, map[string]any{
 		"message": "file deleted",
 	})
 }

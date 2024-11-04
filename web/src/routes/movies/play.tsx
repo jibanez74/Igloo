@@ -35,7 +35,7 @@ function PlayMoviePage() {
         credentials: "include",
       })
         .then(() => alert("deleted video file"))
-        .catch(err => alert("unable to delete video file"));
+        .catch(() => alert("unable to delete video file"));
     };
   }, [fileID]);
 
