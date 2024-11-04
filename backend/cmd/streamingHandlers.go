@@ -15,7 +15,6 @@ import (
 )
 
 const ffmpegPath = "/bin/ffmpeg"
-const transcodePath = "/transcode"
 
 func (app *config) DirectPlayVideo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
@@ -110,7 +109,7 @@ func (app *config) DeleteTranscodedFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	fileName := fmt.Sprintf("%s/%s.mp4", transcodePath, fileUUID)
+	fileName := fmt.Sprintf("%s.mp4", fileUUID)
 
 	err := os.Remove(fileName)
 	if err != nil {
