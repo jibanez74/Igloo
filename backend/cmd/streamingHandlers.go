@@ -8,47 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
 
 const ffmpegPath = "/bin/ffmpeg"
-
-func (app *config) DirectPlayVideo(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
-	}
-
-	var movie models.Movie
-	movie.ID = uint(id)
-
-	status, err := app.repo.GetMovieByID(&movie)
-	if err != nil {
-		helpers.ErrorJSON(w, err, status)
-		return
-	}
-
-	_, err = os.Stat(movie.FilePath)
-	if err != nil || os.IsNotExist(err) {
-		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
-		return
-	}
-
-	file, err := os.Open(movie.FilePath)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-	defer file.Close()
-
-	w.Header().Set("Content-Type", movie.ContentType)
-
-	http.ServeContent(w, r, movie.FileName, movie.CreatedAt, file)
-}
 
 func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Request) {
 	uuid := r.URL.Query().Get("uuid")
@@ -72,21 +37,17 @@ func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = os.Stat(movie.FilePath)
-	if err != nil || os.IsNotExist(err) {
-		helpers.ErrorJSON(w, errors.New("file not found"), http.StatusNotFound)
+	status, err = helpers.CheckFileExist(movie.FilePath)
+	if err != nil {
+		helpers.ErrorJSON(w, err, status)
 		return
 	}
 
 	fileName := fmt.Sprintf("%s.mp4", uuid)
 
-	cmd := exec.Command(ffmpegPath, "-y", "-i", movie.FilePath, "-c", "copy", "-movflags", "+faststart", fileName)
-
-	err = cmd.Run()
+	err = helpers.TranscodeVideo(movie.FilePath, fileName)
 	if err != nil {
-		log.Println(err)
-		log.Println("unable to run ffmpeg")
-		helpers.ErrorJSON(w, err)
+		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -111,7 +72,7 @@ func (app *config) DeleteTranscodedFile(w http.ResponseWriter, r *http.Request) 
 
 	fileName := fmt.Sprintf("%s.mp4", fileUUID)
 
-	err := os.Remove(fileName)
+	err = os.Remove(fileName)
 	if err != nil {
 		log.Println("unable to delete file")
 		helpers.ErrorJSON(w, err)
