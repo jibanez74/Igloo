@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"igloo/cmd/database"
+	"igloo/cmd/helpers"
 	"igloo/cmd/repository"
 	"igloo/cmd/tmdb"
 	"log"
@@ -24,6 +25,8 @@ type config struct {
 	errorLog     *log.Logger
 	cookieSecret string
 	cookieDomain string
+	ffmpeg       string
+	ffprobe      string
 }
 
 func main() {
@@ -40,6 +43,26 @@ func main() {
 		panic(err)
 	}
 	app.repo = repository.New(db)
+
+	ffmpegPath := os.Getenv("FFMPEG_PATH")
+	if ffmpegPath == "" {
+		panic(errors.New("FFMPEG_PATH is not set"))
+	}
+	_, err = helpers.CheckFileExist(ffmpegPath)
+	if err != nil {
+		panic(err)
+	}
+	app.ffmpeg = ffmpegPath
+
+	ffprobePath := os.Getenv("FFPROBE_PATH")
+	if ffprobePath == "" {
+		panic(errors.New("FFPROBE_PATH is not set"))
+	}
+	_, err = helpers.CheckFileExist(ffprobePath)
+	if err != nil {
+		panic(err)
+	}
+	app.ffprobe = ffprobePath
 
 	tmdbKey := os.Getenv("TMDB_API_KEY")
 	if tmdbKey == "" {

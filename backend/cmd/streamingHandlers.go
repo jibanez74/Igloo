@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/helpers"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -42,7 +43,9 @@ func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Req
 
 	fileName := fmt.Sprintf("%s.mp4", uuid)
 
-	err = helpers.TranscodeVideo(movie.FilePath, fileName)
+	cmd := exec.Command(app.ffmpeg, "-i", movie.FilePath, "-c", "copy", "-movflags", "+faststart", fileName)
+
+	err = cmd.Run()
 	if err != nil {
 		helpers.ErrorJSON(w, err, http.StatusInternalServerError)
 		return
