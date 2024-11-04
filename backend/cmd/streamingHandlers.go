@@ -79,7 +79,7 @@ func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	fileName := fmt.Sprintf("%s/%s.mp4", transcodePath, uuid)
+	fileName := fmt.Sprintf("%s.mp4", uuid)
 
 	cmd := exec.Command(ffmpegPath, "-y", "-i", movie.FilePath, "-c", "copy", "-movflags", "+faststart", fileName)
 
