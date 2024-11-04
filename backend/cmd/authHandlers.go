@@ -1,101 +1,69 @@
 package main
 
 import (
-  "errors"
-  "fmt"
-  "igloo/cmd/database/models"
-  "igloo/cmd/helpers"
-  "log"
-  "net/http"
+	"errors"
+	"igloo/cmd/database/models"
+	"igloo/cmd/helpers"
+	"log"
+	"net/http"
 )
 
 func (app *config) Login(w http.ResponseWriter, r *http.Request) {
-  var req struct {
-    Username string `json:"username"`
-    Email    string `json:"email"`
-    Password string `json:"password"`
-  }
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
 
-  err := helpers.ReadJSON(w, r, &req)
-  if err != nil {
-    helpers.ErrorJSON(w, err, http.StatusBadRequest)
-    return
-  }
+	err := helpers.ReadJSON(w, r, &req)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
 
-  var user models.User
-  user.Username = req.Username
-  user.Email = req.Email
+	var user models.User
+	user.Username = req.Username
+	user.Email = req.Email
 
-  err = app.repo.GetAuthUser(&user)
-  if err != nil {
-    helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
-    return
-  }
+	err = app.repo.GetAuthUser(&user)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
+		return
+	}
 
-  match, err := user.PasswordMatches(req.Password)
-  if err != nil {
-    log.Println(err)
-    helpers.ErrorJSON(w, err)
-    return
-  }
+	match, err := user.PasswordMatches(req.Password)
+	if err != nil {
+		log.Println(err)
+		helpers.ErrorJSON(w, err)
+		return
+	}
 
-  if !match {
-    helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
-    return
-  }
+	if !match {
+		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
+		return
+	}
 
-  app.session.Put(r.Context(), "user_id", fmt.Sprintf("%d", user.ID))
-  app.session.Put(r.Context(), "is_admin", fmt.Sprintf("%t", user.IsAdmin))
+	tokens, err := helpers.GenerateToken(&user, app.cookieSecret)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
 
-  helpers.WriteJSON(w, http.StatusOK, map[string]any{
-    "user": map[string]any{
-      "name":     user.Name,
-      "email":    user.Email,
-      "username": user.Username,
-      "thumb":    user.Thumb,
-      "isAdmin":  user.IsAdmin,
-    },
-  })
+	http.SetCookie(w, helpers.SetRefreshCookie(tokens.RefreshToken, app.cookieSecret))
+
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+		"token": tokens.Token,
+		"user": map[string]any{
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"isAdmin":  user.IsAdmin,
+			"thumb":    user.Thumb,
+		},
+	})
 }
 
 func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
-  err := app.session.Destroy(r.Context())
-  if err != nil {
-    helpers.ErrorJSON(w, err)
-    return
-  }
-
-  helpers.WriteJSON(w, http.StatusOK, map[string]any{
-    "message": "logout successful",
-  })
-}
-
-func (app *config) GetAuthUser(w http.ResponseWriter, r *http.Request) {
-  id := app.session.GetInt(r.Context(), "user_id")
-
-  log.Println("your id is ", id)
-
-  var user models.User
-  user.ID = uint(id)
-
-  status, err := app.repo.GetUserByID(&user)
-  if err != nil {
-    helpers.ErrorJSON(w, err, status)
-    return
-  }
-
-  if !user.IsActive {
-    helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
-    return
-  }
-
-  helpers.WriteJSON(w, http.StatusOK, map[string]any{
-    "user": map[string]any{
-      "name":     user.Name,
-      "email":    user.Email,
-      "username": user.Username,
-      "thumb":    user.Thumb,
-      "isAdmin":  user.IsAdmin,
-    },
-  })
+	http.SetCookie(w, helpers.SetExpiredCookie(app.cookieDomain))
+	w.WriteHeader(http.StatusAccepted)
 }

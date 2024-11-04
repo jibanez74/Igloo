@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { FaEnvelope, FaLock, FaSignInAlt, FaUser } from "react-icons/fa";
 import Spinner from "@/components/Spinner";
@@ -16,6 +16,15 @@ function LoginPage() {
   const navigate = useNavigate();
 
   const { user, setUser } = useAppContext();
+
+  useEffect(() => {
+    if (user) {
+      navigate({
+        to: "/",
+        replace: true,
+      });
+    }
+  }, [user]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -50,21 +59,12 @@ function LoginPage() {
       }
 
       setUser(r.user);
-
-      navigate({
-        to: "/",
-        replace: true,
-      });
     } catch (err: unknown) {
       console.error(err);
       setError("unable to process your request");
       setLoading(false);
     }
   };
-
-  if (user) {
-    alert("got user");
-  }
 
   return (
     <section className='flex items-center justify-center min-h-screen'>

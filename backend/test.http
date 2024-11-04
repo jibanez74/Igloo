@@ -1,0 +1,25 @@
+POST http://localhost:8080/api/v1/user/create
+Content-Type: application/json
+
+{
+  "name": "test",
+  "email": "test@gmail.com",
+  "username": "test",
+  "password": "Testing.123.",
+  "isAdmin": true,
+  "isActive": true
+}
+
+
+POST http://localhost:8080/api/v1/login
+Content-Type: application/json
+
+{
+  "email": "test@gmail.com",
+  "username": "test",
+    "password": "Testing.123."
+}
+
+GET http://localhost:8080/api/v1/refresh-token
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJpZ2xvbyIsImV4cCI6MTczMDY3ODEwNywiaWF0IjoxNzMwNjc3MjA3LCJpc3MiOiJpZ2xvbyIsInN1YiI6IjEiLCJ0eXAiOiJKV1QifQ.QFsUvfREkjjYmFJyJAM7THWQN20HXSqw1Hx2G-vZ79I

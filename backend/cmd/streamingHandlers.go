@@ -100,6 +100,26 @@ func (app *config) SimpleTranscodeVideoStream(w http.ResponseWriter, r *http.Req
 	http.ServeContent(w, r, fileName, movie.CreatedAt, file)
 }
 
+func (app *config) DeleteTranscodedFile(w http.ResponseWriter, r *http.Request) {
+	fileUUID := chi.URLParam(r, "uuid")
+	if fileUUID == "" {
+		helpers.ErrorJSON(w, errors.New("uuid is required"), http.StatusBadRequest)
+		return
+	}
+
+	fileName := fmt.Sprintf("%s/%s.mp4", transcodePath, fileUUID)
+
+	err := os.Remove(fileName)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+		"message": "file deleted",
+	})
+}
+
 // func (app *config) StreamTranscodeVideo(w http.ResponseWriter, r *http.Request) {
 // 	processUUID := r.URL.Query().Get("processUUID")
 // 	if processUUID == "" {

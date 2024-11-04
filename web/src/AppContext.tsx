@@ -5,10 +5,8 @@ import type { User } from "@/types/User";
 type AppContextType = {
   user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
-  error?: string;
-  setError?: React.Dispatch<React.SetStateAction<string>>;
-  moviesPage: number;
-  setMoviesPage: React.Dispatch<React.SetStateAction<number>>;
+  jwt: string;
+  setJwt: React.Dispatch<React.SetStateAction<string>>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -30,11 +28,10 @@ export default function AppContextProvider({
 }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [moviesPage, setMoviesPage] = useState(1);
+  const [jwt, setJwt] = useState("");
 
   const getAuthUser = async () => {
-    const res = await fetch("/api/v1/auth/users/me", {
+    const res = await fetch("/api/v1/refresh-token", {
       method: "get",
       credentials: "include",
       headers: {
@@ -42,16 +39,16 @@ export default function AppContextProvider({
       },
     });
 
-    // if (!res.ok) {
-    //   setLoading(false);
-    //   return;
-    // }
-
     const r = await res.json();
 
-    alert(r.error);
+    if (r.error) {
+      alert(r.error);
+      setLoading(false);
+      return;
+    }
 
     setUser(r.user);
+    setJwt(r.token);
     setLoading(false);
   };
 
@@ -62,8 +59,8 @@ export default function AppContextProvider({
   const contextValue: AppContextType = {
     user,
     setUser,
-    moviesPage,
-    setMoviesPage,
+    jwt,
+    setJwt,
   };
 
   return (

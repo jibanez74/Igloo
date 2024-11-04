@@ -10,8 +10,6 @@ import (
 func (app *config) routes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
-	router.Use(app.sessionLoad)
-	router.Use(app.reloadSessionToken)
 
 	if app.debug {
 		router.Use(middleware.Logger)
@@ -23,13 +21,8 @@ func (app *config) routes() http.Handler {
 	router.Post("/api/v1/login", app.Login)
 
 	router.Route("/api/v1/auth", func(r chi.Router) {
-		r.Use(app.isAuth)
 
 		r.Get("/logout", app.Logout)
-
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/me", app.GetAuthUser)
-		})
 
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/{id}", app.GetMovieByID)
@@ -38,6 +31,8 @@ func (app *config) routes() http.Handler {
 
 		r.Route("/stream", func(r chi.Router) {
 			r.Get("/video/direct/{id}", app.DirectPlayVideo)
+			r.Get("/video/simple-transcode/{id}", app.SimpleTranscodeVideoStream)
+			r.Delete("/video/remove/{id}", app.DeleteTranscodedFile)
 		})
 	})
 
