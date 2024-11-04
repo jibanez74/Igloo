@@ -113,6 +113,7 @@ func (app *config) DeleteTranscodedFile(w http.ResponseWriter, r *http.Request) 
 
 	err := os.Remove(fileName)
 	if err != nil {
+		log.Println("unable to delete file")
 		helpers.ErrorJSON(w, err)
 		return
 	}

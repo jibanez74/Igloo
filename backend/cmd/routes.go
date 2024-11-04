@@ -32,7 +32,7 @@ func (app *config) routes() http.Handler {
 		r.Route("/stream", func(r chi.Router) {
 			r.Get("/video/direct/{id}", app.DirectPlayVideo)
 			r.Get("/video/simple-transcode/{id}", app.SimpleTranscodeVideoStream)
-			r.Delete("/video/remove/{id}", app.DeleteTranscodedFile)
+			r.Delete("/video/remove/{uuid}", app.DeleteTranscodedFile)
 		})
 	})
 
