@@ -25,14 +25,12 @@ func (app *config) routes() http.Handler {
 		r.Get("/logout", app.Logout)
 
 		r.Route("/movies", func(r chi.Router) {
+			r.Get("/stream/{id}", app.StreamMovie)
 			r.Get("/{id}", app.GetMovieByID)
 			r.Get("/", app.GetMoviesWithPagination)
 		})
 
-		r.Route("/stream", func(r chi.Router) {
-			r.Get("/video/simple-transcode/{id}", app.SimpleTranscodeVideoStream)
-			r.Delete("/video/remove/{uuid}", app.DeleteTranscodedFile)
-		})
+		
 	})
 
 	// temp route for adding movies
