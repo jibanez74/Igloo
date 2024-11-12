@@ -1,5 +1,5 @@
 export type Studio = {
-  ID?: number;
+  ID: number;
   name: string;
   logo: string;
   country: string;

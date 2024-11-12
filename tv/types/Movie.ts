@@ -18,6 +18,7 @@ export type Movie = {
   ID: number;
   title: string;
   filePath: string;
+  FileName: string;
   container: string;
   size: number;
   contentType: string;
@@ -38,7 +39,7 @@ export type Movie = {
   criticRating: number;
   spokenLanguages: string;
   genres: Genre[];
-  studios: Studio;
+  studios: Studio[];
   castList: Cast[];
   crewList: Crew[];
   videoList: Video[];

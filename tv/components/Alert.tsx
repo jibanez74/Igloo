@@ -3,7 +3,7 @@ import { Colors } from "@/constants/Colors";
 import { ThemedView } from "./ThemedView";
 import { ThemedText } from "./ThemedText";
 
-interface AlertProps {
+type AlertProps = {
   visible: boolean;
   title: string;
   message: string;
@@ -11,9 +11,9 @@ interface AlertProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
-}
+};
 
-export function Alert({
+export default function Alert({
   visible,
   title,
   message,
@@ -26,25 +26,21 @@ export function Alert({
     <Modal
       visible={visible}
       transparent={true}
-      animationType="fade"
+      animationType='fade'
       onRequestClose={onCancel}
     >
-      <ThemedView variant="dark" style={styles.overlay}>
-        <ThemedView variant="primary" style={styles.container}>
+      <ThemedView variant='dark' style={styles.overlay}>
+        <ThemedView variant='primary' style={styles.container}>
           <ThemedText
-            variant="light"
-            size="large"
-            weight="bold"
+            variant='light'
+            size='large'
+            weight='bold'
             style={styles.title}
           >
             {title}
           </ThemedText>
 
-          <ThemedText
-            variant="info"
-            size="medium"
-            style={styles.message}
-          >
+          <ThemedText variant='info' size='medium' style={styles.message}>
             {message}
           </ThemedText>
 
@@ -54,11 +50,7 @@ export function Alert({
               onPress={onCancel}
               focusable={true}
             >
-              <ThemedText
-                variant="info"
-                size="medium"
-                weight="bold"
-              >
+              <ThemedText variant='info' size='medium' weight='bold'>
                 {cancelText}
               </ThemedText>
             </Pressable>
@@ -68,11 +60,7 @@ export function Alert({
               onPress={onConfirm}
               focusable={true}
             >
-              <ThemedText
-                variant="dark"
-                size="medium"
-                weight="bold"
-              >
+              <ThemedText variant='dark' size='medium' weight='bold'>
                 {confirmText}
               </ThemedText>
             </Pressable>

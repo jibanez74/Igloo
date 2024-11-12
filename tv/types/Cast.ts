@@ -1,7 +1,7 @@
 import type { Artist } from "./Artist";
 
 export type Cast = {
-  ID?: number;
+  ID: number;
   artist: Artist;
   character: string;
   order: number;
