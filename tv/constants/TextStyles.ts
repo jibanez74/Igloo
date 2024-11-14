@@ -1,6 +1,6 @@
 import { TextStyle } from "react-native";
 
-export const textStyles = function (
+const textStyles = function (
   scale: number,
   linkColor: string
 ): {
@@ -33,3 +33,5 @@ export const textStyles = function (
     },
   };
 };
+
+export default textStyles;

@@ -1,4 +1,4 @@
-export const Colors = {
+const Colors = {
   primary: "#1C395E",
   secondary: "#88BCF4",
   success: "#3E8AE1",
@@ -11,3 +11,5 @@ export const Colors = {
   textSecondary: "#CEE3F9", // Using info as secondary text
   cardBackground: "#1C395E", // Using primary for cards
 };
+
+export default Colors;

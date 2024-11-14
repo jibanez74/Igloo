@@ -1,6 +1,11 @@
-import { Platform, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 
-export function useScale(): number {
-  const { width } = useWindowDimensions();
-  return Platform.isTV ? width / 1000 : 1;
+export function useScale() {
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // Base scale on a reference screen width (e.g., 1920 for FHD)
+  const baseWidth = 1920;
+  const scale = screenWidth / baseWidth;
+  
+  return scale;
 }

@@ -1,5 +1,5 @@
 import { Text, TextProps, TextStyle } from "react-native";
-import { Colors } from "@/constants/Colors";
+import Colors from "@/constants/Colors";
 
 interface ThemedTextProps extends TextProps {
   variant?: "primary" | "secondary" | "info" | "light" | "dark";
@@ -7,7 +7,7 @@ interface ThemedTextProps extends TextProps {
   weight?: "normal" | "bold";
 }
 
-export function ThemedText({
+export default function ThemedText({
   style,
   variant = "light",
   size = "medium",

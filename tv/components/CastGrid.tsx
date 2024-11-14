@@ -1,17 +1,22 @@
 import { useState } from "react";
-import { View, StyleSheet, Image, ScrollView, Pressable } from "react-native";
-import { Colors } from "@/constants/Colors";
-import { ThemedView } from "./ThemedView";
-import { ThemedText } from "./ThemedText";
+import { View, StyleSheet, Image, Dimensions, Pressable } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import Colors from "@/constants/Colors";
+import ThemedView from "./ThemedView";
+import ThemedText from "./ThemedText";
 import type { Cast } from "@/types/Cast";
 
 type CastGridProps = {
   cast: Cast[];
 };
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const ITEM_GAP = 20;
+const ITEM_WIDTH = 180;
+
 export default function CastGrid({ cast }: CastGridProps) {
   const [focusedId, setFocusedId] = useState<number | null>(null);
-  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+  const [loadedImages, setLoadedImages] = useState<Record<number, boolean>>({});
 
   const handleImageLoad = (id: number) => {
     setLoadedImages(prev => ({
@@ -20,82 +25,89 @@ export default function CastGrid({ cast }: CastGridProps) {
     }));
   };
 
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.container}>
-        {cast.map((member, index) => (
-          <Pressable
-            key={member.ID}
-            focusable={true}
-            hasTVPreferredFocus={index === 0}
-            onFocus={() => setFocusedId(member.ID)}
-            onBlur={() => setFocusedId(null)}
-            style={({ focused }) => [
-              styles.pressable,
-              focused && styles.pressableFocused,
-            ]}
-            // accessibilityLabel={`${member.artist.name} as ${member.character}`}
-            // accessibilityHint='Press to view cast member details'
-            // accessibilityState={{
-            //   selected: focusedId === member.ID,
-            // }}
-          >
-            <ThemedView
-              variant='primary'
-              style={[
-                styles.castCard,
-                focusedId === member.ID && styles.cardFocused,
-              ]}
-            >
-              <View style={styles.imageContainer}>
-                {!loadedImages[member.ID] && (
-                  <ThemedView variant='dark' style={styles.imagePlaceholder}>
-                    <ThemedText variant='info' size='small'>
-                      Loading...
-                    </ThemedText>
-                  </ThemedView>
-                )}
-                <Image
-                  source={{ uri: member.artist.thumb }}
-                  style={styles.image}
-                  resizeMode='cover'
-                  onLoad={() => handleImageLoad(member.ID)}
-                />
-              </View>
-
-              <View style={styles.textContainer}>
-                <ThemedText
-                  variant='light'
-                  size='medium'
-                  weight='bold'
-                  numberOfLines={1}
-                  style={styles.name}
-                >
-                  {member.artist.name}
-                </ThemedText>
-
-                <ThemedText
-                  variant='info'
-                  size='small'
-                  numberOfLines={1}
-                  style={styles.role}
-                >
-                  {member.character}
-                </ThemedText>
-              </View>
+  const renderCastMember = ({
+    item: member,
+    index,
+  }: {
+    item: Cast;
+    index: number;
+  }) => (
+    <Pressable
+      focusable={true}
+      hasTVPreferredFocus={index === 0}
+      onFocus={() => setFocusedId(member.ID)}
+      onBlur={() => setFocusedId(null)}
+      style={({ focused }) => [
+        styles.pressable,
+        focused && styles.pressableFocused,
+      ]}
+      accessibilityLabel={`${member.artist.name} as ${member.character}`}
+    >
+      <ThemedView
+        variant='primary'
+        style={[styles.castCard, focusedId === member.ID && styles.cardFocused]}
+      >
+        <View style={styles.imageContainer}>
+          {!loadedImages[member.ID] && (
+            <ThemedView variant='dark' style={styles.imagePlaceholder}>
+              <ThemedText variant='info' size='small'>
+                Loading...
+              </ThemedText>
             </ThemedView>
-          </Pressable>
-        ))}
-      </View>
-    </ScrollView>
+          )}
+          <Image
+            source={{ uri: member.artist.thumb }}
+            style={styles.image}
+            resizeMode='cover'
+            onLoad={() => handleImageLoad(member.ID)}
+          />
+        </View>
+
+        <View style={styles.textContainer}>
+          <ThemedText
+            variant='light'
+            size='medium'
+            weight='bold'
+            numberOfLines={1}
+            style={styles.name}
+          >
+            {member.artist.name}
+          </ThemedText>
+
+          <ThemedText
+            variant='info'
+            size='small'
+            numberOfLines={1}
+            style={styles.role}
+          >
+            {member.character}
+          </ThemedText>
+        </View>
+      </ThemedView>
+    </Pressable>
+  );
+
+  return (
+    <View style={styles.container}>
+      <FlashList
+        data={cast}
+        renderItem={renderCastMember}
+        estimatedItemSize={ITEM_WIDTH}
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={{ width: ITEM_GAP }} />}
+        contentContainerStyle={styles.listContent}
+        keyExtractor={item => item.ID.toString()}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    gap: 20,
-    paddingVertical: 20,
+    height: 360, // Height to accommodate cast card + padding
+  },
+  listContent: {
     paddingHorizontal: 4,
   },
   pressable: {
@@ -105,7 +117,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   castCard: {
-    width: 180,
+    width: ITEM_WIDTH,
     borderRadius: 8,
     overflow: "hidden",
   },
@@ -117,6 +129,7 @@ const styles = StyleSheet.create({
     position: "relative",
     width: "100%",
     height: 270,
+    backgroundColor: Colors.dark,
   },
   imagePlaceholder: {
     position: "absolute",
@@ -130,7 +143,6 @@ const styles = StyleSheet.create({
   image: {
     width: "100%",
     height: "100%",
-    backgroundColor: Colors.dark,
   },
   textContainer: {
     padding: 12,

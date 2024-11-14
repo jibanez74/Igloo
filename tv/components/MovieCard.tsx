@@ -1,16 +1,21 @@
 import { StyleSheet, Pressable, Image, View, ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Colors } from "@/constants/Colors";
-import { ThemedText } from "@/components/ThemedText";
+import Colors from "@/constants/Colors";
+import ThemedText from "@/components/ThemedText";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {
   movie: SimpleMovie;
   style?: ViewStyle;
+  hasTVPreferredFocus?: boolean;
 };
 
-export default function MovieCard({ movie, style }: MovieCardProps) {
+export default function MovieCard({
+  movie,
+  style,
+  hasTVPreferredFocus,
+}: MovieCardProps) {
   const [isFocused, setIsFocused] = useState(false);
   const router = useRouter();
 
@@ -18,6 +23,7 @@ export default function MovieCard({ movie, style }: MovieCardProps) {
     <Pressable
       style={[styles.card, style, isFocused && styles.cardFocused]}
       focusable={true}
+      hasTVPreferredFocus={hasTVPreferredFocus}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       onPress={() =>

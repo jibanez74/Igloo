@@ -1,11 +1,11 @@
 import { View, ViewProps } from "react-native";
-import { Colors } from "@/constants/Colors";
+import Colors from "@/constants/Colors";
 
 interface ThemedViewProps extends ViewProps {
   variant?: "primary" | "secondary" | "dark" | "light";
 }
 
-export function ThemedView({
+export default function ThemedView({
   style,
   variant = "dark",
   ...props
