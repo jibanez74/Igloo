@@ -28,5 +28,6 @@ type SimpleMovie struct {
 	ID    uint
 	Title string `json:"title"`
 	Thumb string `json:"thumb"`
+	Art   string `json:"art"`
 	Year  uint   `json:"year"`
 }

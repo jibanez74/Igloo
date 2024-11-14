@@ -1,5 +1,5 @@
 import { View, StyleSheet } from "react-native";
-import { ThemedText } from "./ThemedText";
+import ThemedText from "./ThemedText";
 import type { Genre } from "@/types/Genre";
 
 type GenreListProps = {

@@ -1,24 +1,32 @@
-import { useState } from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet, ViewStyle } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
 import Colors from "@/constants/Colors";
 import ThemedView from "@/components/ThemedView";
 import ThemedText from "@/components/ThemedText";
 import MovieCard from "@/components/MovieCard";
+import ArtCarousel from "@/components/ArtCarousel";
 import Spinner from "@/components/Spinner";
-import Alert from "@/components/Alert";
+import useScale from "@/hooks/useScale";
 import api from "@/lib/api";
 import type { SimpleMovie } from "@/types/Movie";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const COLUMN_COUNT = 6;
-const ITEM_GAP = 20;
-const ITEM_WIDTH =
-  (SCREEN_WIDTH - 40 * 2 - ITEM_GAP * (COLUMN_COUNT - 1)) / COLUMN_COUNT;
+const ITEMS_PER_ROW = 6;
+const BASE_GAP = 20;
+const BASE_PADDING = 40;
+const BASE_ITEM_WIDTH = 160;
 
 export default function HomeScreen() {
-  const [showError, setShowError] = useState(false);
+  const scale = useScale();
+
+  const itemGap = BASE_GAP * scale;
+  const padding = BASE_PADDING * scale;
+  const itemWidth = BASE_ITEM_WIDTH * scale;
+
+  const movieCardStyle: ViewStyle = {
+    width: itemWidth,
+    margin: 0,
+  };
 
   const {
     data: movies,
@@ -32,13 +40,13 @@ export default function HomeScreen() {
         const res = await api.get("/auth/movies/latest");
 
         if (!res.data.movies) {
-          throw new Error("no movies found");
+          throw new Error("no movies");
         }
 
-        res.data.movies;
+        return res.data.movies;
       } catch (err) {
         console.error(err);
-        throw new Error("unable to fetch latest movies");
+        throw new Error("unable to fetch movies");
       }
     },
   });
@@ -47,54 +55,24 @@ export default function HomeScreen() {
     return <Spinner text='Loading latest movies...' />;
   }
 
-  if (isError) {
+  if (isError || !movies) {
     return (
-      <Alert
-        visible={true}
-        title='Error'
-        message={error?.message || "Failed to load movie"}
-        onConfirm={() => setShowError(false)}
-        onCancel={() => setShowError(false)}
-      />
+      <ThemedView variant='dark' style={styles.centerContainer}>
+        <ThemedText variant='light' size='large'>
+          Error loading movies
+        </ThemedText>
+      </ThemedView>
     );
+  }
+
+  if (!isError && !isLoading && movies) {
+    console.log(movies);
   }
 
   return (
     <ThemedView variant='dark' style={styles.container}>
-      {/* Header Section */}
-      <View style={styles.header}>
-        <ThemedText
-          variant='light'
-          size='xlarge'
-          weight='bold'
-          style={styles.title}
-        >
-          Welcome to Igloo
-        </ThemedText>
-        <ThemedText variant='info' size='large' style={styles.subtitle}>
-          The latest media in your server
-        </ThemedText>
-      </View>
-
-      {/* Movies Grid */}
-      <View style={styles.gridContainer}>
-        <FlashList
-          data={movies}
-          numColumns={COLUMN_COUNT}
-          estimatedItemSize={ITEM_WIDTH}
-          renderItem={({ item: movie, index }) => (
-            <MovieCard
-              movie={movie}
-              style={styles.movieCard}
-              hasTVPreferredFocus={index === 0}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ width: ITEM_GAP }} />}
-          contentContainerStyle={styles.gridContent}
-          showsVerticalScrollIndicator={false}
-          keyExtractor={item => item.ID.toString()}
-        />
-      </View>
+      {/* Featured Carousel */}
+      <ArtCarousel movies={movies} />
     </ThemedView>
   );
 }
@@ -108,26 +86,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  header: {
-    padding: 40,
-    paddingBottom: 20,
-  },
-  title: {
-    marginBottom: 8,
-  },
-  subtitle: {
-    opacity: 0.8,
-  },
-  gridContainer: {
+  content: {
     flex: 1,
-    paddingHorizontal: 40,
   },
-  gridContent: {
-    gap: ITEM_GAP,
-    padding: 4,
+  section: {
+    marginTop: 20,
   },
-  movieCard: {
-    width: ITEM_WIDTH,
-    margin: 0,
+  sectionTitle: {
+    marginBottom: 16,
   },
 });

@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { Colors } from "@/constants/Colors";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
+import Colors from "@/constants/Colors";
+import ThemedText from "@/components/ThemedText";
+import ThemedView from "@/components/ThemedView";
 
 interface SpinnerProps {
   text?: string;

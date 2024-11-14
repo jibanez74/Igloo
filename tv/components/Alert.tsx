@@ -1,7 +1,7 @@
 import { StyleSheet, Modal, Pressable } from "react-native";
-import { Colors } from "@/constants/Colors";
-import { ThemedView } from "./ThemedView";
-import { ThemedText } from "./ThemedText";
+import Colors from "@/constants/Colors";
+import ThemedView from "./ThemedView";
+import ThemedText from "./ThemedText";
 
 type AlertProps = {
   visible: boolean;
