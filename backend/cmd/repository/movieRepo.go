@@ -3,12 +3,13 @@ package repository
 import (
 	"igloo/cmd/database/models"
 
-	"gorm.io/gorm"
 	"net/http"
+
+	"gorm.io/gorm"
 )
 
 func (r *repo) GetLatestMovies(movies *[]SimpleMovie) (int, error) {
-	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, year").Limit(12).Order("created_at desc").Find(&movies).Error
+	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, art, year").Limit(12).Order("created_at desc").Find(&movies).Error
 	if err != nil {
 		return r.gormStatusCode(err), err
 	}
