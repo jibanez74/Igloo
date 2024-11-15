@@ -8,9 +8,9 @@ import ThemedView from "./ThemedView";
 import ThemedText from "./ThemedText";
 import type { SimpleMovie } from "@/types/Movie";
 
-interface ArtCarouselProps {
+type ArtCarouselProps = {
   movies: SimpleMovie[];
-}
+};
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CAROUSEL_HEIGHT = SCREEN_HEIGHT * 0.7;

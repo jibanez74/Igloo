@@ -2,6 +2,28 @@
   "expo": {
     "plugins": [
       [
+        "react-native-video",
+        {
+          "enableNotificationControls": false,
+          "enableBackgroundAudio": false,
+          "androidExtensions": {
+            "useExoplayerRtsp": false,
+            "useExoplayerSmoothStreaming": false,
+            "useExoplayerHls": true,
+            "useExoplayerDash": false,
+            "useExoplayerCache": true,
+            "useExoplayerCodecs": true,
+            "useExoplayerFfmpeg": true,
+            "useExoplayerMediaSession": true,
+            "useExoplayerIma": false
+          },
+          "enableAudioTrackSelection": true,
+          "enableSubtitleSelection": true,
+          "enableQualitySelection": true,
+          "enableTvMode": true
+        }
+      ],
+      [
         "@react-native-tvos/config-tv",
         {
           "androidTVBanner": "./assets/tv_icons/icon-400x240.png",

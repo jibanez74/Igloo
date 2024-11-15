@@ -65,14 +65,48 @@ export default function HomeScreen() {
     );
   }
 
-  if (!isError && !isLoading && movies) {
-    console.log(movies);
-  }
-
   return (
     <ThemedView variant='dark' style={styles.container}>
       {/* Featured Carousel */}
       <ArtCarousel movies={movies} />
+
+      {/* Content Sections */}
+      <View style={[styles.content, { padding }]}>
+        {/* Latest Movies Row */}
+        <View style={styles.section}>
+          <ThemedText
+            variant='light'
+            size='large'
+            weight='bold'
+            style={styles.sectionTitle}
+          >
+            Latest Movies
+          </ThemedText>
+
+          <FlashList<SimpleMovie>
+            data={movies}
+            horizontal
+            estimatedItemSize={itemWidth}
+            renderItem={({ item: movie, index }) => (
+              <MovieCard
+                movie={movie}
+                style={movieCardStyle}
+                hasTVPreferredFocus={index === 0}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={{ width: itemGap }} />}
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={item => item.ID.toString()}
+            contentContainerStyle={{ paddingRight: padding }}
+          />
+        </View>
+
+        {/* You could add more sections here like:
+        - Continue Watching
+        - Popular on Igloo
+        - Trending Now
+        etc. */}
+      </View>
     </ThemedView>
   );
 }
