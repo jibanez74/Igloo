@@ -18,10 +18,10 @@ func (app *config) routes() http.Handler {
 	}
 
 	router.Post("/api/v1/login", app.Login)
-	router.Get("/latest-movies", app.GetLatestMovies)
+	router.Get("/api/v1/latest-movies", app.GetLatestMovies)
 
 	router.Route("/api/v1/auth", func(r chi.Router) {
-		router.Get("/api/v1/logout", app.Logout)
+		r.Get("/api/v1/logout", app.Logout)
 
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
