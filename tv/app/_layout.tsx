@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import LoginScreen from "./login";
-import "@/assets/global.css";
 import { AuthProvider } from "@/context/AuthContext";
+import "@/assets/global.css";
 
 const queryClient = new QueryClient();
 
@@ -29,9 +29,26 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-      </QueryClientProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Stack>
+          <Stack.Screen
+            name='index'
+            options={{
+              title: "Home",
+              headerTitle: "Home",
+            }}
+          />
+
+          <Stack.Screen
+            name='login'
+            options={{
+              title: "Sign In",
+              headerTitle: "Sign In",
+            }}
+          />
+        </Stack>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
