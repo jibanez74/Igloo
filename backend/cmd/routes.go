@@ -21,7 +21,7 @@ func (app *config) routes() http.Handler {
 	router.Get("/latest-movies", app.GetLatestMovies)
 
 	router.Route("/api/v1/auth", func(r chi.Router) {
-		r.Get("/api/v1/logout", app.Logout)
+		router.Get("/api/v1/logout", app.Logout)
 
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
