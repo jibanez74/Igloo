@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
-import { Text, View, TextInput, Pressable, Image } from "react-native";
+import { Text, View, TextInput, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useAssets } from "expo-asset";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import type { User } from "@/types/User";
+import type { ErrorResponse } from "@/types/ErrorResponse";
+
+type LoginResponse = {
+  token: string;
+  user: User;
+};
 
 export default function LoginScreen() {
   const router = useRouter();
-
   const { signIn, user } = useAuth();
-
-  const [assets] = useAssets(require("../assets/images/logo-alt.png"));
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -32,18 +35,20 @@ export default function LoginScreen() {
       setError("");
       setLoading(true);
 
-      const response = await api.post("/login", {
+      const response = await api.post<LoginResponse>("/login", {
         username,
         email,
         password,
       });
 
-      const { token, user } = response.data;
-
-      await signIn(token, user);
-    } catch (error) {
-      console.error("Login failed:", error);
-      setError("Invalid credentials. Please try again.");
+      await signIn(response.token, response.user);
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      const errorMessage =
+        err.cause?.error || "Invalid credentials. Please try again.";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -55,9 +60,13 @@ export default function LoginScreen() {
       >
         {/* Logo */}
         <View className='mb-12'>
-          {assets && (
-            <Image source={{ uri: assets[0].uri }} className='w-40 h-40' />
-          )}
+          <Image
+            source={require("../assets/images/logo-alt.png")}
+            className='w-40 h-40'
+            contentFit='contain'
+            transition={200}
+            cachePolicy='memory-disk'
+          />
         </View>
 
         {/* Form Container */}
@@ -65,6 +74,10 @@ export default function LoginScreen() {
           <Text className='text-3xl font-bold text-light text-center mb-8'>
             Sign In
           </Text>
+
+          {error && (
+            <Text className='text-danger text-center mb-4'>{error}</Text>
+          )}
 
           {/* Username Input */}
           <View className='mb-6 relative'>

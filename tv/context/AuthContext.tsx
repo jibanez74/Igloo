@@ -28,11 +28,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (token && userData) {
+        const parsedUser = JSON.parse(userData) as User;
         setAuthToken(token);
-        setUser(JSON.parse(userData));
+        setUser(parsedUser);
       }
     } catch (error) {
       console.error("Error loading auth:", error);
+      await signOut();
     }
   };
 
@@ -53,8 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await AsyncStorage.multiRemove(["userToken", "userData"]);
+      setAuthToken(null);
       setUser(null);
+      await AsyncStorage.multiRemove(["userToken", "userData"]);
       router.replace("/login");
     } catch (error) {
       console.error("Error signing out:", error);
@@ -62,9 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const values = { user, signIn, signOut };
-
-  return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, signIn, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => {

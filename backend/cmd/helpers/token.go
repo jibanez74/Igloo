@@ -11,13 +11,11 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-const tokenExp = time.Minute * 15
-const refreshExp = time.Hour * 24 * 7
+const longLivedExp = time.Hour * 24 * 30 // 30 days
 const aud = "igloo"
 const iss = "igloo"
-const cookieName = "igloo"
 
-func GenerateToken(user *models.User, secret string) (TokenPairs, error) {
+func GenerateLongLivedToken(user *models.User, secret string) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
 
 	claims := token.Claims.(jwt.MapClaims)
@@ -26,58 +24,19 @@ func GenerateToken(user *models.User, secret string) (TokenPairs, error) {
 	claims["iss"] = iss
 	claims["iat"] = time.Now().UTC().Unix()
 	claims["typ"] = "JWT"
-	claims["exp"] = time.Now().UTC().Add(tokenExp).Unix()
+	claims["exp"] = time.Now().UTC().Add(longLivedExp).Unix()
+	
+	claims["name"] = user.Name
+	claims["email"] = user.Email
+	claims["username"] = user.Username
+	claims["isAdmin"] = user.IsAdmin
 
-	signedAccessToken, err := token.SignedString([]byte(secret))
+	signedToken, err := token.SignedString([]byte(secret))
 	if err != nil {
-		return TokenPairs{}, err
+		return "", err
 	}
 
-	refreshToken := jwt.New(jwt.SigningMethodHS256)
-	refreshTokenClaims := refreshToken.Claims.(jwt.MapClaims)
-	refreshTokenClaims["sub"] = fmt.Sprint(user.ID)
-	refreshTokenClaims["iat"] = time.Now().UTC().Unix()
-	refreshTokenClaims["exp"] = time.Now().UTC().Add(refreshExp).Unix()
-
-	signedRefreshToken, err := refreshToken.SignedString([]byte(secret))
-	if err != nil {
-		return TokenPairs{}, err
-	}
-
-	tokens := TokenPairs{
-		Token:        signedAccessToken,
-		RefreshToken: signedRefreshToken,
-	}
-
-	return tokens, nil
-}
-
-func SetRefreshCookie(token, cookieDomain string) *http.Cookie {
-	return &http.Cookie{
-		Name:     cookieName,
-		Path:     "/",
-		Value:    token,
-		Expires:  time.Now().Add(refreshExp),
-		MaxAge:   int(refreshExp.Seconds()),
-		SameSite: http.SameSiteStrictMode,
-		Domain:   cookieDomain,
-		HttpOnly: true,
-		Secure:   true,
-	}
-}
-
-func SetExpiredCookie(cookieDomain string) *http.Cookie {
-	return &http.Cookie{
-		Name:     cookieName,
-		Path:     "/",
-		Value:    "",
-		Expires:  time.Unix(0, 0),
-		MaxAge:   -1,
-		SameSite: http.SameSiteStrictMode,
-		Domain:   cookieDomain,
-		HttpOnly: true,
-		Secure:   true,
-	}
+	return signedToken, nil
 }
 
 func GetTokenFromHeaderAndVerify(w http.ResponseWriter, r *http.Request, secret string) (string, *Claims, error) {

@@ -43,16 +43,14 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := helpers.GenerateToken(&user, app.cookieSecret)
+	token, err := helpers.GenerateLongLivedToken(&user, app.cookieSecret)
 	if err != nil {
 		helpers.ErrorJSON(w, err)
 		return
 	}
 
-	http.SetCookie(w, helpers.SetRefreshCookie(tokens.RefreshToken, app.cookieSecret))
-
 	helpers.WriteJSON(w, http.StatusOK, map[string]any{
-		"token": tokens.Token,
+		"token": token,
 		"user": map[string]any{
 			"name":     user.Name,
 			"email":    user.Email,
@@ -63,7 +61,3 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, helpers.SetExpiredCookie(app.cookieDomain))
-	w.WriteHeader(http.StatusAccepted)
-}

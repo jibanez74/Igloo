@@ -1,69 +1,72 @@
-import { View, ScrollView, Text } from "react-native";
+import { View, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
 import api from "@/lib/api";
 import type { SimpleMovie } from "@/types/Movie";
+import type { ErrorResponse } from "@/types/ErrorResponse";
+
+type MoviesResponse = {
+  movies: SimpleMovie[];
+};
 
 export default function LatestMovies() {
-  const {
-    data: movies,
-    isLoading,
-    isError,
-  } = useQuery<SimpleMovie[]>({
+  const { data, isPending, isError, error } = useQuery<
+    SimpleMovie[],
+    Error & { cause?: ErrorResponse }
+  >({
     queryKey: ["latest-movies"],
     queryFn: async () => {
       try {
-        const res = await api.get("/latest-movies");
-
-        if (!res.data.movies) {
-          throw new Error("unable to fetch latest movies");
+        const res = await api.get<MoviesResponse>("/latest-movies");
+        if (!res.movies) {
+          throw new Error("No movies found");
         }
-
-        return res.data.movies;
-      } catch (error) {
-        console.error("Error fetching movies:", error);
-        throw new Error("unable to fetch movies");
+        return res.movies.slice(0, 12);
+      } catch (err: any) {
+        const apiError = err.cause?.error || err.message;
+        throw new Error(apiError);
       }
     },
   });
 
-  if (isLoading) {
-    return (
-      <View className='p-8'>
-        <Text className='text-info text-2xl'>Loading latest movies...</Text>
-      </View>
-    );
-  }
-
-  if (isError) {
-    return (
-      <View className='p-8'>
-        <Text className='text-danger text-2xl'>Error loading movies</Text>
-      </View>
-    );
-  }
-
   return (
     <View className='py-8'>
       {/* Section Title */}
-      <Text className='text-light text-2xl font-bold px-8 mb-6'>
-        Latest Movies
-      </Text>
+      <Text className='text-light text-3xl font-bold mb-6'>Latest Movies</Text>
 
-      {/* Movies Grid */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className='px-8'
-      >
-        <View className='flex-row gap-6'>
-          {movies?.map((movie, index) => (
-            <View key={movie.ID} className='w-[200px]'>
+      {/* Movies Row */}
+      <View className='flex-row gap-6'>
+        {isPending ? (
+          // Loading placeholders
+          Array.from({ length: 6 }).map((_, index) => (
+            <View
+              key={`skeleton-${index}`}
+              className='w-[200px] rounded-lg overflow-hidden bg-primary/20'
+            >
+              {/* Thumbnail skeleton */}
+              <View className='aspect-[2/3] bg-primary/30 animate-pulse' />
+
+              {/* Content skeleton */}
+              <View className='p-4'>
+                <View className='h-6 w-3/4 bg-primary/30 mb-2 rounded animate-pulse' />
+                <View className='h-4 w-1/2 bg-primary/30 rounded animate-pulse' />
+              </View>
+            </View>
+          ))
+        ) : isError ? (
+          <View className='p-8'>
+            <Text className='text-danger text-2xl'>
+              {error.message || "Error loading movies"}
+            </Text>
+          </View>
+        ) : (
+          data?.map((movie, index) => (
+            <View key={movie.ID}>
               <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
             </View>
-          ))}
-        </View>
-      </ScrollView>
+          ))
+        )}
+      </View>
     </View>
   );
 }

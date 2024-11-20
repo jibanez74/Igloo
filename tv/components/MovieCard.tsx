@@ -1,40 +1,40 @@
-import { View, Text, Image, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, Pressable } from "react-native";
+import { Image } from "expo-image";
+import { getTMDBImageURL } from "@/utils/imagePlaceholders";
 import type { SimpleMovie } from "@/types/Movie";
+
+type MovieCardProps = {
+  movie: SimpleMovie;
+  hasTVPreferredFocus?: boolean;
+};
 
 export default function MovieCard({
   movie,
   hasTVPreferredFocus = false,
-}: {
-  movie: SimpleMovie;
-  hasTVPreferredFocus?: boolean;
-}) {
-  const router = useRouter();
-
+}: MovieCardProps) {
   return (
     <Pressable
-      className='rounded-lg overflow-hidden bg-primary transform transition-transform duration-200
-                focus:scale-110 focus:bg-secondary focus:border-2 focus:border-light'
+      className={`
+        w-[200px] rounded-lg overflow-hidden bg-primary/20
+        transform transition-all duration-200
+        focus:scale-110 focus:bg-secondary/20
+        focus:ring-2 focus:ring-secondary
+      `}
       focusable={true}
       hasTVPreferredFocus={hasTVPreferredFocus}
-      nextFocusUp={undefined}
-      nextFocusDown={undefined}
-      nextFocusLeft={undefined}
-      nextFocusRight={undefined}
     >
       {/* Thumbnail */}
       <View className='relative'>
         <Image
-          source={{ uri: movie.thumb }}
+          source={getTMDBImageURL(movie.thumb, "poster", "w500")}
           className='w-full aspect-[2/3]'
-          resizeMode='cover'
+          contentFit='cover'
+          transition={200}
+          cachePolicy='memory-disk'
         />
 
         {/* Gradient Overlay */}
-        <View
-          className='absolute bottom-0 left-0 right-0 h-24 
-                    bg-gradient-to-t from-dark/90 to-transparent'
-        />
+        <View className='absolute inset-0 bg-gradient-to-t from-dark/90 to-transparent' />
       </View>
 
       {/* Content */}
@@ -42,7 +42,6 @@ export default function MovieCard({
         <Text className='text-light text-xl font-bold mb-2' numberOfLines={1}>
           {movie.title}
         </Text>
-
         <Text className='text-info text-lg' numberOfLines={1}>
           {movie.year}
         </Text>

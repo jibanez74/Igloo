@@ -1,12 +1,11 @@
 import { useEffect } from "react";
-import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider } from "@/context/AuthContext";
+import { useFonts } from "expo-font";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Slot } from "expo-router";
+import queryClient from "@/lib/queryClient";
 import "@/assets/global.css";
-
-const queryClient = new QueryClient();
+import { AuthProvider } from "@/context/AuthContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -18,6 +17,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded || error) {
       SplashScreen.hideAsync();
+
       if (error) {
         console.warn(`Error in loading fonts: ${error}`);
       }
@@ -31,23 +31,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Stack>
-          <Stack.Screen
-            name='index'
-            options={{
-              title: "Home",
-              headerTitle: "Home",
-            }}
-          />
-
-          <Stack.Screen
-            name='login'
-            options={{
-              title: "Sign In",
-              headerTitle: "Sign In",
-            }}
-          />
-        </Stack>
+        <Slot />
       </AuthProvider>
     </QueryClientProvider>
   );

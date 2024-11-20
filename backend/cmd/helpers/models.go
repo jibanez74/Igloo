@@ -4,6 +4,10 @@ import "github.com/golang-jwt/jwt/v4"
 
 type Claims struct {
 	jwt.RegisteredClaims
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"isAdmin"`
 }
 
 type TokenPairs struct {
@@ -38,7 +42,7 @@ type mediaStream struct {
 	ColorSpace     string `json:"color_space,omitempty"`
 	Channels       int    `json:"channels,omitempty"`
 	ChannelLayout  string `json:"channel_layout,omitempty"`
-	Tags           tags   `json:"tags,omitempty"` // Tags like title, language, etc.
+	Tags           tags   `json:"tags,omitempty"`
 }
 
 type format struct {
