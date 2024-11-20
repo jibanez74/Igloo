@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"unicode/utf8"
-
 )
 
 func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
@@ -86,11 +85,11 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	if tmdbObject.Thumb != "" {
-		movie.Thumb = fmt.Sprintf("https://image.tmdb.org/t/p/original%s", tmdbObject.Thumb)
+		movie.Thumb = fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", tmdbObject.Thumb)
 	}
 
 	if tmdbObject.Art != "" {
-		movie.Art = fmt.Sprintf("https://image.tmdb.org/t/p/original%s", tmdbObject.Art)
+		movie.Art = fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", tmdbObject.Art)
 	}
 
 	for _, g := range tmdbObject.Genres {

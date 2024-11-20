@@ -24,7 +24,6 @@
           "enableTvMode": true
         }
       ],
-
       [
         "@react-native-tvos/config-tv",
         {
@@ -47,7 +46,9 @@
     "android": {
       "splash": {
         "image": "./assets/images/splash.png"
-      }
+      },
+      "permissions": [],
+      "package": "com.anonymous.Igloo"
     },
     "ios": {
       "splash": {

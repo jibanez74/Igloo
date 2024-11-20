@@ -22,24 +22,24 @@ export default function AuthLayout() {
         headerShown: false,
         tabBarPosition: "top",
         tabBarStyle: {
-          position: 'absolute',
+          position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           height: 90,
-          backgroundColor: 'transparent',
+          backgroundColor: "transparent",
           borderBottomWidth: 0,
           elevation: 0,
           paddingHorizontal: 32,
         },
         tabBarBackground: () => (
-          <View className="absolute inset-0 bg-gradient-to-b from-dark via-dark/80 to-transparent" />
+          <View className='absolute inset-0 bg-gradient-to-b from-dark via-dark/80 to-transparent' />
         ),
-        tabBarActiveTintColor: '#CEE3F9',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarActiveTintColor: "#CEE3F9",
+        tabBarInactiveTintColor: "#6B7280",
         tabBarLabelStyle: {
           fontSize: 18,
-          fontWeight: '600',
+          fontWeight: "600",
           marginLeft: 12,
         },
         tabBarItemStyle: {
@@ -48,8 +48,8 @@ export default function AuthLayout() {
           margin: 0,
         },
         // TV-optimized tab button
-        tabBarButton: (props) => (
-          <View 
+        tabBarButton: props => (
+          <View
             focusable={true}
             className={`
               flex-row items-center justify-center px-8 h-full
@@ -65,7 +65,7 @@ export default function AuthLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name='index'
         options={{
           title: "Home",
           tabBarIcon: ({ focused, color }) => (
@@ -73,13 +73,13 @@ export default function AuthLayout() {
               name={focused ? "home" : "home-outline"}
               size={32}
               color={color}
-              className="transition-all duration-200"
+              className='transition-all duration-200'
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="movies"
+        name='movies'
         options={{
           title: "Movies",
           tabBarIcon: ({ focused, color }) => (
@@ -87,13 +87,13 @@ export default function AuthLayout() {
               name={focused ? "film" : "film-outline"}
               size={32}
               color={color}
-              className="transition-all duration-200"
+              className='transition-all duration-200'
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="tv-shows"
+        name='tv-shows'
         options={{
           title: "TV Shows",
           tabBarIcon: ({ focused, color }) => (
@@ -101,13 +101,13 @@ export default function AuthLayout() {
               name={focused ? "tv" : "tv-outline"}
               size={32}
               color={color}
-              className="transition-all duration-200"
+              className='transition-all duration-200'
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name='profile'
         options={{
           title: "Profile",
           tabBarIcon: ({ focused, color }) => (
@@ -115,7 +115,7 @@ export default function AuthLayout() {
               name={focused ? "person" : "person-outline"}
               size={32}
               color={color}
-              className="transition-all duration-200"
+              className='transition-all duration-200'
             />
           ),
         }}

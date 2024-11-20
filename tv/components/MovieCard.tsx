@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
-import { getTMDBImageURL } from "@/utils/imagePlaceholders";
+import { getTMDBImageURL, getPlaceholder } from "@/utils/imagePlaceholders";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {
@@ -26,7 +26,8 @@ export default function MovieCard({
       {/* Thumbnail */}
       <View className='relative'>
         <Image
-          source={getTMDBImageURL(movie.thumb, "poster", "w500")}
+          source={getTMDBImageURL(movie.thumb, "poster")}
+          placeholder={getPlaceholder("poster")}
           className='w-full aspect-[2/3]'
           contentFit='cover'
           transition={200}

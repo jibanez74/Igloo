@@ -2,7 +2,6 @@ import { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import api from "@/lib/api";
-import setAuthToken from "@/lib/setAuthToken";
 import type { User } from "@/types/User";
 
 type AuthContextType = {
@@ -29,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (token && userData) {
         const parsedUser = JSON.parse(userData) as User;
-        setAuthToken(token);
+        api.setToken(token);
         setUser(parsedUser);
       }
     } catch (error) {
@@ -41,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (token: string, userData: User) => {
     try {
       setUser(userData);
-      setAuthToken(token);
+      api.setToken(token);
 
       await AsyncStorage.multiSet([
         ["userToken", token],
@@ -55,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      setAuthToken(null);
+      api.setToken(null);
       setUser(null);
       await AsyncStorage.multiRemove(["userToken", "userData"]);
       router.replace("/login");
