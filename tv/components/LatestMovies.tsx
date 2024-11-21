@@ -23,32 +23,34 @@ export default function LatestMovies() {
   });
 
   return (
-    <View className='py-8'>
+    <View className="py-4">
       {/* Section Title */}
-      <Text className='text-light text-3xl font-bold mb-6'>Latest Movies</Text>
+      <Text className="text-light text-3xl font-bold mb-6">
+        Latest Movies
+      </Text>
 
       {/* Movies Row */}
-      <View className='flex-row gap-6'>
+      <View className="flex-row gap-6">
         {isPending ? (
           // Loading placeholders
           Array.from({ length: 6 }).map((_, index) => (
             <View
               key={`skeleton-${index}`}
-              className='w-[200px] rounded-lg overflow-hidden bg-primary/20'
+              className="w-[200px] rounded-lg overflow-hidden bg-primary/20"
             >
               {/* Thumbnail skeleton */}
-              <View className='aspect-[2/3] bg-primary/30 animate-pulse' />
+              <View className="aspect-[2/3] bg-primary/30 animate-pulse" />
 
               {/* Content skeleton */}
-              <View className='p-4'>
-                <View className='h-6 w-3/4 bg-primary/30 mb-2 rounded animate-pulse' />
-                <View className='h-4 w-1/2 bg-primary/30 rounded animate-pulse' />
+              <View className="p-4">
+                <View className="h-6 w-3/4 bg-primary/30 mb-2 rounded animate-pulse" />
+                <View className="h-4 w-1/2 bg-primary/30 rounded animate-pulse" />
               </View>
             </View>
           ))
         ) : isError ? (
-          <View className='p-8'>
-            <Text className='text-danger text-2xl'>
+          <View className="p-8">
+            <Text className="text-danger text-2xl">
               {error.message || "Error loading movies"}
             </Text>
           </View>

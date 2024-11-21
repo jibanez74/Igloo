@@ -1,6 +1,4 @@
-export type Genre = {
-  ID?: number;
-  tag: string;
+export interface Genre {
   ID: number;
   title: string;
-};
+}

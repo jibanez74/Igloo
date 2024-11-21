@@ -2,7 +2,10 @@ import type { Artist } from "./Artist";
 
 export type Cast = {
   ID: number;
-  artist: Artist;
+  artist: {
+    ID: number;
+    name: string;
+  };
   character: string;
   order: number;
   CreatedAt?: string | Date;

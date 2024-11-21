@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Image } from "react-native";
+import { useRouter } from "expo-router";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {
@@ -10,6 +11,8 @@ export default function MovieCard({
   movie,
   hasTVPreferredFocus = false,
 }: MovieCardProps) {
+  const router = useRouter();
+
   return (
     <Pressable
       className={`
@@ -20,6 +23,12 @@ export default function MovieCard({
       `}
       focusable={true}
       hasTVPreferredFocus={hasTVPreferredFocus}
+      onPress={() =>
+        router.push({
+          pathname: "/(auth)/movies/[movieID]",
+          params: { movieID: movie.ID },
+        })
+      }
     >
       {/* Thumbnail */}
       <View className='relative'>

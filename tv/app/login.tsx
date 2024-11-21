@@ -7,7 +7,6 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import type { User } from "@/types/User";
-import type { ErrorResponse } from "@/types/ErrorResponse";
 
 type LoginResponse = {
   token: string;
@@ -38,20 +37,9 @@ export default function LoginScreen() {
       setError("");
       setLoading(true);
 
-      const response = await api.post<LoginResponse>("/login", {
-        username,
-        email,
-        password,
-      });
-
-      await signIn(response.token, response.user);
+      console.log("submit data");
     } catch (err: any) {
       console.error("Login failed:", err);
-      const errorMessage =
-        err.cause?.error || "Invalid credentials. Please try again.";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 

@@ -1,8 +1,14 @@
 import { View } from "react-native";
+import type { ViewProps } from "react-native";
 
-export default function Container({ children }: { children: React.ReactNode }) {
+type ContainerProps = ViewProps & {
+  children: React.ReactNode;
+  className?: string;
+};
+
+export default function Container({ children, className = "" }: ContainerProps) {
   return (
-    <View className="px-10 py-8 max-w-[1920px] mx-auto w-full">
+    <View className={`px-10 max-w-[1920px] mx-auto w-full ${className}`}>
       {children}
     </View>
   );
