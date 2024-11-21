@@ -2,9 +2,10 @@ import { View, Text, Pressable } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
+import Container from "@/components/Container";
 import api from "@/lib/api";
-import type { SimpleMovie } from "@/types/Movie";
 import { AxiosError } from "axios";
+import type { SimpleMovie } from "@/types/Movie";
 
 type MoviesResponse = {
   movies: SimpleMovie[];
@@ -26,10 +27,6 @@ export default function MoviesScreen() {
         params: pageParam ? { cursor: pageParam } : undefined,
       });
 
-      if (!data) {
-        throw new Error("No movies found");
-      }
-
       return data;
     },
     initialPageParam: "",
@@ -38,8 +35,10 @@ export default function MoviesScreen() {
 
   if (status === "pending") {
     return (
-      <View className='flex-1 p-8'>
-        <Text className='text-info text-2xl'>Loading movies...</Text>
+      <View className='flex-1 bg-dark'>
+        <Container>
+          <Text className='text-info text-2xl'>Loading movies...</Text>
+        </Container>
       </View>
     );
   }
@@ -51,60 +50,63 @@ export default function MoviesScreen() {
         : "Error loading movies";
 
     return (
-      <View className='flex-1 p-8'>
-        <Text className='text-danger text-2xl'>{errorMessage}</Text>
+      <View className='flex-1 bg-dark'>
+        <Container>
+          <Text className='text-danger text-2xl'>{errorMessage}</Text>
+        </Container>
       </View>
     );
   }
 
-  const allMovies =
-    data?.pages.flatMap((page: MoviesResponse) => page.movies) ?? [];
+  const allMovies = data?.pages.flatMap(page => page.movies) ?? [];
 
   return (
     <View className='flex-1 bg-dark'>
-      {/* Header */}
-      <View className='px-8 py-6'>
-        <Text className='text-light text-4xl font-bold'>Movies</Text>
-      </View>
+      <Container>
+        <Text className='text-light text-4xl font-bold py-6'>All Movies</Text>
 
-      {/* Movies Grid */}
-      <FlashList
-        data={allMovies}
-        numColumns={6}
-        estimatedItemSize={500}
-        keyExtractor={(item: SimpleMovie) => item.ID.toString()}
-        renderItem={({ item, index }) => (
-          <View className='p-3'>
-            <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
-          </View>
-        )}
-        onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage) {
-            fetchNextPage();
-          }
-        }}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={() =>
-          hasNextPage ? (
-            <View className='p-3'>
-              <Pressable
-                className={`
-                  h-[300px] w-[200px] rounded-lg 
-                  justify-center items-center
-                  bg-primary/20
-                  focus:bg-secondary/20 focus:scale-110
-                `}
-                focusable={!isFetchingNextPage}
-              >
-                <Text className='text-light text-xl text-center'>
-                  {isFetchingNextPage ? "Loading..." : "Load More"}
-                </Text>
-              </Pressable>
-            </View>
-          ) : null
-        }
-        contentContainerStyle={{ paddingHorizontal: 32 }}
-      />
+        <View className='flex-1 h-full'>
+          <FlashList
+            data={allMovies}
+            numColumns={6}
+            estimatedItemSize={350}
+            keyExtractor={(item: SimpleMovie) => item.ID.toString()}
+            renderItem={({ item, index }) => (
+              <View className='p-3 w-1/6'>
+                <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
+              </View>
+            )}
+            onEndReached={() => {
+              if (hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+              }
+            }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() =>
+              hasNextPage ? (
+                <View className='p-3'>
+                  <Pressable
+                    className={`
+                      h-[300px] w-[200px] rounded-lg 
+                      justify-center items-center
+                      bg-primary/20
+                      focus:bg-secondary/20 focus:scale-110
+                    `}
+                    focusable={!isFetchingNextPage}
+                  >
+                    <Text className='text-light text-xl text-center'>
+                      {isFetchingNextPage ? "Loading..." : "Load More"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
+            contentContainerStyle={{
+              paddingBottom: 32,
+            }}
+          />
+        </View>
+      </Container>
     </View>
   );
 }

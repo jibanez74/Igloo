@@ -8,11 +8,11 @@ export default function AuthLayout() {
   const [activeRoute, setActiveRoute] = useState("index");
 
   return (
-    <View className="flex-1 bg-dark">
+    <View className='flex-1 bg-dark'>
       {/* Navigation Bar - Added justify-between to spread items */}
       <View className='flex-row items-center justify-between h-[70px] px-12 bg-gradient-to-b from-dark via-dark/80 to-transparent'>
         {/* Left Group */}
-        <View className="flex-row items-center gap-2">
+        <View className='flex-row items-center gap-2'>
           {/* Home Button */}
           <Pressable
             focusable={true}
@@ -77,7 +77,6 @@ export default function AuthLayout() {
             focusable={true}
             onPress={() => {
               setActiveRoute("tv-shows");
-              router.push("/(auth)/tv-shows");
             }}
             className={`
               flex-row items-center px-8 h-[50px]
@@ -106,7 +105,6 @@ export default function AuthLayout() {
             focusable={true}
             onPress={() => {
               setActiveRoute("music");
-              router.push("/(auth)/music");
             }}
             className={`
               flex-row items-center px-8 h-[50px]
@@ -116,7 +114,11 @@ export default function AuthLayout() {
             `}
           >
             <Ionicons
-              name={activeRoute === "music" ? "musical-notes" : "musical-notes-outline"}
+              name={
+                activeRoute === "music"
+                  ? "musical-notes"
+                  : "musical-notes-outline"
+              }
               size={28}
               color={activeRoute === "music" ? "#CEE3F9" : "#6B7280"}
             />
@@ -135,7 +137,6 @@ export default function AuthLayout() {
             focusable={true}
             onPress={() => {
               setActiveRoute("other");
-              router.push("/(auth)/other");
             }}
             className={`
               flex-row items-center px-8 h-[50px]
@@ -165,7 +166,6 @@ export default function AuthLayout() {
           focusable={true}
           onPress={() => {
             setActiveRoute("settings");
-            router.push("/(auth)/settings");
           }}
           className={`
             flex-row items-center px-8 h-[50px]
