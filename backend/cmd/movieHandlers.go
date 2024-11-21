@@ -161,3 +161,23 @@ func (app *config) DirectStreamMovie(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, movie.FilePath, movie.CreatedAt, file)
 
 }
+
+func (app *config) GetMoviesInfinite(w http.ResponseWriter, r *http.Request) {
+	cursor := r.URL.Query().Get("cursor")
+
+	const limit = 24
+
+	var movies []repository.SimpleMovie
+
+	nextCursor, err := app.repo.GetMoviesWithCursor(&movies, cursor, limit)
+	if err != nil {
+		helpers.ErrorJSON(w, err)
+		return
+	}
+
+	// Return movies and next cursor
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+		"movies":     movies,
+		"nextCursor": nextCursor,
+	})
+}

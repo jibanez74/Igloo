@@ -26,6 +26,7 @@ func (app *config) routes() http.Handler {
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
 			r.Get("/{id}", app.GetMovieByID)
 			r.Get("/", app.GetMoviesWithPagination)
+			r.Get("/auth/movies", app.GetMoviesInfinite)
 		})
 	})
 

@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
-import { getTMDBImageURL, getPlaceholder } from "@/utils/imagePlaceholders";
+import { getTMDBImageURL, getPlaceholder } from "@/lib/imagePlaceholders";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {

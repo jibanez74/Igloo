@@ -1,6 +1,5 @@
 {
   "expo": {
-    "scheme": "routertv",
     "plugins": [
       [
         "react-native-video",
@@ -39,26 +38,27 @@
           }
         }
       ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "newArchEnabled": false
+          },
+          "android": {
+            "newArchEnabled": false
+          }
+        }
+      ],
       "expo-router",
-      "expo-font",
       "expo-asset"
     ],
-    "android": {
-      "splash": {
-        "image": "./assets/images/splash.png"
-      },
-      "permissions": [],
-      "package": "com.anonymous.Igloo"
-    },
-    "ios": {
-      "splash": {
-        "image": "./assets/images/splash.png"
-      }
-    },
     "experiments": {
       "typedRoutes": true
     },
     "name": "Igloo",
-    "slug": "Igloo"
+    "slug": "Igloo",
+    "android": {
+      "package": "com.blindpenguincoder.igloo"
+    }
   }
 }

@@ -2,6 +2,7 @@ import { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import api from "@/lib/api";
+import setAuthToken from "@/lib/setAuthToken";
 import type { User } from "@/types/User";
 
 type AuthContextType = {
@@ -27,20 +28,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (token && userData) {
-        const parsedUser = JSON.parse(userData) as User;
-        api.setToken(token);
-        setUser(parsedUser);
+        setAuthToken(token);
+        setUser(JSON.parse(userData));
       }
     } catch (error) {
       console.error("Error loading auth:", error);
-      await signOut();
     }
   };
 
   const signIn = async (token: string, userData: User) => {
     try {
       setUser(userData);
-      api.setToken(token);
+      setAuthToken(token);
 
       await AsyncStorage.multiSet([
         ["userToken", token],
@@ -54,9 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      api.setToken(null);
-      setUser(null);
       await AsyncStorage.multiRemove(["userToken", "userData"]);
+      setUser(null);
       router.replace("/login");
     } catch (error) {
       console.error("Error signing out:", error);
@@ -64,11 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  return (
-    <AuthContext.Provider value={{ user, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const values = { user, signIn, signOut };
+
+  return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {

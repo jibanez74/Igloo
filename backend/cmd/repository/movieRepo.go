@@ -4,6 +4,8 @@ import (
 	"igloo/cmd/database/models"
 
 	"net/http"
+	"strconv"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -71,4 +73,35 @@ func (r *repo) CreateMovie(movie *models.Movie) (int, error) {
 	}
 
 	return http.StatusCreated, nil
+}
+
+func (r *repo) GetMoviesWithCursor(movies *[]SimpleMovie, cursor string, limit int) (string, error) {
+	query := r.db.Model(&models.Movie{}).Select("id, title, thumb, year")
+	
+	// If cursor is provided, get movies after this ID
+	if cursor != "" {
+		cursorID, err := strconv.ParseUint(cursor, 10, 64)
+		if err != nil {
+			return "", err
+		}
+		query = query.Where("id < ?", cursorID)
+	}
+
+	// Get one extra item to determine if there's a next page
+	err := query.Order("id desc").Limit(limit + 1).Find(&movies).Error
+	if err != nil {
+		return "", err
+	}
+
+	// If we got more items than limit, there's a next page
+	var nextCursor string
+	if len(*movies) > limit {
+		// Remove the extra item
+		lastItem := (*movies)[len(*movies)-1]
+		*movies = (*movies)[:limit]
+		// Use the ID of the last item as the next cursor
+		nextCursor = fmt.Sprintf("%d", lastItem.ID)
+	}
+
+	return nextCursor, nil
 }

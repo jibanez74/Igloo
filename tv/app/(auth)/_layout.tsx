@@ -1,125 +1,77 @@
-import { useEffect } from "react";
-import { View } from "react-native";
-import { Tabs } from "expo-router";
+import { useState } from "react";
+import { View, Text, Pressable } from "react-native";
+import { Slot, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
-import { useAuth } from "@/context/AuthContext";
-import { router } from "expo-router";
 
 export default function AuthLayout() {
-  const { user } = useAuth();
-  const colorScheme = useColorScheme();
-
-  useEffect(() => {
-    if (!user) {
-      router.replace("/login");
-    }
-  }, [user]);
+  const [activeRoute, setActiveRoute] = useState("index");
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: "top",
-        tabBarStyle: {
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 90,
-          backgroundColor: "transparent",
-          borderBottomWidth: 0,
-          elevation: 0,
-          paddingHorizontal: 32,
-        },
-        tabBarBackground: () => (
-          <View className='absolute inset-0 bg-gradient-to-b from-dark via-dark/80 to-transparent' />
-        ),
-        tabBarActiveTintColor: "#CEE3F9",
-        tabBarInactiveTintColor: "#6B7280",
-        tabBarLabelStyle: {
-          fontSize: 18,
-          fontWeight: "600",
-          marginLeft: 12,
-        },
-        tabBarItemStyle: {
-          height: 90,
-          padding: 0,
-          margin: 0,
-        },
-        // TV-optimized tab button
-        tabBarButton: props => (
-          <View
-            focusable={true}
+    <View className='flex-1 bg-dark'>
+      {/* Top Navigation Bar */}
+      <View className='flex-row items-center h-[90px] px-8 bg-gradient-to-b from-dark via-dark/80 to-transparent'>
+        {/* Home Button */}
+        <Pressable
+          focusable={true}
+          hasTVPreferredFocus={true}
+          onPress={() => {
+            setActiveRoute("index");
+          }}
+          className={`
+            flex-row items-center px-8 h-[90px] mr-4
+            rounded-lg overflow-hidden transition-all duration-200
+            ${activeRoute === "index" ? "bg-secondary/20" : ""}
+            focus:bg-secondary/30 focus:scale-110
+          `}
+        >
+          <Ionicons
+            name={activeRoute === "index" ? "home" : "home-outline"}
+            size={32}
+            color={activeRoute === "index" ? "#CEE3F9" : "#6B7280"}
+          />
+          <Text
             className={`
-              flex-row items-center justify-center px-8 h-full
-              rounded-lg overflow-hidden transition-all duration-200
-              hover:bg-primary/30
-              focus:bg-secondary/20 focus:scale-110
-              active:bg-secondary/30
+              ml-3 text-xl font-semibold
+              ${activeRoute === "index" ? "text-light" : "text-info/60"}
             `}
           >
-            {props.children}
-          </View>
-        ),
-      }}
-    >
-      <Tabs.Screen
-        name='index'
-        options={{
-          title: "Home",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
-              size={32}
-              color={color}
-              className='transition-all duration-200'
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name='movies'
-        options={{
-          title: "Movies",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "film" : "film-outline"}
-              size={32}
-              color={color}
-              className='transition-all duration-200'
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name='tv-shows'
-        options={{
-          title: "TV Shows",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "tv" : "tv-outline"}
-              size={32}
-              color={color}
-              className='transition-all duration-200'
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name='profile'
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "person" : "person-outline"}
-              size={32}
-              color={color}
-              className='transition-all duration-200'
-            />
-          ),
-        }}
-      />
-    </Tabs>
+            Home
+          </Text>
+        </Pressable>
+
+        {/* Movies Button */}
+        <Pressable
+          focusable={true}
+          onPress={() => {
+            setActiveRoute("movies");
+          }}
+          className={`
+            flex-row items-center px-8 h-[90px] mr-4
+            rounded-lg overflow-hidden transition-all duration-200
+            ${activeRoute === "movies" ? "bg-secondary/20" : ""}
+            focus:bg-secondary/30 focus:scale-110
+          `}
+        >
+          <Ionicons
+            name={activeRoute === "movies" ? "film" : "film-outline"}
+            size={32}
+            color={activeRoute === "movies" ? "#CEE3F9" : "#6B7280"}
+          />
+          <Text
+            className={`
+              ml-3 text-xl font-semibold
+              ${activeRoute === "movies" ? "text-light" : "text-info/60"}
+            `}
+          >
+            Movies
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Content Area */}
+      <View className='flex-1'>
+        <Slot />
+      </View>
+    </View>
   );
 }

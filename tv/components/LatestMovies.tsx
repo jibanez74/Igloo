@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
 import api from "@/lib/api";
 import type { SimpleMovie } from "@/types/Movie";
-import type { ErrorResponse } from "@/types/ErrorResponse";
+import type { AxiosError } from "axios";
 
 type MoviesResponse = {
   movies: SimpleMovie[];
@@ -12,20 +12,17 @@ type MoviesResponse = {
 export default function LatestMovies() {
   const { data, isPending, isError, error } = useQuery<
     SimpleMovie[],
-    Error & { cause?: ErrorResponse }
+    AxiosError
   >({
     queryKey: ["latest-movies"],
     queryFn: async () => {
-      try {
-        const res = await api.get<MoviesResponse>("/latest-movies");
-        if (!res.movies) {
-          throw new Error("No movies found");
-        }
-        return res.movies.slice(0, 12);
-      } catch (err: any) {
-        const apiError = err.cause?.error || err.message;
-        throw new Error(apiError);
+      const { data } = await api.get<MoviesResponse>("/auth/movies/latest");
+
+      if (!data.movies) {
+        throw new Error("No movies found");
       }
+
+      return data.movies;
     },
   });
 
@@ -60,7 +57,7 @@ export default function LatestMovies() {
             </Text>
           </View>
         ) : (
-          data?.map((movie, index) => (
+          data?.map((movie: SimpleMovie, index: number) => (
             <View key={movie.ID}>
               <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
             </View>

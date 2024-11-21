@@ -1,0 +1,500 @@
+
+> Task :expo-image:kaptDebugKotlin
+Note: [2] Wrote GeneratedAppGlideModule with: [com.github.penfeizhou.animation.glide.GlideAnimationModule, com.bumptech.glide.integration.okhttp3.OkHttpLibraryGlideModule, com.bumptech.glide.integration.avif.AvifGlideModule, expo.modules.image.blurhash.BlurhashModule, expo.modules.image.dataurls.Base64Module, expo.modules.image.thumbhash.ThumbhashModule, expo.modules.image.svg.SVGModule, expo.modules.image.okhttp.ExpoImageOkHttpClientGlideModule]
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.8/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 43s
+479 actionable tasks: 72 executed, 7 from cache, 400 up-to-date
+Your Expo app does not have a 'userInterfaceStyle' setting which can to confusing color scheme behavior. Please set a 'userInterfaceStyle' to remove this warning (recommended 'automatic'). https://docs.expo.dev/develop/user-interface/color-themes
+Starting Metro Bundler
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ █▀█ █▄▀▄▀▀▀▄█▄ ▀▄██▄▀▄█ ▄▄▄▄▄ █
+█ █   █ █▀▀▀█ ▀█▀▀▀ ▄▀▄ ▀ ▀▀▄▀█ █   █ █
+█ █▄▄▄█ █▀ █▀▀█▀▀██▄▄▀█▀▄▀ ▀▀ █ █▄▄▄█ █
+█▄▄▄▄▄▄▄█▄▀ ▀▄█ █▄█▄█ ▀▄█▄█ ▀ █▄▄▄▄▄▄▄█
+█▄▄▄ ▄▀▄▄▄ ▀▄▀▄▀▄▄▄▄▀█▀  ▄ █▄▀▄█ █▄▀▄██
+█▀▀▀▀▀▄▄ █  █▀▄▀▄▀▄ █▄ ▄▀▀█ ▄ ▄   ▄█▄▄█
+█▄  ▄█▀▄▄▀█ █▄█▄███▀█▀██▀▄▄▄██▄▄▀▄  █▄█
+█ ▀  ▀▄▄▀ █▄ ▄█▀▄█▄▀▀▄▀ ███▄▄   ▄▄██▄▄█
+█▀█▀▀▀█▄█▀ █▄▀ ▀▄▄▄▄▀▄█▀  ▄▄██ ▄▀▄▄ ▄██
+█ ▀▀   ▄██▀▀█▀██▄ █▄█ ▀ █▄█ ▄██▄▀ ▄▄▀ █
+█▀██▀▄ ▄▄ ▀ █▄▄▀▄▄ ▄▀█▀ ▀█▄ █▄█▄▀▄▄▄▄██
+█▄█▄▄█▄▄▀▄██ ▄██ ▄█▄██  ▀▄▄▄▄ ▄█▄▀▄█ ▄█
+█▀█▀▄  ▄▀██▀▄▀ ▀▄▄▄▄▀ ▀  ▄▄▄█▀▄▄▀▄▀▄▄██
+█ ███ █▄█▀█▄█▀██▄▀▄ █▀▀████ ▄ ▀▀ █▄█ ▄█
+█▄██▄█▄▄█ ███▄▄▀██  ▀ █▄▀▄ ▄▀ ▄▄▄ ▄▄█▄█
+█ ▄▄▄▄▄ █▄▀█ ▄█▀ █▄▀█▀ ▄███▄█ █▄█ ██▄▄█
+█ █   █ █ ▀▄▄▀▀██▄▄▄▀ █▀ ▄ ▄ ▄    ▄  ▀█
+█ █▄▄▄█ █ ▄██▀ ▄▄▀█▄██  █ ▄ ▀ ▀▀ ▀▄▄▄ █
+█▄▄▄▄▄▄▄█▄▄██▄█▄▄▄▄▄▄██▄██▄▄██▄█▄█▄▄▄▄█
+
+› Metro waiting on com.blindpenguincoder.igloo://expo-development-client/?url=http%3A%2F%2F192.168.172.232%3A8081
+› Scan the QR code above to open the project in a development build. Learn more: https://expo.fyi/start
+
+› Using development build
+› Press s │ switch to Expo Go
+
+› Press a │ open Android
+› Press i │ open iOS simulator
+› Press w │ open web
+
+› Press j │ open debugger
+› Press r │ reload app
+› Press m │ toggle menu
+› Press o │ open project code in your editor
+
+› Press ? │ show all commands
+
+› Opening com.blindpenguincoder.igloo://expo-development-client/?url=http%3A%2F%2F192.168.172.232%3A8081 on SHIELD_Android_TV
+
+› Logs for your project will appear below. Press Ctrl+C to exit.
+Android Bundling failed 985ms node_modules/expo-router/entry.js (1514 modules)
+Unable to resolve "expo/fetch" from "lib/api.ts"
+› Stopped server
+joseibanez@MacBookPro tv % 
+joseibanez@MacBookPro tv % 
+joseibanez@MacBookPro tv % 
+joseibanez@MacBookPro tv % 
+joseibanez@MacBookPro tv % clear
+
+joseibanez@MacBookPro tv % bunx expo run android
+› Using expo run:android 
+(node:6077) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+› Building app...
+Configuration on demand is an incubating feature.
+
+> Configure project :expo
+
+Using expo modules
+  - expo-asset (10.0.10)
+  - expo-constants (16.0.2)
+  - expo-device (6.0.2)
+  - expo-file-system (17.0.1)
+  - expo-font (12.0.10)
+  - expo-image (1.13.0)
+  - expo-keep-awake (13.0.2)
+  - expo-linear-gradient (13.0.2)
+  - expo-modules-core (1.12.26)
+  - expo-splash-screen (0.27.6)
+  - expo-system-ui (3.0.7)
+  - expo-web-browser (13.0.3)
+
+
+> Configure project :react-native-reanimated
+Android gradle plugin: 8.2.1
+Gradle: 8.8
+
+> Configure project :react-native-video
+Kotlin version is correct: 1.9.23
+useExoplayerIMA: false
+useExoplayerSmoothStreaming: false
+useExoplayerDash: false
+useExoplayerHls: true
+useExoplayerRtsp: false
+buildFromSource: false
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.8/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 10s
+479 actionable tasks: 34 executed, 445 up-to-date
+Your Expo app does not have a 'userInterfaceStyle' setting which can to confusing color scheme behavior. Please set a 'userInterfaceStyle' to remove this warning (recommended 'automatic'). https://docs.expo.dev/develop/user-interface/color-themes
+Starting Metro Bundler
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ █▀█ █▄▀▄▀▀▀▄█▄ ▀▄██▄▀▄█ ▄▄▄▄▄ █
+█ █   █ █▀▀▀█ ▀█▀▀▀ ▄▀▄ ▀ ▀▀▄▀█ █   █ █
+█ █▄▄▄█ █▀ █▀▀█▀▀██▄▄▀█▀▄▀ ▀▀ █ █▄▄▄█ █
+█▄▄▄▄▄▄▄█▄▀ ▀▄█ █▄█▄█ ▀▄█▄█ ▀ █▄▄▄▄▄▄▄█
+█▄▄▄ ▄▀▄▄▄ ▀▄▀▄▀▄▄▄▄▀█▀  ▄ █▄▀▄█ █▄▀▄██
+█▀▀▀▀▀▄▄ █  █▀▄▀▄▀▄ █▄ ▄▀▀█ ▄ ▄   ▄█▄▄█
+█▄  ▄█▀▄▄▀█ █▄█▄███▀█▀██▀▄▄▄██▄▄▀▄  █▄█
+█ ▀  ▀▄▄▀ █▄ ▄█▀▄█▄▀▀▄▀ ███▄▄   ▄▄██▄▄█
+█▀█▀▀▀█▄█▀ █▄▀ ▀▄▄▄▄▀▄█▀  ▄▄██ ▄▀▄▄ ▄██
+█ ▀▀   ▄██▀▀█▀██▄ █▄█ ▀ █▄█ ▄██▄▀ ▄▄▀ █
+█▀██▀▄ ▄▄ ▀ █▄▄▀▄▄ ▄▀█▀ ▀█▄ █▄█▄▀▄▄▄▄██
+█▄█▄▄█▄▄▀▄██ ▄██ ▄█▄██  ▀▄▄▄▄ ▄█▄▀▄█ ▄█
+█▀█▀▄  ▄▀██▀▄▀ ▀▄▄▄▄▀ ▀  ▄▄▄█▀▄▄▀▄▀▄▄██
+█ ███ █▄█▀█▄█▀██▄▀▄ █▀▀████ ▄ ▀▀ █▄█ ▄█
+█▄██▄█▄▄█ ███▄▄▀██  ▀ █▄▀▄ ▄▀ ▄▄▄ ▄▄█▄█
+█ ▄▄▄▄▄ █▄▀█ ▄█▀ █▄▀█▀ ▄███▄█ █▄█ ██▄▄█
+█ █   █ █ ▀▄▄▀▀██▄▄▄▀ █▀ ▄ ▄ ▄    ▄  ▀█
+█ █▄▄▄█ █ ▄██▀ ▄▄▀█▄██  █ ▄ ▀ ▀▀ ▀▄▄▄ █
+█▄▄▄▄▄▄▄█▄▄██▄█▄▄▄▄▄▄██▄██▄▄██▄█▄█▄▄▄▄█
+
+› Metro waiting on com.blindpenguincoder.igloo://expo-development-client/?url=http%3A%2F%2F192.168.172.232%3A8081
+› Scan the QR code above to open the project in a development build. Learn more: https://expo.fyi/start
+
+› Using development build
+› Press s │ switch to Expo Go
+
+› Press a │ open Android
+› Press i │ open iOS simulator
+› Press w │ open web
+
+› Press j │ open debugger
+› Press r │ reload app
+› Press m │ toggle menu
+› Press o │ open project code in your editor
+
+› Press ? │ show all commands
+
+› Opening com.blindpenguincoder.igloo://expo-development-client/?url=http%3A%2F%2F192.168.172.232%3A8081 on SHIELD_Android_TV
+
+› Logs for your project will appear below. Press Ctrl+C to exit.
+Android Bundled 1195ms node_modules/expo-router/entry.js (1576 modules)
+ WARN  [Layout children]: Too many screens defined. Route "movies/index" is extraneous. [Component Stack]
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+ WARN  [Layout children]: Too many screens defined. Route "movies/index" is extraneous. [Component Stack]
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+› Reloading apps
+Android Bundled 60ms node_modules/expo-router/entry.js (1 module)
+ ERROR  TypeError: 0, _native.useLocale is not a function (it is undefined)
+
+This error is located at:
+    in DrawerViewBase (created by DrawerView)
+    in RCTView (created by View)
+    in View (created by SafeAreaProviderCompat)
+    in SafeAreaProviderCompat (created by DrawerView)
+    in DrawerView (created by DrawerNavigator)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by DrawerNavigator)
+    in DrawerNavigator
+    in Unknown (created by AuthLayout)
+    in AuthLayout
+    in Unknown (created by Route((auth)))
+    in Suspense (created by Route((auth)))
+    in Route (created by Route((auth)))
+    in Route((auth)) (created by SceneView)
+    in StaticContainer
+    in EnsureSingleNavigator (created by SceneView)
+    in SceneView (created by QualifiedSlot)
+    in QualifiedSlot (created by Slot)
+    in PreventRemoveProvider (created by NavigationContent)
+    in NavigationContent
+    in Unknown (created by QualifiedNavigator)
+    in QualifiedNavigator (created by Navigator)
+    in Navigator (created by Slot)
+    in Slot (created by RootLayout)
+    in QueryClientProvider (created by RootLayout)
+    in RootLayout
+    in Unknown (created by Route())
+    in Suspense (created by Route())
+    in Route (created by Route())
+    in Route() (created by ContextNavigator)
+    in SafeAreaEnv (created by SafeAreaProviderShim)
+    in RNCSafeAreaProvider (created by SafeAreaProvider)
+    in SafeAreaProvider (created by SafeAreaProviderShim)
+    in SafeAreaProviderShim (created by wrapper)
+    in wrapper (created by ContextNavigator)
+    in EnsureSingleNavigator
+    in BaseNavigationContainer
+    in ThemeProvider
+    in NavigationContainerInner (created by ContextNavigator)
+    in ContextNavigator (created by ExpoRoot)
+    in ExpoRoot (created by App)
+    in App (created by ErrorOverlay)
+    in ErrorToastContainer (created by ErrorOverlay)
+    in ErrorOverlay (created by withDevTools(ErrorOverlay))
+    in withDevTools(ErrorOverlay)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in RCTView (created by View)
+    in View (created by CssInterop.View)
+    in CssInterop.View (created by AppContainer)
+    in AppContainer
+    in main(RootComponent), js engine: hermes
+

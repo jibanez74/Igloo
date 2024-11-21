@@ -14,6 +14,7 @@ type Repo interface {
 	GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error)
 	GetMovieByID(movie *models.Movie) (int, error)
 	CreateMovie(*models.Movie) (int, error)
+	GetMoviesWithCursor(movies *[]SimpleMovie, cursor string, limit int) (string, error)
 
 	GetAuthUser(*models.User) error
 	GetUserByID(*models.User) (int, error)
