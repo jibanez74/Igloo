@@ -14,7 +14,7 @@ type Repo interface {
 	GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error)
 	GetMovieByID(movie *models.Movie) (int, error)
 	CreateMovie(*models.Movie) (int, error)
-	GetMoviesWithCursor(*[]SimpleMovie, uint) (uint, error)
+	GetMoviesWithCursor(*[]SimpleMovie, string, int) (string, error)
 
 	GetAuthUser(*models.User) error
 	GetUserByID(*models.User) (int, error)
@@ -29,6 +29,5 @@ type SimpleMovie struct {
 	ID    uint   `json:"id"`
 	Title string `json:"title"`
 	Thumb string `json:"thumb"`
-	Art   string `json:"art"`
 	Year  uint   `json:"year"`
 }

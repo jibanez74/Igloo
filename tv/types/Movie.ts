@@ -11,7 +11,6 @@ export type SimpleMovie = {
   ID: number;
   title: string;
   thumb: string;
-  art?: string;
   year: number;
 };
 

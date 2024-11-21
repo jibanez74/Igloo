@@ -163,15 +163,16 @@ func (app *config) DirectStreamMovie(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *config) GetMoviesInfinite(w http.ResponseWriter, r *http.Request) {
-	cursorID, err := strconv.ParseUint(r.URL.Query().Get("cursor"), 10, 64)
+	cursor := r.URL.Query().Get("cursor")
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
+		limit = 24
 	}
 
 	var movies []repository.SimpleMovie
 
-	nextCursor, err := app.repo.GetMoviesWithCursor(&movies, uint(cursorID))
+	nextCursor, err := app.repo.GetMoviesWithCursor(&movies, cursor, limit)
 	if err != nil {
 		helpers.ErrorJSON(w, err)
 		return
@@ -181,7 +182,7 @@ func (app *config) GetMoviesInfinite(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{
 		"movies": movies,
 	}
-	if nextCursor > 0 {
+	if nextCursor != "" {
 		response["nextCursor"] = nextCursor
 	}
 

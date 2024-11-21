@@ -8,7 +8,7 @@ import { AxiosError } from "axios";
 
 type MoviesResponse = {
   movies: SimpleMovie[];
-  nextCursor?: number;
+  nextCursor?: string;
 };
 
 export default function MoviesScreen() {
@@ -21,7 +21,7 @@ export default function MoviesScreen() {
     error,
   } = useInfiniteQuery({
     queryKey: ["movies"],
-    queryFn: async ({ pageParam = 0 }) => {
+    queryFn: async ({ pageParam = "" }) => {
       const { data } = await api.get<MoviesResponse>("/auth/movies", {
         params: {
           cursor: pageParam,
@@ -29,7 +29,7 @@ export default function MoviesScreen() {
       });
       return data;
     },
-    initialPageParam: 0,
+    initialPageParam: "",
     getNextPageParam: lastPage => lastPage.nextCursor,
   });
 
