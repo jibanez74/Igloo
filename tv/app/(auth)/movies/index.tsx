@@ -60,10 +60,6 @@ export default function MoviesScreen() {
   const allMovies =
     data?.pages.flatMap((page: MoviesResponse) => page.movies) ?? [];
 
-  if (allMovies) {
-    console.log(allMovies);
-  }
-
   return (
     <View className='flex-1 bg-dark'>
       {/* Header */}
@@ -75,7 +71,7 @@ export default function MoviesScreen() {
       <FlashList
         data={allMovies}
         numColumns={6}
-        estimatedItemSize={300}
+        estimatedItemSize={500}
         keyExtractor={(item: SimpleMovie) => item.ID.toString()}
         renderItem={({ item, index }) => (
           <View className='p-3'>

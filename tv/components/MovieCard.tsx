@@ -1,5 +1,4 @@
 import { View, Text, Pressable, Image } from "react-native";
-import { getTMDBImageURL, getPlaceholder } from "@/lib/imagePlaceholders";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {
@@ -24,7 +23,11 @@ export default function MovieCard({
     >
       {/* Thumbnail */}
       <View className='relative'>
-        <Image source={{ uri: movie.thumb }} className='w-full aspect-[2/3]' />
+        <Image
+          source={{ uri: movie.thumb }}
+          className='w-full aspect-[2/3]'
+          resizeMode='cover'
+        />
 
         {/* Gradient Overlay */}
         <View className='absolute inset-0 bg-gradient-to-t from-dark/90 to-transparent' />

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Text, View, TextInput, Pressable } from "react-native";
+import { Text, Image, View, TextInput, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import { useAssets } from "expo-asset";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -15,7 +15,10 @@ type LoginResponse = {
 };
 
 export default function LoginScreen() {
+  const [asset] = useAssets([require("../assets/images/logo-alt.png")]);
+
   const router = useRouter();
+
   const { signIn, user } = useAuth();
 
   const [username, setUsername] = useState("");
@@ -60,13 +63,9 @@ export default function LoginScreen() {
       >
         {/* Logo */}
         <View className='mb-12'>
-          <Image
-            source={require("../assets/images/logo-alt.png")}
-            className='w-40 h-40'
-            contentFit='contain'
-            transition={200}
-            cachePolicy='memory-disk'
-          />
+          {asset && (
+            <Image source={{ uri: asset[0].uri }} className='w-40 h-40' />
+          )}
         </View>
 
         {/* Form Container */}
