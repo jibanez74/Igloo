@@ -7,13 +7,13 @@ import type { Audio } from "./Audio";
 import type { Subtitles } from "./Subtitles";
 import type { MovieExtras } from "./MovieExtras";
 
-export interface SimpleMovie {
-  ID: string;
+export type SimpleMovie = {
+  ID: number;
   title: string;
-  year: string;
   thumb: string;
   art?: string;
-}
+  year: number;
+};
 
 export type Movie = {
   ID: number;

@@ -4,11 +4,11 @@ import (
 	"igloo/cmd/database/models"
 
 	"net/http"
-	"strconv"
-	"fmt"
 
 	"gorm.io/gorm"
 )
+
+const limit = 24
 
 func (r *repo) GetLatestMovies(movies *[]SimpleMovie) (int, error) {
 	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, art, year").Limit(12).Order("created_at desc").Find(&movies).Error
@@ -75,32 +75,28 @@ func (r *repo) CreateMovie(movie *models.Movie) (int, error) {
 	return http.StatusCreated, nil
 }
 
-func (r *repo) GetMoviesWithCursor(movies *[]SimpleMovie, cursor string, limit int) (string, error) {
+func (r *repo) GetMoviesWithCursor(movies *[]SimpleMovie, cursor uint) (uint, error) {
 	query := r.db.Model(&models.Movie{}).Select("id, title, thumb, year")
-	
+
 	// If cursor is provided, get movies after this ID
-	if cursor != "" {
-		cursorID, err := strconv.ParseUint(cursor, 10, 64)
-		if err != nil {
-			return "", err
-		}
-		query = query.Where("id < ?", cursorID)
+	if cursor > 0 {
+		query = query.Where("id < ?", cursor)
 	}
 
 	// Get one extra item to determine if there's a next page
 	err := query.Order("id desc").Limit(limit + 1).Find(&movies).Error
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	// If we got more items than limit, there's a next page
-	var nextCursor string
+	var nextCursor uint
 	if len(*movies) > limit {
 		// Remove the extra item
 		lastItem := (*movies)[len(*movies)-1]
 		*movies = (*movies)[:limit]
 		// Use the ID of the last item as the next cursor
-		nextCursor = fmt.Sprintf("%d", lastItem.ID)
+		nextCursor = lastItem.ID
 	}
 
 	return nextCursor, nil

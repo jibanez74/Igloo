@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 export default function AuthLayout() {
   const [activeRoute, setActiveRoute] = useState("index");
 
+  const router = useRouter();
+
   return (
     <View className='flex-1 bg-dark'>
       {/* Top Navigation Bar */}
@@ -44,6 +46,7 @@ export default function AuthLayout() {
           focusable={true}
           onPress={() => {
             setActiveRoute("movies");
+            router.push("/(auth)/movies");
           }}
           className={`
             flex-row items-center px-8 h-[90px] mr-4
