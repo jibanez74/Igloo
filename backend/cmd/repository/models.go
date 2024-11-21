@@ -26,7 +26,7 @@ type repo struct {
 }
 
 type SimpleMovie struct {
-	ID    uint   `json:"id"`
+	ID    uint
 	Title string `json:"title"`
 	Thumb string `json:"thumb"`
 	Year  uint   `json:"year"`

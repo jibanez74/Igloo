@@ -1,5 +1,4 @@
-import { View, Text, Pressable } from "react-native";
-import { Image } from "expo-image";
+import { View, Text, Pressable, Image } from "react-native";
 import { getTMDBImageURL, getPlaceholder } from "@/lib/imagePlaceholders";
 import type { SimpleMovie } from "@/types/Movie";
 
@@ -25,14 +24,7 @@ export default function MovieCard({
     >
       {/* Thumbnail */}
       <View className='relative'>
-        <Image
-          source={getTMDBImageURL(movie.thumb, "poster")}
-          placeholder={getPlaceholder("poster")}
-          className='w-full aspect-[2/3]'
-          contentFit='cover'
-          transition={200}
-          cachePolicy='memory-disk'
-        />
+        <Image source={{ uri: movie.thumb }} className='w-full aspect-[2/3]' />
 
         {/* Gradient Overlay */}
         <View className='absolute inset-0 bg-gradient-to-t from-dark/90 to-transparent' />

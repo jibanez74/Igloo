@@ -22,11 +22,14 @@ export default function MoviesScreen() {
   } = useInfiniteQuery({
     queryKey: ["movies"],
     queryFn: async ({ pageParam = "" }) => {
-      const { data } = await api.get<MoviesResponse>("/auth/movies", {
-        params: {
-          cursor: pageParam,
-        },
+      const { data } = await api.get<MoviesResponse>("/auth/movies/infinite", {
+        params: pageParam ? { cursor: pageParam } : undefined,
       });
+
+      if (!data) {
+        throw new Error("No movies found");
+      }
+
       return data;
     },
     initialPageParam: "",
@@ -57,6 +60,10 @@ export default function MoviesScreen() {
   const allMovies =
     data?.pages.flatMap((page: MoviesResponse) => page.movies) ?? [];
 
+  if (allMovies) {
+    console.log(allMovies);
+  }
+
   return (
     <View className='flex-1 bg-dark'>
       {/* Header */}
@@ -69,10 +76,10 @@ export default function MoviesScreen() {
         data={allMovies}
         numColumns={6}
         estimatedItemSize={300}
-        keyExtractor={item => item.ID.toString()}
-        renderItem={({ item: movie, index }) => (
+        keyExtractor={(item: SimpleMovie) => item.ID.toString()}
+        renderItem={({ item, index }) => (
           <View className='p-3'>
-            <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
+            <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
           </View>
         )}
         onEndReached={() => {
