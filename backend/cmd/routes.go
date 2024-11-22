@@ -25,7 +25,7 @@ func (app *config) routes() http.Handler {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
 			r.Get("/{id}", app.GetMovieByID)
-			r.Get("/infinite", app.GetMoviesInfinite)
+			r.Get("/all", app.GetAllMovies)
 		})
 	})
 

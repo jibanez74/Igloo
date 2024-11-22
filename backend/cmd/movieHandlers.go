@@ -26,45 +26,6 @@ func (app *config) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (app *config) GetMoviesWithPagination(w http.ResponseWriter, r *http.Request) {
-	page, err := strconv.Atoi(r.URL.Query().Get("page"))
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
-	}
-
-	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
-	}
-
-	count, err := app.repo.GetMovieCount()
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
-	}
-
-	offset := (page - 1) * limit
-
-	var movies []repository.SimpleMovie
-
-	status, err := app.repo.GetMoviesWithPagination(&movies, limit, offset)
-	if err != nil {
-		helpers.ErrorJSON(w, err, status)
-		return
-	}
-
-	pages := count / int64(limit)
-
-	helpers.WriteJSON(w, status, map[string]any{
-		"movies": movies,
-		"pages":  pages,
-		"page":   page,
-		"count":  count,
-	})
-}
-
 func (app *config) GetMovieByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -162,29 +123,18 @@ func (app *config) DirectStreamMovie(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (app *config) GetMoviesInfinite(w http.ResponseWriter, r *http.Request) {
-	cursor := r.URL.Query().Get("cursor")
-
-	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil {
-		limit = 24
-	}
-
+func (app *config) GetAllMovies(w http.ResponseWriter, r *http.Request) {
 	var movies []repository.SimpleMovie
 
-	nextCursor, err := app.repo.GetMoviesWithCursor(&movies, cursor, limit)
+	status, err := app.repo.GetAllMovies(&movies)
 	if err != nil {
-		helpers.ErrorJSON(w, err)
+		helpers.ErrorJSON(w, err, status)
 		return
 	}
 
-	// Only include nextCursor in response if there is one
-	response := map[string]any{
+	helpers.WriteJSON(w, status, map[string]any{
 		"movies": movies,
-	}
-	if nextCursor != "" {
-		response["nextCursor"] = nextCursor
-	}
+		"count":  len(movies),
+	})
 
-	helpers.WriteJSON(w, http.StatusOK, response)
 }

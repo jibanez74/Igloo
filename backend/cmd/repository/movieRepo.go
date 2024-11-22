@@ -46,15 +46,6 @@ func (r *repo) GetMovieCount() (int64, error) {
 	return count, nil
 }
 
-func (r *repo) GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error) {
-	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, year").Limit(limit).Offset(offset).Order("created_at desc").Find(&movies).Error
-	if err != nil {
-		return r.gormStatusCode(err), err
-	}
-
-	return http.StatusOK, nil
-}
-
 func (r *repo) GetMovieByID(movie *models.Movie) (int, error) {
 	err := r.db.Preload("CastList.Artist").Preload("CrewList.Artist").Preload("Studios").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").Preload("Extras").Preload("Genres").First(&movie, movie.ID).Error
 	if err != nil {
@@ -73,25 +64,11 @@ func (r *repo) CreateMovie(movie *models.Movie) (int, error) {
 	return http.StatusCreated, nil
 }
 
-func (r *repo) GetMoviesWithCursor(movies *[]SimpleMovie, cursor string, limit int) (string, error) {
-	query := r.db.Model(&models.Movie{}).Select("id, title, thumb, year")
-
-	if cursor != "" {
-		query = query.Where("title > ?", cursor)
-	}
-
-	err := query.Order("title asc").Limit(limit + 1).Find(&movies).Error
+func (r *repo) GetAllMovies(movies *[]SimpleMovie) (int, error) {
+	err := r.db.Model(&models.Movie{}).Select("id, title, thumb, year").Order("title asc").Find(movies).Error
 	if err != nil {
-		return "", err
+		return r.gormStatusCode(err), err
 	}
 
-	var nextCursor string
-
-	if len(*movies) > limit {
-		lastItem := (*movies)[len(*movies)-1]
-		*movies = (*movies)[:limit]
-		nextCursor = lastItem.Title
-	}
-
-	return nextCursor, nil
+	return http.StatusOK, nil
 }

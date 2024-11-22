@@ -11,10 +11,9 @@ type Repo interface {
 	GetLatestMovies(movies *[]SimpleMovie) (int, error)
 	MovieExist(title string) (bool, error)
 	GetMovieCount() (int64, error)
-	GetMoviesWithPagination(movies *[]SimpleMovie, limit int, offset int) (int, error)
 	GetMovieByID(movie *models.Movie) (int, error)
 	CreateMovie(*models.Movie) (int, error)
-	GetMoviesWithCursor(*[]SimpleMovie, string, int) (string, error)
+	GetAllMovies(movies *[]SimpleMovie) (int, error)
 
 	GetAuthUser(*models.User) error
 	GetUserByID(*models.User) (int, error)
