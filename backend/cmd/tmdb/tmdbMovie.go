@@ -85,11 +85,35 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	if tmdbObject.Thumb != "" {
-		movie.Thumb = fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", tmdbObject.Thumb)
+		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", tmdbObject.Thumb)
+
+		filename, err := helpers.SaveImage(
+			tmdbURL,
+			movie.Title,
+			"static/movies/thumb",
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to save poster: %w", err)
+		}
+
+		movie.Thumb = fmt.Sprintf("/static/movies/thumb/%s", filename)
 	}
 
 	if tmdbObject.Art != "" {
-		movie.Art = fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", tmdbObject.Art)
+		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", tmdbObject.Art)
+
+		filename, err := helpers.SaveImage(
+			tmdbURL,
+			movie.Title,
+			"static/movies/art",
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to save backdrop: %w", err)
+		}
+
+		movie.Art = fmt.Sprintf("/static/movies/art/%s", filename)
 	}
 
 	for _, g := range tmdbObject.Genres {
