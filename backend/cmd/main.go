@@ -2,18 +2,18 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"igloo/cmd/database"
 	"igloo/cmd/helpers"
 	"igloo/cmd/repository"
 	"igloo/cmd/tmdb"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"strconv"
 	"sync"
 	"syscall"
-
-	"os"
 )
 
 type config struct {
@@ -31,6 +31,21 @@ type config struct {
 
 func main() {
 	var app config
+
+	// Create static directory structure
+	dirs := []string{
+		"static",
+		"static/movies",
+		"static/movies/thumb",
+		"static/movies/art",
+	}
+
+	for _, dir := range dirs {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			panic(fmt.Errorf("failed to create directory %s: %w", dir, err))
+		}
+	}
 
 	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 	if err != nil {

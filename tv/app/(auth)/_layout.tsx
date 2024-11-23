@@ -9,7 +9,6 @@ export default function AuthLayout() {
 
   return (
     <View className='flex-1 bg-dark'>
-      {/* Navigation Bar - Added justify-between to spread items */}
       <View className='flex-row items-center justify-between h-[70px] px-12 bg-gradient-to-b from-dark via-dark/80 to-transparent'>
         {/* Left Group */}
         <View className='flex-row items-center gap-2'>
