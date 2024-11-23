@@ -17,21 +17,21 @@ export default function MoviesScreen() {
       const { data } = await api.get<MoviesResponse>("/auth/movies/all");
       return data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
   if (isPending) {
     return (
-      <View className='flex-1 bg-dark p-8'>
-        <Text className='text-info text-2xl'>Loading movies...</Text>
+      <View className="flex-1 bg-dark p-8">
+        <Text className="text-info text-2xl">Loading movies...</Text>
       </View>
     );
   }
 
   if (isError) {
     return (
-      <View className='flex-1 bg-dark p-8'>
-        <Text className='text-danger text-2xl'>
+      <View className="flex-1 bg-dark p-8">
+        <Text className="text-danger text-2xl">
           {error?.message || "Error loading movies"}
         </Text>
       </View>
@@ -39,23 +39,32 @@ export default function MoviesScreen() {
   }
 
   return (
-    <View className='flex-1 bg-dark'>
-      <Text className='text-light text-4xl font-bold px-8 py-6'>
+    <View className="flex-1 bg-dark">
+      <Text className="text-light text-4xl font-bold px-8 py-6">
         All Movies ({data?.count || 0})
       </Text>
 
-      <View className='flex-1'>
+      <View className="flex-1">
         <FlashList
           data={data?.movies}
           numColumns={6}
-          estimatedItemSize={300}
+          estimatedItemSize={375}
           keyExtractor={item => item.ID.toString()}
           renderItem={({ item, index }) => (
-            <View className='w-1/6 aspect-[2/3] p-3'>
-              <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
+            <View style={{ 
+              width: '16.666%',
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}>
+              <MovieCard 
+                movie={item} 
+                hasTVPreferredFocus={index === 0} 
+              />
             </View>
           )}
-          removeClippedSubviews={false}
+          contentContainerStyle={{
+            paddingBottom: 32,
+          }}
         />
       </View>
     </View>
