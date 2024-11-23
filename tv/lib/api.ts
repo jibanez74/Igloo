@@ -1,9 +1,7 @@
 import axios from "axios";
 
-const BASE_URL = "https://swifty.hare-crocodile.ts.net/api/v1";
-
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: `${process.env.EXPO_PUBLIC_API_URL}/api/v1`,
 });
 
 export default api;
