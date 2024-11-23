@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 )
 
 func (app *config) routes() http.Handler {
@@ -22,17 +21,6 @@ func (app *config) routes() http.Handler {
 		router.Use(middleware.RequestID)
 	}
 
-	// CORS configuration
-	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Content-Type"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300, // Maximum value not ignored by any of major browsers
-	}))
-
-	// Serve static files with caching
 	workDir, _ := os.Getwd()
 	filesDir := http.Dir(filepath.Join(workDir, "static"))
 	FileServer(router, "/static", filesDir)
