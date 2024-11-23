@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
@@ -9,6 +9,33 @@ type MoviesResponse = {
   movies: SimpleMovie[];
   count: number;
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#121F32', // matches bg-dark
+  },
+  header: {
+    paddingHorizontal: 32,
+    paddingVertical: 24,
+  },
+  headerText: {
+    color: '#F3F0E8', // matches text-light
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  gridContainer: {
+    flex: 1,
+  },
+  movieItem: {
+    width: '16.666%',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  contentContainer: {
+    paddingBottom: 32,
+  },
+});
 
 export default function MoviesScreen() {
   const { data, error, isError, isPending } = useQuery({
@@ -22,16 +49,16 @@ export default function MoviesScreen() {
 
   if (isPending) {
     return (
-      <View className="flex-1 bg-dark p-8">
-        <Text className="text-info text-2xl">Loading movies...</Text>
+      <View style={styles.container}>
+        <Text className="text-info text-2xl p-8">Loading movies...</Text>
       </View>
     );
   }
 
   if (isError) {
     return (
-      <View className="flex-1 bg-dark p-8">
-        <Text className="text-danger text-2xl">
+      <View style={styles.container}>
+        <Text className="text-danger text-2xl p-8">
           {error?.message || "Error loading movies"}
         </Text>
       </View>
@@ -39,32 +66,28 @@ export default function MoviesScreen() {
   }
 
   return (
-    <View className="flex-1 bg-dark">
-      <Text className="text-light text-4xl font-bold px-8 py-6">
-        All Movies ({data?.count || 0})
-      </Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>
+          All Movies ({data?.count || 0})
+        </Text>
+      </View>
 
-      <View className="flex-1">
+      <View style={styles.gridContainer}>
         <FlashList
           data={data?.movies}
           numColumns={6}
           estimatedItemSize={375}
           keyExtractor={item => item.ID.toString()}
           renderItem={({ item, index }) => (
-            <View style={{ 
-              width: '16.666%',
-              paddingHorizontal: 16,
-              paddingVertical: 16,
-            }}>
+            <View style={styles.movieItem}>
               <MovieCard 
                 movie={item} 
                 hasTVPreferredFocus={index === 0} 
               />
             </View>
           )}
-          contentContainerStyle={{
-            paddingBottom: 32,
-          }}
+          contentContainerStyle={styles.contentContainer}
         />
       </View>
     </View>
