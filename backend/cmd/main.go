@@ -90,6 +90,7 @@ func main() {
 		"static/movies",
 		"static/movies/thumb",
 		"static/movies/art",
+		"static/artists",
 	}
 
 	for _, dir := range dirs {

@@ -131,24 +131,66 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		})
 	}
 
+	// Handle Cast
 	for _, c := range tmdbObject.Credits.Cast {
+		// Use w500 for artist images - good balance of quality and size
+		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
+		
+		var artistThumb string
+		if c.Thumb != "" {
+			filename, err := helpers.SaveImage(
+				tmdbURL,
+				c.Name,
+				"static/artists",
+			)
+			if err != nil {
+				// Log error but continue processing
+				t.errorLog.Printf("failed to save cast image for %s: %v", c.Name, err)
+				// Use original TMDB URL as fallback
+				artistThumb = tmdbURL
+			} else {
+				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+			}
+		}
+
 		movie.CastList = append(movie.CastList, models.Cast{
 			Artist: models.Artist{
 				Name:         c.Name,
 				OriginalName: c.OriginalName,
-				Thumb:        fmt.Sprintf("https://image.tmdb.org/t/p/original%s", c.Thumb),
+				Thumb:        artistThumb,
 			},
 			Character: c.Character,
 			Order:     c.Order,
 		})
 	}
 
+	// Handle Crew
 	for _, c := range tmdbObject.Credits.Crew {
+		// Use w500 for artist images - same as cast
+		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
+		
+		var artistThumb string
+		if c.Thumb != "" {
+			filename, err := helpers.SaveImage(
+				tmdbURL,
+				c.Name,
+				"static/artists",
+			)
+			if err != nil {
+				// Log error but continue processing
+				t.errorLog.Printf("failed to save crew image for %s: %v", c.Name, err)
+				// Use original TMDB URL as fallback
+				artistThumb = tmdbURL
+			} else {
+				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+			}
+		}
+
 		movie.CrewList = append(movie.CrewList, models.Crew{
 			Artist: models.Artist{
 				Name:         c.Name,
 				OriginalName: c.OriginalName,
-				Thumb:        fmt.Sprintf("https://image.tmdb.org/t/p/original%s", c.Thumb),
+				Thumb:        artistThumb,
 			},
 			Job:        c.Job,
 			Department: c.Department,
