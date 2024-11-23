@@ -124,29 +124,45 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	for _, s := range tmdbObject.Studios {
+		var studioLogo string
+
+		if s.Logo != "" {
+			tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
+
+			filename, err := helpers.SaveImage(
+				tmdbURL,
+				s.Name,
+				"static/studios",
+			)
+
+			if err != nil {
+				studioLogo = tmdbURL
+			} else {
+
+				studioLogo = fmt.Sprintf("/static/studios/%s", filename)
+			}
+		}
+
 		movie.Studios = append(movie.Studios, &models.Studio{
 			Name:    s.Name,
-			Logo:    fmt.Sprintf("https://image.tmdb.org/t/p/original%s", s.Logo),
+			Logo:    studioLogo,
 			Country: s.Country,
 		})
 	}
 
-	// Handle Cast
 	for _, c := range tmdbObject.Credits.Cast {
-		// Use w500 for artist images - good balance of quality and size
 		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
-		
+
 		var artistThumb string
+
 		if c.Thumb != "" {
 			filename, err := helpers.SaveImage(
 				tmdbURL,
 				c.Name,
 				"static/artists",
 			)
+
 			if err != nil {
-				// Log error but continue processing
-				t.errorLog.Printf("failed to save cast image for %s: %v", c.Name, err)
-				// Use original TMDB URL as fallback
 				artistThumb = tmdbURL
 			} else {
 				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
@@ -164,22 +180,20 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		})
 	}
 
-	// Handle Crew
 	for _, c := range tmdbObject.Credits.Crew {
-		// Use w500 for artist images - same as cast
 		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
-		
+
 		var artistThumb string
+
 		if c.Thumb != "" {
 			filename, err := helpers.SaveImage(
 				tmdbURL,
 				c.Name,
 				"static/artists",
 			)
+
 			if err != nil {
-				// Log error but continue processing
-				t.errorLog.Printf("failed to save crew image for %s: %v", c.Name, err)
-				// Use original TMDB URL as fallback
+
 				artistThumb = tmdbURL
 			} else {
 				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
