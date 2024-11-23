@@ -1,28 +1,30 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"igloo/cmd/database"
-	"igloo/cmd/helpers"
 	"igloo/cmd/repository"
 	"igloo/cmd/tmdb"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
 )
+
+//go:embed bin/*
+var binaries embed.FS
 
 type config struct {
 	debug        bool
 	repo         repository.Repo
 	tmdb         tmdb.Tmdb
 	wg           *sync.WaitGroup
-	infoLog      *log.Logger
-	errorLog     *log.Logger
 	cookieSecret string
 	cookieDomain string
 	ffmpeg       string
@@ -44,26 +46,11 @@ func main() {
 	}
 	app.repo = repository.New(db)
 
-	ffmpegPath := os.Getenv("FFMPEG_PATH")
-	if ffmpegPath == "" {
-		panic(errors.New("FFMPEG_PATH is not set"))
-	}
-
-	_, err = helpers.CheckFileExist(ffmpegPath)
+	ffmpegPath, ffprobePath, err := extractBinaries()
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("failed to extract binaries: %w", err))
 	}
 	app.ffmpeg = ffmpegPath
-
-	ffprobePath := os.Getenv("FFPROBE_PATH")
-	if ffprobePath == "" {
-		panic(errors.New("FFPROBE_PATH is not set"))
-	}
-
-	_, err = helpers.CheckFileExist(ffprobePath)
-	if err != nil {
-		panic(err)
-	}
 	app.ffprobe = ffprobePath
 
 	tmdbKey := os.Getenv("TMDB_API_KEY")
@@ -91,7 +78,7 @@ func main() {
 		"static/movies/thumb",
 		"static/movies/art",
 		"static/artists",
-		"/static/studios",
+		"static/studios",
 	}
 
 	for _, dir := range dirs {
@@ -102,12 +89,12 @@ func main() {
 	}
 
 	app.wg = &sync.WaitGroup{}
-	app.infoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	app.errorLog = log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	go app.listenForShutdown()
 
 	app.serve()
+
+	defer os.RemoveAll(filepath.Dir(ffmpegPath))
 }
 
 func (app *config) serve() {
@@ -121,7 +108,7 @@ func (app *config) serve() {
 		Handler: app.routes(),
 	}
 
-	app.infoLog.Println("Starting web server...")
+	log.Println("Starting web server...")
 
 	err := srv.ListenAndServe()
 	if err != nil {
@@ -138,7 +125,37 @@ func (app *config) listenForShutdown() {
 }
 
 func (app *config) shutdown() {
-	app.infoLog.Println("would run cleanup tasks...")
+	log.Println("would run cleanup tasks...")
 	app.wg.Wait()
-	app.infoLog.Println("closing channels and shutting down application...")
+	log.Println("closing channels and shutting down application...")
+}
+
+func extractBinaries() (string, string, error) {
+
+	tempDir, err := os.MkdirTemp("", "igloo-binaries")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	ffmpegPath := filepath.Join(tempDir, "ffmpeg")
+	ffmpegBin, err := binaries.ReadFile("bin/ffmpeg")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read ffmpeg binary: %w", err)
+	}
+
+	if err := os.WriteFile(ffmpegPath, ffmpegBin, 0755); err != nil {
+		return "", "", fmt.Errorf("failed to write ffmpeg binary: %w", err)
+	}
+
+	ffprobePath := filepath.Join(tempDir, "ffprobe")
+	ffprobeBin, err := binaries.ReadFile("bin/ffprobe")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read ffprobe binary: %w", err)
+	}
+
+	if err := os.WriteFile(ffprobePath, ffprobeBin, 0755); err != nil {
+		return "", "", fmt.Errorf("failed to write ffprobe binary: %w", err)
+	}
+
+	return ffmpegPath, ffprobePath, nil
 }

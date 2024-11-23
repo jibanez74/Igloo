@@ -3,6 +3,7 @@ package database
 import (
 	"igloo/cmd/database/models"
 	"os"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -11,12 +12,21 @@ import (
 func New() (*gorm.DB, error) {
 	dsn := os.Getenv("DSN")
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	gormDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	db.AutoMigrate(
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	gormDB.AutoMigrate(
 		&models.Movie{},
 		&models.Artist{},
 		&models.Cast{},
@@ -32,5 +42,5 @@ func New() (*gorm.DB, error) {
 		&models.UserSettings{},
 	)
 
-	return db, nil
+	return gormDB, nil
 }

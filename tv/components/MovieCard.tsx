@@ -4,21 +4,31 @@ import type { SimpleMovie } from "@/types/Movie";
 type MovieCardProps = {
   movie: SimpleMovie;
   hasTVPreferredFocus?: boolean;
+  width: number;
+  height: number;
 };
 
 export default function MovieCard({
   movie,
   hasTVPreferredFocus = false,
+  width,
+  height,
 }: MovieCardProps) {
   // Construct the full URL for the image
   const imageUrl = movie.thumb.startsWith("http")
     ? movie.thumb
-    : `${process.env.EXPO_PUBLIC_API_URL}${movie.thumb}`; // Add base URL to local path
+    : `${process.env.EXPO_PUBLIC_API_URL}${movie.thumb}`;
 
   return (
     <Pressable
+      style={{
+        width,
+        borderRadius: 8,
+        overflow: "hidden",
+        backgroundColor: "rgba(28, 57, 94, 0.2)",
+        transform: [], // Required for TV focus animation
+      }}
       className={`
-        w-[200px] rounded-lg overflow-hidden bg-primary/20
         transform transition-all duration-200
         focus:scale-110 focus:bg-secondary/20
         focus:ring-2 focus:ring-secondary
@@ -27,10 +37,13 @@ export default function MovieCard({
       hasTVPreferredFocus={hasTVPreferredFocus}
     >
       {/* Thumbnail */}
-      <View className='relative'>
+      <View>
         <Image
           source={{ uri: imageUrl }}
-          className='w-full aspect-[2/3]'
+          style={{
+            width,
+            height,
+          }}
           resizeMode='cover'
         />
 

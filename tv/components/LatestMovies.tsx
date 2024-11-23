@@ -1,6 +1,7 @@
 import { View, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
+import { TV_LAYOUT } from "@/constants/tv";
 import api from "@/lib/api";
 import type { SimpleMovie } from "@/types/Movie";
 
@@ -9,58 +10,47 @@ type MoviesResponse = {
 };
 
 export default function LatestMovies() {
-  const { data, isPending, isError, error } = useQuery({
+  const { data, isPending, isError, error } = useQuery<SimpleMovie[]>({
     queryKey: ["latest-movies"],
     queryFn: async () => {
       const { data } = await api.get<MoviesResponse>("/auth/movies/latest");
-
-      if (!data.movies) {
-        throw new Error("No movies found");
-      }
-
       return data.movies;
     },
   });
 
+  if (isPending) {
+    return (
+      <View className='py-8'>
+        <Text className='text-info text-2xl'>Loading latest movies...</Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View className='py-8'>
+        <Text className='text-danger text-2xl'>
+          {error?.message || "Error loading latest movies"}
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <View className="py-4">
-      {/* Section Title */}
-      <Text className="text-light text-3xl font-bold mb-6">
-        Latest Movies
-      </Text>
+    <View className='py-8'>
+      <Text className='text-light text-3xl font-bold mb-6'>Latest Movies</Text>
 
-      {/* Movies Row */}
-      <View className="flex-row gap-6">
-        {isPending ? (
-          // Loading placeholders
-          Array.from({ length: 6 }).map((_, index) => (
-            <View
-              key={`skeleton-${index}`}
-              className="w-[200px] rounded-lg overflow-hidden bg-primary/20"
-            >
-              {/* Thumbnail skeleton */}
-              <View className="aspect-[2/3] bg-primary/30 animate-pulse" />
-
-              {/* Content skeleton */}
-              <View className="p-4">
-                <View className="h-6 w-3/4 bg-primary/30 mb-2 rounded animate-pulse" />
-                <View className="h-4 w-1/2 bg-primary/30 rounded animate-pulse" />
-              </View>
-            </View>
-          ))
-        ) : isError ? (
-          <View className="p-8">
-            <Text className="text-danger text-2xl">
-              {error.message || "Error loading movies"}
-            </Text>
+      <View className='flex-row gap-6'>
+        {data?.map((movie, index) => (
+          <View key={movie.ID}>
+            <MovieCard
+              movie={movie}
+              hasTVPreferredFocus={index === 0}
+              width={TV_LAYOUT.POSTER.WIDTH}
+              height={TV_LAYOUT.POSTER.HEIGHT}
+            />
           </View>
-        ) : (
-          data.map((movie, index) => (
-            <View key={movie.ID}>
-              <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
-            </View>
-          ))
-        )}
+        ))}
       </View>
     </View>
   );
