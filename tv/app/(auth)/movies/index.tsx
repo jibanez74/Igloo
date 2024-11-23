@@ -55,7 +55,6 @@ export default function MoviesScreen() {
               <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
             </View>
           )}
-          initialNumToRender={24}
           removeClippedSubviews={false}
         />
       </View>

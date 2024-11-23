@@ -32,21 +32,6 @@ type config struct {
 func main() {
 	var app config
 
-	// Create static directory structure
-	dirs := []string{
-		"static",
-		"static/movies",
-		"static/movies/thumb",
-		"static/movies/art",
-	}
-
-	for _, dir := range dirs {
-		err := os.MkdirAll(dir, 0755)
-		if err != nil {
-			panic(fmt.Errorf("failed to create directory %s: %w", dir, err))
-		}
-	}
-
 	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 	if err != nil {
 		panic(err)
@@ -63,6 +48,7 @@ func main() {
 	if ffmpegPath == "" {
 		panic(errors.New("FFMPEG_PATH is not set"))
 	}
+
 	_, err = helpers.CheckFileExist(ffmpegPath)
 	if err != nil {
 		panic(err)
@@ -73,6 +59,7 @@ func main() {
 	if ffprobePath == "" {
 		panic(errors.New("FFPROBE_PATH is not set"))
 	}
+
 	_, err = helpers.CheckFileExist(ffprobePath)
 	if err != nil {
 		panic(err)
@@ -95,7 +82,22 @@ func main() {
 	if cookieDomain == "" {
 		cookieDomain = "localhost"
 	}
+
 	app.cookieDomain = cookieDomain
+
+	dirs := []string{
+		"static",
+		"static/movies",
+		"static/movies/thumb",
+		"static/movies/art",
+	}
+
+	for _, dir := range dirs {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			panic(fmt.Errorf("failed to create directory %s: %w", dir, err))
+		}
+	}
 
 	app.wg = &sync.WaitGroup{}
 	app.infoLog = log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
