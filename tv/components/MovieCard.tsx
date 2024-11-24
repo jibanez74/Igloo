@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Image } from "react-native";
+import { useRouter } from "expo-router";
 import type { SimpleMovie } from "@/types/Movie";
 
 type MovieCardProps = {
@@ -14,36 +15,36 @@ export default function MovieCard({
   width,
   height,
 }: MovieCardProps) {
-  // Construct the full URL for the image
   const imageUrl = movie.thumb.startsWith("http")
     ? movie.thumb
     : `${process.env.EXPO_PUBLIC_API_URL}${movie.thumb}`;
 
+  const router = useRouter();
+
   return (
     <Pressable
-      style={{
-        width,
-        borderRadius: 8,
-        overflow: "hidden",
-        backgroundColor: "rgba(28, 57, 94, 0.2)",
-        transform: [], // Required for TV focus animation
-      }}
       className={`
+        rounded-lg overflow-hidden bg-primary/20
         transform transition-all duration-200
         focus:scale-110 focus:bg-secondary/20
         focus:ring-2 focus:ring-secondary
       `}
+      style={{ width }}
       focusable={true}
       hasTVPreferredFocus={hasTVPreferredFocus}
+      onPress={() =>
+        router.push({
+          pathname: "/(auth)/movies/[movieID]",
+          params: { movieID: movie.ID },
+        })
+      }
     >
       {/* Thumbnail */}
-      <View>
+      <View className='relative'>
         <Image
           source={{ uri: imageUrl }}
-          style={{
-            width,
-            height,
-          }}
+          className='w-full'
+          style={{ height }}
           resizeMode='cover'
         />
 

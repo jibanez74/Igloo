@@ -1,9 +1,15 @@
+import React from "react";
 import { View, Text, Image, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import api from "@/lib/api";
 import formatDate from "@/lib/formatDate";
+import formatDollars from "@/lib/formatDollars";
+import getImgSrc from "@/lib/getImgSrc";
+import CastGrid from "@/components/CastGrid";
+import StudioGrid from "@/lib/StudioGrid";
 import type { Movie } from "@/types/Movie";
 
 type MovieResponse = {
@@ -22,11 +28,7 @@ export default function MovieDetailsScreen() {
     queryKey: ["movie", movieID],
     queryFn: async () => {
       const { data } = await api.get<MovieResponse>(`/auth/movies/${movieID}`);
-
-      if (!data.movie) {
-        throw new Error("Movie not found");
-      }
-
+      if (!data.movie) throw new Error("Movie not found");
       return data.movie;
     },
   });
@@ -39,7 +41,7 @@ export default function MovieDetailsScreen() {
     );
   }
 
-  if (error || !movie) {
+  if (isError || !movie) {
     return (
       <View className='flex-1 bg-dark p-8'>
         <Text className='text-danger text-2xl'>
@@ -68,14 +70,29 @@ export default function MovieDetailsScreen() {
         {/* Left Side - Backdrop and Main Info */}
         <View className='w-2/3 h-full relative'>
           <Image
-            source={{ uri: movie.art }}
+            source={{ uri: getImgSrc(movie.art) }}
             className='w-full h-full'
             resizeMode='cover'
           />
-          <View className='absolute inset-0 bg-gradient-to-r from-dark via-dark/50 to-transparent' />
+          <LinearGradient
+            colors={[
+              "rgba(18, 31, 50, 1)", // dark
+              "rgba(18, 31, 50, 0.7)", // dark with opacity
+              "transparent",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
 
           {/* Content Overlay */}
-          <View className='absolute bottom-0 left-a0 p-8 w-full'>
+          <View className='absolute bottom-0 left-0 p-8 w-full'>
             <Text className='text-light text-6xl font-bold mb-4'>
               {movie.title}
             </Text>
@@ -100,18 +117,31 @@ export default function MovieDetailsScreen() {
 
             {/* Play Button */}
             <Pressable
-              className='bg-secondary py-4 px-8 rounded-lg w-[200px] items-center mt-6
-                        focus:scale-110 focus:bg-info'
+              className='w-[200px] mt-6 overflow-hidden rounded-lg
+                        focus:scale-110'
               focusable={true}
               hasTVPreferredFocus={true}
+              onPress={() =>
+                router.push({
+                  pathname: "/(auth)/movies/[movieID]/play",
+                  params: { movieID: movie.ID },
+                })
+              }
             >
-              <Text className='text-dark text-xl font-bold'>Play</Text>
+              <LinearGradient
+                colors={["#4F46E5", "#3730A3"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ padding: 16, alignItems: "center" }}
+              >
+                <Text className='text-light text-xl font-bold'>Play</Text>
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
 
         {/* Right Side - Details */}
-        <View className='w-1/3 p-8 overflow-y-auto'>
+        <View className='w-1/3 p-8 overflow-y-scroll'>
           {/* Summary */}
           <Text className='text-light text-xl mb-6'>{movie.summary}</Text>
 
@@ -125,13 +155,23 @@ export default function MovieDetailsScreen() {
             </View>
           )}
 
+          {/* Cast Grid */}
+          {movie.castList.length > 0 && (
+            <CastGrid cast={movie.castList} maxDisplay={6} />
+          )}
+
+          {/* Studios Grid */}
+          {movie.studios.length > 0 && (
+            <StudioGrid studios={movie.studios} maxDisplay={6} />
+          )}
+
           {/* Financial Details */}
           <View className='flex-row gap-8 mb-6'>
             {movie.budget > 0 && (
               <View>
                 <Text className='text-info/60 text-lg'>Budget</Text>
                 <Text className='text-light text-xl'>
-                  ${movie.budget.toLocaleString()}
+                  {formatDollars(movie.budget)}
                 </Text>
               </View>
             )}
@@ -139,23 +179,11 @@ export default function MovieDetailsScreen() {
               <View>
                 <Text className='text-info/60 text-lg'>Box Office</Text>
                 <Text className='text-light text-xl'>
-                  ${movie.revenue.toLocaleString()}
+                  {formatDollars(movie.revenue)}
                 </Text>
               </View>
             )}
           </View>
-
-          {/* Cast & Crew */}
-          {movie.castList.length > 0 && (
-            <View className='mb-6'>
-              <Text className='text-light text-2xl font-bold mb-2'>Cast</Text>
-              {movie.castList.slice(0, 6).map(cast => (
-                <Text key={cast.ID} className='text-info text-lg'>
-                  {cast.artist.name} as {cast.character}
-                </Text>
-              ))}
-            </View>
-          )}
 
           {/* Genres */}
           {movie.genres.length > 0 && (

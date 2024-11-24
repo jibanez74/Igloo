@@ -1,11 +1,5 @@
-import { useState, useRef } from "react";
-import {
-  useTVEventHandler,
-  View,
-  Text,
-  Pressable,
-  TVEventHandler,
-} from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { View, Text, Pressable } from "react-native";
 import Video, { VideoRef, OnBufferData } from "react-native-video";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -40,50 +34,6 @@ export default function VideoPlayer({
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
 
-  useTVEventHandler(event => {
-    switch (event.eventType) {
-      case "playPause":
-        setIsPaused(prev => !prev);
-        setShowControls(true);
-        break;
-
-      case "select":
-        setIsPaused(prev => !prev);
-        setShowControls(true);
-        break;
-
-      case "right":
-        videoRef.current?.seek(10);
-        setShowControls(true);
-        break;
-
-      case "left":
-        videoRef.current?.seek(-10);
-        setShowControls(true);
-        break;
-
-      case "up":
-        setShowControls(true);
-        break;
-
-      case "down":
-        setShowControls(true);
-        break;
-
-      case "back":
-      case "exit":
-        handleBack();
-        break;
-    }
-
-    // Hide controls after 3 seconds
-    const timer = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  });
-
   const handleBuffer = (data: OnBufferData) => {
     setIsBuffering(data.isBuffering);
     if (data.isBuffering) {
@@ -105,39 +55,6 @@ export default function VideoPlayer({
     }
   };
 
-  // Configure ExoPlayer for direct streaming
-  const videoConfig = {
-    // Hardware acceleration
-    androidHardwareAcceleration: true,
-    useHardwareDecoder: true,
-
-    // Buffer configuration for large files
-    bufferConfig: {
-      minBufferMs: 30000, // 30 seconds minimum buffer
-      maxBufferMs: 120000, // 2 minutes maximum buffer
-      bufferForPlaybackMs: 5000, // Start playback after 5 seconds
-      bufferForPlaybackAfterRebufferMs: 10000, // 10 seconds after rebuffer
-    },
-
-    maxBitRate:
-      resolution >= 2160
-        ? 90000000 // 80Mbps for 4K
-        : resolution >= 1080
-        ? 40000000 // 40Mbps for 1080p
-        : 20000000, // 20Mbps for others
-
-    // Playback settings
-    progressUpdateInterval: 250,
-    reportBandwidth: true,
-
-    // Cache settings for large files
-    cache: true,
-    maxCacheSize: 1024 * 1024 * 1024, // 1GB cache
-
-    // Prevent sleep during playback
-    preventsDisplaySleepDuringVideoPlayback: true,
-  };
-
   return (
     <View className='flex-1 bg-black'>
       <Video
@@ -150,17 +67,14 @@ export default function VideoPlayer({
             "Accept-Ranges": "bytes",
           },
         }}
-        className='absolute inset-0 w-full h-full'
-        resizeMode='contain'
         paused={isPaused}
         onBuffer={handleBuffer}
         onError={handleError}
         repeat={false}
-        controls={false}
+        controls={true}
         fullscreen={true}
         poster={thumb}
         posterResizeMode='contain'
-        {...videoConfig}
       />
 
       {/* Loading State */}
@@ -181,43 +95,6 @@ export default function VideoPlayer({
           >
             <Text className='text-dark text-xl font-bold'>Go Back</Text>
           </Pressable>
-        </View>
-      )}
-
-      {/* Controls Overlay */}
-      {showControls && (
-        <View className='absolute inset-0 items-center justify-between p-8'>
-          {/* Top Bar */}
-          <View className='w-full flex-row items-center'>
-            <Pressable
-              className='flex-row items-center bg-dark/80 px-4 py-2 rounded-lg
-                        focus:bg-secondary/20 focus:scale-110'
-              focusable={true}
-              onPress={handleBack}
-            >
-              <Ionicons name='arrow-back' size={24} color='#CEE3F9' />
-              <Text className='text-light text-xl ml-2'>Back</Text>
-            </Pressable>
-          </View>
-
-          {/* Center Controls */}
-          <Pressable
-            className='bg-dark/80 p-4 rounded-full
-                      focus:bg-secondary/20 focus:scale-110'
-            focusable={true}
-            onPress={() => setIsPaused(!isPaused)}
-          >
-            <Ionicons
-              name={isPaused ? "play" : "pause"}
-              size={48}
-              color='#CEE3F9'
-            />
-          </Pressable>
-
-          {/* Progress Bar */}
-          <View className='w-full h-1 bg-dark/80 rounded-full'>
-            <View className='h-full w-1/2 bg-secondary rounded-full' />
-          </View>
         </View>
       )}
     </View>
