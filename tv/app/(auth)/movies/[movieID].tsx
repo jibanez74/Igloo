@@ -75,7 +75,7 @@ export default function MovieDetailsScreen() {
           <View className='absolute inset-0 bg-gradient-to-r from-dark via-dark/50 to-transparent' />
 
           {/* Content Overlay */}
-          <View className='absolute bottom-0 left-0 p-8 w-full'>
+          <View className='absolute bottom-0 left-a0 p-8 w-full'>
             <Text className='text-light text-6xl font-bold mb-4'>
               {movie.title}
             </Text>
