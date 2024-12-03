@@ -3,18 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import MovieCard from "@/components/MovieCard";
 import { TV_LAYOUT } from "@/constants/tv";
 import api from "@/lib/api";
-import type { SimpleMovie } from "@/types/Movie";
-
-type MoviesResponse = {
-  movies: SimpleMovie[];
-};
+import type { MoviesResponse } from "@/types/Movie";
 
 export default function LatestMovies() {
-  const { data, isPending, isError, error } = useQuery<SimpleMovie[]>({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: ["latest-movies"],
     queryFn: async () => {
-      const { data } = await api.get<MoviesResponse>("/auth/movies/latest");
-      return data.movies;
+      try {
+        const { data } = await api.get<MoviesResponse>("/auth/movies/latest");
+
+        if (!data.movies) {
+          throw new Error("no movies were fetched");
+        }
+
+        return data.movies;
+      } catch (err) {
+        console.error(err);
+        throw new Error("unable to fetch movies from server");
+      }
     },
   });
 
@@ -41,7 +47,7 @@ export default function LatestMovies() {
       <Text className='text-light text-3xl font-bold mb-6'>Latest Movies</Text>
 
       <View className='flex-row gap-6'>
-        {data?.map((movie, index) => (
+        {data.map((movie, index) => (
           <View key={movie.ID}>
             <MovieCard
               movie={movie}

@@ -14,6 +14,21 @@ export type SimpleMovie = {
   year: number;
 };
 
+export type MovieCardProps = {
+  movie: SimpleMovie;
+  hasTVPreferredFocus?: boolean;
+  width: number;
+  height: number;
+};
+
+export type MoviesResponse = {
+  movies: SimpleMovie[];
+};
+
+export type MovieResponse = {
+  movie: Movie;
+};
+
 export type Movie = {
   ID: number;
   title: string;
