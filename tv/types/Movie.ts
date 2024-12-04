@@ -17,8 +17,6 @@ export type SimpleMovie = {
 export type MovieCardProps = {
   movie: SimpleMovie;
   hasTVPreferredFocus?: boolean;
-  width: number;
-  height: number;
 };
 
 export type MoviesResponse = {

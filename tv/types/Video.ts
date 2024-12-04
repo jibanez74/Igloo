@@ -1,5 +1,5 @@
 export type Video = {
-  ID?: number;
+  ID: number;
   title: string;
   index: number;
   profile: string;
@@ -18,4 +18,11 @@ export type Video = {
   CreatedAt?: string | Date;
   UpdatedAt?: string | Date;
   DeletedAt?: string | Date | null;
+};
+
+export type VideoError = {
+  error: {
+    errorString?: string;
+    errorException?: string;
+  };
 };

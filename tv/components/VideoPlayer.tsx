@@ -1,26 +1,18 @@
 import { useState, useRef } from "react";
 import { Platform } from "react-native";
 import { VideoRef, Video, type SelectedVideoTrack } from "react-native-video";
+import type { VideoError } from "@/types/Video";
 
 type VideoPlayerProps = {
   uri: string;
   thumb: string;
   maxBitRate: number;
-  videoTrack: SelectedVideoTrack;
-};
-
-type VideoError = {
-  error: {
-    errorString?: string;
-    errorException?: string;
-  };
 };
 
 export default function VideoPlayer({
   uri,
   thumb,
   maxBitRate,
-  videoTrack,
 }: VideoPlayerProps) {
   const videoRef = useRef<VideoRef>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -52,7 +44,6 @@ export default function VideoPlayer({
       renderToHardwareTextureAndroid={
         Platform.isTV && Platform.OS === "android"
       }
-      selectedVideoTrack={videoTrack}
       volume={volume}
     />
   );

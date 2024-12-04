@@ -1,5 +1,8 @@
+import { StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { dark, primary, secondary, info } from "@/constants/Colors";
+import { Layout } from "@/constants/Layout";
 
 export default function TabLayout() {
   return (
@@ -7,13 +10,11 @@ export default function TabLayout() {
       screenOptions={{
         tabBarPosition: "top",
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: "#121F32", // dark
-          borderBottomColor: "#1C395E", // primary
-          borderBottomWidth: 1,
-        },
-        tabBarActiveTintColor: "#88BCF4", // secondary
-        tabBarInactiveTintColor: "#CEE3F9", // info
+        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: secondary,
+        tabBarInactiveTintColor: info,
+        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarIconStyle: styles.tabBarIcon,
       }}
     >
       <Tabs.Screen
@@ -23,7 +24,7 @@ export default function TabLayout() {
           tabBarIcon: ({ focused, color }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
-              size={24}
+              size={Layout.isFHD ? 32 : 24}
               color={color}
             />
           ),
@@ -37,7 +38,7 @@ export default function TabLayout() {
           tabBarIcon: ({ focused, color }) => (
             <Ionicons
               name={focused ? "film" : "film-outline"}
-              size={24}
+              size={Layout.isFHD ? 32 : 24}
               color={color}
             />
           ),
@@ -46,3 +47,21 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: dark,
+    borderBottomColor: primary,
+    borderBottomWidth: 1,
+    height: Layout.isFHD ? 80 : 60,
+    paddingVertical: Layout.spacing.sm,
+  },
+  tabBarLabel: {
+    fontSize: Layout.isFHD ? 18 : 14,
+    fontWeight: "500",
+    marginTop: Layout.spacing.xs,
+  },
+  tabBarIcon: {
+    marginBottom: -Layout.spacing.xs,
+  },
+});
