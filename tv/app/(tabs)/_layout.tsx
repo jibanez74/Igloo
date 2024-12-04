@@ -32,7 +32,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name='movies'
+        name='movies/index'
         options={{
           title: "Movies",
           tabBarIcon: ({ focused, color }) => (

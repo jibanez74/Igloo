@@ -13,7 +13,7 @@ export default function MovieCard({
     <Link
       asChild
       href={{
-        pathname: "/(tabs)/movies/[movieID]",
+        pathname: "/(tabs)/movies/(movie)/[movieID]",
         params: { movieID: movie.ID },
       }}
     >
@@ -29,7 +29,7 @@ export default function MovieCard({
               <Image
                 source={{ uri: getImgSrc(movie.thumb) }}
                 style={styles.image}
-                resizeMode="cover"
+                resizeMode='cover'
               />
 
               {/* Gradient Overlay */}
@@ -39,10 +39,18 @@ export default function MovieCard({
             {/* Content */}
             <View style={styles.content}>
               <View style={styles.textContainer}>
-                <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+                <Text
+                  style={styles.title}
+                  numberOfLines={1}
+                  ellipsizeMode='tail'
+                >
                   {movie.title}
                 </Text>
-                <Text style={styles.year} numberOfLines={1} ellipsizeMode="tail">
+                <Text
+                  style={styles.year}
+                  numberOfLines={1}
+                  ellipsizeMode='tail'
+                >
                   {movie.year}
                 </Text>
               </View>
