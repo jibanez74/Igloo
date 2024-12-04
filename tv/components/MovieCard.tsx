@@ -22,29 +22,44 @@ export default function MovieCard({
         hasTVPreferredFocus={hasTVPreferredFocus}
         style={({ focused }) => [styles.card, focused && styles.cardFocused]}
       >
-        {/* Thumbnail */}
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: getImgSrc(movie.thumb) }}
-            style={styles.image}
-            resizeMode='cover'
-          />
+        {({ focused }) => (
+          <>
+            {/* Thumbnail */}
+            <View style={styles.imageContainer}>
+              <Image
+                source={{ uri: getImgSrc(movie.thumb) }}
+                style={styles.image}
+                resizeMode="cover"
+              />
 
-          {/* Gradient Overlay */}
-          <View style={styles.overlay} />
-        </View>
+              {/* Gradient Overlay */}
+              <View style={styles.overlay} />
+            </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <View style={styles.textContainer}>
-            <Text style={styles.title} numberOfLines={1} ellipsizeMode='tail'>
-              {movie.title}
-            </Text>
-            <Text style={styles.year} numberOfLines={1} ellipsizeMode='tail'>
-              {movie.year}
-            </Text>
-          </View>
-        </View>
+            {/* Content */}
+            <View style={styles.content}>
+              <View style={styles.textContainer}>
+                <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+                  {movie.title}
+                </Text>
+                <Text style={styles.year} numberOfLines={1} ellipsizeMode="tail">
+                  {movie.year}
+                </Text>
+              </View>
+            </View>
+
+            {/* Full Title Overlay (shows on focus) */}
+            {focused && (
+              <View style={styles.fullTitleContainer}>
+                <View style={styles.fullTitleOverlay} />
+                <View style={styles.fullTitleContent}>
+                  <Text style={styles.fullTitle}>{movie.title}</Text>
+                  <Text style={styles.fullYear}>{movie.year}</Text>
+                </View>
+              </View>
+            )}
+          </>
+        )}
       </Pressable>
     </Link>
   );
@@ -100,5 +115,35 @@ const styles = StyleSheet.create({
     fontSize: Layout.card.textSize,
     color: info,
     width: "100%",
+  },
+  // Full title overlay styles
+  fullTitleContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullTitleOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: `${dark}CC`,
+  },
+  fullTitleContent: {
+    padding: Layout.spacing.lg,
+    alignItems: "center",
+  },
+  fullTitle: {
+    fontSize: Layout.card.titleSize,
+    fontWeight: "bold",
+    color: light,
+    textAlign: "center",
+    marginBottom: Layout.spacing.sm,
+  },
+  fullYear: {
+    fontSize: Layout.card.textSize,
+    color: info,
+    textAlign: "center",
   },
 });
