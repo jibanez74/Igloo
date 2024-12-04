@@ -13,7 +13,7 @@ export default function MovieCard({
     <Link
       asChild
       href={{
-        pathname: "/(tabs)/movies/(movie)/[movieID]",
+        pathname: "/(tabs)/movies/[movieID]",
         params: { movieID: movie.ID },
       }}
     >

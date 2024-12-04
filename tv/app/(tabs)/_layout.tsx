@@ -18,7 +18,7 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name='index'
+        name="index"
         options={{
           title: "Home",
           tabBarIcon: ({ focused, color }) => (
@@ -32,9 +32,10 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name='movies/index'
+        name="movies"
         options={{
           title: "Movies",
+          href: "/movies",
           tabBarIcon: ({ focused, color }) => (
             <Ionicons
               name={focused ? "film" : "film-outline"}
