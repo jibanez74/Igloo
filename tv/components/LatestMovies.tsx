@@ -45,19 +45,22 @@ export default function LatestMovies() {
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Latest Movies</Text>
 
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollViewContent}
         style={styles.scrollView}
       >
         {data.map((movie, index) => (
-          <View key={movie.ID} style={[
-            styles.movieCard,
-            // Remove margin from last item
-            index === data.length - 1 && styles.lastMovieCard,
-          ]}>
-            <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
+          <View
+            key={movie.ID}
+            style={[
+              styles.movieCard,
+              // Remove margin from last item
+              index === data.length - 1 && styles.lastMovieCard,
+            ]}
+          >
+            <MovieCard movie={movie} hasTVPreferredFocus={false} />
           </View>
         ))}
       </ScrollView>

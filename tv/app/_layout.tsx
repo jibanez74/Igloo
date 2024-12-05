@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
 import { Slot } from "expo-router";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -30,16 +29,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <View style={styles.container}>
-        <Slot />
-      </View>
+      <Slot />
     </QueryClientProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: dark,
-  },
-});
