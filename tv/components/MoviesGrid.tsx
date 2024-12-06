@@ -26,16 +26,17 @@ export default function MoviesGrid({ movies }: { movies: SimpleMovie[] }) {
               index < movies.length - numColumns && styles.bottomMargin,
             ]}
           >
-            <MovieCard
-              movie={item}
-              hasTVPreferredFocus={index === 0}
-            />
+            <MovieCard movie={item} hasTVPreferredFocus={index === 0} />
           </View>
         )}
         estimatedItemSize={Layout.card.height + Layout.spacing.xl * 2}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        keyExtractor={(item) => item.ID.toString()}
+        keyExtractor={item => item.ID.toString()}
+        estimatedListSize={{
+          width: Layout.window.width,
+          height: Layout.window.height - Layout.spacing.xl * 4,
+        }}
       />
     </View>
   );
