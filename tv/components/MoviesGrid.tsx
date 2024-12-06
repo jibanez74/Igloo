@@ -32,9 +32,10 @@ export default function MoviesGrid({ movies }: { movies: SimpleMovie[] }) {
             />
           </View>
         )}
-        estimatedItemSize={Layout.card.height + Layout.spacing.lg}
+        estimatedItemSize={Layout.card.height + Layout.spacing.xl * 2}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyExtractor={(item) => item.ID.toString()}
       />
     </View>
   );
@@ -43,6 +44,7 @@ export default function MoviesGrid({ movies }: { movies: SimpleMovie[] }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: Layout.window.height - Layout.spacing.xl * 4, // Account for padding and header
   },
   contentContainer: {
     padding: Layout.spacing.xl,
@@ -50,6 +52,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     marginRight: Layout.spacing.lg,
     marginBottom: Layout.spacing.lg,
+    height: Layout.card.height + Layout.spacing.xl * 2, // Account for title and year
   },
   lastInRow: {
     marginRight: 0,

@@ -1,13 +1,18 @@
 import { View, Text, StyleSheet } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import api from "@/lib/api";
 import getError from "@/lib/getError";
 import MoviesGrid from "@/components/MoviesGrid";
-import { dark, light, info } from "@/constants/Colors";
+import Alert from "@/components/Alert";
+import Loading from "@/components/Loading";
+import { dark, light } from "@/constants/Colors";
 import { Layout } from "@/constants/Layout";
 import type { MoviesResponse } from "@/types/Movie";
 
 export default function MoviesScreen() {
+  const [showError, setShowError] = useState(true);
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["movies"],
     queryFn: async () => {
@@ -28,17 +33,19 @@ export default function MoviesScreen() {
   if (isPending) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading movies...</Text>
+        <Loading message="Loading movies..." />
       </View>
     );
   }
 
-  if (isError) {
+  if (isError && showError) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>
-          {error instanceof Error ? error.message : "An error occurred"}
-        </Text>
+        <Alert
+          type="error"
+          message={error instanceof Error ? error.message : "An error occurred"}
+          onDismiss={() => setShowError(false)}
+        />
       </View>
     );
   }
@@ -46,7 +53,7 @@ export default function MoviesScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Movies</Text>
-      <MoviesGrid movies={data} />
+      <MoviesGrid movies={data || []} />
     </View>
   );
 }
@@ -62,13 +69,5 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: light,
     marginBottom: Layout.spacing.lg,
-  },
-  loadingText: {
-    fontSize: Layout.card.titleSize,
-    color: info,
-  },
-  errorText: {
-    fontSize: Layout.card.titleSize,
-    color: info,
   },
 });

@@ -56,7 +56,6 @@ export default function LatestMovies() {
             key={movie.ID}
             style={[
               styles.movieCard,
-              // Remove margin from last item
               index === data.length - 1 && styles.lastMovieCard,
             ]}
           >
