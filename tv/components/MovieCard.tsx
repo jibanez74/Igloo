@@ -3,7 +3,12 @@ import { Link } from "expo-router";
 import getImgSrc from "@/lib/getImgSrc";
 import { primary, dark, light, info, secondary } from "@/constants/Colors";
 import { Layout } from "@/constants/Layout";
-import type { MovieCardProps } from "@/types/Movie";
+import type { SimpleMovie } from "@/types/Movie";
+
+type MovieCardProps = {
+  movie: SimpleMovie;
+  hasTVPreferredFocus?: boolean;
+};
 
 export default function MovieCard({
   movie,

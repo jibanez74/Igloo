@@ -8,7 +8,11 @@ import Loading from "./Loading";
 import Alert from "./Alert";
 import { light } from "@/constants/Colors";
 import { Layout } from "@/constants/Layout";
-import type { MoviesResponse } from "@/types/Movie";
+import type { SimpleMovie } from "@/types/Movie";
+
+type MoviesResponse = {
+  movies: SimpleMovie[];
+};
 
 export default function LatestMovies() {
   const [showError, setShowError] = useState(true);

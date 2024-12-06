@@ -8,7 +8,12 @@ import Alert from "@/components/Alert";
 import Loading from "@/components/Loading";
 import { dark, light } from "@/constants/Colors";
 import { Layout } from "@/constants/Layout";
-import type { MoviesResponse } from "@/types/Movie";
+import type { SimpleMovie } from "@/types/Movie";
+
+type MoviesResponse = {
+  movies: SimpleMovie[];
+  count: number;
+};
 
 export default function MoviesScreen() {
   const [showError, setShowError] = useState(true);
@@ -23,7 +28,7 @@ export default function MoviesScreen() {
           throw new Error("no movies were returned by the server");
         }
 
-        return data.movies;
+        return data;
       } catch (err) {
         throw new Error(getError(err));
       }
@@ -33,7 +38,7 @@ export default function MoviesScreen() {
   if (isPending) {
     return (
       <View style={styles.container}>
-        <Loading message="Loading movies..." />
+        <Loading message='Loading movies...' />
       </View>
     );
   }
@@ -42,7 +47,7 @@ export default function MoviesScreen() {
     return (
       <View style={styles.container}>
         <Alert
-          type="error"
+          type='error'
           message={error instanceof Error ? error.message : "An error occurred"}
           onDismiss={() => setShowError(false)}
         />
@@ -52,8 +57,8 @@ export default function MoviesScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Movies</Text>
-      <MoviesGrid movies={data || []} />
+      <Text style={styles.title}>Movies ({data?.count || 0})</Text>
+      <MoviesGrid movies={data?.movies || []} />
     </View>
   );
 }
