@@ -1,6 +1,23 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions } from "react-native";
 import { danger, info, success, light, secondary } from "@/constants/Colors";
-import { Layout } from "@/constants/Layout";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Scale values based on screen width (1920 is FHD width)
+const scale = SCREEN_WIDTH / 1920;
+const SPACING = {
+  xs: Math.round(4 * scale),
+  sm: Math.round(8 * scale),
+  md: Math.round(16 * scale),
+  lg: Math.round(24 * scale),
+  xl: Math.round(32 * scale),
+};
+
+const FONT_SIZES = {
+  small: Math.round(16 * scale),
+  medium: Math.round(20 * scale),
+  large: Math.round(24 * scale),
+};
 
 type AlertType = "error" | "info" | "success";
 
@@ -53,16 +70,16 @@ export default function Alert({
 
 const styles = StyleSheet.create({
   container: {
-    padding: Layout.spacing.lg,
-    borderRadius: Layout.spacing.sm,
+    padding: SPACING.lg,
+    borderRadius: SPACING.sm,
     borderWidth: 1,
     opacity: 0.9,
     alignItems: "center",
   },
   message: {
-    fontSize: Layout.card.textSize,
+    fontSize: FONT_SIZES.medium,
     textAlign: "center",
-    marginBottom: Layout.spacing.lg,
+    marginBottom: SPACING.lg,
   },
   // Error styles
   errorContainer: {
@@ -90,9 +107,9 @@ const styles = StyleSheet.create({
   },
   // Button styles
   button: {
-    paddingVertical: Layout.spacing.sm,
-    paddingHorizontal: Layout.spacing.xl,
-    borderRadius: Layout.spacing.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: SPACING.xs,
     backgroundColor: `${light}33`,
     borderWidth: 2,
     borderColor: "transparent",
@@ -104,7 +121,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: light,
-    fontSize: Layout.card.textSize,
+    fontSize: FONT_SIZES.medium,
     fontWeight: "bold",
     textAlign: "center",
   },

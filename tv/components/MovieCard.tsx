@@ -1,162 +1,137 @@
-import { Image, Pressable, View, Text, StyleSheet } from "react-native";
+import { useRef, useState, useEffect } from "react";
+import {
+  Image,
+  Pressable,
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+} from "react-native";
 import { Link } from "expo-router";
-import getImgSrc from "@/lib/getImgSrc";
 import { primary, dark, light, info, secondary } from "@/constants/Colors";
-import { Layout } from "@/constants/Layout";
+import getImgSrc from "@/lib/getImgSrc";
 import type { SimpleMovie } from "@/types/Movie";
+
+const POSTER_WIDTH = 200; // Base width for 1080p TV
+const POSTER_HEIGHT = 300; // Maintain 2:3 aspect ratio (500:750 = 2:3)
 
 type MovieCardProps = {
   movie: SimpleMovie;
-  hasTVPreferredFocus?: boolean;
+  hasTvFocus?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 export default function MovieCard({
   movie,
-  hasTVPreferredFocus = false,
+  hasTvFocus = false,
+  onFocus,
+  onBlur,
 }: MovieCardProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const scaleValue = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(scaleValue, {
+      toValue: hasTvFocus ? 1.1 : 1,
+      useNativeDriver: true,
+    }).start();
+  }, [hasTvFocus]);
+
+  const handleFocus = () => {
+    onFocus?.();
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    onBlur?.();
+    setIsFocused(false);
+  };
+
   return (
     <Link
-      asChild
       href={{
         pathname: "/(tabs)/movies/[movieID]",
         params: { movieID: movie.ID },
       }}
+      asChild
     >
       <Pressable
+        accessibilityLabel={`Movie: ${movie.title}, released in ${movie.year}`}
         focusable={true}
-        hasTVPreferredFocus={hasTVPreferredFocus}
-        style={({ focused }) => [styles.card, focused && styles.cardFocused]}
+        hasTVPreferredFocus={hasTvFocus}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={({ pressed }) => [styles.pressable, pressed && { opacity: 0.9 }]}
       >
-        {({ focused }) => (
-          <>
-            {/* Thumbnail */}
-            <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: getImgSrc(movie.thumb) }}
-                style={styles.image}
-                resizeMode='cover'
-              />
-
-              {/* Gradient Overlay */}
-              <View style={styles.overlay} />
-            </View>
-
-            {/* Content */}
-            <View style={styles.content}>
-              <View style={styles.textContainer}>
-                <Text
-                  style={styles.title}
-                  numberOfLines={1}
-                  ellipsizeMode='tail'
-                >
-                  {movie.title}
-                </Text>
-                <Text
-                  style={styles.year}
-                  numberOfLines={1}
-                  ellipsizeMode='tail'
-                >
-                  {movie.year}
-                </Text>
-              </View>
-            </View>
-
-            {/* Full Title Overlay (shows on focus) */}
-            {focused && (
-              <View style={styles.fullTitleContainer}>
-                <View style={styles.fullTitleOverlay} />
-                <View style={styles.fullTitleContent}>
-                  <Text style={styles.fullTitle}>{movie.title}</Text>
-                  <Text style={styles.fullYear}>{movie.year}</Text>
-                </View>
-              </View>
-            )}
-          </>
-        )}
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [{ scale: scaleValue }],
+            },
+          ]}
+        >
+          <View style={styles.posterContainer}>
+            <Image
+              source={{ uri: getImgSrc(movie.thumb) }}
+              style={styles.poster}
+              resizeMode='cover'
+            />
+          </View>
+          <View style={styles.content}>
+            <Text style={styles.title} numberOfLines={1} allowFontScaling>
+              {movie.title}
+            </Text>
+            <Text style={styles.year}>{movie.year}</Text>
+          </View>
+          {isFocused && <View style={styles.focusBorder} />}
+        </Animated.View>
       </Pressable>
     </Link>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    margin: 8,
+  },
   card: {
-    width: Layout.card.width,
-    borderRadius: Layout.spacing.sm,
-    overflow: "hidden",
+    width: POSTER_WIDTH,
     backgroundColor: `${primary}33`,
-    transform: [{ scale: 1 }],
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderRadius: 8,
+    overflow: "hidden",
   },
-  cardFocused: {
-    transform: [{ scale: 1.05 }],
-    backgroundColor: `${primary}66`,
-    borderColor: secondary,
+  posterContainer: {
+    width: POSTER_WIDTH,
+    height: POSTER_HEIGHT,
+    backgroundColor: dark,
   },
-  imageContainer: {
-    position: "relative",
-    width: Layout.card.width,
-    height: Layout.card.height,
-  },
-  image: {
+  poster: {
     width: "100%",
     height: "100%",
   },
-  overlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: `${dark}99`,
-  },
   content: {
-    padding: Layout.spacing.md,
-    width: Layout.card.width,
-  },
-  textContainer: {
-    width: "100%",
+    padding: 12,
   },
   title: {
-    fontSize: Layout.card.titleSize,
+    fontSize: 16,
     fontWeight: "bold",
     color: light,
-    marginBottom: Layout.spacing.sm,
-    width: "100%",
+    marginBottom: 4,
   },
   year: {
-    fontSize: Layout.card.textSize,
+    fontSize: 14,
     color: info,
-    width: "100%",
   },
-  // Full title overlay styles
-  fullTitleContainer: {
+  focusBorder: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  fullTitleOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: `${dark}CC`,
-  },
-  fullTitleContent: {
-    padding: Layout.spacing.lg,
-    alignItems: "center",
-  },
-  fullTitle: {
-    fontSize: Layout.card.titleSize,
-    fontWeight: "bold",
-    color: light,
-    textAlign: "center",
-    marginBottom: Layout.spacing.sm,
-  },
-  fullYear: {
-    fontSize: Layout.card.textSize,
-    color: info,
-    textAlign: "center",
+    borderWidth: 3,
+    borderColor: secondary,
+    borderRadius: 8,
   },
 });

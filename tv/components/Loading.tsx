@@ -1,6 +1,24 @@
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Dimensions,
+} from "react-native";
 import { light, info } from "@/constants/Colors";
-import { Layout } from "@/constants/Layout";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Scale values based on screen width (1920 is FHD width)
+const scale = SCREEN_WIDTH / 1920;
+const SPACING = {
+  lg: Math.round(24 * scale),
+  xl: Math.round(32 * scale),
+};
+
+const FONT_SIZES = {
+  large: Math.round(24 * scale),
+};
 
 type LoadingProps = {
   message?: string;
@@ -14,11 +32,7 @@ export default function Loading({
   return (
     <View style={styles.container}>
       {showSpinner && (
-        <ActivityIndicator
-          size={Layout.isFHD ? "large" : "small"}
-          color={info}
-          style={styles.spinner}
-        />
+        <ActivityIndicator size='large' color={info} style={styles.spinner} />
       )}
       <Text style={styles.message}>{message}</Text>
     </View>
@@ -30,14 +44,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: Layout.spacing.xl,
+    padding: SPACING.xl,
   },
   spinner: {
-    marginBottom: Layout.spacing.lg,
-    transform: [{ scale: Layout.isFHD ? 1.5 : 1 }],
+    marginBottom: SPACING.lg,
+    transform: [{ scale: 1.5 }],
   },
   message: {
-    fontSize: Layout.card.titleSize,
+    fontSize: FONT_SIZES.large,
     color: light,
     textAlign: "center",
   },

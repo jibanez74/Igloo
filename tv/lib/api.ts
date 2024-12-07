@@ -1,18 +1,8 @@
 import axios from "axios";
-import Constants from "expo-constants";
-
-const apiUrl =
-  Constants.expoConfig?.extra?.apiUrl ||
-  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
-
-if (!apiUrl) {
-  throw new Error(
-    "API URL is not configured. Please check your app configuration."
-  );
-}
+import API_URL from "@/constants/Backend";
 
 const api = axios.create({
-  baseURL: apiUrl,
+  baseURL: `${API_URL}/api/v1`,
 });
 
 export default api;

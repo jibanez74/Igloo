@@ -1,14 +1,19 @@
-import { ScrollView, View, Text, StyleSheet } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import api from "@/lib/api";
+import { FlatList, View, Text, StyleSheet } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import getError from "@/lib/getError";
-import MovieCard from "./MovieCard";
+import api from "@/lib/api";
+import { dark, light } from "@/constants/Colors";
 import Loading from "./Loading";
 import Alert from "./Alert";
-import { light } from "@/constants/Colors";
-import { Layout } from "@/constants/Layout";
+import MovieCard from "./MovieCard";
 import type { SimpleMovie } from "@/types/Movie";
+
+// Card dimensions based on MovieCard
+const CARD_WIDTH = 200;
+const CARD_HEIGHT = 300;
+const CONTAINER_PADDING = 32;
+const CARD_MARGIN = 24;
 
 type MoviesResponse = {
   movies: SimpleMovie[];
@@ -34,6 +39,23 @@ export default function LatestMovies() {
     },
   });
 
+  const renderMovie = ({
+    item,
+    index,
+  }: {
+    item: SimpleMovie;
+    index: number;
+  }) => (
+    <View
+      style={[
+        styles.movieContainer,
+        index === (data?.length || 0) - 1 && styles.lastMovie,
+      ]}
+    >
+      <MovieCard movie={item} hasTvFocus={index === 0} />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Latest Movies</Text>
@@ -50,24 +72,14 @@ export default function LatestMovies() {
             onDismiss={() => setShowError(false)}
           />
         ) : (
-          <ScrollView
+          <FlatList
+            data={data}
+            renderItem={renderMovie}
+            keyExtractor={item => item.ID.toString()}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.scrollViewContent}
-            style={styles.scrollView}
-          >
-            {data?.map((movie, index) => (
-              <View
-                key={movie.ID}
-                style={[
-                  styles.movieCard,
-                  index === data.length - 1 && styles.lastMovieCard,
-                ]}
-              >
-                <MovieCard movie={movie} hasTVPreferredFocus={index === 0} />
-              </View>
-            ))}
-          </ScrollView>
+            contentContainerStyle={styles.listContent}
+          />
         )}
       </View>
     </View>
@@ -76,28 +88,26 @@ export default function LatestMovies() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: Layout.spacing.xl,
+    paddingVertical: CONTAINER_PADDING,
+    backgroundColor: dark,
   },
   sectionTitle: {
-    fontSize: Layout.card.titleSize * 1.25,
+    fontSize: 28,
     fontWeight: "bold",
     color: light,
-    marginBottom: Layout.spacing.lg,
-    paddingHorizontal: Layout.spacing.xl,
+    marginBottom: 24,
+    paddingHorizontal: CONTAINER_PADDING,
   },
   contentContainer: {
-    height: Layout.card.height + Layout.spacing.xl * 2,
+    height: CARD_HEIGHT + CONTAINER_PADDING, // Based on MovieCard height + padding
   },
-  scrollView: {
-    flexGrow: 0,
+  listContent: {
+    paddingHorizontal: CONTAINER_PADDING,
   },
-  scrollViewContent: {
-    paddingHorizontal: Layout.spacing.xl,
+  movieContainer: {
+    marginRight: CARD_MARGIN,
   },
-  movieCard: {
-    marginRight: Layout.card.spacing,
-  },
-  lastMovieCard: {
+  lastMovie: {
     marginRight: 0,
   },
 });

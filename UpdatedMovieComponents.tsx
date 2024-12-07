@@ -1,8 +1,24 @@
+
 import { useRef, useState, useEffect } from "react";
-import { Pressable, Text, View, StyleSheet, Dimensions } from "react-native";
+import {
+  Image,
+  Pressable,
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Dimensions,
+} from "react-native";
+import { Link } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
-import MovieCard from "./MovieCard";
-import { secondary, info, primary, dark, light } from "@/constants/Colors";
+import {
+  primary,
+  dark,
+  light,
+  info,
+  secondary,
+} from "@/constants/Colors";
+import getImgSrc from "@/lib/getImgSrc";
 import type { SimpleMovie } from "@/types/Movie";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -12,11 +28,92 @@ const POSTER_HEIGHT = Math.round(300 * scaleFactor);
 const CARD_MARGIN = Math.round(24 * scaleFactor);
 const CONTAINER_PADDING = Math.round(32 * scaleFactor);
 
+type MovieCardProps = {
+  movie: SimpleMovie;
+  hasTvFocus?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
+};
+
+export function MovieCard({
+  movie,
+  hasTvFocus = false,
+  onFocus,
+  onBlur,
+}: MovieCardProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const scaleValue = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(scaleValue, {
+      toValue: hasTvFocus ? 1.1 : 1,
+      useNativeDriver: true,
+    }).start();
+  }, [hasTvFocus]);
+
+  const handleFocus = () => {
+    onFocus?.();
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    onBlur?.();
+    setIsFocused(false);
+  };
+
+  return (
+    <Link
+      href={{
+        pathname: "/(tabs)/movies/[movieID]",
+        params: { movieID: movie.ID },
+      }}
+      asChild
+    >
+      <Pressable
+        accessibilityLabel={`Movie: ${movie.title}, released in ${movie.year}`}
+        focusable={true}
+        hasTVPreferredFocus={hasTvFocus}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={({ pressed }) => [
+          styles.pressable,
+          pressed && { opacity: 0.9 },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [{ scale: scaleValue }],
+            },
+          ]}
+        >
+          <View style={styles.posterContainer}>
+            <Image
+              source={{ uri: getImgSrc(movie.thumb) }}
+              style={styles.poster}
+              resizeMode="cover"
+              defaultSource={require("@/assets/placeholder.png")}
+            />
+          </View>
+          <View style={styles.content}>
+            <Text style={styles.title} numberOfLines={1} allowFontScaling>
+              {movie.title}
+            </Text>
+            <Text style={styles.year}>{movie.year}</Text>
+          </View>
+          {isFocused && <View style={styles.focusBorder} />}
+        </Animated.View>
+      </Pressable>
+    </Link>
+  );
+}
+
 type MoviesGridProps = {
   movies: SimpleMovie[];
 };
 
-export default function MoviesGrid({ movies }: MoviesGridProps) {
+export function MoviesGrid({ movies }: MoviesGridProps) {
   const availableWidth = SCREEN_WIDTH - CONTAINER_PADDING * 2;
   const numColumns = Math.floor(availableWidth / (POSTER_WIDTH + CARD_MARGIN));
   const itemHeight = POSTER_HEIGHT + CARD_MARGIN * 2;
@@ -76,7 +173,9 @@ export default function MoviesGrid({ movies }: MoviesGridProps) {
         estimatedItemSize={itemHeight}
         contentContainerStyle={gridStyles.contentContainer}
         showsVerticalScrollIndicator={false}
-        keyExtractor={(item, index) => item?.ID?.toString() || `movie-${index}`}
+        keyExtractor={(item, index) =>
+          item?.ID?.toString() || `movie-${index}`
+        }
       />
     </View>
   );

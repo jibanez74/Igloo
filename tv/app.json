@@ -61,7 +61,7 @@
     "name": "Igloo",
     "slug": "Igloo",
     "extra": {
-      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1"
+      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net"
     }
   }
 }
