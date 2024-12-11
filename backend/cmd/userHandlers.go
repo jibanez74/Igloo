@@ -4,13 +4,17 @@ import (
 	"errors"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
+	"log"
 	"net/http"
 	"strconv"
 )
 
 func (app *config) GetAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("inside of handler")
+
 	userID, ok := helpers.UserIDFromContext(r.Context())
 	if !ok {
+		log.Println("unable to get user id from context")
 		helpers.ErrorJSON(w, errors.New("unauthorized"), http.StatusUnauthorized)
 		return
 	}
@@ -30,7 +34,6 @@ func (app *config) GetAuthenticatedUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Return user data
 	helpers.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
 			"id":       user.ID,

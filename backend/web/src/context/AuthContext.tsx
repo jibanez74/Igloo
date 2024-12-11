@@ -1,5 +1,17 @@
-import { useEffect, useState, createContext, useContext } from "react";
+import {
+  useTransition,
+  useState,
+  createContext,
+  useContext,
+  useEffect,
+} from "react";
+import api from "../lib/api";
 import type { User } from "../types/User";
+import getError from "../lib/getError";
+
+type UserResponse = {
+  user: User;
+};
 
 type AuthContextType = {
   user: User | null;
@@ -22,16 +34,28 @@ export default function AuthProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setLoading(false);
-  }, []);
+  const getAuthUser = () => {
+    startTransition(async () => {
+      try {
+        const { data } = await api.get<UserResponse>("/auth/users/me");
+
+        if (data.user) {
+          setUser(data.user);
+        }
+      } catch (err) {
+        alert(getError(err));
+      }
+    });
+  };
+
+  useEffect(() => getAuthUser(), []);
 
   return (
     <AuthContext.Provider value={{ user, setUser }}>
-      {!loading && children}
+      {!isPending && children}
     </AuthContext.Provider>
   );
 }
