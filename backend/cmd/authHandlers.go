@@ -49,8 +49,17 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(helpers.LongLivedExp.Seconds()),
+	})
+
 	helpers.WriteJSON(w, http.StatusOK, map[string]any{
-		"token": token,
 		"user": map[string]any{
 			"name":     user.Name,
 			"email":    user.Email,
@@ -60,4 +69,3 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
-
