@@ -10,11 +10,7 @@ export default defineConfig({
     }),
   ],
 
-  // css: {
-  //   preprocessorOptions: {
-  //     scss: {},
-  //   },
-  // },
+  base: "/assets/",
 
   server: {
     port: 3000,

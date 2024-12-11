@@ -22,10 +22,12 @@ func (app *config) routes() http.Handler {
 		router.Use(middleware.RequestID)
 	}
 
+	// Serve static files (for uploads, images, etc)
 	workDir, _ := os.Getwd()
 	filesDir := http.Dir(filepath.Join(workDir, "static"))
 	fileServer(router, "/static", filesDir)
 
+	// API routes must come before the catch-all route
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Post("/login", app.Login)
 
@@ -48,14 +50,23 @@ func (app *config) routes() http.Handler {
 		})
 	})
 
-	// In production mode, serve the React app from the client directory
+	// In production mode, serve the React app
 	if !app.debug {
 		clientDir := http.Dir(filepath.Join(workDir, "client"))
 
-		router.Handle("/*", http.FileServer(clientDir))
+		// FileServer for static assets (js, css, etc)
+		router.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(clientDir)))
 
-		router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(workDir, "client", "index.html"))
+		// Catch-all route must be last
+		router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			// Don't serve index.html for API routes
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.NotFound(w, r)
+				return
+			}
+			
+			indexPath := filepath.Join(workDir, "client", "index.html")
+			http.ServeFile(w, r, indexPath)
 		})
 	}
 
