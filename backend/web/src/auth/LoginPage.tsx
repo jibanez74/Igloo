@@ -9,6 +9,7 @@ import Form from "react-bootstrap/Form";
 import InputGroup from "react-bootstrap/InputGroup";
 import Button from "react-bootstrap/Button";
 import { FaUser, FaEnvelope, FaLock } from "react-icons/fa";
+import Message from "../shared/Message";
 import getError from "../lib/getError";
 import api from "../lib/api";
 import type { User } from "../types/User";
@@ -61,7 +62,7 @@ export default function LoginPage() {
             <Card.Body className='p-4'>
               <h2 className='text-center mb-4'>Login</h2>
 
-              {error && <div className='alert alert-danger'>{error}</div>}
+              {error && <Message msg={error} />}
 
               <Form onSubmit={handleSubmit}>
                 <Form.Group className='mb-3' controlId='username'>
@@ -71,11 +72,16 @@ export default function LoginPage() {
                       <FaUser />
                     </InputGroup.Text>
                     <Form.Control
+                      autoFocus
+                      autoCapitalize='off'
                       name='username'
                       type='text'
                       placeholder='Enter username'
                       required
+                      minLength={2}
+                      maxLength={20}
                       className='bg-dark border-secondary text-light'
+                      disabled={loading}
                     />
                   </InputGroup>
                 </Form.Group>
@@ -92,6 +98,7 @@ export default function LoginPage() {
                       placeholder='Enter email'
                       required
                       className='bg-dark border-secondary text-light'
+                      disabled={loading}
                     />
                   </InputGroup>
                 </Form.Group>
@@ -107,7 +114,10 @@ export default function LoginPage() {
                       type='password'
                       placeholder='Enter password'
                       required
+                      minLength={9}
+                      maxLength={128}
                       className='bg-dark border-secondary text-light'
+                      disabled={loading}
                     />
                   </InputGroup>
                 </Form.Group>
