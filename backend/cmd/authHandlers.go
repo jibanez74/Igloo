@@ -69,3 +69,20 @@ func (app *config) Login(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
+
+func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
+	// Expire the cookie by setting MaxAge to -1
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	helpers.WriteJSON(w, http.StatusOK, map[string]any{
+		"message": "logged out successfully",
+	})
+}

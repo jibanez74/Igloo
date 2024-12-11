@@ -29,6 +29,7 @@ func (app *config) routes() http.Handler {
 	router.Post("/api/v1/login", app.Login)
 
 	router.Route("/api/v1/auth", func(r chi.Router) {
+		r.Get("/logout", app.Logout)
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
