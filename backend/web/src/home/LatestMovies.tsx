@@ -16,7 +16,7 @@ export default function LatestMovies() {
     queryKey: ["latest-movies"],
     queryFn: async () => {
       try {
-        const { data } = await api.get<MoviesResponse>("/auth/movies/latest");
+        const { data } = await api.get<MoviesResponse>("/movies/latest");
 
         if (!data.movies) {
           throw new Error("no movies were fetched");
@@ -61,13 +61,27 @@ export default function LatestMovies() {
       )}
 
       {!isPending && !isError && data && (
-        <Row className='g-4'>
-          {data.map(m => (
-            <Col key={m.ID} sm={4} md={3} lg={2} className='d-flex h-100'>
-              <MovieCard movie={m} />
-            </Col>
-          ))}
-        </Row>
+        <>
+          {data.length === 0 ? (
+            <Row className='justify-content-center my-4'>
+              <Col xs={12} md={6}>
+                <Message
+                  title='No Movies'
+                  msg='There are no movies available at the moment.'
+                  variant='info'
+                />
+              </Col>
+            </Row>
+          ) : (
+            <Row className='g-4'>
+              {data.map(m => (
+                <Col key={m.ID} sm={4} md={3} lg={2} className='d-flex h-100'>
+                  <MovieCard movie={m} />
+                </Col>
+              ))}
+            </Row>
+          )}
+        </>
       )}
     </>
   );

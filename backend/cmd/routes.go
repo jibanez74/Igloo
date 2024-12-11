@@ -26,30 +26,38 @@ func (app *config) routes() http.Handler {
 	filesDir := http.Dir(filepath.Join(workDir, "static"))
 	fileServer(router, "/static", filesDir)
 
-	router.Post("/api/v1/login", app.Login)
-
 	router.Route("/api/v1", func(r chi.Router) {
-		r.Use(app.isAuth)
+		r.Post("/login", app.Login)
 
-		r.Get("/auth/logout", app.Logout)
+		r.Group(func(r chi.Router) {
+			r.Use(app.isAuth)
 
-		r.Route("/movies", func(r chi.Router) {
-			r.Get("/latest", app.GetLatestMovies)
-			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
-			r.Get("/{id}", app.GetMovieByID)
-			r.Get("/all", app.GetAllMovies)
-		})
+			r.Get("/logout", app.Logout)
 
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/me", app.GetAuthenticatedUser)
+			r.Route("/users", func(r chi.Router) {
+				r.Get("/me", app.GetAuthenticatedUser)
+			})
+
+			r.Route("/movies", func(r chi.Router) {
+				r.Get("/latest", app.GetLatestMovies)
+				r.Get("/all", app.GetAllMovies)
+				r.Get("/stream/direct/{id}", app.DirectStreamMovie)
+				r.Get("/{id}", app.GetMovieByID)
+				r.Post("/create", app.CreateMovie)
+			})
 		})
 	})
 
-	// temp route for adding movies
-	router.Post("/api/v1/movie/create", app.CreateMovie)
+	// In production mode, serve the React app from the client directory
+	if !app.debug {
+		clientDir := http.Dir(filepath.Join(workDir, "client"))
 
-	// temp route for adding users
-	router.Post("/api/v1/user/create", app.CreateUser)
+		router.Handle("/*", http.FileServer(clientDir))
+
+		router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, filepath.Join(workDir, "client", "index.html"))
+		})
+	}
 
 	return router
 }
