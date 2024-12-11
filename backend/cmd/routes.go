@@ -28,13 +28,20 @@ func (app *config) routes() http.Handler {
 
 	router.Post("/api/v1/login", app.Login)
 
-	router.Route("/api/v1/auth", func(r chi.Router) {
-		r.Get("/logout", app.Logout)
+	router.Route("/api/v1", func(r chi.Router) {
+		r.Use(app.isAuth)
+
+		r.Get("/auth/logout", app.Logout)
+
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/stream/direct/{id}", app.DirectStreamMovie)
 			r.Get("/{id}", app.GetMovieByID)
 			r.Get("/all", app.GetAllMovies)
+		})
+
+		r.Route("/users", func(r chi.Router) {
+			r.Get("/me", app.GetAuthenticatedUser)
 		})
 	})
 
