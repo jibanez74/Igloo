@@ -24,8 +24,8 @@ func (app *config) routes() http.Handler {
 	filesDir := http.Dir(filepath.Join(app.workDir, "static"))
 	fileServer(router, "/api/v1/static", filesDir)
 
-	// router.Post("/users/create", app.CreateUser)
-	// router.Post("/movies/create", app.CreateMovie)
+	router.Post("/users/create", app.CreateUser)
+	router.Post("/movies/create", app.CreateMovie)
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Post("/login", app.Login)
