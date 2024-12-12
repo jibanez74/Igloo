@@ -3,7 +3,5 @@ export default function getImgSrc(path: string) {
     return "";
   }
 
-  return path.startsWith("http")
-    ? path
-    : `https://swifty.hare-crocodile.ts.net${path}`;
+  return path.startsWith("http") ? path : `/api/v1${path}`;
 }

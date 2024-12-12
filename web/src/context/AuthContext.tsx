@@ -7,7 +7,6 @@ import {
 } from "react";
 import api from "../lib/api";
 import type { User } from "../types/User";
-import getError from "../lib/getError";
 
 type UserResponse = {
   user: User;
@@ -40,13 +39,13 @@ export default function AuthProvider({
   const getAuthUser = () => {
     startTransition(async () => {
       try {
-        const { data } = await api.get<UserResponse>("/auth/users/me");
+        const { data } = await api.get<UserResponse>("/users/me");
 
         if (data.user) {
           setUser(data.user);
         }
       } catch (err) {
-        alert(getError(err));
+        console.error(err);
       }
     });
   };

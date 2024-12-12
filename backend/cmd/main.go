@@ -22,6 +22,7 @@ var binaries embed.FS
 
 type config struct {
 	debug        bool
+	workDir      string
 	repo         repository.Repo
 	tmdb         tmdb.Tmdb
 	wg           *sync.WaitGroup
@@ -33,6 +34,12 @@ type config struct {
 
 func main() {
 	var app config
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	app.workDir = workDir
 
 	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 	if err != nil {

@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,12 +21,12 @@ func (app *config) routes() http.Handler {
 		router.Use(middleware.RequestID)
 	}
 
-	// Serve static files (for uploads, images, etc)
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "static"))
-	fileServer(router, "/static", filesDir)
+	filesDir := http.Dir(filepath.Join(app.workDir, "static"))
+	fileServer(router, "/api/v1/static", filesDir)
 
-	// API routes must come before the catch-all route
+	// router.Post("/users/create", app.CreateUser)
+	// router.Post("/movies/create", app.CreateMovie)
+
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Post("/login", app.Login)
 
@@ -45,28 +44,16 @@ func (app *config) routes() http.Handler {
 				r.Get("/all", app.GetAllMovies)
 				r.Get("/stream/direct/{id}", app.DirectStreamMovie)
 				r.Get("/{id}", app.GetMovieByID)
-				r.Post("/create", app.CreateMovie)
 			})
 		})
 	})
 
-	// In production mode, serve the React app
 	if !app.debug {
-		clientDir := http.Dir(filepath.Join(workDir, "client"))
+		assetsDir := http.Dir(filepath.Join(app.workDir, "cmd", "client", "assets"))
+		fileServer(router, "/assets", assetsDir)
 
-		// FileServer for static assets (js, css, etc)
-		router.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(clientDir)))
-
-		// Catch-all route must be last
 		router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			// Don't serve index.html for API routes
-			if strings.HasPrefix(r.URL.Path, "/api/") {
-				http.NotFound(w, r)
-				return
-			}
-			
-			indexPath := filepath.Join(workDir, "client", "index.html")
-			http.ServeFile(w, r, indexPath)
+			http.ServeFile(w, r, filepath.Join(app.workDir, "cmd", "client", "index.html"))
 		})
 	}
 
@@ -86,17 +73,38 @@ func fileServer(r chi.Router, path string, root http.FileSystem) {
 	path += "*"
 
 	r.Get(path, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year
-		w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).UTC().Format(http.TimeFormat))
+		// Set different cache durations based on file type
+		if strings.HasSuffix(r.URL.Path, ".jpg") ||
+			strings.HasSuffix(r.URL.Path, ".jpeg") ||
+			strings.HasSuffix(r.URL.Path, ".png") {
+			// Cache images for 1 year
+			w.Header().Set("Cache-Control", "public, max-age=31536000") // 31536000 seconds = 1 year
+			w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).UTC().Format(http.TimeFormat))
+		} else if strings.HasSuffix(r.URL.Path, ".css") ||
+			strings.HasSuffix(r.URL.Path, ".js") {
+			// Cache CSS and JS for 24 hours
+			w.Header().Set("Cache-Control", "public, max-age=86400") // 86400 seconds = 24 hours
+			w.Header().Set("Expires", time.Now().AddDate(0, 0, 1).UTC().Format(http.TimeFormat))
+		} else {
+			// Default: no cache for other files
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		}
 
 		rctx := chi.RouteContext(r.Context())
 		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
 		fs := http.StripPrefix(pathPrefix, http.FileServer(root))
 
+		// Set appropriate content types
 		if strings.HasSuffix(r.URL.Path, ".jpg") || strings.HasSuffix(r.URL.Path, ".jpeg") {
 			w.Header().Set("Content-Type", "image/jpeg")
 		} else if strings.HasSuffix(r.URL.Path, ".png") {
 			w.Header().Set("Content-Type", "image/png")
+		} else if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		} else if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
 		}
 
 		fs.ServeHTTP(w, r)
