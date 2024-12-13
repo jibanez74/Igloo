@@ -13,7 +13,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
   return (
     <Card className='w-100 h-100 bg-primary text-light rounded-1'>
       <Link to={`/movies/${movie.ID}`}>
-        <Card.Img variant='top' src={imgSrc} className='rounded-top-1' />
+        <Card.Img
+          alt={movie.title}
+          variant='top'
+          src={imgSrc}
+          className='rounded-top-1'
+        />
       </Link>
 
       <Card.Body className='d-flex flex-column text-center'>
