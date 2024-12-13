@@ -31,58 +31,71 @@ export default function LatestMovies() {
   });
 
   return (
-    <>
-      <Row className='mb-4'>
-        <Col>
-          <h2 className='text-white'>Latest Movies</h2>
-        </Col>
-      </Row>
+    <section aria-labelledby='latest-movies-title'>
+      {/* Header with fixed height to prevent layout shift */}
+      <header style={{ minHeight: "48px" }} className='mb-4'>
+        <h2 id='latest-movies-title' className='text-white m-0'>
+          Latest Movies
+        </h2>
+      </header>
 
-      {isPending && (
-        <Row className='justify-content-center my-5'>
-          <Col xs='auto'>
-            <Spinner animation='border' role='status' variant='primary'>
-              <span className='visually-hidden'>Loading...</span>
+      {/* Content container with minimum height to prevent layout shift */}
+      <div style={{ minHeight: "400px" }}>
+        {isPending && (
+          <div
+            className='d-flex justify-content-center align-items-center py-5'
+            role='status'
+            aria-label='Loading latest movies'
+          >
+            <Spinner
+              animation='border'
+              variant='primary'
+              style={{ width: "3rem", height: "3rem" }}
+            >
+              <span className='visually-hidden'>Loading latest movies...</span>
             </Spinner>
-          </Col>
-        </Row>
-      )}
+          </div>
+        )}
 
-      {isError && (
-        <Row className='justify-content-center my-4'>
-          <Col xs={12} md={6}>
+        {isError && (
+          <div role='alert' aria-live='polite'>
             <Message
               title='Loading Error'
               msg='Unable to fetch latest movies. Please try again later.'
               variant='danger'
             />
-          </Col>
-        </Row>
-      )}
+          </div>
+        )}
 
-      {!isPending && !isError && data && (
-        <>
-          {data.length === 0 ? (
-            <Row className='justify-content-center my-4'>
-              <Col xs={12} md={6}>
+        {!isPending && !isError && data && (
+          <>
+            {data.length === 0 ? (
+              <div role='alert' aria-live='polite'>
                 <Message
                   title='No Movies'
                   msg='There are no movies available at the moment.'
                   variant='info'
                 />
-              </Col>
-            </Row>
-          ) : (
-            <Row className='g-4'>
-              {data.map(m => (
-                <Col key={m.ID} sm={4} md={3} lg={2} className='d-flex h-100'>
-                  <MovieCard movie={m} />
-                </Col>
-              ))}
-            </Row>
-          )}
-        </>
-      )}
-    </>
+              </div>
+            ) : (
+              <Row className='g-4' role='list' aria-label='Latest movies grid'>
+                {data.map(movie => (
+                  <Col
+                    key={movie.ID}
+                    sm={4}
+                    md={3}
+                    lg={2}
+                    className='d-flex h-100'
+                    role='listitem'
+                  >
+                    <MovieCard movie={movie} />
+                  </Col>
+                ))}
+              </Row>
+            )}
+          </>
+        )}
+      </div>
+    </section>
   );
 }

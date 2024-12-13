@@ -14,7 +14,6 @@ import {
   FaSignOutAlt,
 } from "react-icons/fa";
 import logo from "../assets/images/logo-alt.png";
-import getError from "../lib/getError";
 
 export default function Header() {
   const { user, setUser } = useAuth();
@@ -23,12 +22,12 @@ export default function Header() {
 
   const handleSignOut = async () => {
     try {
-      await api.get("/auth/logout");
+      await api.get("/logout");
 
       setUser(null);
       navigate("/login", { replace: true });
     } catch (err) {
-      alert(getError(err));
+      console.error(err);
     }
   };
 
