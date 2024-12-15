@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import getError from "../lib/getError";
 import api from "../lib/api";
+import getImgSrc from "../lib/getImgSrc";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -116,7 +117,7 @@ export default function MovieDetailsPage() {
         <Row>
           <Col md={4} lg={3}>
             <Image
-              src={data.thumb}
+              src={getImgSrc(data.thumb)}
               alt={`${data.title} poster`}
               fluid
               rounded
@@ -215,7 +216,7 @@ export default function MovieDetailsPage() {
                       <div className='text-center mb-3'>
                         {cast.artist.thumb ? (
                           <Image
-                            src={cast.artist.thumb}
+                            src={getImgSrc(cast.artist.thumb)}
                             alt={cast.artist.name}
                             roundedCircle
                             style={{
@@ -262,7 +263,7 @@ export default function MovieDetailsPage() {
                       <div className='text-center mb-3'>
                         {crew.artist.thumb ? (
                           <Image
-                            src={crew.artist.thumb}
+                            src={getImgSrc(crew.artist.thumb)}
                             alt={crew.artist.name}
                             roundedCircle
                             style={{
@@ -310,7 +311,7 @@ export default function MovieDetailsPage() {
                         <div className='text-center mb-3'>
                           {studio.logo ? (
                             <Image
-                              src={studio.logo}
+                              src={getImgSrc(studio.logo)}
                               alt={studio.name}
                               style={{
                                 width: "auto",
