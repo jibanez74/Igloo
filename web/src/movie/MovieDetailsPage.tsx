@@ -27,10 +27,10 @@ export default function MovieDetailsPage() {
   const { id } = useParams();
 
   const navigate = useNavigate();
+
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
 
-  // Helper function to extract YouTube video ID
   const getYouTubeId = (url: string) => {
     const match = url.match(/[?&]v=([^&]+)/);
     return match ? match[1] : null;
