@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import ReactPlayer from "react-player";
 import getError from "../lib/getError";
 import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
-
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
 import Container from "react-bootstrap/Container";
@@ -18,8 +16,8 @@ import Spinner from "react-bootstrap/Spinner";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
 import Card from "react-bootstrap/Card";
-import Modal from "react-bootstrap/Modal";
 import Image from "react-bootstrap/Image";
+import VideoExtrasModal from "../shared/VideoExtrasModal";
 import {
   FaArrowLeft,
   FaStar,
@@ -36,19 +34,11 @@ type MovieResponse = {
 
 export default function MovieDetailsPage() {
   const { id } = useParams();
+
   const navigate = useNavigate();
+
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const handleVideoSelect = (url: string) => {
-    setSelectedVideo(url);
-    setIsPlaying(true);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedVideo(null);
-    setIsPlaying(false);
-  };
+  const [selectedTitle, setSelectedTitle] = useState<string>("");
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["movie", id],
@@ -64,6 +54,16 @@ export default function MovieDetailsPage() {
       }
     },
   });
+
+  const handleVideoSelect = (url: string, title: string) => {
+    setSelectedVideo(url);
+    setSelectedTitle(title);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedVideo(null);
+    setSelectedTitle("");
+  };
 
   if (isPending) {
     return (
@@ -109,9 +109,9 @@ export default function MovieDetailsPage() {
   }
 
   return (
-    <div className='pt-5'>
+    <main className='pt-5'>
       {/* Hero Section */}
-      <div
+      <header
         className='position-relative bg-dark bg-opacity-75'
         style={{
           minHeight: "80vh",
@@ -123,27 +123,32 @@ export default function MovieDetailsPage() {
         }}
       >
         {/* Back Button */}
-        <Button
-          variant='outline-light'
-          onClick={() => navigate(-1)}
-          className='position-fixed top-0 start-0 m-4 mt-5 z-3'
-        >
-          <FaArrowLeft className='me-2' /> Back
-        </Button>
+        <nav aria-label='Navigation'>
+          <Button
+            variant='outline-light'
+            onClick={() => navigate(-1)}
+            className='position-fixed top-0 start-0 m-4 mt-5 z-3'
+          >
+            <FaArrowLeft className='me-2' aria-hidden='true' />
+            <span>Back</span>
+          </Button>
+        </nav>
 
         <Container className='py-5'>
           <Row className='align-items-center min-vh-75'>
             <Col md={4} lg={3}>
-              <Image
-                src={getImgSrc(data.thumb)}
-                alt={`${data.title} poster`}
-                fluid
-                rounded
-                className='shadow h-100 object-fit-cover'
-              />
+              <figure>
+                <Image
+                  src={getImgSrc(data.thumb)}
+                  alt={`${data.title} poster`}
+                  fluid
+                  rounded
+                  className='shadow h-100 object-fit-cover'
+                />
+              </figure>
             </Col>
             <Col md={8} lg={9}>
-              <div className='text-white'>
+              <article className='text-white'>
                 <h1 className='display-4 mb-2'>
                   {data.title}
                   {data.audienceRating > 0 && (
@@ -152,8 +157,14 @@ export default function MovieDetailsPage() {
                       text='dark'
                       className='ms-3 align-middle'
                     >
-                      <FaStar className='me-1' />
-                      {data.audienceRating.toFixed(1)}
+                      <FaStar className='me-1' aria-hidden='true' />
+                      <span
+                        aria-label={`Rating: ${data.audienceRating.toFixed(
+                          1
+                        )} out of 10`}
+                      >
+                        {data.audienceRating.toFixed(1)}
+                      </span>
                     </Badge>
                   )}
                 </h1>
@@ -168,9 +179,9 @@ export default function MovieDetailsPage() {
                 {data.genres.length > 0 && (
                   <div className='mb-4'>
                     <span className='text-light opacity-75'>Genres: </span>
-                    <span>
+                    <span role='list' aria-label='Movie genres'>
                       {data.genres.map((genre, index) => (
-                        <span key={genre.ID}>
+                        <span key={genre.ID} role='listitem'>
                           {genre.title}
                           {index < data.genres.length - 1 ? ", " : ""}
                         </span>
@@ -182,20 +193,21 @@ export default function MovieDetailsPage() {
                 <p className='mb-4 fs-5'>{data.summary}</p>
 
                 {/* Action Buttons */}
-                <div className='mb-4'>
+                <div className='mb-4' role='toolbar' aria-label='Movie actions'>
                   <ButtonGroup>
                     <Button variant='primary' size='lg'>
-                      <FaPlay className='me-2' /> Play
+                      <FaPlay className='me-2' aria-hidden='true' /> Play
                     </Button>
                     <Button variant='outline-light' size='lg'>
-                      <FaEye className='me-2' /> Mark Watched
+                      <FaEye className='me-2' aria-hidden='true' /> Mark Watched
                     </Button>
                     <Button variant='outline-light' size='lg'>
-                      <FaHeart className='me-2' /> Like
+                      <FaHeart className='me-2' aria-hidden='true' /> Like
                     </Button>
                     <Dropdown as={ButtonGroup}>
                       <Dropdown.Toggle variant='outline-light' size='lg'>
-                        <FaEllipsisV />
+                        <FaEllipsisV aria-hidden='true' />
+                        <span className='visually-hidden'>More options</span>
                       </Dropdown.Toggle>
                       <Dropdown.Menu variant='dark'>
                         <Dropdown.Item href='#/action-1'>
@@ -213,57 +225,47 @@ export default function MovieDetailsPage() {
                 {/* Movie Meta Info */}
                 <Row className='g-4'>
                   <Col sm={6} md={4}>
-                    <div className='d-flex flex-column'>
-                      <small className='text-light opacity-75'>
-                        Release Date
-                      </small>
-                      <span>{formatDate(data.releaseDate)}</span>
-                    </div>
+                    <dt className='text-light opacity-75'>Release Date</dt>
+                    <dd>{formatDate(data.releaseDate)}</dd>
                   </Col>
                   <Col sm={6} md={4}>
-                    <div className='d-flex flex-column'>
-                      <small className='text-light opacity-75'>Runtime</small>
-                      <span>
-                        {Math.floor(data.runTime / 60)}h {data.runTime % 60}m
-                      </span>
-                    </div>
+                    <dt className='text-light opacity-75'>Runtime</dt>
+                    <dd>
+                      {Math.floor(data.runTime / 60)}h {data.runTime % 60}m
+                    </dd>
                   </Col>
                   <Col sm={6} md={4}>
-                    <div className='d-flex flex-column'>
-                      <small className='text-light opacity-75'>Rating</small>
-                      <span>{data.contentRating}</span>
-                    </div>
+                    <dt className='text-light opacity-75'>Rating</dt>
+                    <dd>{data.contentRating}</dd>
                   </Col>
                   {data.budget > 0 && (
                     <Col sm={6} md={4}>
-                      <div className='d-flex flex-column'>
-                        <small className='text-light opacity-75'>Budget</small>
-                        <span>{formatDollars(data.budget)}</span>
-                      </div>
+                      <dt className='text-light opacity-75'>Budget</dt>
+                      <dd>{formatDollars(data.budget)}</dd>
                     </Col>
                   )}
                   {data.revenue > 0 && (
                     <Col sm={6} md={4}>
-                      <div className='d-flex flex-column'>
-                        <small className='text-light opacity-75'>Revenue</small>
-                        <span>{formatDollars(data.revenue)}</span>
-                      </div>
+                      <dt className='text-light opacity-75'>Revenue</dt>
+                      <dd>{formatDollars(data.revenue)}</dd>
                     </Col>
                   )}
                 </Row>
-              </div>
+              </article>
             </Col>
           </Row>
         </Container>
-      </div>
+      </header>
 
       {/* Content Sections */}
       <div className='bg-dark'>
         <Container className='py-5'>
           {/* Videos and Extras Section */}
           {data.extras.length > 0 && (
-            <section className='mb-5'>
-              <h2 className='h4 mb-4 text-white'>Videos & Extras</h2>
+            <section aria-labelledby='videos-heading' className='mb-5'>
+              <h2 id='videos-heading' className='h4 mb-4 text-white'>
+                Videos & Extras
+              </h2>
               <Row xs={1} md={2} lg={3} className='g-4'>
                 {data.extras.map(extra => (
                   <Col key={extra.ID}>
@@ -273,9 +275,12 @@ export default function MovieDetailsPage() {
                         <div className='d-grid'>
                           <Button
                             variant='primary'
-                            onClick={() => handleVideoSelect(extra.url)}
+                            onClick={() =>
+                              handleVideoSelect(extra.url, extra.title)
+                            }
                           >
-                            <FaPlay className='me-2' /> Watch {extra.kind}
+                            <FaPlay className='me-2' aria-hidden='true' /> Watch{" "}
+                            {extra.kind}
                           </Button>
                         </div>
                       </Card.Body>
@@ -287,14 +292,16 @@ export default function MovieDetailsPage() {
           )}
 
           {/* Cast Section */}
-          <section className='mb-5'>
-            <h2 className='h4 mb-4 text-white'>Cast</h2>
+          <section aria-labelledby='cast-heading' className='mb-5'>
+            <h2 id='cast-heading' className='h4 mb-4 text-white'>
+              Cast
+            </h2>
             <Row xs={2} md={3} lg={6} className='g-4'>
               {data.castList.map(cast => (
                 <Col key={cast.ID}>
                   <Card className='h-100 bg-dark border-0 shadow'>
                     <Card.Body className='d-flex flex-column'>
-                      <div className='text-center mb-3'>
+                      <figure className='text-center mb-3'>
                         {cast.artist.thumb ? (
                           <Image
                             src={getImgSrc(cast.artist.thumb)}
@@ -309,16 +316,21 @@ export default function MovieDetailsPage() {
                             className='rounded-circle bg-secondary d-flex align-items-center justify-content-center mx-auto'
                             style={{ width: 100, height: 100 }}
                           >
-                            <i className='bi bi-person fs-1 text-dark'></i>
+                            <i
+                              className='bi bi-person fs-1 text-dark'
+                              aria-hidden='true'
+                            ></i>
                           </div>
                         )}
-                      </div>
-                      <h3 className='h6 text-center mb-1 text-white'>
-                        {cast.artist.name}
-                      </h3>
-                      <p className='text-light opacity-75 text-center small mb-0'>
-                        {cast.character}
-                      </p>
+                        <figcaption>
+                          <h3 className='h6 text-center mb-1 text-white'>
+                            {cast.artist.name}
+                          </h3>
+                          <p className='text-light opacity-75 text-center small mb-0'>
+                            {cast.character}
+                          </p>
+                        </figcaption>
+                      </figure>
                     </Card.Body>
                   </Card>
                 </Col>
@@ -327,14 +339,16 @@ export default function MovieDetailsPage() {
           </section>
 
           {/* Crew Section */}
-          <section className='mb-5'>
-            <h2 className='h4 mb-4 text-white'>Crew</h2>
+          <section aria-labelledby='crew-heading' className='mb-5'>
+            <h2 id='crew-heading' className='h4 mb-4 text-white'>
+              Crew
+            </h2>
             <Row xs={2} md={3} lg={6} className='g-4'>
               {data.crewList.map(crew => (
                 <Col key={crew.ID}>
                   <Card className='h-100 bg-dark border-0 shadow'>
                     <Card.Body className='d-flex flex-column'>
-                      <div className='text-center mb-3'>
+                      <figure className='text-center mb-3'>
                         {crew.artist.thumb ? (
                           <Image
                             src={getImgSrc(crew.artist.thumb)}
@@ -349,16 +363,21 @@ export default function MovieDetailsPage() {
                             className='rounded-circle bg-secondary d-flex align-items-center justify-content-center mx-auto'
                             style={{ width: 100, height: 100 }}
                           >
-                            <i className='bi bi-person fs-1 text-dark'></i>
+                            <i
+                              className='bi bi-person fs-1 text-dark'
+                              aria-hidden='true'
+                            ></i>
                           </div>
                         )}
-                      </div>
-                      <h3 className='h6 text-center mb-1 text-white'>
-                        {crew.artist.name}
-                      </h3>
-                      <p className='text-light opacity-75 text-center small mb-0'>
-                        {crew.job}
-                      </p>
+                        <figcaption>
+                          <h3 className='h6 text-center mb-1 text-white'>
+                            {crew.artist.name}
+                          </h3>
+                          <p className='text-light opacity-75 text-center small mb-0'>
+                            {crew.job}
+                          </p>
+                        </figcaption>
+                      </figure>
                     </Card.Body>
                   </Card>
                 </Col>
@@ -368,14 +387,16 @@ export default function MovieDetailsPage() {
 
           {/* Studios Section */}
           {data.studios.length > 0 && (
-            <section>
-              <h2 className='h4 mb-4 text-white'>Studios</h2>
+            <section aria-labelledby='studios-heading'>
+              <h2 id='studios-heading' className='h4 mb-4 text-white'>
+                Studios
+              </h2>
               <Row xs={2} md={3} lg={6} className='g-4'>
                 {data.studios.map(studio => (
                   <Col key={studio.ID}>
                     <Card className='h-100 bg-dark border-0 shadow'>
                       <Card.Body className='d-flex flex-column justify-content-center'>
-                        <div className='text-center mb-3'>
+                        <figure className='text-center mb-3'>
                           {studio.logo ? (
                             <Image
                               src={getImgSrc(studio.logo)}
@@ -385,13 +406,18 @@ export default function MovieDetailsPage() {
                             />
                           ) : (
                             <div className='bg-secondary d-flex align-items-center justify-content-center h-100'>
-                              <i className='bi bi-building fs-1 text-dark'></i>
+                              <i
+                                className='bi bi-building fs-1 text-dark'
+                                aria-hidden='true'
+                              ></i>
                             </div>
                           )}
-                        </div>
-                        <h3 className='h6 text-center mb-0 text-white'>
-                          {studio.name}
-                        </h3>
+                          <figcaption>
+                            <h3 className='h6 text-center mb-0 text-white'>
+                              {studio.name}
+                            </h3>
+                          </figcaption>
+                        </figure>
                       </Card.Body>
                     </Card>
                   </Col>
@@ -403,63 +429,12 @@ export default function MovieDetailsPage() {
       </div>
 
       {/* Video Modal */}
-      <Modal
+      <VideoExtrasModal
         show={!!selectedVideo}
         onHide={handleCloseModal}
-        size="xl"
-        centered
-        animation={true}
-        dialogClassName="modal-90w"
-      >
-        <Modal.Header closeButton className="border-0 bg-dark">
-          <Modal.Title className="text-light">
-            {data.extras.find(e => e.url === selectedVideo)?.title}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-0 bg-dark">
-          <div className="player-wrapper">
-            <ReactPlayer
-              url={selectedVideo || ""}
-              playing={isPlaying}
-              controls={true}
-              width="100%"
-              height="100%"
-              style={{ position: "absolute", top: 0, left: 0 }}
-              config={{
-                youtube: {
-                  playerVars: {
-                    autoplay: 1,
-                    modestbranding: 1,
-                    rel: 0,
-                  },
-                },
-              }}
-              onEnded={() => setIsPlaying(false)}
-              onError={e => console.error("Player Error:", e)}
-            />
-          </div>
-        </Modal.Body>
-      </Modal>
-
-      <style>
-        {`
-          .modal-90w {
-            width: 90%;
-            max-width: 1200px;
-          }
-          .modal-content {
-            background-color: transparent;
-            border: none;
-          }
-          .player-wrapper {
-            position: relative;
-            padding-top: 56.25%; /* 16:9 Aspect Ratio */
-          }
-          .modal-header .btn-close {
-            filter: invert(1);
-          }
-        `}
-      </style>
-    </div>
+        videoUrl={selectedVideo}
+        title={selectedTitle}
+      />
+    </main>
   );
 }
