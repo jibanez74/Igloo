@@ -1,20 +1,5 @@
 package helpers
 
-import "github.com/golang-jwt/jwt/v4"
-
-type Claims struct {
-	jwt.RegisteredClaims
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	IsAdmin  bool   `json:"isAdmin"`
-}
-
-type TokenPairs struct {
-	Token        string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-}
-
 type tags struct {
 	Title    string `json:"title,omitempty"`
 	Language string `json:"language,omitempty"`
