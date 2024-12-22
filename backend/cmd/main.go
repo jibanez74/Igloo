@@ -7,14 +7,14 @@ import (
 	"igloo/cmd/database"
 	"igloo/cmd/repository"
 	"igloo/cmd/tmdb"
-	"log"
-	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
-	"syscall"
+	"time"
+
+	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/storage/redis"
 )
 
 //go:embed bin/*
@@ -22,12 +22,14 @@ var binaries embed.FS
 
 type config struct {
 	debug        bool
+	port         string
 	workDir      string
 	repo         repository.Repo
 	tmdb         tmdb.Tmdb
 	wg           *sync.WaitGroup
 	cookieSecret string
 	cookieDomain string
+	session      *session.Store
 	ffmpeg       string
 	ffprobe      string
 }
@@ -76,7 +78,6 @@ func main() {
 	if cookieDomain == "" {
 		cookieDomain = "localhost"
 	}
-
 	app.cookieDomain = cookieDomain
 
 	dirs := []string{
@@ -95,50 +96,58 @@ func main() {
 		}
 	}
 
-	app.wg = &sync.WaitGroup{}
-
-	go app.listenForShutdown()
-
-	app.serve()
-
-	defer os.RemoveAll(filepath.Dir(ffmpegPath))
-}
-
-func (app *config) serve() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = ":8080"
 	}
+	app.port = port
 
-	srv := &http.Server{
-		Addr:    port,
-		Handler: app.routes(),
-	}
+	app.initSession()
 
-	log.Println("Starting web server...")
+	app.wg = &sync.WaitGroup{}
 
-	err := srv.ListenAndServe()
+	err = app.run()
 	if err != nil {
 		panic(err)
 	}
+
+	defer os.RemoveAll(filepath.Dir(ffmpegPath))
 }
 
-func (app *config) listenForShutdown() {
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	app.shutdown()
-	os.Exit(0)
-}
+func (app *config) initSession() {
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		host = "localhost"
+	}
 
-func (app *config) shutdown() {
-	log.Println("would run cleanup tasks...")
-	app.wg.Wait()
-	log.Println("closing channels and shutting down application...")
+	port, err := strconv.Atoi(os.Getenv("REDIS_PORT"))
+	if err != nil {
+		port = 6379 // Default Redis port
+	}
+
+	storage := redis.New(redis.Config{
+		Host:      host,
+		Port:      port,
+		Username:  "",
+		Password:  "",
+		Database:  0,
+		Reset:     false,
+		PoolSize:  10,
+		TLSConfig: nil,
+	})
+
+	app.session = session.New(session.Config{
+		Storage:        storage,
+		Expiration:     24 * time.Hour,
+		CookieDomain:   app.cookieDomain,
+		CookiePath:     "/",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieSameSite: "strict",
+	})
 }
 
 func extractBinaries() (string, string, error) {
-
 	tempDir, err := os.MkdirTemp("", "igloo-binaries")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temp dir: %w", err)

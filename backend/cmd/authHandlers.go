@@ -1,88 +1,88 @@
 package main
 
 import (
-	"errors"
 	"igloo/cmd/database/models"
-	"igloo/cmd/helpers"
-	"log"
-	"net/http"
+
+	"github.com/gofiber/fiber/v2"
 )
 
-func (app *config) Login(w http.ResponseWriter, r *http.Request) {
+func (app *config) Login(c *fiber.Ctx) error {
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
-	err := helpers.ReadJSON(w, r, &req)
+	err := c.BodyParser(&req)
 	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	var user models.User
-	user.Username = req.Username
-	user.Email = req.Email
 
 	err = app.repo.GetAuthUser(&user)
 	if err != nil {
-		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid credentails",
+		})
 	}
 
 	match, err := user.PasswordMatches(req.Password)
 	if err != nil {
-		log.Println(err)
-		helpers.ErrorJSON(w, err)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "the server encountered an error while authenticating",
+		})
 	}
 
 	if !match {
-		helpers.ErrorJSON(w, errors.New("invalid credentials"), http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid credentails",
+		})
 	}
 
-	token, err := helpers.GenerateLongLivedToken(&user, app.cookieSecret)
+	ses, err := app.session.Get(c)
 	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   int(helpers.LongLivedExp.Seconds()),
-	})
+	ses.Set("is_admin", user.IsAdmin)
+	ses.Set("id", user.ID)
 
-	helpers.WriteJSON(w, http.StatusOK, map[string]any{
-		"user": map[string]any{
+	err = ses.Save()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": fiber.Map{
 			"name":     user.Name,
-			"email":    user.Email,
 			"username": user.Username,
+			"email":    user.Email,
 			"isAdmin":  user.IsAdmin,
-			"thumb":    user.Thumb,
 		},
 	})
 }
 
-func (app *config) Logout(w http.ResponseWriter, r *http.Request) {
-	// Expire the cookie by setting MaxAge to -1
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
+func (app *config) Logout(c *fiber.Ctx) error {
+	ses, err := app.session.Get(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-	helpers.WriteJSON(w, http.StatusOK, map[string]any{
-		"message": "logged out successfully",
-	})
+	err = ses.Destroy()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.SendStatus(fiber.StatusOK)
 }

@@ -50,3 +50,7 @@ export type Movie = {
   UpdatedAt?: string | Date;
   DeletedAt?: string | Date | null;
 };
+
+export type MovieResponse = {
+  movie: Movie;
+};

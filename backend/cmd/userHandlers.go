@@ -1,28 +1,26 @@
 package main
 
 import (
-	"errors"
 	"igloo/cmd/database/models"
 	"igloo/cmd/helpers"
-	"log"
-	"net/http"
 	"strconv"
+
+	"github.com/gofiber/fiber/v2"
 )
 
-func (app *config) GetAuthenticatedUser(w http.ResponseWriter, r *http.Request) {
-	log.Println("inside of handler")
-
-	userID, ok := helpers.UserIDFromContext(r.Context())
+func (app *config) GetAuthenticatedUser(c *fiber.Ctx) error {
+	userID, ok := helpers.UserIDFromContext(c.Context())
 	if !ok {
-		log.Println("unable to get user id from context")
-		helpers.ErrorJSON(w, errors.New("unauthorized"), http.StatusUnauthorized)
-		return
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
 	}
 
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		helpers.ErrorJSON(w, err, http.StatusBadRequest)
-		return
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	var user models.User
@@ -30,12 +28,13 @@ func (app *config) GetAuthenticatedUser(w http.ResponseWriter, r *http.Request) 
 
 	status, err := app.repo.GetUserByID(&user)
 	if err != nil {
-		helpers.ErrorJSON(w, err, status)
-		return
+		return c.Status(status).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, map[string]any{
-		"user": map[string]any{
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": fiber.Map{
 			"id":       user.ID,
 			"name":     user.Name,
 			"email":    user.Email,
@@ -46,22 +45,23 @@ func (app *config) GetAuthenticatedUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (app *config) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (app *config) CreateUser(c *fiber.Ctx) error {
 	var user models.User
 
-	err := helpers.ReadJSON(w, r, &user)
-	if err != nil {
-		helpers.ErrorJSON(w, err)
-		return
+	if err := c.BodyParser(&user); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	status, err := app.repo.CreateUser(&user)
 	if err != nil {
-		helpers.ErrorJSON(w, err, status)
-		return
+		return c.Status(status).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	helpers.WriteJSON(w, status, map[string]any{
+	return c.Status(status).JSON(fiber.Map{
 		"message": "User created successfully",
 	})
 }
