@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/tmdb"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -34,13 +35,17 @@ type config struct {
 func main() {
 	var app config
 
+	debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
+	if err != nil {
+		panic(err)
+	}
+	app.debug = debug
+
 	workDir, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
 	app.workDir = workDir
-
-	app.debug = os.Getenv("DEBUG") == "true"
 
 	app.port = os.Getenv("PORT")
 	if app.port == "" {
@@ -57,7 +62,7 @@ func main() {
 		panic("cookie domain is required")
 	}
 
-	tmdbKey := os.Getenv("TMDB_KEY")
+	tmdbKey := os.Getenv("TMDB_API_KEY")
 	if tmdbKey == "" {
 		panic("tmdb key is required")
 	}
