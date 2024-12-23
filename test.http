@@ -1,0 +1,20 @@
+POST http://100.107.177.6:8080/api/v1/users/create
+Content-Type: application/json
+
+{
+  "name": "Jose Ibanez",
+  "email": "jose.ibanez@blindpenguincoder.com",
+  "username": "penguin",
+  "password": "Testing.123.",
+  "isAdmin": true,
+  "isActive": true
+}
+
+POST https://swifty.hare-crocodile.ts.net/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "jose.ibanez@blindpenguincoder.com",
+  "username": "penguin",
+  "password": "Testing.123."
+}
