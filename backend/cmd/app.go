@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"time"
 
@@ -68,7 +69,14 @@ func (app *config) run() error {
 		})
 
 		f.Get("*", func(c *fiber.Ctx) error {
-			return c.SendFile(filepath.Join(clientDir, "index.html"))
+			indexFile := filepath.Join(clientDir, "index.html")
+
+			_, err := os.Stat(indexFile)
+			if err != nil {
+				panic(err)
+			}
+
+			return c.SendFile(indexFile)
 		})
 	}
 
