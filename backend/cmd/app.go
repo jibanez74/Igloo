@@ -76,6 +76,10 @@ func (app *config) run() error {
 				panic(err)
 			}
 
+			c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Set("Pragma", "no-cache")
+			c.Set("Expires", "0")
+
 			return c.SendFile(indexFile)
 		})
 	}

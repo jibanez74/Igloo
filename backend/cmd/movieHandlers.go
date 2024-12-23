@@ -130,7 +130,7 @@ func (app *config) DirectStreamMovie(c *fiber.Ctx) error {
 	c.Set("Content-Disposition", "inline; filename="+movie.Title)
 	c.Set("Accept-Ranges", "bytes")
 
-	return c.SendFile(movie.FilePath, true)
+	return c.SendFile(movie.FilePath)
 }
 
 func (app *config) GetAllMovies(c *fiber.Ctx) error {
