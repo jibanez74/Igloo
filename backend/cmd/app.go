@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -38,7 +39,8 @@ func (app *config) run() error {
 		TimeZone:   "Local",
 	}))
 
-	f.Static("/static", "./static", fiber.Static{
+	staticDir := filepath.Join(app.workDir, "static")
+	f.Static("/static", staticDir, fiber.Static{
 		Compress:      true,
 		ByteRange:     true,
 		Browse:        false,
@@ -50,7 +52,14 @@ func (app *config) run() error {
 	auth.Get("/logout", app.Logout)
 
 	movies := f.Group("/api/v1/movies")
+	movies.Get("/all", app.GetAllMovies)
+	movies.Get("/latest", app.GetLatestMovies)
 	movies.Post("/create", app.CreateMovie)
+
+	if !app.debug {
+		clientDir := filepath.Join(app.workDir, "cmd", "client")
+		f.Static("/*", clientDir)
+	}
 
 	return f.Listen(app.port)
 }
