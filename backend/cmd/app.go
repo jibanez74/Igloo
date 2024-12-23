@@ -58,7 +58,18 @@ func (app *config) run() error {
 
 	if !app.debug {
 		clientDir := filepath.Join(app.workDir, "cmd", "client")
-		f.Static("/*", clientDir)
+		assetsDir := filepath.Join(clientDir, "assets")
+
+		f.Static("/assets", assetsDir, fiber.Static{
+			Compress:      true,
+			ByteRange:     true,
+			Browse:        false,
+			CacheDuration: 24 * time.Hour,
+		})
+
+		f.Get("*", func(c *fiber.Ctx) error {
+			return c.SendFile(filepath.Join(clientDir, "index.html"))
+		})
 	}
 
 	return f.Listen(app.port)
