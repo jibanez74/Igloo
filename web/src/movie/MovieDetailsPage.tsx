@@ -6,6 +6,7 @@ import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
+import { isAudioCodecSupported } from "../lib/codecs";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -54,6 +55,12 @@ export default function MovieDetailsPage() {
       }
     },
   });
+
+  const playMovie = () => {
+    if (isAudioCodecSupported(data?.audioList[0].codec)) {
+      alert("you can play this audio");
+    }
+  };
 
   const handleVideoSelect = (url: string, title: string) => {
     setSelectedVideo(url);
@@ -195,7 +202,7 @@ export default function MovieDetailsPage() {
                 {/* Action Buttons */}
                 <div className='mb-4' role='toolbar' aria-label='Movie actions'>
                   <ButtonGroup>
-                    <Button variant='primary' size='lg'>
+                    <Button onClick={playMovie} variant='primary' size='lg'>
                       <FaPlay className='me-2' aria-hidden='true' /> Play
                     </Button>
                     <Button variant='outline-light' size='lg'>

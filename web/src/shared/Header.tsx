@@ -22,7 +22,7 @@ export default function Header() {
 
   const handleSignOut = async () => {
     try {
-      await api.get("/logout");
+      await api.get("/auth/logout");
 
       setUser(null);
       navigate("/login", { replace: true });
