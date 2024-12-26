@@ -6,7 +6,6 @@ import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
-import { isAudioCodecSupported } from "../lib/codecs";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -57,9 +56,7 @@ export default function MovieDetailsPage() {
   });
 
   const playMovie = () => {
-    if (isAudioCodecSupported(data?.audioList[0].codec)) {
-      alert("you can play this audio");
-    }
+    console.log("play movie");
   };
 
   const handleVideoSelect = (url: string, title: string) => {

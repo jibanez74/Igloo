@@ -32,6 +32,7 @@ export default function LoginPage() {
     const formData = new FormData(e.currentTarget);
 
     try {
+
       const { data } = await api.post<AuthResponse>("/auth/login", {
         username: formData.get("username"),
         email: formData.get("email"),
