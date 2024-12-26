@@ -25,7 +25,7 @@ func (app *config) Login(c *fiber.Ctx) error {
 	err = app.repo.GetAuthUser(&user)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid credentails",
+			"error": err.Error(),
 		})
 	}
 
