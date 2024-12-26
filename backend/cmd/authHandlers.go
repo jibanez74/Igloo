@@ -2,11 +2,14 @@ package main
 
 import (
 	"igloo/cmd/database/models"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func (app *config) Login(c *fiber.Ctx) error {
+	log.Println("inside of handler")
+
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -20,6 +23,8 @@ func (app *config) Login(c *fiber.Ctx) error {
 		})
 	}
 
+	log.Println("about to fetch user")
+
 	var user models.User
 
 	err = app.repo.GetAuthUser(&user)
@@ -29,16 +34,18 @@ func (app *config) Login(c *fiber.Ctx) error {
 		})
 	}
 
+	log.Println("found user")
+
 	match, err := user.PasswordMatches(req.Password)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "the server encountered an error while authenticating",
+			"error": err.Error(),
 		})
 	}
 
 	if !match {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid credentails",
+			"error": err.Error(),
 		})
 	}
 
