@@ -1,15 +1,17 @@
 package main
 
 import (
+	"errors"
 	"igloo/cmd/database/models"
-	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
-func (app *config) Login(c *fiber.Ctx) error {
-	log.Println("inside of handler")
+const errMsg = "invalid credentials"
+const internalErr = "unable to process your request"
 
+func (app *config) Login(c *fiber.Ctx) error {
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -23,36 +25,40 @@ func (app *config) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	log.Println("about to fetch user")
-
 	var user models.User
+	user.Email = req.Email
+	user.Username = req.Username
 
 	err = app.repo.GetAuthUser(&user)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": errMsg,
+			})
+		}
+
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": internalErr,
 		})
 	}
-
-	log.Println("found user")
 
 	match, err := user.PasswordMatches(req.Password)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
+			"error": internalErr,
 		})
 	}
 
 	if !match {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
+			"error": errMsg,
 		})
 	}
 
 	ses, err := app.session.Get(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
+			"error": internalErr,
 		})
 	}
 

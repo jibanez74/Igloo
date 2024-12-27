@@ -1,6 +1,4 @@
-GET http://100.107.177.6:8080/api/v1/movies/;atest
-
-POST http://100.107.177.6:8080/api/v1/users/create
+POST https://swifty.hare-crocodile.ts.net/api/v1/users/create
 Content-Type: application/json
 
 {
