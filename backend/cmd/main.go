@@ -96,7 +96,6 @@ func main() {
 }
 
 func (app *config) initSession() {
-	// Get Redis configuration from environment
 	host := os.Getenv("REDIS_HOST")
 	if host == "" {
 		host = "localhost"
@@ -106,7 +105,6 @@ func (app *config) initSession() {
 	username := os.Getenv("REDIS_USER")
 	password := os.Getenv("REDIS_PASSWORD")
 
-	// Create Redis storage
 	storage := redis.New(redis.Config{
 		Host:      host,
 		Port:      port,
@@ -118,7 +116,6 @@ func (app *config) initSession() {
 		TLSConfig: nil,
 	})
 
-	// Create session store
 	app.session = session.New(session.Config{
 		Storage:        storage,
 		Expiration:     24 * time.Hour,

@@ -40,6 +40,24 @@ func (app *config) run() error {
 		TimeZone:   "Local",
 	}))
 
+	// Security headers middleware
+	f.Use(func(c *fiber.Ctx) error {
+		// Security headers
+		c.Set("X-XSS-Protection", "1; mode=block")
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Download-Options", "noopen")
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Set("X-Frame-Options", "SAMEORIGIN")
+		c.Set("X-DNS-Prefetch-Control", "off")
+
+		// Only in production
+		if !app.debug {
+			c.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https:; media-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';")
+		}
+
+		return c.Next()
+	})
+
 	staticDir := filepath.Join(app.workDir, "static")
 	f.Static("/api/v1/static", staticDir, fiber.Static{
 		Compress:      true,
@@ -55,6 +73,7 @@ func (app *config) run() error {
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/all", app.GetAllMovies)
 	movies.Get("/latest", app.GetLatestMovies)
+	movies.Get("/:id", app.GetMovieByID)
 
 	users := f.Group("/api/v1/users")
 	users.Get("/me", app.isAuth, app.GetAuthUser)
@@ -75,7 +94,9 @@ func (app *config) run() error {
 
 			_, err := os.Stat(indexFile)
 			if err != nil {
-				panic(err)
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "Page not found",
+				})
 			}
 
 			c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
