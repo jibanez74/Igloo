@@ -55,10 +55,9 @@ func (app *config) run() error {
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/all", app.GetAllMovies)
 	movies.Get("/latest", app.GetLatestMovies)
-	movies.Post("/create", app.CreateMovie)
 
 	users := f.Group("/api/v1/users")
-	users.Post("/create", app.CreateUser)
+	users.Get("/me", app.isAuth, app.GetAuthUser)
 
 	if !app.debug {
 		clientDir := filepath.Join(app.workDir, "cmd", "client")
