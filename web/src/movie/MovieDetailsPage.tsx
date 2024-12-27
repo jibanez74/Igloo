@@ -49,6 +49,7 @@ export default function MovieDetailsPage() {
         if (!data.movie) {
           throw new Error("the server did not return a movie");
         }
+
         return data.movie;
       } catch (err) {
         throw getError(err);

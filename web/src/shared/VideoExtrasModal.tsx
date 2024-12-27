@@ -50,6 +50,8 @@ export default function VideoExtrasModal({
                     autoplay: 1,
                     modestbranding: 1,
                     rel: 0,
+                    origin: window.location.origin,
+                    enablejsapi: 1,
                   },
                 },
               }}

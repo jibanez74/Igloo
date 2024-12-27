@@ -52,7 +52,13 @@ func (app *config) run() error {
 
 		// Only in production
 		if !app.debug {
-			c.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https:; media-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';")
+			c.Set("Content-Security-Policy",
+				"default-src 'self';"+
+					"img-src 'self' data: https:;"+
+					"media-src 'self' https:;"+
+					"frame-src 'self' https://www.youtube.com https://youtube.com;"+
+					"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://youtube.com;"+
+					"style-src 'self' 'unsafe-inline';")
 		}
 
 		return c.Next()
