@@ -13,10 +13,10 @@ import Button from "react-bootstrap/Button";
 import ButtonGroup from "react-bootstrap/ButtonGroup";
 import Dropdown from "react-bootstrap/Dropdown";
 import Spinner from "react-bootstrap/Spinner";
-import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
 import Card from "react-bootstrap/Card";
 import Image from "react-bootstrap/Image";
+import Message from "../shared/Message";
 import VideoExtrasModal from "../shared/VideoExtrasModal";
 import {
   FaArrowLeft,
@@ -45,6 +45,7 @@ export default function MovieDetailsPage() {
     queryFn: async () => {
       try {
         const { data } = await api.get<MovieResponse>(`/movies/${id}`);
+
         if (!data.movie) {
           throw new Error("the server did not return a movie");
         }
@@ -56,7 +57,9 @@ export default function MovieDetailsPage() {
   });
 
   const playMovie = () => {
-    console.log("play movie");
+    alert(
+      `Your audio codec is ${data?.audioList[0].codec} and your video codec is ${data?.videoList[0].codec}`
+    );
   };
 
   const handleVideoSelect = (url: string, title: string) => {
@@ -104,9 +107,11 @@ export default function MovieDetailsPage() {
           <FaArrowLeft className='me-2' /> Back
         </Button>
         <Container className='py-5'>
-          <Alert variant='danger'>
-            {error instanceof Error ? error.message : "An error occurred"}
-          </Alert>
+          <Message
+            title='Error Loading Movie'
+            msg={error instanceof Error ? error.message : "An error occurred"}
+            variant='danger'
+          />
         </Container>
       </div>
     );

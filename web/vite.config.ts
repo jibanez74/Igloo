@@ -23,13 +23,3 @@ export default defineConfig({
     },
   },
 });
-
-HTTP/1.1 400 Bad Request
-Content-Length: 28
-Content-Type: application/json
-Date: Thu, 26 Dec 2024 21:31:48 GMT
-Connection: close
-
-{
-  "error": "record not found"
-}
