@@ -33,6 +33,10 @@ type MovieResponse = {
   movie: Movie;
 };
 
+type PlayResponse = {
+  fileName: string;
+};
+
 export default function MovieDetailsPage() {
   const { id } = useParams();
 
@@ -58,7 +62,7 @@ export default function MovieDetailsPage() {
     },
   });
 
-  const playMovie = () => {
+  const playMovie = async () => {
     if (!data) {
       return alert("Movie data not available");
     }
@@ -78,11 +82,18 @@ export default function MovieDetailsPage() {
       }
     }
 
-    return alert(
-      `Copy audio is ${
-        copyAudio ? "enabled" : "disabled"
-      } and copy video codec is ${copyVideoCodec ? "enabled" : "disabled"}`
-    );
+    try {
+      const { data } = await api.post<PlayResponse>("/movies/create-m3u8", {
+        copyAudio,
+        copyVideoCodec,
+        movieID: id,
+      });
+
+      navigate(`/movies/play/${data.fileName}`);
+    } catch (err) {
+      console.error(err);
+      alert("request to transcode video failed");
+    }
   };
 
   const handleVideoSelect = (url: string, title: string) => {
