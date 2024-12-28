@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"igloo/cmd/database/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -63,7 +64,7 @@ func (app *config) Login(c *fiber.Ctx) error {
 	}
 
 	ses.Set("is_admin", user.IsAdmin)
-	ses.Set("id", user.ID)
+	ses.Set("id", fmt.Sprintf("%d", user.ID))
 
 	err = ses.Save()
 	if err != nil {
