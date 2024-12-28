@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"igloo/cmd/database/models"
 	"log"
 	"strconv"
@@ -26,15 +27,9 @@ func (app *config) isAuth(c *fiber.Ctx) error {
 		})
 	}
 
-	idStr, ok := id.(string)
-	if !ok {
-		log.Println("unable to convert id to string")
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Invalid session format",
-		})
-	}
+	log.Println("Your id is: ", id)
 
-	userID, err := strconv.ParseUint(idStr, 10, 64)
+	userID, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
 	if err != nil {
 		log.Println(err.Error())
 		log.Println("unable to parse id with strconv")
