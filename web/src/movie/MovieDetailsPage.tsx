@@ -83,13 +83,23 @@ export default function MovieDetailsPage() {
     }
 
     try {
-      const { data } = await api.post<PlayResponse>("/movies/create-m3u8", {
-        copyAudio,
-        copyVideoCodec,
-        movieID: id,
+      const { data: res } = await api.post<PlayResponse>(
+        "/movies/create-m3u8",
+        {
+          copyAudio,
+          copyVideoCodec,
+          movieID: id,
+        }
+      );
+
+      const searchParams = new URLSearchParams({
+        file_name: res.fileName,
+        native_hls: canPlayNativeHLS.toString(),
+        title: data.title,
+        poster: data.thumb,
       });
 
-      navigate(`/movies/play/${data.fileName}`);
+      navigate(`/movies/play?${searchParams.toString()}`);
     } catch (err) {
       console.error(err);
       alert("request to transcode video failed");

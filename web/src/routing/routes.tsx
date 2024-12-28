@@ -5,6 +5,7 @@ import LoginPage from "../auth/LoginPage";
 import HomePage from "../home/HomePage";
 import MoviesPage from "../movies/MoviesPage";
 import MovieDetailsPage from "../movie/MovieDetailsPage";
+import PlayMovie from "../movie/PlayMovie";
 
 const routes = createBrowserRouter([
   {
@@ -29,6 +30,10 @@ const routes = createBrowserRouter([
               {
                 path: ":id",
                 element: <MovieDetailsPage />,
+              },
+              {
+                path: "play",
+                element: <PlayMovie />,
               },
             ],
           },
