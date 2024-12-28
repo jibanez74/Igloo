@@ -21,18 +21,13 @@ func (app *config) isAuth(c *fiber.Ctx) error {
 
 	id := ses.Get("id")
 	if id == nil {
-		log.Println("no id was found in session")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Please log in to continue",
 		})
 	}
 
-	log.Println("Your id is: ", id)
-
 	userID, err := strconv.ParseUint(fmt.Sprintf("%v", id), 10, 64)
 	if err != nil {
-		log.Println(err.Error())
-		log.Println("unable to parse id with strconv")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Invalid session data",
 		})
@@ -43,15 +38,12 @@ func (app *config) isAuth(c *fiber.Ctx) error {
 
 	status, err := app.repo.GetUserByID(&user)
 	if err != nil {
-		log.Println(err.Error())
-		log.Println("unable to get user from db")
 		return c.Status(status).JSON(fiber.Map{
 			"error": "Authentication failed",
 		})
 	}
 
 	if !user.IsActive {
-		log.Println("the user is not active")
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "Account is inactive",
 		})
