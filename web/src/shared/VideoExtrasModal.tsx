@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Modal from "react-bootstrap/Modal";
-import ReactPlayer from "react-player";
+import ReactPlayer from "react-player/youtube";
 
 type VideoExtrasModalProps = {
   show: boolean;
@@ -45,16 +45,17 @@ export default function VideoExtrasModal({
               height='100%'
               style={{ position: "absolute", top: 0, left: 0 }}
               config={{
-                youtube: {
-                  playerVars: {
-                    autoplay: 1,
-                    modestbranding: 1,
-                    rel: 0,
-                    origin: window.location.origin,
-                    enablejsapi: 1,
-                  },
+                playerVars: {
+                  autoplay: 1,
+                  modestbranding: 1,
+                  rel: 0,
+                  origin: window.location.origin,
+                  enablejsapi: 1,
+                  playsinline: 1,
                 },
               }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
               onError={e => console.error("Player Error:", e)}
             />

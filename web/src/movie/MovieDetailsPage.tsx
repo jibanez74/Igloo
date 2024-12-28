@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import getError from "../lib/getError";
 import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
-import { isAudioCodecSupported, isVideoCodecSupported } from "../lib/codecs";
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
 import Container from "react-bootstrap/Container";
@@ -65,23 +64,40 @@ export default function MovieDetailsPage() {
     }
 
     const video = document.createElement("video");
+
     const canPlayNativeHLS = video.canPlayType("application/vnd.apple.mpegurl");
-    const canPlayHLS =
-      canPlayNativeHLS || ReactPlayer.canPlay("application/x-mpegURL");
 
-    if (!canPlayHLS) {
-      return alert("Your browser does not support HLS streaming");
+    if (!canPlayNativeHLS) {
+      return alert("unable to play native hls");
     }
 
-    // Check codec support for the first video and audio stream
-    const canPlayAudio =
-      data.audioList[0] && isAudioCodecSupported(data.audioList[0].codec);
-    const canPlayVideo =
-      data.videoList[0] && isVideoCodecSupported(data.videoList[0].codec);
+    // const canPlayHLS =
+    //   canPlayNativeHLS || ReactPlayer.canPlay("application/x-mpegURL");
 
-    if (!canPlayAudio || !canPlayVideo) {
-      return alert("This video format is not supported in your browser");
-    }
+    // if (!canPlayHLS) {
+    //   return alert("Your browser does not support HLS streaming");
+    // }
+
+    // const firstVideoStream = data.videoList[0];
+    // const firstAudioStream = data.audioList[0];
+
+    // if (!firstVideoStream || !firstAudioStream) {
+    //   return alert("No video or audio streams found");
+    // }
+
+    // const videoCodecString = `video/${firstVideoStream.codec}${
+    //   firstVideoStream.profile ? `;profile=${firstVideoStream.profile}` : ""
+    // }`;
+    // const audioCodecString = `audio/${firstAudioStream.codec}`;
+
+    // const canPlayVideo = video.canPlayType(videoCodecString) !== "";
+    // const canPlayAudio = video.canPlayType(audioCodecString) !== "";
+
+    // if (!canPlayVideo || !canPlayAudio) {
+    //   return alert("This video format is not supported in your browser");
+    // }
+
+    return alert("can play movie");
   };
 
   const handleVideoSelect = (url: string, title: string) => {
