@@ -32,7 +32,7 @@ export default function HlsPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
 
   return (
-    <div className='player-wrapper'>
+    <div style={{ position: "relative", paddingTop: "56.25%" }}>
       <ReactPlayer
         url={url}
         playing={isPlaying}
@@ -70,32 +70,12 @@ export default function HlsPlayer({
         progressInterval={1000}
       />
       {isBuffering && (
-        <div className='buffering-overlay'>
+        <div className='position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50'>
           <Spinner animation='border' variant='light' role='status'>
             <span className='visually-hidden'>Loading...</span>
           </Spinner>
         </div>
       )}
-      <style>
-        {`
-          .player-wrapper {
-            position: relative;
-            padding-top: 56.25%; /* 16:9 Aspect Ratio */
-          }
-          .buffering-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1;
-          }
-        `}
-      </style>
     </div>
   );
 }
