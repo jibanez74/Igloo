@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import ReactPlayer from "react-player/file";
 import Spinner from "react-bootstrap/Spinner";
 
@@ -6,6 +6,7 @@ type HlsPlayerProps = {
   url: string;
   title?: string;
   poster?: string;
+  useHlsJs: boolean;
   onError?: (error: Error) => void;
   onProgress?: (state: {
     played: number;
@@ -21,6 +22,7 @@ export default function HlsPlayer({
   url,
   title,
   poster,
+  useHlsJs,
   onError,
   onProgress,
   onDuration,
@@ -28,30 +30,6 @@ export default function HlsPlayer({
 }: HlsPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-
-  const handleBuffer = useCallback(() => {
-    setIsBuffering(true);
-  }, []);
-
-  const handleBufferEnd = useCallback(() => {
-    setIsBuffering(false);
-  }, []);
-
-  const handleError = useCallback(
-    (error: Error) => {
-      console.error("HLS Player Error:", error);
-      onError?.(error);
-    },
-    [onError]
-  );
-
-  const handlePlay = useCallback(() => {
-    setIsPlaying(true);
-  }, []);
-
-  const handlePause = useCallback(() => {
-    setIsPlaying(false);
-  }, []);
 
   return (
     <div className='player-wrapper'>
@@ -63,7 +41,14 @@ export default function HlsPlayer({
         height='100%'
         style={{ position: "absolute", top: 0, left: 0 }}
         config={{
-          forceHLS: true,
+          forceHLS: useHlsJs,
+          hlsOptions: useHlsJs
+            ? {
+                enableWorker: true,
+                lowLatencyMode: true,
+                backBufferLength: 90,
+              }
+            : undefined,
           attributes: {
             poster: poster,
             preload: "auto",
@@ -71,11 +56,14 @@ export default function HlsPlayer({
             title: title,
           },
         }}
-        onBuffer={handleBuffer}
-        onBufferEnd={handleBufferEnd}
-        onError={handleError}
-        onPlay={handlePlay}
-        onPause={handlePause}
+        onBuffer={() => setIsBuffering(true)}
+        onBufferEnd={() => setIsBuffering(false)}
+        onError={(error: Error) => {
+          console.error("HLS Player Error:", error);
+          onError?.(error);
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         onEnded={onEnded}
         onProgress={onProgress}
         onDuration={onDuration}
