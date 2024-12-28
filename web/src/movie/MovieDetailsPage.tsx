@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import getError from "../lib/getError";
 import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
+import { isAudioCodecSupported, isVideoCodecSupported } from "../lib/codecs";
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
 import Container from "react-bootstrap/Container";
@@ -27,6 +28,7 @@ import {
   FaEllipsisV,
 } from "react-icons/fa";
 import type { Movie } from "../types/Movie";
+import ReactPlayer from "react-player";
 
 type MovieResponse = {
   movie: Movie;
@@ -58,9 +60,28 @@ export default function MovieDetailsPage() {
   });
 
   const playMovie = () => {
-    alert(
-      `Your audio codec is ${data?.audioList[0].codec} and your video codec is ${data?.videoList[0].codec}`
-    );
+    if (!data) {
+      return alert("Movie data not available");
+    }
+
+    const video = document.createElement("video");
+    const canPlayNativeHLS = video.canPlayType("application/vnd.apple.mpegurl");
+    const canPlayHLS =
+      canPlayNativeHLS || ReactPlayer.canPlay("application/x-mpegURL");
+
+    if (!canPlayHLS) {
+      return alert("Your browser does not support HLS streaming");
+    }
+
+    // Check codec support for the first video and audio stream
+    const canPlayAudio =
+      data.audioList[0] && isAudioCodecSupported(data.audioList[0].codec);
+    const canPlayVideo =
+      data.videoList[0] && isVideoCodecSupported(data.videoList[0].codec);
+
+    if (!canPlayAudio || !canPlayVideo) {
+      return alert("This video format is not supported in your browser");
+    }
   };
 
   const handleVideoSelect = (url: string, title: string) => {

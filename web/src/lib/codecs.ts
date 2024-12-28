@@ -93,16 +93,13 @@ export function isVideoCodecSupported(
 
   if (!codecSupport) return false;
 
-  // Check if browser is supported
   if (browser.name === "unknown") return false;
 
   const minVersion = codecSupport.minVersion[browser.name];
   if (!minVersion) return false;
 
-  // Check version compatibility
   if (compareVersions(browser.version, minVersion) < 0) return false;
 
-  // Check profile if specified
   if (profile && codecSupport.profiles) {
     return codecSupport.profiles.includes(profile.toLowerCase());
   }
@@ -116,13 +113,11 @@ export function isAudioCodecSupported(codec: string): boolean {
 
   if (!codecSupport) return false;
 
-  // Check if browser is supported
   if (browser.name === "unknown") return false;
 
   const minVersion = codecSupport.minVersion[browser.name];
   if (!minVersion) return false;
 
-  // Check version compatibility
   return compareVersions(browser.version, minVersion) >= 0;
 }
 
