@@ -6,6 +6,7 @@ import formatDollars from "../lib/formatDollars";
 import formatDate from "../lib/formatDate";
 import api from "../lib/api";
 import getImgSrc from "../lib/getImgSrc";
+import { safariAudioCodecs, safariVideoCodecs } from "../lib/codecs";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -27,7 +28,6 @@ import {
   FaEllipsisV,
 } from "react-icons/fa";
 import type { Movie } from "../types/Movie";
-import ReactPlayer from "react-player";
 
 type MovieResponse = {
   movie: Movie;
@@ -64,40 +64,25 @@ export default function MovieDetailsPage() {
     }
 
     const video = document.createElement("video");
-
     const canPlayNativeHLS = video.canPlayType("application/vnd.apple.mpegurl");
+    let copyAudio = true;
+    let copyVideoCodec = true;
 
-    if (!canPlayNativeHLS) {
-      return alert("unable to play native hls");
+    if (canPlayNativeHLS) {
+      if (!safariAudioCodecs.includes(data.audioList[0].codec)) {
+        copyAudio = false;
+      }
+
+      if (!safariVideoCodecs.includes(data.videoList[0].codec)) {
+        copyVideoCodec = false;
+      }
     }
 
-    // const canPlayHLS =
-    //   canPlayNativeHLS || ReactPlayer.canPlay("application/x-mpegURL");
-
-    // if (!canPlayHLS) {
-    //   return alert("Your browser does not support HLS streaming");
-    // }
-
-    // const firstVideoStream = data.videoList[0];
-    // const firstAudioStream = data.audioList[0];
-
-    // if (!firstVideoStream || !firstAudioStream) {
-    //   return alert("No video or audio streams found");
-    // }
-
-    // const videoCodecString = `video/${firstVideoStream.codec}${
-    //   firstVideoStream.profile ? `;profile=${firstVideoStream.profile}` : ""
-    // }`;
-    // const audioCodecString = `audio/${firstAudioStream.codec}`;
-
-    // const canPlayVideo = video.canPlayType(videoCodecString) !== "";
-    // const canPlayAudio = video.canPlayType(audioCodecString) !== "";
-
-    // if (!canPlayVideo || !canPlayAudio) {
-    //   return alert("This video format is not supported in your browser");
-    // }
-
-    return alert("can play movie");
+    return alert(
+      `Copy audio is ${
+        copyAudio ? "enabled" : "disabled"
+      } and copy video codec is ${copyVideoCodec ? "enabled" : "disabled"}`
+    );
   };
 
   const handleVideoSelect = (url: string, title: string) => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Modal from "react-bootstrap/Modal";
-import ReactPlayer from "react-player/youtube";
+import YoutubePlayer from "./YoutubePlayer";
 
 type VideoExtrasModalProps = {
   show: boolean;
@@ -23,65 +23,34 @@ export default function VideoExtrasModal({
   };
 
   return (
-    <>
-      <Modal
-        show={show}
-        onHide={handleClose}
-        size='xl'
-        centered
-        animation={true}
-        dialogClassName='modal-90w'
+    <Modal
+      show={show}
+      onHide={handleClose}
+      size='xl'
+      centered
+      animation={true}
+      dialogClassName='modal-90w'
+      contentClassName='bg-transparent border-0'
+      style={{ maxWidth: "1200px", width: "90%" }}
+    >
+      <Modal.Header
+        closeButton
+        className='border-0 bg-dark'
+        closeVariant='white'
       >
-        <Modal.Header closeButton className='border-0 bg-dark'>
-          <Modal.Title className='text-light'>{title}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body className='p-0 bg-dark'>
-          <div className='player-wrapper'>
-            <ReactPlayer
-              url={videoUrl || ""}
-              playing={isPlaying}
-              controls={true}
-              width='100%'
-              height='100%'
-              style={{ position: "absolute", top: 0, left: 0 }}
-              config={{
-                playerVars: {
-                  autoplay: 1,
-                  modestbranding: 1,
-                  rel: 0,
-                  origin: window.location.origin,
-                  enablejsapi: 1,
-                  playsinline: 1,
-                },
-              }}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
-              onError={e => console.error("Player Error:", e)}
-            />
-          </div>
-        </Modal.Body>
-      </Modal>
+        <Modal.Title className='text-light'>{title}</Modal.Title>
+      </Modal.Header>
 
-      <style>
-        {`
-          .modal-90w {
-            width: 90%;
-            max-width: 1200px;
-          }
-          .modal-content {
-            background-color: transparent;
-            border: none;
-          }
-          .player-wrapper {
-            position: relative;
-            padding-top: 56.25%; /* 16:9 Aspect Ratio */
-          }
-          .modal-header .btn-close {
-            filter: invert(1);
-          }
-        `}
-      </style>
-    </>
+      <Modal.Body className='p-0 bg-dark'>
+        <YoutubePlayer
+          url={videoUrl}
+          playing={isPlaying}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+          onError={e => console.error("Player Error:", e)}
+        />
+      </Modal.Body>
+    </Modal>
   );
 }
