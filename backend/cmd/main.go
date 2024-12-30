@@ -30,6 +30,7 @@ type config struct {
 	session      *session.Store
 	ffmpeg       string
 	ffprobe      string
+	TranscodeDir string
 }
 
 func main() {
@@ -89,6 +90,9 @@ func main() {
 	app.initSession()
 
 	app.wg = &sync.WaitGroup{}
+
+	// this is a temp dir for testing hls transcoding
+	app.transcodeDir = "/home/romany/videos"
 
 	app.run()
 

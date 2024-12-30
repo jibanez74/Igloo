@@ -31,15 +31,12 @@ export default function VideoExtrasModal({
       animation={true}
       dialogClassName='modal-90w'
       contentClassName='bg-transparent border-0'
-      style={{ maxWidth: "1200px", width: "90%" }}
     >
       <Modal.Header
         closeButton
         className='border-0 bg-dark'
         closeVariant='white'
-      >
-        <Modal.Title className='text-light'>{title}</Modal.Title>
-      </Modal.Header>
+      />
 
       <Modal.Body className='p-0 bg-dark'>
         <YoutubePlayer
