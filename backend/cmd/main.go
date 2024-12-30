@@ -30,7 +30,7 @@ type config struct {
 	session      *session.Store
 	ffmpeg       string
 	ffprobe      string
-	TranscodeDir string
+	transcodeDir string
 }
 
 func main() {
