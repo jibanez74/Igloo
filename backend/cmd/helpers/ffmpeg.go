@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -173,12 +172,5 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 
 	cmd := exec.Command(opts.Bin, cmdArgs...)
 
-	go func() {
-		err = cmd.Run()
-		if err != nil {
-			log.Println(err)
-		}
-	}()
-
-	return nil
+	return cmd.Run()
 }
