@@ -2,7 +2,9 @@ package helpers
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -168,6 +170,15 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 	}
 
 	cmdArgs = append(cmdArgs, filepath.Join(opts.OutputDir, "playlist.m3u8"))
+
+	cmd := exec.Command(opts.Bin, cmdArgs...)
+
+	go func() {
+		err = cmd.Run()
+		if err != nil {
+			log.Println(err)
+		}
+	}()
 
 	return nil
 }
