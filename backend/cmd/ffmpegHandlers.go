@@ -10,7 +10,19 @@ import (
 )
 
 func (app *config) TranscodeHls(c *fiber.Ctx) error {
-	var req helpers.TranscodeOptions
+	var req struct {
+		InputPath        string `json:"inputPath"`
+		AudioStreamIndex int    `json:"audioStreamIndex"`
+		AudioCodec       string `json:"audioCodec"`
+		AudioBitRate     string `json:"audioBitRate"`
+		AudioChannels    string `json:"audioChannels"`
+		VideoStreamIndex int    `json:"videoStreamIndex"`
+		VideoCodec       string `json:"videoCodec"`
+		VideoBitrate     string `json:"videoBitrate"`
+		VideoHeight      string `json:"videoHeight"`
+		VideoProfile     string `json:"videoProfile"`
+		Preset           string `json:"preset"`
+	}
 
 	err := c.BodyParser(&req)
 	if err != nil {
@@ -20,10 +32,30 @@ func (app *config) TranscodeHls(c *fiber.Ctx) error {
 		})
 	}
 
-	req.Bin = app.ffmpeg
-	req.OutputDir = filepath.Join(app.transcodeDir, filepath.Base(req.InputPath))
+	opts := helpers.TranscodeOptions{
+		Bin:              app.ffmpeg,
+		InputPath:        req.InputPath,
+		OutputDir:        filepath.Join(app.transcodeDir, filepath.Base(req.InputPath)),
+		AudioStreamIndex: req.AudioStreamIndex,
+		AudioCodec:       req.AudioCodec,
+		AudioBitRate:     req.AudioBitRate,
+		AudioChannels:    req.AudioChannels,
+		VideoStreamIndex: req.VideoStreamIndex,
+		VideoCodec:       req.VideoCodec,
+		VideoBitrate:     req.VideoBitrate,
+		VideoHeight:      req.VideoHeight,
+		VideoProfile:     req.VideoProfile,
+		Preset:           req.Preset,
+	}
 
-	err = helpers.CreateHlsStream(&req)
+	status, err := helpers.ValidateVideoTranscodeOpts(&opts)
+	if err != nil {
+		return c.Status(status).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	err = helpers.CreateHlsStream(&opts)
 	if err != nil {
 		log.Println(err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -32,7 +64,7 @@ func (app *config) TranscodeHls(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"fileName": filepath.Base(req.OutputDir),
+		"fileName": filepath.Base(opts.OutputDir),
 		"message":  "HLS stream created successfully",
 	})
 }

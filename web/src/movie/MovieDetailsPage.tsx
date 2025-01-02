@@ -91,6 +91,8 @@ export default function MovieDetailsPage() {
       preset: copyVideoCodec ? undefined : "fast",
     };
 
+    alert("about to call api");
+
     try {
       await api.post("/ffmpeg/hls", opts);
       alert("success");

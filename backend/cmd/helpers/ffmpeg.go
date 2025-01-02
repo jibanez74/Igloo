@@ -3,88 +3,53 @@ package helpers
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type TranscodeOptions struct {
 	Bin              string
-	InputPath        string `json:"inputPath"`
+	InputPath        string
 	OutputDir        string
-	AudioStreamIndex int    `json:"audioStreamIndex"`
-	AudioCodec       string `json:"audioCodec"`
-	AudioBitRate     string `json:"audioBitRate"`
-	AudioChannels    string `json:"audioChannels"`
-	VideoStreamIndex int    `json:"videoStreamIndex"`
-	VideoCodec       string `json:"videoCodec"`
-	VideoBitrate     string `json:"videoBitrate"`
-	VideoHeight      string `json:"videoHeight"`
-	VideoProfile     string `json:"videoProfile"`
-	Preset           string `json:"preset"`
+	AudioStreamIndex int
+	AudioCodec       string
+	AudioBitRate     string
+	AudioChannels    string
+	VideoStreamIndex int
+	VideoCodec       string
+	VideoBitrate     string
+	VideoHeight      string
+	VideoProfile     string
+	Preset           string
 }
 
-func validateVideoTranscodeOpts(opts *TranscodeOptions) error {
+func ValidateVideoTranscodeOpts(opts *TranscodeOptions) (int, error) {
 	if opts.Bin == "" {
-		return fmt.Errorf("ffmpeg binary path is required")
-	}
-
-	if opts.InputPath == "" {
-		return fmt.Errorf("input path is required")
+		return fiber.StatusInternalServerError, fmt.Errorf("ffmpeg binary path is required")
 	}
 
 	if opts.OutputDir == "" {
-		return fmt.Errorf("output directory is required")
+		return fiber.StatusInternalServerError, fmt.Errorf("output directory is required")
 	}
 
-	_, err := os.Stat(opts.InputPath)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("input file does not exist: %s", opts.InputPath)
+	if opts.InputPath == "" {
+		return fiber.StatusBadRequest, fmt.Errorf("input path is required")
+	}
+
+	status, err := CheckFileExist(opts.InputPath)
+	if err != nil {
+		return status, err
 	}
 
 	if opts.AudioStreamIndex < 0 {
-		return fmt.Errorf("invalid audio stream index: %d", opts.AudioStreamIndex)
+		return fiber.StatusBadRequest, fmt.Errorf("invalid audio stream index: %d", opts.AudioStreamIndex)
 	}
 
 	if opts.VideoStreamIndex < 0 {
-		return fmt.Errorf("invalid video stream index: %d", opts.VideoStreamIndex)
-	}
-
-	if opts.AudioCodec != "copy" {
-		if opts.AudioCodec == "" {
-			return fmt.Errorf("audio codec is required when not copying")
-		}
-
-		if opts.AudioBitRate != "" && !strings.HasSuffix(opts.AudioBitRate, "k") {
-			return fmt.Errorf("invalid audio bitrate format: %s (should end with 'k')", opts.AudioBitRate)
-		}
-	}
-
-	if opts.VideoCodec != "copy" {
-		if opts.VideoCodec == "" {
-			return fmt.Errorf("video codec is required when not copying")
-		}
-
-		if opts.VideoBitrate != "" && !strings.HasSuffix(opts.VideoBitrate, "k") {
-			return fmt.Errorf("invalid video bitrate format: %s (should end with 'k')", opts.VideoBitrate)
-		}
-	}
-
-	if opts.VideoProfile != "" {
-		validProfiles := []string{"baseline", "main", "high"}
-		isValidProfile := false
-
-		for _, p := range validProfiles {
-			if opts.VideoProfile == p {
-				isValidProfile = true
-				break
-			}
-		}
-
-		if !isValidProfile {
-			return fmt.Errorf("invalid video profile: %s (must be one of: %s)", opts.VideoProfile, strings.Join(validProfiles, ", "))
-		}
+		return fiber.StatusBadRequest, fmt.Errorf("invalid video stream index: %d", opts.VideoStreamIndex)
 	}
 
 	if opts.Preset != "" {
@@ -99,36 +64,24 @@ func validateVideoTranscodeOpts(opts *TranscodeOptions) error {
 		}
 
 		if !isValidPreset {
-			return fmt.Errorf("invalid preset: %s (must be one of: %s)", opts.Preset, strings.Join(validPresets, ", "))
+			return fiber.StatusBadRequest, fmt.Errorf("invalid preset: %s (must be one of: %s)",
+				opts.Preset, strings.Join(validPresets, ", "))
 		}
 	}
 
-	return nil
+	return 0, nil
 }
 
 func CreateHlsStream(opts *TranscodeOptions) error {
-	err := validateVideoTranscodeOpts(opts)
-	if err != nil {
-		return fmt.Errorf("invalid options: %w", err)
-	}
-
-	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
-	}
-
-	// Base command with input
 	cmdArgs := []string{
 		"-i", opts.InputPath,
 		"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex), // Video stream
 		"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex), // Audio stream
 	}
 
-	// Handle codec settings
 	if opts.AudioCodec == "copy" && opts.VideoCodec == "copy" {
 		cmdArgs = append(cmdArgs, "-c:v", "copy", "-c:a", "copy")
 	} else {
-		// Audio settings
 		if opts.AudioCodec == "copy" {
 			cmdArgs = append(cmdArgs, "-c:a", "copy")
 		} else {
@@ -139,7 +92,6 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 			)
 		}
 
-		// Video settings
 		if opts.VideoCodec == "copy" {
 			cmdArgs = append(cmdArgs, "-c:v", "copy")
 		} else {
@@ -153,7 +105,6 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 		}
 	}
 
-	// HLS specific settings
 	cmdArgs = append(cmdArgs,
 		"-f", "hls",
 		"-hls_time", "6",
@@ -162,7 +113,6 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 		"-hls_playlist_type", "vod",
 	)
 
-	// Add output path
 	cmdArgs = append(cmdArgs, filepath.Join(opts.OutputDir, "playlist.m3u8"))
 
 	cmd := exec.Command(opts.Bin, cmdArgs...)
