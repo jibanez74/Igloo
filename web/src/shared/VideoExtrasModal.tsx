@@ -6,14 +6,12 @@ type VideoExtrasModalProps = {
   show: boolean;
   onHide: () => void;
   videoUrl: string | null;
-  title: string;
 };
 
 export default function VideoExtrasModal({
   show,
   onHide,
   videoUrl,
-  title,
 }: VideoExtrasModalProps) {
   const [isPlaying, setIsPlaying] = useState(false);
 

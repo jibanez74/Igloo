@@ -33,17 +33,12 @@ type MovieResponse = {
   movie: Movie;
 };
 
-type PlayResponse = {
-  fileName: string;
-};
-
 export default function MovieDetailsPage() {
   const { id } = useParams();
 
   const navigate = useNavigate();
 
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-  const [selectedTitle, setSelectedTitle] = useState<string>("");
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ["movie", id],
@@ -83,37 +78,27 @@ export default function MovieDetailsPage() {
     }
 
     try {
-      const { data: res } = await api.post<PlayResponse>(
-        "/movies/create-m3u8",
-        {
-          copyAudio,
-          copyVideoCodec,
-          movieID: id,
-        }
-      );
-
-      const searchParams = new URLSearchParams({
-        file_name: res.fileName,
-        native_hls: canPlayNativeHLS.toString(),
-        title: data.title,
-        poster: data.thumb,
+      await api.post("/ffmpeg/hls", {
+        inputPath: data.filePath,
+        audioStreamIndex: 0,
+        audioCodec: copyAudio ? "copy" : "aac",
+        videoStreamIndex: 0,
+        videoCodec: copyVideoCodec ? "copy" : "libx264",
       });
 
-      navigate(`/movies/play?${searchParams.toString()}`);
+      alert("transcode started");
     } catch (err) {
       console.error(err);
       alert("request to transcode video failed");
     }
   };
 
-  const handleVideoSelect = (url: string, title: string) => {
+  const handleVideoSelect = (url: string) => {
     setSelectedVideo(url);
-    setSelectedTitle(title);
   };
 
   const handleCloseModal = () => {
     setSelectedVideo(null);
-    setSelectedTitle("");
   };
 
   if (isPending) {
@@ -328,9 +313,7 @@ export default function MovieDetailsPage() {
                         <div className='d-grid'>
                           <Button
                             variant='primary'
-                            onClick={() =>
-                              handleVideoSelect(extra.url, extra.title)
-                            }
+                            onClick={() => handleVideoSelect(extra.url)}
                           >
                             <FaPlay className='me-2' aria-hidden='true' /> Watch{" "}
                             {extra.kind}
@@ -486,7 +469,6 @@ export default function MovieDetailsPage() {
         show={!!selectedVideo}
         onHide={handleCloseModal}
         videoUrl={selectedVideo}
-        title={selectedTitle}
       />
     </main>
   );

@@ -12,18 +12,18 @@ import (
 
 type TranscodeOptions struct {
 	Bin              string
-	InputPath        string
+	InputPath        string `json:"inputPath"`
 	OutputDir        string
-	AudioStreamIndex int
-	AudioCodec       string
-	AudioBitRate     string
-	AudioChannels    string
-	VideoStreamIndex int
-	VideoCodec       string
-	VideoBitrate     string
-	VideoHeight      string
-	VideoProfile     string
-	Preset           string
+	AudioStreamIndex int    `json:"audioStreamIndex"`
+	AudioCodec       string `json:"audioCodec"`
+	AudioBitRate     string `json:"audioBitRate"`
+	AudioChannels    string `json:"audioChannels"`
+	VideoStreamIndex int    `json:"videoStreamIndex"`
+	VideoCodec       string `json:"videoCodec"`
+	VideoBitrate     string `json:"videoBitrate"`
+	VideoHeight      string `json:"videoHeight"`
+	VideoProfile     string `json:"videoProfile"`
+	Preset           string `json:"preset"`
 }
 
 func validateVideoTranscodeOpts(opts *TranscodeOptions) error {

@@ -53,7 +53,7 @@ func (app *config) run() error {
 	auth.Get("/logout", app.Logout)
 
 	ffmpeg := f.Group("/api/v1/ffmpeg")
-	ffmpeg.Post("/movie/hls/:id", app.TranscodeMovieHls)
+	ffmpeg.Post("/hls", app.TranscodeHls)
 
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/all", app.GetAllMovies)
