@@ -81,18 +81,25 @@ export default function MovieDetailsPage() {
       inputPath: data.filePath,
       audioStreamIndex: 0,
       audioCodec: copyAudio ? "copy" : "aac",
+      audioBitRate: copyAudio ? undefined : "128k",
+      audioChannels: copyAudio ? undefined : "2",
       videoStreamIndex: 0,
       videoCodec: copyVideoCodec ? "copy" : "libx264",
+      videoBitrate: copyVideoCodec ? undefined : "1000k",
+      videoHeight: copyVideoCodec ? undefined : "720",
+      videoProfile: copyVideoCodec ? undefined : "main",
+      preset: copyVideoCodec ? undefined : "fast",
     };
 
-    alert(JSON.stringify(opts));
-
     try {
-      await api.post("/ffmpeg/hls", opts);
-
-      alert("transcode started");
+      const { data: response } = await api.post("/ffmpeg/hls", opts);
+      console.log("Transcode response:", response);
+      navigate(
+        `/movies/play?file_name=${response.fileName}&native_hls=${canPlayNativeHLS}&title=${data.title}&poster=${data.thumb}`
+      );
     } catch (err) {
-      console.error(err);
+      console.error("Transcode error:", err);
+      alert("Failed to start video playback");
     }
   };
 

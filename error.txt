@@ -1,0 +1,161 @@
+romany@swifty:~/projects/Igloo/backend$ ls
+cmd  db-data  docker-compose.yml  go.mod  go.sum  igloo_server  Makefile  static
+romany@swifty:~/projects/Igloo/backend$ cd static/
+romany@swifty:~/projects/Igloo/backend/static$ ls
+artists  movies  studios
+romany@swifty:~/projects/Igloo/backend/static$ cd
+romany@swifty:~$ cd /home/romany/videos/
+romany@swifty:~/videos$ ls
+concerts  documentaries  interviews  personal  star_wars  workouts
+romany@swifty:~/videos$ 2025-01-02 13:06:53 | 200 |   16.629955ms | GET | /api/v1/movies/188
+2025-01-02 13:07:00 | 500 |   10.272495ms | POST | /api/v1/ffmpeg/hls
+2025-01-02 13:07:38 | 200 |   15.995693ms | GET | /api/v1/movies/188
+2025-01-02 13:08:32 | 200 |   14.570533ms | GET | /api/v1/movies/188
+romany@swifty:~/videos$ ls
+concerts  documentaries  interviews  personal  star_wars  workouts
+romany@swifty:~/videos$ cd
+romany@swifty:~$ cd projects/Igloo/
+romany@swifty:~/projects/Igloo$ git pull
+Already up to date.
+romany@swifty:~/projects/Igloo$ cd backend/
+romany@swifty:~/projects/Igloo/backend$ ls
+cmd  db-data  docker-compose.yml  go.mod  go.sum  igloo_server  Makefile  static
+romany@swifty:~/projects/Igloo/backend$ make restart
+Stopping...
+Stopped!
+Building...
+env CGO_ENABLED=0  go build -ldflags="-s -w" -o "igloo_server" ./cmd
+Built!
+Starting...
+Started!
+romany@swifty:~/projects/Igloo/backend$ 
+ ┌───────────────────────────────────────────────────┐ 
+ │                     Igloo API                     │ 
+ │                   Fiber v2.52.5                   │ 
+ │               http://127.0.0.1:8080               │ 
+ │       (bound on host 0.0.0.0 and port 8080)       │ 
+ │                                                   │ 
+ │ Handlers ............ 20  Processes ........... 1 │ 
+ │ Prefork ....... Disabled  PID ........... 1349463 │ 
+ └───────────────────────────────────────────────────┘ 
+
+2025-01-02 13:13:59 | 401 |      49.623µs | GET | /api/v1/users/me
+2025-01-02 13:14:20 | 200 |   76.177605ms | POST | /api/v1/auth/login
+2025-01-02 13:14:21 | 200 |    1.164817ms | GET | /api/v1/movies/latest
+2025-01-02 13:14:29 | 200 |    2.538185ms | GET | /api/v1/movies/all
+2025-01-02 13:14:35 | 200 |   23.082799ms | GET | /api/v1/movies/139
+2025-01-02 13:14:36 | 304 |    3.779034ms | GET | /api/v1/static/artists/dave_foley_poster.jpg
+2025-01-02 13:14:36 | 304 |     178.525µs | GET | /api/v1/static/artists/kevin_spacey_poster.jpg
+2025-01-02 13:14:36 | 304 |      96.381µs | GET | /api/v1/static/artists/julia_louis-dreyfus_poster.jpg
+2025-01-02 13:14:36 | 304 |     105.708µs | GET | /api/v1/static/artists/phyllis_diller_poster.jpg
+2025-01-02 13:14:36 | 304 |     105.658µs | GET | /api/v1/static/artists/hayden_panettiere_poster.jpg
+2025-01-02 13:14:36 | 304 |     176.922µs | GET | /api/v1/static/artists/richard_kind_poster.jpg
+2025-01-02 13:14:37 | 200 |      78.116µs | GET | /api/v1/no_thumb.png
+2025-01-02 13:14:37 | 304 |     323.568µs | GET | /api/v1/static/artists/david_hyde_pierce_poster.jpg
+2025-01-02 13:14:37 | 304 |     179.266µs | GET | /api/v1/static/artists/joe_ranft_poster.jpg
+2025-01-02 13:14:37 | 304 |    3.545646ms | GET | /api/v1/static/artists/denis_leary_poster.jpg
+2025-01-02 13:14:37 | 304 |     266.089µs | GET | /api/v1/static/artists/jonathan_harris_poster.jpg
+2025-01-02 13:14:37 | 304 |     193.052µs | GET | /api/v1/static/artists/madeline_kahn_poster.jpg
+2025-01-02 13:14:37 | 304 |     164.609µs | GET | /api/v1/static/artists/bonnie_hunt_poster.jpg
+2025-01-02 13:14:37 | 304 |     198.032µs | GET | /api/v1/static/artists/michael_mcshane_poster.jpg
+2025-01-02 13:14:37 | 304 |     118.483µs | GET | /api/v1/static/artists/john_ratzenberger_poster.jpg
+2025-01-02 13:14:37 | 304 |     183.675µs | GET | /api/v1/static/artists/roddy_mcdowall_poster.jpg
+2025-01-02 13:14:37 | 304 |     209.373µs | GET | /api/v1/static/artists/edie_mcclurg_poster.jpg
+2025-01-02 13:14:37 | 304 |     200.606µs | GET | /api/v1/static/artists/brad_garrett_poster.jpg
+2025-01-02 13:14:38 | 304 |     193.543µs | GET | /api/v1/static/artists/alex_rocco_poster.jpg
+2025-01-02 13:14:38 | 304 |     256.912µs | GET | /api/v1/static/artists/carlos_alazraqui_poster.jpg
+2025-01-02 13:14:38 | 304 |      191.63µs | GET | /api/v1/static/artists/jack_angel_poster.jpg
+2025-01-02 13:14:38 | 304 |     201.509µs | GET | /api/v1/static/artists/bob_bergen_poster.jpg
+2025-01-02 13:14:38 | 304 |     199.134µs | GET | /api/v1/static/artists/kimberly_j._brown_poster.jpg
+2025-01-02 13:14:38 | 304 |     193.493µs | GET | /api/v1/static/artists/anthony_burch_poster.jpg
+2025-01-02 13:14:38 | 304 |     236.304µs | GET | /api/v1/static/artists/rodger_bumpass_poster.jpg
+2025-01-02 13:14:39 | 304 |      165.11µs | GET | /api/v1/static/artists/paul_eiding_poster.jpg
+2025-01-02 13:14:39 | 304 |         213µs | GET | /api/v1/static/artists/debi_derryberry_poster.jpg
+2025-01-02 13:14:39 | 304 |     171.923µs | GET | /api/v1/static/artists/jennifer_darling_poster.jpg
+2025-01-02 13:14:39 | 304 |     210.024µs | GET | /api/v1/static/artists/jessica_evans_poster.jpg
+2025-01-02 13:14:39 | 304 |      82.535µs | GET | /api/v1/static/artists/brad_hall_poster.jpg
+2025-01-02 13:14:39 | 304 |     182.282µs | GET | /api/v1/static/artists/bill_farmer_poster.jpg
+2025-01-02 13:14:39 | 304 |     237.606µs | GET | /api/v1/static/artists/courtland_mead_poster.jpg
+2025-01-02 13:14:39 | 304 |     216.787µs | GET | /api/v1/static/artists/john_lasseter_poster.jpg
+2025-01-02 13:14:39 | 304 |     130.235µs | GET | /api/v1/static/artists/sherry_lynn_poster.jpg
+2025-01-02 13:14:39 | 304 |     177.413µs | GET | /api/v1/static/artists/david_l._lander_poster.jpg
+2025-01-02 13:14:39 | 304 |      133.05µs | GET | /api/v1/static/artists/jess_harnell_poster.jpg
+2025-01-02 13:14:40 | 304 |     156.424µs | GET | /api/v1/static/artists/mickie_mcgowan_poster.jpg
+2025-01-02 13:14:40 | 304 |     195.988µs | GET | /api/v1/static/artists/kelsey_mulrooney_poster.jpg
+2025-01-02 13:14:40 | 304 |     177.123µs | GET | /api/v1/static/artists/christina_milian_poster.jpg
+2025-01-02 13:14:40 | 304 |      239.54µs | GET | /api/v1/static/artists/jordan_ranft_poster.jpg
+2025-01-02 13:14:40 | 304 |     190.618µs | GET | /api/v1/static/artists/jan_rabson_poster.jpg
+2025-01-02 13:14:40 | 304 |     194.154µs | GET | /api/v1/static/artists/jeff_pidgeon_poster.jpg
+2025-01-02 13:14:40 | 304 |     134.683µs | GET | /api/v1/static/artists/phil_proctor_poster.jpg
+2025-01-02 13:14:40 | 304 |      181.41µs | GET | /api/v1/static/artists/hannah_swanson_poster.jpg
+2025-01-02 13:14:40 | 304 |     235.853µs | GET | /api/v1/static/artists/andrew_stanton_poster.jpg
+2025-01-02 13:14:40 | 304 |     115.537µs | GET | /api/v1/static/artists/francesca_marie_smith_poster.jpg
+2025-01-02 13:14:40 | 304 |     113.713µs | GET | /api/v1/static/artists/russi_taylor_poster.jpg
+2025-01-02 13:14:40 | 304 |     280.186µs | GET | /api/v1/static/artists/travis_tedford_poster.jpg
+2025-01-02 13:14:41 | 304 |     276.068µs | GET | /api/v1/static/artists/lee_unkrich_poster.jpg
+2025-01-02 13:14:41 | 304 |     194.495µs | GET | /api/v1/static/artists/ashley_tisdale_poster.jpg
+2025-01-02 13:14:41 | 304 |     366.659µs | GET | /api/v1/static/artists/jordan_warkol_poster.jpg
+2025-01-02 13:14:41 | 304 |     205.055µs | GET | /api/v1/static/artists/don_mcenery_poster.jpg
+2025-01-02 13:14:41 | 304 |     203.812µs | GET | /api/v1/static/artists/kevin_reher_poster.jpg
+2025-01-02 13:14:41 | 304 |     216.657µs | GET | /api/v1/static/artists/randy_newman_poster.jpg
+2025-01-02 13:14:41 | 304 |    9.428238ms | GET | /api/v1/static/artists/armen_ksajikian_poster.jpg
+2025-01-02 13:14:41 | 304 |     185.409µs | GET | /api/v1/static/artists/kyle_balda_poster.jpg
+2025-01-02 13:14:42 | 304 |     249.278µs | GET | /api/v1/static/artists/jonas_rivera_poster.jpg
+2025-01-02 13:14:42 | 304 |     279.024µs | GET | /api/v1/static/artists/david_ian_salter_poster.jpg
+2025-01-02 13:14:42 | 304 |     188.644µs | GET | /api/v1/static/artists/robert_taylor_poster.jpg
+2025-01-02 13:14:42 | 304 |     172.294µs | GET | /api/v1/static/artists/tom_boyd_poster.jpg
+2025-01-02 13:14:42 | 304 |     262.814µs | GET | /api/v1/static/artists/gary_rydstrom_poster.jpg
+2025-01-02 13:14:42 | 304 |     203.532µs | GET | /api/v1/static/artists/samuel_lord_black_poster.jpg
+2025-01-02 13:14:42 | 304 |     182.582µs | GET | /api/v1/static/artists/bobby_podesta_poster.jpg
+2025-01-02 13:14:42 | 304 |     168.136µs | GET | /api/v1/static/artists/tia_w._kratter_poster.jpg
+2025-01-02 13:14:42 | 304 |     212.388µs | GET | /api/v1/static/artists/bob_pauley_poster.jpg
+2025-01-02 13:14:42 | 304 |     254.427µs | GET | /api/v1/static/artists/doug_sweetland_poster.jpg
+2025-01-02 13:14:43 | 304 |     249.067µs | GET | /api/v1/static/artists/don_davis_poster.jpg
+2025-01-02 13:14:43 | 304 |     110.237µs | GET | /api/v1/static/artists/karen_prell_poster.jpg
+2025-01-02 13:14:43 | 304 |     235.903µs | GET | /api/v1/static/artists/chris_perry_poster.jpg
+2025-01-02 13:14:43 | 304 |     194.736µs | GET | /api/v1/static/artists/jerome_ranft_poster.jpg
+2025-01-02 13:14:43 | 304 |     105.057µs | GET | /api/v1/static/artists/shannon_mills_poster.jpg
+2025-01-02 13:14:43 | 304 |     119.284µs | GET | /api/v1/static/artists/shawn_krause_poster.jpg
+2025-01-02 13:14:43 | 304 |     151.234µs | GET | /api/v1/static/artists/tommy_johnson_poster.jpg
+2025-01-02 13:14:43 | 304 |     155.682µs | GET | /api/v1/static/artists/lindsey_collins_poster.jpg
+2025-01-02 13:14:43 | 304 |     210.496µs | GET | /api/v1/static/artists/scott_clark_poster.jpg
+2025-01-02 13:14:43 | 304 |     3.47835ms | GET | /api/v1/static/artists/rachel_bolt_poster.jpg
+2025-01-02 13:14:43 | 304 |     134.823µs | GET | /api/v1/static/artists/bret_parker_poster.jpg
+2025-01-02 13:14:43 | 304 |     138.079µs | GET | /api/v1/static/artists/doc_kane_poster.jpg
+2025-01-02 13:14:44 | 304 |     233.869µs | GET | /api/v1/static/artists/michael_silvers_poster.jpg
+2025-01-02 13:14:44 | 304 |     174.257µs | GET | /api/v1/static/artists/danielle_feinberg_poster.jpg
+2025-01-02 13:14:44 | 304 |     238.057µs | GET | /api/v1/static/artists/bryn_imagire_poster.jpg
+2025-01-02 13:14:44 | 304 |     126.147µs | GET | /api/v1/static/artists/john_kahrs_poster.jpg
+2025-01-02 13:14:44 | 304 |      87.194µs | GET | /api/v1/static/studios/walt_disney_pictures_poster.jpg
+2025-01-02 13:14:44 | 304 |     214.713µs | GET | /api/v1/static/artists/gary_rizzo_poster.jpg
+2025-01-02 13:14:44 | 304 |     150.914µs | GET | /api/v1/static/studios/pixar_poster.jpg
+2025-01-02 13:14:44 | 304 |     234.801µs | GET | /api/v1/static/movies/art/a_bugs_life_poster.jpg
+frame=0
+fps=0.00
+stream_0_0_q=-1.0
+stream_0_1_q=-1.0
+bitrate=  -0.0kbits/s
+total_size=0
+out_time_us=-40411
+out_time_ms=-40411
+out_time=-00:00:00.040411
+dup_frames=0
+drop_frames=0
+speed=N/A
+progress=continue
+frame=247
+fps=0.00
+stream_0_0_q=-1.0
+stream_0_1_q=-1.0
+bitrate=N/A
+total_size=N/A
+out_time_us=10428000
+out_time_ms=10428000
+out_time=00:00:10.428000
+dup_frames=0
+drop_frames=0
+speed= 174x
+progress=end
+2025/01/02 13:14:45 ffmpeg failed: exit status 254
+2025-01-02 13:14:44 | 500 |   68.909611ms | POST | /api/v1/ffmpeg/hls
+
