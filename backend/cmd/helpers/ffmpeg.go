@@ -1,11 +1,8 @@
 package helpers
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -171,57 +168,6 @@ func CreateHlsStream(opts *TranscodeOptions) error {
 	}
 
 	cmdArgs = append(cmdArgs, filepath.Join(opts.OutputDir, "playlist.m3u8"))
-
-	cmd := exec.Command(opts.Bin, cmdArgs...)
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		return fmt.Errorf("failed to start ffmpeg: %w", err)
-	}
-
-	errChan := make(chan error, 1)
-
-	go func() {
-		errOutput, err := io.ReadAll(stderr)
-		if err != nil {
-			errChan <- fmt.Errorf("failed to read stderr: %w", err)
-			return
-		}
-
-		if len(errOutput) > 0 {
-			errChan <- fmt.Errorf("ffmpeg error: %s", string(errOutput))
-			return
-		}
-
-		errChan <- nil
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-
-	err = cmd.Wait()
-	if err != nil {
-		return fmt.Errorf("ffmpeg failed: %w", err)
-	}
-
-	err = <-errChan
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

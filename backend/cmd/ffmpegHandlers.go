@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"igloo/cmd/helpers"
 	"log"
 	"path/filepath"
@@ -22,14 +23,13 @@ func (app *config) TranscodeHls(c *fiber.Ctx) error {
 	req.Bin = app.ffmpeg
 	req.OutputDir = filepath.Join(app.transcodeDir, filepath.Base(req.InputPath))
 
-	// err = helpers.CreateHlsStream(&req)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	os.RemoveAll(req.OutputDir)
-	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-	// 		"error": fmt.Sprintf("failed to create HLS stream: %v", err),
-	// 	})
-	// }
+	err = helpers.CreateHlsStream(&req)
+	if err != nil {
+		log.Println(err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to create HLS stream: %v", err),
+		})
+	}
 
 	return c.JSON(fiber.Map{
 		"fileName": filepath.Base(req.OutputDir),

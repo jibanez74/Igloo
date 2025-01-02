@@ -85,18 +85,15 @@ export default function MovieDetailsPage() {
       audioChannels: copyAudio ? undefined : "2",
       videoStreamIndex: 0,
       videoCodec: copyVideoCodec ? "copy" : "libx264",
-      videoBitrate: copyVideoCodec ? undefined : "1000k",
+      videoBitrate: copyVideoCodec ? undefined : "3000k",
       videoHeight: copyVideoCodec ? undefined : "720",
       videoProfile: copyVideoCodec ? undefined : "main",
       preset: copyVideoCodec ? undefined : "fast",
     };
 
     try {
-      const { data: response } = await api.post("/ffmpeg/hls", opts);
-      console.log("Transcode response:", response);
-      navigate(
-        `/movies/play?file_name=${response.fileName}&native_hls=${canPlayNativeHLS}&title=${data.title}&poster=${data.thumb}`
-      );
+      await api.post("/ffmpeg/hls", opts);
+      alert("success");
     } catch (err) {
       console.error("Transcode error:", err);
       alert("Failed to start video playback");
