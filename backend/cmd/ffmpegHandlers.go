@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/helpers"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -14,6 +15,7 @@ func (app *config) TranscodeHls(c *fiber.Ctx) error {
 
 	err := c.BodyParser(&req)
 	if err != nil {
+		log.Println(err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
@@ -24,6 +26,7 @@ func (app *config) TranscodeHls(c *fiber.Ctx) error {
 
 	err = helpers.CreateHlsStream(&req)
 	if err != nil {
+		log.Println(err)
 		os.RemoveAll(req.OutputDir)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("failed to create HLS stream: %v", err),

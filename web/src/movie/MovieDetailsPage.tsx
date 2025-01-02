@@ -77,19 +77,22 @@ export default function MovieDetailsPage() {
       }
     }
 
+    const opts = {
+      inputPath: data.filePath,
+      audioStreamIndex: 0,
+      audioCodec: copyAudio ? "copy" : "aac",
+      videoStreamIndex: 0,
+      videoCodec: copyVideoCodec ? "copy" : "libx264",
+    };
+
+    alert(JSON.stringify(opts));
+
     try {
-      await api.post("/ffmpeg/hls", {
-        inputPath: data.filePath,
-        audioStreamIndex: 0,
-        audioCodec: copyAudio ? "copy" : "aac",
-        videoStreamIndex: 0,
-        videoCodec: copyVideoCodec ? "copy" : "libx264",
-      });
+      await api.post("/ffmpeg/hls", opts);
 
       alert("transcode started");
     } catch (err) {
       console.error(err);
-      alert("request to transcode video failed");
     }
   };
 
