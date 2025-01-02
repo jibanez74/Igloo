@@ -87,12 +87,11 @@ func main() {
 	}
 	app.ffprobe = ffprobePath
 
+	app.transcodeDir = "/home/romany/videos"
+
 	app.initSession()
 
 	app.wg = &sync.WaitGroup{}
-
-	// this is a temp dir for testing hls transcoding
-	app.transcodeDir = "/home/romany/videos"
 
 	app.run()
 
