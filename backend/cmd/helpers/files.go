@@ -34,5 +34,4 @@ func RemoveFile(path string) (int, error) {
 	}
 
 	return http.StatusOK, nil
-
 }
