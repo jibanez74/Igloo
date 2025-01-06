@@ -105,10 +105,11 @@ func createDefaultSettings(db *gorm.DB) error {
 			PhotosDir:        filepath.Join(workDir, "photos"),
 			StaticDir:        filepath.Join(workDir, "static"),
 			MaxUserTranscode: 5,
-			TmdbKey:          os.Getenv("TMDB_KEY"), // Get from environment variable
+			Ffmpeg:           "ffmpeg",
+			Ffprobe:          "ffprobe",
+			TmdbKey:          os.Getenv("TMDB_KEY"),
 		}
 
-		// Create the directories
 		dirs := []string{
 			defaultSettings.TranscodeDir,
 			defaultSettings.MovieDir,

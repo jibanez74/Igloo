@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/helpers"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 )
@@ -17,9 +18,17 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		return errors.New("tmdb id is required")
 	}
 
-	url := fmt.Sprintf("%s/movie/%s?api_key=%s&append_to_response=credits,videos,release_dates", t.baseUrl, movie.TmdbID, t.key)
+	baseURL := fmt.Sprintf("%s/movie/%s", t.baseUrl, movie.TmdbID)
 
-	req, err := http.NewRequest("GET", url, nil)
+	// Create url.Values to properly encode query parameters
+	params := url.Values{}
+	params.Add("api_key", *t.key)
+	params.Add("append_to_response", "credits,videos,release_dates")
+
+	// Construct the final URL
+	requestURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+
+	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
 		return err
 	}

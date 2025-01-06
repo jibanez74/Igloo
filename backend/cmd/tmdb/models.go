@@ -13,7 +13,7 @@ type Tmdb interface {
 
 type tmdb struct {
 	baseUrl string
-	key     string
+	key     *string
 	http    *http.Client
 }
 

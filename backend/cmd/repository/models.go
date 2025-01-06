@@ -8,6 +8,7 @@ import (
 
 type Repo interface {
 	gormStatusCode(err error) int
+	GetSettings() (*models.GlobalSettings, error)
 	GetLatestMovies(movies *[]SimpleMovie) (int, error)
 	MovieExist(title string) (bool, error)
 	GetMovieCount() (int64, error)

@@ -10,7 +10,7 @@ import (
 )
 
 func (app *config) isAuth(c *fiber.Ctx) error {
-	ses, err := app.session.Get(c)
+	ses, err := app.Session.Get(c)
 	if err != nil {
 		log.Println(err.Error())
 		log.Println("unable to get session")
@@ -36,7 +36,7 @@ func (app *config) isAuth(c *fiber.Ctx) error {
 	var user models.User
 	user.ID = uint(userID)
 
-	status, err := app.repo.GetUserByID(&user)
+	status, err := app.Repo.GetUserByID(&user)
 	if err != nil {
 		return c.Status(status).JSON(fiber.Map{
 			"error": "Authentication failed",
