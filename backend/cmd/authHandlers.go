@@ -11,6 +11,8 @@ const authError = "invalid credentials"
 const serverError = "server error"
 
 func (app *config) Login(c *fiber.Ctx) error {
+	log.Println("inside of handlers")
+
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
