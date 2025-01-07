@@ -62,6 +62,8 @@ func main() {
 		log.Println("tmdb api key not set")
 	}
 
+	app.initSession()
+
 	err = app.run()
 	if err != nil {
 		panic(err)
