@@ -75,3 +75,18 @@ func (app *config) Login(c *fiber.Ctx) error {
 		},
 	})
 }
+
+func (app *config) Logout(c *fiber.Ctx) error {
+	session, err := app.Session.Get(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "server error",
+		})
+	}
+
+	session.Destroy()
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "logged out",
+	})
+}

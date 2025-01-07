@@ -107,6 +107,7 @@ func (app *config) run() error {
 
 	auth := f.Group("/api/v1/auth")
 	auth.Post("/login", app.Login)
+	auth.Get("/logout", app.Logout)
 
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/all", app.GetAllMovies)
