@@ -107,7 +107,7 @@ func createDefaultSettings(db *gorm.DB) error {
 			MaxUserTranscode: 5,
 			Ffmpeg:           "ffmpeg",
 			Ffprobe:          "ffprobe",
-			TmdbKey:          os.Getenv("TMDB_KEY"),
+			TmdbKey:          os.Getenv("TMDB_API_KEY"),
 		}
 
 		dirs := []string{
