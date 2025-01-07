@@ -115,6 +115,9 @@ func (app *config) run() error {
 	movies.Get("/:id", app.GetMovieByID)
 	movies.Post("/create", app.CreateMovie)
 
+	users := f.Group("/api/v1/users")
+	users.Get("/me", app.IsAuth, app.GetAuthUser)
+
 	if !app.Settings.Debug {
 		clientDir := filepath.Join(app.workDir, "cmd", "client")
 		assetsDir := filepath.Join(clientDir, "assets")

@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func (app *config) isAuth(c *fiber.Ctx) error {
+func (app *config) IsAuth(c *fiber.Ctx) error {
 	ses, err := app.Session.Get(c)
 	if err != nil {
 		log.Println(err.Error())
