@@ -2,6 +2,7 @@ package main
 
 import (
 	"igloo/cmd/database/models"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -18,6 +19,8 @@ func (app *config) Login(c *fiber.Ctx) error {
 
 	err := c.BodyParser(&req)
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to parse body")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -29,6 +32,8 @@ func (app *config) Login(c *fiber.Ctx) error {
 
 	err = app.Repo.GetAuthUser(&user)
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to get auth user")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authError,
 		})
@@ -36,12 +41,15 @@ func (app *config) Login(c *fiber.Ctx) error {
 
 	isMatch, err := user.PasswordMatches(req.Password)
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to match password")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "server error",
 		})
 	}
 
 	if !isMatch {
+		log.Println(" password does not match")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authError,
 		})
@@ -49,6 +57,8 @@ func (app *config) Login(c *fiber.Ctx) error {
 
 	session, err := app.Session.Get(c)
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to get session")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "server error",
 		})
@@ -59,6 +69,8 @@ func (app *config) Login(c *fiber.Ctx) error {
 
 	err = session.Save()
 	if err != nil {
+		log.Println(err)
+		log.Println("unable to save session")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "server error",
 		})
