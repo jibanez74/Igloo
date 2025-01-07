@@ -105,6 +105,9 @@ func (app *config) run() error {
 		CacheDuration: 24 * time.Hour,
 	})
 
+	auth := f.Group("/api/v1/auth")
+	auth.Post("/login", app.Login)
+
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/all", app.GetAllMovies)
 	movies.Get("/latest", app.GetLatestMovies)

@@ -13,7 +13,6 @@ func (app *config) isAuth(c *fiber.Ctx) error {
 	ses, err := app.Session.Get(c)
 	if err != nil {
 		log.Println(err.Error())
-		log.Println("unable to get session")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "unable to get session",
 		})
