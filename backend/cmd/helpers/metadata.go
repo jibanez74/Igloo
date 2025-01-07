@@ -10,9 +10,7 @@ import (
 	"path/filepath"
 )
 
-const ffprobe = "/bin/ffprobe"
-
-func GetMovieMetadata(movie *models.Movie) error {
+func GetMovieMetadata(movie *models.Movie, ffprobe string) error {
 	fileInfo, err := os.Stat(movie.FilePath)
 	if err != nil {
 		return err
@@ -26,6 +24,7 @@ func GetMovieMetadata(movie *models.Movie) error {
 	}
 
 	ext := filepath.Ext(movie.FilePath)
+
 	contentType := mime.TypeByExtension(ext)
 	if contentType == "" {
 		contentType = "application/octet-stream" // Fallback if type is unknown
