@@ -1,81 +1,69 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import Container from "react-bootstrap/Container";
-import Button from "react-bootstrap/Button";
-import Message from "../shared/Message";
+import { useNavigate } from "react-router-dom";
 import HlsPlayer from "../shared/HlsPlayer";
-import { FaArrowLeft } from "react-icons/fa";
 
-export default function PlayMovie() {
+interface PlayMovieProps {
+  movieId: number;
+  onClose?: () => void;
+}
+
+export default function PlayMovie({ movieId, onClose }: PlayMovieProps) {
+  const [error, setError] = useState<string>("");
   const navigate = useNavigate();
 
-  const [searchParams] = useSearchParams();
-  const fileName = searchParams.get("file_name");
-  const nativeHls = searchParams.get("native_hls") === "true";
-  const title = searchParams.get("title");
-  const poster = searchParams.get("poster");
-
-  const [error, setError] = useState<string | null>(null);
-
-  if (!fileName) {
-    return (
-      <Container className='py-5'>
-        <Message title='Error' msg='No video file specified' variant='danger' />
-      </Container>
-    );
-  }
-
   const handleError = (error: Error) => {
-    console.error("Playback Error:", error);
-    setError(error.message);
+    console.error("Playback error:", error);
+    setError("Failed to play video. Please try again.");
   };
 
-  const handleEnded = () => {
-    navigate(-1);
+  const handleClose = () => {
+    onClose?.();
+    navigate(`/movie/${movieId}`);
   };
 
   return (
-    <main className='min-vh-100 bg-dark'>
-      {/* Back Button */}
-      <Button
-        variant='outline-light'
-        onClick={() => navigate(-1)}
-        className='position-fixed top-0 start-0 m-4 z-3'
-      >
-        <FaArrowLeft className='me-2' /> Back
-      </Button>
-
-      {/* Error Message */}
+    <div className='video-player-container'>
+      <HlsPlayer movieId={movieId} onError={handleError} />
       {error && (
-        <Container className='py-5'>
-          <Message
-            title='Playback Error'
-            msg={error}
-            variant='danger'
-            duration={5000}
-          />
-        </Container>
-      )}
-
-      {/* Video Player */}
-      {!error && (
-        <div className='d-flex align-items-center justify-content-center min-vh-100'>
-          <Container fluid className='px-0'>
-            <HlsPlayer
-              url={`/api/v1/movies/stream/${fileName}`}
-              title={title || undefined}
-              poster={poster || undefined}
-              useHlsJs={!nativeHls}
-              onError={handleError}
-              onEnded={handleEnded}
-              onProgress={state => {
-                // You can add progress tracking here
-                console.log("Progress:", state.played);
-              }}
-            />
-          </Container>
+        <div className='error-message'>
+          {error}
+          <button onClick={handleClose}>Close</button>
         </div>
       )}
-    </main>
+      <style jsx>{`
+        .video-player-container {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: black;
+          z-index: 1000;
+        }
+        .error-message {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 1rem;
+          border-radius: 4px;
+          text-align: center;
+        }
+        button {
+          margin-top: 1rem;
+          padding: 0.5rem 1rem;
+          background: #007bff;
+          border: none;
+          border-radius: 4px;
+          color: white;
+          cursor: pointer;
+        }
+        button:hover {
+          background: #0056b3;
+        }
+      `}</style>
+    </div>
   );
 }

@@ -3,8 +3,10 @@ package main
 import (
 	"igloo/cmd/database"
 	"igloo/cmd/database/models"
+	"igloo/cmd/ffmpeg"
 	"igloo/cmd/repository"
 	"igloo/cmd/tmdb"
+
 	"log"
 	"os"
 	"path/filepath"
@@ -25,6 +27,7 @@ type config struct {
 	Session      *session.Store
 	CookieDomain string
 	CookieSecret string
+	ffmpeg       ffmpeg.FFmpeg
 }
 
 func main() {
@@ -37,6 +40,11 @@ func main() {
 	app.Repo = repository.New(db)
 
 	app.Settings, err = app.Repo.GetSettings()
+	if err != nil {
+		panic(err)
+	}
+
+	app.ffmpeg, err = ffmpeg.New(app.Settings.Ffmpeg, "")
 	if err != nil {
 		panic(err)
 	}

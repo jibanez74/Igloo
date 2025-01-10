@@ -1,81 +1,86 @@
-import { useState } from "react";
 import ReactPlayer from "react-player/file";
-import Spinner from "react-bootstrap/Spinner";
+import { useState } from "react";
 
-type HlsPlayerProps = {
-  url: string;
-  title?: string;
-  poster?: string;
-  useHlsJs: boolean;
+interface HlsPlayerProps {
+  movieId: number;
+  onPlay?: () => void;
+  onPause?: () => void;
   onError?: (error: Error) => void;
-  onProgress?: (state: {
-    played: number;
-    playedSeconds: number;
-    loaded: number;
-    loadedSeconds: number;
-  }) => void;
-  onDuration?: (duration: number) => void;
-  onEnded?: () => void;
-};
+  onBuffer?: () => void;
+  onBufferEnd?: () => void;
+}
 
 export default function HlsPlayer({
-  url,
-  title,
-  poster,
-  useHlsJs,
+  movieId,
+  onPlay,
+  onPause,
   onError,
-  onProgress,
-  onDuration,
-  onEnded,
+  onBuffer,
+  onBufferEnd,
 }: HlsPlayerProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
+
+  const handlePlay = () => {
+    setPlaying(true);
+    onPlay?.();
+  };
+
+  const handlePause = () => {
+    setPlaying(false);
+    onPause?.();
+  };
+
+  const handleBuffer = () => {
+    setBuffering(true);
+    onBuffer?.();
+  };
+
+  const handleBufferEnd = () => {
+    setBuffering(false);
+    onBufferEnd?.();
+  };
+
+  const handleError = (error: Error) => {
+    console.error("HLS Player error:", error);
+    onError?.(error);
+  };
 
   return (
-    <div style={{ position: "relative", paddingTop: "56.25%" }}>
+    <div className='player-wrapper'>
       <ReactPlayer
-        url={url}
-        playing={isPlaying}
-        controls={true}
+        url={`/api/v1/movies/${movieId}/stream/master.m3u8`}
+        className='react-player'
         width='100%'
         height='100%'
-        style={{ position: "absolute", top: 0, left: 0 }}
+        playing={playing}
+        controls={true}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onError={handleError}
+        onBuffer={handleBuffer}
+        onBufferEnd={handleBufferEnd}
         config={{
-          forceHLS: useHlsJs,
-          hlsOptions: useHlsJs
-            ? {
-                enableWorker: true,
-                lowLatencyMode: true,
-                backBufferLength: 90,
-              }
-            : undefined,
-          attributes: {
-            poster: poster,
-            preload: "auto",
-            controlsList: "nodownload",
-            title: title,
+          file: {
+            forceHLS: true,
+            hlsOptions: {
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+            },
           },
         }}
-        onBuffer={() => setIsBuffering(true)}
-        onBufferEnd={() => setIsBuffering(false)}
-        onError={(error: Error) => {
-          console.error("HLS Player Error:", error);
-          onError?.(error);
-        }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={onEnded}
-        onProgress={onProgress}
-        onDuration={onDuration}
-        progressInterval={1000}
       />
-      {isBuffering && (
-        <div className='position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50'>
-          <Spinner animation='border' variant='light' role='status'>
-            <span className='visually-hidden'>Loading...</span>
-          </Spinner>
-        </div>
-      )}
+      <style jsx>{`
+        .player-wrapper {
+          position: relative;
+          padding-top: 56.25%; /* 16:9 aspect ratio */
+        }
+        .react-player {
+          position: absolute;
+          top: 0;
+          left: 0;
+        }
+      `}</style>
     </div>
   );
 }
