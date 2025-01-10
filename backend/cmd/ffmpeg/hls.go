@@ -22,10 +22,9 @@ type HlsOpts struct {
 	VideoProfile     string
 	Preset           string
 	HlsTime          int
-	// SegementsUrl     string
-	FileName    string
-	HlsListSize int
-	HlsFlags    string
+	FileName         string
+	HlsListSize      int
+	HlsFlags         string
 }
 
 const (
@@ -37,12 +36,12 @@ const (
 
 var ValidAudioCodecs = [7]string{
 	"copy",
-	"aac", // Most compatible
-	"ac3", // Good for surround
+	"aac",
+	"ac3",
 	"eac3",
-	"mp3",  // Widely supported
-	"opus", // Excellent for low bitrate
-	"flac", // For lossless quality
+	"mp3",
+	"opus",
+	"flac",
 }
 
 var ValidAudioChannels = [5]int{
@@ -54,11 +53,11 @@ var ValidAudioChannels = [5]int{
 }
 
 var ValidAudioBitrates = [5]int{
-	128, // Default quality
-	192, // High quality
-	256, // Very high quality
-	320, // Maximum quality
-	640, // Ultra high quality
+	128,
+	192,
+	256,
+	320,
+	640,
 }
 
 var ValidPresets = [9]string{"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"}
@@ -79,14 +78,14 @@ var ValidVideoCodecs = [5]string{
 }
 
 var ValidVideoBitrates = [8]int{
-	2000,  // 2 Mbps
-	4000,  // 4 Mbps
-	6000,  // 6 Mbps
-	8000,  // 8 Mbps
-	10000, // 10 Mbps
-	12000, // 12 Mbps
-	15000, // 15 Mbps
-	20000, // 20 Mbps
+	2000,
+	4000,
+	6000,
+	8000,
+	10000,
+	12000,
+	15000,
+	20000,
 }
 
 var ValidVideoHeights = [5]int{
@@ -109,7 +108,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
-	// Validate paths
 	if _, err := os.Stat(opts.InputPath); err != nil {
 		return fmt.Errorf("input path error: %w", err)
 	}
@@ -118,7 +116,6 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 		return fmt.Errorf("output directory error: %w", err)
 	}
 
-	// Validate stream indexes
 	if opts.AudioStreamIndex < 0 {
 		return errors.New("invalid audio stream index: must be 0 or greater")
 	}
@@ -126,22 +123,18 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 		return errors.New("invalid video stream index: must be 0 or greater")
 	}
 
-	// Validate audio settings
 	if err := f.validateAudioSettings(opts); err != nil {
 		return err
 	}
 
-	// Validate video settings
 	if err := f.validateVideoSettings(opts); err != nil {
 		return err
 	}
 
-	// Validate HLS settings
 	return f.validateHLSSettings(opts)
 }
 
 func (f *ffmpeg) validateAudioSettings(opts *HlsOpts) error {
-	// Set default audio codec
 	if opts.AudioCodec == "" {
 		opts.AudioCodec = "aac"
 	} else if err := validateInArray(opts.AudioCodec, ValidAudioCodecs[:],
@@ -149,7 +142,6 @@ func (f *ffmpeg) validateAudioSettings(opts *HlsOpts) error {
 		return err
 	}
 
-	// Validate audio bitrate based on codec
 	if opts.AudioCodec != "copy" {
 		switch opts.AudioCodec {
 		case "flac":
@@ -165,7 +157,6 @@ func (f *ffmpeg) validateAudioSettings(opts *HlsOpts) error {
 		}
 	}
 
-	// Validate audio channels
 	if opts.AudioChannels == 0 {
 		opts.AudioChannels = 2
 	} else if err := validateInArray(opts.AudioChannels, ValidAudioChannels[:],
@@ -177,7 +168,6 @@ func (f *ffmpeg) validateAudioSettings(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) validateVideoSettings(opts *HlsOpts) error {
-	// Set default video codec
 	if opts.VideoCodec == "" {
 		opts.VideoCodec = "libx264"
 	} else if err := validateInArray(opts.VideoCodec, ValidVideoCodecs[:],
@@ -185,14 +175,12 @@ func (f *ffmpeg) validateVideoSettings(opts *HlsOpts) error {
 		return err
 	}
 
-	// Validate codec matches acceleration method
 	if opts.VideoCodec != "copy" {
 		if err := f.validateAccelCodecMatch(opts.VideoCodec); err != nil {
 			return err
 		}
 	}
 
-	// Validate video bitrate
 	if opts.VideoBitrate == 0 {
 		opts.VideoBitrate = DefaultVideoRate
 	} else if err := validateInArray(opts.VideoBitrate, ValidVideoBitrates[:],
@@ -200,7 +188,6 @@ func (f *ffmpeg) validateVideoSettings(opts *HlsOpts) error {
 		return err
 	}
 
-	// Validate video height
 	if opts.VideoHeight == 0 {
 		opts.VideoHeight = DefaultVideoHeight
 	} else if err := validateInArray(opts.VideoHeight, ValidVideoHeights[:],
@@ -208,7 +195,6 @@ func (f *ffmpeg) validateVideoSettings(opts *HlsOpts) error {
 		return err
 	}
 
-	// Validate preset
 	if opts.Preset == "" {
 		opts.Preset = "fast"
 	} else if err := validateInArray(opts.Preset, ValidPresets[:],
@@ -216,7 +202,6 @@ func (f *ffmpeg) validateVideoSettings(opts *HlsOpts) error {
 		return err
 	}
 
-	// Validate profile if specified
 	if opts.VideoProfile != "" {
 		if err := validateInArray(opts.VideoProfile, ValidVideoProfiles[:],
 			"invalid video profile: must be one of: baseline, main, high, or high10"); err != nil {
@@ -261,12 +246,10 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 			}
 		}
 
-		// Video codec settings
 		if opts.VideoCodec == "copy" {
 			cmdArgs = append(cmdArgs, "-c:v", "copy")
 		} else {
-			// Determine video codec based on acceleration method
-			videoCodec := "libx264" // default software encoder
+			videoCodec := "libx264"
 			if f.AccelMethod != "" {
 				switch f.AccelMethod {
 				case NVENC:
@@ -279,7 +262,6 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 			}
 			cmdArgs = append(cmdArgs, "-c:v", videoCodec)
 
-			// Add video settings only if not empty
 			if opts.VideoBitrate > 0 {
 				cmdArgs = append(cmdArgs, "-b:v", fmt.Sprintf("%dk", opts.VideoBitrate))
 			}
@@ -287,19 +269,16 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				cmdArgs = append(cmdArgs, "-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight))
 			}
 
-			// Add profile only for software and NVENC
 			if opts.VideoProfile != "" && (f.AccelMethod == NoAccel || f.AccelMethod == NVENC) {
 				cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
 			}
 
-			// Add preset if specified
 			if opts.Preset != "" {
 				cmdArgs = append(cmdArgs, "-preset", opts.Preset)
 			}
 		}
 	}
 
-	// HLS specific settings
 	cmdArgs = append(cmdArgs,
 		"-f", "hls",
 		"-hls_time", fmt.Sprintf("%d", opts.HlsTime),
@@ -308,7 +287,6 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_flags", "append_list",
 	)
 
-	// Output file must be last
 	cmdArgs = append(cmdArgs,
 		filepath.Join(opts.OutputDir, fmt.Sprintf("%s.m3u8", opts.FileName)),
 	)
@@ -361,7 +339,7 @@ func (f *ffmpeg) validateAccelCodecMatch(videoCodec string) error {
 		if videoCodec != "h264_videotoolbox" {
 			return errors.New("videotoolbox acceleration requires h264_videotoolbox codec")
 		}
-	case "": // Software encoding
+	case "":
 		if videoCodec != "libx264" {
 			return errors.New("software encoding requires libx264 codec")
 		}
