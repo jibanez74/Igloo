@@ -24,7 +24,7 @@ type HlsOpts struct {
 }
 
 const (
-	DefaultHlsTime        = "5"
+	DefaultHlsTime        = "4"
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
 	DefaultHlsFlags       = "independent_segments"
@@ -96,6 +96,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		cmdArgs = append(cmdArgs, "-c:v", "copy")
 	} else {
 		var videoCodec string
+
 		switch f.AccelMethod {
 		case NVENC:
 			videoCodec = NvencVideoCodec
@@ -124,12 +125,10 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_time", DefaultHlsTime,
 		"-hls_list_size", DefaultHlsListSize,
 		"-hls_segment_type", DefaultSegmentType,
-		"-hls_flags", DefaultHlsFlags,
+		"-hls_flags", DefaultHlsFlags+"+program_date_time",
+		"-hls_base_url", "/api/hls/",
 		"-hls_fmp4_init_filename", DefaultInitFileName,
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
-	)
-
-	cmdArgs = append(cmdArgs,
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
