@@ -1,9 +1,6 @@
 package ffmpeg
 
-import (
-	"errors"
-	"igloo/cmd/internal/helpers"
-)
+import "errors"
 
 const (
 	DefaultVideoCodec  = "libx264"           // Software encoding
@@ -82,7 +79,7 @@ func validateVideoProfile(opts *HlsOpts, accelMethod string) error {
 			return errors.New("video profiles are only supported with software encoding and NVENC")
 		}
 
-		if err := helpers.ValidateInArray(opts.VideoProfile, ValidVideoProfiles[:],
+		if err := validateInArray(opts.VideoProfile, ValidVideoProfiles[:],
 			"invalid video profile: must be one of: baseline, main, high, or high10"); err != nil {
 
 			return err
@@ -95,7 +92,7 @@ func validateVideoProfile(opts *HlsOpts, accelMethod string) error {
 func validateVideoBitrate(opts *HlsOpts) error {
 	if opts.VideoBitrate == 0 {
 		opts.VideoBitrate = DefaultVideoRate
-	} else if err := helpers.ValidateInArray(opts.VideoBitrate, ValidVideoBitrates[:],
+	} else if err := validateInArray(opts.VideoBitrate, ValidVideoBitrates[:],
 		"invalid video bitrate: must be one of: 2000, 4000, 6000, 8000, 10000, 12000, 15000, or 20000 kbps"); err != nil {
 
 		return err
@@ -107,7 +104,7 @@ func validateVideoBitrate(opts *HlsOpts) error {
 func validateVideoHeight(opts *HlsOpts) error {
 	if opts.VideoHeight == 0 {
 		opts.VideoHeight = DefaultVideoHeight
-	} else if err := helpers.ValidateInArray(opts.VideoHeight, ValidVideoHeights[:],
+	} else if err := validateInArray(opts.VideoHeight, ValidVideoHeights[:],
 		"invalid video height: must be one of: 480, 720, 1080, or 2160"); err != nil {
 
 		return err
@@ -119,7 +116,7 @@ func validateVideoHeight(opts *HlsOpts) error {
 func validateVideoPreset(opts *HlsOpts) error {
 	if opts.Preset == "" {
 		opts.Preset = DefaultPreset
-	} else if err := helpers.ValidateInArray(opts.Preset, ValidPresets[:],
+	} else if err := validateInArray(opts.Preset, ValidPresets[:],
 		"invalid video preset"); err != nil {
 
 		return err

@@ -1,7 +1,5 @@
 package ffmpeg
 
-import "igloo/cmd/internal/helpers"
-
 const (
 	DefaultAudioRate     = 128
 	DefaultAudioChannels = 2
@@ -50,7 +48,7 @@ func validateAudioSettings(opts *HlsOpts) error {
 func validateAudioCodec(opts *HlsOpts) error {
 	if opts.AudioCodec == "" {
 		opts.AudioCodec = DefaultAudioCodec
-	} else if err := helpers.ValidateInArray(opts.AudioCodec, ValidAudioCodecs[:],
+	} else if err := validateInArray(opts.AudioCodec, ValidAudioCodecs[:],
 		"invalid audio codec: must be one of: copy, aac, or mp3"); err != nil {
 
 		return err
@@ -63,7 +61,7 @@ func validateAudioBitrate(opts *HlsOpts) error {
 	if opts.AudioCodec != "copy" {
 		if opts.AudioBitRate == 0 {
 			opts.AudioBitRate = DefaultAudioRate
-		} else if err := helpers.ValidateInArray(opts.AudioBitRate, ValidAudioBitrates[:],
+		} else if err := validateInArray(opts.AudioBitRate, ValidAudioBitrates[:],
 			"invalid audio bitrate: must be one of: 128, 192, 256, or 320 kbps"); err != nil {
 
 			return err
@@ -76,7 +74,7 @@ func validateAudioBitrate(opts *HlsOpts) error {
 func validateAudioChannels(opts *HlsOpts) error {
 	if opts.AudioChannels == 0 {
 		opts.AudioChannels = DefaultAudioChannels
-	} else if err := helpers.ValidateInArray(opts.AudioChannels, ValidAudioChannels[:],
+	} else if err := validateInArray(opts.AudioChannels, ValidAudioChannels[:],
 		"invalid audio channels: must be one of: 1 (mono), 2 (stereo), 6 (5.1), 8 (7.1)"); err != nil {
 
 		return err

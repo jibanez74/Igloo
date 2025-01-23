@@ -134,7 +134,9 @@ func New() (*gorm.DB, error) {
 			&models.VideoStream{},
 			&models.User{},
 		} {
-			if err := gormDB.AutoMigrate(model); err != nil {
+
+			err = gormDB.AutoMigrate(model)
+			if err != nil {
 				return nil, fmt.Errorf("failed to migrate %T: %w", model, err)
 			}
 		}

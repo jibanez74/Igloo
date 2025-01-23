@@ -19,5 +19,5 @@ type GlobalSettings struct {
 	RedisUser        string `gorm:"not null;default:''" json:"redisUser"`
 	RedisPassword    string `gorm:"not null;default:''" json:"redisPassword"`
 	RedisPort        int    `gorm:"default:6379" json:"redisPort"`
-	DownloadImages   bool   `gorm:"default:true" json:"downloadImages"`
+	DownloadImages   bool   `gorm:"default:false" json:"downloadImages"`
 }
