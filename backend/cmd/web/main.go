@@ -32,7 +32,9 @@ func main() {
 	}
 	app.db = db
 
-	err = db.First(app.settings).Error
+	app.settings = &models.GlobalSettings{}
+
+  err = db.First(app.settings).Error
 	if err != nil {
 		panic(err)
 	}
