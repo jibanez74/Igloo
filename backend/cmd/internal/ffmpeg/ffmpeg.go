@@ -1,8 +1,10 @@
 package ffmpeg
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 )
 
 type FFmpeg interface {
@@ -21,10 +23,13 @@ const (
 	VideoToolbox = "videotoolbox" // Apple VideoToolbox
 )
 
-func New(ffmpegPath string, accelMethod string) (FFmpeg, error) {
-	err := validateFfmpegPath(ffmpegPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid ffmpeg path: %w", err)
+func New(ffmpegPath string) (FFmpeg, error) {
+	if ffmpegPath == "" {
+		return nil, errors.New("ffmpeg path is required")
+	}
+
+	if ffmpegPath != "ffmpeg" && !filepath.IsAbs(ffmpegPath) {
+		return nil, errors.New("ffmpeg path must be absolute unless using 'ffmpeg' from PATH")
 	}
 
 	path, err := exec.LookPath(ffmpegPath)
@@ -33,15 +38,9 @@ func New(ffmpegPath string, accelMethod string) (FFmpeg, error) {
 	}
 
 	f := &ffmpeg{
-		Bin: path,
+		Bin:         path,
+		AccelMethod: NoAccel,
 	}
-
-	err = validateAccelMethod(accelMethod)
-	if err != nil {
-		return nil, fmt.Errorf("invalid acceleration method: %w", err)
-	}
-
-	f.AccelMethod = accelMethod
 
 	return f, nil
 }

@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"igloo/cmd/database/models"
+	"igloo/cmd/internal/database/models"
 
 	"net/http"
 

@@ -3,7 +3,7 @@ package helpers
 import (
 	"encoding/json"
 	"fmt"
-	"igloo/cmd/database/models"
+	"igloo/cmd/internal/database/models"
 	"mime"
 	"os"
 	"os/exec"

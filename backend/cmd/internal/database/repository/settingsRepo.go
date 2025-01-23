@@ -1,6 +1,6 @@
 package repository
 
-import "igloo/cmd/database/models"
+import "igloo/cmd/internal/database/models"
 
 func (r *repo) GetSettings() (*models.GlobalSettings, error) {
 	var settings models.GlobalSettings
