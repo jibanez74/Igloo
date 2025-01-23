@@ -5,10 +5,7 @@ import (
 	"igloo/cmd/internal/database/models"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/tmdb"
-	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -91,49 +88,17 @@ func main() {
 		CacheDuration: 24 * time.Hour,
 	})
 
+	movies := f.Group("/api/v1/movies")
+	movies.Get("/latest", app.getLatestMovies)
+	movies.Post("/create", app.createMovie)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = ":8080"
 	}
 
-	movies := f.Group("/api/v1/movies")
-	movies.Get("/latest", app.getLatestMovies)
-	movies.Post("/create", app.createMovie)
-
-	serverShutdown := make(chan struct{})
-
-	go func() {
-		if err := f.Listen(port); err != nil {
-			log.Printf("Fatal server error: %v\n", err)
-			close(serverShutdown)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
-	select {
-	case <-quit:
-		log.Println("Gracefully shutting down...")
-
-		err = f.Shutdown()
-		if err != nil {
-			log.Printf("Error shutting down server: %v\n", err)
-		}
-
-	case <-serverShutdown:
-		log.Println("Server was shut down unexpectedly")
+	err = f.Listen(port)
+	if err != nil {
+		panic(err)
 	}
-
-	sqlDB, err := app.db.DB()
-	if err == nil {
-		err = sqlDB.Close()
-		if err != nil {
-			log.Printf("Error closing database connection: %v\n", err)
-		} else {
-			log.Println("Database connection closed")
-		}
-	}
-
-	log.Println("Server exited")
 }
