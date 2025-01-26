@@ -34,7 +34,7 @@ func main() {
 
 	app.settings = &models.GlobalSettings{}
 
-  err = db.First(app.settings).Error
+	err = db.First(app.settings).Error
 	if err != nil {
 		panic(err)
 	}
@@ -92,6 +92,9 @@ func main() {
 
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/latest", app.getLatestMovies)
+	movies.Get("/:id/stream", app.directStreamMovie)
+	movies.Get("/:id", app.GetMovieBydID)
+	movies.Get("", app.GetAllMovies)
 	movies.Post("/create", app.createMovie)
 
 	port := os.Getenv("PORT")
