@@ -5,12 +5,14 @@ import (
 	"igloo/cmd/internal/database/models"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/tmdb"
+	"log"
 	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/session"
 
 	"gorm.io/gorm"
 )
@@ -21,6 +23,7 @@ type config struct {
 	workDir  string
 	tmdb     tmdb.Tmdb
 	ffmpeg   ffmpeg.FFmpeg
+	store    *session.Store
 }
 
 func main() {
@@ -28,30 +31,38 @@ func main() {
 
 	db, err := database.New()
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to initialize database:", err)
 	}
 	app.db = db
 
 	app.settings = &models.GlobalSettings{}
-
 	err = db.First(app.settings).Error
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to load settings:", err)
 	}
+
+	app.store = session.New(session.Config{
+		KeyLookup:      "cookie:session_id",
+		CookieName:     "session_id",
+		CookieSecure:   !app.settings.Debug,
+		CookieHTTPOnly: true,
+		CookieSameSite: "Strict",
+		Expiration:     24 * time.Hour,
+	})
 
 	app.ffmpeg, err = ffmpeg.New(app.settings.Ffmpeg)
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to initialize ffmpeg:", err)
 	}
 
 	app.workDir, err = os.Getwd()
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to get working directory:", err)
 	}
 
 	app.tmdb, err = tmdb.New(&app.settings.TmdbKey)
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to initialize TMDB client:", err)
 	}
 
 	f := fiber.New(fiber.Config{
@@ -90,11 +101,14 @@ func main() {
 		CacheDuration: 24 * time.Hour,
 	})
 
+	auth := f.Group("/api/v1/auth")
+	auth.Post("/login", app.Login)
+
 	movies := f.Group("/api/v1/movies")
+	movies.Get("/", app.GetAllMovies)
 	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/:id/stream", app.directStreamMovie)
 	movies.Get("/:id", app.GetMovieBydID)
-	movies.Get("", app.GetAllMovies)
+	movies.Get("/:id/stream", app.directStreamMovie)
 	movies.Post("/create", app.createMovie)
 
 	port := os.Getenv("PORT")
@@ -102,8 +116,7 @@ func main() {
 		port = ":8080"
 	}
 
-	err = f.Listen(port)
-	if err != nil {
-		panic(err)
+	if err := f.Listen(port); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }
