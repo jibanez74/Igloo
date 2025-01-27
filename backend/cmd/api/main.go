@@ -105,6 +105,7 @@ func main() {
 	auth := f.Group("/api/v1/auth")
 	auth.Get("/me", app.requireAuth, app.getAuthUser)
 	auth.Post("/login", app.login)
+	auth.Post("/logout", app.logout)
 
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/", app.GetAllMovies)

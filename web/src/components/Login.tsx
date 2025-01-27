@@ -1,25 +1,11 @@
-import { useEffect, useState } from "react";
-import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { FiUser, FiLock } from "react-icons/fi";
 import useAuth from "@/hooks/useAuth";
 
-export const Route = createLazyFileRoute("/login")({
-  component: LoginPage,
-});
-
-function LoginPage() {
+export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const { user, setUser } = useAuth();
-
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      navigate({ to: "/" });
-    }
-  }, [user, navigate]);
+  const { setUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,7 +30,6 @@ function LoginPage() {
       }
 
       const data = await response.json();
-
       setUser(data.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -54,7 +39,7 @@ function LoginPage() {
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center'>
+    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-950 via-blue-900 to-indigo-950'>
       <div className='max-w-md w-full space-y-8 p-10 bg-slate-900/50 backdrop-blur-sm rounded-xl shadow-xl'>
         <div className='text-center'>
           <h2 className='mt-6 text-3xl font-bold text-white'>Welcome back</h2>

@@ -8,8 +8,11 @@ import {
   FiGrid,
   FiMenu,
   FiX,
+  FiSettings,
+  FiLogOut,
 } from "react-icons/fi";
 import iglooLogo from "@/assets/images/logo-alt.png";
+import useAuth from "@/hooks/useAuth";
 
 const navLinks = [
   { to: "/", icon: FiHome, label: "Home" },
@@ -23,6 +26,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const { setUser } = useAuth();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -45,6 +49,14 @@ export default function Navbar() {
   }, [isMobileMenuOpen]);
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+
+  const handleSignOut = () => {
+    fetch("/api/v1/auth/logout", {
+      method: "POST",
+    }).finally(() => {
+      setUser(null);
+    });
+  };
 
   return (
     <>
@@ -92,20 +104,21 @@ export default function Navbar() {
 
             {/* Right side - Settings and Mobile Menu Button */}
             <div className='flex items-center gap-2'>
-              {/* Settings Link - Temporarily disabled until route is implemented
+              {/* Settings Link */}
               <Link
                 to='/settings'
-                preload='intent'
-                className='p-2 rounded-md text-blue-200 hover:text-white hover:bg-blue-500/10 transition-all duration-200 ease-in-out flex items-center gap-2 relative group'
-                title='Settings'
+                className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-colors flex items-center gap-2'
               >
-                <FiSettings className='w-5 h-5' aria-hidden='true' />
-                <span className='hidden md:inline text-sm font-medium'>
-                  Settings
-                </span>
-                <span className='absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+                <FiSettings /> Settings
               </Link>
-              */}
+
+              {/* Sign Out Button */}
+              <button
+                onClick={handleSignOut}
+                className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-colors flex items-center gap-2'
+              >
+                <FiLogOut /> Sign Out
+              </button>
 
               {/* Mobile Menu Button */}
               <button

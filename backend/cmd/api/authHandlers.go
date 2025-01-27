@@ -115,3 +115,22 @@ func (app *config) getAuthUser(c *fiber.Ctx) error {
 		},
 	})
 }
+
+func (app *config) logout(c *fiber.Ctx) error {
+	sess, err := app.store.Get(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": errNotAuth,
+		})
+	}
+
+	// Destroy the session
+	err = sess.Destroy()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": errNotAuth,
+		})
+	}
+
+	return c.SendStatus(fiber.StatusOK)
+}
