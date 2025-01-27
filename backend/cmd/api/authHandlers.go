@@ -95,3 +95,4 @@ func (app *config) Login(c *fiber.Ctx) error {
 		},
 	})
 }
+

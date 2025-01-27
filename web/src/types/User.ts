@@ -6,6 +6,7 @@ export type User = {
   email: string;
   username: string;
   isAdmin: boolean;
+  isActive?: boolean;
   thumb: string;
   favoriteMovies?: Movie[] | null;
   CreatedAt?: string | Date;
