@@ -12,7 +12,7 @@ const (
 	serverError = "server error"
 )
 
-func (app *config) Login(c *fiber.Ctx) error {
+func (app *config) login(c *fiber.Ctx) error {
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -96,3 +96,22 @@ func (app *config) Login(c *fiber.Ctx) error {
 	})
 }
 
+func (app *config) getAuthUser(c *fiber.Ctx) error {
+	user := GetUserFromContext(c)
+	if user == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": errNotAuth,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": fiber.Map{
+			"ID":       user.ID,
+			"Name":     user.Name,
+			"Username": user.Username,
+			"Email":    user.Email,
+			"IsAdmin":  user.IsAdmin,
+			"thumb":    user.Thumb,
+		},
+	})
+}
