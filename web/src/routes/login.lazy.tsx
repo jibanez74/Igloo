@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { FiUser, FiLock } from "react-icons/fi";
 import useAuth from "@/hooks/useAuth";
+import { FiUser, FiMail, FiLock } from "react-icons/fi";
+import ErrorWarning from "@/components/ErrorWarning";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
@@ -10,97 +11,171 @@ export const Route = createLazyFileRoute("/login")({
 function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isVisible, setIsVisible] = useState(false);
 
-  const { user, setUser } = useAuth();
-
+  const { setUser, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
-      navigate({ to: "/" });
+      navigate({ to: "/", replace: true });
     }
   }, [user, navigate]);
 
+  useEffect(() => {
+    if (error) {
+      setIsVisible(true);
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        // Wait for fade out animation to complete before clearing error
+        setTimeout(() => setError(""), 300);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
+    setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
     const username = formData.get("username") as string;
+    const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
     try {
-      const response = await fetch("/api/v1/auth/login", {
+      const res = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error("Invalid credentials");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+
+        throw new Error(
+          errorData?.error || "Something went wrong. Please try again later."
+        );
       }
 
-      const data = await response.json();
+      const data = await res.json();
 
       setUser(data.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Please try again later.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center'>
-      <div className='max-w-md w-full space-y-8 p-10 bg-slate-900/50 backdrop-blur-sm rounded-xl shadow-xl'>
-        <div className='text-center'>
-          <h2 className='mt-6 text-3xl font-bold text-white'>Welcome back</h2>
-          <p className='mt-2 text-sm text-blue-200'>Sign in to your account</p>
-        </div>
-        <form className='mt-8 space-y-6' onSubmit={handleSubmit}>
-          <div className='rounded-md shadow-sm -space-y-px'>
-            <div className='relative'>
-              <FiUser className='absolute top-3 left-3 text-blue-300' />
-              <input
-                id='username'
-                name='username'
-                type='text'
-                required
-                className='appearance-none rounded-t-md relative block w-full px-10 py-2 border border-slate-700 bg-slate-800/50 placeholder-blue-300 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10'
-                placeholder='Username'
-              />
+    <main className='min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8'>
+      <section className='max-w-md w-full space-y-8 bg-slate-900/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20'>
+        <header>
+          <h1 className='text-center text-3xl font-bold text-white'>
+            Sign in to your account
+          </h1>
+        </header>
+        <form
+          className='mt-8 space-y-6'
+          onSubmit={handleSubmit}
+          aria-label='Login form'
+        >
+          <ErrorWarning error={error} isVisible={isVisible} />
+          <fieldset className='space-y-4 rounded-md'>
+            <legend className='sr-only'>Login credentials</legend>
+            <div>
+              <label htmlFor='username' className='sr-only'>
+                Username
+              </label>
+              <div className='relative'>
+                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                  <FiUser
+                    className='h-5 w-5 text-blue-200'
+                    aria-hidden='true'
+                  />
+                </div>
+                <input
+                  autoFocus
+                  id='username'
+                  name='username'
+                  type='text'
+                  required
+                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
+                  placeholder='Username'
+                  aria-required='true'
+                />
+              </div>
             </div>
-            <div className='relative'>
-              <FiLock className='absolute top-3 left-3 text-blue-300' />
-              <input
-                id='password'
-                name='password'
-                type='password'
-                required
-                className='appearance-none rounded-b-md relative block w-full px-10 py-2 border border-slate-700 bg-slate-800/50 placeholder-blue-300 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10'
-                placeholder='Password'
-              />
+            <div>
+              <label htmlFor='email' className='sr-only'>
+                Email
+              </label>
+              <div className='relative'>
+                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                  <FiMail
+                    className='h-5 w-5 text-blue-200'
+                    aria-hidden='true'
+                  />
+                </div>
+                <input
+                  id='email'
+                  name='email'
+                  type='email'
+                  required
+                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
+                  placeholder='Email address'
+                  aria-required='true'
+                />
+              </div>
             </div>
-          </div>
-
-          {error && (
-            <div className='text-red-400 text-sm text-center'>{error}</div>
-          )}
+            <div>
+              <label htmlFor='password' className='sr-only'>
+                Password
+              </label>
+              <div className='relative'>
+                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                  <FiLock
+                    className='h-5 w-5 text-blue-200'
+                    aria-hidden='true'
+                  />
+                </div>
+                <input
+                  id='password'
+                  name='password'
+                  type='password'
+                  required
+                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
+                  placeholder='Password'
+                  aria-required='true'
+                />
+              </div>
+            </div>
+          </fieldset>
 
           <div>
             <button
               type='submit'
               disabled={isLoading}
-              className='group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed'
+              className='group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200'
+              aria-busy={isLoading}
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

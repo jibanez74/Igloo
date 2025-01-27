@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   FiHome,
   FiFilm,
@@ -26,7 +26,8 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const { setUser } = useAuth();
+  const { user, setUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,12 +51,20 @@ export default function Navbar() {
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
-  const handleSignOut = () => {
-    fetch("/api/v1/auth/logout", {
-      method: "POST",
-    }).finally(() => {
-      setUser(null);
-    });
+  const handleSignOut = async () => {
+    try {
+      const res = await fetch("/api/v1/auth/logout", {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        setUser(null);
+
+        navigate({ to: "/login", replace: true });
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
   return (
@@ -86,83 +95,91 @@ export default function Navbar() {
               </Link>
 
               {/* Desktop Navigation Links */}
-              <div className='hidden md:flex items-center gap-1'>
-                {navLinks.map(({ to, icon: Icon, label }) => (
-                  <Link
-                    key={to}
-                    to={to}
-                    preload='intent'
-                    className='px-3 py-2 rounded-md text-sm font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-all duration-200 ease-in-out flex items-center gap-2 relative group'
-                  >
-                    <Icon className='w-4 h-4' aria-hidden='true' />
-                    {label}
-                    <span className='absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
-                  </Link>
-                ))}
-              </div>
+              {user && (
+                <div className='hidden md:flex items-center gap-1'>
+                  {navLinks.map(({ to, icon: Icon, label }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      preload='intent'
+                      className='px-3 py-2 rounded-md text-sm font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group'
+                    >
+                      <Icon className='w-4 h-4' aria-hidden='true' />
+                      {label}
+                      <span className='absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500' />
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Right side - Settings and Mobile Menu Button */}
             <div className='flex items-center gap-2'>
-              {/* Settings Link */}
-              <Link
-                to='/settings'
-                className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-colors flex items-center gap-2'
-              >
-                <FiSettings /> Settings
-              </Link>
+              {user && (
+                <>
+                  {/* Settings Link */}
+                  <Link
+                    to='/settings'
+                    className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2'
+                  >
+                    <FiSettings /> Settings
+                  </Link>
 
-              {/* Sign Out Button */}
-              <button
-                onClick={handleSignOut}
-                className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-colors flex items-center gap-2'
-              >
-                <FiLogOut /> Sign Out
-              </button>
+                  {/* Sign Out Button */}
+                  <button
+                    onClick={handleSignOut}
+                    className='text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2'
+                  >
+                    <FiLogOut /> Sign Out
+                  </button>
 
-              {/* Mobile Menu Button */}
-              <button
-                ref={menuButtonRef}
-                type='button'
-                className='md:hidden p-2 rounded-md text-blue-200 hover:text-white hover:bg-blue-500/10 transition-colors'
-                onClick={toggleMobileMenu}
-                aria-expanded={isMobileMenuOpen}
-                aria-label='Toggle mobile menu'
-              >
-                {isMobileMenuOpen ? (
-                  <FiX className='w-6 h-6' aria-hidden='true' />
-                ) : (
-                  <FiMenu className='w-6 h-6' aria-hidden='true' />
-                )}
-              </button>
+                  {/* Mobile Menu Button */}
+                  <button
+                    ref={menuButtonRef}
+                    type='button'
+                    className='md:hidden p-2 rounded-md text-blue-200 hover:text-white hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out'
+                    onClick={toggleMobileMenu}
+                    aria-expanded={isMobileMenuOpen}
+                    aria-label='Toggle mobile menu'
+                  >
+                    {isMobileMenuOpen ? (
+                      <FiX className='w-6 h-6' aria-hidden='true' />
+                    ) : (
+                      <FiMenu className='w-6 h-6' aria-hidden='true' />
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Mobile Navigation Menu */}
-        <div
-          ref={mobileMenuRef}
-          className={`md:hidden transition-all duration-300 ease-in-out ${
-            isMobileMenuOpen
-              ? "max-h-96 opacity-100"
-              : "max-h-0 opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className='px-2 pt-2 pb-3 space-y-1 bg-slate-900/95 backdrop-blur-sm border-t border-blue-900/20'>
-            {navLinks.map(({ to, icon: Icon, label }) => (
-              <Link
-                key={to}
-                to={to}
-                preload='intent'
-                className='px-3 py-2 rounded-md text-base font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-colors flex items-center gap-3'
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Icon className='w-5 h-5' aria-hidden='true' />
-                {label}
-              </Link>
-            ))}
+        {user && (
+          <div
+            ref={mobileMenuRef}
+            className={`md:hidden transition-all duration-300 ease-in-out ${
+              isMobileMenuOpen
+                ? "max-h-96 opacity-100"
+                : "max-h-0 opacity-0 pointer-events-none"
+            }`}
+          >
+            <div className='px-2 pt-2 pb-3 space-y-1 bg-slate-900/95 backdrop-blur-sm border-t border-blue-900/20'>
+              {navLinks.map(({ to, icon: Icon, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  preload='intent'
+                  className='px-3 py-2 rounded-md text-base font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-colors flex items-center gap-3'
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Icon className='w-5 h-5' aria-hidden='true' />
+                  {label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </nav>
     </>
   );
