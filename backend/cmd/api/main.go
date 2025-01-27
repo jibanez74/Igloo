@@ -111,12 +111,15 @@ func main() {
 	movies.Get("/:id/stream", app.directStreamMovie)
 	movies.Post("/create", app.createMovie)
 
+	users := f.Group("/api/v1/user")
+	users.Post("/create", app.CreateUser)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = ":8080"
 	}
 
-	if err := f.Listen(port); err != nil {
+	err = f.Listen(port)
+	if err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }
