@@ -9,6 +9,7 @@ import (
 type Tmdb interface {
 	formatReleaseDate(date string) (time.Time, error)
 	GetTmdbMovieByID(movieByID *models.Movie) error
+	GetNowPlayingMovies() (*nowPlayingResponse, error)
 }
 
 type tmdb struct {

@@ -110,6 +110,7 @@ func main() {
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/", app.GetAllMovies)
 	movies.Get("/latest", app.getLatestMovies)
+	movies.Get("/now-playing", app.getNowPlayingMovies)
 	movies.Get("/:id", app.GetMovieBydID)
 	movies.Get("/:id/stream", app.directStreamMovie)
 	movies.Post("/create", app.createMovie)
