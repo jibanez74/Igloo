@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FiPlay, FiFilm } from "react-icons/fi";
 import LatestMovies from "@/components/LatestMovies";
-import NowPlayingMovies from "@/components/NowPlayingMovies";
+
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -45,11 +45,6 @@ function HomePage() {
       <div className='bg-slate-900'>
         {/* Latest Movies Section */}
         <LatestMovies />
-
-        {/* Now Playing Movies Section */}
-        <NowPlayingMovies />
-
-        {/* More sections can be added here */}
       </div>
     </main>
   );
