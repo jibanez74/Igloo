@@ -93,3 +93,7 @@ type tmdbMovie struct {
 	Videos          tmdbVideos       `json:"videos"`
 	ReleaseDates    tmdbReleaseDates `json:"release_dates"` // New field for content ratings and release dates
 }
+
+type tmdbMovies struct {
+	Results []tmdbMovie `json:"results"`
+}
