@@ -67,6 +67,32 @@ function MovieDetailsPage() {
     }
   };
 
+  const handlePlayMovie = async () => {
+    const hlsRequestOpts = {
+      movieID: movie.ID,
+      videoCodec: "copy",
+      audioCodec: "copy",
+    };
+
+    const res = await fetch("/api/v1/ffmpeg/hls/movie", {
+      method: "post",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(hlsRequestOpts),
+    });
+
+    if (!res.ok) {
+      alert("an error occurred");
+      return;
+    }
+
+    const data = await res.json();
+
+    alert(data.outputDir);
+  };
+
   return (
     <main className='min-h-screen pt-16'>
       {/* Hero Section with Backdrop */}
@@ -176,6 +202,7 @@ function MovieDetailsPage() {
               <div className='flex flex-wrap items-center gap-4 mb-8'>
                 <button
                   type='button'
+                  onClick={handlePlayMovie}
                   className='inline-flex items-center gap-2 px-6 py-3 bg-sky-500 hover:bg-sky-400 
                            text-white font-medium rounded-lg transition-colors'
                 >
