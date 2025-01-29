@@ -18,7 +18,7 @@ export default function YoutubePlayer({
   onError,
 }: YoutubePlayerProps) {
   return (
-    <div className='w-full'>
+    <div className='w-full bg-black'>
       <div className='relative w-full pt-[56.25%]'>
         {" "}
         {/* 16:9 Aspect Ratio */}
@@ -29,6 +29,7 @@ export default function YoutubePlayer({
             controls={true}
             width='100%'
             height='100%'
+            style={{ position: "absolute", top: 0, left: 0 }}
             config={{
               playerVars: {
                 autoplay: 1,

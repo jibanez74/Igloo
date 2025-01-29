@@ -43,11 +43,12 @@ export default function YoutubeModal({
   return (
     <dialog
       ref={dialogRef}
-      className='fixed inset-0 p-0 m-0 max-w-4xl w-[92%] h-fit bg-transparent backdrop:bg-slate-900/90 backdrop:backdrop-blur-sm'
+      className='fixed m-auto inset-0 p-4 max-h-[90vh] max-w-[90vw] w-full md:w-[800px] bg-transparent 
+                 backdrop:bg-slate-900/90 backdrop:backdrop-blur-sm'
       onClick={handleBackdropClick}
       onClose={onClose}
     >
-      <div className='bg-slate-900 rounded-lg shadow-xl shadow-black/20'>
+      <div className='bg-slate-900 rounded-lg shadow-xl shadow-black/20 overflow-hidden'>
         <YoutubePlayer url={videoUrl} playing={isOpen} onEnded={onClose} />
       </div>
     </dialog>
