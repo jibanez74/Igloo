@@ -221,6 +221,7 @@ func createDefaultSettings(db *gorm.DB) error {
 			defaultSettings.PhotosDir,
 			defaultSettings.StaticDir,
 			filepath.Join(defaultSettings.StaticDir, "images"),
+			filepath.Join(defaultSettings.StaticDir, "images", "avatars"),
 			filepath.Join(defaultSettings.StaticDir, "images", "movies"),
 			filepath.Join(defaultSettings.StaticDir, "images", "movies", "thumb"),
 			filepath.Join(defaultSettings.StaticDir, "images", "movies", "art"),

@@ -1,11 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"igloo/cmd/internal/database/models"
+	"igloo/cmd/internal/helpers"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
+
+var allowedPhotoTypes = []string{".jpg", ".jpeg", ".png", ".gif"}
 
 type simpleUser struct {
 	ID       uint
@@ -83,5 +90,46 @@ func (app *config) GetUsers(c *fiber.Ctx) error {
 		"page":  page,
 		"pages": totalPages,
 		"limit": limit,
+	})
+}
+
+func (app *config) UploadUserPhoto(c *fiber.Ctx) error {
+	file, err := c.FormFile("photo")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "No file uploaded",
+		})
+	}
+
+	if file.Size > 10*1024*1024 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "File size too large. Maximum size is 10MB",
+		})
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	err = helpers.ValidateInArray(ext, allowedPhotoTypes, "Invalid file type. Allowed types: JPG, PNG, GIF")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	filename := uuid.New().String() + ext
+	uploadPath := filepath.Join(app.settings.StaticDir, "images", "avatars", filename)
+
+	if err := c.SaveFile(file, uploadPath); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to save file",
+		})
+	}
+
+	// Get the host from the request
+	host := c.Protocol() + "://" + c.Hostname()
+
+	// Return the file path with full URL
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"filename": filename,
+		"path":     fmt.Sprintf("%s/api/v1/static/images/avatars/%s", host, filename),
 	})
 }
