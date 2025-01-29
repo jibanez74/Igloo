@@ -1,11 +1,12 @@
+import { Link } from "@tanstack/react-router";
 import { FiPlay } from "react-icons/fi";
 import getImgSrc from "@/utils/getImgSrc";
 import type { SimpleMovie } from "@/types/Movie";
 
-interface MovieCardProps {
+type MovieCardProps = {
   movie: SimpleMovie;
   showPlayButton?: boolean;
-}
+};
 
 export default function MovieCard({
   movie,
@@ -16,12 +17,20 @@ export default function MovieCard({
   return (
     <div className='group relative bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 hover:shadow-blue-500/20 hover:scale-[1.02]'>
       {/* Movie Poster with Link */}
-      <img
-        src={imgSrc}
-        alt={`${movie.title} poster`}
-        className='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
-        loading='lazy'
-      />
+      <Link
+        to='/movies/$movieID'
+        params={{
+          movieID: movie.ID.toString(),
+        }}
+      >
+        <img
+          src={imgSrc}
+          alt={`${movie.title} poster`}
+          className='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
+          loading='lazy'
+        />
+      </Link>
+
       <div className='absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-50' />
 
       {/* Movie Info */}

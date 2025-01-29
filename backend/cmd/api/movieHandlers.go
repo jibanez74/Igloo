@@ -26,7 +26,7 @@ func (app *config) GetMovieBydID(c *fiber.Ctx) error {
 
 	var movie models.Movie
 
-	err = app.db.Preload("Extras").Preload("Studios").Preload("Genres").Preload("CastList").Preload("CrewList").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").First(&movie, uint(id)).Error
+	err = app.db.Preload("Extras").Preload("Studios").Preload("Genres").Preload("CastList.Artist").Preload("CrewList.Artist").Preload("VideoList").Preload("AudioList").Preload("SubtitleList").Preload("ChapterList").First(&movie, uint(id)).Error
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": err.Error(),

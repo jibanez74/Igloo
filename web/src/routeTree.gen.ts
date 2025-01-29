@@ -18,6 +18,8 @@ import { Route as TvshowsIndexImport } from './routes/tvshows/index'
 import { Route as MusicIndexImport } from './routes/music/index'
 import { Route as MoviesIndexImport } from './routes/movies/index'
 import { Route as SettingsUsersIndexImport } from './routes/settings/users/index'
+import { Route as MoviesMovieIDIndexImport } from './routes/movies/$movieID/index'
+import { Route as MoviesMovieIDPlayImport } from './routes/movies/$movieID/play'
 
 // Create Virtual Routes
 
@@ -25,6 +27,9 @@ const LoginLazyImport = createFileRoute('/login')()
 const SettingsIndexLazyImport = createFileRoute('/settings/')()
 const SettingsUsersCreateLazyImport = createFileRoute(
   '/settings/users/create',
+)()
+const SettingsUserscreateLazyImport = createFileRoute(
+  '/settings/users/@create',
 )()
 
 // Create/Update Routes
@@ -73,6 +78,12 @@ const SettingsUsersIndexRoute = SettingsUsersIndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const MoviesMovieIDIndexRoute = MoviesMovieIDIndexImport.update({
+  id: '/movies/$movieID/',
+  path: '/movies/$movieID/',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const SettingsUsersCreateLazyRoute = SettingsUsersCreateLazyImport.update({
   id: '/settings/users/create',
   path: '/settings/users/create',
@@ -80,6 +91,20 @@ const SettingsUsersCreateLazyRoute = SettingsUsersCreateLazyImport.update({
 } as any).lazy(() =>
   import('./routes/settings/users/create.lazy').then((d) => d.Route),
 )
+
+const SettingsUserscreateLazyRoute = SettingsUserscreateLazyImport.update({
+  id: '/settings/users/@create',
+  path: '/settings/users/@create',
+  getParentRoute: () => rootRoute,
+} as any).lazy(() =>
+  import('./routes/settings/users/@create.lazy').then((d) => d.Route),
+)
+
+const MoviesMovieIDPlayRoute = MoviesMovieIDPlayImport.update({
+  id: '/movies/$movieID/play',
+  path: '/movies/$movieID/play',
+  getParentRoute: () => rootRoute,
+} as any)
 
 // Populate the FileRoutesByPath interface
 
@@ -127,11 +152,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexLazyImport
       parentRoute: typeof rootRoute
     }
+    '/movies/$movieID/play': {
+      id: '/movies/$movieID/play'
+      path: '/movies/$movieID/play'
+      fullPath: '/movies/$movieID/play'
+      preLoaderRoute: typeof MoviesMovieIDPlayImport
+      parentRoute: typeof rootRoute
+    }
+    '/settings/users/@create': {
+      id: '/settings/users/@create'
+      path: '/settings/users/@create'
+      fullPath: '/settings/users/@create'
+      preLoaderRoute: typeof SettingsUserscreateLazyImport
+      parentRoute: typeof rootRoute
+    }
     '/settings/users/create': {
       id: '/settings/users/create'
       path: '/settings/users/create'
       fullPath: '/settings/users/create'
       preLoaderRoute: typeof SettingsUsersCreateLazyImport
+      parentRoute: typeof rootRoute
+    }
+    '/movies/$movieID/': {
+      id: '/movies/$movieID/'
+      path: '/movies/$movieID'
+      fullPath: '/movies/$movieID'
+      preLoaderRoute: typeof MoviesMovieIDIndexImport
       parentRoute: typeof rootRoute
     }
     '/settings/users/': {
@@ -153,7 +199,10 @@ export interface FileRoutesByFullPath {
   '/music': typeof MusicIndexRoute
   '/tvshows': typeof TvshowsIndexRoute
   '/settings': typeof SettingsIndexLazyRoute
+  '/movies/$movieID/play': typeof MoviesMovieIDPlayRoute
+  '/settings/users/@create': typeof SettingsUserscreateLazyRoute
   '/settings/users/create': typeof SettingsUsersCreateLazyRoute
+  '/movies/$movieID': typeof MoviesMovieIDIndexRoute
   '/settings/users': typeof SettingsUsersIndexRoute
 }
 
@@ -164,7 +213,10 @@ export interface FileRoutesByTo {
   '/music': typeof MusicIndexRoute
   '/tvshows': typeof TvshowsIndexRoute
   '/settings': typeof SettingsIndexLazyRoute
+  '/movies/$movieID/play': typeof MoviesMovieIDPlayRoute
+  '/settings/users/@create': typeof SettingsUserscreateLazyRoute
   '/settings/users/create': typeof SettingsUsersCreateLazyRoute
+  '/movies/$movieID': typeof MoviesMovieIDIndexRoute
   '/settings/users': typeof SettingsUsersIndexRoute
 }
 
@@ -176,7 +228,10 @@ export interface FileRoutesById {
   '/music/': typeof MusicIndexRoute
   '/tvshows/': typeof TvshowsIndexRoute
   '/settings/': typeof SettingsIndexLazyRoute
+  '/movies/$movieID/play': typeof MoviesMovieIDPlayRoute
+  '/settings/users/@create': typeof SettingsUserscreateLazyRoute
   '/settings/users/create': typeof SettingsUsersCreateLazyRoute
+  '/movies/$movieID/': typeof MoviesMovieIDIndexRoute
   '/settings/users/': typeof SettingsUsersIndexRoute
 }
 
@@ -189,7 +244,10 @@ export interface FileRouteTypes {
     | '/music'
     | '/tvshows'
     | '/settings'
+    | '/movies/$movieID/play'
+    | '/settings/users/@create'
     | '/settings/users/create'
+    | '/movies/$movieID'
     | '/settings/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -199,7 +257,10 @@ export interface FileRouteTypes {
     | '/music'
     | '/tvshows'
     | '/settings'
+    | '/movies/$movieID/play'
+    | '/settings/users/@create'
     | '/settings/users/create'
+    | '/movies/$movieID'
     | '/settings/users'
   id:
     | '__root__'
@@ -209,7 +270,10 @@ export interface FileRouteTypes {
     | '/music/'
     | '/tvshows/'
     | '/settings/'
+    | '/movies/$movieID/play'
+    | '/settings/users/@create'
     | '/settings/users/create'
+    | '/movies/$movieID/'
     | '/settings/users/'
   fileRoutesById: FileRoutesById
 }
@@ -221,7 +285,10 @@ export interface RootRouteChildren {
   MusicIndexRoute: typeof MusicIndexRoute
   TvshowsIndexRoute: typeof TvshowsIndexRoute
   SettingsIndexLazyRoute: typeof SettingsIndexLazyRoute
+  MoviesMovieIDPlayRoute: typeof MoviesMovieIDPlayRoute
+  SettingsUserscreateLazyRoute: typeof SettingsUserscreateLazyRoute
   SettingsUsersCreateLazyRoute: typeof SettingsUsersCreateLazyRoute
+  MoviesMovieIDIndexRoute: typeof MoviesMovieIDIndexRoute
   SettingsUsersIndexRoute: typeof SettingsUsersIndexRoute
 }
 
@@ -232,7 +299,10 @@ const rootRouteChildren: RootRouteChildren = {
   MusicIndexRoute: MusicIndexRoute,
   TvshowsIndexRoute: TvshowsIndexRoute,
   SettingsIndexLazyRoute: SettingsIndexLazyRoute,
+  MoviesMovieIDPlayRoute: MoviesMovieIDPlayRoute,
+  SettingsUserscreateLazyRoute: SettingsUserscreateLazyRoute,
   SettingsUsersCreateLazyRoute: SettingsUsersCreateLazyRoute,
+  MoviesMovieIDIndexRoute: MoviesMovieIDIndexRoute,
   SettingsUsersIndexRoute: SettingsUsersIndexRoute,
 }
 
@@ -252,7 +322,10 @@ export const routeTree = rootRoute
         "/music/",
         "/tvshows/",
         "/settings/",
+        "/movies/$movieID/play",
+        "/settings/users/@create",
         "/settings/users/create",
+        "/movies/$movieID/",
         "/settings/users/"
       ]
     },
@@ -274,8 +347,17 @@ export const routeTree = rootRoute
     "/settings/": {
       "filePath": "settings/index.lazy.tsx"
     },
+    "/movies/$movieID/play": {
+      "filePath": "movies/$movieID/play.tsx"
+    },
+    "/settings/users/@create": {
+      "filePath": "settings/users/@create.lazy.tsx"
+    },
     "/settings/users/create": {
       "filePath": "settings/users/create.lazy.tsx"
+    },
+    "/movies/$movieID/": {
+      "filePath": "movies/$movieID/index.tsx"
     },
     "/settings/users/": {
       "filePath": "settings/users/index.tsx"
