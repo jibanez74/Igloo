@@ -16,11 +16,11 @@ var allowedPhotoTypes = []string{".jpg", ".jpeg", ".png", ".gif"}
 
 type simpleUser struct {
 	ID       uint
-	Name     string
-	Username string
-	Email    string
-	IsAdmin  bool
-	IsActive bool
+	Name     string `json:"name"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	IsAdmin  bool   `json:"is_admin"`
+	IsActive bool   `json:"is_active"`
 }
 
 func (app *config) CreateUser(c *fiber.Ctx) error {
