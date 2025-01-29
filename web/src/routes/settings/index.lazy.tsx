@@ -11,6 +11,7 @@ function RouteComponent() {
       <Link to='/settings/users' search={{ page: 1, limit: 10 }}>
         Go to Users
       </Link>
+
     </main>
   );
 }
