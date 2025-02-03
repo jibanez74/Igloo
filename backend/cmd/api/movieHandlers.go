@@ -70,7 +70,7 @@ func (app *config) createMovie(c *fiber.Ctx) error {
 	}
 
 	if movie.TmdbID != "" {
-		err = app.tmdb.GetTmdbMovieByID(&movie)
+		err = app.tmdb.GetTmdbMovieByID(&movie, app.settings.DownloadImages)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),

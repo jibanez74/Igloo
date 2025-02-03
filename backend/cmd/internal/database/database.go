@@ -28,12 +28,14 @@ func New() (*gorm.DB, error) {
 	}
 
 	validType := false
+
 	for _, t := range dbTypes {
 		if t == dbType {
 			validType = true
 			break
 		}
 	}
+
 	if !validType {
 		return nil, fmt.Errorf("unsupported database type: %s. Must be one of: %v", dbType, dbTypes)
 	}
@@ -41,6 +43,7 @@ func New() (*gorm.DB, error) {
 	switch dbType {
 	case "postgres":
 		dsn := os.Getenv("DSN")
+
 		if dsn == "" {
 			return nil, errors.New("DSN environment variable is not set")
 		}
@@ -54,6 +57,7 @@ func New() (*gorm.DB, error) {
 		}
 
 		dialector = postgres.Open(dsn)
+
 	case "sqlite":
 		gormConfig = gorm.Config{
 			PrepareStmt: true,
@@ -65,7 +69,9 @@ func New() (*gorm.DB, error) {
 		}
 
 		dbPath := filepath.Join("data", "igloo.db")
-		if err := os.MkdirAll("data", 0755); err != nil {
+
+		err := os.MkdirAll("data", 0755)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create data directory: %w", err)
 		}
 
@@ -102,48 +108,9 @@ func New() (*gorm.DB, error) {
 		gormDB.Exec("PRAGMA temp_store=MEMORY;")
 	}
 
-	if dbType == "postgres" {
-		err = gormDB.AutoMigrate(
-			&models.GlobalSettings{},
-			&models.Movie{},
-			&models.Artist{},
-			&models.Cast{},
-			&models.Crew{},
-			&models.Genre{},
-			&models.Studio{},
-			&models.MovieExtra{},
-			&models.Chapter{},
-			&models.Subtitles{},
-			&models.AudioStream{},
-			&models.VideoStream{},
-			&models.User{},
-		)
-	} else {
-		for _, model := range []interface{}{
-			&models.GlobalSettings{},
-			&models.Movie{},
-			&models.Artist{},
-			&models.Cast{},
-			&models.Crew{},
-			&models.Genre{},
-			&models.Studio{},
-			&models.MovieExtra{},
-			&models.Chapter{},
-			&models.Subtitles{},
-			&models.AudioStream{},
-			&models.VideoStream{},
-			&models.User{},
-		} {
-
-			err = gormDB.AutoMigrate(model)
-			if err != nil {
-				return nil, fmt.Errorf("failed to migrate %T: %w", model, err)
-			}
-		}
-	}
-
+	err = runMigrations(gormDB)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	err = createDefaultSettings(gormDB)
@@ -218,7 +185,6 @@ func createDefaultSettings(db *gorm.DB) error {
 			defaultSettings.MovieDir,
 			defaultSettings.MusicDir,
 			defaultSettings.TVShowsDir,
-			defaultSettings.PhotosDir,
 			defaultSettings.StaticDir,
 			filepath.Join(defaultSettings.StaticDir, "images"),
 			filepath.Join(defaultSettings.StaticDir, "images", "avatars"),

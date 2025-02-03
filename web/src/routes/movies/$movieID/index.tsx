@@ -90,7 +90,7 @@ function MovieDetailsPage() {
 
     const data = await res.json();
 
-    alert(data.outputDir);
+    alert(JSON.stringify(data));
   };
 
   return (

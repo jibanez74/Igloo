@@ -7,7 +7,7 @@ import (
 )
 
 type Tmdb interface {
-	GetTmdbMovieByID(movieByID *models.Movie) error
+	GetTmdbMovieByID(*models.Movie, bool) error
 }
 
 type tmdb struct {

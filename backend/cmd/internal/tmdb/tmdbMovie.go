@@ -15,7 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
+func (t *tmdb) GetTmdbMovieByID(movie *models.Movie, download bool) error {
 	if movie.TmdbID == "" {
 		return errors.New("tmdb id is required")
 	}
@@ -96,33 +96,41 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	if tmdbObject.Thumb != "" {
 		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", tmdbObject.Thumb)
 
-		filename, err := helpers.SaveImage(
-			tmdbURL,
-			movie.Title,
-			"static/movies/thumb",
-		)
+		if download {
+			filename, err := helpers.SaveImage(
+				tmdbURL,
+				movie.Title,
+				"static/movies/thumb",
+			)
 
-		if err != nil {
-			return fmt.Errorf("failed to save poster: %w", err)
+			if err != nil {
+				return fmt.Errorf("failed to save poster: %w", err)
+			}
+
+			movie.Thumb = fmt.Sprintf("/static/movies/thumb/%s", filename)
+		} else {
+			movie.Thumb = tmdbURL
 		}
-
-		movie.Thumb = fmt.Sprintf("/static/movies/thumb/%s", filename)
 	}
 
 	if tmdbObject.Art != "" {
 		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", tmdbObject.Art)
 
-		filename, err := helpers.SaveImage(
-			tmdbURL,
-			movie.Title,
-			"static/movies/art",
-		)
+		if download {
+			filename, err := helpers.SaveImage(
+				tmdbURL,
+				movie.Title,
+				"static/movies/art",
+			)
 
-		if err != nil {
-			return fmt.Errorf("failed to save backdrop: %w", err)
+			if err != nil {
+				return fmt.Errorf("failed to save backdrop: %w", err)
+			}
+
+			movie.Art = fmt.Sprintf("/static/movies/art/%s", filename)
+		} else {
+			movie.Art = tmdbURL
 		}
-
-		movie.Art = fmt.Sprintf("/static/movies/art/%s", filename)
 	}
 
 	for _, g := range tmdbObject.Genres {
@@ -138,17 +146,20 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 		if s.Logo != "" {
 			tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
 
-			filename, err := helpers.SaveImage(
-				tmdbURL,
-				s.Name,
-				"static/studios",
-			)
+			if download {
+				filename, err := helpers.SaveImage(
+					tmdbURL,
+					s.Name,
+					"static/studios",
+				)
 
-			if err != nil {
-				studioLogo = tmdbURL
+				if err != nil {
+					studioLogo = tmdbURL
+				} else {
+					studioLogo = fmt.Sprintf("/static/studios/%s", filename)
+				}
 			} else {
-
-				studioLogo = fmt.Sprintf("/static/studios/%s", filename)
+				studioLogo = tmdbURL
 			}
 		}
 
@@ -160,21 +171,25 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	for _, c := range tmdbObject.Credits.Cast {
-		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
-
 		var artistThumb string
 
 		if c.Thumb != "" {
-			filename, err := helpers.SaveImage(
-				tmdbURL,
-				c.Name,
-				"static/artists",
-			)
+			tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
 
-			if err != nil {
-				artistThumb = tmdbURL
+			if download {
+				filename, err := helpers.SaveImage(
+					tmdbURL,
+					c.Name,
+					"static/artists",
+				)
+
+				if err != nil {
+					artistThumb = tmdbURL
+				} else {
+					artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+				}
 			} else {
-				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+				artistThumb = tmdbURL
 			}
 		}
 
@@ -190,22 +205,25 @@ func (t *tmdb) GetTmdbMovieByID(movie *models.Movie) error {
 	}
 
 	for _, c := range tmdbObject.Credits.Crew {
-		tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
-
 		var artistThumb string
 
 		if c.Thumb != "" {
-			filename, err := helpers.SaveImage(
-				tmdbURL,
-				c.Name,
-				"static/artists",
-			)
+			tmdbURL := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", c.Thumb)
 
-			if err != nil {
+			if download {
+				filename, err := helpers.SaveImage(
+					tmdbURL,
+					c.Name,
+					"static/artists",
+				)
 
-				artistThumb = tmdbURL
+				if err != nil {
+					artistThumb = tmdbURL
+				} else {
+					artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+				}
 			} else {
-				artistThumb = fmt.Sprintf("/static/artists/%s", filename)
+				artistThumb = tmdbURL
 			}
 		}
 
