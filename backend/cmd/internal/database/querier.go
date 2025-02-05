@@ -33,23 +33,20 @@ type Querier interface {
 	GetGlobalSettings(ctx context.Context) (GlobalSetting, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetMovie(ctx context.Context, id int32) (Movie, error)
+	GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, error)
 	GetMovieGenres(ctx context.Context, movieID int32) ([]Genre, error)
 	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
 	GetMovieSubtitles(ctx context.Context, movieID pgtype.Int4) ([]Subtitle, error)
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMoviesAlphabetically(ctx context.Context) ([]GetMoviesAlphabeticallyRow, error)
-	GetMoviesByYear(ctx context.Context, year int32) ([]Movie, error)
 	GetUser(ctx context.Context, id int32) (User, error)
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
 	ListGenres(ctx context.Context) ([]Genre, error)
 	ListGenresByType(ctx context.Context, genreType string) ([]Genre, error)
-	ListMovies(ctx context.Context, arg ListMoviesParams) ([]Movie, error)
 	RemoveMovieGenre(ctx context.Context, arg RemoveMovieGenreParams) error
 	RemoveMovieStudio(ctx context.Context, arg RemoveMovieStudioParams) error
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
-	SearchMovies(ctx context.Context, arg SearchMoviesParams) ([]Movie, error)
 	UpdateGlobalSettings(ctx context.Context, arg UpdateGlobalSettingsParams) (GlobalSetting, error)
-	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 }
 
 var _ Querier = (*Queries)(nil)

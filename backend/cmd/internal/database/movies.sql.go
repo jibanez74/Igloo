@@ -205,6 +205,44 @@ func (q *Queries) GetMovie(ctx context.Context, id int32) (Movie, error) {
 	return i, err
 }
 
+const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
+SELECT id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages FROM movies
+WHERE tmdb_id = $1
+`
+
+func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, error) {
+	row := q.db.QueryRow(ctx, getMovieByTmdbID, tmdbID)
+	var i Movie
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.Size,
+		&i.ContentType,
+		&i.Resolution,
+		&i.RunTime,
+		&i.Adult,
+		&i.TagLine,
+		&i.Summary,
+		&i.Art,
+		&i.Thumb,
+		&i.TmdbID,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Budget,
+		&i.Revenue,
+		&i.ContentRating,
+		&i.AudienceRating,
+		&i.CriticRating,
+		&i.SpokenLanguages,
+	)
+	return i, err
+}
+
 const getMoviesAlphabetically = `-- name: GetMoviesAlphabetically :many
 SELECT 
     id,
@@ -245,227 +283,4 @@ func (q *Queries) GetMoviesAlphabetically(ctx context.Context) ([]GetMoviesAlpha
 		return nil, err
 	}
 	return items, nil
-}
-
-const getMoviesByYear = `-- name: GetMoviesByYear :many
-SELECT id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages FROM movies
-WHERE year = $1
-ORDER BY title
-`
-
-func (q *Queries) GetMoviesByYear(ctx context.Context, year int32) ([]Movie, error) {
-	rows, err := q.db.Query(ctx, getMoviesByYear, year)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Movie{}
-	for rows.Next() {
-		var i Movie
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.FilePath,
-			&i.FileName,
-			&i.Container,
-			&i.Size,
-			&i.ContentType,
-			&i.Resolution,
-			&i.RunTime,
-			&i.Adult,
-			&i.TagLine,
-			&i.Summary,
-			&i.Art,
-			&i.Thumb,
-			&i.TmdbID,
-			&i.Year,
-			&i.ReleaseDate,
-			&i.Budget,
-			&i.Revenue,
-			&i.ContentRating,
-			&i.AudienceRating,
-			&i.CriticRating,
-			&i.SpokenLanguages,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMovies = `-- name: ListMovies :many
-SELECT id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages FROM movies
-ORDER BY title
-LIMIT $1 OFFSET $2
-`
-
-type ListMoviesParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-func (q *Queries) ListMovies(ctx context.Context, arg ListMoviesParams) ([]Movie, error) {
-	rows, err := q.db.Query(ctx, listMovies, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Movie{}
-	for rows.Next() {
-		var i Movie
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.FilePath,
-			&i.FileName,
-			&i.Container,
-			&i.Size,
-			&i.ContentType,
-			&i.Resolution,
-			&i.RunTime,
-			&i.Adult,
-			&i.TagLine,
-			&i.Summary,
-			&i.Art,
-			&i.Thumb,
-			&i.TmdbID,
-			&i.Year,
-			&i.ReleaseDate,
-			&i.Budget,
-			&i.Revenue,
-			&i.ContentRating,
-			&i.AudienceRating,
-			&i.CriticRating,
-			&i.SpokenLanguages,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchMovies = `-- name: SearchMovies :many
-SELECT id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages FROM movies
-WHERE title ILIKE $1
-ORDER BY title
-LIMIT $2
-`
-
-type SearchMoviesParams struct {
-	Title string `json:"title"`
-	Limit int32  `json:"limit"`
-}
-
-func (q *Queries) SearchMovies(ctx context.Context, arg SearchMoviesParams) ([]Movie, error) {
-	rows, err := q.db.Query(ctx, searchMovies, arg.Title, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Movie{}
-	for rows.Next() {
-		var i Movie
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.FilePath,
-			&i.FileName,
-			&i.Container,
-			&i.Size,
-			&i.ContentType,
-			&i.Resolution,
-			&i.RunTime,
-			&i.Adult,
-			&i.TagLine,
-			&i.Summary,
-			&i.Art,
-			&i.Thumb,
-			&i.TmdbID,
-			&i.Year,
-			&i.ReleaseDate,
-			&i.Budget,
-			&i.Revenue,
-			&i.ContentRating,
-			&i.AudienceRating,
-			&i.CriticRating,
-			&i.SpokenLanguages,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateMovie = `-- name: UpdateMovie :one
-UPDATE movies
-SET 
-    title = $2,
-    tag_line = $3,
-    summary = $4,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages
-`
-
-type UpdateMovieParams struct {
-	ID      int32  `json:"id"`
-	Title   string `json:"title"`
-	TagLine string `json:"tag_line"`
-	Summary string `json:"summary"`
-}
-
-func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error) {
-	row := q.db.QueryRow(ctx, updateMovie,
-		arg.ID,
-		arg.Title,
-		arg.TagLine,
-		arg.Summary,
-	)
-	var i Movie
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.FilePath,
-		&i.FileName,
-		&i.Container,
-		&i.Size,
-		&i.ContentType,
-		&i.Resolution,
-		&i.RunTime,
-		&i.Adult,
-		&i.TagLine,
-		&i.Summary,
-		&i.Art,
-		&i.Thumb,
-		&i.TmdbID,
-		&i.Year,
-		&i.ReleaseDate,
-		&i.Budget,
-		&i.Revenue,
-		&i.ContentRating,
-		&i.AudienceRating,
-		&i.CriticRating,
-		&i.SpokenLanguages,
-	)
-	return i, err
 }
