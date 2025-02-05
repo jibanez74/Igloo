@@ -2,7 +2,6 @@ package main
 
 import (
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/database/models"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/tmdb"
 	"log"
@@ -13,33 +12,27 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/session"
-
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type config struct {
-	db       *gorm.DB
-	settings *models.GlobalSettings
-	workDir  string
-	tmdb     tmdb.Tmdb
-	ffmpeg   ffmpeg.FFmpeg
-	store    *session.Store
+	db      *database.Queries
+	workDir string
+	tmdb    tmdb.Tmdb
+	ffmpeg  ffmpeg.FFmpeg
+	store   *session.Store
 }
 
 func main() {
 	var app config
 
-	db, err := database.New()
+	dbpool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
+		log.Fatal("unable to connect to database:", err)
 	}
-	app.db = db
+	defer dbpool.Close()
 
-	app.settings = &models.GlobalSettings{}
-	err = db.First(app.settings).Error
-	if err != nil {
-		log.Fatal("Failed to load settings:", err)
-	}
+	app.db = database.New(dbpool)
 
 	app.store = session.New(session.Config{
 		KeyLookup:      "cookie:session_id",
@@ -107,8 +100,8 @@ func main() {
 	auth.Post("/login", app.login)
 	auth.Post("/logout", app.logout)
 
-  ffmpegRoutes := f.Group("/api/v1/ffmpeg")
-  ffmpegRoutes.Post("/hls/movie", app.createMovieHls)
+	ffmpegRoutes := f.Group("/api/v1/ffmpeg")
+	ffmpegRoutes.Post("/hls/movie", app.createMovieHls)
 
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/", app.GetAllMovies)

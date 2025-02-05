@@ -1,38 +1,26 @@
+version: '3.8'
+
 services:
-  igloo_db:
-    container_name: igloo_db
-    image: postgres
+  postgres:
+    image: postgres:16-alpine
+    container_name: movies_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-movies_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: igloo
     volumes:
-      - ./db-data/postgres:/var/lib/postgresql/data
-
-  igloo_cache:
-    container_name: igloo_cache
-    image: redis
-    ports:
-      - "6379:6379"
-    restart: always
-    volumes:
-      - ./db-data/redis:/data
-
-  minio:
-    image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-movies_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
-  minio_data:
-
+  postgres_data:
+    name: movies_db_data
