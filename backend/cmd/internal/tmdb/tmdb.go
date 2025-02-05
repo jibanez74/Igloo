@@ -2,12 +2,11 @@ package tmdb
 
 import (
 	"errors"
-	"igloo/cmd/internal/database/models"
 	"net/http"
 )
 
 type Tmdb interface {
-	GetTmdbMovieByID(*models.Movie, bool) error
+	GetTmdbMovieByID(*string) (*tmdbMovie, error)
 }
 
 type tmdb struct {
@@ -22,10 +21,12 @@ type tmdbLanguage struct {
 }
 
 type tmdbGenre struct {
+	ID  int32  `json:"id"`
 	Tag string `json:"name"`
 }
 
 type tmdbStudio struct {
+	ID      int32  `json:"id"`
 	Name    string `json:"name"`
 	Logo    string `json:"logo_path"`
 	Country string `json:"origin_country"`
@@ -33,6 +34,7 @@ type tmdbStudio struct {
 
 type tmdbCredits struct {
 	Cast []struct {
+		ID           int32  `json:"id"`
 		Name         string `json:"name"`
 		OriginalName string `json:"original_name"`
 		Thumb        string `json:"profile_path"`
@@ -41,6 +43,7 @@ type tmdbCredits struct {
 	} `json:"cast"`
 
 	Crew []struct {
+		ID           int32  `json:"id"`
 		Name         string `json:"name"`
 		OriginalName string `json:"original_name"`
 		Thumb        string `json:"profile_path"`
@@ -76,9 +79,9 @@ type tmdbMovie struct {
 	Adult           bool             `json:"adult"`
 	TagLine         string           `json:"tagline"`
 	Summary         string           `json:"overview"`
-	Budget          uint             `json:"budget"`
-	Revenue         uint             `json:"revenue"`
-	RunTime         uint             `json:"runtime"`
+	Budget          int32            `json:"budget"`
+	Revenue         int32            `json:"revenue"`
+	RunTime         int32            `json:"runtime"`
 	AudienceRating  float32          `json:"vote_average"`
 	ImdbID          string           `json:"imdb_id"`
 	ReleaseDate     string           `json:"release_date"`
@@ -90,10 +93,6 @@ type tmdbMovie struct {
 	Credits         tmdbCredits      `json:"credits"`
 	Videos          tmdbVideos       `json:"videos"`
 	ReleaseDates    tmdbReleaseDates `json:"release_dates"` // New field for content ratings and release dates
-}
-
-type tmdbMovies struct {
-	Results []tmdbMovie `json:"results"`
 }
 
 func New(key *string) (Tmdb, error) {
