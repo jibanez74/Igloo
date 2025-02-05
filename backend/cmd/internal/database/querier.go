@@ -29,7 +29,8 @@ type Querier interface {
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
 	GetActiveUserByEmailAndUsername(ctx context.Context, arg GetActiveUserByEmailAndUsernameParams) (User, error)
 	GetActiveUserByEmailOrUsername(ctx context.Context, email string) (User, error)
-	GetGenre(ctx context.Context, id int32) (Genre, error)
+	GetGenreByID(ctx context.Context, id int32) (string, error)
+	GetGenreByTmdbID(ctx context.Context, tmdbID int32) (GetGenreByTmdbIDRow, error)
 	GetGlobalSettings(ctx context.Context) (GlobalSetting, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetMovie(ctx context.Context, id int32) (Movie, error)
@@ -40,10 +41,9 @@ type Querier interface {
 	GetMovieSubtitles(ctx context.Context, movieID pgtype.Int4) ([]Subtitle, error)
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMoviesAlphabetically(ctx context.Context) ([]GetMoviesAlphabeticallyRow, error)
+	GetStudioByTmdbID(ctx context.Context, tmdbID int32) (int32, error)
 	GetUser(ctx context.Context, id int32) (User, error)
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
-	ListGenres(ctx context.Context) ([]Genre, error)
-	ListGenresByType(ctx context.Context, genreType string) ([]Genre, error)
 	RemoveMovieGenre(ctx context.Context, arg RemoveMovieGenreParams) error
 	RemoveMovieStudio(ctx context.Context, arg RemoveMovieStudioParams) error
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
