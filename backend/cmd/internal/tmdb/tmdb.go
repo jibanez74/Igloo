@@ -39,7 +39,7 @@ type tmdbCredits struct {
 		OriginalName string `json:"original_name"`
 		Thumb        string `json:"profile_path"`
 		Character    string `json:"character"`
-		Order        int    `json:"order"`
+		SortOrder    int32  `json:"order"`
 	} `json:"cast"`
 
 	Crew []struct {
@@ -79,8 +79,8 @@ type tmdbMovie struct {
 	Adult           bool             `json:"adult"`
 	TagLine         string           `json:"tagline"`
 	Summary         string           `json:"overview"`
-	Budget          int32            `json:"budget"`
-	Revenue         int32            `json:"revenue"`
+	Budget          int64            `json:"budget"`
+	Revenue         int64            `json:"revenue"`
 	RunTime         int32            `json:"runtime"`
 	AudienceRating  float32          `json:"vote_average"`
 	ImdbID          string           `json:"imdb_id"`

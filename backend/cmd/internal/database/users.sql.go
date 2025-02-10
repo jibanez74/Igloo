@@ -60,67 +60,50 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const getActiveUserByEmailAndUsername = `-- name: GetActiveUserByEmailAndUsername :one
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, name, email, username, is_active, is_admin, avatar FROM users
+WHERE id = $1
+`
+
+type GetUserByIDRow struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	IsAdmin  bool   `json:"is_admin"`
+	Avatar   string `json:"avatar"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Username,
+		&i.IsActive,
+		&i.IsAdmin,
+		&i.Avatar,
+	)
+	return i, err
+}
+
+const getUserForLogin = `-- name: GetUserForLogin :one
 SELECT id, created_at, updated_at, name, email, username, password, is_active, is_admin, avatar FROM users
 WHERE email = $1 
 AND username = $2
 AND is_active = true
 `
 
-type GetActiveUserByEmailAndUsernameParams struct {
+type GetUserForLoginParams struct {
 	Email    string `json:"email"`
 	Username string `json:"username"`
 }
 
-func (q *Queries) GetActiveUserByEmailAndUsername(ctx context.Context, arg GetActiveUserByEmailAndUsernameParams) (User, error) {
-	row := q.db.QueryRow(ctx, getActiveUserByEmailAndUsername, arg.Email, arg.Username)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Email,
-		&i.Username,
-		&i.Password,
-		&i.IsActive,
-		&i.IsAdmin,
-		&i.Avatar,
-	)
-	return i, err
-}
-
-const getActiveUserByEmailOrUsername = `-- name: GetActiveUserByEmailOrUsername :one
-SELECT id, created_at, updated_at, name, email, username, password, is_active, is_admin, avatar FROM users
-WHERE (email = $1 OR username = $1)
-AND is_active = true
-`
-
-func (q *Queries) GetActiveUserByEmailOrUsername(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, getActiveUserByEmailOrUsername, email)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Email,
-		&i.Username,
-		&i.Password,
-		&i.IsActive,
-		&i.IsAdmin,
-		&i.Avatar,
-	)
-	return i, err
-}
-
-const getUser = `-- name: GetUser :one
-SELECT id, created_at, updated_at, name, email, username, password, is_active, is_admin, avatar FROM users
-WHERE id = $1
-`
-
-func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRow(ctx, getUser, id)
+func (q *Queries) GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForLogin, arg.Email, arg.Username)
 	var i User
 	err := row.Scan(
 		&i.ID,

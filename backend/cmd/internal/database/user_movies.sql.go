@@ -25,7 +25,7 @@ func (q *Queries) AddUserMovie(ctx context.Context, arg AddUserMovieParams) erro
 }
 
 const getUserMovies = `-- name: GetUserMovies :many
-SELECT m.id, m.created_at, m.updated_at, m.title, m.file_path, m.file_name, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.year, m.release_date, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages FROM movies m
+SELECT m.id, m.created_at, m.updated_at, m.title, m.file_path, m.file_name, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.year, m.release_date, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages FROM movies m
 JOIN user_movies um ON um.movie_id = m.id
 WHERE um.user_id = $1
 `
@@ -56,6 +56,7 @@ func (q *Queries) GetUserMovies(ctx context.Context, userID int32) ([]Movie, err
 			&i.Art,
 			&i.Thumb,
 			&i.TmdbID,
+			&i.ImdbID,
 			&i.Year,
 			&i.ReleaseDate,
 			&i.Budget,

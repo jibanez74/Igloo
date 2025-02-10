@@ -57,18 +57,3 @@ func (q *Queries) GetMovieStudios(ctx context.Context, movieID int32) ([]Studio,
 	}
 	return items, nil
 }
-
-const removeMovieStudio = `-- name: RemoveMovieStudio :exec
-DELETE FROM movie_studios
-WHERE movie_id = $1 AND studio_id = $2
-`
-
-type RemoveMovieStudioParams struct {
-	MovieID  int32 `json:"movie_id"`
-	StudioID int32 `json:"studio_id"`
-}
-
-func (q *Queries) RemoveMovieStudio(ctx context.Context, arg RemoveMovieStudioParams) error {
-	_, err := q.db.Exec(ctx, removeMovieStudio, arg.MovieID, arg.StudioID)
-	return err
-}

@@ -25,7 +25,7 @@ const (
 
 func New(ffmpegPath string) (FFmpeg, error) {
 	if ffmpegPath == "" {
-		return nil, errors.New("ffmpeg path is required")
+		return nil, errors.New("unable to get ffmpeg path from environment variables")
 	}
 
 	if ffmpegPath != "ffmpeg" && !filepath.IsAbs(ffmpegPath) {
@@ -37,10 +37,8 @@ func New(ffmpegPath string) (FFmpeg, error) {
 		return nil, fmt.Errorf("ffmpeg not found or not executable: %w", err)
 	}
 
-	f := &ffmpeg{
+	return &ffmpeg{
 		Bin:         path,
 		AccelMethod: NoAccel,
-	}
-
-	return f, nil
+	}, nil
 }

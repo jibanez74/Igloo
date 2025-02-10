@@ -1,38 +1,35 @@
 services:
-  igloo_db:
+  postgres:
+    image: postgres:16-alpine
     container_name: igloo_db
-    image: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-igloo}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: igloo
     volumes:
-      - ./db-data/postgres:/var/lib/postgresql/data
+      - ./igloo_data/db:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-movies_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  igloo_cache:
+  redis:
+    image: redis:7-alpine
     container_name: igloo_cache
-    image: redis
     ports:
       - "6379:6379"
-    restart: always
     volumes:
-      - ./db-data/redis:/data
-
-  minio:
-    image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-
-volumes:
-  minio_data:
-
+      - ./igloo_data/cache:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

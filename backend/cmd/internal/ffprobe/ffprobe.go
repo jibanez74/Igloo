@@ -1,4 +1,16 @@
-package helpers
+package ffprobe
+
+import (
+	"errors"
+	"fmt"
+	"igloo/cmd/internal/database"
+	"os/exec"
+	"path/filepath"
+)
+
+type Ffprobe interface {
+	GetMovieMetadata(filePath *string) (*movieMetadataResult, error)
+}
 
 type tags struct {
 	Title    string `json:"title,omitempty"`
@@ -51,4 +63,34 @@ type result struct {
 	Streams  []mediaStream `json:"streams"`
 	Chapters []tmdbChapter `json:"chapters"`
 	Format   format        `json:"format"`
+}
+
+type movieMetadataResult struct {
+	VideoList    []database.CreateVideoStreamParams
+	AudioList    []database.CreateAudioStreamParams
+	SubtitleList []database.CreateSubtitleParams
+	ChapterList  []database.CreateChapterParams
+}
+
+type ffprobe struct {
+	bin string
+}
+
+func New(ffprobePath string) (Ffprobe, error) {
+	if ffprobePath == "" {
+		return nil, errors.New("unable to get ffprobe path from environment variables")
+	}
+
+	if ffprobePath != "ffprobe" && !filepath.IsAbs(ffprobePath) {
+		return nil, errors.New("ffmpeg path must be absolute unless using 'ffmpeg' from PATH")
+	}
+
+	path, err := exec.LookPath(ffprobePath)
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe not found or not executable: %w", err)
+	}
+
+	return &ffprobe{
+		bin: path,
+	}, nil
 }

@@ -24,7 +24,6 @@ type AudioStream struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	Title         string             `json:"title"`
 	Index         int32              `json:"index"`
-	Profile       string             `json:"profile"`
 	Codec         string             `json:"codec"`
 	Channels      int32              `json:"channels"`
 	ChannelLayout string             `json:"channel_layout"`
@@ -71,35 +70,6 @@ type Genre struct {
 	TmdbID    int32              `json:"tmdb_id"`
 }
 
-type GlobalSetting struct {
-	ID                     int32              `json:"id"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
-	Debug                  bool               `json:"debug"`
-	TranscodeDir           string             `json:"transcode_dir"`
-	MovieDir               string             `json:"movie_dir"`
-	MusicDir               string             `json:"music_dir"`
-	TvShowsDir             string             `json:"tv_shows_dir"`
-	StaticDir              string             `json:"static_dir"`
-	MaxUserTranscode       int32              `json:"max_user_transcode"`
-	Ffmpeg                 string             `json:"ffmpeg"`
-	Ffprobe                string             `json:"ffprobe"`
-	TmdbKey                string             `json:"tmdb_key"`
-	RedisHost              string             `json:"redis_host"`
-	RedisUser              string             `json:"redis_user"`
-	RedisPassword          string             `json:"redis_password"`
-	RedisPort              int32              `json:"redis_port"`
-	DownloadImages         bool               `json:"download_images"`
-	PostgresHost           string             `json:"postgres_host"`
-	PostgresPort           int32              `json:"postgres_port"`
-	PostgresUser           string             `json:"postgres_user"`
-	PostgresPassword       string             `json:"postgres_password"`
-	PostgresDb             string             `json:"postgres_db"`
-	PostgresSslMode        string             `json:"postgres_ssl_mode"`
-	PostgresTimezone       string             `json:"postgres_timezone"`
-	PostgresMaxConnections int32              `json:"postgres_max_connections"`
-}
-
 type Movie struct {
 	ID              int32              `json:"id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -117,10 +87,11 @@ type Movie struct {
 	Art             string             `json:"art"`
 	Thumb           string             `json:"thumb"`
 	TmdbID          string             `json:"tmdb_id"`
+	ImdbID          string             `json:"imdb_id"`
 	Year            int32              `json:"year"`
 	ReleaseDate     pgtype.Date        `json:"release_date"`
-	Budget          int32              `json:"budget"`
-	Revenue         int32              `json:"revenue"`
+	Budget          int64              `json:"budget"`
+	Revenue         int64              `json:"revenue"`
 	ContentRating   string             `json:"content_rating"`
 	AudienceRating  float32            `json:"audience_rating"`
 	CriticRating    float32            `json:"critic_rating"`

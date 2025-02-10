@@ -1,76 +1,72 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/database/models"
 	"igloo/cmd/internal/ffmpeg"
+	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/handlers"
+	"igloo/cmd/internal/settings"
 	"igloo/cmd/internal/tmdb"
+
 	"log"
-	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/session"
-
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type config struct {
-	db       *gorm.DB
-	settings *models.GlobalSettings
-	workDir  string
-	tmdb     tmdb.Tmdb
-	ffmpeg   ffmpeg.FFmpeg
-	store    *session.Store
-}
-
 func main() {
-	var app config
-
-	db, err := database.New()
+	settings, err := settings.New()
 	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
-	}
-	app.db = db
-
-	app.settings = &models.GlobalSettings{}
-	err = db.First(app.settings).Error
-	if err != nil {
-		log.Fatal("Failed to load settings:", err)
+		log.Fatal(err)
 	}
 
-	app.store = session.New(session.Config{
-		KeyLookup:      "cookie:session_id",
-		CookieName:     "session_id",
-		CookieSecure:   !app.settings.Debug,
-		CookieHTTPOnly: true,
-		CookieSameSite: "Strict",
-		Expiration:     24 * time.Hour,
+	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		settings.PostgresUser,
+		settings.PostgresPass,
+		settings.PostgresHost,
+		settings.PostgresPort,
+		settings.PostgresDB,
+		settings.PostgresSslMode,
+	)
+
+	queries, err := getQueries(&dbUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ffmpegBin, err := ffmpeg.New(settings.FfmpegPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ffprobeBin, err := ffprobe.New(settings.FfprobePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tmdbClient, err := tmdb.New(&settings.TmdbKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	appHandlers := handlers.New(&handlers.HandlersConfig{
+		Ffmpeg:  ffmpegBin,
+		Ffprobe: ffprobeBin,
+		Tmdb:    tmdbClient,
+		Queries: queries,
 	})
-
-	app.ffmpeg, err = ffmpeg.New(app.settings.Ffmpeg)
-	if err != nil {
-		log.Fatal("Failed to initialize ffmpeg:", err)
-	}
-
-	app.workDir, err = os.Getwd()
-	if err != nil {
-		log.Fatal("Failed to get working directory:", err)
-	}
-
-	app.tmdb, err = tmdb.New(&app.settings.TmdbKey)
-	if err != nil {
-		log.Fatal("Failed to initialize TMDB client:", err)
-	}
 
 	f := fiber.New(fiber.Config{
 		AppName:               "Igloo API",
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          10 * time.Second,
 		IdleTimeout:           10 * time.Second,
-		DisableStartupMessage: app.settings.Debug,
+		DisableStartupMessage: settings.Debug,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 
@@ -86,7 +82,7 @@ func main() {
 	})
 
 	f.Use(recover.New(recover.Config{
-		EnableStackTrace: app.settings.Debug,
+		EnableStackTrace: settings.Debug,
 	}))
 
 	f.Use(logger.New(logger.Config{
@@ -95,40 +91,29 @@ func main() {
 		TimeZone:   "Local",
 	}))
 
-	f.Static("/api/v1/static", app.settings.StaticDir, fiber.Static{
-		Compress:      true,
-		ByteRange:     true,
-		Browse:        false,
-		CacheDuration: 24 * time.Hour,
-	})
-
-	auth := f.Group("/api/v1/auth")
-	auth.Get("/me", app.requireAuth, app.getAuthUser)
-	auth.Post("/login", app.login)
-	auth.Post("/logout", app.logout)
-
-  ffmpegRoutes := f.Group("/api/v1/ffmpeg")
-  ffmpegRoutes.Post("/hls/movie", app.createMovieHls)
-
 	movies := f.Group("/api/v1/movies")
-	movies.Get("/", app.GetAllMovies)
-	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/:id", app.GetMovieBydID)
-	movies.Get("/:id/stream", app.directStreamMovie)
-	movies.Post("/create", app.createMovie)
+	movies.Get("/latest", appHandlers.GetLatestMovies)
+	movies.Get("/:id", appHandlers.GetMovieByID)
 
-	users := f.Group("/api/v1/users")
-	users.Get("/", app.GetUsers)
-	users.Post("/create", app.CreateUser)
-	users.Post("/upload-photo", app.UploadUserPhoto)
+	log.Fatal(f.Listen(":8080"))
+}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = ":8080"
-	}
-
-	err = f.Listen(port)
+func getQueries(dbUrl *string) (*database.Queries, error) {
+	dbConfig, err := pgxpool.ParseConfig(*dbUrl)
 	if err != nil {
-		log.Fatal("Failed to start server:", err)
+		return nil, err
 	}
+
+	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	if err != nil {
+		return nil, err
+	}
+	defer dbpool.Close()
+
+	err = dbpool.Ping(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return database.New(dbpool), nil
 }

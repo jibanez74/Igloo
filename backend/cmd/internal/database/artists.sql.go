@@ -47,3 +47,21 @@ func (q *Queries) CreateArtist(ctx context.Context, arg CreateArtistParams) (Art
 	)
 	return i, err
 }
+
+const getArtistByTmdbID = `-- name: GetArtistByTmdbID :one
+SELECT id, tmdb_id FROM artists
+WHERE tmdb_id = $1
+LIMIT 1
+`
+
+type GetArtistByTmdbIDRow struct {
+	ID     int32 `json:"id"`
+	TmdbID int32 `json:"tmdb_id"`
+}
+
+func (q *Queries) GetArtistByTmdbID(ctx context.Context, tmdbID int32) (GetArtistByTmdbIDRow, error) {
+	row := q.db.QueryRow(ctx, getArtistByTmdbID, tmdbID)
+	var i GetArtistByTmdbIDRow
+	err := row.Scan(&i.ID, &i.TmdbID)
+	return i, err
+}

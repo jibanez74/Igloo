@@ -53,38 +53,3 @@ func (q *Queries) CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) 
 	)
 	return i, err
 }
-
-const getMovieSubtitles = `-- name: GetMovieSubtitles :many
-SELECT id, created_at, updated_at, title, index, codec, language, movie_id FROM subtitles
-WHERE movie_id = $1
-ORDER BY index
-`
-
-func (q *Queries) GetMovieSubtitles(ctx context.Context, movieID pgtype.Int4) ([]Subtitle, error) {
-	rows, err := q.db.Query(ctx, getMovieSubtitles, movieID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Subtitle{}
-	for rows.Next() {
-		var i Subtitle
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.Index,
-			&i.Codec,
-			&i.Language,
-			&i.MovieID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
