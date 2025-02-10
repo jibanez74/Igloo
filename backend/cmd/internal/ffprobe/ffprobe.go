@@ -2,7 +2,14 @@ package ffprobe
 
 import (
 	"errors"
+<<<<<<< HEAD
 	"igloo/internal/database"
+=======
+	"fmt"
+	"igloo/cmd/internal/database"
+	"os/exec"
+	"path/filepath"
+>>>>>>> main
 )
 
 type Ffprobe interface {
@@ -73,6 +80,7 @@ type ffprobe struct {
 	bin string
 }
 
+<<<<<<< HEAD
 func New(ffprobePath *string) (Ffprobe, error) {
 	if ffprobePath == nil {
 		return nil, errors.New("ffprobe path is required")
@@ -80,5 +88,23 @@ func New(ffprobePath *string) (Ffprobe, error) {
 
 	return &ffprobe{
 		bin: *ffprobePath,
+=======
+func New(ffprobePath string) (Ffprobe, error) {
+	if ffprobePath == "" {
+		return nil, errors.New("unable to get ffprobe path from environment variables")
+	}
+
+	if ffprobePath != "ffprobe" && !filepath.IsAbs(ffprobePath) {
+		return nil, errors.New("ffmpeg path must be absolute unless using 'ffmpeg' from PATH")
+	}
+
+	path, err := exec.LookPath(ffprobePath)
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe not found or not executable: %w", err)
+	}
+
+	return &ffprobe{
+		bin: path,
+>>>>>>> main
 	}, nil
 }

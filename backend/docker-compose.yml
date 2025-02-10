@@ -3,16 +3,28 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
+<<<<<<< HEAD
     container_name: movies_db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-movies_db}
+=======
+    container_name: igloo_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-igloo}
+>>>>>>> main
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
+<<<<<<< HEAD
       - postgres_data:/var/lib/postgresql/data
+=======
+      - ./igloo_data/db:/var/lib/postgresql/data
+>>>>>>> main
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-movies_db}"]
@@ -21,6 +33,23 @@ services:
       retries: 5
     restart: unless-stopped
 
+<<<<<<< HEAD
 volumes:
   postgres_data:
     name: movies_db_data
+=======
+  redis:
+    image: redis:7-alpine
+    container_name: igloo_cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./igloo_data/cache:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+>>>>>>> main

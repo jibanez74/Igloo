@@ -19,7 +19,10 @@ INSERT INTO movies (
     container,
     size,
     content_type,
+<<<<<<< HEAD
     resolution,
+=======
+>>>>>>> main
     run_time,
     adult,
     tag_line,
@@ -27,6 +30,10 @@ INSERT INTO movies (
     art,
     thumb,
     tmdb_id,
+<<<<<<< HEAD
+=======
+    imdb_id,
+>>>>>>> main
     year,
     release_date,
     budget,
@@ -37,10 +44,17 @@ INSERT INTO movies (
     spoken_languages
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+<<<<<<< HEAD
     $11, $12, $13, $14, $15, $16, $17, $18, $19,
     $20, $21, $22
 )
 RETURNING id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages
+=======
+    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+    $21, $22
+)
+RETURNING id, created_at, updated_at, title, file_path, file_name, container, size, content_type, run_time, adult, tag_line, summary, art, thumb, tmdb_id, imdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages
+>>>>>>> main
 `
 
 type CreateMovieParams struct {
@@ -50,7 +64,10 @@ type CreateMovieParams struct {
 	Container       string      `json:"container"`
 	Size            int64       `json:"size"`
 	ContentType     string      `json:"content_type"`
+<<<<<<< HEAD
 	Resolution      string      `json:"resolution"`
+=======
+>>>>>>> main
 	RunTime         int32       `json:"run_time"`
 	Adult           bool        `json:"adult"`
 	TagLine         string      `json:"tag_line"`
@@ -58,10 +75,18 @@ type CreateMovieParams struct {
 	Art             string      `json:"art"`
 	Thumb           string      `json:"thumb"`
 	TmdbID          string      `json:"tmdb_id"`
+<<<<<<< HEAD
 	Year            int32       `json:"year"`
 	ReleaseDate     pgtype.Date `json:"release_date"`
 	Budget          int32       `json:"budget"`
 	Revenue         int32       `json:"revenue"`
+=======
+	ImdbID          string      `json:"imdb_id"`
+	Year            int32       `json:"year"`
+	ReleaseDate     pgtype.Date `json:"release_date"`
+	Budget          int64       `json:"budget"`
+	Revenue         int64       `json:"revenue"`
+>>>>>>> main
 	ContentRating   string      `json:"content_rating"`
 	AudienceRating  float32     `json:"audience_rating"`
 	CriticRating    float32     `json:"critic_rating"`
@@ -76,7 +101,10 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		arg.Container,
 		arg.Size,
 		arg.ContentType,
+<<<<<<< HEAD
 		arg.Resolution,
+=======
+>>>>>>> main
 		arg.RunTime,
 		arg.Adult,
 		arg.TagLine,
@@ -84,6 +112,10 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		arg.Art,
 		arg.Thumb,
 		arg.TmdbID,
+<<<<<<< HEAD
+=======
+		arg.ImdbID,
+>>>>>>> main
 		arg.Year,
 		arg.ReleaseDate,
 		arg.Budget,
@@ -104,7 +136,10 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		&i.Container,
 		&i.Size,
 		&i.ContentType,
+<<<<<<< HEAD
 		&i.Resolution,
+=======
+>>>>>>> main
 		&i.RunTime,
 		&i.Adult,
 		&i.TagLine,
@@ -112,6 +147,10 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		&i.Art,
 		&i.Thumb,
 		&i.TmdbID,
+<<<<<<< HEAD
+=======
+		&i.ImdbID,
+>>>>>>> main
 		&i.Year,
 		&i.ReleaseDate,
 		&i.Budget,
@@ -167,6 +206,7 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 	return items, nil
 }
 
+<<<<<<< HEAD
 const getMovie = `-- name: GetMovie :one
 SELECT id, created_at, updated_at, title, file_path, file_name, container, size, content_type, resolution, run_time, adult, tag_line, summary, art, thumb, tmdb_id, year, release_date, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages FROM movies
 WHERE id = $1
@@ -213,6 +253,128 @@ WHERE tmdb_id = $1
 func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, error) {
 	row := q.db.QueryRow(ctx, getMovieByTmdbID, tmdbID)
 	var i Movie
+=======
+const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
+SELECT id, tmdb_id FROM movies
+WHERE tmdb_id = $1
+`
+
+type GetMovieByTmdbIDRow struct {
+	ID     int32  `json:"id"`
+	TmdbID string `json:"tmdb_id"`
+}
+
+func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (GetMovieByTmdbIDRow, error) {
+	row := q.db.QueryRow(ctx, getMovieByTmdbID, tmdbID)
+	var i GetMovieByTmdbIDRow
+	err := row.Scan(&i.ID, &i.TmdbID)
+	return i, err
+}
+
+const getMovieCount = `-- name: GetMovieCount :one
+SELECT COUNT(*) FROM movies
+`
+
+func (q *Queries) GetMovieCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getMovieCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getMovieDetails = `-- name: GetMovieDetails :one
+SELECT 
+    m.id, m.created_at, m.updated_at, m.title, m.file_path, m.file_name, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.year, m.release_date, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', g.id,
+            'tag', g.tag
+        )) FILTER (WHERE g.id IS NOT NULL), '[]'
+    ) as genres,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', s.id,
+            'name', s.name,
+            'logo', s.logo
+        )) FILTER (WHERE s.id IS NOT NULL), '[]'
+    ) as studios,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', a_cast.id,
+            'name', a_cast.name,
+            'thumb', a_cast.thumb,
+            'character', cl.character,
+            'sort_order', cl.sort_order
+        )) FILTER (WHERE a_cast.id IS NOT NULL), '[]'
+    ) as cast,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', a_crew.id,
+            'name', a_crew.name,
+            'thumb', a_crew.thumb,
+            'job', cw.job,
+            'department', cw.department
+        )) FILTER (WHERE a_crew.id IS NOT NULL), '[]'
+    ) as crew,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', me.id,
+            'title', me.title,
+            'url', me.url,
+            'kind', me.kind
+        )) FILTER (WHERE me.id IS NOT NULL), '[]'
+    ) as extras
+FROM movies m
+LEFT JOIN movie_genres mg ON mg.movie_id = m.id
+LEFT JOIN genres g ON g.id = mg.genre_id
+LEFT JOIN movie_studios ms ON ms.movie_id = m.id
+LEFT JOIN studios s ON s.id = ms.studio_id
+LEFT JOIN cast_list cl ON cl.movie_id = m.id
+LEFT JOIN artists a_cast ON a_cast.id = cl.artist_id
+LEFT JOIN crew_list cw ON cw.movie_id = m.id
+LEFT JOIN artists a_crew ON a_crew.id = cw.artist_id
+LEFT JOIN movie_extras me ON me.movie_id = m.id
+WHERE m.id = $1
+GROUP BY m.id
+`
+
+type GetMovieDetailsRow struct {
+	ID              int32              `json:"id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	Title           string             `json:"title"`
+	FilePath        string             `json:"file_path"`
+	FileName        string             `json:"file_name"`
+	Container       string             `json:"container"`
+	Size            int64              `json:"size"`
+	ContentType     string             `json:"content_type"`
+	RunTime         int32              `json:"run_time"`
+	Adult           bool               `json:"adult"`
+	TagLine         string             `json:"tag_line"`
+	Summary         string             `json:"summary"`
+	Art             string             `json:"art"`
+	Thumb           string             `json:"thumb"`
+	TmdbID          string             `json:"tmdb_id"`
+	ImdbID          string             `json:"imdb_id"`
+	Year            int32              `json:"year"`
+	ReleaseDate     pgtype.Date        `json:"release_date"`
+	Budget          int64              `json:"budget"`
+	Revenue         int64              `json:"revenue"`
+	ContentRating   string             `json:"content_rating"`
+	AudienceRating  float32            `json:"audience_rating"`
+	CriticRating    float32            `json:"critic_rating"`
+	SpokenLanguages string             `json:"spoken_languages"`
+	Genres          interface{}        `json:"genres"`
+	Studios         interface{}        `json:"studios"`
+	Cast            interface{}        `json:"cast"`
+	Crew            interface{}        `json:"crew"`
+	Extras          interface{}        `json:"extras"`
+}
+
+func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetailsRow, error) {
+	row := q.db.QueryRow(ctx, getMovieDetails, id)
+	var i GetMovieDetailsRow
+>>>>>>> main
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -223,7 +385,10 @@ func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, e
 		&i.Container,
 		&i.Size,
 		&i.ContentType,
+<<<<<<< HEAD
 		&i.Resolution,
+=======
+>>>>>>> main
 		&i.RunTime,
 		&i.Adult,
 		&i.TagLine,
@@ -231,6 +396,10 @@ func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, e
 		&i.Art,
 		&i.Thumb,
 		&i.TmdbID,
+<<<<<<< HEAD
+=======
+		&i.ImdbID,
+>>>>>>> main
 		&i.Year,
 		&i.ReleaseDate,
 		&i.Budget,
@@ -239,15 +408,28 @@ func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID string) (Movie, e
 		&i.AudienceRating,
 		&i.CriticRating,
 		&i.SpokenLanguages,
+<<<<<<< HEAD
+=======
+		&i.Genres,
+		&i.Studios,
+		&i.Cast,
+		&i.Crew,
+		&i.Extras,
+>>>>>>> main
 	)
 	return i, err
 }
 
+<<<<<<< HEAD
 const getMoviesAlphabetically = `-- name: GetMoviesAlphabetically :many
+=======
+const getMoviesPaginated = `-- name: GetMoviesPaginated :many
+>>>>>>> main
 SELECT 
     id,
     title,
     thumb,
+<<<<<<< HEAD
     year
 FROM movies
 ORDER BY title ASC
@@ -262,18 +444,55 @@ type GetMoviesAlphabeticallyRow struct {
 
 func (q *Queries) GetMoviesAlphabetically(ctx context.Context) ([]GetMoviesAlphabeticallyRow, error) {
 	rows, err := q.db.Query(ctx, getMoviesAlphabetically)
+=======
+    year,
+    audience_rating,
+    critic_rating
+FROM movies
+ORDER BY title ASC
+LIMIT $1 OFFSET $2
+`
+
+type GetMoviesPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetMoviesPaginatedRow struct {
+	ID             int32   `json:"id"`
+	Title          string  `json:"title"`
+	Thumb          string  `json:"thumb"`
+	Year           int32   `json:"year"`
+	AudienceRating float32 `json:"audience_rating"`
+	CriticRating   float32 `json:"critic_rating"`
+}
+
+func (q *Queries) GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getMoviesPaginated, arg.Limit, arg.Offset)
+>>>>>>> main
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+<<<<<<< HEAD
 	items := []GetMoviesAlphabeticallyRow{}
 	for rows.Next() {
 		var i GetMoviesAlphabeticallyRow
+=======
+	items := []GetMoviesPaginatedRow{}
+	for rows.Next() {
+		var i GetMoviesPaginatedRow
+>>>>>>> main
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
 			&i.Thumb,
 			&i.Year,
+<<<<<<< HEAD
+=======
+			&i.AudienceRating,
+			&i.CriticRating,
+>>>>>>> main
 		); err != nil {
 			return nil, err
 		}

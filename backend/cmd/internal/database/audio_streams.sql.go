@@ -15,22 +15,34 @@ const createAudioStream = `-- name: CreateAudioStream :one
 INSERT INTO audio_streams (
     title,
     index,
+<<<<<<< HEAD
     profile,
+=======
+>>>>>>> main
     codec,
     channels,
     channel_layout,
     language,
     movie_id
 ) VALUES (
+<<<<<<< HEAD
     $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING id, created_at, updated_at, title, index, profile, codec, channels, channel_layout, language, movie_id
+=======
+    $1, $2, $3, $4, $5, $6, $7
+)
+RETURNING id, created_at, updated_at, title, index, codec, channels, channel_layout, language, movie_id
+>>>>>>> main
 `
 
 type CreateAudioStreamParams struct {
 	Title         string      `json:"title"`
 	Index         int32       `json:"index"`
+<<<<<<< HEAD
 	Profile       string      `json:"profile"`
+=======
+>>>>>>> main
 	Codec         string      `json:"codec"`
 	Channels      int32       `json:"channels"`
 	ChannelLayout string      `json:"channel_layout"`
@@ -42,7 +54,10 @@ func (q *Queries) CreateAudioStream(ctx context.Context, arg CreateAudioStreamPa
 	row := q.db.QueryRow(ctx, createAudioStream,
 		arg.Title,
 		arg.Index,
+<<<<<<< HEAD
 		arg.Profile,
+=======
+>>>>>>> main
 		arg.Codec,
 		arg.Channels,
 		arg.ChannelLayout,
@@ -56,7 +71,10 @@ func (q *Queries) CreateAudioStream(ctx context.Context, arg CreateAudioStreamPa
 		&i.UpdatedAt,
 		&i.Title,
 		&i.Index,
+<<<<<<< HEAD
 		&i.Profile,
+=======
+>>>>>>> main
 		&i.Codec,
 		&i.Channels,
 		&i.ChannelLayout,

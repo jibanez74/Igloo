@@ -23,6 +23,7 @@ func (q *Queries) AddMovieGenre(ctx context.Context, arg AddMovieGenreParams) er
 	_, err := q.db.Exec(ctx, addMovieGenre, arg.MovieID, arg.GenreID)
 	return err
 }
+<<<<<<< HEAD
 
 const getMovieGenres = `-- name: GetMovieGenres :many
 SELECT g.id, g.created_at, g.updated_at, g.tag, g.genre_type, g.tmdb_id FROM genres g
@@ -71,3 +72,5 @@ func (q *Queries) RemoveMovieGenre(ctx context.Context, arg RemoveMovieGenrePara
 	_, err := q.db.Exec(ctx, removeMovieGenre, arg.MovieID, arg.GenreID)
 	return err
 }
+=======
+>>>>>>> main

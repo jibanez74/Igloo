@@ -20,13 +20,17 @@ type Querier interface {
 	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
 	CreateCrewMember(ctx context.Context, arg CreateCrewMemberParams) (CrewList, error)
 	CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error)
+<<<<<<< HEAD
 	CreateGlobalSettings(ctx context.Context, arg CreateGlobalSettingsParams) (GlobalSetting, error)
+=======
+>>>>>>> main
 	CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie, error)
 	CreateMovieExtra(ctx context.Context, arg CreateMovieExtraParams) (MovieExtra, error)
 	CreateStudio(ctx context.Context, arg CreateStudioParams) (Studio, error)
 	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
+<<<<<<< HEAD
 	GetActiveUserByEmailAndUsername(ctx context.Context, arg GetActiveUserByEmailAndUsernameParams) (User, error)
 	GetActiveUserByEmailOrUsername(ctx context.Context, email string) (User, error)
 	GetGenre(ctx context.Context, id int32) (Genre, error)
@@ -47,6 +51,23 @@ type Querier interface {
 	RemoveMovieStudio(ctx context.Context, arg RemoveMovieStudioParams) error
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
 	UpdateGlobalSettings(ctx context.Context, arg UpdateGlobalSettingsParams) (GlobalSetting, error)
+=======
+	GetArtistByTmdbID(ctx context.Context, tmdbID int32) (GetArtistByTmdbIDRow, error)
+	GetGenreByID(ctx context.Context, id int32) (string, error)
+	GetGenreByTmdbID(ctx context.Context, tmdbID int32) (GetGenreByTmdbIDRow, error)
+	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
+	GetMovieByTmdbID(ctx context.Context, tmdbID string) (GetMovieByTmdbIDRow, error)
+	GetMovieCount(ctx context.Context) (int64, error)
+	GetMovieDetails(ctx context.Context, id int32) (GetMovieDetailsRow, error)
+	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
+	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
+	GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error)
+	GetStudioByTmdbID(ctx context.Context, tmdbID int32) (GetStudioByTmdbIDRow, error)
+	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
+	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
+	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
+	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
+>>>>>>> main
 }
 
 var _ Querier = (*Queries)(nil)

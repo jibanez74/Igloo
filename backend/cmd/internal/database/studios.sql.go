@@ -47,3 +47,23 @@ func (q *Queries) CreateStudio(ctx context.Context, arg CreateStudioParams) (Stu
 	)
 	return i, err
 }
+<<<<<<< HEAD
+=======
+
+const getStudioByTmdbID = `-- name: GetStudioByTmdbID :one
+SELECT id, tmdb_id FROM studios
+WHERE tmdb_id = $1
+`
+
+type GetStudioByTmdbIDRow struct {
+	ID     int32 `json:"id"`
+	TmdbID int32 `json:"tmdb_id"`
+}
+
+func (q *Queries) GetStudioByTmdbID(ctx context.Context, tmdbID int32) (GetStudioByTmdbIDRow, error) {
+	row := q.db.QueryRow(ctx, getStudioByTmdbID, tmdbID)
+	var i GetStudioByTmdbIDRow
+	err := row.Scan(&i.ID, &i.TmdbID)
+	return i, err
+}
+>>>>>>> main

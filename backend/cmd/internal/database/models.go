@@ -24,7 +24,10 @@ type AudioStream struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	Title         string             `json:"title"`
 	Index         int32              `json:"index"`
+<<<<<<< HEAD
 	Profile       string             `json:"profile"`
+=======
+>>>>>>> main
 	Codec         string             `json:"codec"`
 	Channels      int32              `json:"channels"`
 	ChannelLayout string             `json:"channel_layout"`
@@ -71,6 +74,7 @@ type Genre struct {
 	TmdbID    int32              `json:"tmdb_id"`
 }
 
+<<<<<<< HEAD
 type GlobalSetting struct {
 	ID                     int32              `json:"id"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
@@ -100,6 +104,8 @@ type GlobalSetting struct {
 	PostgresMaxConnections int32              `json:"postgres_max_connections"`
 }
 
+=======
+>>>>>>> main
 type Movie struct {
 	ID              int32              `json:"id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -110,7 +116,10 @@ type Movie struct {
 	Container       string             `json:"container"`
 	Size            int64              `json:"size"`
 	ContentType     string             `json:"content_type"`
+<<<<<<< HEAD
 	Resolution      string             `json:"resolution"`
+=======
+>>>>>>> main
 	RunTime         int32              `json:"run_time"`
 	Adult           bool               `json:"adult"`
 	TagLine         string             `json:"tag_line"`
@@ -118,10 +127,18 @@ type Movie struct {
 	Art             string             `json:"art"`
 	Thumb           string             `json:"thumb"`
 	TmdbID          string             `json:"tmdb_id"`
+<<<<<<< HEAD
 	Year            int32              `json:"year"`
 	ReleaseDate     pgtype.Date        `json:"release_date"`
 	Budget          int32              `json:"budget"`
 	Revenue         int32              `json:"revenue"`
+=======
+	ImdbID          string             `json:"imdb_id"`
+	Year            int32              `json:"year"`
+	ReleaseDate     pgtype.Date        `json:"release_date"`
+	Budget          int64              `json:"budget"`
+	Revenue         int64              `json:"revenue"`
+>>>>>>> main
 	ContentRating   string             `json:"content_rating"`
 	AudienceRating  float32            `json:"audience_rating"`
 	CriticRating    float32            `json:"critic_rating"`

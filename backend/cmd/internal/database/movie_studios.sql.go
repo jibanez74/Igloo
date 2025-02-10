@@ -57,6 +57,7 @@ func (q *Queries) GetMovieStudios(ctx context.Context, movieID int32) ([]Studio,
 	}
 	return items, nil
 }
+<<<<<<< HEAD
 
 const removeMovieStudio = `-- name: RemoveMovieStudio :exec
 DELETE FROM movie_studios
@@ -72,3 +73,5 @@ func (q *Queries) RemoveMovieStudio(ctx context.Context, arg RemoveMovieStudioPa
 	_, err := q.db.Exec(ctx, removeMovieStudio, arg.MovieID, arg.StudioID)
 	return err
 }
+=======
+>>>>>>> main

@@ -53,6 +53,7 @@ func (q *Queries) CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) 
 	)
 	return i, err
 }
+<<<<<<< HEAD
 
 const getMovieSubtitles = `-- name: GetMovieSubtitles :many
 SELECT id, created_at, updated_at, title, index, codec, language, movie_id FROM subtitles
@@ -88,3 +89,5 @@ func (q *Queries) GetMovieSubtitles(ctx context.Context, movieID pgtype.Int4) ([
 	}
 	return items, nil
 }
+=======
+>>>>>>> main

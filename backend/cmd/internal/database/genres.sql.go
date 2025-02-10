@@ -40,6 +40,7 @@ func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre
 	return i, err
 }
 
+<<<<<<< HEAD
 const getGenre = `-- name: GetGenre :one
 SELECT id, created_at, updated_at, tag, genre_type, tmdb_id FROM genres
 WHERE id = $1
@@ -123,3 +124,34 @@ func (q *Queries) ListGenresByType(ctx context.Context, genreType string) ([]Gen
 	}
 	return items, nil
 }
+=======
+const getGenreByID = `-- name: GetGenreByID :one
+SELECt tag FROM genres
+WHERE id = $1
+`
+
+func (q *Queries) GetGenreByID(ctx context.Context, id int32) (string, error) {
+	row := q.db.QueryRow(ctx, getGenreByID, id)
+	var tag string
+	err := row.Scan(&tag)
+	return tag, err
+}
+
+const getGenreByTmdbID = `-- name: GetGenreByTmdbID :one
+SELECT id, tag, tmdb_id FROM genres
+WHERE tmdb_id = $1
+`
+
+type GetGenreByTmdbIDRow struct {
+	ID     int32  `json:"id"`
+	Tag    string `json:"tag"`
+	TmdbID int32  `json:"tmdb_id"`
+}
+
+func (q *Queries) GetGenreByTmdbID(ctx context.Context, tmdbID int32) (GetGenreByTmdbIDRow, error) {
+	row := q.db.QueryRow(ctx, getGenreByTmdbID, tmdbID)
+	var i GetGenreByTmdbIDRow
+	err := row.Scan(&i.ID, &i.Tag, &i.TmdbID)
+	return i, err
+}
+>>>>>>> main
