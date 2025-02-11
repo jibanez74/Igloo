@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
-	"path/filepath"
 )
 
 type Ffprobe interface {
@@ -81,16 +80,14 @@ func New(ffprobePath string) (Ffprobe, error) {
 		return nil, errors.New("unable to get ffprobe path from environment variables")
 	}
 
-	if ffprobePath != "ffprobe" && !filepath.IsAbs(ffprobePath) {
-		return nil, errors.New("ffmpeg path must be absolute unless using 'ffmpeg' from PATH")
+	f := ffprobe{
+		bin: ffprobePath,
 	}
 
-	path, err := exec.LookPath(ffprobePath)
+	_, err := exec.LookPath(f.bin)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe not found or not executable: %w", err)
 	}
 
-	return &ffprobe{
-		bin: path,
-	}, nil
+	return &f, nil
 }

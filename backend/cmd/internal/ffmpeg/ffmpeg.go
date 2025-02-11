@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 )
 
 type FFmpeg interface {
@@ -28,17 +27,19 @@ func New(ffmpegPath string) (FFmpeg, error) {
 		return nil, errors.New("unable to get ffmpeg path from environment variables")
 	}
 
-	if ffmpegPath != "ffmpeg" && !filepath.IsAbs(ffmpegPath) {
-		return nil, errors.New("ffmpeg path must be absolute unless using 'ffmpeg' from PATH")
+	f := ffmpeg{
+		Bin:         ffmpegPath,
+		AccelMethod: NoAccel,
 	}
 
-	path, err := exec.LookPath(ffmpegPath)
+	if f.Bin == "ffmpeg" {
+		return &f, nil
+	}
+
+	_, err := exec.LookPath(f.Bin)
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg not found or not executable: %w", err)
 	}
 
-	return &ffmpeg{
-		Bin:         path,
-		AccelMethod: NoAccel,
-	}, nil
+	return &f, nil
 }
