@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/handlers"
@@ -48,6 +49,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	queries := database.New(dbpool)
 
 	ffmpegBin, err := ffmpeg.New(settings.FfmpegPath)
 	if err != nil {
