@@ -66,30 +66,51 @@ func New() (*settings, error) {
 			}
 		}
 
-		cfg := &settings{
-			Debug:           os.Getenv("DEBUG") == "true",
-			DownloadImages:  os.Getenv("DOWNLOAD_IMAGES") == "true",
-			JellyfinToken:   os.Getenv("JELLYFIN_TOKEN"),
-			TmdbKey:         os.Getenv("TMDB_API_KEY"),
-			FfmpegPath:      ffmpegPath,
-			FfprobePath:     ffprobePath,
-			StaticDir:       filepath.Join(homeDir, ".local", "share", "igloo", "static"),
-			MoviesImgDir:    filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "movies"),
-			StudiosImgDir:   filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "studios"),
-			ArtistsImgDir:   filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "artists"),
-			PostgresHost:    os.Getenv("POSTGRES_HOST"),
-			PostgresPort:    os.Getenv("POSTGRES_PORT"),
-			PostgresUser:    os.Getenv("POSTGRES_USER"),
-			PostgresPass:    os.Getenv("POSTGRES_PASSWORD"),
-			PostgresDB:      os.Getenv("POSTGRES_DB"),
-			PostgresSslMode: os.Getenv("POSTGRES_SSL_MODE"),
+		// Get and validate database settings
+		maxConns := 50 // Default value
+		if maxConnsStr := os.Getenv("POSTGRES_MAX_CONNECTIONS"); maxConnsStr != "" {
+			maxConns, err = strconv.Atoi(maxConnsStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid POSTGRES_MAX_CONNECTIONS value: %w", err)
+			}
 		}
 
-		maxCon, err := strconv.Atoi(os.Getenv("POSTGRES_MAX_CONNS"))
-		if err != nil {
-			maxCon = 10
+		cfg := &settings{
+			Debug:            os.Getenv("DEBUG") == "true",
+			DownloadImages:   os.Getenv("DOWNLOAD_IMAGES") == "true",
+			JellyfinToken:    os.Getenv("JELLYFIN_TOKEN"),
+			TmdbKey:          os.Getenv("TMDB_API_KEY"),
+			FfmpegPath:       ffmpegPath,
+			FfprobePath:      ffprobePath,
+			StaticDir:        filepath.Join(homeDir, ".local", "share", "igloo", "static"),
+			MoviesImgDir:     filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "movies"),
+			StudiosImgDir:    filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "studios"),
+			ArtistsImgDir:    filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "artists"),
+			PostgresHost:     os.Getenv("POSTGRES_HOST"),
+			PostgresPort:     os.Getenv("POSTGRES_PORT"),
+			PostgresUser:     os.Getenv("POSTGRES_USER"),
+			PostgresPass:     os.Getenv("POSTGRES_PASSWORD"),
+			PostgresDB:       os.Getenv("POSTGRES_DB"),
+			PostgresSslMode:  os.Getenv("POSTGRES_SSL_MODE"),
+			PostgresMaxConns: maxConns,
 		}
-		cfg.PostgresMaxConns = maxCon
+
+		// Validate required database settings
+		if cfg.PostgresHost == "" {
+			return nil, errors.New("POSTGRES_HOST is required")
+		}
+		if cfg.PostgresPort == "" {
+			return nil, errors.New("POSTGRES_PORT is required")
+		}
+		if cfg.PostgresUser == "" {
+			return nil, errors.New("POSTGRES_USER is required")
+		}
+		if cfg.PostgresPass == "" {
+			return nil, errors.New("POSTGRES_PASSWORD is required")
+		}
+		if cfg.PostgresDB == "" {
+			return nil, errors.New("POSTGRES_DB is required")
+		}
 
 		dirs := [4]string{cfg.StaticDir, cfg.MoviesImgDir, cfg.StudiosImgDir, cfg.ArtistsImgDir}
 		for _, dir := range dirs {
