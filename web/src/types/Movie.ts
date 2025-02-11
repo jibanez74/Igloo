@@ -8,7 +8,7 @@ import type { Subtitles } from "./Subtitles";
 import type { MovieExtras } from "./MovieExtras";
 
 export type SimpleMovie = {
-  ID: number;
+  id: number;
   title: string;
   thumb: string;
   year: number;

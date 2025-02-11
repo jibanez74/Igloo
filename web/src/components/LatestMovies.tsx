@@ -61,7 +61,7 @@ export default function LatestMovies() {
                     className='aspect-[2/3] rounded-xl bg-slate-800/50 animate-pulse'
                   />
                 ))
-              : movies.map(movie => <MovieCard key={movie.ID} movie={movie} />)}
+              : movies.map(movie => <MovieCard key={movie.id} movie={movie} />)}
           </div>
         </div>
       </div>
