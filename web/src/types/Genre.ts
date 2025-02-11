@@ -1,4 +1,4 @@
-export type Genre {
-  ID: number;
+export type Genre = {
+  id: number;
   tag: string;
-}
+};

@@ -1,11 +1,7 @@
-import type { Artist } from "./Artist";
-
 export type Crew = {
-  ID?: number;
-  artist: Artist;
+  id: number;
+  name: string;
+  thumb: string;
   job: string;
   department: string;
-  CreatedAt?: string | Date;
-  UpdatedAt?: string | Date;
-  DeletedAt?: string | Date | null;
 };
