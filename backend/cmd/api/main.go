@@ -6,7 +6,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/handlers"
 	"igloo/cmd/internal/settings"
 	"igloo/cmd/internal/tmdb"
 
@@ -19,67 +18,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type application struct {
+	settings settings.Settings
+	db       *pgxpool.Pool
+	queries  *database.Queries
+	ffmpeg   ffmpeg.FFmpeg
+	ffprobe  ffprobe.Ffprobe
+	tmdb     tmdb.Tmdb
+}
+
 func main() {
-	settings, err := settings.New()
+	app, err := initApp()
 	if err != nil {
-		log.Fatal(err)
+		msg := fmt.Sprintf("unable to initialize application: %s", err)
+		log.Fatal(msg)
 	}
-
-	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		settings.PostgresUser,
-		settings.PostgresPass,
-		settings.PostgresHost,
-		settings.PostgresPort,
-		settings.PostgresDB,
-		settings.PostgresSslMode,
-	)
-
-	dbConfig, err := pgxpool.ParseConfig(dbUrl)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer dbpool.Close()
-
-	err = dbpool.Ping(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	queries := database.New(dbpool)
-
-	ffmpegBin, err := ffmpeg.New(settings.FfmpegPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ffprobeBin, err := ffprobe.New(settings.FfprobePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	tmdbClient, err := tmdb.New(&settings.TmdbKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	appHandlers := handlers.New(&handlers.HandlersConfig{
-		Ffmpeg:  ffmpegBin,
-		Ffprobe: ffprobeBin,
-		Tmdb:    tmdbClient,
-		Queries: queries,
-	})
+	defer app.db.Close()
 
 	f := fiber.New(fiber.Config{
 		AppName:               "Igloo API",
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          10 * time.Second,
 		IdleTimeout:           10 * time.Second,
-		DisableStartupMessage: settings.Debug,
+		DisableStartupMessage: app.settings.GetDebug(),
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 
@@ -95,7 +56,7 @@ func main() {
 	})
 
 	f.Use(recover.New(recover.Config{
-		EnableStackTrace: settings.Debug,
+		EnableStackTrace: app.settings.GetDebug(),
 	}))
 
 	f.Use(logger.New(logger.Config{
@@ -105,8 +66,66 @@ func main() {
 	}))
 
 	movies := f.Group("/api/v1/movies")
-	movies.Get("/latest", appHandlers.GetLatestMovies)
-	movies.Get("/:id", appHandlers.GetMovieByID)
+	movies.Get("/latest", app.getLatestMovies)
+	movies.Post("/create", app.createTmdbMovie)
 
-	log.Fatal(f.Listen(":8080"))
+	log.Fatal(f.Listen(app.settings.GetPort()))
+}
+
+func initApp() (*application, error) {
+	settings, err := settings.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load settings: %w", err)
+	}
+
+	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		settings.GetPostgresUser(),
+		settings.GetPostgresPass(),
+		settings.GetPostgresHost(),
+		settings.GetPostgresPort(),
+		settings.GetPostgresDB(),
+		settings.GetPostgresSslMode(),
+	)
+
+	dbConfig, err := pgxpool.ParseConfig(dbUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse database config: %w", err)
+	}
+
+	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database pool: %w", err)
+	}
+
+	err = dbpool.Ping(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	queries := database.New(dbpool)
+
+	ffmpegBin, err := ffmpeg.New(settings.GetFfmpegPath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ffmpeg: %w", err)
+	}
+
+	ffprobeBin, err := ffprobe.New(settings.GetFfprobePath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ffprobe: %w", err)
+	}
+
+	tmdbKey := settings.GetTmdbKey()
+	tmdbClient, err := tmdb.New(&tmdbKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize tmdb client: %w", err)
+	}
+
+	return &application{
+		settings: settings,
+		db:       dbpool,
+		queries:  queries,
+		ffmpeg:   ffmpegBin,
+		ffprobe:  ffprobeBin,
+		tmdb:     tmdbClient,
+	}, nil
 }
