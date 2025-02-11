@@ -2,8 +2,10 @@ package settings
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 )
@@ -44,13 +46,33 @@ func New() (*settings, error) {
 			return nil, fmt.Errorf("failed to get home directory: %w", err)
 		}
 
+		// Get and validate ffmpeg path
+		ffmpegPath := os.Getenv("FFMPEG_PATH")
+		if ffmpegPath == "" {
+			// Try to find ffmpeg in PATH as fallback
+			ffmpegPath, err = exec.LookPath("ffmpeg")
+			if err != nil {
+				return nil, fmt.Errorf("FFMPEG_PATH not set and ffmpeg not found in PATH: %w", err)
+			}
+		}
+
+		// Get and validate ffprobe path
+		ffprobePath := os.Getenv("FFPROBE_PATH")
+		if ffprobePath == "" {
+			// Try to find ffprobe in PATH as fallback
+			ffprobePath, err = exec.LookPath("ffprobe")
+			if err != nil {
+				return nil, fmt.Errorf("FFPROBE_PATH not set and ffprobe not found in PATH: %w", err)
+			}
+		}
+
 		cfg := &settings{
 			Debug:           os.Getenv("DEBUG") == "true",
 			DownloadImages:  os.Getenv("DOWNLOAD_IMAGES") == "true",
 			JellyfinToken:   os.Getenv("JELLYFIN_TOKEN"),
 			TmdbKey:         os.Getenv("TMDB_API_KEY"),
-			FfmpegPath:      os.Getenv("FFMPEG_PATH"),
-			FfprobePath:     os.Getenv("FFPROBE_PATH"),
+			FfmpegPath:      ffmpegPath,
+			FfprobePath:     ffprobePath,
 			StaticDir:       filepath.Join(homeDir, ".local", "share", "igloo", "static"),
 			MoviesImgDir:    filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "movies"),
 			StudiosImgDir:   filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "studios"),
@@ -102,6 +124,22 @@ func New() (*settings, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	fmt.Printf("Config: %+v\n", cfg)
+	// Validate ffmpeg and ffprobe paths when loading from config
+	if cfg.FfmpegPath == "" {
+		return nil, errors.New("ffmpeg path is not set in config")
+	}
+	if cfg.FfprobePath == "" {
+		return nil, errors.New("ffprobe path is not set in config")
+	}
+
+	// Verify the paths still exist and are executable
+	if _, err := exec.LookPath(cfg.FfmpegPath); err != nil {
+		return nil, fmt.Errorf("ffmpeg not found or not executable at %s: %w", cfg.FfmpegPath, err)
+	}
+	if _, err := exec.LookPath(cfg.FfprobePath); err != nil {
+		return nil, fmt.Errorf("ffprobe not found or not executable at %s: %w", cfg.FfprobePath, err)
+	}
+
+	fmt.Printf("Config loaded: %+v\n", cfg)
 	return &cfg, nil
 }
