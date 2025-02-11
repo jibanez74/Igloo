@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
+	"path/filepath"
 )
 
 type Ffprobe interface {
@@ -77,16 +78,32 @@ type ffprobe struct {
 
 func New(ffprobePath string) (Ffprobe, error) {
 	if ffprobePath == "" {
-		return nil, errors.New("unable to get ffprobe path from environment variables")
+		return nil, errors.New("ffprobe path is required")
 	}
 
 	f := ffprobe{
 		bin: ffprobePath,
 	}
 
-	_, err := exec.LookPath(f.bin)
-	if err != nil {
-		return nil, fmt.Errorf("ffprobe not found or not executable: %w", err)
+	if f.bin == "ffprobe" {
+		path, err := exec.LookPath(f.bin)
+		if err != nil {
+			return nil, fmt.Errorf("ffprobe not found in PATH: %w", err)
+		}
+
+		f.bin = path
+	} else {
+		absPath, err := filepath.Abs(f.bin)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ffprobe path: %w", err)
+		}
+
+		f.bin = absPath
+
+		_, err = exec.LookPath(f.bin)
+		if err != nil {
+			return nil, fmt.Errorf("ffprobe not found or not executable at %s: %w", f.bin, err)
+		}
 	}
 
 	return &f, nil
