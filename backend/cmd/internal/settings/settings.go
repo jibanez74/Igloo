@@ -102,5 +102,6 @@ func New() (*settings, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	fmt.Printf("Config: %+v\n", cfg)
 	return &cfg, nil
 }
