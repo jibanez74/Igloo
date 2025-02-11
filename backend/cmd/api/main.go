@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/handlers"
@@ -34,7 +33,18 @@ func main() {
 		settings.PostgresSslMode,
 	)
 
-	queries, err := getQueries(&dbUrl)
+	dbConfig, err := pgxpool.ParseConfig(dbUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dbpool.Close()
+
+	err = dbpool.Ping(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,24 +106,4 @@ func main() {
 	movies.Get("/:id", appHandlers.GetMovieByID)
 
 	log.Fatal(f.Listen(":8080"))
-}
-
-func getQueries(dbUrl *string) (*database.Queries, error) {
-	dbConfig, err := pgxpool.ParseConfig(*dbUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		return nil, err
-	}
-	defer dbpool.Close()
-
-	err = dbpool.Ping(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	return database.New(dbpool), nil
 }
