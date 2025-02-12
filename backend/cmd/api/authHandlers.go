@@ -4,6 +4,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/session"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -21,31 +22,31 @@ const (
 
 func (app *application) login(c *fiber.Ctx) error {
 	var request loginRequest
-	if err := c.BodyParser(&request); err != nil {
+
+	err := c.BodyParser(&request)
+	if err != nil {
+		log.Println("unable to parse body")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	if request.Username == "" || request.Email == "" || request.Password == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "username, email and password are required",
-		})
-	}
-
 	if len(request.Username) > 20 || len(request.Username) < 2 {
+		log.Println("invalid username length")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "username must be between 2 and 20 characters",
 		})
 	}
 
 	if len(request.Email) < 5 || len(request.Email) > 100 {
+		log.Println("invalid email length")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid email address",
 		})
 	}
 
 	if len(request.Password) < 9 || len(request.Password) > 128 {
+		log.Println("invalid password length")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "password must be between 9 and 128 characters",
 		})
@@ -57,6 +58,7 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		log.Println("unable to get user")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authErr,
 		})
@@ -64,12 +66,14 @@ func (app *application) login(c *fiber.Ctx) error {
 
 	isMatch, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
+		log.Println("unable to run match func")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
 	}
 
 	if !isMatch {
+		log.Println("passwords do not match")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authErr,
 		})
@@ -81,6 +85,7 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
+		log.Println("unable to create auth session")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
