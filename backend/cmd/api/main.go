@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,7 +62,6 @@ func main() {
 		},
 	})
 
-	f.Use(cors.New())
 	f.Use(logger.New())
 
 	api := f.Group("/api/v1")
@@ -149,7 +147,12 @@ func initApp() (*application, error) {
 	}
 
 	redisPool := caching.New(settings.GetRedisAddress())
-	ses := session.New(!settings.GetDebug(), redisPool)
+
+	// Initialize session with proper configuration
+	sessionManager := session.New(
+		!settings.GetDebug(),
+		redisPool,
+	)
 
 	ffmpegBin, err := ffmpeg.New(settings.GetFfmpegPath())
 	if err != nil {
@@ -170,7 +173,7 @@ func initApp() (*application, error) {
 	return &application{
 		settings: settings,
 		caching:  redisPool,
-		session:  ses,
+		session:  sessionManager,
 		db:       dbpool,
 		queries:  queries,
 		ffmpeg:   ffmpegBin,
