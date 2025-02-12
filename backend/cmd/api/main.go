@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -60,32 +60,27 @@ func main() {
 		},
 	})
 
-	f.Use(recover.New(recover.Config{
-		EnableStackTrace: app.settings.GetDebug(),
-	}))
+	f.Use(cors.New())
+	f.Use(logger.New())
 
-	f.Use(logger.New(logger.Config{
-		Format:     "${time} | ${status} | ${latency} | ${method} | ${path}\n",
-		TimeFormat: "2006-01-02 15:04:05",
-		TimeZone:   "Local",
-	}))
+	api := f.Group("/api/v1")
 
-	auth := f.Group("/api/v1/auth")
+	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 	auth.Post("/logout", app.logout)
 
-	movies := f.Group("/api/v1/movies")
+	movies := api.Group("/movies")
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/details/:id", app.getMovieDetails)
+	movies.Get("/:id", app.getMovieDetails)
 	movies.Post("/create", app.createTmdbMovie)
 
-	users := f.Group("/api/v1/users")
+	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)
 	users.Get("/count", app.getTotalUsersCount)
-	users.Get("/details/:id", app.getUserByID)
-	users.Post("/create", app.createUser)
+	users.Get("/:id", app.getUserByID)
+	users.Post("/", app.createUser)
 
 	log.Fatal(f.Listen(app.settings.GetPort()))
 }
