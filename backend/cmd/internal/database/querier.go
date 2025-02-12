@@ -37,9 +37,11 @@ type Querier interface {
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error)
 	GetStudioByTmdbID(ctx context.Context, tmdbID int32) (GetStudioByTmdbIDRow, error)
+	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
+	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
 }
 

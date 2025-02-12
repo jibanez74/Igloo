@@ -60,6 +60,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getTotalUsersCount = `-- name: GetTotalUsersCount :one
+SELECT COUNT(*) FROM users
+`
+
+func (q *Queries) GetTotalUsersCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getTotalUsersCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, name, email, username, is_active, is_admin, avatar FROM users
 WHERE id = $1
@@ -118,4 +129,58 @@ func (q *Queries) GetUserForLogin(ctx context.Context, arg GetUserForLoginParams
 		&i.Avatar,
 	)
 	return i, err
+}
+
+const getUsersPaginated = `-- name: GetUsersPaginated :many
+SELECT 
+    id,
+    name,
+    email,
+    username,
+    is_active,
+    is_admin
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetUsersPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetUsersPaginatedRow struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	IsAdmin  bool   `json:"is_admin"`
+}
+
+func (q *Queries) GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getUsersPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsersPaginatedRow{}
+	for rows.Next() {
+		var i GetUsersPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Username,
+			&i.IsActive,
+			&i.IsAdmin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

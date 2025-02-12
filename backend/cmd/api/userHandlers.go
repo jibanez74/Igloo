@@ -8,6 +8,60 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func (app *application) getTotalUsersCount(c *fiber.Ctx) error {
+	count, err := app.queries.GetTotalUsersCount(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"count": count,
+	})
+}
+
+func (app *application) getUsersPaginated(c *fiber.Ctx) error {
+	page, err := strconv.Atoi(c.Query("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(c.Query("limit", "10"))
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 24
+	}
+
+	offset := (page - 1) * limit
+
+	users, err := app.queries.GetUsersPaginated(c.Context(), database.GetUsersPaginatedParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	totalUsers, err := app.queries.GetTotalUsersCount(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	totalPages := (totalUsers + int64(limit) - 1) / int64(limit)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"users":        users,
+		"current_page": page,
+		"total_pages":  totalPages,
+		"total_users":  totalUsers,
+	})
+}
+
 func (app *application) getUserByID(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {

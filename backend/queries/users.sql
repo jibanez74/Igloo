@@ -1,3 +1,18 @@
+-- name: GetTotalUsersCount :one
+SELECT COUNT(*) FROM users;
+
+-- name: GetUsersPaginated :many
+SELECT 
+    id,
+    name,
+    email,
+    username,
+    is_active,
+    is_admin
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
 -- name: GetUserByID :one
 SELECT id, name, email, username, is_active, is_admin, avatar FROM users
 WHERE id = $1;
@@ -21,3 +36,4 @@ INSERT INTO users (
     $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
+
