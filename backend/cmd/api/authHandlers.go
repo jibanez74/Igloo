@@ -39,7 +39,7 @@ func (app *application) login(c *fiber.Ctx) error {
 		})
 	}
 
-	if len(request.Email) < 4 || len(request.Email) > 100 {
+	if len(request.Email) < 5 || len(request.Email) > 100 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid email address",
 		})

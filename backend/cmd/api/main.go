@@ -80,6 +80,10 @@ func main() {
 	movies.Get("/details/:id", app.getMovieDetails)
 	movies.Post("/create", app.createTmdbMovie)
 
+	users := f.Group("/api/v1/users")
+	f.Get("/:id", app.getUserByID)
+	users.Post("/create", app.createUser)
+
 	log.Fatal(f.Listen(app.settings.GetPort()))
 }
 
