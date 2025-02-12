@@ -3,8 +3,11 @@ module igloo
 go 1.23.6
 
 require (
+	github.com/alexedwards/scs/redisstore v0.0.0-20250206205117-b6793b4a9566 // indirect
+	github.com/alexedwards/scs/v2 v2.8.0 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/gofiber/fiber/v2 v2.52.6 // indirect
+	github.com/gomodule/redigo v1.9.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

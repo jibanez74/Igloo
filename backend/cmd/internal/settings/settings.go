@@ -26,6 +26,7 @@ type Settings interface {
 	GetPostgresDB() string
 	GetPostgresSslMode() string
 	GetPostgresMaxConns() int
+	GetRedisAddress() string
 }
 
 type settings struct {
@@ -47,9 +48,10 @@ type settings struct {
 	PostgresDB       string `json:"postgres_db"`
 	PostgresSslMode  string `json:"postgres_ssl_mode"`
 	PostgresMaxConns int    `json:"postgres_max_conns"`
+	RedisHost        string `json:"redis_host"`
+	RedisPort        int    `json:"redis_port"`
 }
 
-// Implement all getter methods for the Settings interface
 func (s *settings) GetDebug() bool             { return s.Debug }
 func (s *settings) GetPort() string            { return s.Port }
 func (s *settings) GetDownloadImages() bool    { return s.DownloadImages }
@@ -68,6 +70,7 @@ func (s *settings) GetPostgresPass() string    { return s.PostgresPass }
 func (s *settings) GetPostgresDB() string      { return s.PostgresDB }
 func (s *settings) GetPostgresSslMode() string { return s.PostgresSslMode }
 func (s *settings) GetPostgresMaxConns() int   { return s.PostgresMaxConns }
+func (s *settings) GetRedisAddress() string    { return fmt.Sprintf("%s:%d", s.RedisHost, s.RedisPort) }
 
 func New() (Settings, error) {
 	configDir := getConfigDir()

@@ -6,6 +6,8 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/session"
+	"igloo/cmd/internal/session/caching"
 	"igloo/cmd/internal/settings"
 	"igloo/cmd/internal/tmdb"
 
@@ -15,11 +17,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type application struct {
 	settings settings.Settings
+	caching  *redis.Pool
+	session  session.Session
 	db       *pgxpool.Pool
 	queries  *database.Queries
 	ffmpeg   ffmpeg.FFmpeg
@@ -65,6 +70,10 @@ func main() {
 		TimeZone:   "Local",
 	}))
 
+	auth := f.Group("/api/v1/auth")
+	auth.Post("/login", app.login)
+	auth.Post("/logout", app.logout)
+
 	movies := f.Group("/api/v1/movies")
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/details/:id", app.getMovieDetails)
@@ -105,6 +114,9 @@ func initApp() (*application, error) {
 
 	queries := database.New(dbpool)
 
+	redisPool := caching.New(settings.GetRedisAddress())
+	ses := session.New(!settings.GetDebug(), redisPool)
+
 	ffmpegBin, err := ffmpeg.New(settings.GetFfmpegPath())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ffmpeg: %w", err)
@@ -123,6 +135,8 @@ func initApp() (*application, error) {
 
 	return &application{
 		settings: settings,
+		caching:  redisPool,
+		session:  ses,
 		db:       dbpool,
 		queries:  queries,
 		ffmpeg:   ffmpegBin,

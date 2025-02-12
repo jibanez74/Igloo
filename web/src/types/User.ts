@@ -1,17 +1,11 @@
-import type { Movie } from "./Movie";
-
 export type User = {
-  ID: number;
+  id: number;
   name: string;
   email: string;
   username: string;
-  isAdmin: boolean;
-  isActive?: boolean;
-  thumb?: string;
-  favoriteMovies?: Movie[] | null;
-  CreatedAt?: string | Date;
-  UpdatedAt?: string | Date;
-  DeletedAt?: string | Date | null;
+  is_admin: boolean;
+  is_active?: boolean;
+  avatar?: string;
 };
 
 export type UsersResponse = {

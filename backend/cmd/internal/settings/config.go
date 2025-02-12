@@ -74,6 +74,16 @@ func parseEnvConfig() (*settings, error) {
 		}
 	}
 
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+
+	redisPort, err := strconv.Atoi(os.Getenv("REDIS_PORT"))
+	if err != nil {
+		redisPort = 6379
+	}
+
 	return &settings{
 		Port:             fmt.Sprintf(":%d", port),
 		Debug:            os.Getenv("DEBUG") == "true",
@@ -93,6 +103,8 @@ func parseEnvConfig() (*settings, error) {
 		PostgresDB:       os.Getenv("POSTGRES_DB"),
 		PostgresSslMode:  os.Getenv("POSTGRES_SSL_MODE"),
 		PostgresMaxConns: maxConns,
+		RedisHost:        redisHost,
+		RedisPort:        redisPort,
 	}, nil
 }
 
