@@ -68,7 +68,8 @@ func main() {
 
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
-	auth.Post("/logout", app.logout)
+	auth.Get("/me", app.requireAuth, app.getAuthUser)
+	auth.Post("/logout", app.requireAuth, app.logout)
 
 	movies := api.Group("/movies")
 	movies.Get("/", app.getMoviesPaginated)
@@ -81,7 +82,7 @@ func main() {
 	users.Get("/", app.getUsersPaginated)
 	users.Get("/count", app.getTotalUsersCount)
 	users.Get("/:id", app.getUserByID)
-	users.Post("/", app.createUser)
+	users.Post("/create", app.createUser)
 
 	log.Fatal(f.Listen(app.settings.GetPort()))
 }

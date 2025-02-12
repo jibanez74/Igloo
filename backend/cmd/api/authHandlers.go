@@ -94,6 +94,33 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 }
 
+func (app *application) getAuthUser(c *fiber.Ctx) error {
+	id, err := app.session.GetUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	user, err := app.queries.GetUserByID(c.Context(), id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": fiber.Map{
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"avatar":   user.Avatar,
+			"is_admin": user.IsAdmin,
+		},
+	})
+
+}
+
 func (app *application) logout(c *fiber.Ctx) error {
 	err := app.session.DestroyAuthSession(c)
 	if err != nil {

@@ -20,7 +20,7 @@ export default function MovieCard({
       <Link
         to='/movies/$movieID'
         params={{
-          movieID: movie.ID.toString(),
+          movieID: movie.id.toString(),
         }}
       >
         <img

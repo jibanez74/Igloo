@@ -14,11 +14,6 @@ import (
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
 
-const (
-	KeyUserID  = "user_id"
-	KeyIsAdmin = "is_admin"
-)
-
 type Session interface {
 	CreateAuthSession(*fiber.Ctx, *AuthData) error
 	DestroyAuthSession(*fiber.Ctx) error
@@ -37,6 +32,11 @@ type AuthData struct {
 type session struct {
 	store *scs.SessionManager
 }
+
+const (
+	KeyUserID  = "user_id"
+	KeyIsAdmin = "is_admin"
+)
 
 func New(secure bool, redisPool *redis.Pool) *session {
 	s := scs.New()
@@ -129,6 +129,7 @@ func (s *session) DestroyAuthSession(c *fiber.Ctx) error {
 
 func (s *session) IsAuthenticated(c *fiber.Ctx) bool {
 	ctx := s.getContext(c)
+
 	return s.store.Exists(ctx, KeyUserID)
 }
 

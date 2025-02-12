@@ -13,7 +13,10 @@ export default function LatestMovies() {
   useEffect(() => {
     const fetchLatestMovies = async () => {
       try {
-        const res = await fetch("/api/v1/movies/latest");
+        const res = await fetch("/api/v1/movies/latest", {
+          credentials: "include",
+        });
+
         if (!res.ok) {
           throw new Error("Failed to fetch latest movies");
         }
