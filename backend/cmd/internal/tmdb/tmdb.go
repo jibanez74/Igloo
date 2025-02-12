@@ -52,13 +52,20 @@ type tmdbCredits struct {
 	} `json:"crew"`
 }
 
+type tmdbVideo struct {
+	ID          string `json:"id"`
+	Site        string `json:"site"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Official    bool   `json:"official"`
+	Language    string `json:"iso_639_1"`
+	Country     string `json:"iso_3166_1"`
+	PublishedAt string `json:"published_at"`
+}
+
 type tmdbVideos struct {
-	Results []struct {
-		Key   string `json:"key"`
-		Kind  string `json:"type"`
-		Title string `json:"name"`
-		Site  string `json:"site"`
-	} `json:"results"`
+	Results []tmdbVideo `json:"results"`
 }
 
 type tmdbReleaseDate struct {

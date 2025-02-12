@@ -322,22 +322,26 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Videos.Results) > 0 {
 		for _, v := range movieInfo.Videos.Results {
-			if v.Site == "youtube" {
-				_, err = qtx.CreateMovieExtra(c.Context(), database.CreateMovieExtraParams{
-					Title: v.Title,
-					Url:   v.Key,
-					Kind:  v.Kind,
-					MovieID: pgtype.Int4{
-						Int32: newMovie.ID,
-						Valid: true,
-					},
-				})
+			if v.Site != "YouTube" {
+				continue
+			}
 
-				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": fmt.Sprintf("unable to create movie extra %s for the movie %s: %v", v.Title, movie.Title, err),
-					})
-				}
+			videoUrl := fmt.Sprintf("https://www.youtube.com/watch?v=%s", v.Key)
+
+			_, err = qtx.CreateMovieExtra(c.Context(), database.CreateMovieExtraParams{
+				Title: v.Name,
+				Url:   videoUrl,
+				Kind:  v.Type,
+				MovieID: pgtype.Int4{
+					Int32: newMovie.ID,
+					Valid: true,
+				},
+			})
+
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": fmt.Sprintf("unable to create movie extra %s for the movie %s: %v", v.Name, movie.Title, err),
+				})
 			}
 		}
 	}
