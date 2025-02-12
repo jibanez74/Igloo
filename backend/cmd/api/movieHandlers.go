@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"igloo/cmd/internal/database"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -50,5 +51,45 @@ func (app *application) getMovieDetails(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movie": movie,
+	})
+}
+
+func (app *application) getMoviesPaginated(c *fiber.Ctx) error {
+	page, err := strconv.Atoi(c.Query("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(c.Query("limit", "24"))
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 24
+	}
+
+	offset := (page - 1) * limit
+
+	movies, err := app.queries.GetMoviesPaginated(c.Context(), database.GetMoviesPaginatedParams{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	totalMovies, err := app.queries.GetMovieCount(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	totalPages := (totalMovies + int64(limit) - 1) / int64(limit)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"movies":       movies,
+		"current_page": page,
+		"total_pages":  totalPages,
+		"total_movies": totalMovies,
 	})
 }

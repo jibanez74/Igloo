@@ -75,6 +75,7 @@ func main() {
 	auth.Post("/logout", app.logout)
 
 	movies := f.Group("/api/v1/movies")
+	movies.Get("/", app.getMoviesPaginated)
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/details/:id", app.getMovieDetails)

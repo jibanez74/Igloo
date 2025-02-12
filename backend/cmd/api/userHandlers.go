@@ -27,7 +27,7 @@ func (app *application) getUsersPaginated(c *fiber.Ctx) error {
 		page = 1
 	}
 
-	limit, err := strconv.Atoi(c.Query("limit", "10"))
+	limit, err := strconv.Atoi(c.Query("limit", "24"))
 	if err != nil || limit < 1 || limit > 100 {
 		limit = 24
 	}
@@ -38,7 +38,6 @@ func (app *application) getUsersPaginated(c *fiber.Ctx) error {
 		Limit:  int32(limit),
 		Offset: int32(offset),
 	})
-
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
