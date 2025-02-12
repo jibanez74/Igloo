@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gomodule/redigo/redis"
+	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
 
 const (
@@ -49,35 +51,90 @@ func New(secure bool, redisPool *redis.Pool) *session {
 	return &session{store: s}
 }
 
+func (s *session) getContext(c *fiber.Ctx) context.Context {
+	var r http.Request
+
+	fasthttpadaptor.ConvertRequest(c.Context(), &r, true)
+
+	token := c.Cookies(s.store.Cookie.Name)
+
+	ctx, _ := s.store.Load(r.Context(), token)
+
+	return ctx
+}
+
 func (s *session) CreateAuthSession(c *fiber.Ctx, authData *AuthData) error {
 	if authData == nil {
 		return errors.New("auth data cannot be nil")
 	}
 
-	s.store.Put(c.Context(), KeyUserID, authData.ID)
-	s.store.Put(c.Context(), KeyIsAdmin, authData.IsAdmin)
+	ctx := s.getContext(c)
 
+	s.store.Put(ctx, KeyUserID, authData.ID)
+	s.store.Put(ctx, KeyIsAdmin, authData.IsAdmin)
+
+	// Get token and save session data
+	token, expiry, err := s.store.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit session: %w", err)
+	}
+
+	// Set the session cookie
+	cookie := &fiber.Cookie{
+		Name:     s.store.Cookie.Name,
+		Value:    token,
+		Expires:  expiry,
+		Secure:   s.store.Cookie.Secure,
+		HTTPOnly: true,
+	}
+
+	// Convert http.SameSite to string
+	switch s.store.Cookie.SameSite {
+	case http.SameSiteLaxMode:
+		cookie.SameSite = "Lax"
+	case http.SameSiteStrictMode:
+		cookie.SameSite = "Strict"
+	case http.SameSiteNoneMode:
+		cookie.SameSite = "None"
+	default:
+		cookie.SameSite = "Lax"
+	}
+
+	c.Cookie(cookie)
 	return nil
 }
 
 func (s *session) DestroyAuthSession(c *fiber.Ctx) error {
-	if err := s.store.RenewToken(c.Context()); err != nil {
+	ctx := s.getContext(c)
+
+	if err := s.store.RenewToken(ctx); err != nil {
 		return fmt.Errorf("failed to renew token: %w", err)
 	}
 
-	if err := s.store.Destroy(c.Context()); err != nil {
+	if err := s.store.Destroy(ctx); err != nil {
 		return fmt.Errorf("failed to destroy session: %w", err)
 	}
+
+	// Clear the session cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     s.store.Cookie.Name,
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		SameSite: "Lax",
+	})
 
 	return nil
 }
 
 func (s *session) IsAuthenticated(c *fiber.Ctx) bool {
-	return s.store.Exists(c.Context(), KeyUserID)
+	ctx := s.getContext(c)
+	return s.store.Exists(ctx, KeyUserID)
 }
 
 func (s *session) GetUserID(c *fiber.Ctx) (int32, error) {
-	id, ok := s.store.Get(c.Context(), KeyUserID).(int32)
+	ctx := s.getContext(c)
+	id, ok := s.store.Get(ctx, KeyUserID).(int32)
 	if !ok {
 		return 0, errors.New("user ID not found in session")
 	}
@@ -85,7 +142,8 @@ func (s *session) GetUserID(c *fiber.Ctx) (int32, error) {
 }
 
 func (s *session) IsAdmin(c *fiber.Ctx) bool {
-	isAdmin, ok := s.store.Get(c.Context(), KeyIsAdmin).(bool)
+	ctx := s.getContext(c)
+	isAdmin, ok := s.store.Get(ctx, KeyIsAdmin).(bool)
 	return ok && isAdmin
 }
 
@@ -101,7 +159,5 @@ func (s *session) AuthMiddleware() fiber.Handler {
 }
 
 func (s *session) Cleanup() error {
-	// Currently no cleanup needed for redis store
-	// This method is added for future use and interface completeness
 	return nil
 }

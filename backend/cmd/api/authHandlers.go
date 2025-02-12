@@ -4,7 +4,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/session"
-	"log"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -37,7 +36,6 @@ func (app *application) login(c *fiber.Ctx) error {
 	}
 
 	if len(request.Email) < 5 || len(request.Email) > 100 {
-		log.Println("invalid email length")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid email address",
 		})
@@ -62,14 +60,12 @@ func (app *application) login(c *fiber.Ctx) error {
 
 	isMatch, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
-		log.Println("unable to verify password")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
 	}
 
 	if !isMatch {
-		log.Println("invalid password")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authErr,
 		})
@@ -81,9 +77,8 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		log.Println("unable to create auth session:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create session",
+			"error": serverErr,
 		})
 	}
 
