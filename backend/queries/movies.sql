@@ -20,9 +20,7 @@ SELECT
     id,
     title,
     thumb,
-    year,
-    audience_rating,
-    critic_rating
+    year
 FROM movies
 ORDER BY title ASC
 LIMIT $1 OFFSET $2;
@@ -68,7 +66,58 @@ SELECT
             'url', me.url,
             'kind', me.kind
         )) FILTER (WHERE me.id IS NOT NULL), '[]'
-    ) as extras
+    ) as extras,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', vs.id,
+            'title', vs.title,
+            'index', vs.index,
+            'profile', vs.profile,
+            'aspect_ratio', vs.aspect_ratio,
+            'bit_rate', vs.bit_rate,
+            'bit_depth', vs.bit_depth,
+            'codec', vs.codec,
+            'width', vs.width,
+            'height', vs.height,
+            'coded_width', vs.coded_width,
+            'coded_height', vs.coded_height,
+            'color_transfer', vs.color_transfer,
+            'color_primaries', vs.color_primaries,
+            'color_space', vs.color_space,
+            'color_range', vs.color_range,
+            'frame_rate', vs.frame_rate,
+            'avg_frame_rate', vs.avg_frame_rate,
+            'level', vs.level
+        )) FILTER (WHERE vs.id IS NOT NULL), '[]'
+    ) as video_streams,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', aus.id,
+            'title', aus.title,
+            'index', aus.index,
+            'codec', aus.codec,
+            'channels', aus.channels,
+            'channel_layout', aus.channel_layout,
+            'language', aus.language
+        )) FILTER (WHERE aus.id IS NOT NULL), '[]'
+    ) as audio_streams,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', sub.id,
+            'title', sub.title,
+            'index', sub.index,
+            'codec', sub.codec,
+            'language', sub.language
+        )) FILTER (WHERE sub.id IS NOT NULL), '[]'
+    ) as subtitles,
+    COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', ch.id,
+            'title', ch.title,
+            'start_time_ms', ch.start_time_ms,
+            'thumb', ch.thumb
+        )) FILTER (WHERE ch.id IS NOT NULL), '[]'
+    ) as chapters
 FROM movies m
 LEFT JOIN movie_genres mg ON mg.movie_id = m.id
 LEFT JOIN genres g ON g.id = mg.genre_id
@@ -79,6 +128,10 @@ LEFT JOIN artists a_cast ON a_cast.id = cl.artist_id
 LEFT JOIN crew_list cw ON cw.movie_id = m.id
 LEFT JOIN artists a_crew ON a_crew.id = cw.artist_id
 LEFT JOIN movie_extras me ON me.movie_id = m.id
+LEFT JOIN video_streams vs ON vs.movie_id = m.id
+LEFT JOIN audio_streams aus ON aus.movie_id = m.id
+LEFT JOIN subtitles sub ON sub.movie_id = m.id
+LEFT JOIN chapters ch ON ch.movie_id = m.id
 WHERE m.id = $1
 GROUP BY m.id;
 
