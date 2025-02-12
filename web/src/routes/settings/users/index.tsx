@@ -26,9 +26,20 @@ export const Route = createFileRoute("/settings/users/")({
 });
 
 function UsersPage() {
-  const { useLoaderData, useSearch } = getRouteApi("/settings/users/");
-  const { users, count, pages } = useLoaderData();
+  const { useLoaderData, useSearch, useNavigate } =
+    getRouteApi("/settings/users/");
+  const { users, total_pages, total_users } = useLoaderData();
   const { page, limit } = useSearch();
+  const navigate = useNavigate();
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      search: {
+        page: newPage,
+        limit,
+      },
+    });
+  };
 
   return (
     <main className='container mx-auto px-4 py-8'>
@@ -49,7 +60,8 @@ function UsersPage() {
             </Link>
           </div>
           <p className='text-sm text-sky-200'>
-            Total users: <span className='text-white font-medium'>{count}</span>
+            Total users:{" "}
+            <span className='text-white font-medium'>{total_users}</span>
           </p>
         </header>
 
@@ -67,9 +79,8 @@ function UsersPage() {
             </div>
             <Pagination
               currentPage={page}
-              totalPages={pages}
-              baseUrl='/settings/users'
-              searchParams={{ limit: limit.toString() }}
+              totalPages={total_pages}
+              onPageChange={handlePageChange}
             />
           </>
         )}

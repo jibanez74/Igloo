@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/session"
 	"igloo/cmd/internal/session/caching"
 	"igloo/cmd/internal/settings"
@@ -31,6 +32,8 @@ type application struct {
 	ffprobe  ffprobe.Ffprobe
 	tmdb     tmdb.Tmdb
 }
+
+const DefaultPassword = "AdminPassword"
 
 func main() {
 	app, err := initApp()
@@ -116,6 +119,34 @@ func initApp() (*application, error) {
 	}
 
 	queries := database.New(dbpool)
+
+	count, err := queries.GetTotalUsersCount(context.Background())
+	if err != nil {
+		msg := fmt.Sprintf("unable to check if there are any users in the database: %s", err)
+		log.Println(msg)
+	} else {
+		if count == 0 {
+			hashPassword, err := helpers.HashPassword(DefaultPassword)
+			if err != nil {
+				msg := fmt.Sprintf("unable to hash password for default user creation: %s", err)
+				log.Fatal(msg)
+			}
+
+			_, err = queries.CreateUser(context.Background(), database.CreateUserParams{
+				Name:     "Admin User",
+				Email:    "admin@example.com",
+				Username: "admin",
+				Password: hashPassword,
+				IsActive: true,
+				IsAdmin:  true,
+			})
+
+			if err != nil {
+				msg := fmt.Sprintf("unable to create default user: %s", err)
+				log.Fatal(msg)
+			}
+		}
+	}
 
 	redisPool := caching.New(settings.GetRedisAddress())
 	ses := session.New(!settings.GetDebug(), redisPool)

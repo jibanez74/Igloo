@@ -250,24 +250,3 @@ ALTER TABLE artists
 
 ALTER TABLE studios 
     ADD CONSTRAINT check_name_length CHECK (length(name) >= 2);
-
---
--- Default admin user
---
-INSERT INTO users (
-    name,
-    username,
-    email,
-    password,
-    is_admin,
-    is_active,
-    avatar
-) VALUES (
-    'admin',
-    'admin',
-    'admin@example.com',
-    '$2a$10$RnJPr0c8TQUPrHXhGQRRYOQYnFvjVmRYm1n2qHk7JbFzwNOyJqKSi', -- hashed value of 'AdminPassword'
-    true,
-    true,
-    'https://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?d=identicon'
-) ON CONFLICT (username) DO NOTHING;

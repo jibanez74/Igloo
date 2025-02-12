@@ -14,6 +14,7 @@ function LoginPage() {
   const [isVisible, setIsVisible] = useState(false);
 
   const { setUser, user } = useAuth();
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,11 +26,12 @@ function LoginPage() {
   useEffect(() => {
     if (error) {
       setIsVisible(true);
+
       const timer = setTimeout(() => {
         setIsVisible(false);
-        // Wait for fade out animation to complete before clearing error
         setTimeout(() => setError(""), 300);
       }, 6000);
+
       return () => clearTimeout(timer);
     }
   }, [error]);
@@ -47,6 +49,7 @@ function LoginPage() {
     try {
       const res = await fetch("/api/v1/auth/login", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
