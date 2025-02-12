@@ -7,6 +7,19 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func (app *application) getTotalMovieCount(c *fiber.Ctx) error {
+	count, err := app.queries.GetMovieCount(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"count": count,
+	})
+}
+
 func (app *application) getLatestMovies(c *fiber.Ctx) error {
 	movies, err := app.queries.GetLatestMovies(c.Context())
 	if err != nil {
