@@ -43,12 +43,9 @@ function MovieDetailsPage() {
   const [showAllCrew, setShowAllCrew] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
-  const displayedCast = showAllCast
-    ? movie.castList
-    : movie.castList.slice(0, 6);
-  const displayedCrew = showAllCrew
-    ? movie.crewList
-    : movie.crewList.slice(0, 6);
+  const cast = movie.cast.sort((a, b) => a.sort_order - b.sort_order);
+  const displayedCast = showAllCast ? cast : cast.slice(0, 6);
+  const displayedCrew = showAllCrew ? movie.crew : movie.crew.slice(0, 6);
 
   const getYouTubeVideoId = (url: string) => {
     const regExp =
@@ -69,7 +66,7 @@ function MovieDetailsPage() {
 
   const handlePlayMovie = async () => {
     const hlsRequestOpts = {
-      movieID: movie.ID,
+      movieID: movie.id,
       videoCodec: "copy",
       audioCodec: "copy",
     };
@@ -126,9 +123,9 @@ function MovieDetailsPage() {
               <h1 className='text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-xl'>
                 {movie.title}
               </h1>
-              {movie.tagLine && (
+              {movie.tag_line && (
                 <p className='text-xl text-sky-200 mb-4 italic drop-shadow-xl'>
-                  {movie.tagLine}
+                  {movie.tag_line}
                 </p>
               )}
 
@@ -136,22 +133,22 @@ function MovieDetailsPage() {
               <div className='flex flex-wrap gap-4 text-sm text-sky-200 mb-6 drop-shadow-lg bg-slate-900/20 backdrop-blur-sm rounded-lg px-4 py-2'>
                 <div className='flex items-center gap-1'>
                   <FiCalendar className='w-4 h-4' aria-hidden='true' />
-                  <span>{formatDate(movie.releaseDate)}</span>
+                  <span>{formatDate(movie.release_date)}</span>
                 </div>
 
                 <div className='flex items-center gap-1'>
                   <FiClock className='w-4 h-4' aria-hidden='true' />
-                  <span>{formatRuntime(movie.runTime)}</span>
+                  <span>{formatRuntime(movie.run_time)}</span>
                 </div>
-                {movie.contentRating && (
+                {movie.content_rating && (
                   <span className='px-2 py-0.5 bg-sky-500/20 rounded'>
-                    {movie.contentRating}
+                    {movie.content_rating}
                   </span>
                 )}
 
                 {movie.genres.map(genre => (
                   <span
-                    key={genre.ID}
+                    key={genre.id}
                     className='px-2 py-0.5 bg-sky-500/10 rounded'
                   >
                     {genre.tag}
@@ -161,7 +158,7 @@ function MovieDetailsPage() {
 
               {/* Ratings */}
               <div className='flex gap-6 mb-6'>
-                {movie.audienceRating > 0 && (
+                {movie.audience_rating > 0 && (
                   <div className='flex items-center gap-2'>
                     <FiStar
                       className='w-5 h-5 text-sky-400'
@@ -169,7 +166,7 @@ function MovieDetailsPage() {
                     />
                     <div>
                       <div className='text-lg font-medium text-white'>
-                        {movie.audienceRating.toFixed(1)}
+                        {movie.audience_rating.toFixed(1)}
                       </div>
                       <div className='text-xs text-sky-200'>
                         Audience Rating
@@ -177,7 +174,7 @@ function MovieDetailsPage() {
                     </div>
                   </div>
                 )}
-                {movie.criticRating > 0 && (
+                {movie.critic_rating > 0 && (
                   <div className='flex items-center gap-2'>
                     <FiAward
                       className='w-5 h-5 text-sky-400'
@@ -185,7 +182,7 @@ function MovieDetailsPage() {
                     />
                     <div>
                       <div className='text-lg font-medium text-white'>
-                        {movie.criticRating.toFixed(1)}
+                        {movie.critic_rating.toFixed(1)}
                       </div>
                       <div className='text-xs text-sky-200'>Critic Rating</div>
                     </div>
@@ -286,17 +283,17 @@ function MovieDetailsPage() {
         <h2 className='text-2xl font-bold text-white mb-6'>Cast & Crew</h2>
 
         {/* Cast */}
-        {movie.castList.length > 0 && (
+        {movie.cast.length > 0 && (
           <div className='mb-12'>
             <h3 className='text-lg font-medium text-sky-200 mb-4'>Cast</h3>
             <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
               {displayedCast.map(cast => (
-                <div key={cast.ID} className='text-center'>
+                <div key={cast.id} className='text-center'>
                   <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
-                    {cast.artist.thumb ? (
+                    {cast.thumb ? (
                       <img
-                        src={getImgSrc(cast.artist.thumb)}
-                        alt={cast.artist.name}
+                        src={getImgSrc(cast.thumb)}
+                        alt={cast.name}
                         className='w-full h-full object-cover'
                       />
                     ) : (
@@ -306,13 +303,13 @@ function MovieDetailsPage() {
                     )}
                   </div>
                   <div className='text-sm font-medium text-white'>
-                    {cast.artist.name}
+                    {cast.name}
                   </div>
                   <div className='text-xs text-sky-200'>{cast.character}</div>
                 </div>
               ))}
             </div>
-            {movie.castList.length > 6 && (
+            {movie.cast.length > 6 && (
               <div className='flex justify-center mt-6'>
                 <button
                   type='button'
@@ -327,7 +324,7 @@ function MovieDetailsPage() {
                     </>
                   ) : (
                     <>
-                      Show All Cast ({movie.castList.length}){" "}
+                      Show All Cast ({movie.cast.length}){" "}
                       <FiChevronDown className='w-4 h-4' aria-hidden='true' />
                     </>
                   )}
@@ -338,17 +335,17 @@ function MovieDetailsPage() {
         )}
 
         {/* Crew */}
-        {movie.crewList.length > 0 && (
+        {movie.crew.length > 0 && (
           <div>
             <h3 className='text-lg font-medium text-sky-200 mb-4'>Crew</h3>
             <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
               {displayedCrew.map(crew => (
-                <div key={crew.ID} className='text-center'>
+                <div key={crew.id} className='text-center'>
                   <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
-                    {crew.artist.thumb ? (
+                    {crew.thumb ? (
                       <img
-                        src={getImgSrc(crew.artist.thumb)}
-                        alt={crew.artist.name}
+                        src={getImgSrc(crew.thumb)}
+                        alt={crew.name}
                         className='w-full h-full object-cover'
                       />
                     ) : (
@@ -358,13 +355,13 @@ function MovieDetailsPage() {
                     )}
                   </div>
                   <div className='text-sm font-medium text-white'>
-                    {crew.artist.name}
+                    {crew.name}
                   </div>
                   <div className='text-xs text-sky-200'>{crew.job}</div>
                 </div>
               ))}
             </div>
-            {movie.crewList.length > 6 && (
+            {movie.crew.length > 6 && (
               <div className='flex justify-center mt-6'>
                 <button
                   type='button'
@@ -379,7 +376,7 @@ function MovieDetailsPage() {
                     </>
                   ) : (
                     <>
-                      Show All Crew ({movie.crewList.length}){" "}
+                      Show All Crew ({movie.crew.length}){" "}
                       <FiChevronDown className='w-4 h-4' aria-hidden='true' />
                     </>
                   )}

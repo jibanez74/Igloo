@@ -39,7 +39,7 @@ export type Movie = {
   spoken_languages: string;
   genres: Genre[];
   studios: Studio[];
-  castj: Cast[];
+  cast: Cast[];
   crew: Crew[];
   videoList: Video[];
   audioList: Audio[];
