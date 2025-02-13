@@ -268,7 +268,9 @@ function MovieDetailsPage() {
                       Studios
                     </div>
                     <div className='text-white'>
-                      {movie.studios.map(studio => studio.name).join(", ")}
+                      {movie.studios.map(studio => (
+                        <span key={studio.id}>{studio.name}</span>
+                      ))}
                     </div>
                   </div>
                 )}
