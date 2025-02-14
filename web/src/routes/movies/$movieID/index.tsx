@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   FiClock,
   FiDollarSign,
@@ -37,8 +37,10 @@ export const Route = createFileRoute("/movies/$movieID/")({
 });
 
 function MovieDetailsPage() {
-  const { useLoaderData } = getRouteApi("/movies/$movieID/");
-  const { movie } = useLoaderData() as { movie: Movie };
+  const { movie } = Route.useLoaderData() as { movie: Movie };
+
+  const navigate = Route.useNavigate();
+
   const [showAllCast, setShowAllCast] = useState(false);
   const [showAllCrew, setShowAllCrew] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
@@ -63,30 +65,15 @@ function MovieDetailsPage() {
     }
   };
 
-  const handlePlayMovie = async () => {
-    const hlsRequestOpts = {
-      movieID: movie.id,
-      videoCodec: "copy",
-      audioCodec: "copy",
-    };
-
-    const res = await fetch("/api/v1/ffmpeg/hls/movie", {
-      method: "post",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
+  const handlePlayMovie = () => {
+    navigate({
+      to: "/movies/$movieID/play",
+      params: { movieID: movie.id.toString() },
+      search: {
+        title: movie.title,
+        thumb: movie.thumb,
       },
-      body: JSON.stringify(hlsRequestOpts),
     });
-
-    if (!res.ok) {
-      alert("an error occurred");
-      return;
-    }
-
-    const data = await res.json();
-
-    alert(JSON.stringify(data));
   };
 
   return (

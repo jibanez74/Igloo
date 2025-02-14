@@ -137,8 +137,8 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 			r := ranges[0]
 
 			c.Status(fiber.StatusPartialContent)
-			c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", r.start, r.end, movie.Size))
-			c.Set("Content-Length", fmt.Sprintf("%d", r.end-r.start+1))
+			c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", r.Start, r.End, movie.Size))
+			c.Set("Content-Length", fmt.Sprintf("%d", r.End-r.Start+1))
 
 			return c.SendFile(movie.FilePath, true)
 		}
