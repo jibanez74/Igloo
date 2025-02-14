@@ -9,18 +9,18 @@ import (
 )
 
 type HlsOpts struct {
-	InputPath        string
-	OutputDir        string
-	AudioStreamIndex int
-	AudioCodec       string
-	AudioBitRate     int
-	AudioChannels    int
-	VideoStreamIndex int
-	VideoCodec       string
-	VideoBitrate     int
-	VideoHeight      int
-	VideoProfile     string
-	Preset           string
+	InputPath        string `json:"input_path"`
+	OutputDir        string `json:"output_dir"`
+	AudioStreamIndex int    `json:"audio_stream_index"`
+	AudioCodec       string `json:"audio_codec"`
+	AudioBitRate     int    `json:"audio_bit_rate"`
+	AudioChannels    int    `json:"audio_channels"`
+	VideoStreamIndex int    `json:"video_stream_index"`
+	VideoCodec       string `json:"video_codec"`
+	VideoBitrate     int    `json:"video_bitrate"`
+	VideoHeight      int    `json:"video_height"`
+	VideoProfile     string `json:"video_profile"`
+	Preset           string `json:"preset"`
 }
 
 const (

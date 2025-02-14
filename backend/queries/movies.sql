@@ -192,6 +192,10 @@ CROSS JOIN movie_extras e
 CROSS JOIN movie_streams ms
 CROSS JOIN movie_chapters ch;
 
+-- name: GetMovieForStreaming :one
+SELECT id, file_path, content_type, size FROM movies
+WHERE id = $1;
+
 -- name: CreateMovie :one
 INSERT INTO movies (
     title,

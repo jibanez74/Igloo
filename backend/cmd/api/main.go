@@ -68,15 +68,16 @@ func main() {
 
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
-	auth.Get("/me", app.requireAuth, app.getAuthUser)
-	auth.Post("/logout", app.requireAuth, app.logout)
+	auth.Get("/me", app.getAuthUser)
+	auth.Post("/logout", app.logout)
 
 	movies := api.Group("/movies")
-	movies.Get("/", app.getMoviesPaginated)
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/:id", app.getMovieDetails)
+	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
+	movies.Get("/stream/:id", app.streamMovie)
+	movies.Get("/:id", app.getMovieDetails)
 
 	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)

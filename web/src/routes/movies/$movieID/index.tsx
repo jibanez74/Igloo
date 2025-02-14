@@ -43,8 +43,7 @@ function MovieDetailsPage() {
   const [showAllCrew, setShowAllCrew] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
-  const cast = movie.cast.sort((a, b) => a.sort_order - b.sort_order);
-  const displayedCast = showAllCast ? cast : cast.slice(0, 6);
+  const displayedCast = showAllCast ? movie.cast : movie.cast.slice(0, 6);
   const displayedCrew = showAllCrew ? movie.crew : movie.crew.slice(0, 6);
 
   const getYouTubeVideoId = (url: string) => {
