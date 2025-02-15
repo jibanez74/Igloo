@@ -13,6 +13,7 @@ import (
 	"igloo/cmd/internal/tmdb"
 
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -66,11 +67,6 @@ func main() {
 
 	api := f.Group("/api/v1")
 
-	api.Static("/hls", app.settings.GetTranscodeDir(), fiber.Static{
-		Compress: true,
-		Browse:   false,
-	})
-
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 	auth.Get("/me", app.getAuthUser)
@@ -91,6 +87,26 @@ func main() {
 	users.Get("/:id", app.getUserByID)
 	users.Post("/create", app.createUser)
 
+	api.Static("/hls", app.settings.GetTranscodeDir(), fiber.Static{
+		Compress:      true,
+		Browse:        false,
+		Index:         "playlist.m3u8",
+		CacheDuration: 1 * time.Second,
+		MaxAge:        0,
+		ByteRange:     true,
+		Next: func(c *fiber.Ctx) bool {
+			path := c.Path()
+			if strings.HasSuffix(path, ".ts") {
+				c.Set("Cache-Control", "public, max-age=31536000")
+				c.Set("Content-Type", "video/MP2T")
+			} else if strings.HasSuffix(path, ".m3u8") {
+				c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				c.Set("Content-Type", "application/x-mpegURL")
+			}
+
+			return false
+		},
+	})
 	log.Fatal(f.Listen(app.settings.GetPort()))
 }
 

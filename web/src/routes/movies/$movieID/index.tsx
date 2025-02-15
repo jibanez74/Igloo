@@ -39,11 +39,11 @@ export const Route = createFileRoute("/movies/$movieID/")({
 function MovieDetailsPage() {
   const { movie } = Route.useLoaderData() as { movie: Movie };
 
-  // const navigate = Route.useNavigate();
-
   const [showAllCast, setShowAllCast] = useState(false);
   const [showAllCrew, setShowAllCrew] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+
+  const navigate = Route.useNavigate();
 
   const displayedCast = showAllCast ? movie.cast : movie.cast.slice(0, 6);
   const displayedCrew = showAllCrew ? movie.crew : movie.crew.slice(0, 6);
@@ -82,18 +82,19 @@ function MovieDetailsPage() {
       body: JSON.stringify(hlsOpts),
     });
 
-    if (res.ok) {
-      alert("an error occurred while creating the hls stream");
+    if (!res.ok) {
+      const data = await res.json();
+      alert(JSON.stringify(data));
       return;
     }
 
-    // navigate({
-    //   to: "/movies/$movieID/play",
-    //   params: { movieID: movie.id.toString() },
-    //   search: {
-    //     title: movie.title,
-    //   },
-    // });
+    navigate({
+      to: "/movies/$movieID/play",
+      params: { movieID: movie.id.toString() },
+      search: {
+        title: movie.title,
+      },
+    });
   };
 
   return (
