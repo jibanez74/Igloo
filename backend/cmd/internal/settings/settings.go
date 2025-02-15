@@ -27,6 +27,7 @@ type Settings interface {
 	GetPostgresSslMode() string
 	GetPostgresMaxConns() int
 	GetRedisAddress() string
+	GetTranscodeDir() string
 }
 
 type settings struct {
@@ -38,6 +39,7 @@ type settings struct {
 	FfmpegPath       string `json:"ffmpeg_path"`
 	FfprobePath      string `json:"ffprobe_path"`
 	StaticDir        string `json:"static_dir"`
+	TranscodeDir     string `json:"transcode_dir"`
 	MoviesImgDir     string `json:"movies_img_dir"`
 	StudiosImgDir    string `json:"studios_img_dir"`
 	ArtistsImgDir    string `json:"artists_img_dir"`
@@ -71,6 +73,8 @@ func (s *settings) GetPostgresDB() string      { return s.PostgresDB }
 func (s *settings) GetPostgresSslMode() string { return s.PostgresSslMode }
 func (s *settings) GetPostgresMaxConns() int   { return s.PostgresMaxConns }
 func (s *settings) GetRedisAddress() string    { return fmt.Sprintf("%s:%d", s.RedisHost, s.RedisPort) }
+func (s *settings) GetTranscodeDir() string    { return s.TranscodeDir }
+
 
 func New() (Settings, error) {
 	configDir := getConfigDir()

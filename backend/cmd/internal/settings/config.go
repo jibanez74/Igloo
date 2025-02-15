@@ -92,6 +92,7 @@ func parseEnvConfig() (*settings, error) {
 		TmdbKey:          os.Getenv("TMDB_API_KEY"),
 		FfmpegPath:       os.Getenv("FFMPEG_PATH"),
 		FfprobePath:      os.Getenv("FFPROBE_PATH"),
+		TranscodeDir:     filepath.Join(homeDir, ".local", "share", "igloo", "transcode"),
 		StaticDir:        filepath.Join(homeDir, ".local", "share", "igloo", "static"),
 		MoviesImgDir:     filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "movies"),
 		StudiosImgDir:    filepath.Join(homeDir, ".local", "share", "igloo", "static", "images", "studios"),
