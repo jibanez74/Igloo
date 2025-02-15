@@ -38,13 +38,13 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 
 	err = app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
+		msg := fmt.Sprintf("an error occurred while creating the hls stream: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "unable to generate hls stream",
+			"error": msg,
 		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "hls stream created successfully",
 	})
-
 }

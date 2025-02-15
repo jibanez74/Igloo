@@ -24,7 +24,7 @@ type HlsOpts struct {
 }
 
 const (
-	DefaultHlsTime        = "4"
+	DefaultHlsTime        = "5"
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
 	DefaultHlsFlags       = "independent_segments"

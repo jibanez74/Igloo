@@ -65,13 +65,33 @@ function MovieDetailsPage() {
     }
   };
 
-  const handlePlayMovie = () => {
+  const handlePlayMovie = async () => {
+    const hlsOpts = {
+      audio_codec: "copy",
+      audio_stream_index: 1,
+      video_codec: "copy",
+      video_stream_index: 0,
+    };
+
+    const res = await fetch(`/api/v1/movies/create-hls/${movie.id}`, {
+      method: "post",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(hlsOpts),
+    });
+
+    if (res.ok) {
+      alert("an error occurred while creating the hls stream");
+      return;
+    }
+
     navigate({
       to: "/movies/$movieID/play",
       params: { movieID: movie.id.toString() },
       search: {
         title: movie.title,
-        thumb: movie.thumb,
       },
     });
   };

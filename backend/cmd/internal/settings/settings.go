@@ -75,7 +75,6 @@ func (s *settings) GetPostgresMaxConns() int   { return s.PostgresMaxConns }
 func (s *settings) GetRedisAddress() string    { return fmt.Sprintf("%s:%d", s.RedisHost, s.RedisPort) }
 func (s *settings) GetTranscodeDir() string    { return s.TranscodeDir }
 
-
 func New() (Settings, error) {
 	configDir := getConfigDir()
 	configPath := filepath.Join(configDir, "config.json")

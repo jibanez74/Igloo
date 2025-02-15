@@ -1,4 +1,4 @@
-export default function canPlayNativeHls(): boolean {
+export default function canPlayNativeHls() {
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 

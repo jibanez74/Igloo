@@ -66,6 +66,11 @@ func main() {
 
 	api := f.Group("/api/v1")
 
+	api.Static("/hls", app.settings.GetTranscodeDir(), fiber.Static{
+		Compress: true,
+		Browse:   false,
+	})
+
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 	auth.Get("/me", app.getAuthUser)
@@ -76,6 +81,7 @@ func main() {
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
+	movies.Post("/create-hls/:id", app.createMovieHlsStream)
 	movies.Get("/stream/:id", app.streamMovie)
 	movies.Get("/:id", app.getMovieDetails)
 

@@ -1,17 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import canPlayNativeHls from "@/utils/canPlayNativeHls";
 import HlsPlayer from "@/components/HlsPlayer";
-import Hls from "hls.js";
 
 type PlayParams = {
   title: string;
-  thumb: string;
 };
 
 export const Route = createFileRoute("/movies/$movieID/play")({
   validateSearch: (search: Record<string, unknown>): PlayParams => ({
-    title: String(search.title),
-    thumb: String(search.thumb),
+    title: String(search.title ?? "unknown"),
   }),
   loaderDeps: ({ search }) => search,
   component: PlayMoviePage,
@@ -19,13 +16,7 @@ export const Route = createFileRoute("/movies/$movieID/play")({
 
 function PlayMoviePage() {
   const { movieID } = Route.useParams();
-  const { title } = Route.useSearch<PlayParams>();
-  const [canUseHls, setCanUseHls] = useState(false);
-
-  useEffect(() => {
-    // Check if HLS.js is supported
-    setCanUseHls(Hls.isSupported());
-  }, []);
+  const { title } = Route.useLoaderDeps();
 
   return (
     <div className='min-h-screen bg-slate-900 flex flex-col'>
@@ -33,8 +24,8 @@ function PlayMoviePage() {
       <div className='flex-1 flex items-center justify-center p-4 md:p-8'>
         <div className='w-full max-w-7xl aspect-video'>
           <HlsPlayer
-            url={`/api/v1/movies/${movieID}/hls/master.m3u8`}
-            useHlsJs={canUseHls}
+            url={`/api/v1/hls/movies/${movieID}/playlist.m3u8`}
+            useHlsJs={canPlayNativeHls()}
             title={title}
             onError={error => {
               console.error("Playback Error:", error);
