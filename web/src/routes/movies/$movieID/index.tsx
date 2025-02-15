@@ -39,7 +39,7 @@ export const Route = createFileRoute("/movies/$movieID/")({
 function MovieDetailsPage() {
   const { movie } = Route.useLoaderData() as { movie: Movie };
 
-  const navigate = Route.useNavigate();
+  // const navigate = Route.useNavigate();
 
   const [showAllCast, setShowAllCast] = useState(false);
   const [showAllCrew, setShowAllCrew] = useState(false);
@@ -87,13 +87,13 @@ function MovieDetailsPage() {
       return;
     }
 
-    navigate({
-      to: "/movies/$movieID/play",
-      params: { movieID: movie.id.toString() },
-      search: {
-        title: movie.title,
-      },
-    });
+    // navigate({
+    //   to: "/movies/$movieID/play",
+    //   params: { movieID: movie.id.toString() },
+    //   search: {
+    //     title: movie.title,
+    //   },
+    // });
   };
 
   return (

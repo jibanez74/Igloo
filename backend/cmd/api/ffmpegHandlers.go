@@ -34,7 +34,7 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 	}
 
 	request.InputPath = movie.FilePath
-	request.OutputDir = filepath.Join(app.settings.GetTranscodeDir(), fmt.Sprintf("%d", movie.ID))
+	request.OutputDir = filepath.Join(app.settings.GetTranscodeDir(), "movies", fmt.Sprintf("%d", movie.ID))
 
 	err = app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
