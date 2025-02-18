@@ -1,0 +1,363 @@
+romany@swifty:~/projects/Igloo/backend$ 2025/02/17 22:57:18 your output: ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+  built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+  configuration: --prefix=/usr --extra-version=3ubuntu5 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --disable-omx --enable-gnutls --enable-libaom --enable-libass --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libglslang --enable-libgme --enable-libgsm --enable-libharfbuzz --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-openal --enable-opencl --enable-opengl --disable-sndio --enable-libvpl --disable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-ladspa --enable-libbluray --enable-libjack --enable-libpulse --enable-librabbitmq --enable-librist --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libx264 --enable-libzmq --enable-libzvbi --enable-lv2 --enable-sdl2 --enable-libplacebo --enable-librav1e --enable-pocketsphinx --enable-librsvg --enable-libjxl --enable-shared
+  libavutil      58. 29.100 / 58. 29.100
+  libavcodec     60. 31.102 / 60. 31.102
+  libavformat    60. 16.100 / 60. 16.100
+  libavdevice    60.  3.100 / 60.  3.100
+  libavfilter     9. 12.100 /  9. 12.100
+  libswscale      7.  5.100 /  7.  5.100
+  libswresample   4. 12.100 /  4. 12.100
+  libpostproc    57.  3.100 / 57.  3.100
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x604116a10f40] stream 0, timescale not set
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/plexmedia/zfs/movies/romance/Americas.Sweethearts.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 0
+    compatible_brands: mp42isom
+    creation_time   : 2019-10-10T13:59:31.000000Z
+    title           : America's Sweethearts
+    artist          : Joe Roth
+    album           : Romantic Movies of the 2000's
+    genre           : Romance
+    date            : 2001-07-20T07:00:00Z
+    track           : 3/10
+    disc            : 1/1
+    compilation     : 0
+    sort_name       : America's Sweethearts
+    sort_artist     : Joe Roth
+    sort_album      : Romantic Movies of the 2000's
+    description     : Gwen (Catherine Zeta-Jones) and Eddie (John Cusack) are AMERICA'S SWEETHEARTS...the country's 
+    synopsis        : Gwen (Catherine Zeta-Jones) and Eddie (John Cusack) are AMERICA'S SWEETHEARTS...the country's favorite couple, on-screen and off. But when their very public romance turns into a very private breakup,only veteran press agent Lee (Billy Crystal) and Gwen's 
+    purchase_date   : 2018-04-17 22:53:43
+    hd_video        : 2
+    media_type      : 9
+  Duration: 01:43:16.42, start: 0.000000, bitrate: 5377 kb/s
+  Chapters:
+    Chapter #0:0: start 0.000000, end 428.000000
+      Metadata:
+        title           : 1
+    Chapter #0:1: start 428.000000, end 743.000000
+      Metadata:
+        title           : 2
+    Chapter #0:2: start 743.000000, end 1141.000000
+      Metadata:
+        title           : 3
+    Chapter #0:3: start 1141.000000, end 1518.000000
+      Metadata:
+        title           : 4
+    Chapter #0:4: start 1518.000000, end 1783.000000
+      Metadata:
+        title           : 5
+    Chapter #0:5: start 1783.000000, end 2172.000000
+      Metadata:
+        title           : 6
+    Chapter #0:6: start 2172.000000, end 2428.000000
+      Metadata:
+        title           : 7
+    Chapter #0:7: start 2428.000000, end 2895.000000
+      Metadata:
+        title           : 8
+    Chapter #0:8: start 2895.000000, end 3207.000000
+      Metadata:
+        title           : 9
+    Chapter #0:9: start 3207.000000, end 3698.000000
+      Metadata:
+        title           : 10
+    Chapter #0:10: start 3698.000000, end 4028.000000
+      Metadata:
+        title           : 11
+    Chapter #0:11: start 4028.000000, end 4267.000000
+      Metadata:
+        title           : 12
+    Chapter #0:12: start 4267.000000, end 4684.000000
+      Metadata:
+        title           : 13
+    Chapter #0:13: start 4684.000000, end 5223.000000
+      Metadata:
+        title           : 14
+    Chapter #0:14: start 5223.000000, end 5735.000000
+      Metadata:
+        title           : 15
+    Chapter #0:15: start 5735.000000, end 6196.363000
+      Metadata:
+        title           : 16
+  Stream #0:0[0x0]: Video: mjpeg (Baseline), yuvj420p(pc, bt470bg/unknown/unknown), 667x1000 [SAR 72:72 DAR 667:1000], 90k tbr, 90k tbn (attached pic)
+  Stream #0:1[0x1](eng): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 126 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T13:59:31.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:2[0x2](eng): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1916x796 [SAR 1:1 DAR 479:199], 4604 kb/s, 23.98 fps, 23.98 tbr, 2997 tbn (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:02:32.000000Z
+      vendor_id       : [0][0][0][0]
+      encoder         : JVT/AVC Coding
+  Stream #0:3[0x3](eng): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:04:41.000000Z
+  Stream #0:4[0x4](eng): Subtitle: eia_608 (c608 / 0x38303663), 1916x796, 0 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:04:41.000000Z
+  Stream #0:5[0x5](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119
+    Metadata:
+      creation_time   : 2019-10-10T14:04:42.000000Z
+  Stream #0:6[0x6](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:42.000000Z
+  Stream #0:7[0x7](ara): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:43.000000Z
+  Stream #0:8[0x8](zho): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:44.000000Z
+  Stream #0:9[0x9](ces): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:45.000000Z
+  Stream #0:10[0xa](ell): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:46.000000Z
+  Stream #0:11[0xb](eng): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:47.000000Z
+  Stream #0:12[0xc](spa): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:48.000000Z
+  Stream #0:13[0xd](spa): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:49.000000Z
+  Stream #0:14[0xe](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:50.000000Z
+  Stream #0:15[0xf](hin): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:50.000000Z
+  Stream #0:16[0x10](hun): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:51.000000Z
+  Stream #0:17[0x11](kor): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:52.000000Z
+  Stream #0:18[0x12](nld): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:53.000000Z
+  Stream #0:19[0x13](pol): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:54.000000Z
+  Stream #0:20[0x14](por): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:54.000000Z
+  Stream #0:21[0x15](swe): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:55.000000Z
+  Stream #0:22[0x16](tha): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:56.000000Z
+  Stream #0:23[0x17](eng): Subtitle: mov_text (text / 0x74786574), 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:57.000000Z
+  Stream #0:24[0x18](eng): Audio: ac3 (ac-3 / 0x332D6361), 48000 Hz, 5.1(side), fltp, 384 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:57.000000Z
+      vendor_id       : [0][0][0][0]
+    Side data:
+      audio service type: main
+  Stream #0:25[0x19](fra): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 125 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:06:02.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:26[0x1a](spa): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 125 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:08:53.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:27[0x1b](und): Data: bin_data (text / 0x74786574)
+    Metadata:
+      creation_time   : 2019-10-10T14:11:49.000000Z
+[hls @ 0x604116d76e40] Opening '/home/romany/.local/share/igloo/transcode/movies/335//home/romany/.local/share/igloo/transcode/movies/335/init.mp4' for writing
+[hls @ 0x604116d76e40] Failed to open segment '/home/romany/.local/share/igloo/transcode/movies/335/init.mp4'
+[out#0/hls @ 0x604116c57b80] Could not write header (incorrect codec parameters ?): No such file or directory
+Error opening output file /home/romany/.local/share/igloo/transcode/movies/335/playlist.m3u8.
+Error opening output files: No such file or directory
+
+22:57:18 | 500 |  107.714248ms | 127.0.0.1 | POST | /api/v1/movies/create-hls/335 | -
+2025/02/17 22:57:25 your output: ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+  built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+  configuration: --prefix=/usr --extra-version=3ubuntu5 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --disable-omx --enable-gnutls --enable-libaom --enable-libass --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libglslang --enable-libgme --enable-libgsm --enable-libharfbuzz --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-openal --enable-opencl --enable-opengl --disable-sndio --enable-libvpl --disable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-ladspa --enable-libbluray --enable-libjack --enable-libpulse --enable-librabbitmq --enable-librist --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libx264 --enable-libzmq --enable-libzvbi --enable-lv2 --enable-sdl2 --enable-libplacebo --enable-librav1e --enable-pocketsphinx --enable-librsvg --enable-libjxl --enable-shared
+  libavutil      58. 29.100 / 58. 29.100
+  libavcodec     60. 31.102 / 60. 31.102
+  libavformat    60. 16.100 / 60. 16.100
+  libavdevice    60.  3.100 / 60.  3.100
+  libavfilter     9. 12.100 /  9. 12.100
+  libswscale      7.  5.100 /  7.  5.100
+  libswresample   4. 12.100 /  4. 12.100
+  libpostproc    57.  3.100 / 57.  3.100
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5a20f02dcf40] stream 0, timescale not set
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/plexmedia/zfs/movies/romance/Americas.Sweethearts.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 0
+    compatible_brands: mp42isom
+    creation_time   : 2019-10-10T13:59:31.000000Z
+    title           : America's Sweethearts
+    artist          : Joe Roth
+    album           : Romantic Movies of the 2000's
+    genre           : Romance
+    date            : 2001-07-20T07:00:00Z
+    track           : 3/10
+    disc            : 1/1
+    compilation     : 0
+    sort_name       : America's Sweethearts
+    sort_artist     : Joe Roth
+    sort_album      : Romantic Movies of the 2000's
+    description     : Gwen (Catherine Zeta-Jones) and Eddie (John Cusack) are AMERICA'S SWEETHEARTS...the country's 
+    synopsis        : Gwen (Catherine Zeta-Jones) and Eddie (John Cusack) are AMERICA'S SWEETHEARTS...the country's favorite couple, on-screen and off. But when their very public romance turns into a very private breakup,only veteran press agent Lee (Billy Crystal) and Gwen's 
+    purchase_date   : 2018-04-17 22:53:43
+    hd_video        : 2
+    media_type      : 9
+  Duration: 01:43:16.42, start: 0.000000, bitrate: 5377 kb/s
+  Chapters:
+    Chapter #0:0: start 0.000000, end 428.000000
+      Metadata:
+        title           : 1
+    Chapter #0:1: start 428.000000, end 743.000000
+      Metadata:
+        title           : 2
+    Chapter #0:2: start 743.000000, end 1141.000000
+      Metadata:
+        title           : 3
+    Chapter #0:3: start 1141.000000, end 1518.000000
+      Metadata:
+        title           : 4
+    Chapter #0:4: start 1518.000000, end 1783.000000
+      Metadata:
+        title           : 5
+    Chapter #0:5: start 1783.000000, end 2172.000000
+      Metadata:
+        title           : 6
+    Chapter #0:6: start 2172.000000, end 2428.000000
+      Metadata:
+        title           : 7
+    Chapter #0:7: start 2428.000000, end 2895.000000
+      Metadata:
+        title           : 8
+    Chapter #0:8: start 2895.000000, end 3207.000000
+      Metadata:
+        title           : 9
+    Chapter #0:9: start 3207.000000, end 3698.000000
+      Metadata:
+        title           : 10
+    Chapter #0:10: start 3698.000000, end 4028.000000
+      Metadata:
+        title           : 11
+    Chapter #0:11: start 4028.000000, end 4267.000000
+      Metadata:
+        title           : 12
+    Chapter #0:12: start 4267.000000, end 4684.000000
+      Metadata:
+        title           : 13
+    Chapter #0:13: start 4684.000000, end 5223.000000
+      Metadata:
+        title           : 14
+    Chapter #0:14: start 5223.000000, end 5735.000000
+      Metadata:
+        title           : 15
+    Chapter #0:15: start 5735.000000, end 6196.363000
+      Metadata:
+        title           : 16
+  Stream #0:0[0x0]: Video: mjpeg (Baseline), yuvj420p(pc, bt470bg/unknown/unknown), 667x1000 [SAR 72:72 DAR 667:1000], 90k tbr, 90k tbn (attached pic)
+  Stream #0:1[0x1](eng): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 126 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T13:59:31.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:2[0x2](eng): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1916x796 [SAR 1:1 DAR 479:199], 4604 kb/s, 23.98 fps, 23.98 tbr, 2997 tbn (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:02:32.000000Z
+      vendor_id       : [0][0][0][0]
+      encoder         : JVT/AVC Coding
+  Stream #0:3[0x3](eng): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:04:41.000000Z
+  Stream #0:4[0x4](eng): Subtitle: eia_608 (c608 / 0x38303663), 1916x796, 0 kb/s (default)
+    Metadata:
+      creation_time   : 2019-10-10T14:04:41.000000Z
+  Stream #0:5[0x5](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119
+    Metadata:
+      creation_time   : 2019-10-10T14:04:42.000000Z
+  Stream #0:6[0x6](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:42.000000Z
+  Stream #0:7[0x7](ara): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:43.000000Z
+  Stream #0:8[0x8](zho): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:44.000000Z
+  Stream #0:9[0x9](ces): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:45.000000Z
+  Stream #0:10[0xa](ell): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:46.000000Z
+  Stream #0:11[0xb](eng): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:47.000000Z
+  Stream #0:12[0xc](spa): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:48.000000Z
+  Stream #0:13[0xd](spa): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:49.000000Z
+  Stream #0:14[0xe](fra): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:50.000000Z
+  Stream #0:15[0xf](hin): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:50.000000Z
+  Stream #0:16[0x10](hun): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:51.000000Z
+  Stream #0:17[0x11](kor): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:52.000000Z
+  Stream #0:18[0x12](nld): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:53.000000Z
+  Stream #0:19[0x13](pol): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:54.000000Z
+  Stream #0:20[0x14](por): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:54.000000Z
+  Stream #0:21[0x15](swe): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:55.000000Z
+  Stream #0:22[0x16](tha): Subtitle: mov_text (tx3g / 0x67337874), 1916x119, 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:56.000000Z
+  Stream #0:23[0x17](eng): Subtitle: mov_text (text / 0x74786574), 0 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:57.000000Z
+  Stream #0:24[0x18](eng): Audio: ac3 (ac-3 / 0x332D6361), 48000 Hz, 5.1(side), fltp, 384 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:04:57.000000Z
+      vendor_id       : [0][0][0][0]
+    Side data:
+      audio service type: main
+  Stream #0:25[0x19](fra): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 125 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:06:02.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:26[0x1a](spa): Audio: aac (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 125 kb/s
+    Metadata:
+      creation_time   : 2019-10-10T14:08:53.000000Z
+      vendor_id       : [0][0][0][0]
+  Stream #0:27[0x1b](und): Data: bin_data (text / 0x74786574)
+    Metadata:
+      creation_time   : 2019-10-10T14:11:49.000000Z
+[hls @ 0x5a20f0642e40] Opening '/home/romany/.local/share/igloo/transcode/movies/335//home/romany/.local/share/igloo/transcode/movies/335/init.mp4' for writing
+[hls @ 0x5a20f0642e40] Failed to open segment '/home/romany/.local/share/igloo/transcode/movies/335/init.mp4'
+[out#0/hls @ 0x5a20f0523b80] Could not write header (incorrect codec parameters ?): No such file or directory
+Error opening output file /home/romany/.local/share/igloo/transcode/movies/335/playlist.m3u8.
+Error opening output files: No such file or directory
+
+22:57:25 | 500 |  103.828599ms | 127.0.0.1 | POST | /api/v1/movies/create-hls/335 | -
+

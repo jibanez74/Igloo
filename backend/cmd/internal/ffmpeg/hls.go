@@ -72,6 +72,7 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
+		"-y",
 		"-i", opts.InputPath,
 	}
 
@@ -117,7 +118,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_list_size", DefaultHlsListSize,
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_flags", DefaultHlsFlags,
-		"-hls_fmp4_init_filename", filepath.Join(opts.OutputDir, DefaultInitFileName),
+		"-hls_fmp4_init_filename", "init.mp4",
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
