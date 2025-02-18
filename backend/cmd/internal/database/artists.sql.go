@@ -65,3 +65,30 @@ func (q *Queries) GetArtistByTmdbID(ctx context.Context, tmdbID int32) (GetArtis
 	err := row.Scan(&i.ID, &i.TmdbID)
 	return i, err
 }
+
+const updateArtistThumb = `-- name: UpdateArtistThumb :one
+UPDATE artists
+SET thumb = $2
+WHERE id = $1
+RETURNING id, created_at, updated_at, name, original_name, thumb, tmdb_id
+`
+
+type UpdateArtistThumbParams struct {
+	ID    int32  `json:"id"`
+	Thumb string `json:"thumb"`
+}
+
+func (q *Queries) UpdateArtistThumb(ctx context.Context, arg UpdateArtistThumbParams) (Artist, error) {
+	row := q.db.QueryRow(ctx, updateArtistThumb, arg.ID, arg.Thumb)
+	var i Artist
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.OriginalName,
+		&i.Thumb,
+		&i.TmdbID,
+	)
+	return i, err
+}

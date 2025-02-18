@@ -1,420 +1,420 @@
 package main
 
 import (
-	"fmt"
-	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
-	"mime"
-	"os"
-	"path/filepath"
-	"strings"
-	"unicode/utf8"
+  "fmt"
+  "igloo/cmd/internal/database"
+  "igloo/cmd/internal/helpers"
+  "mime"
+  "os"
+  "path/filepath"
+  "strings"
+  "unicode/utf8"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgtype"
+  "github.com/gofiber/fiber/v2"
+  "github.com/jackc/pgx/v5/pgtype"
 )
 
 func (app *application) createTmdbMovie(c *fiber.Ctx) error {
-	var request struct {
-		FilePath string `json:"filePath"`
-		TmdbID   string `json:"tmdbID"`
-	}
+  var request struct {
+    FilePath string `json:"filePath"`
+    TmdbID   string `json:"tmdbID"`
+  }
 
-	err := c.BodyParser(&request)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to parse request body: %v", err),
-		})
-	}
+  err := c.BodyParser(&request)
+  if err != nil {
+    return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to parse request body: %v", err),
+    })
+  }
 
-	if request.FilePath == "" || request.TmdbID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "file path and tmdb id are required",
-		})
-	}
+  if request.FilePath == "" || request.TmdbID == "" {
+    return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+      "error": "file path and tmdb id are required",
+    })
+  }
 
-	var movie database.CreateMovieParams
+  var movie database.CreateMovieParams
 
-	fileInfo, err := os.Stat(request.FilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": fmt.Sprintf("unable to find the file at %s", request.FilePath),
-			})
-		}
+  fileInfo, err := os.Stat(request.FilePath)
+  if err != nil {
+    if os.IsNotExist(err) {
+      return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+        "error": fmt.Sprintf("unable to find the file at %s", request.FilePath),
+      })
+    }
 
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to stat the file at %s: %v", request.FilePath, err),
-		})
-	}
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to stat the file at %s: %v", request.FilePath, err),
+    })
+  }
 
-	movie.FilePath = request.FilePath
-	movie.Size = int64(fileInfo.Size())
-	movie.FileName = fileInfo.Name()
-	movie.Container = filepath.Ext(movie.FilePath)
+  movie.FilePath = request.FilePath
+  movie.Size = int64(fileInfo.Size())
+  movie.FileName = fileInfo.Name()
+  movie.Container = filepath.Ext(movie.FilePath)
 
-	contentType := mime.TypeByExtension(movie.Container)
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	movie.ContentType = contentType
+  contentType := mime.TypeByExtension(movie.Container)
+  if contentType == "" {
+    contentType = "application/octet-stream"
+  }
+  movie.ContentType = contentType
 
-	movieInfo, err := app.tmdb.GetTmdbMovieByID(&request.TmdbID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to get movie info from tmdb: %v", err),
-		})
-	}
+  movieInfo, err := app.tmdb.GetTmdbMovieByID(&request.TmdbID)
+  if err != nil {
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to get movie info from tmdb: %v", err),
+    })
+  }
 
-	movie.Title = movieInfo.Title
-	movie.TagLine = movieInfo.TagLine
-	movie.Adult = movieInfo.Adult
-	movie.Summary = movieInfo.Summary
-	movie.Budget = movieInfo.Budget
-	movie.Revenue = movieInfo.Revenue
-	movie.RunTime = movieInfo.RunTime
-	movie.AudienceRating = movieInfo.AudienceRating
-	movie.TmdbID = request.TmdbID
-	movie.ImdbID = movieInfo.ImdbID
+  movie.Title = movieInfo.Title
+  movie.TagLine = movieInfo.TagLine
+  movie.Adult = movieInfo.Adult
+  movie.Summary = movieInfo.Summary
+  movie.Budget = movieInfo.Budget
+  movie.Revenue = movieInfo.Revenue
+  movie.RunTime = movieInfo.RunTime
+  movie.AudienceRating = movieInfo.AudienceRating
+  movie.TmdbID = request.TmdbID
+  movie.ImdbID = movieInfo.ImdbID
 
-	if len(movieInfo.SpokenLanguages) > 0 {
-		var languages []string
+  if len(movieInfo.SpokenLanguages) > 0 {
+    var languages []string
 
-		for _, l := range movieInfo.SpokenLanguages {
-			if utf8.ValidString(l.Name) {
-				languages = append(languages, l.Name)
-			} else {
-				validLanguageName := helpers.SanitizeString(l.Name)
-				languages = append(languages, validLanguageName)
-			}
-		}
+    for _, l := range movieInfo.SpokenLanguages {
+      if utf8.ValidString(l.Name) {
+        languages = append(languages, l.Name)
+      } else {
+        validLanguageName := helpers.SanitizeString(l.Name)
+        languages = append(languages, validLanguageName)
+      }
+    }
 
-		movie.SpokenLanguages = strings.Join(languages, ", ")
-	} else {
-		movie.SpokenLanguages = "unknown"
-	}
+    movie.SpokenLanguages = strings.Join(languages, ", ")
+  } else {
+    movie.SpokenLanguages = "unknown"
+  }
 
-	releaseDate, err := helpers.FormatDate(movieInfo.ReleaseDate)
-	if err == nil {
-		movie.ReleaseDate = pgtype.Date{
-			Time:  releaseDate,
-			Valid: true,
-		}
+  releaseDate, err := helpers.FormatDate(movieInfo.ReleaseDate)
+  if err == nil {
+    movie.ReleaseDate = pgtype.Date{
+      Time:  releaseDate,
+      Valid: true,
+    }
 
-		movie.Year = int32(releaseDate.Year())
-	}
+    movie.Year = int32(releaseDate.Year())
+  }
 
-	download := app.settings.GetDownloadImages()
+  download := app.settings.GetDownloadImages()
 
-	if movieInfo.Thumb != "" {
-		thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
+  if movieInfo.Thumb != "" {
+    thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
 
-		if download {
-			fullPath, err := helpers.SaveImage(
-				thumbUrl,
-				filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
-				"thumb.jpg",
-			)
+    if download {
+      fullPath, err := helpers.SaveImage(
+        thumbUrl,
+        filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
+        "thumb.jpg",
+      )
 
-			if err == nil {
-				movie.Thumb = *fullPath
-			}
-		} else {
-			movie.Thumb = thumbUrl
-		}
-	}
+      if err == nil {
+        movie.Thumb = *fullPath
+      }
+    } else {
+      movie.Thumb = thumbUrl
+    }
+  }
 
-	if movieInfo.Art != "" {
-		artURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
+  if movieInfo.Art != "" {
+    artURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
 
-		if download {
-			fullPath, err := helpers.SaveImage(
-				artURL,
-				filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
-				"art.jpg",
-			)
+    if download {
+      fullPath, err := helpers.SaveImage(
+        artURL,
+        filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
+        "art.jpg",
+      )
 
-			if err == nil {
-				movie.Art = *fullPath
-			}
-		} else {
-			movie.Art = artURL
-		}
-	}
+      if err == nil {
+        movie.Art = *fullPath
+      }
+    } else {
+      movie.Art = artURL
+    }
+  }
 
-	tx, err := app.db.Begin(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("failed to start transaction: %v", err),
-		})
-	}
-	defer tx.Rollback(c.Context())
+  tx, err := app.db.Begin(c.Context())
+  if err != nil {
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("failed to start transaction: %v", err),
+    })
+  }
+  defer tx.Rollback(c.Context())
 
-	qtx := app.queries.WithTx(tx)
+  qtx := app.queries.WithTx(tx)
 
-	newMovie, err := qtx.CreateMovie(c.Context(), movie)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to create the movie %s: %v", movie.Title, err),
-		})
-	}
+  newMovie, err := qtx.CreateMovie(c.Context(), movie)
+  if err != nil {
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to create the movie %s: %v", movie.Title, err),
+    })
+  }
 
-	if len(movieInfo.Genres) > 0 {
-		for _, g := range movieInfo.Genres {
-			var genreID int32
+  if len(movieInfo.Genres) > 0 {
+    for _, g := range movieInfo.Genres {
+      var genreID int32
 
-			existingGenre, err := qtx.GetGenreByTmdbID(c.Context(), g.ID)
-			if err != nil {
-				newGenre, err := qtx.CreateGenre(c.Context(), database.CreateGenreParams{
-					Tag:       g.Tag,
-					GenreType: "movie",
-					TmdbID:    g.ID,
-				})
+      existingGenre, err := qtx.GetGenreByTmdbID(c.Context(), g.ID)
+      if err != nil {
+        newGenre, err := qtx.CreateGenre(c.Context(), database.CreateGenreParams{
+          Tag:       g.Tag,
+          GenreType: "movie",
+          TmdbID:    g.ID,
+        })
 
-				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": fmt.Sprintf("unable to create genre %s for the movie %s: %v", g.Tag, movie.Title, err),
-					})
-				}
+        if err != nil {
+          return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": fmt.Sprintf("unable to create genre %s for the movie %s: %v", g.Tag, movie.Title, err),
+          })
+        }
 
-				genreID = newGenre.ID
-			} else {
-				genreID = existingGenre.ID
-			}
+        genreID = newGenre.ID
+      } else {
+        genreID = existingGenre.ID
+      }
 
-			err = qtx.AddMovieGenre(c.Context(), database.AddMovieGenreParams{
-				MovieID: newMovie.ID,
-				GenreID: genreID,
-			})
+      err = qtx.AddMovieGenre(c.Context(), database.AddMovieGenreParams{
+        MovieID: newMovie.ID,
+        GenreID: genreID,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to link genre %s to the movie %s: %v", g.Tag, movie.Title, err),
-				})
-			}
-		}
-	}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to link genre %s to the movie %s: %v", g.Tag, movie.Title, err),
+        })
+      }
+    }
+  }
 
-	if len(movieInfo.Studios) > 0 {
-		for _, s := range movieInfo.Studios {
-			var studioID int32
+  if len(movieInfo.Studios) > 0 {
+    for _, s := range movieInfo.Studios {
+      var studioID int32
 
-			existingStudio, err := qtx.GetStudioByTmdbID(c.Context(), s.ID)
-			if err != nil {
-				logoUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
+      existingStudio, err := qtx.GetStudioByTmdbID(c.Context(), s.ID)
+      if err != nil {
+        logoUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
 
-				if download {
-					fullPath, err := helpers.SaveImage(
-						logoUrl,
-						app.settings.GetStudiosImgDir(),
-						fmt.Sprintf("%d.jpg", s.ID),
-					)
+        if download {
+          fullPath, err := helpers.SaveImage(
+            logoUrl,
+            app.settings.GetStudiosImgDir(),
+            fmt.Sprintf("%d.jpg", s.ID),
+          )
 
-					if err == nil {
-						s.Logo = *fullPath
-					}
-				} else {
-					s.Logo = logoUrl
-				}
+          if err == nil {
+            s.Logo = *fullPath
+          }
+        } else {
+          s.Logo = logoUrl
+        }
 
-				newStudio, err := qtx.CreateStudio(c.Context(), database.CreateStudioParams{
-					Name:    s.Name,
-					Country: s.Country,
-					Logo:    s.Logo,
-					TmdbID:  s.ID,
-				})
+        newStudio, err := qtx.CreateStudio(c.Context(), database.CreateStudioParams{
+          Name:    s.Name,
+          Country: s.Country,
+          Logo:    s.Logo,
+          TmdbID:  s.ID,
+        })
 
-				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": fmt.Sprintf("unable to create studio %s for the movie %s: %v", s.Name, movie.Title, err),
-					})
-				}
+        if err != nil {
+          return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": fmt.Sprintf("unable to create studio %s for the movie %s: %v", s.Name, movie.Title, err),
+          })
+        }
 
-				studioID = newStudio.ID
-			} else {
-				studioID = existingStudio.ID
-			}
+        studioID = newStudio.ID
+      } else {
+        studioID = existingStudio.ID
+      }
 
-			err = qtx.AddMovieStudio(c.Context(), database.AddMovieStudioParams{
-				MovieID:  newMovie.ID,
-				StudioID: studioID,
-			})
+      err = qtx.AddMovieStudio(c.Context(), database.AddMovieStudioParams{
+        MovieID:  newMovie.ID,
+        StudioID: studioID,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to link studio %s to the movie %s: %v", s.Name, movie.Title, err),
-				})
-			}
-		}
-	}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to link studio %s to the movie %s: %v", s.Name, movie.Title, err),
+        })
+      }
+    }
+  }
 
-	if len(movieInfo.Credits.Cast) > 0 {
-		for _, a := range movieInfo.Credits.Cast {
-			artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
-				ID:           a.ID,
-				Name:         a.Name,
-				OriginalName: a.OriginalName,
-				Thumb:        a.Thumb,
-			})
+  if len(movieInfo.Credits.Cast) > 0 {
+    for _, a := range movieInfo.Credits.Cast {
+      artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
+        ID:           a.ID,
+        Name:         a.Name,
+        OriginalName: a.OriginalName,
+        Thumb:        a.Thumb,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create artist %s for the movie %s: %v", a.Name, movie.Title, err),
-				})
-			}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create artist %s for the movie %s: %v", a.Name, movie.Title, err),
+        })
+      }
 
-			_, err = qtx.CreateCastMember(c.Context(), database.CreateCastMemberParams{
-				ArtistID: pgtype.Int4{
-					Int32: artistID,
-					Valid: true,
-				},
-				MovieID: pgtype.Int4{
-					Int32: newMovie.ID,
-					Valid: true,
-				},
-				Character: a.Character,
-				SortOrder: a.SortOrder,
-			})
+      _, err = qtx.CreateCastMember(c.Context(), database.CreateCastMemberParams{
+        ArtistID: pgtype.Int4{
+          Int32: artistID,
+          Valid: true,
+        },
+        MovieID: pgtype.Int4{
+          Int32: newMovie.ID,
+          Valid: true,
+        },
+        Character: a.Character,
+        SortOrder: a.SortOrder,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create cast member %s for the movie %s: %v", a.Name, movie.Title, err),
-				})
-			}
-		}
-	}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create cast member %s for the movie %s: %v", a.Name, movie.Title, err),
+        })
+      }
+    }
+  }
 
-	if len(movieInfo.Credits.Crew) > 0 {
-		for _, a := range movieInfo.Credits.Crew {
-			artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
-				ID:           a.ID,
-				Name:         a.Name,
-				OriginalName: a.OriginalName,
-				Thumb:        a.Thumb,
-			})
+  if len(movieInfo.Credits.Crew) > 0 {
+    for _, a := range movieInfo.Credits.Crew {
+      artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
+        ID:           a.ID,
+        Name:         a.Name,
+        OriginalName: a.OriginalName,
+        Thumb:        a.Thumb,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create artist %s for the movie %s: %v", a.Name, movie.Title, err),
-				})
-			}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create artist %s for the movie %s: %v", a.Name, movie.Title, err),
+        })
+      }
 
-			_, err = qtx.CreateCrewMember(c.Context(), database.CreateCrewMemberParams{
-				ArtistID: pgtype.Int4{
-					Int32: artistID,
-					Valid: true,
-				},
-				MovieID: pgtype.Int4{
-					Int32: newMovie.ID,
-					Valid: true,
-				},
-				Job:        a.Job,
-				Department: a.Department,
-			})
+      _, err = qtx.CreateCrewMember(c.Context(), database.CreateCrewMemberParams{
+        ArtistID: pgtype.Int4{
+          Int32: artistID,
+          Valid: true,
+        },
+        MovieID: pgtype.Int4{
+          Int32: newMovie.ID,
+          Valid: true,
+        },
+        Job:        a.Job,
+        Department: a.Department,
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create crew member %s for the movie %s: %v", a.Name, movie.Title, err),
-				})
-			}
-		}
-	}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create crew member %s for the movie %s: %v", a.Name, movie.Title, err),
+        })
+      }
+    }
+  }
 
-	if len(movieInfo.Videos.Results) > 0 {
-		for _, v := range movieInfo.Videos.Results {
-			if v.Site != "YouTube" {
-				continue
-			}
+  if len(movieInfo.Videos.Results) > 0 {
+    for _, v := range movieInfo.Videos.Results {
+      if v.Site != "YouTube" {
+        continue
+      }
 
-			videoUrl := fmt.Sprintf("https://www.youtube.com/watch?v=%s", v.Key)
+      videoUrl := fmt.Sprintf("https://www.youtube.com/watch?v=%s", v.Key)
 
-			_, err = qtx.CreateMovieExtra(c.Context(), database.CreateMovieExtraParams{
-				Title: v.Name,
-				Url:   videoUrl,
-				Kind:  v.Type,
-				MovieID: pgtype.Int4{
-					Int32: newMovie.ID,
-					Valid: true,
-				},
-			})
+      _, err = qtx.CreateMovieExtra(c.Context(), database.CreateMovieExtraParams{
+        Title: v.Name,
+        Url:   videoUrl,
+        Kind:  v.Type,
+        MovieID: pgtype.Int4{
+          Int32: newMovie.ID,
+          Valid: true,
+        },
+      })
 
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create movie extra %s for the movie %s: %v", v.Name, movie.Title, err),
-				})
-			}
-		}
-	}
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create movie extra %s for the movie %s: %v", v.Name, movie.Title, err),
+        })
+      }
+    }
+  }
 
-	probeResult, err := app.ffprobe.GetMovieMetadata(&movie.FilePath)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to get movie metadata for the movie %s: %v", movie.Title, err),
-		})
-	}
+  probeResult, err := app.ffprobe.GetMovieMetadata(&movie.FilePath)
+  if err != nil {
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to get movie metadata for the movie %s: %v", movie.Title, err),
+    })
+  }
 
-	for _, v := range probeResult.VideoList {
-		v.MovieID = pgtype.Int4{
-			Int32: newMovie.ID,
-			Valid: true,
-		}
+  for _, v := range probeResult.VideoList {
+    v.MovieID = pgtype.Int4{
+      Int32: newMovie.ID,
+      Valid: true,
+    }
 
-		_, err := qtx.CreateVideoStream(c.Context(), v)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": fmt.Sprintf("unable to create video stream for the movie %s: %v", movie.Title, err),
-			})
-		}
-	}
+    _, err := qtx.CreateVideoStream(c.Context(), v)
+    if err != nil {
+      return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+        "error": fmt.Sprintf("unable to create video stream for the movie %s: %v", movie.Title, err),
+      })
+    }
+  }
 
-	if len(probeResult.AudioList) > 0 {
-		for _, a := range probeResult.AudioList {
-			a.MovieID = pgtype.Int4{
-				Int32: newMovie.ID,
-				Valid: true,
-			}
+  if len(probeResult.AudioList) > 0 {
+    for _, a := range probeResult.AudioList {
+      a.MovieID = pgtype.Int4{
+        Int32: newMovie.ID,
+        Valid: true,
+      }
 
-			if len(a.Codec) > 20 {
-				msg := fmt.Sprintf("audio codec is too long: %s", a.Codec)
+      if len(a.Codec) > 20 {
+        msg := fmt.Sprintf("audio codec is too long: %s", a.Codec)
 
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": msg,
-				})
-			}
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+          "error": msg,
+        })
+      }
 
-			_, err := qtx.CreateAudioStream(c.Context(), a)
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create audio stream for the movie %s: %v", movie.Title, err),
-				})
-			}
-		}
-	}
+      _, err := qtx.CreateAudioStream(c.Context(), a)
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create audio stream for the movie %s: %v", movie.Title, err),
+        })
+      }
+    }
+  }
 
-	if len(probeResult.SubtitleList) > 0 {
-		for _, s := range probeResult.SubtitleList {
-			s.MovieID = pgtype.Int4{
-				Int32: newMovie.ID,
-				Valid: true,
-			}
+  if len(probeResult.SubtitleList) > 0 {
+    for _, s := range probeResult.SubtitleList {
+      s.MovieID = pgtype.Int4{
+        Int32: newMovie.ID,
+        Valid: true,
+      }
 
-			_, err = qtx.CreateSubtitle(c.Context(), s)
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": fmt.Sprintf("unable to create subtitle for the movie %s: %v", movie.Title, err),
-				})
-			}
-		}
-	}
+      _, err = qtx.CreateSubtitle(c.Context(), s)
+      if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+          "error": fmt.Sprintf("unable to create subtitle for the movie %s: %v", movie.Title, err),
+        })
+      }
+    }
+  }
 
-	err = tx.Commit(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to commit the transaction for the movie %s: %v", movie.Title, err),
-		})
-	}
+  err = tx.Commit(c.Context())
+  if err != nil {
+    return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+      "error": fmt.Sprintf("unable to commit the transaction for the movie %s: %v", movie.Title, err),
+    })
+  }
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": fmt.Sprintf("successfully added the movie %s", movie.Title),
-	})
+  return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+    "message": fmt.Sprintf("successfully added the movie %s", movie.Title),
+  })
 }

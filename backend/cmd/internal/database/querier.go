@@ -44,6 +44,7 @@ type Querier interface {
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
+	UpdateArtistThumb(ctx context.Context, arg UpdateArtistThumbParams) (Artist, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -18,3 +18,9 @@ INSERT INTO artists (
 )
 RETURNING *;
 
+-- name: UpdateArtistThumb :one
+UPDATE artists
+SET thumb = $2
+WHERE id = $1
+RETURNING *;
+
