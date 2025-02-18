@@ -56,12 +56,10 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	_, err := os.Stat(opts.InputPath)
 	if err != nil {
-		return fmt.Errorf("input path error: %w", err)
-	}
-
-	err = os.MkdirAll(opts.OutputDir, 0755)
-	if err != nil {
-		return fmt.Errorf("output directory error: %w", err)
+		err = os.MkdirAll(opts.OutputDir, 0755)
+		if err != nil {
+			return fmt.Errorf("output directory error: %w", err)
+		}
 	}
 
 	if opts.AudioCodec != "copy" && opts.AudioStreamIndex < 0 {
