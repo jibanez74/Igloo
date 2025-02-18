@@ -68,9 +68,7 @@ function MovieDetailsPage() {
   const handlePlayMovie = async () => {
     const hlsOpts = {
       audio_codec: "copy",
-      audio_stream_index: 1,
       video_codec: "copy",
-      video_stream_index: 0,
     };
 
     const res = await fetch(`/api/v1/movies/create-hls/${movie.id}`, {

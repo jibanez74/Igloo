@@ -74,42 +74,37 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
 		"-y",
 		"-i", opts.InputPath,
+		"-c:a", opts.AudioCodec,
+		"-c:v", opts.VideoCodec,
+		"-sn",
+		"-b:a", fmt.Sprintf("%dk", opts.AudioBitRate),
+		"-ac", fmt.Sprintf("%d", opts.AudioChannels),
+		"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
 	}
 
-	if opts.VideoCodec == "copy" && opts.AudioCodec == "copy" {
-		cmdArgs = append(cmdArgs, "-c", "copy")
-	} else {
-		cmdArgs = append(cmdArgs,
-			"-c:a", opts.AudioCodec,
-			"-b:a", fmt.Sprintf("%dk", opts.AudioBitRate),
-			"-ac", fmt.Sprintf("%d", opts.AudioChannels),
-			"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
-		)
+	var videoCodec string
 
-		var videoCodec string
+	switch f.AccelMethod {
+	case NVENC:
+		videoCodec = NvencVideoCodec
+	case QSV:
+		videoCodec = QsvVideoCodec
+	case VideoToolbox:
+		videoCodec = VtVideoCodec
+	default:
+		videoCodec = DefaultVideoCodec
+	}
 
-		switch f.AccelMethod {
-		case NVENC:
-			videoCodec = NvencVideoCodec
-		case QSV:
-			videoCodec = QsvVideoCodec
-		case VideoToolbox:
-			videoCodec = VtVideoCodec
-		default:
-			videoCodec = DefaultVideoCodec
-		}
+	cmdArgs = append(cmdArgs,
+		"-c:v", videoCodec,
+		"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
+		"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
+		"-preset", opts.Preset,
+		"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
+	)
 
-		cmdArgs = append(cmdArgs,
-			"-c:v", videoCodec,
-			"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
-			"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
-			"-preset", opts.Preset,
-			"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
-		)
-
-		if opts.VideoProfile != "" {
-			cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
-		}
+	if opts.VideoProfile != "" {
+		cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
 	}
 
 	cmdArgs = append(cmdArgs,
