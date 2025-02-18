@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -40,11 +41,22 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 		fmt.Sprintf("%d", movie.ID),
 	)
 
+	if err := os.MkdirAll(request.OutputDir, 0755); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to create output directory: %s", err),
+		})
+	}
+
+	if _, err := os.Stat(request.InputPath); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("input file not found or not accessible: %s", err),
+		})
+	}
+
 	err = app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
-		msg := fmt.Sprintf("an error occurred while creating the hls stream: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": msg,
+			"error": fmt.Sprintf("an error occurred while creating the hls stream: %s", err),
 		})
 	}
 

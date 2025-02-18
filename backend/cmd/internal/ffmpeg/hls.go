@@ -44,7 +44,8 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create hls stream: %w\n%s", err, string(output))
+		msg := fmt.Sprintf("your output: %s", string(output))
+		return fmt.Errorf("failed to create hls stream: %w\n%s", err, msg)
 	}
 
 	return nil
