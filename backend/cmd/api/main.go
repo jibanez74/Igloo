@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"time"
@@ -94,6 +95,35 @@ func main() {
 
 	api := f.Group("/api/v1")
 
+	streamGroup := api.Group("/stream")
+	streamGroup.Use(func(c *fiber.Ctx) error {
+		switch filepath.Ext(c.Path()) {
+		case ".m3u8":
+			c.Set("Content-Type", "application/vnd.apple.mpegurl")
+			c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Set("Pragma", "no-cache")
+			c.Set("Expires", "0")
+		case ".m4s":
+			c.Set("Content-Type", "video/iso.segment")
+			c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		case ".mp4":
+			c.Set("Content-Type", "video/mp4")
+			c.Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+		}
+
+		return c.Next()
+	})
+
+	streamGroup.Static("/", app.settings.GetTranscodeDir(), fiber.Static{
+		Compress:      true,
+		ByteRange:     true,
+		Browse:        false,
+		MaxAge:        0,
+		CacheDuration: 0,
+		Next:          nil,
+		Index:         "",
+	})
+
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 	auth.Get("/me", app.getAuthUser)
@@ -105,7 +135,6 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Post("/create-hls/:id", app.createMovieHlsStream)
-	movies.Get("/stream/:id", app.streamMovie)
 	movies.Get("/:id", app.getMovieDetails)
 
 	users := api.Group("/users")
