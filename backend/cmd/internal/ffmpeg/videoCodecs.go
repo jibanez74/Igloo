@@ -1,126 +1,76 @@
 package ffmpeg
 
-import "errors"
-
 const (
-	DefaultVideoCodec  = "libx264"           // Software encoding
-	NvencVideoCodec    = "h264_nvenc"        // NVIDIA GPU
-	QsvVideoCodec      = "h264_qsv"          // Intel QuickSync
-	VtVideoCodec       = "h264_videotoolbox" // Apple VideoToolbox
+	DefaultVideoCodec  = "libx264"
+	NvencVideoCodec    = "h264_nvenc"
+	QsvVideoCodec      = "h264_qsv"
+	VtVideoCodec       = "h264_videotoolbox"
 	DefaultVideoHeight = 480
 	DefaultVideoRate   = 2000
 	DefaultPreset      = "fast"
 )
 
-var ValidPresets = [9]string{
-	"ultrafast",
-	"superfast",
-	"veryfast",
-	"faster",
-	"fast",
-	"medium",
-	"slow",
-	"slower",
-	"veryslow",
-}
-
-var ValidVideoProfiles = [4]string{
-	"baseline",
-	"main",
-	"high",
-	"high10",
-}
-
-var ValidVideoBitrates = [8]int{
-	2000,
-	4000,
-	6000,
-	8000,
-	10000,
-	12000,
-	15000,
-	20000,
-}
-
-var ValidVideoHeights = [4]int{
-	480,
-	720,
-	1080,
-	2160,
-}
-
-func validateVideoSettings(opts *HlsOpts, accelMethod string) error {
-	err := validateVideoBitrate(opts)
-	if err != nil {
-		return err
+var (
+	ValidPresetsMap = map[string]bool{
+		"ultrafast": true,
+		"superfast": true,
+		"veryfast":  true,
+		"faster":    true,
+		"fast":      true,
+		"medium":    true,
+		"slow":      true,
+		"slower":    true,
+		"veryslow":  true,
 	}
 
-	err = validateVideoHeight(opts)
-	if err != nil {
-		return err
+	ValidVideoProfilesMap = map[string]bool{
+		"baseline": true,
+		"main":     true,
+		"high":     true,
+		"high10":   true,
 	}
 
-	err = validateVideoPreset(opts)
-	if err != nil {
-		return err
+	ValidVideoBitratesMap = map[int]bool{
+		2000:  true,
+		4000:  true,
+		6000:  true,
+		8000:  true,
+		10000: true,
+		12000: true,
+		15000: true,
+		20000: true,
 	}
 
-	err = validateVideoProfile(opts, accelMethod)
-	if err != nil {
-		return err
+	ValidVideoHeightsMap = map[int]bool{
+		480:  true,
+		720:  true,
+		1080: true,
+		2160: true,
+	}
+)
+
+func validateVideoSettings(opts *HlsOpts, accelMethod string) {
+	if opts.VideoCodec == "copy" {
+		return
 	}
 
-	return nil
-}
-
-func validateVideoProfile(opts *HlsOpts, accelMethod string) error {
-	if opts.VideoProfile != "" {
-		if accelMethod != NoAccel && accelMethod != NVENC {
-			return errors.New("video profiles are only supported with software encoding and NVENC")
-		}
-
-		if err := validateInArray(opts.VideoProfile, ValidVideoProfiles[:],
-			"invalid video profile: must be one of: baseline, main, high, or high10"); err != nil {
-
-			return err
-		}
-	}
-
-	return nil
-}
-
-func validateVideoBitrate(opts *HlsOpts) error {
-	if opts.VideoBitrate == 0 {
+	if !ValidVideoBitratesMap[opts.VideoBitrate] {
 		opts.VideoBitrate = DefaultVideoRate
-	} else if err := validateInArray(opts.VideoBitrate, ValidVideoBitrates[:],
-		"invalid video bitrate: must be one of: 2000, 4000, 6000, 8000, 10000, 12000, 15000, or 20000 kbps"); err != nil {
-
-		return err
 	}
 
-	return nil
-}
-
-func validateVideoHeight(opts *HlsOpts) error {
-	if opts.VideoHeight == 0 {
+	if !ValidVideoHeightsMap[opts.VideoHeight] {
 		opts.VideoHeight = DefaultVideoHeight
-	} else if err := validateInArray(opts.VideoHeight, ValidVideoHeights[:],
-		"invalid video height: must be one of: 480, 720, 1080, or 2160"); err != nil {
-
-		return err
 	}
 
-	return nil
-}
-
-func validateVideoPreset(opts *HlsOpts) error {
-	if opts.Preset == "" {
+	if !ValidPresetsMap[opts.Preset] {
 		opts.Preset = DefaultPreset
-	} else if err := validateInArray(opts.Preset, ValidPresets[:],
-		"invalid video preset"); err != nil {
-
-		return err
 	}
 
-	return nil
+	if opts.VideoProfile != "" && (accelMethod != NoAccel && accelMethod != NVENC) {
+		opts.VideoProfile = ""
+	}
+
+	if !ValidVideoProfilesMap[opts.VideoProfile] {
+		opts.VideoProfile = ""
+	}
 }

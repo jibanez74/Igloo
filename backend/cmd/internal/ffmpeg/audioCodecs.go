@@ -6,79 +6,42 @@ const (
 	DefaultAudioCodec    = "aac"
 )
 
-var ValidAudioCodecs = [3]string{
-	"copy",
-	"aac",
-	"mp3",
-}
-
-var ValidAudioChannels = [4]int{
-	1,
-	2,
-	6,
-	8,
-}
-
-var ValidAudioBitrates = [4]int{
-	128,
-	192,
-	256,
-	320,
-}
-
-func validateAudioSettings(opts *HlsOpts) error {
-	err := validateAudioCodec(opts)
-	if err != nil {
-		return err
+var (
+	ValidAudioCodecsMap = map[string]bool{
+		"copy": true,
+		"aac":  true,
+		"mp3":  true,
 	}
 
-	err = validateAudioBitrate(opts)
-	if err != nil {
-		return err
+	ValidAudioChannelsMap = map[int]bool{
+		1: true,
+		2: true,
+		6: true,
+		8: true,
 	}
 
-	err = validateAudioChannels(opts)
-	if err != nil {
-		return err
+	ValidAudioBitratesMap = map[int]bool{
+		128: true,
+		192: true,
+		256: true,
+		320: true,
 	}
+)
 
-	return nil
-}
-
-func validateAudioCodec(opts *HlsOpts) error {
-	if opts.AudioCodec == "" {
+func validateAudioSettings(opts *HlsOpts) {
+	if !ValidAudioCodecsMap[opts.AudioCodec] {
 		opts.AudioCodec = DefaultAudioCodec
-	} else if err := validateInArray(opts.AudioCodec, ValidAudioCodecs[:],
-		"invalid audio codec: must be one of: copy, aac, or mp3"); err != nil {
-
-		return err
 	}
 
-	return nil
-}
-
-func validateAudioBitrate(opts *HlsOpts) error {
-	if opts.AudioCodec != "copy" {
-		if opts.AudioBitRate == 0 {
-			opts.AudioBitRate = DefaultAudioRate
-		} else if err := validateInArray(opts.AudioBitRate, ValidAudioBitrates[:],
-			"invalid audio bitrate: must be one of: 128, 192, 256, or 320 kbps"); err != nil {
-
-			return err
-		}
+	if opts.AudioCodec == "copy" {
+		return
 	}
 
-	return nil
-}
+	if !ValidAudioBitratesMap[opts.AudioBitRate] {
+		opts.AudioBitRate = DefaultAudioRate
+	}
 
-func validateAudioChannels(opts *HlsOpts) error {
-	if opts.AudioChannels == 0 {
+	if !ValidAudioChannelsMap[opts.AudioChannels] {
 		opts.AudioChannels = DefaultAudioChannels
-	} else if err := validateInArray(opts.AudioChannels, ValidAudioChannels[:],
-		"invalid audio channels: must be one of: 1 (mono), 2 (stereo), 6 (5.1), 8 (7.1)"); err != nil {
-
-		return err
 	}
-
-	return nil
 }

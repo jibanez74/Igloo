@@ -24,12 +24,12 @@ type HlsOpts struct {
 }
 
 const (
-	DefaultHlsTime        = "5"
+	DefaultHlsTime        = "6"
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
-	DefaultHlsFlags       = "independent_segments"
+	DefaultHlsFlags       = "independent_segments+program_date_time+append_list"
 	DefaultPlaylistType   = "event"
-	DefaultSegmentPattern = "segment%d.m4s"
+	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"
 	DefaultInitFileName   = "init.mp4"
 )
@@ -56,45 +56,37 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 		return fmt.Errorf("output directory error: %w", err)
 	}
 
-	if opts.AudioStreamIndex < 0 {
+	if opts.AudioCodec != "copy" && opts.AudioStreamIndex < 0 {
 		return errors.New("invalid audio stream index: must be 0 or greater")
 	}
 
-	if opts.VideoStreamIndex < 0 {
+	validateAudioSettings(opts)
+
+	if opts.VideoCodec != "copy" && opts.VideoStreamIndex < 0 {
 		return errors.New("invalid video stream index: must be 0 or greater")
 	}
 
-	err = validateAudioSettings(opts)
-	if err != nil {
-		return err
-	}
-
-	err = validateVideoSettings(opts, f.AccelMethod)
-	if err != nil {
-		return err
-	}
+	validateVideoSettings(opts, f.AccelMethod)
 
 	return nil
 }
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
+		"-y",
 		"-i", opts.InputPath,
-		"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
-		"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
 	}
 
-	if opts.AudioCodec == "copy" {
-		cmdArgs = append(cmdArgs, "-c:a", "copy")
-	} else if opts.AudioCodec != "" {
-		cmdArgs = append(cmdArgs, "-c:a", opts.AudioCodec)
-		cmdArgs = append(cmdArgs, "-b:a", fmt.Sprintf("%dk", opts.AudioBitRate))
-		cmdArgs = append(cmdArgs, "-ac", fmt.Sprintf("%d", opts.AudioChannels))
-	}
-
-	if opts.VideoCodec == "copy" {
-		cmdArgs = append(cmdArgs, "-c:v", "copy")
+	if opts.VideoCodec == "copy" && opts.AudioCodec == "copy" {
+		cmdArgs = append(cmdArgs, "-c", "copy")
 	} else {
+		cmdArgs = append(cmdArgs,
+			"-c:a", opts.AudioCodec,
+			"-b:a", fmt.Sprintf("%dk", opts.AudioBitRate),
+			"-ac", fmt.Sprintf("%d", opts.AudioChannels),
+			"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
+		)
+
 		var videoCodec string
 
 		switch f.AccelMethod {
@@ -107,12 +99,13 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		default:
 			videoCodec = DefaultVideoCodec
 		}
-		cmdArgs = append(cmdArgs, "-c:v", videoCodec)
 
 		cmdArgs = append(cmdArgs,
+			"-c:v", videoCodec,
 			"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 			"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
 			"-preset", opts.Preset,
+			"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
 		)
 
 		if opts.VideoProfile != "" {
@@ -125,15 +118,13 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_time", DefaultHlsTime,
 		"-hls_list_size", DefaultHlsListSize,
 		"-hls_segment_type", DefaultSegmentType,
-		"-hls_flags", DefaultHlsFlags+"+program_date_time",
-		"-hls_fmp4_init_filename", DefaultInitFileName,
-		"-hls_segment_filename", DefaultSegmentPattern,
+		"-hls_flags", DefaultHlsFlags,
+		"-hls_fmp4_init_filename", filepath.Join(opts.OutputDir, DefaultInitFileName),
+		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
 	cmd := exec.Command(f.Bin, cmdArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
 	return cmd
 }

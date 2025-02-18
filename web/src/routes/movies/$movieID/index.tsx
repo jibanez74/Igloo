@@ -91,9 +91,7 @@ function MovieDetailsPage() {
     navigate({
       to: "/movies/$movieID/play",
       params: { movieID: movie.id.toString() },
-      search: {
-        title: movie.title,
-      },
+      search: { title: movie.title },
     });
   };
 
