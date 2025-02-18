@@ -49,13 +49,8 @@ type application struct {
 }
 
 const (
-	// Default user settings
 	DefaultPassword = "AdminPassword"
-
-	// Queue sizes
-	DefaultImageJobs = 50
-
-	// Timeouts
+	DefaultImageJobs = 10
 	ServerTimeout   = 10 * time.Second
 	ShutdownTimeout = 10 * time.Second
 )
