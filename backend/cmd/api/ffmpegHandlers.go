@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
 	"path/filepath"
@@ -42,8 +43,9 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 
 	err = app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
+		app.logger.Error(errors.New(fmt.Sprintf("unable to create hls stream for movie %d: %s", movie.ID, err)))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("an error occurred while creating the hls stream: %s", err),
+			"error": "unable to create hls stream",
 		})
 	}
 
