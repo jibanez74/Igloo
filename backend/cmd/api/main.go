@@ -131,7 +131,7 @@ func main() {
 	case err := <-serverChan:
 		app.logger.Fatal(fmt.Sprintf("error starting server: %s", err))
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		app.logger.Info(fmt.Sprintf("Server started successfully on port %s", app.settings.GetPort()))
 		app.listenForShutdown(f)
 	}

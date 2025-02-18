@@ -51,6 +51,7 @@ func (app *application) createOrGetArtist(c *fiber.Ctx, q *database.Queries, a *
 						ID:    newArtist.ID,
 						Thumb: localPath,
 					})
+
 					if err != nil {
 						app.logger.Error(fmt.Errorf("failed to update artist thumb: %w", err))
 					}
