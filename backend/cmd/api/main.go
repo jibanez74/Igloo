@@ -49,10 +49,10 @@ type application struct {
 }
 
 const (
-	DefaultPassword = "AdminPassword"
-	DefaultImageJobs = 10
-	ServerTimeout   = 10 * time.Second
-	ShutdownTimeout = 10 * time.Second
+	DefaultPassword  = "AdminPassword"
+	DefaultImageJobs = 5
+	ServerTimeout    = 10 * time.Second
+	ShutdownTimeout  = 10 * time.Second
 )
 
 func main() {
