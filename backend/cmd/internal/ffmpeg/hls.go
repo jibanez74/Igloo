@@ -42,7 +42,12 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create hls stream: %w", err)
+	}
+
+	return nil
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
