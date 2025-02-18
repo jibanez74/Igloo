@@ -71,37 +71,51 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
 		"-y",
 		"-i", opts.InputPath,
-		"-c:a", opts.AudioCodec,
-		"-c:v", opts.VideoCodec,
 		"-sn",
-		"-b:a", fmt.Sprintf("%dk", opts.AudioBitRate),
-		"-ac", fmt.Sprintf("%d", opts.AudioChannels),
-		"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
 	}
 
-	var videoCodec string
+	if opts.VideoCodec == "copy" && opts.AudioCodec == "copy" {
+		cmdArgs = append(cmdArgs, "-c", "copy")
+	} else {
+		cmdArgs = append(cmdArgs, "-c:a", opts.AudioCodec)
 
-	switch f.AccelMethod {
-	case NVENC:
-		videoCodec = NvencVideoCodec
-	case QSV:
-		videoCodec = QsvVideoCodec
-	case VideoToolbox:
-		videoCodec = VtVideoCodec
-	default:
-		videoCodec = DefaultVideoCodec
-	}
+		if opts.AudioCodec != "copy" {
+			cmdArgs = append(cmdArgs,
+				"-b:a", fmt.Sprintf("%dk", opts.AudioBitRate),
+				"-ac", fmt.Sprintf("%d", opts.AudioChannels),
+				"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
+			)
+		}
 
-	cmdArgs = append(cmdArgs,
-		"-c:v", videoCodec,
-		"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
-		"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
-		"-preset", opts.Preset,
-		"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
-	)
+		if opts.VideoCodec == "copy" {
+			cmdArgs = append(cmdArgs, "-c:v", opts.VideoCodec)
+		} else {
+			var videoCodec string
 
-	if opts.VideoProfile != "" {
-		cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
+			switch f.AccelMethod {
+			case NVENC:
+				videoCodec = NvencVideoCodec
+			case QSV:
+				videoCodec = QsvVideoCodec
+			case VideoToolbox:
+				videoCodec = VtVideoCodec
+			default:
+				videoCodec = DefaultVideoCodec
+			}
+
+			cmdArgs = append(cmdArgs,
+				"-c:v", videoCodec,
+				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
+				"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
+				"-preset", opts.Preset,
+				"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
+			)
+
+			if opts.VideoProfile != "" {
+				cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
+			}
+		}
+
 	}
 
 	cmdArgs = append(cmdArgs,
@@ -110,7 +124,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_list_size", DefaultHlsListSize,
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_flags", DefaultHlsFlags,
-		"-hls_fmp4_init_filename", "init.mp4",
+		"-hls_fmp4_init_filename", DefaultInitFileName,
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
