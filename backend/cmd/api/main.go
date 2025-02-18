@@ -14,6 +14,7 @@ import (
 	"igloo/cmd/internal/settings"
 	"igloo/cmd/internal/tmdb"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -114,20 +115,34 @@ func main() {
 	users.Post("/create", app.createUser)
 
 	serverChan := make(chan error, 1)
+	readyChan := make(chan bool, 1)
 
 	go func() {
-		err = f.Listen(app.settings.GetPort())
+		defer close(serverChan)
+		defer close(readyChan)
+
+		ln, err := net.Listen("tcp", app.settings.GetPort())
+		if err != nil {
+			serverChan <- err
+			return
+		}
+
+		readyChan <- true
+
+		err = f.Listener(ln)
 		if err != nil {
 			serverChan <- err
 		}
 	}()
 
 	select {
-	case err := <-serverChan:
-		app.logger.Fatal(fmt.Sprintf("error starting server: %s", err))
+	case err, ok := <-serverChan:
+		if ok && err != nil {
+			app.logger.Fatal(fmt.Sprintf("error starting server: %s", err))
+		}
 
-	case <-time.After(5 * time.Second):
-		app.logger.Info(fmt.Sprintf("Server started successfully on port %s", app.settings.GetPort()))
+	case <-readyChan:
+		app.logger.Info(fmt.Sprintf("Server started on port %s", app.settings.GetPort()))
 		app.listenForShutdown(f)
 	}
 }
