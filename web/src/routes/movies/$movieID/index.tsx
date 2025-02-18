@@ -151,7 +151,7 @@ function MovieDetailsPage() {
 
                 {movie.genres.map(genre => (
                   <span
-                    key={genre.id}
+                    key={`genre-${genre.id}`}
                     className='px-2 py-0.5 bg-sky-500/10 rounded'
                   >
                     {genre.tag}
@@ -292,8 +292,8 @@ function MovieDetailsPage() {
           <div className='mb-12'>
             <h3 className='text-lg font-medium text-sky-200 mb-4'>Cast</h3>
             <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {displayedCast.map(cast => (
-                <div key={cast.id} className='text-center'>
+              {displayedCast.map((cast, i) => (
+                <div key={`cast-${i}`} className='text-center'>
                   <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
                     {cast.thumb ? (
                       <img
@@ -344,8 +344,8 @@ function MovieDetailsPage() {
           <div>
             <h3 className='text-lg font-medium text-sky-200 mb-4'>Crew</h3>
             <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {displayedCrew.map(crew => (
-                <div key={crew.id} className='text-center'>
+              {displayedCrew.map((crew, i) => (
+                <div key={`crew-${i}`} className='text-center'>
                   <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
                     {crew.thumb ? (
                       <img
@@ -397,7 +397,7 @@ function MovieDetailsPage() {
         <section className='container mx-auto px-4 py-12 border-t border-sky-200/10'>
           <h2 className='text-2xl font-bold text-white mb-6'>Extras</h2>
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-            {movie.extras.map(extra => {
+            {movie.extras.map((extra, i) => {
               const videoId = getYouTubeVideoId(extra.url);
               const thumbnailUrl = videoId
                 ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
@@ -405,7 +405,7 @@ function MovieDetailsPage() {
 
               return (
                 <button
-                  key={extra.ID}
+                  key={`extra-${i}`}
                   onClick={() => setSelectedVideo(extra.url)}
                   onKeyDown={e => handleKeyPress(e, extra.url)}
                   className='group relative aspect-video w-full rounded-xl overflow-hidden focus:outline-none 

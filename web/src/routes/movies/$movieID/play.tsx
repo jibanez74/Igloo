@@ -24,7 +24,7 @@ function PlayMoviePage() {
       <div className='flex-1 flex items-center justify-center p-4 md:p-8'>
         <div className='w-full max-w-7xl aspect-video'>
           <HlsPlayer
-            url={`/api/v1/hls/movies/${movieID}/playlist.m3u8`}
+            url={`/api/v1/stream/movies/${movieID}/playlist.m3u8`}
             useHlsJs={canPlayNativeHls()}
             title={title}
             onError={error => {
