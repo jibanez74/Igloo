@@ -184,6 +184,14 @@ export default function HlsPlayer({
         e.preventDefault();
         video.currentTime = Math.min(video.duration, video.currentTime + 10);
         break;
+      case "arrowup":
+        e.preventDefault();
+        video.volume = Math.min(1, video.volume + 0.1); // Increase volume by 10%
+        break;
+      case "arrowdown":
+        e.preventDefault();
+        video.volume = Math.max(0, video.volume - 0.1); // Decrease volume by 10%
+        break;
       case "m":
         e.preventDefault();
         video.muted = !video.muted;
