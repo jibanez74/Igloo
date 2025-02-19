@@ -26,7 +26,7 @@ const (
 	DefaultHlsTime        = "5"
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
-	DefaultHlsFlags       = "independent_segments+program_date_time+append_list+keyframe_all"
+	DefaultHlsFlags       = "independent_segments+program_date_time+append_list"
 	DefaultPlaylistType   = "event"
 	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"
@@ -108,8 +108,9 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 				"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
 				"-preset", opts.Preset,
-				"-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%s)", DefaultHlsTime),
-				"-sc_threshold", "0",
+				"-g", "120",
+				"-keyint_min", "120",
+				"-force_key_frames", "expr:gte(t,n_forced*2)",
 				"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
 			)
 
