@@ -3,5 +3,5 @@ export type Crew = {
   name: string;
   thumb: string;
   job: string;
-  department: string;
+  sort_order: number;
 };

@@ -10,16 +10,18 @@ import {
   FiHeart,
   FiCheck,
   FiMoreHorizontal,
-  FiChevronDown,
-  FiChevronUp,
-  FiYoutube,
 } from "react-icons/fi";
 import getImgSrc from "@/utils/getImgSrc";
 import formatDate from "@/utils/formatDate";
 import formatRuntime from "@/utils/formatRuntime";
 import formatDollars from "@/utils/formatDollars";
-import type { Movie } from "@/types/Movie";
+import CastSection from "@/components/CastSection";
+import CrewSection from "@/components/CrewSection";
+import GenreList from "@/components/GenreList";
 import YoutubeModal from "@/components/YoutubeModal";
+import StudioList from "@/components/StudioList";
+import ExtrasSection from "@/components/ExtrasSection";
+import type { Movie } from "@/types/Movie";
 
 export const Route = createFileRoute("/movies/$movieID/")({
   component: MovieDetailsPage,
@@ -39,31 +41,9 @@ export const Route = createFileRoute("/movies/$movieID/")({
 function MovieDetailsPage() {
   const { movie } = Route.useLoaderData() as { movie: Movie };
 
-  const [showAllCast, setShowAllCast] = useState(false);
-  const [showAllCrew, setShowAllCrew] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
   const navigate = Route.useNavigate();
-
-  const displayedCast = showAllCast ? movie.cast : movie.cast.slice(0, 6);
-  const displayedCrew = showAllCrew ? movie.crew : movie.crew.slice(0, 6);
-
-  const getYouTubeVideoId = (url: string) => {
-    const regExp =
-      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
-  };
-
-  const handleKeyPress = (
-    e: React.KeyboardEvent<HTMLButtonElement>,
-    url: string
-  ) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      setSelectedVideo(url);
-    }
-  };
 
   const handlePlayMovie = async () => {
     const hlsOpts = {
@@ -149,14 +129,7 @@ function MovieDetailsPage() {
                   </span>
                 )}
 
-                {movie.genres.map(genre => (
-                  <span
-                    key={`genre-${genre.id}`}
-                    className='px-2 py-0.5 bg-sky-500/10 rounded'
-                  >
-                    {genre.tag}
-                  </span>
-                ))}
+                <GenreList genres={movie.genres} />
               </div>
 
               {/* Ratings */}
@@ -246,7 +219,6 @@ function MovieDetailsPage() {
                       <FiDollarSign className='w-4 h-4' aria-hidden='true' />
                       <span className='text-sm font-medium'>Budget</span>
                     </div>
-
                     <div className='text-white'>
                       {formatDollars(movie.budget)}
                     </div>
@@ -265,18 +237,7 @@ function MovieDetailsPage() {
                   </div>
                 )}
 
-                {movie.studios.length > 0 && (
-                  <div>
-                    <div className='text-sm font-medium text-sky-400 mb-1'>
-                      Studios
-                    </div>
-                    <div className='text-white'>
-                      {movie.studios.map(studio => (
-                        <span key={studio.id}>{studio.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <StudioList studios={movie.studios} />
               </div>
             </div>
           </div>
@@ -286,177 +247,15 @@ function MovieDetailsPage() {
       {/* Cast & Crew Section */}
       <section className='container mx-auto px-4 py-12'>
         <h2 className='text-2xl font-bold text-white mb-6'>Cast & Crew</h2>
-
-        {/* Cast */}
-        {movie.cast.length > 0 && (
-          <div className='mb-12'>
-            <h3 className='text-lg font-medium text-sky-200 mb-4'>Cast</h3>
-            <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {displayedCast.map((cast, i) => (
-                <div key={`cast-${i}`} className='text-center'>
-                  <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
-                    {cast.thumb ? (
-                      <img
-                        src={getImgSrc(cast.thumb)}
-                        alt={cast.name}
-                        className='w-full h-full object-cover'
-                      />
-                    ) : (
-                      <div className='w-full h-full flex items-center justify-center bg-slate-800/50'>
-                        <span className='text-sky-200/50'>No Image</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className='text-sm font-medium text-white'>
-                    {cast.name}
-                  </div>
-                  <div className='text-xs text-sky-200'>{cast.character}</div>
-                </div>
-              ))}
-            </div>
-            {movie.cast.length > 6 && (
-              <div className='flex justify-center mt-6'>
-                <button
-                  type='button'
-                  onClick={() => setShowAllCast(!showAllCast)}
-                  className='inline-flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-800 
-                           text-sky-200 hover:text-sky-100 rounded-lg transition-colors text-sm font-medium'
-                >
-                  {showAllCast ? (
-                    <>
-                      Show Less{" "}
-                      <FiChevronUp className='w-4 h-4' aria-hidden='true' />
-                    </>
-                  ) : (
-                    <>
-                      Show All Cast ({movie.cast.length}){" "}
-                      <FiChevronDown className='w-4 h-4' aria-hidden='true' />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Crew */}
-        {movie.crew.length > 0 && (
-          <div>
-            <h3 className='text-lg font-medium text-sky-200 mb-4'>Crew</h3>
-            <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {displayedCrew.map((crew, i) => (
-                <div key={`crew-${i}`} className='text-center'>
-                  <div className='aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden'>
-                    {crew.thumb ? (
-                      <img
-                        src={getImgSrc(crew.thumb)}
-                        alt={crew.name}
-                        className='w-full h-full object-cover'
-                      />
-                    ) : (
-                      <div className='w-full h-full flex items-center justify-center bg-slate-800/50'>
-                        <span className='text-sky-200/50'>No Image</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className='text-sm font-medium text-white'>
-                    {crew.name}
-                  </div>
-                  <div className='text-xs text-sky-200'>{crew.job}</div>
-                </div>
-              ))}
-            </div>
-            {movie.crew.length > 6 && (
-              <div className='flex justify-center mt-6'>
-                <button
-                  type='button'
-                  onClick={() => setShowAllCrew(!showAllCrew)}
-                  className='inline-flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-800 
-                           text-sky-200 hover:text-sky-100 rounded-lg transition-colors text-sm font-medium'
-                >
-                  {showAllCrew ? (
-                    <>
-                      Show Less{" "}
-                      <FiChevronUp className='w-4 h-4' aria-hidden='true' />
-                    </>
-                  ) : (
-                    <>
-                      Show All Crew ({movie.crew.length}){" "}
-                      <FiChevronDown className='w-4 h-4' aria-hidden='true' />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        {movie.cast.length > 0 && <CastSection cast={movie.cast} />}
+        {movie.crew.length > 0 && <CrewSection crew={movie.crew} />}
       </section>
 
       {/* Extras Section */}
-      {movie.extras.length > 0 && (
-        <section className='container mx-auto px-4 py-12 border-t border-sky-200/10'>
-          <h2 className='text-2xl font-bold text-white mb-6'>Extras</h2>
-          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-            {movie.extras.map((extra, i) => {
-              const videoId = getYouTubeVideoId(extra.url);
-              const thumbnailUrl = videoId
-                ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-                : "";
-
-              return (
-                <button
-                  key={`extra-${i}`}
-                  onClick={() => setSelectedVideo(extra.url)}
-                  onKeyDown={e => handleKeyPress(e, extra.url)}
-                  className='group relative aspect-video w-full rounded-xl overflow-hidden focus:outline-none 
-                           focus:ring-2 focus:ring-sky-500/40 focus:ring-offset-2 focus:ring-offset-slate-800'
-                  aria-label={`Play ${extra.title}`}
-                >
-                  {/* Thumbnail */}
-                  <img
-                    src={thumbnailUrl}
-                    alt={extra.title}
-                    className='w-full h-full object-cover transition-transform duration-300 
-                             group-hover:scale-105'
-                  />
-
-                  {/* Overlay */}
-                  <div
-                    className='absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent 
-                                opacity-80 group-hover:opacity-90 transition-opacity'
-                  />
-
-                  {/* Play Button */}
-                  <div className='absolute inset-0 flex items-center justify-center'>
-                    <div
-                      className='rounded-full bg-sky-500/90 p-4 transform transition-all duration-300 
-                                  group-hover:bg-sky-400 group-hover:scale-110'
-                    >
-                      <FiYoutube
-                        className='w-8 h-8 text-white'
-                        aria-hidden='true'
-                      />
-                    </div>
-                  </div>
-
-                  {/* Text Content */}
-                  <div className='absolute bottom-0 left-0 right-0 p-4'>
-                    <h3
-                      className='text-base font-medium text-white line-clamp-2 mb-1 group-hover:text-sky-200 
-                                 transition-colors'
-                    >
-                      {extra.title}
-                    </h3>
-                    <p className='text-sm text-sky-200/80 capitalize'>
-                      {extra.kind}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      <ExtrasSection
+        extras={movie.extras}
+        onSelectVideo={url => setSelectedVideo(url)}
+      />
 
       {/* YouTube Modal */}
       <YoutubeModal
