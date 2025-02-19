@@ -128,7 +128,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_flags", DefaultHlsFlags,
 		"-hls_fmp4_init_filename", DefaultInitFileName,
-		"-hls_segment_filename", DefaultSegmentPattern,
+		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		"-hls_base_url", opts.SegmentsUrl+"/",
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
