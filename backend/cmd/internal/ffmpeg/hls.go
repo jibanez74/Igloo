@@ -47,7 +47,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 		return fmt.Errorf("ffmpeg error: %w\n%s", err, string(output))
 	}
 
-  return nil
+	return nil
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
@@ -121,11 +121,6 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		}
 	}
 
-	segmentFilename := filepath.Join(opts.OutputDir, DefaultSegmentPattern)
-	if opts.SegmentsUrl != "" {
-		segmentFilename = filepath.Join(opts.SegmentsUrl, DefaultSegmentPattern)
-	}
-
 	cmdArgs = append(cmdArgs,
 		"-hls_playlist_type", DefaultPlaylistType,
 		"-hls_time", DefaultHlsTime,
@@ -133,7 +128,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_flags", DefaultHlsFlags,
 		"-hls_fmp4_init_filename", DefaultInitFileName,
-		"-hls_segment_filename", segmentFilename,
+		"-hls_segment_filename", DefaultSegmentPattern,
 		"-hls_base_url", opts.SegmentsUrl+"/",
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
