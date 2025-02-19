@@ -20,6 +20,7 @@ type HlsOpts struct {
 	VideoHeight      int    `json:"video_height"`
 	VideoProfile     string `json:"video_profile"`
 	Preset           string `json:"preset"`
+	SegmentsUrl      string `json:"segments_url"`
 }
 
 const (
@@ -120,6 +121,11 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		}
 	}
 
+	segmentFilename := filepath.Join(opts.OutputDir, DefaultSegmentPattern)
+	if opts.SegmentsUrl != "" {
+		segmentFilename = filepath.Join(opts.SegmentsUrl, DefaultSegmentPattern)
+	}
+
 	cmdArgs = append(cmdArgs,
 		"-hls_playlist_type", DefaultPlaylistType,
 		"-hls_time", DefaultHlsTime,
@@ -127,11 +133,10 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_flags", DefaultHlsFlags,
 		"-hls_fmp4_init_filename", DefaultInitFileName,
-		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
+		"-hls_segment_filename", segmentFilename,
+		"-hls_base_url", opts.SegmentsUrl+"/",
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
-	cmd := exec.Command(f.Bin, cmdArgs...)
-
-	return cmd
+	return exec.Command(f.Bin, cmdArgs...)
 }

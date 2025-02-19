@@ -40,6 +40,7 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 		"movies",
 		fmt.Sprintf("%d", movie.ID),
 	)
+	request.SegmentsUrl = fmt.Sprintf("/api/v1/hls/movies/%d", movie.ID)
 
 	err = app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
