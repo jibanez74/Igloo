@@ -52,15 +52,66 @@ export default function HlsPlayer({
               },
               hlsOptions: useHlsJs
                 ? {
+                    debug: true,
                     enableWorker: true,
                     autoStartLoad: true,
                     startLevel: -1,
-                    debug: false,
+                    manifestLoadPolicy: {
+                      default: {
+                        maxTimeToFirstByteMs: 10000,
+                        maxLoadTimeMs: 10000,
+                        timeoutRetry: {
+                          maxNumRetry: 3,
+                          retryDelayMs: 1000,
+                          maxRetryDelayMs: 0,
+                        },
+                        errorRetry: {
+                          maxNumRetry: 3,
+                          retryDelayMs: 1000,
+                          maxRetryDelayMs: 8000,
+                        },
+                      },
+                    },
+                    playlistLoadPolicy: {
+                      default: {
+                        maxTimeToFirstByteMs: 10000,
+                        maxLoadTimeMs: 10000,
+                        timeoutRetry: {
+                          maxNumRetry: 2,
+                          retryDelayMs: 0,
+                          maxRetryDelayMs: 0,
+                        },
+                        errorRetry: {
+                          maxNumRetry: 2,
+                          retryDelayMs: 1000,
+                          maxRetryDelayMs: 8000,
+                        },
+                      },
+                    },
+                    fragLoadPolicy: {
+                      default: {
+                        maxTimeToFirstByteMs: 20000,
+                        maxLoadTimeMs: 20000,
+                        timeoutRetry: {
+                          maxNumRetry: 4,
+                          retryDelayMs: 0,
+                          maxRetryDelayMs: 0,
+                        },
+                        errorRetry: {
+                          maxNumRetry: 6,
+                          retryDelayMs: 1000,
+                          maxRetryDelayMs: 8000,
+                        },
+                      },
+                    },
+                    maxBufferSize: 0,
                     maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
-                    maxBufferSize: 200 * 1000 * 1000,
-                    maxBufferHole: 0.5,
-                    lowLatencyMode: true,
+                    maxMaxBufferLength: 600,
+                    progressive: false,
+                    lowLatencyMode: false,
+                    enableSoftwareAES: true,
+                    abrEwmaDefaultEstimate: 500000,
+                    backBufferLength: 90,
                   }
                 : undefined,
               hlsVersion: useHlsJs ? Hls.version : undefined,
