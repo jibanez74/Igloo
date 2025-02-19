@@ -163,6 +163,49 @@ export default function HlsPlayer({
     };
   }, [url, useHlsJs, onError, playing, onQualitiesLoaded]);
 
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    switch (e.key.toLowerCase()) {
+      case " ":
+        e.preventDefault();
+        if (video.paused) {
+          video.play();
+        } else {
+          video.pause();
+        }
+        break;
+      case "arrowleft":
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        break;
+      case "arrowright":
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        break;
+      case "m":
+        e.preventDefault();
+        video.muted = !video.muted;
+        break;
+      case "f":
+        e.preventDefault();
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          video.requestFullscreen();
+        }
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (useHlsJs) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [useHlsJs]);
+
   if (!useHlsJs) {
     return (
       <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
@@ -222,6 +265,11 @@ export default function HlsPlayer({
               : 0,
           });
         }}
+        onSeeking={() => setIsLoading(true)}
+        onSeeked={() => setIsLoading(false)}
+        onWaiting={() => setIsLoading(true)}
+        onPlaying={() => setIsLoading(false)}
+        onLoadedData={() => setIsLoading(false)}
       />
     </div>
   );

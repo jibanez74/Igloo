@@ -115,7 +115,7 @@ func main() {
 	})
 
 	streamGroup.Static("/", app.settings.GetTranscodeDir(), fiber.Static{
-		Compress:      true,
+		Compress:      false,
 		ByteRange:     true,
 		Browse:        false,
 		MaxAge:        0,
