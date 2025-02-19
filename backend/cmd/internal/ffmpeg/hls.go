@@ -42,12 +42,12 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	err = cmd.Start()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("ffmpeg error: %w\n%s", err, string(output))
 	}
 
-	return cmd.Wait()
+  return nil
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
