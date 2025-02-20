@@ -1,4 +1,4 @@
-  import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { FiX } from "react-icons/fi";
 
 type opts = {
