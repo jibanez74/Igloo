@@ -41,9 +41,9 @@ export type Movie = {
   studios: Studio[];
   cast: Cast[];
   crew: Crew[];
-  videoList: Video[];
-  audioList: Audio[];
-  subtitleList: Subtitles[];
+  video_streams: Video[];
+  audio_streams: Audio[];
+  subtitles: Subtitles[];
   extras: MovieExtras[];
   created_at?: string | Date;
   updated_at?: string | Date;

@@ -44,6 +44,22 @@ export const Route = createFileRoute("/movies/$movieID/")({
 function MovieDetailsPage() {
   const { movie } = Route.useLoaderData() as { movie: Movie };
 
+  const audioOpts =
+    movie.audio_streams.length > 0
+      ? movie.audio_streams.map(s => ({
+          value: s.index,
+          label: `${s.title} ${s.language}`,
+        }))
+      : [];
+
+  const subtitleOpts =
+    movie.subtitles.length > 0
+      ? movie.subtitles.map(s => ({
+          value: s.index,
+          label: `${s.title} ${s.language}`,
+        }))
+      : [];
+
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [isPlaybackModalOpen, setIsPlaybackModalOpen] = useState(false);
 
@@ -211,7 +227,6 @@ function MovieDetailsPage() {
                       type='button'
                       className='inline-flex items-center justify-center w-12 h-12 bg-slate-800/50 hover:bg-slate-800 
                                text-sky-200 hover:text-sky-100 rounded-lg transition-colors'
-                      aria-label='More options'
                     >
                       <FiMoreHorizontal
                         className='w-5 h-5'
@@ -219,14 +234,15 @@ function MovieDetailsPage() {
                       />
                     </button>
                   }
+                  label={`More options for ${movie.title}`}
                   items={[
                     {
-                      label: "Playback",
+                      label: "Playback Settings",
                       icon: <FiPlay className='w-4 h-4' />,
                       onClick: () => setIsPlaybackModalOpen(true),
                     },
                     {
-                      label: "Details",
+                      label: "Movie Details",
                       icon: <FiInfo className='w-4 h-4' />,
                       onClick: () => {
                         console.log("Show details");
@@ -292,6 +308,8 @@ function MovieDetailsPage() {
       <PlaybackSettingsModal
         isOpen={isPlaybackModalOpen}
         onClose={() => setIsPlaybackModalOpen(false)}
+        audioOpts={audioOpts}
+        subtitleOpts={subtitleOpts}
       />
     </main>
   );
