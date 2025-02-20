@@ -58,14 +58,18 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 			}
 
 			if s.CodecType == "audio" {
-				result.AudioList = append(result.AudioList, database.CreateAudioStreamParams{
-					Title:         s.Tags.Title,
+				title := s.Tags.Title
+				language := s.Tags.Language
+
+				audioStream := database.CreateAudioStreamParams{
+					Title:         title,
 					Index:         int32(s.Index),
 					Codec:         s.CodecName,
-					Language:      s.Tags.Language,
+					Language:      language,
 					Channels:      int32(s.Channels),
 					ChannelLayout: s.ChannelLayout,
-				})
+				}
+				result.AudioList = append(result.AudioList, audioStream)
 			}
 
 			if s.CodecType == "subtitle" {
