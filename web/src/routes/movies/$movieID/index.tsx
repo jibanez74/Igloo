@@ -10,6 +10,7 @@ import {
   FiHeart,
   FiCheck,
   FiMoreHorizontal,
+  FiInfo,
 } from "react-icons/fi";
 import getImgSrc from "@/utils/getImgSrc";
 import formatDate from "@/utils/formatDate";
@@ -21,6 +22,8 @@ import GenreList from "@/components/GenreList";
 import YoutubeModal from "@/components/YoutubeModal";
 import StudioList from "@/components/StudioList";
 import ExtrasSection from "@/components/ExtrasSection";
+import Dropdown from "@/components/Dropdown";
+import PlaybackSettingsModal from "@/components/PlaybackSettingsModal";
 import type { Movie } from "@/types/Movie";
 
 export const Route = createFileRoute("/movies/$movieID/")({
@@ -42,6 +45,7 @@ function MovieDetailsPage() {
   const { movie } = Route.useLoaderData() as { movie: Movie };
 
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [isPlaybackModalOpen, setIsPlaybackModalOpen] = useState(false);
 
   const navigate = Route.useNavigate();
 
@@ -201,14 +205,35 @@ function MovieDetailsPage() {
                   Mark as Watched
                 </button>
 
-                <button
-                  type='button'
-                  className='inline-flex items-center justify-center w-12 h-12 bg-slate-800/50 hover:bg-slate-800 
-                           text-sky-200 hover:text-sky-100 rounded-lg transition-colors'
-                  aria-label='More options'
-                >
-                  <FiMoreHorizontal className='w-5 h-5' aria-hidden='true' />
-                </button>
+                <Dropdown
+                  trigger={
+                    <button
+                      type='button'
+                      className='inline-flex items-center justify-center w-12 h-12 bg-slate-800/50 hover:bg-slate-800 
+                               text-sky-200 hover:text-sky-100 rounded-lg transition-colors'
+                      aria-label='More options'
+                    >
+                      <FiMoreHorizontal
+                        className='w-5 h-5'
+                        aria-hidden='true'
+                      />
+                    </button>
+                  }
+                  items={[
+                    {
+                      label: "Playback",
+                      icon: <FiPlay className='w-4 h-4' />,
+                      onClick: () => setIsPlaybackModalOpen(true),
+                    },
+                    {
+                      label: "Details",
+                      icon: <FiInfo className='w-4 h-4' />,
+                      onClick: () => {
+                        console.log("Show details");
+                      },
+                    },
+                  ]}
+                />
               </div>
 
               {/* Additional Info */}
@@ -262,6 +287,11 @@ function MovieDetailsPage() {
         isOpen={!!selectedVideo}
         onClose={() => setSelectedVideo(null)}
         videoUrl={selectedVideo}
+      />
+
+      <PlaybackSettingsModal
+        isOpen={isPlaybackModalOpen}
+        onClose={() => setIsPlaybackModalOpen(false)}
       />
     </main>
   );
