@@ -42,7 +42,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return fmt.Errorf("ffmpeg error: %w", err)
 	}
