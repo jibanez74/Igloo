@@ -109,7 +109,7 @@ func main() {
 	auth.Get("/me", app.getAuthUser)
 	auth.Post("/logout", app.logout)
 
-	ffmpeg := f.Group("/api/v1/ffmpeg")
+	ffmpeg := api.Group("/ffmpeg")
 	ffmpeg.Post("/movie/create-hls", app.createMovieHlsStream)
 	ffmpeg.Post("/job/cancel/:pid", app.cancelJob)
 
