@@ -214,6 +214,13 @@ export default function HlsPlayer({
     }
   }, [useHlsJs]);
 
+  const handlePlay = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+    onPlay?.();
+  };
+
   if (!useHlsJs) {
     return (
       <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
@@ -229,7 +236,7 @@ export default function HlsPlayer({
           width='100%'
           height='100%'
           className='absolute top-0 left-0'
-          onPlay={onPlay}
+          onPlay={handlePlay}
           onPause={onPause}
           onEnded={onEnded}
           onError={onError}
@@ -258,7 +265,7 @@ export default function HlsPlayer({
         playsInline
         autoPlay={playing}
         style={{ width: "100%", height: "100%" }}
-        onPlay={onPlay}
+        onPlay={handlePlay}
         onPause={onPause}
         onEnded={onEnded}
         onTimeUpdate={e => {

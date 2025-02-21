@@ -111,7 +111,8 @@ func main() {
 
 	ffmpeg := api.Group("/ffmpeg")
 	ffmpeg.Post("/movie/create-hls/:id", app.createMovieHlsStream)
-	ffmpeg.Post("/job/cancel/:pid", app.cancelJob)
+	ffmpeg.Post("/job/cancel/:pid"
+  , app.cancelJob)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)

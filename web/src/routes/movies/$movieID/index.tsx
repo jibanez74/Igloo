@@ -67,8 +67,10 @@ function MovieDetailsPage() {
 
   const handlePlayMovie = async () => {
     const hlsOpts = {
-      audio_codec: "copy",
+      audio_codec: "aac",
+      audio_stream_index: movie.audio_streams[0].index,
       video_codec: "copy",
+      video_stream_index: movie.video_streams[0].index,
     };
 
     const res = await fetch(`/api/v1/ffmpeg/movie/create-hls/${movie.id}`, {

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import canPlayNativeHls from "@/utils/canPlayNativeHls";
 import HlsPlayer from "@/components/HlsPlayer";
@@ -20,16 +19,6 @@ export const Route = createFileRoute("/movies/$movieID/play")({
 function PlayMoviePage() {
   const { movieID } = Route.useParams();
   const { pid, title } = Route.useLoaderDeps();
-
-  useEffect(() => {
-    return () => {
-      fetch(`/api/v1/ffmpeg/jobs/cancel/${pid}`, {
-        credentials: "include",
-      })
-        .then(() => alert("job canceled successfully"))
-        .catch(err => alert(JSON.stringify(err)));
-    };
-  }, [pid]);
 
   return (
     <div className='min-h-screen bg-slate-900 flex flex-col'>
