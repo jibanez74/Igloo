@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,16 +43,14 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	err = cmd.Start()
-	if err != nil {
-		return fmt.Errorf("ffmpeg error: %w", err)
-	}
-
 	go func() {
-		err = cmd.Wait()
+		output, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Prinln(err)
+			msg := fmt.Sprintf("the error output is %s", string(output))
+			log.Println(msg)
 		}
+
+		log.Println(string(output))
 	}()
 
 	return nil
