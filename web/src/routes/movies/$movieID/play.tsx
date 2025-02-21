@@ -18,7 +18,7 @@ export const Route = createFileRoute("/movies/$movieID/play")({
 
 function PlayMoviePage() {
   const { movieID } = Route.useParams();
-  const { pid, title } = Route.useLoaderDeps();
+  const { title } = Route.useLoaderDeps();
 
   return (
     <div className='min-h-screen bg-slate-900 flex flex-col'>
