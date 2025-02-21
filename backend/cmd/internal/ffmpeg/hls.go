@@ -154,7 +154,3 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 
 	return exec.Command(f.Bin, cmdArgs...)
 }
-
-func (f *ffmpeg) PrepareHlsCmd(opts *HlsOpts) *exec.Cmd {
-	return f.prepareHlsCmd(opts)
-}

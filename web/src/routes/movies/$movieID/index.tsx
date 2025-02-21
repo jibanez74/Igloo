@@ -80,16 +80,17 @@ function MovieDetailsPage() {
       body: JSON.stringify(hlsOpts),
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      alert(JSON.stringify(data));
+    const data = await res.json();
+
+    if (data.error) {
+      alert(data.error);
       return;
     }
 
     navigate({
       to: "/movies/$movieID/play",
       params: { movieID: movie.id.toString() },
-      search: { title: movie.title },
+      search: { title: movie.title, pid: data.pid },
     });
   };
 
