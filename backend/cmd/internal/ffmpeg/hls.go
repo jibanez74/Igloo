@@ -15,7 +15,7 @@ type HlsOpts struct {
 	AudioBitRate     int    `json:"audio_bit_rate"`
 	AudioChannels    int    `json:"audio_channels"`
 	VideoStreamIndex int    `json:"video_stream_index"`
-	VideoCodec       string `json:"video_codec"`
+	VideoCodec       string
 	VideoBitrate     int    `json:"video_bitrate"`
 	VideoHeight      int    `json:"video_height"`
 	VideoProfile     string `json:"video_profile"`
@@ -42,10 +42,17 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	output, err := cmd.CombinedOutput()
+	err := cmd.Start()
 	if err != nil {
-		return fmt.Errorf("ffmpeg error: %w\n%s", err, string(output))
+		return fmt.Errorf("ffmpeg error: %w", err)
 	}
+
+	go func() {
+		err = cmd.Wait()
+		if err != nil {
+			log.Prinln(err)
+		}
+	}()
 
 	return nil
 }

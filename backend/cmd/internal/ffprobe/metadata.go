@@ -40,7 +40,6 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 	}
 
 	for _, s := range probeResult.Streams {
-		// Skip attached pictures (like cover art)
 		if s.Disposition != nil && s.Disposition.AttachedPic == 1 {
 			continue
 		}
