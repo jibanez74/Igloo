@@ -1,14 +1,12 @@
 package ffmpeg
 
 import (
-	"errors"
 	"fmt"
 	"os/exec"
 	"time"
 )
 
 type job struct {
-	id        string
 	process   *exec.Cmd
 	startTime time.Time
 	status    string
@@ -16,17 +14,27 @@ type job struct {
 }
 
 func (f *ffmpeg) CancelJob(pid string) error {
-	job, ok := f.jobs[pid]
-	if !ok {
-		return errors.New("job not found")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	job, exists := f.jobs[pid]
+	if !exists {
+		return fmt.Errorf("job %s not found", pid)
 	}
 
 	err := job.process.Process.Kill()
 	if err != nil {
-		return fmt.Errorf("failed to kill job: %w", err)
+		return fmt.Errorf("failed to kill process: %w", err)
 	}
 
 	delete(f.jobs, pid)
 
 	return nil
+}
+
+func (f *ffmpeg) JobsFull(limit int) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	return len(f.jobs) >= limit
 }

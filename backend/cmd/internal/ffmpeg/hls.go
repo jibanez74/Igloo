@@ -1,7 +1,6 @@
 package ffmpeg
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,23 +45,26 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	err = cmd.Start()
-	if err != nil {
-		return "", fmt.Errorf("failed to start ffmpeg process: %w", err)
-	}
-
 	pid := uuid.NewString()
 
-	if len(f.jobs) > 10 {
-		return "", errors.New("too many jobs running")
-	}
+	f.mu.Lock()
 
 	f.jobs[pid] = job{
-		id:        pid,
 		process:   cmd,
 		startTime: time.Now(),
 		status:    "running",
 	}
+
+	f.mu.Unlock()
+
+	go func() {
+		err = cmd.Run()
+		if err != nil {
+			f.mu.Lock()
+			delete(f.jobs, pid)
+			f.mu.Unlock()
+		}
+	}()
 
 	return pid, nil
 }
