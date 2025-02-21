@@ -109,12 +109,15 @@ func main() {
 	auth.Get("/me", app.getAuthUser)
 	auth.Post("/logout", app.logout)
 
+	ffmpeg := f.Group("/api/v1/ffmpeg")
+	ffmpeg.Post("/movie/create-hls", app.createMovieHlsStream)
+	ffmpeg.Post("/job/cancel/:pid", app.cancelJob)
+
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
-	movies.Post("/create-hls/:id", app.createMovieHlsStream)
 	movies.Get("/:id", app.getMovieDetails)
 
 	users := api.Group("/users")
@@ -253,7 +256,6 @@ func initApp() (*application, error) {
 		imageQueue: make(chan imageJob, DefaultImageJobs),
 	}
 
-	// Start image processing workers
 	go app.processImages()
 
 	return app, nil
@@ -272,6 +274,7 @@ func (app *application) processImages() {
 			if job.onError != nil {
 				job.onError(err)
 			}
+
 			continue
 		}
 

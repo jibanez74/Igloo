@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
 	"path/filepath"
@@ -42,15 +41,34 @@ func (app *application) createMovieHlsStream(c *fiber.Ctx) error {
 	)
 	request.SegmentsUrl = fmt.Sprintf("/api/v1/hls/movies/%d", movie.ID)
 
-	err = app.ffmpeg.CreateHlsStream(&request)
+	pid, err := app.ffmpeg.CreateHlsStream(&request)
 	if err != nil {
-		app.logger.Error(errors.New(fmt.Sprintf("unable to create hls stream for movie %d: %s", movie.ID, err)))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "unable to create hls stream",
+			"error": err.Error(),
 		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "hls stream created successfully",
+		"pid": pid,
+	})
+}
+
+func (app *application) cancelJob(c *fiber.Ctx) error {
+	pid := c.Params("pid")
+	if pid == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "pid is required",
+		})
+	}
+
+	err := app.ffmpeg.CancelJob(pid)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "job cancelled",
 	})
 }

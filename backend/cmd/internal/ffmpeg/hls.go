@@ -1,11 +1,14 @@
 package ffmpeg
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type HlsOpts struct {
@@ -35,25 +38,33 @@ const (
 	DefaultInitFileName   = "init.mp4"
 )
 
-func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) error {
+func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	err := f.validateHlsOpts(opts)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	cmd := f.prepareHlsCmd(opts)
 
-	go func() {
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			msg := fmt.Sprintf("the error output is %s", string(output))
-			log.Println(msg)
-		}
+	err = cmd.Start()
+	if err != nil {
+		return "", fmt.Errorf("failed to start ffmpeg process: %w", err)
+	}
 
-		log.Println(string(output))
-	}()
+	pid := uuid.NewString()
 
-	return nil
+	if len(f.jobs) > 10 {
+		return "", errors.New("too many jobs running")
+	}
+
+	f.jobs[pid] = job{
+		id:        pid,
+		process:   cmd,
+		startTime: time.Now(),
+		status:    "running",
+	}
+
+	return pid, nil
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
@@ -140,4 +151,8 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	)
 
 	return exec.Command(f.Bin, cmdArgs...)
+}
+
+func (f *ffmpeg) PrepareHlsCmd(opts *HlsOpts) *exec.Cmd {
+	return f.prepareHlsCmd(opts)
 }

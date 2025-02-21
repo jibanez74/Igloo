@@ -8,12 +8,14 @@ import (
 )
 
 type FFmpeg interface {
-	CreateHlsStream(opts *HlsOpts) error
+	CreateHlsStream(opts *HlsOpts) (string, error)
+	CancelJob(string) error
 }
 
 type ffmpeg struct {
 	Bin         string
 	AccelMethod string
+	jobs        map[string]job
 }
 
 const (
@@ -31,6 +33,7 @@ func New(ffmpegPath string) (FFmpeg, error) {
 	f := ffmpeg{
 		Bin:         ffmpegPath,
 		AccelMethod: NoAccel,
+		jobs:        make(map[string]job),
 	}
 
 	if f.Bin == "ffmpeg" {
