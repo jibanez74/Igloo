@@ -32,7 +32,6 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		return nil, errors.New("no streams found")
 	}
 
-	// Initialize result with empty slices
 	result := &movieMetadataResult{
 		VideoList:    make([]database.CreateVideoStreamParams, 0),
 		AudioList:    make([]database.CreateAudioStreamParams, 0),
@@ -40,8 +39,12 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		ChapterList:  make([]database.CreateChapterParams, 0),
 	}
 
-	// Process streams
 	for _, s := range probeResult.Streams {
+		// Skip attached pictures (like cover art)
+		if s.Disposition != nil && s.Disposition.AttachedPic == 1 {
+			continue
+		}
+
 		switch s.CodecType {
 		case "video":
 			result.VideoList = append(result.VideoList, database.CreateVideoStreamParams{
