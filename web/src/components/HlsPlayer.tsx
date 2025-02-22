@@ -13,6 +13,7 @@ type HlsPlayerProps = {
   useHlsJs: boolean;
   title?: string;
   playing?: boolean;
+  startTime?: number;
   onPlay?: () => void;
   onPause?: () => void;
   onEnded?: () => void;
@@ -31,6 +32,7 @@ export default function HlsPlayer({
   useHlsJs,
   title,
   playing = false,
+  startTime = 0,
   onPlay,
   onPause,
   onEnded,
@@ -41,6 +43,7 @@ export default function HlsPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
 
   useEffect(() => {
     if (!useHlsJs || !videoRef.current) return;
@@ -215,11 +218,16 @@ export default function HlsPlayer({
   }, [useHlsJs]);
 
   const handlePlay = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
+    if (videoRef.current && !hasPlayedOnce) {
+      videoRef.current.currentTime = startTime;
+      setHasPlayedOnce(true);
     }
     onPlay?.();
   };
+
+  useEffect(() => {
+    setHasPlayedOnce(false);
+  }, [url]);
 
   if (!useHlsJs) {
     return (
