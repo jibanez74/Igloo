@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import canPlayNativeHls from "@/utils/canPlayNativeHls";
 import HlsPlayer from "@/components/HlsPlayer";
@@ -20,7 +21,16 @@ function PlayMoviePage() {
   const { movieID } = Route.useParams();
   const { pid, title } = Route.useLoaderDeps();
 
-  console.log(pid);
+  useEffect(() => {
+    return () => {
+      if (window.confirm("are you sure you wish to stop playback?")) {
+        fetch(`/api/v1/ffmpeg/jobs/cancel/${pid}`, {
+          method: "delete",
+          credentials: "include",
+        }).then(res => alert(`${res.status} - ${res.statusText}`));
+      }
+    };
+  }, [pid]);
 
   return (
     <div className='min-h-screen bg-slate-900 flex flex-col'>
