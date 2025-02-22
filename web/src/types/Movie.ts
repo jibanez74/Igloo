@@ -14,6 +14,13 @@ export type SimpleMovie = {
   year: number;
 };
 
+export type MovieResponse = {
+  movies: SimpleMovie[];
+  current_page: number;
+  total_pages: number;
+  total_movies: number;
+};
+
 export type Movie = {
   id: number;
   title: string;

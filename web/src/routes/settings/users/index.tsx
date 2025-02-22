@@ -1,4 +1,4 @@
-import { getRouteApi, createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import UsersTable from "@/components/UsersTable";
 import Pagination from "@/components/Pagination";
 import { FiUserPlus } from "react-icons/fi";
@@ -26,11 +26,9 @@ export const Route = createFileRoute("/settings/users/")({
 });
 
 function UsersPage() {
-  const { useLoaderData, useSearch, useNavigate } =
-    getRouteApi("/settings/users/");
-  const { users, total_pages, total_users } = useLoaderData();
-  const { page, limit } = useSearch();
-  const navigate = useNavigate();
+  const { users, total_pages, total_users } = Route.useLoaderData();
+  const { page, limit } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   const handlePageChange = (newPage: number) => {
     navigate({
