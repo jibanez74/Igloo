@@ -70,8 +70,8 @@ function MovieDetailsPage() {
     const opts: MovieHlsOpts = {
       title: movie.title,
       audio_codec: "aac",
-      audio_bit_rate: 320,
-      audio_channels: 6,
+      audio_bit_rate: 192,
+      audio_channels: 2,
       audio_stream_index: movie.audio_streams[0].index,
       video_stream_index: movie.video_streams[0].index,
       video_codec: "copy",
