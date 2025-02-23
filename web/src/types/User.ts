@@ -8,9 +8,9 @@ export type User = {
   avatar?: string;
 };
 
-export interface UsersResponse {
+export type UsersResponse = {
   users: User[];
   current_page: number;
   total_pages: number;
   total_users: number;
-}
+};

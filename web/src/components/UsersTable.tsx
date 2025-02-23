@@ -32,7 +32,7 @@ export default function UsersTable({ users }: UsersTableProps) {
       </thead>
       <tbody className='divide-y divide-sky-200/10'>
         {users.map(user => (
-          <tr key={user.ID} className='hover:bg-sky-500/5 transition-colors'>
+          <tr key={user.id} className='hover:bg-sky-500/5 transition-colors'>
             <th scope='row' className='py-4 text-white font-normal'>
               {user.name}
             </th>
@@ -44,7 +44,7 @@ export default function UsersTable({ users }: UsersTableProps) {
               </div>
             </td>
             <td className='py-4'>
-              {user.isActive ? (
+              {user.is_active ? (
                 <span className='inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400'>
                   <FiCheck className='w-3 h-3' aria-hidden='true' /> Active
                 </span>
@@ -55,7 +55,7 @@ export default function UsersTable({ users }: UsersTableProps) {
               )}
             </td>
             <td className='py-4'>
-              {user.isAdmin ? (
+              {user.is_admin ? (
                 <span className='inline-flex items-center gap-1 text-amber-300'>
                   <FiShield className='w-4 h-4' aria-hidden='true' /> Admin
                 </span>

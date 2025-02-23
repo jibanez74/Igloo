@@ -15,10 +15,10 @@ export default function Pagination({
   const getPageNumbers = () => {
     const pages = [];
     const showPages = 5; // Number of page buttons to show
-    
+
     let startPage = Math.max(1, currentPage - Math.floor(showPages / 2));
-    let endPage = Math.min(totalPages, startPage + showPages - 1);
-    
+    const endPage = Math.min(totalPages, startPage + showPages - 1);
+
     // Adjust start if we're near the end
     if (endPage - startPage + 1 < showPages) {
       startPage = Math.max(1, endPage - showPages + 1);
@@ -27,20 +27,20 @@ export default function Pagination({
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
-    
+
     return pages;
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-6">
+    <div className='flex items-center justify-center gap-2 mt-6'>
       {/* Previous button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        aria-label="Previous page"
+        className='p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors'
+        aria-label='Previous page'
       >
-        <FiChevronLeft className="w-5 h-5" />
+        <FiChevronLeft className='w-5 h-5' />
       </button>
 
       {/* First page */}
@@ -56,9 +56,7 @@ export default function Pagination({
           >
             1
           </button>
-          {getPageNumbers()[0] > 2 && (
-            <span className="text-sky-200">...</span>
-          )}
+          {getPageNumbers()[0] > 2 && <span className='text-sky-200'>...</span>}
         </>
       )}
 
@@ -81,7 +79,7 @@ export default function Pagination({
       {getPageNumbers()[getPageNumbers().length - 1] < totalPages && (
         <>
           {getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1 && (
-            <span className="text-sky-200">...</span>
+            <span className='text-sky-200'>...</span>
           )}
           <button
             onClick={() => onPageChange(totalPages)}
@@ -100,11 +98,11 @@ export default function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        aria-label="Next page"
+        className='p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors'
+        aria-label='Next page'
       >
-        <FiChevronRight className="w-5 h-5" />
+        <FiChevronRight className='w-5 h-5' />
       </button>
     </div>
   );
-} 
+}

@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"time"
@@ -125,6 +126,34 @@ func main() {
 	users.Get("/count", app.getTotalUsersCount)
 	users.Get("/:id", app.getUserByID)
 	users.Post("/create", app.createUser)
+
+	if !app.settings.GetDebug() {
+		workDir, err := os.Getwd()
+		if err != nil {
+			app.logger.Error(fmt.Errorf("failed to get working directory: %w", err))
+			return
+		}
+
+		buildDir := filepath.Join(workDir, "cmd", "client", "dist")
+		assetsDir := filepath.Join(buildDir, "assets")
+
+		api.Static("/assets", assetsDir, fiber.Static{
+			Compress:      true,
+			ByteRange:     true,
+			Browse:        false,
+			MaxAge:        3600,
+			CacheDuration: time.Hour * 24,
+		})
+
+		api.Static("*", buildDir, fiber.Static{
+			Compress:      true,
+			ByteRange:     true,
+			Browse:        false,
+			MaxAge:        3600,
+			CacheDuration: time.Hour * 24,
+			Index:         "index.html",
+		})
+	}
 
 	serverChan := make(chan error, 1)
 	readyChan := make(chan bool, 1)

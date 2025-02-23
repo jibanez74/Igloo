@@ -33,7 +33,7 @@ function MoviesPage() {
   const navigate = Route.useNavigate();
 
   return (
-    <main 
+    <main
       className='min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'
       aria-label='Movie gallery page'
     >
@@ -47,19 +47,16 @@ function MoviesPage() {
         </header>
 
         {/* Gallery Section */}
-        <section 
-          className='min-h-[200px]'
-          aria-label='Movie gallery'
-        >
+        <section className='min-h-[200px]' aria-label='Movie gallery'>
           {movies.length === 0 ? (
-            <p 
+            <p
               className='flex items-center justify-center h-64 text-sky-200'
               role='status'
             >
               No movies available
             </p>
           ) : (
-            <ul 
+            <ul
               className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6'
               role='list'
             >
@@ -74,10 +71,7 @@ function MoviesPage() {
 
         {/* Pagination Section */}
         {total_pages > 1 && (
-          <nav 
-            className='mt-8'
-            aria-label='Movie gallery pagination'
-          >
+          <nav className='mt-8' aria-label='Movie gallery pagination'>
             <Pagination
               currentPage={current_page}
               totalPages={total_pages}
