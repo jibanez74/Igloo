@@ -134,7 +134,7 @@ func main() {
 			return
 		}
 
-		buildDir := filepath.Join(workDir, "cmd", "client", "dist")
+		buildDir := filepath.Join(workDir, "cmd", "client")
 		assetsDir := filepath.Join(buildDir, "assets")
 
 		api.Static("/assets", assetsDir, fiber.Static{
