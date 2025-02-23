@@ -15,21 +15,25 @@ export default function MovieCard({
   const imgSrc = getImgSrc(movie.thumb);
 
   return (
-    <div className='group relative bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 hover:shadow-blue-500/20 hover:scale-[1.02]'>
-      {/* Movie Poster with Link */}
-      <Link
-        to='/movies/$movieID'
-        params={{
-          movieID: movie.id.toString(),
-        }}
-      >
+    <Link
+      to='/movies/$movieID'
+      params={{ movieID: movie.id.toString() }}
+      className='block w-full transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-500 rounded-xl'
+    >
+      <div className='relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800'>
         <img
           src={imgSrc}
           alt={`${movie.title} poster`}
-          className='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
+          className='w-full h-full object-cover'
           loading='lazy'
         />
-      </Link>
+        <div className='absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent'>
+          <h3 className='text-sm font-medium text-white truncate'>
+            {movie.title}
+          </h3>
+          <p className='text-xs text-sky-200'>{movie.year}</p>
+        </div>
+      </div>
 
       <div className='absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-50' />
 
@@ -45,7 +49,6 @@ export default function MovieCard({
             </span>
             {movie.title}
           </h3>
-          <p className='text-sm text-blue-200'>{movie.year}</p>
         </div>
 
         {/* Play Button */}
@@ -59,6 +62,6 @@ export default function MovieCard({
           </button>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
