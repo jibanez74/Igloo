@@ -141,17 +141,18 @@ func main() {
 			Compress:      true,
 			ByteRange:     true,
 			Browse:        false,
-			MaxAge:        3600,
-			CacheDuration: time.Hour * 24,
+			MaxAge:        0,
+			CacheDuration: 0,
+			Next:          nil,
 		})
 
 		api.Static("*", buildDir, fiber.Static{
 			Compress:      true,
 			ByteRange:     true,
 			Browse:        false,
-			MaxAge:        3600,
-			CacheDuration: time.Hour * 24,
-			Index:         "index.html",
+			MaxAge:        0,
+			CacheDuration: 0, Index: "index.html",
+			Next: nil,
 		})
 	}
 
