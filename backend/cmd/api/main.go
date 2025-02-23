@@ -137,7 +137,7 @@ func main() {
 		buildDir := filepath.Join(workDir, "cmd", "client")
 		assetsDir := filepath.Join(buildDir, "assets")
 
-		api.Static("/assets", assetsDir, fiber.Static{
+		f.Static("/assets", assetsDir, fiber.Static{
 			Compress:      true,
 			ByteRange:     true,
 			Browse:        false,
@@ -146,13 +146,14 @@ func main() {
 			Next:          nil,
 		})
 
-		api.Static("*", buildDir, fiber.Static{
+		f.Static("*", buildDir, fiber.Static{
 			Compress:      true,
 			ByteRange:     true,
 			Browse:        false,
 			MaxAge:        0,
-			CacheDuration: 0, Index: "index.html",
-			Next: nil,
+			CacheDuration: 0,
+			Index:         "index.html",
+			Next:          nil,
 		})
 	}
 
