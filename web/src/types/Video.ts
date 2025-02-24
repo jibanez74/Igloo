@@ -5,7 +5,7 @@ export type Video = {
   profile: string;
   aspectRatio: string;
   bitDepth: string;
-  codec: string;
+  codec: "aac" | "mp3" | "copy";
   width: number;
   height: number;
   codedHeight: number;

@@ -62,7 +62,7 @@ function MoviesPage() {
             >
               {movies.map(movie => (
                 <li key={movie.id}>
-                  <MovieCard movie={movie} />
+                  <MovieCard movie={movie} imgLoading='lazy' />
                 </li>
               ))}
             </ul>
