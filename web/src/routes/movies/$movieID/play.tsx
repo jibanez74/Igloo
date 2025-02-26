@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import canPlayNativeHls from "@/utils/canPlayNativeHls";
-import HlsPlayer from "@/components/HlsPlayer";
+import canPlayNativeHls from "../../../utils/canPlayNativeHls";
+import HlsPlayer from "../../../components/HlsPlayer";
 
 type PlayParams = {
   title: string;

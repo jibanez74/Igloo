@@ -12,7 +12,7 @@ import {
   FiLogOut,
 } from "react-icons/fi";
 import iglooLogo from "@/assets/images/logo-alt.png";
-import useAuth from "@/hooks/useAuth";
+import useAuth from "../hooks/useAuth";
 
 const navLinks = [
   { to: "/", icon: FiHome, label: "Home" },

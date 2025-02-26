@@ -13,7 +13,9 @@ export default function ExtrasSection({
   const getYouTubeVideoId = (url: string) => {
     const regExp =
       /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
+
+      const match = url.match(regExp);
+
     return match && match[2].length === 11 ? match[2] : null;
   };
 
@@ -23,6 +25,7 @@ export default function ExtrasSection({
   ) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+
       onSelectVideo(url);
     }
   };
@@ -30,9 +33,11 @@ export default function ExtrasSection({
   return (
     <section className='container mx-auto px-4 py-12 border-t border-sky-200/10'>
       <h2 className='text-2xl font-bold text-white mb-6'>Extras</h2>
+
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
         {extras.map(extra => {
           const videoId = getYouTubeVideoId(extra.url);
+
           const thumbnailUrl = videoId
             ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
             : "";

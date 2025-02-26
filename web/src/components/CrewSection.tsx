@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
-import getImgSrc from "@/utils/getImgSrc";
-import type { Crew } from "@/types/Crew";
+import getImgSrc from "../utils/getImgSrc";
+import type { Crew } from "../types/Crew";
 
 type CrewSectionProps = {
   crew: Crew[];

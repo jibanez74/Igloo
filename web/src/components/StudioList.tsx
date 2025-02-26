@@ -1,5 +1,5 @@
 import { FiFilm } from "react-icons/fi";
-import type { Studio } from "@/types/Studio";
+import type { Studio } from "../types/Studio";
 
 type StudioListProps = {
   studios: Studio[];

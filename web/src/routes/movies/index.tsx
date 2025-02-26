@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import MovieCard from "@/components/MovieCard";
-import Pagination from "@/components/Pagination";
-import type { PaginationSearch } from "@/types/Pagination";
-import type { MovieResponse } from "@/types/Movie";
+import MovieCard from "../../components/MovieCard";
+import Pagination from "../../components/Pagination";
+import type { PaginationSearch } from "../../types/Pagination";
+import type { MovieResponse } from "../../types/Movie";
 
 export const Route = createFileRoute("/movies/")({
   validateSearch: (search: Record<string, unknown>): PaginationSearch => ({

@@ -12,20 +12,20 @@ import {
   FiMoreHorizontal,
   FiInfo,
 } from "react-icons/fi";
-import getImgSrc from "@/utils/getImgSrc";
-import formatDate from "@/utils/formatDate";
-import formatRuntime from "@/utils/formatRuntime";
-import formatDollars from "@/utils/formatDollars";
-import CastSection from "@/components/CastSection";
-import CrewSection from "@/components/CrewSection";
-import GenreList from "@/components/GenreList";
-import YoutubeModal from "@/components/YoutubeModal";
-import StudioList from "@/components/StudioList";
-import ExtrasSection from "@/components/ExtrasSection";
-import Dropdown from "@/components/Dropdown";
-import PlaybackSettingsModal from "@/components/PlaybackSettingsModal";
-import type { Movie } from "@/types/Movie";
-import type { MovieHlsOpts } from "@/types/Transcode";
+import getImgSrc from "../../../utils/getImgSrc";
+import formatDate from "../../../utils/formatDate";
+import formatRuntime from "../../../utils/formatRuntime";
+import formatDollars from "../../../utils/formatDollars";
+import CastSection from "../../../components/CastSection";
+import CrewSection from "../../../components/CrewSection";
+import GenreList from "../../../components/GenreList";
+import YoutubeModal from "../../../components/YoutubeModal";
+import StudioList from "../../../components/StudioList";
+import ExtrasSection from "../../../components/ExtrasSection";
+import Dropdown from "../../../components/Dropdown";
+import PlaybackSettingsModal from "../../../components/PlaybackSettingsModal";
+import type { Movie } from "../../../types/Movie";
+import type { MovieHlsOpts } from "../../../types/Transcode";
 
 export const Route = createFileRoute("/movies/$movieID/")({
   component: MovieDetailsPage,

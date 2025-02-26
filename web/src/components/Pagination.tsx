@@ -1,6 +1,6 @@
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
 
-interface PaginationProps {
+type PaginationProps = {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;

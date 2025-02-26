@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { FiUser, FiMail, FiLock, FiShield, FiImage, FiX } from "react-icons/fi";
-import Spinner from "@/components/Spinner";
-import ErrorWarning from "@/components/ErrorWarning";
+import Spinner from "../../../components/Spinner";
+import ErrorWarning from "../../..//components/ErrorWarning";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FILE_TYPES = ["image/jpeg", "image/png", "image/gif"];

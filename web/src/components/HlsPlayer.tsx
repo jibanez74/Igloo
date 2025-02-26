@@ -1,6 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import ReactPlayer from "react-player";
 import Hls from "hls.js";
-import { useEffect, useRef, useState } from "react";
 
 type Quality = {
   width: number;

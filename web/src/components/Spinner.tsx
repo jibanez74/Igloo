@@ -1,6 +1,6 @@
 import { FiLoader } from "react-icons/fi";
 
-interface SpinnerProps {
+type SpinnerProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
 }

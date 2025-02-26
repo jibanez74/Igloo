@@ -1,6 +1,6 @@
 import { FiAlertCircle } from "react-icons/fi";
 
-interface ErrorWarningProps {
+type ErrorWarningProps = {
   error: string;
   isVisible: boolean;
 }

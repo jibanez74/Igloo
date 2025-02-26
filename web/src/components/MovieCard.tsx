@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { FiPlay } from "react-icons/fi";
-import getImgSrc from "@/utils/getImgSrc";
-import type { SimpleMovie } from "@/types/Movie";
+import getImgSrc from "../utils/getImgSrc";
+import type { SimpleMovie } from "../types/Movie";
 
 type MovieCardProps = {
   movie: SimpleMovie;

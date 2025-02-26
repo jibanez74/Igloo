@@ -1,4 +1,4 @@
-import type { Genre } from "@/types/Genre";
+import type { Genre } from "../types/Genre";
 
 type GenreListProps = {
   genres: Genre[];

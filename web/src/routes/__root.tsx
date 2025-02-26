@@ -1,14 +1,18 @@
 import { Outlet, createRootRoute, redirect } from "@tanstack/react-router";
+import {QueryClientProvider} from '@tanstack/react-query'
+import queryClient from '../utils/queryClient';
 import AuthProvider from "@/context/AuthProvider";
 import Navbar from "@/components/Navbar";
 
 export const Route = createRootRoute({
   component: () => {
     return (
+      <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Navbar />
         <Outlet />
       </AuthProvider>
+      </QueryClientProvider>
     );
   },
   beforeLoad: ({ location }) => {

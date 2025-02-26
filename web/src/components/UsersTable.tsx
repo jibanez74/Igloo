@@ -1,5 +1,5 @@
 import { FiMail, FiShield, FiCheck, FiX } from "react-icons/fi";
-import type { User } from "@/types/User";
+import type { User } from "../types/User";
 
 type UsersTableProps = {
   users: User[];

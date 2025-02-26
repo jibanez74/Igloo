@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import useAuth from "@/hooks/useAuth";
+import useAuth from "../hooks/useAuth";
 import { FiUser, FiMail, FiLock } from "react-icons/fi";
-import ErrorWarning from "@/components/ErrorWarning";
+import ErrorWarning from "../components/ErrorWarning";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,

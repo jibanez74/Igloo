@@ -1,38 +1,36 @@
-import { useState, useEffect } from "react";
+import {useQuery} from '@tanstack/react-query'
 import MovieCard from "./MovieCard";
 import ErrorWarning from "./ErrorWarning";
 import Spinner from "./Spinner";
-import type { SimpleMovie } from "@/types/Movie";
+import type { SimpleMovie } from "../types/Movie";
 
 export default function LatestMovies() {
-  const [movies, setMovies] = useState<SimpleMovie[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isErrorVisible, setIsErrorVisible] = useState(false);
-
-  useEffect(() => {
-    const fetchLatestMovies = async () => {
+  const {data: movies, error, isError, isPending} = useQuery({
+    queryKey: ['latest-movies'],
+    queryFn: async (): Promise<SimpleMovie[]> => {
       try {
         const res = await fetch("/api/v1/movies/latest", {
           credentials: "include",
         });
 
-        if (!res.ok) {
-          throw new Error("Failed to fetch latest movies");
-        }
-        const data = await res.json();
-        setMovies(data.movies);
-        setError("");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-        setIsErrorVisible(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        const data = await res.json()
 
-    fetchLatestMovies();
-  }, []);
+        if (!res.ok) {
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          )
+        }
+
+        return data.movies
+
+
+      } catch (err) {
+        console.error(err)
+        throw new Error("a network occured while fetching movies")
+      }
+    }
+  })
+
 
   return (
     <section className='py-8'>
@@ -40,23 +38,23 @@ export default function LatestMovies() {
         <div className='flex items-center justify-between h-10 mb-6'>
           <h2 className='text-2xl font-bold text-white'>Latest Movies</h2>
           <div className='w-5 h-5 flex items-center justify-center'>
-            {isLoading && <Spinner />}
+            {isPending && <Spinner />}
           </div>
         </div>
 
         <div className='h-10'>
-          <ErrorWarning error={error} isVisible={isErrorVisible} />
+          <ErrorWarning error={error?.message || ''} isVisible={isError} />
         </div>
 
         <div className='min-h-[200px]'>
-          {!isLoading && movies.length === 0 && (
+          {!isPending && movies?.length === 0 && (
             <div className='h-full flex items-center justify-center'>
               <p className='text-blue-200'>No movies available</p>
             </div>
           )}
 
           <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6'>
-            {isLoading
+            {isPending
               ? // Loading placeholders
                 Array.from({ length: 12 }).map((_, index) => (
                   <div
@@ -64,7 +62,7 @@ export default function LatestMovies() {
                     className='aspect-[2/3] rounded-xl bg-slate-800/50 animate-pulse'
                   />
                 ))
-              : movies.map(movie => (
+              : movies?.map(movie => (
                   <MovieCard key={movie.id} movie={movie} imgLoading='eager' />
                 ))}
           </div>
