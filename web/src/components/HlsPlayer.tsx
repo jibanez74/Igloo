@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, memo } from "react";
 import ReactPlayer from "react-player";
 import Hls, { ErrorTypes, Events, ErrorData } from "hls.js";
+import { useMutation } from "@tanstack/react-query";
 
 const HLS_CONFIG = {
   debug: import.meta.env.DEV,
@@ -106,6 +107,17 @@ const LoadingOverlay = memo(() => (
 
 LoadingOverlay.displayName = 'LoadingOverlay';
 
+// Optional: Analytics and metadata functions
+const logPlaybackAnalytics = async (event: { 
+  url: string;
+  type: 'play' | 'pause' | 'ended' | 'error';
+  timestamp: number;
+  error?: Error;
+}) => {
+  // Implementation for sending analytics
+  console.log('Logging playback event:', event);
+};
+
 function HlsPlayer({
   url,
   useHlsJs,
@@ -125,6 +137,15 @@ function HlsPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Optional: Analytics mutation
+  const { mutate: logEvent } = useMutation({
+    mutationFn: logPlaybackAnalytics,
+    // Optionally handle errors silently to not affect playback
+    onError: (error) => {
+      console.warn('Failed to log playback event:', error);
+    }
+  });
+
   const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
     onProgress?.({
@@ -140,8 +161,16 @@ function HlsPlayer({
       videoRef.current.currentTime = startTime;
       hasPlayedOnceRef.current = true;
     }
+    
+    // Optional: Log play event
+    logEvent({
+      url,
+      type: 'play',
+      timestamp: Date.now()
+    });
+    
     onPlay?.();
-  }, [startTime, onPlay]);
+  }, [startTime, onPlay, url, logEvent]);
 
   const handleLoadingStart = useCallback(() => setIsLoading(true), []);
   const handleLoadingEnd = useCallback(() => setIsLoading(false), []);
@@ -207,6 +236,14 @@ function HlsPlayer({
         videoRef.current?.play().catch(error => {
           console.error('Failed to play video:', error);
           setError(error);
+          
+          // Log error event
+          logEvent({
+            url,
+            type: 'error',
+            timestamp: Date.now(),
+            error
+          });
         });
       }
     };
@@ -220,11 +257,19 @@ function HlsPlayer({
       onQualitiesLoaded?.(qualities);
     };
 
-    const handleError = (_event: unknown, data: ErrorData) => {
+    const handleError = (_event: Events.ERROR, data: ErrorData) => {
       if (data.fatal) {
         const error = new Error(`HLS.js Error: ${data.type}`);
         console.error(error, data);
         
+        // Log error event
+        logEvent({
+          url,
+          type: 'error',
+          timestamp: Date.now(),
+          error
+        });
+
         switch (data.type) {
           case ErrorTypes.NETWORK_ERROR:
             hls.startLoad();
@@ -257,7 +302,7 @@ function HlsPlayer({
       hls.off(Events.ERROR, handleError);
       hls.destroy();
     };
-  }, [url, useHlsJs, onError, playing, onQualitiesLoaded, handleLoadingEnd]);
+  }, [url, useHlsJs, onError, playing, onQualitiesLoaded, handleLoadingEnd, logEvent]);
 
   useEffect(() => {
     if (useHlsJs) {
