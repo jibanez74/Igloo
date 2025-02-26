@@ -1,6 +1,69 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import ReactPlayer from "react-player";
-import Hls from "hls.js";
+import Hls, { ErrorTypes, Events, ErrorData } from "hls.js";
+
+const HLS_CONFIG = {
+  debug: import.meta.env.DEV,
+  enableWorker: true,
+  autoStartLoad: true,
+  startLevel: -1,
+  manifestLoadPolicy: {
+    default: {
+      maxTimeToFirstByteMs: 10000,
+      maxLoadTimeMs: 10000,
+      timeoutRetry: {
+        maxNumRetry: 3,
+        retryDelayMs: 1000,
+        maxRetryDelayMs: 0,
+      },
+      errorRetry: {
+        maxNumRetry: 3,
+        retryDelayMs: 1000,
+        maxRetryDelayMs: 8000,
+      },
+    },
+  },
+  playlistLoadPolicy: {
+    default: {
+      maxTimeToFirstByteMs: 10000,
+      maxLoadTimeMs: 10000,
+      timeoutRetry: {
+        maxNumRetry: 2,
+        retryDelayMs: 0,
+        maxRetryDelayMs: 0,
+      },
+      errorRetry: {
+        maxNumRetry: 2,
+        retryDelayMs: 1000,
+        maxRetryDelayMs: 8000,
+      },
+    },
+  },
+  fragLoadPolicy: {
+    default: {
+      maxTimeToFirstByteMs: 20000,
+      maxLoadTimeMs: 20000,
+      timeoutRetry: {
+        maxNumRetry: 4,
+        retryDelayMs: 0,
+        maxRetryDelayMs: 0,
+      },
+      errorRetry: {
+        maxNumRetry: 6,
+        retryDelayMs: 1000,
+        maxRetryDelayMs: 8000,
+      },
+    },
+  },
+  maxBufferSize: 0,
+  maxBufferLength: 30,
+  maxMaxBufferLength: 600,
+  progressive: false,
+  lowLatencyMode: false,
+  enableSoftwareAES: true,
+  abrEwmaDefaultEstimate: 500000,
+  backBufferLength: 90,
+} as const;
 
 type Quality = {
   width: number;
@@ -27,7 +90,7 @@ type HlsPlayerProps = {
   onQualitiesLoaded?: (qualities: Quality[]) => void;
 };
 
-export default function HlsPlayer({
+function HlsPlayer({
   url,
   useHlsJs,
   title,
@@ -42,8 +105,85 @@ export default function HlsPlayer({
 }: HlsPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const hasPlayedOnceRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
+
+  const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const target = e.currentTarget;
+    onProgress?.({
+      played: target.currentTime / target.duration,
+      playedSeconds: target.currentTime,
+      loaded: target.buffered.length ? target.buffered.end(0) / target.duration : 0,
+      loadedSeconds: target.buffered.length ? target.buffered.end(0) : 0,
+    });
+  }, [onProgress]);
+
+  const handlePlay = useCallback(() => {
+    if (videoRef.current && !hasPlayedOnceRef.current) {
+      videoRef.current.currentTime = startTime;
+      hasPlayedOnceRef.current = true;
+    }
+    onPlay?.();
+  }, [startTime, onPlay]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    switch (e.key.toLowerCase()) {
+      case " ":
+        e.preventDefault();
+
+        if (video.paused) {
+          video.play();
+        } else {
+          video.pause();
+        }
+
+        break;
+      case "arrowleft":
+        e.preventDefault();
+
+        video.currentTime = Math.max(0, video.currentTime - 10);
+
+        break;
+      case "arrowright":
+        e.preventDefault();
+
+        video.currentTime = Math.min(video.duration, video.currentTime + 10);
+
+        break;
+      case "arrowup":
+        e.preventDefault();
+
+        video.volume = Math.min(1, video.volume + 0.1);
+
+        break;
+      case "arrowdown":
+        e.preventDefault();
+
+        video.volume = Math.max(0, video.volume - 0.1);
+
+        break;
+      case "m":
+        e.preventDefault();
+
+        video.muted = !video.muted;
+
+        break;
+      case "f":
+        e.preventDefault();
+
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          video.requestFullscreen();
+        }
+
+        break;
+    }
+  }, []);
 
   useEffect(() => {
     if (!useHlsJs || !videoRef.current) return;
@@ -52,99 +192,35 @@ export default function HlsPlayer({
       hlsRef.current.destroy();
     }
 
-    const hls = new Hls({
-      debug: true,
-      enableWorker: true,
-      autoStartLoad: true,
-      startLevel: -1,
-      manifestLoadPolicy: {
-        default: {
-          maxTimeToFirstByteMs: 10000,
-          maxLoadTimeMs: 10000,
-          timeoutRetry: {
-            maxNumRetry: 3,
-            retryDelayMs: 1000,
-            maxRetryDelayMs: 0,
-          },
-          errorRetry: {
-            maxNumRetry: 3,
-            retryDelayMs: 1000,
-            maxRetryDelayMs: 8000,
-          },
-        },
-      },
-      playlistLoadPolicy: {
-        default: {
-          maxTimeToFirstByteMs: 10000,
-          maxLoadTimeMs: 10000,
-          timeoutRetry: {
-            maxNumRetry: 2,
-            retryDelayMs: 0,
-            maxRetryDelayMs: 0,
-          },
-          errorRetry: {
-            maxNumRetry: 2,
-            retryDelayMs: 1000,
-            maxRetryDelayMs: 8000,
-          },
-        },
-      },
-      fragLoadPolicy: {
-        default: {
-          maxTimeToFirstByteMs: 20000,
-          maxLoadTimeMs: 20000,
-          timeoutRetry: {
-            maxNumRetry: 4,
-            retryDelayMs: 0,
-            maxRetryDelayMs: 0,
-          },
-          errorRetry: {
-            maxNumRetry: 6,
-            retryDelayMs: 1000,
-            maxRetryDelayMs: 8000,
-          },
-        },
-      },
-      maxBufferSize: 0,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 600,
-      progressive: false,
-      lowLatencyMode: false,
-      enableSoftwareAES: true,
-      abrEwmaDefaultEstimate: 500000,
-      backBufferLength: 90,
-    });
+    const hls = new Hls(HLS_CONFIG);
 
     hls.attachMedia(videoRef.current);
 
-    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-      hls.loadSource(url);
-    });
-
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    const handleManifestParsed = () => {
       setIsLoading(false);
+
       if (playing) {
         videoRef.current?.play();
       }
-    });
+    };
 
-    hls.on(Hls.Events.LEVEL_LOADED, () => {
+    const handleLevelLoaded = () => {
       const qualities = hls.levels.map(level => ({
         width: level.width,
         height: level.height,
         bitrate: level.bitrate,
       }));
       onQualitiesLoaded?.(qualities);
-    });
+    };
 
-    hls.on(Hls.Events.ERROR, (_event, data) => {
+    const handleError = (_event: unknown, data: ErrorData) => {
       if (data.fatal) {
         switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
+          case ErrorTypes.NETWORK_ERROR:
             console.error("Network error:", data);
             hls.startLoad();
             break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
+          case ErrorTypes.MEDIA_ERROR:
             console.error("Media error:", data);
             hls.recoverMediaError();
             break;
@@ -155,78 +231,36 @@ export default function HlsPlayer({
         }
         onError?.(new Error(`HLS.js Error: ${data.type}`));
       }
+    };
+
+    hls.on(Events.MEDIA_ATTACHED, () => {
+      hls.loadSource(url);
     });
+
+    hls.on(Events.MANIFEST_PARSED, handleManifestParsed);
+    hls.on(Events.LEVEL_LOADED, handleLevelLoaded);
+    hls.on(Events.ERROR, handleError);
 
     hlsRef.current = hls;
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-      }
+      hls.off(Events.MANIFEST_PARSED, handleManifestParsed);
+      hls.off(Events.LEVEL_LOADED, handleLevelLoaded);
+      hls.off(Events.ERROR, handleError);
+      hls.destroy();
     };
   }, [url, useHlsJs, onError, playing, onQualitiesLoaded]);
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    switch (e.key.toLowerCase()) {
-      case " ":
-        e.preventDefault();
-        if (video.paused) {
-          video.play();
-        } else {
-          video.pause();
-        }
-        break;
-      case "arrowleft":
-        e.preventDefault();
-        video.currentTime = Math.max(0, video.currentTime - 10);
-        break;
-      case "arrowright":
-        e.preventDefault();
-        video.currentTime = Math.min(video.duration, video.currentTime + 10);
-        break;
-      case "arrowup":
-        e.preventDefault();
-        video.volume = Math.min(1, video.volume + 0.1); // Increase volume by 10%
-        break;
-      case "arrowdown":
-        e.preventDefault();
-        video.volume = Math.max(0, video.volume - 0.1); // Decrease volume by 10%
-        break;
-      case "m":
-        e.preventDefault();
-        video.muted = !video.muted;
-        break;
-      case "f":
-        e.preventDefault();
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          video.requestFullscreen();
-        }
-        break;
-    }
-  };
 
   useEffect(() => {
     if (useHlsJs) {
       window.addEventListener("keydown", handleKeyDown);
+
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [useHlsJs]);
-
-  const handlePlay = () => {
-    if (videoRef.current && !hasPlayedOnce) {
-      videoRef.current.currentTime = startTime;
-      setHasPlayedOnce(true);
-    }
-    onPlay?.();
-  };
+  }, [useHlsJs, handleKeyDown]);
 
   useEffect(() => {
-    setHasPlayedOnce(false);
+    hasPlayedOnceRef.current = false;
   }, [url]);
 
   if (!useHlsJs) {
@@ -276,18 +310,7 @@ export default function HlsPlayer({
         onPlay={handlePlay}
         onPause={onPause}
         onEnded={onEnded}
-        onTimeUpdate={e => {
-          onProgress?.({
-            played: e.currentTarget.currentTime / e.currentTarget.duration,
-            playedSeconds: e.currentTarget.currentTime,
-            loaded: e.currentTarget.buffered.length
-              ? e.currentTarget.buffered.end(0) / e.currentTarget.duration
-              : 0,
-            loadedSeconds: e.currentTarget.buffered.length
-              ? e.currentTarget.buffered.end(0)
-              : 0,
-          });
-        }}
+        onTimeUpdate={handleTimeUpdate}
         onSeeking={() => setIsLoading(true)}
         onSeeked={() => setIsLoading(false)}
         onWaiting={() => setIsLoading(true)}
@@ -297,3 +320,5 @@ export default function HlsPlayer({
     </div>
   );
 }
+
+export default memo(HlsPlayer);

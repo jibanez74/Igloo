@@ -1,5 +1,5 @@
 import { FiYoutube } from "react-icons/fi";
-import type { MovieExtras } from "@/types/MovieExtras";
+import type { MovieExtras } from "../types/MovieExtras";
 
 type ExtrasSectionProps = {
   extras: MovieExtras[];

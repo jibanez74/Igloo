@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { FiPlay, FiFilm } from "react-icons/fi";
-import LatestMovies from "../components/LatestMovies"
+import LatestMovies from "../components/LatestMovies";
 
 export const Route = createFileRoute("/")({
   component: HomePage,

@@ -11,7 +11,7 @@ import {
   FiSettings,
   FiLogOut,
 } from "react-icons/fi";
-import iglooLogo from "@/assets/images/logo-alt.png";
+import iglooLogo from "../assets/images/logo-alt.png";
 import useAuth from "../hooks/useAuth";
 
 const navLinks = [
