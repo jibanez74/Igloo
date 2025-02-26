@@ -90,6 +90,22 @@ type HlsPlayerProps = {
   onQualitiesLoaded?: (qualities: Quality[]) => void;
 };
 
+const TitleOverlay = memo(({ title }: { title: string }) => (
+  <div className='absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-black/80 to-transparent'>
+    <h1 className='text-white text-xl font-medium'>{title}</h1>
+  </div>
+));
+
+TitleOverlay.displayName = 'TitleOverlay';
+
+const LoadingOverlay = memo(() => (
+  <div className='absolute inset-0 flex items-center justify-center bg-slate-900/80'>
+    <div className='text-sky-200'>Loading...</div>
+  </div>
+));
+
+LoadingOverlay.displayName = 'LoadingOverlay';
+
 function HlsPlayer({
   url,
   useHlsJs,
@@ -107,6 +123,7 @@ function HlsPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const hasPlayedOnceRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
@@ -126,61 +143,49 @@ function HlsPlayer({
     onPlay?.();
   }, [startTime, onPlay]);
 
+  const handleLoadingStart = useCallback(() => setIsLoading(true), []);
+  const handleLoadingEnd = useCallback(() => setIsLoading(false), []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const video = videoRef.current;
-
     if (!video) return;
 
     switch (e.key.toLowerCase()) {
       case " ":
         e.preventDefault();
-
         if (video.paused) {
           video.play();
         } else {
           video.pause();
         }
-
         break;
       case "arrowleft":
         e.preventDefault();
-
         video.currentTime = Math.max(0, video.currentTime - 10);
-
         break;
       case "arrowright":
         e.preventDefault();
-
         video.currentTime = Math.min(video.duration, video.currentTime + 10);
-
         break;
       case "arrowup":
         e.preventDefault();
-
         video.volume = Math.min(1, video.volume + 0.1);
-
         break;
       case "arrowdown":
         e.preventDefault();
-
         video.volume = Math.max(0, video.volume - 0.1);
-
         break;
       case "m":
         e.preventDefault();
-
         video.muted = !video.muted;
-
         break;
       case "f":
         e.preventDefault();
-
         if (document.fullscreenElement) {
           document.exitFullscreen();
         } else {
           video.requestFullscreen();
         }
-
         break;
     }
   }, []);
@@ -197,10 +202,12 @@ function HlsPlayer({
     hls.attachMedia(videoRef.current);
 
     const handleManifestParsed = () => {
-      setIsLoading(false);
-
+      handleLoadingEnd();
       if (playing) {
-        videoRef.current?.play();
+        videoRef.current?.play().catch(error => {
+          console.error('Failed to play video:', error);
+          setError(error);
+        });
       }
     };
 
@@ -215,21 +222,22 @@ function HlsPlayer({
 
     const handleError = (_event: unknown, data: ErrorData) => {
       if (data.fatal) {
+        const error = new Error(`HLS.js Error: ${data.type}`);
+        console.error(error, data);
+        
         switch (data.type) {
           case ErrorTypes.NETWORK_ERROR:
-            console.error("Network error:", data);
             hls.startLoad();
             break;
           case ErrorTypes.MEDIA_ERROR:
-            console.error("Media error:", data);
             hls.recoverMediaError();
             break;
           default:
-            console.error("Fatal error:", data);
             hls.destroy();
+            setError(error);
             break;
         }
-        onError?.(new Error(`HLS.js Error: ${data.type}`));
+        onError?.(error);
       }
     };
 
@@ -249,12 +257,11 @@ function HlsPlayer({
       hls.off(Events.ERROR, handleError);
       hls.destroy();
     };
-  }, [url, useHlsJs, onError, playing, onQualitiesLoaded]);
+  }, [url, useHlsJs, onError, playing, onQualitiesLoaded, handleLoadingEnd]);
 
   useEffect(() => {
     if (useHlsJs) {
       window.addEventListener("keydown", handleKeyDown);
-
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
   }, [useHlsJs, handleKeyDown]);
@@ -263,14 +270,21 @@ function HlsPlayer({
     hasPlayedOnceRef.current = false;
   }, [url]);
 
+  if (error) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
+        <div className="text-red-500">
+          <h3 className="font-medium">Error playing video</h3>
+          <p className="text-sm opacity-75">{error.message}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!useHlsJs) {
     return (
       <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
-        {title && (
-          <div className='absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-black/80 to-transparent'>
-            <h1 className='text-white text-xl font-medium'>{title}</h1>
-          </div>
-        )}
+        {title && <TitleOverlay title={title} />}
         <ReactPlayer
           url={url}
           playing={playing}
@@ -291,16 +305,8 @@ function HlsPlayer({
 
   return (
     <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
-      {title && (
-        <div className='absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-black/80 to-transparent'>
-          <h1 className='text-white text-xl font-medium'>{title}</h1>
-        </div>
-      )}
-      {isLoading && (
-        <div className='absolute inset-0 flex items-center justify-center bg-slate-900/80'>
-          <div className='text-sky-200'>Loading...</div>
-        </div>
-      )}
+      {title && <TitleOverlay title={title} />}
+      {isLoading && <LoadingOverlay />}
       <video
         ref={videoRef}
         controls
@@ -311,11 +317,11 @@ function HlsPlayer({
         onPause={onPause}
         onEnded={onEnded}
         onTimeUpdate={handleTimeUpdate}
-        onSeeking={() => setIsLoading(true)}
-        onSeeked={() => setIsLoading(false)}
-        onWaiting={() => setIsLoading(true)}
-        onPlaying={() => setIsLoading(false)}
-        onLoadedData={() => setIsLoading(false)}
+        onSeeking={handleLoadingStart}
+        onSeeked={handleLoadingEnd}
+        onWaiting={handleLoadingStart}
+        onPlaying={handleLoadingEnd}
+        onLoadedData={handleLoadingEnd}
       />
     </div>
   );
