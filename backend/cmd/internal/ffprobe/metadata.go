@@ -5,6 +5,9 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"os/exec"
+	"strconv"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, error) {
@@ -32,12 +35,10 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		return nil, errors.New("no streams found")
 	}
 
-	result := &movieMetadataResult{
-		VideoList:    make([]database.CreateVideoStreamParams, 0),
-		AudioList:    make([]database.CreateAudioStreamParams, 0),
-		SubtitleList: make([]database.CreateSubtitleParams, 0),
-		ChapterList:  make([]database.CreateChapterParams, 0),
-	}
+	// Use maps to store unique streams
+	videoStreams := make(map[int]database.CreateVideoStreamParams)
+	audioStreams := make(map[int]database.CreateAudioStreamParams)
+	subtitleStreams := make(map[int]database.CreateSubtitleParams)
 
 	for _, s := range probeResult.Streams {
 		if s.Disposition != nil && s.Disposition.AttachedPic == 1 {
@@ -46,7 +47,7 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 
 		switch s.CodecType {
 		case "video":
-			result.VideoList = append(result.VideoList, database.CreateVideoStreamParams{
+			videoStreams[s.Index] = database.CreateVideoStreamParams{
 				Index:          int32(s.Index),
 				Codec:          s.CodecName,
 				Title:          s.CodecLongName,
@@ -65,28 +66,64 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 				FrameRate:      s.FrameRate,
 				BitDepth:       s.BitDepth,
 				BitRate:        s.BitRate,
-			})
+			}
 		case "audio":
-			result.AudioList = append(result.AudioList, database.CreateAudioStreamParams{
+			audioStreams[s.Index] = database.CreateAudioStreamParams{
 				Title:         s.Tags.Title,
 				Index:         int32(s.Index),
 				Codec:         s.CodecName,
 				Language:      s.Tags.Language,
 				Channels:      int32(s.Channels),
 				ChannelLayout: s.ChannelLayout,
-			})
+			}
 		case "subtitle":
-			result.SubtitleList = append(result.SubtitleList, database.CreateSubtitleParams{
+			subtitleStreams[s.Index] = database.CreateSubtitleParams{
 				Title:    s.CodecLongName,
 				Codec:    s.CodecName,
 				Language: s.Tags.Language,
 				Index:    int32(s.Index),
-			})
+			}
+		}
+	}
+
+	// Convert maps to sorted slices
+	result := &movieMetadataResult{
+		VideoList:    make([]database.CreateVideoStreamParams, 0, len(videoStreams)),
+		AudioList:    make([]database.CreateAudioStreamParams, 0, len(audioStreams)),
+		SubtitleList: make([]database.CreateSubtitleParams, 0, len(subtitleStreams)),
+		ChapterList:  make([]database.CreateChapterParams, 0),
+	}
+
+	// Add streams in order of their index
+	for i := 0; i < len(probeResult.Streams); i++ {
+		if stream, exists := videoStreams[i]; exists {
+			result.VideoList = append(result.VideoList, stream)
+		}
+		if stream, exists := audioStreams[i]; exists {
+			result.AudioList = append(result.AudioList, stream)
+		}
+		if stream, exists := subtitleStreams[i]; exists {
+			result.SubtitleList = append(result.SubtitleList, stream)
 		}
 	}
 
 	if len(probeResult.Chapters) > 0 {
 		result.ChapterList = make([]database.CreateChapterParams, len(probeResult.Chapters))
+		for i, chapter := range probeResult.Chapters {
+			startTimeMs := int32(0)
+			if chapter.StartTime != "" {
+				if startTime, err := strconv.ParseFloat(chapter.StartTime, 64); err == nil {
+					startTimeMs = int32(startTime * 1000)
+				}
+			}
+
+			result.ChapterList[i] = database.CreateChapterParams{
+				Title:       chapter.Title,
+				StartTimeMs: startTimeMs,
+				Thumb:       "",
+				MovieID:     pgtype.Int4{},
+			}
+		}
 	}
 
 	if len(result.VideoList) == 0 {

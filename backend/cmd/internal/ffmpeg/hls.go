@@ -30,7 +30,7 @@ const (
 	DefaultHlsTime        = "5"
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
-	DefaultHlsFlags       = "independent_segments+program_date_time+append_list"
+	DefaultHlsFlags       = "independent_segments+program_date_time+append_list+discont_start"
 	DefaultPlaylistType   = "event"
 	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"

@@ -10,7 +10,6 @@ type job struct {
 	process   *exec.Cmd
 	startTime time.Time
 	status    string
-	error     error
 }
 
 func (f *ffmpeg) CancelJob(pid string) error {

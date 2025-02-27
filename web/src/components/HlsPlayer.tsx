@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback, memo } from "react";
-import ReactPlayer from "react-player";
 import Hls, { ErrorTypes, Events, ErrorData } from "hls.js";
 import { useMutation } from "@tanstack/react-query";
 
@@ -133,18 +132,65 @@ function HlsPlayer({
 }: HlsPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const hasPlayedOnceRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [isStartTimeSet, setIsStartTimeSet] = useState(false);
 
   // Optional: Analytics mutation
   const { mutate: logEvent } = useMutation({
     mutationFn: logPlaybackAnalytics,
-    // Optionally handle errors silently to not affect playback
     onError: (error) => {
       console.warn('Failed to log playback event:', error);
     }
   });
+
+  const handleLoadingStart = useCallback(() => setIsLoading(true), []);
+  const handleLoadingEnd = useCallback(() => setIsLoading(false), []);
+
+  // Reset start time state when URL changes
+  useEffect(() => {
+    setIsStartTimeSet(false);
+  }, [url]);
+
+  const setStartTimeAndPlay = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || isStartTimeSet) return;
+
+    try {
+      // Set start time
+      video.currentTime = startTime;
+      setIsStartTimeSet(true);
+      
+      // Only autoplay if playing prop is true
+      if (playing) {
+        await video.play();
+      }
+    } catch (error) {
+      console.error('Failed to set start time or play:', error);
+      setError(error instanceof Error ? error : new Error('Playback failed'));
+    }
+  }, [startTime, playing, isStartTimeSet]);
+
+  const handleLoadedData = useCallback(() => {
+    handleLoadingEnd();
+    setStartTimeAndPlay();
+  }, [handleLoadingEnd, setStartTimeAndPlay]);
+
+  const handlePlay = useCallback(() => {
+    // Ensure start time is set before allowing play
+    if (!isStartTimeSet) {
+      setStartTimeAndPlay();
+      return;
+    }
+
+    logEvent({
+      url,
+      type: 'play',
+      timestamp: Date.now()
+    });
+    
+    onPlay?.();
+  }, [url, logEvent, onPlay, isStartTimeSet, setStartTimeAndPlay]);
 
   const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = e.currentTarget;
@@ -155,25 +201,6 @@ function HlsPlayer({
       loadedSeconds: target.buffered.length ? target.buffered.end(0) : 0,
     });
   }, [onProgress]);
-
-  const handlePlay = useCallback(() => {
-    if (videoRef.current && !hasPlayedOnceRef.current) {
-      videoRef.current.currentTime = startTime;
-      hasPlayedOnceRef.current = true;
-    }
-    
-    // Optional: Log play event
-    logEvent({
-      url,
-      type: 'play',
-      timestamp: Date.now()
-    });
-    
-    onPlay?.();
-  }, [startTime, onPlay, url, logEvent]);
-
-  const handleLoadingStart = useCallback(() => setIsLoading(true), []);
-  const handleLoadingEnd = useCallback(() => setIsLoading(false), []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const video = videoRef.current;
@@ -219,33 +246,36 @@ function HlsPlayer({
     }
   }, []);
 
+  // Initialize HLS.js if needed
   useEffect(() => {
-    if (!useHlsJs || !videoRef.current) return;
+    if (!videoRef.current) return;
 
+    // If we're using native HLS (Safari/iOS), just set the source
+    if (!useHlsJs) {
+      videoRef.current.src = url;
+      return;
+    }
+
+    // Check if HLS.js is supported
+    if (!Hls.isSupported()) {
+      console.error('HLS.js is not supported');
+      setError(new Error('HLS.js is not supported in this browser'));
+      return;
+    }
+
+    // Clean up existing HLS instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
     }
 
     const hls = new Hls(HLS_CONFIG);
+    hlsRef.current = hls;
 
     hls.attachMedia(videoRef.current);
 
     const handleManifestParsed = () => {
       handleLoadingEnd();
-      if (playing) {
-        videoRef.current?.play().catch(error => {
-          console.error('Failed to play video:', error);
-          setError(error);
-          
-          // Log error event
-          logEvent({
-            url,
-            type: 'error',
-            timestamp: Date.now(),
-            error
-          });
-        });
-      }
+      setStartTimeAndPlay();
     };
 
     const handleLevelLoaded = () => {
@@ -262,7 +292,6 @@ function HlsPlayer({
         const error = new Error(`HLS.js Error: ${data.type}`);
         console.error(error, data);
         
-        // Log error event
         logEvent({
           url,
           type: 'error',
@@ -294,26 +323,18 @@ function HlsPlayer({
     hls.on(Events.LEVEL_LOADED, handleLevelLoaded);
     hls.on(Events.ERROR, handleError);
 
-    hlsRef.current = hls;
-
     return () => {
       hls.off(Events.MANIFEST_PARSED, handleManifestParsed);
       hls.off(Events.LEVEL_LOADED, handleLevelLoaded);
       hls.off(Events.ERROR, handleError);
       hls.destroy();
     };
-  }, [url, useHlsJs, onError, playing, onQualitiesLoaded, handleLoadingEnd, logEvent]);
+  }, [url, useHlsJs, handleLoadingEnd, setStartTimeAndPlay, onQualitiesLoaded, logEvent, onError]);
 
   useEffect(() => {
-    if (useHlsJs) {
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
-    }
-  }, [useHlsJs, handleKeyDown]);
-
-  useEffect(() => {
-    hasPlayedOnceRef.current = false;
-  }, [url]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   if (error) {
     return (
@@ -326,28 +347,6 @@ function HlsPlayer({
     );
   }
 
-  if (!useHlsJs) {
-    return (
-      <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
-        {title && <TitleOverlay title={title} />}
-        <ReactPlayer
-          url={url}
-          playing={playing}
-          controls={true}
-          width='100%'
-          height='100%'
-          className='absolute top-0 left-0'
-          onPlay={handlePlay}
-          onPause={onPause}
-          onEnded={onEnded}
-          onError={onError}
-          onProgress={onProgress}
-          progressInterval={1000}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className='relative w-full h-full bg-black rounded-lg overflow-hidden shadow-2xl'>
       {title && <TitleOverlay title={title} />}
@@ -356,17 +355,16 @@ function HlsPlayer({
         ref={videoRef}
         controls
         playsInline
-        autoPlay={playing}
         style={{ width: "100%", height: "100%" }}
         onPlay={handlePlay}
         onPause={onPause}
         onEnded={onEnded}
         onTimeUpdate={handleTimeUpdate}
+        onLoadedData={handleLoadedData}
         onSeeking={handleLoadingStart}
         onSeeked={handleLoadingEnd}
         onWaiting={handleLoadingStart}
         onPlaying={handleLoadingEnd}
-        onLoadedData={handleLoadingEnd}
       />
     </div>
   );
