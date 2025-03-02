@@ -1,9 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/session"
+	"igloo/cmd/internal/tokens"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -15,121 +16,76 @@ type loginRequest struct {
 }
 
 const (
-	authErr   = "invalid user credentials"
-	serverErr = "internal server error"
+	authErr   = "invalid credentials"
+	serverErr = "server error"
 )
 
 func (app *application) login(c *fiber.Ctx) error {
-	var request loginRequest
+	var req loginRequest
 
-	err := c.BodyParser(&request)
+	err := c.BodyParser(&req)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	if len(request.Username) > 20 || len(request.Username) < 2 {
+	if req.Username == "" || req.Password == "" || req.Email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "username must be between 2 and 20 characters",
-		})
-	}
-
-	if len(request.Email) < 5 || len(request.Email) > 100 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid email address",
-		})
-	}
-
-	if len(request.Password) < 9 || len(request.Password) > 128 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "password must be between 9 and 128 characters",
+			"error": "Missing required fields",
 		})
 	}
 
 	user, err := app.queries.GetUserForLogin(c.Context(), database.GetUserForLoginParams{
-		Email:    request.Email,
-		Username: request.Username,
+		Email:    req.Email,
+		Username: req.Username,
 	})
 
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": authErr,
 		})
 	}
 
-	isMatch, err := helpers.PasswordMatches(request.Password, user.Password)
+	match, err := helpers.PasswordMatches(req.Password, user.Password)
 	if err != nil {
+		app.logger.Error(fmt.Errorf("error checking password: %w", err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
 	}
 
-	if !isMatch {
+	if !match {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": authErr,
 		})
 	}
 
-	err = app.session.CreateAuthSession(c, &session.AuthData{
-		ID:      user.ID,
-		IsAdmin: user.IsAdmin,
+	tokenPair, err := app.tokens.GenerateTokenPair(tokens.Claims{
+		UserID:   int(user.ID),
+		Username: user.Username,
+		Email:    user.Email,
+		IsAdmin:  user.IsAdmin,
 	})
 
 	if err != nil {
+		app.logger.Error(fmt.Errorf("error generating tokens: %w", err))
+
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"tokens": tokenPair,
 		"user": fiber.Map{
 			"id":       user.ID,
 			"name":     user.Name,
 			"email":    user.Email,
 			"username": user.Username,
-			"is_admin": user.IsAdmin,
 			"avatar":   user.Avatar,
+			"isAdmin":  user.IsAdmin,
 		},
-	})
-}
-
-func (app *application) getAuthUser(c *fiber.Ctx) error {
-	id, err := app.session.GetUserID(c)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	user, err := app.queries.GetUserByID(c.Context(), id)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"user": fiber.Map{
-			"name":     user.Name,
-			"email":    user.Email,
-			"username": user.Username,
-			"avatar":   user.Avatar,
-			"is_admin": user.IsAdmin,
-		},
-	})
-
-}
-
-func (app *application) logout(c *fiber.Ctx) error {
-	err := app.session.DestroyAuthSession(c)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "logged out successfully",
 	})
 }

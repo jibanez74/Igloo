@@ -28,6 +28,8 @@ type Settings interface {
 	GetPostgresMaxConns() int
 	GetRedisAddress() string
 	GetTranscodeDir() string
+	GetJwtAccessSecret() string
+	GetJwtRefreshSecret() string
 }
 
 type settings struct {
@@ -52,28 +54,32 @@ type settings struct {
 	PostgresMaxConns int    `json:"postgres_max_conns"`
 	RedisHost        string `json:"redis_host"`
 	RedisPort        int    `json:"redis_port"`
+	JwtAccessSecret  string `json:"jwt_access_secret"`
+	JwtRefreshSecret string `json:"jwt_refresh_secret"`
 }
 
-func (s *settings) GetDebug() bool             { return s.Debug }
-func (s *settings) GetPort() string            { return s.Port }
-func (s *settings) GetDownloadImages() bool    { return s.DownloadImages }
-func (s *settings) GetTmdbKey() string         { return s.TmdbKey }
-func (s *settings) GetJellyfinToken() string   { return s.JellyfinToken }
-func (s *settings) GetFfmpegPath() string      { return s.FfmpegPath }
-func (s *settings) GetFfprobePath() string     { return s.FfprobePath }
-func (s *settings) GetStaticDir() string       { return s.StaticDir }
-func (s *settings) GetMoviesImgDir() string    { return s.MoviesImgDir }
-func (s *settings) GetStudiosImgDir() string   { return s.StudiosImgDir }
-func (s *settings) GetArtistsImgDir() string   { return s.ArtistsImgDir }
-func (s *settings) GetPostgresHost() string    { return s.PostgresHost }
-func (s *settings) GetPostgresPort() string    { return s.PostgresPort }
-func (s *settings) GetPostgresUser() string    { return s.PostgresUser }
-func (s *settings) GetPostgresPass() string    { return s.PostgresPass }
-func (s *settings) GetPostgresDB() string      { return s.PostgresDB }
-func (s *settings) GetPostgresSslMode() string { return s.PostgresSslMode }
-func (s *settings) GetPostgresMaxConns() int   { return s.PostgresMaxConns }
-func (s *settings) GetRedisAddress() string    { return fmt.Sprintf("%s:%d", s.RedisHost, s.RedisPort) }
-func (s *settings) GetTranscodeDir() string    { return s.TranscodeDir }
+func (s *settings) GetDebug() bool              { return s.Debug }
+func (s *settings) GetPort() string             { return s.Port }
+func (s *settings) GetDownloadImages() bool     { return s.DownloadImages }
+func (s *settings) GetTmdbKey() string          { return s.TmdbKey }
+func (s *settings) GetJellyfinToken() string    { return s.JellyfinToken }
+func (s *settings) GetFfmpegPath() string       { return s.FfmpegPath }
+func (s *settings) GetFfprobePath() string      { return s.FfprobePath }
+func (s *settings) GetStaticDir() string        { return s.StaticDir }
+func (s *settings) GetMoviesImgDir() string     { return s.MoviesImgDir }
+func (s *settings) GetStudiosImgDir() string    { return s.StudiosImgDir }
+func (s *settings) GetArtistsImgDir() string    { return s.ArtistsImgDir }
+func (s *settings) GetPostgresHost() string     { return s.PostgresHost }
+func (s *settings) GetPostgresPort() string     { return s.PostgresPort }
+func (s *settings) GetPostgresUser() string     { return s.PostgresUser }
+func (s *settings) GetPostgresPass() string     { return s.PostgresPass }
+func (s *settings) GetPostgresDB() string       { return s.PostgresDB }
+func (s *settings) GetPostgresSslMode() string  { return s.PostgresSslMode }
+func (s *settings) GetPostgresMaxConns() int    { return s.PostgresMaxConns }
+func (s *settings) GetRedisAddress() string     { return fmt.Sprintf("%s:%d", s.RedisHost, s.RedisPort) }
+func (s *settings) GetTranscodeDir() string     { return s.TranscodeDir }
+func (s *settings) GetJwtAccessSecret() string  { return s.JwtAccessSecret }
+func (s *settings) GetJwtRefreshSecret() string { return s.JwtRefreshSecret }
 
 func New() (Settings, error) {
 	configDir := getConfigDir()

@@ -84,6 +84,16 @@ func parseEnvConfig() (*settings, error) {
 		redisPort = 6379
 	}
 
+	jwtAccessSecret := os.Getenv("JWT_ACCESS_SECRET")
+	if jwtAccessSecret == "" {
+		jwtAccessSecret = "your-256-bit-secret" // Default for development only
+	}
+
+	jwtRefreshSecret := os.Getenv("JWT_REFRESH_SECRET")
+	if jwtRefreshSecret == "" {
+		jwtRefreshSecret = "your-256-bit-refresh-secret" // Default for development only
+	}
+
 	return &settings{
 		Port:             fmt.Sprintf(":%d", port),
 		Debug:            os.Getenv("DEBUG") == "true",
@@ -106,6 +116,8 @@ func parseEnvConfig() (*settings, error) {
 		PostgresMaxConns: maxConns,
 		RedisHost:        redisHost,
 		RedisPort:        redisPort,
+		JwtAccessSecret:  jwtAccessSecret,
+		JwtRefreshSecret: jwtRefreshSecret,
 	}, nil
 }
 

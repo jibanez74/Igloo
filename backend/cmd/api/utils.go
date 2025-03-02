@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
@@ -38,29 +37,6 @@ func (app *application) createOrGetArtist(c *fiber.Ctx, q *database.Queries, a *
 	newArtist, err := q.CreateArtist(c.Context(), artist)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create artist: %v", err)
-	}
-
-	if app.settings.GetDownloadImages() {
-		app.imageQueue <- imageJob{
-			sourceURL:  thumbUrl,
-			targetPath: app.settings.GetArtistsImgDir(),
-			filename:   fmt.Sprintf("%d.jpg", newArtist.ID),
-			onSuccess: func(localPath string) {
-				if localPath != thumbUrl {
-					_, err := q.UpdateArtistThumb(context.Background(), database.UpdateArtistThumbParams{
-						ID:    newArtist.ID,
-						Thumb: localPath,
-					})
-
-					if err != nil {
-						app.logger.Error(fmt.Errorf("failed to update artist thumb: %w", err))
-					}
-				}
-			},
-			onError: func(err error) {
-				app.logger.Error(fmt.Errorf("failed to save artist image: %w", err))
-			},
-		}
 	}
 
 	return newArtist.ID, nil
