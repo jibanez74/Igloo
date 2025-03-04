@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/config"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers"
-	customLogger "igloo/cmd/internal/logger" // Alias to avoid conflict
-	"igloo/cmd/internal/settings"
+	"igloo/cmd/internal/helpers" // Alias to avoid conflict
 	"igloo/cmd/internal/tmdb"
 	"igloo/cmd/internal/tokens"
 	"log"
+	"os"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -20,13 +21,12 @@ import (
 )
 
 type application struct {
-	settings settings.Settings
+	settings *database.GlobalSetting
 	db       *pgxpool.Pool
 	queries  *database.Queries
 	ffmpeg   ffmpeg.FFmpeg
 	ffprobe  ffprobe.Ffprobe
 	tmdb     tmdb.Tmdb
-	logger   customLogger.AppLogger
 	tokens   tokens.TokenManager
 }
 
@@ -44,7 +44,7 @@ func main() {
 	})
 
 	f.Use(recover.New(recover.Config{
-		EnableStackTrace: app.settings.GetDebug(),
+		EnableStackTrace: app.settings.Debug,
 	}))
 
 	f.Use(logger.New(logger.Config{
@@ -55,10 +55,22 @@ func main() {
 
 	api := f.Group("/api/v1")
 
+	api.Static("/transcode", app.settings.TranscodeDir, fiber.Static{
+		Compress:  true,
+		Browse:    false,
+		Index:     "",
+		ByteRange: true,
+		Download:  false,
+		Next:      nil,
+	})
+
+	api.Static("/static", app.settings.StaticDir, fiber.Static{
+		Compress: true,
+		Browse:   true,
+	})
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 
-	// Movie routes
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
@@ -66,60 +78,163 @@ func main() {
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
 
-	err = f.Listen(app.settings.GetPort())
+	err = f.Listen(fmt.Sprintf(":%d", app.settings.Port))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func initApp() (*application, error) {
-	settings, err := settings.New()
+	var app application
+
+	cfg, err := config.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
 
-	logger, err := customLogger.New(settings.GetDebug(), settings.GetStaticDir())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logger: %w", err)
-	}
-
-	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		settings.GetPostgresUser(),
-		settings.GetPostgresPass(),
-		settings.GetPostgresHost(),
-		settings.GetPostgresPort(),
-		settings.GetPostgresDB(),
-		settings.GetPostgresSslMode(),
-	)
-
-	dbConfig, err := pgxpool.ParseConfig(dbUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse database config: %w", err)
-	}
-
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create database pool: %w", err)
-	}
-
-	err = dbpool.Ping(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	queries := database.New(dbpool)
-
-	count, err := queries.GetTotalUsersCount(context.Background())
+	err = app.initDB()
 	if err != nil {
 		return nil, err
 	}
-	if count == 0 {
-		hashPassword, err := helpers.HashPassword(DefaultPassword)
+
+	var settings database.GlobalSetting
+
+	if cfg.CreateSettings {
+		settings, err = app.queries.CreateSettings(context.Background(), *cfg.Settings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create settings: %w", err)
+		}
+	} else {
+		settings, err = app.queries.GetSettings(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get settings: %w", err)
+		}
+	}
+	app.settings = &settings
+
+	err = app.createDefaultUser()
+	if err != nil {
+		return nil, err
+	}
+
+	err = app.initTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	if app.settings.FfmpegPath != "" {
+		f, err := ffmpeg.New(app.settings.FfmpegPath)
 		if err != nil {
 			return nil, err
 		}
 
-		_, err = queries.CreateUser(context.Background(), database.CreateUserParams{
+		app.ffmpeg = f
+	}
+
+	if app.settings.FfprobePath != "" {
+		f, err := ffprobe.New(app.settings.FfprobePath)
+		if err != nil {
+			return nil, err
+		}
+
+		app.ffprobe = f
+	}
+
+	if app.settings.TmdbApiKey != "" {
+		t, err := tmdb.New(&app.settings.TmdbApiKey)
+		if err != nil {
+			return nil, err
+		}
+
+		app.tmdb = t
+	}
+
+	return &app, nil
+}
+
+func (app *application) initDB() error {
+	host := os.Getenv("POSTGRES_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
+	port, err := strconv.Atoi(os.Getenv("POSTGRES_PORT"))
+	if err != nil {
+		port = 5432
+	}
+
+	user := os.Getenv("POSTGRES_USER")
+	if user == "" {
+		user = "postgres"
+	}
+
+	pwd := os.Getenv("POSTGRES_PASSWORD")
+	if pwd == "" {
+		pwd = "postgres"
+	}
+
+	dbName := os.Getenv("POSTGRES_DB")
+	if dbName == "" {
+		dbName = "igloo"
+	}
+
+	sslMode := os.Getenv("POSTGRES_SSL_MODE")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	maxCon, err := strconv.Atoi(os.Getenv("POSTGRES_MAX_CONNECTIONS"))
+	if err != nil {
+		maxCon = 10
+	}
+
+	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		user,
+		pwd,
+		host,
+		port,
+		dbName,
+		sslMode,
+	)
+
+	dbConfig, err := pgxpool.ParseConfig(dbUrl)
+	if err != nil {
+		return fmt.Errorf("failed to parse database config: %w", err)
+	}
+
+	dbConfig.MaxConns = int32(maxCon)
+
+	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create database pool: %w", err)
+	}
+
+	err = dbpool.Ping(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	queries := database.New(dbpool)
+
+	app.db = dbpool
+	app.queries = queries
+
+	return nil
+}
+
+func (app *application) createDefaultUser() error {
+	count, err := app.queries.GetTotalUsersCount(context.Background())
+	if err != nil {
+		return fmt.Errorf("unable to determine total users count: %w", err)
+	}
+
+	if count == 0 {
+		hashPassword, err := helpers.HashPassword(DefaultPassword)
+		if err != nil {
+			return fmt.Errorf("failed to hash password for default user: %w", err)
+		}
+
+		_, err = app.queries.CreateUser(context.Background(), database.CreateUserParams{
 			Name:     "Admin User",
 			Email:    "admin@example.com",
 			Username: "admin",
@@ -129,46 +244,34 @@ func initApp() (*application, error) {
 		})
 
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("failed to create default user: %w", err)
 		}
 	}
 
-	ffmpegBin, err := ffmpeg.New(settings.GetFfmpegPath())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ffmpeg: %w", err)
+	return nil
+}
+
+func (app *application) initTokens() error {
+	jwtAccessSecret := os.Getenv("JWT_ACCESS_SECRET")
+	if jwtAccessSecret == "" {
+		jwtAccessSecret = "your-256-bit-secret"
 	}
 
-	ffprobeBin, err := ffprobe.New(settings.GetFfprobePath())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ffprobe: %w", err)
+	jwtRefreshSecret := os.Getenv("JWT_REFRESH_SECRET")
+	if jwtRefreshSecret == "" {
+		jwtRefreshSecret = "your-256-bit-refresh-secret"
 	}
 
-	tmdbKey := settings.GetTmdbKey()
-	tmdbClient, err := tmdb.New(&tmdbKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tmdb client: %w", err)
-	}
-
-	// Initialize token manager
 	tokenConfig := tokens.DefaultConfig().
-		WithAccessTokenSecret(settings.GetJwtAccessSecret()).
-		WithRefreshTokenSecret(settings.GetJwtRefreshSecret())
+		WithAccessTokenSecret(jwtAccessSecret).
+		WithRefreshTokenSecret(jwtRefreshSecret)
 
 	tokenManager, err := tokens.New(tokenConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize token manager: %w", err)
+		return fmt.Errorf("failed to initialize token manager: %w", err)
 	}
 
-	app := &application{
-		settings: settings,
-		db:       dbpool,
-		queries:  queries,
-		ffmpeg:   ffmpegBin,
-		ffprobe:  ffprobeBin,
-		tmdb:     tmdbClient,
-		logger:   logger,
-		tokens:   tokenManager,
-	}
+	app.tokens = tokenManager
 
-	return app, nil
+	return nil
 }

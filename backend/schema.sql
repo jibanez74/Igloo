@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS movies CASCADE;
 DROP TABLE IF EXISTS artists CASCADE;
 DROP TABLE IF EXISTS genres CASCADE;
 DROP TABLE IF EXISTS studios CASCADE;
+DROP TABLE IF EXISTS global_settings;
 DROP TABLE IF EXISTS users CASCADE;
 
 --
@@ -31,6 +32,27 @@ CREATE TABLE users (
     is_active BOOLEAN NOT NULL,
     is_admin BOOLEAN NOT NULL,
     avatar VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE global_settings (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    port INTEGER NOT NULL,
+    debug BOOLEAN NOT NULL,
+    movies_dir_list VARCHAR(255) NOT NULL,
+    movies_img_dir VARCHAR(255) NOT NULL,
+    music_dir_list VARCHAR(255) NOT NULL,
+    tvshows_dir_list VARCHAR(255) NOT NULL,
+    transcode_dir VARCHAR(255) NOT NULL,
+    studios_img_dir VARCHAR(255) NOT NULL,
+    static_dir VARCHAR(255) NOT NULL,
+    download_images BOOLEAN NOT NULL,
+    tmdb_api_key VARCHAR(255) NOT NULL,
+    ffmpeg_path VARCHAR(255) NOT NULL,
+    ffprobe_path VARCHAR(255) NOT NULL,
+    hardware_acceleration VARCHAR(255) NOT NULL,
+    jellyfin_token VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE movies (

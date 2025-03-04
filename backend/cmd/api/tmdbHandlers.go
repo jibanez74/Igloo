@@ -104,7 +104,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 		movie.Year = int32(releaseDate.Year())
 	}
 
-	download := app.settings.GetDownloadImages()
+	download := app.settings.DownloadImages
 
 	if movieInfo.Thumb != "" {
 		thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
@@ -112,7 +112,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 		if download {
 			fullPath, err := helpers.SaveImage(
 				thumbUrl,
-				filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
+				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
 				"thumb.jpg",
 			)
 
@@ -130,7 +130,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 		if download {
 			fullPath, err := helpers.SaveImage(
 				artURL,
-				filepath.Join(app.settings.GetMoviesImgDir(), movie.FileName),
+				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
 				"art.jpg",
 			)
 
@@ -206,7 +206,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 				if download {
 					fullPath, err := helpers.SaveImage(
 						logoUrl,
-						app.settings.GetStudiosImgDir(),
+						app.settings.StudiosImgDir,
 						fmt.Sprintf("%d.jpg", s.ID),
 					)
 

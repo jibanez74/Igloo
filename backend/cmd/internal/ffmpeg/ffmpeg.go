@@ -22,7 +22,7 @@ type ffmpeg struct {
 }
 
 const (
-	NoAccel      = ""             // Software encoding (CPU)
+	NoAccel      = ""            
 	NVENC        = "nvenc"        // NVIDIA GPU acceleration
 	QSV          = "qsv"          // Intel QuickSync
 	VideoToolbox = "videotoolbox" // Apple VideoToolbox

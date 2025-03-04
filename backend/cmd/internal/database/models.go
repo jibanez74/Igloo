@@ -70,6 +70,27 @@ type Genre struct {
 	TmdbID    int32              `json:"tmdb_id"`
 }
 
+type GlobalSetting struct {
+	ID                   int32              `json:"id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Port                 int32              `json:"port"`
+	Debug                bool               `json:"debug"`
+	MoviesDirList        string             `json:"movies_dir_list"`
+	MoviesImgDir         string             `json:"movies_img_dir"`
+	MusicDirList         string             `json:"music_dir_list"`
+	TvshowsDirList       string             `json:"tvshows_dir_list"`
+	TranscodeDir         string             `json:"transcode_dir"`
+	StudiosImgDir        string             `json:"studios_img_dir"`
+	StaticDir            string             `json:"static_dir"`
+	DownloadImages       bool               `json:"download_images"`
+	TmdbApiKey           string             `json:"tmdb_api_key"`
+	FfmpegPath           string             `json:"ffmpeg_path"`
+	FfprobePath          string             `json:"ffprobe_path"`
+	HardwareAcceleration string             `json:"hardware_acceleration"`
+	JellyfinToken        string             `json:"jellyfin_token"`
+}
+
 type Movie struct {
 	ID              int32              `json:"id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`

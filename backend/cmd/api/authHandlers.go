@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tokens"
@@ -49,8 +48,6 @@ func (app *application) login(c *fiber.Ctx) error {
 
 	match, err := helpers.PasswordMatches(req.Password, user.Password)
 	if err != nil {
-		app.logger.Error(fmt.Errorf("error checking password: %w", err))
-
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
@@ -70,8 +67,6 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		app.logger.Error(fmt.Errorf("error generating tokens: %w", err))
-
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": serverErr,
 		})
