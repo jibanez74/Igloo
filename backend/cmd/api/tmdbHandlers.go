@@ -161,30 +161,19 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Genres) > 0 {
 		for _, g := range movieInfo.Genres {
-			var genreID int32
+			genre, err := qtx.GetOrCreateGenre(c.Context(), database.GetOrCreateGenreParams{
+				Tag: g.Tag,
+			})
 
-			existingGenre, err := qtx.GetGenreByTmdbID(c.Context(), g.ID)
 			if err != nil {
-				newGenre, err := qtx.CreateGenre(c.Context(), database.CreateGenreParams{
-					Tag:       g.Tag,
-					GenreType: "movie",
-					TmdbID:    g.ID,
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": fmt.Sprintf("unable to create genre %s for the movie %s: %v", g.Tag, movie.Title, err),
 				})
-
-				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": fmt.Sprintf("unable to create genre %s for the movie %s: %v", g.Tag, movie.Title, err),
-					})
-				}
-
-				genreID = newGenre.ID
-			} else {
-				genreID = existingGenre.ID
 			}
 
 			err = qtx.AddMovieGenre(c.Context(), database.AddMovieGenreParams{
 				MovieID: newMovie.ID,
-				GenreID: genreID,
+				GenreID: genre.ID,
 			})
 
 			if err != nil {
@@ -197,47 +186,19 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Studios) > 0 {
 		for _, s := range movieInfo.Studios {
-			var studioID int32
+			studio, err := qtx.GetOrCreateStudio(c.Context(), database.GetOrCreateStudioParams{
+				TmdbID: s.ID,
+			})
 
-			existingStudio, err := qtx.GetStudioByTmdbID(c.Context(), s.ID)
 			if err != nil {
-				logoUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
-
-				if download {
-					fullPath, err := helpers.SaveImage(
-						logoUrl,
-						app.settings.StudiosImgDir,
-						fmt.Sprintf("%d.jpg", s.ID),
-					)
-
-					if err == nil {
-						s.Logo = *fullPath
-					}
-				} else {
-					s.Logo = logoUrl
-				}
-
-				newStudio, err := qtx.CreateStudio(c.Context(), database.CreateStudioParams{
-					Name:    s.Name,
-					Country: s.Country,
-					Logo:    s.Logo,
-					TmdbID:  s.ID,
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": fmt.Sprintf("unable to create studio %s for the movie %s: %v", s.Name, movie.Title, err),
 				})
-
-				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": fmt.Sprintf("unable to create studio %s for the movie %s: %v", s.Name, movie.Title, err),
-					})
-				}
-
-				studioID = newStudio.ID
-			} else {
-				studioID = existingStudio.ID
 			}
 
 			err = qtx.AddMovieStudio(c.Context(), database.AddMovieStudioParams{
 				MovieID:  newMovie.ID,
-				StudioID: studioID,
+				StudioID: studio.ID,
 			})
 
 			if err != nil {

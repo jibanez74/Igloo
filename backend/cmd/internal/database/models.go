@@ -51,15 +51,6 @@ type CrewList struct {
 	Department string             `json:"department"`
 }
 
-type Genre struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Tag       string             `json:"tag"`
-	GenreType string             `json:"genre_type"`
-	TmdbID    int32              `json:"tmdb_id"`
-}
-
 type GlobalSetting struct {
 	ID                   int32              `json:"id"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`

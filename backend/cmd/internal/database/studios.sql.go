@@ -7,35 +7,59 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createStudio = `-- name: CreateStudio :one
-INSERT INTO studios (
-    name,
-    country,
-    logo,
-    tmdb_id
-) VALUES (
-    $1, $2, $3, $4
+const getOrCreateStudio = `-- name: GetOrCreateStudio :one
+WITH existing_studio AS (
+    SELECT s.id, s.created_at, s.updated_at, s.name, s.country, s.logo, s.tmdb_id 
+    FROM studios s
+    WHERE s.tmdb_id = $1
+    LIMIT 1
+), new_studio AS (
+    INSERT INTO studios (
+        name,
+        country,
+        logo,
+        tmdb_id
+    )
+    SELECT $2, $3, $4, $1
+    WHERE NOT EXISTS (SELECT 1 FROM existing_studio)
+    RETURNING id, created_at, updated_at, name, country, logo, tmdb_id
 )
-RETURNING id, created_at, updated_at, name, country, logo, tmdb_id
+SELECT e.id, e.created_at, e.updated_at, e.name, e.country, e.logo, e.tmdb_id 
+FROM existing_studio e
+UNION ALL
+SELECT n.id, n.created_at, n.updated_at, n.name, n.country, n.logo, n.tmdb_id 
+FROM new_studio n
 `
 
-type CreateStudioParams struct {
+type GetOrCreateStudioParams struct {
+	TmdbID  int32  `json:"tmdb_id"`
 	Name    string `json:"name"`
 	Country string `json:"country"`
 	Logo    string `json:"logo"`
-	TmdbID  int32  `json:"tmdb_id"`
 }
 
-func (q *Queries) CreateStudio(ctx context.Context, arg CreateStudioParams) (Studio, error) {
-	row := q.db.QueryRow(ctx, createStudio,
+type GetOrCreateStudioRow struct {
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Name      string             `json:"name"`
+	Country   string             `json:"country"`
+	Logo      string             `json:"logo"`
+	TmdbID    int32              `json:"tmdb_id"`
+}
+
+func (q *Queries) GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error) {
+	row := q.db.QueryRow(ctx, getOrCreateStudio,
+		arg.TmdbID,
 		arg.Name,
 		arg.Country,
 		arg.Logo,
-		arg.TmdbID,
 	)
-	var i Studio
+	var i GetOrCreateStudioRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -45,22 +69,5 @@ func (q *Queries) CreateStudio(ctx context.Context, arg CreateStudioParams) (Stu
 		&i.Logo,
 		&i.TmdbID,
 	)
-	return i, err
-}
-
-const getStudioByTmdbID = `-- name: GetStudioByTmdbID :one
-SELECT id, tmdb_id FROM studios
-WHERE tmdb_id = $1
-`
-
-type GetStudioByTmdbIDRow struct {
-	ID     int32 `json:"id"`
-	TmdbID int32 `json:"tmdb_id"`
-}
-
-func (q *Queries) GetStudioByTmdbID(ctx context.Context, tmdbID int32) (GetStudioByTmdbIDRow, error) {
-	row := q.db.QueryRow(ctx, getStudioByTmdbID, tmdbID)
-	var i GetStudioByTmdbIDRow
-	err := row.Scan(&i.ID, &i.TmdbID)
 	return i, err
 }

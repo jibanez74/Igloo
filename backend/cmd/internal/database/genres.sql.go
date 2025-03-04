@@ -7,38 +7,9 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const createGenre = `-- name: CreateGenre :one
-INSERT INTO genres (
-    tag,
-    genre_type,
-    tmdb_id
-) VALUES (
-    $1, $2, $3
-)
-RETURNING id, created_at, updated_at, tag, genre_type, tmdb_id
-`
-
-type CreateGenreParams struct {
-	Tag       string `json:"tag"`
-	GenreType string `json:"genre_type"`
-	TmdbID    int32  `json:"tmdb_id"`
-}
-
-func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error) {
-	row := q.db.QueryRow(ctx, createGenre, arg.Tag, arg.GenreType, arg.TmdbID)
-	var i Genre
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Tag,
-		&i.GenreType,
-		&i.TmdbID,
-	)
-	return i, err
-}
 
 const getGenreByID = `-- name: GetGenreByID :one
 SELECt tag FROM genres
@@ -52,20 +23,50 @@ func (q *Queries) GetGenreByID(ctx context.Context, id int32) (string, error) {
 	return tag, err
 }
 
-const getGenreByTmdbID = `-- name: GetGenreByTmdbID :one
-SELECT id, tag, tmdb_id FROM genres
-WHERE tmdb_id = $1
+const getOrCreateGenre = `-- name: GetOrCreateGenre :one
+WITH existing_genre AS (
+    SELECT g.id, g.created_at, g.updated_at, g.tag, g.genre_type
+    FROM genres g
+    WHERE g.tag = $1
+    LIMIT 1
+), new_genre AS (
+    INSERT INTO genres (
+        tag,
+        genre_type
+    )
+    SELECT $1, $2
+    WHERE NOT EXISTS (SELECT 1 FROM existing_genre)
+    RETURNING id, created_at, updated_at, tag, genre_type
+)
+SELECT e.id, e.created_at, e.updated_at, e.tag, e.genre_type
+FROM existing_genre e
+UNION ALL
+SELECT n.id, n.created_at, n.updated_at, n.tag, n.genre_type
+FROM new_genre n
 `
 
-type GetGenreByTmdbIDRow struct {
-	ID     int32  `json:"id"`
-	Tag    string `json:"tag"`
-	TmdbID int32  `json:"tmdb_id"`
+type GetOrCreateGenreParams struct {
+	Tag       string `json:"tag"`
+	GenreType string `json:"genre_type"`
 }
 
-func (q *Queries) GetGenreByTmdbID(ctx context.Context, tmdbID int32) (GetGenreByTmdbIDRow, error) {
-	row := q.db.QueryRow(ctx, getGenreByTmdbID, tmdbID)
-	var i GetGenreByTmdbIDRow
-	err := row.Scan(&i.ID, &i.Tag, &i.TmdbID)
+type GetOrCreateGenreRow struct {
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Tag       string             `json:"tag"`
+	GenreType string             `json:"genre_type"`
+}
+
+func (q *Queries) GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error) {
+	row := q.db.QueryRow(ctx, getOrCreateGenre, arg.Tag, arg.GenreType)
+	var i GetOrCreateGenreRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Tag,
+		&i.GenreType,
+	)
 	return i, err
 }
