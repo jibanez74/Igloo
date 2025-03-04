@@ -250,8 +250,8 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Credits.Cast) > 0 {
 		for _, a := range movieInfo.Credits.Cast {
-			artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
-				ID:           a.ID,
+			artist, err := qtx.GetOrCreateArtist(c.Context(), database.GetOrCreateArtistParams{
+				TmdbID:       int32(a.ID),
 				Name:         a.Name,
 				OriginalName: a.OriginalName,
 				Thumb:        a.Thumb,
@@ -265,7 +265,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 			_, err = qtx.CreateCastMember(c.Context(), database.CreateCastMemberParams{
 				ArtistID: pgtype.Int4{
-					Int32: artistID,
+					Int32: artist.ID,
 					Valid: true,
 				},
 				MovieID: pgtype.Int4{
@@ -286,8 +286,8 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Credits.Crew) > 0 {
 		for _, a := range movieInfo.Credits.Crew {
-			artistID, err := app.createOrGetArtist(c, qtx, &createArtistArgs{
-				ID:           a.ID,
+			artist, err := qtx.GetOrCreateArtist(c.Context(), database.GetOrCreateArtistParams{
+				TmdbID:       int32(a.ID),
 				Name:         a.Name,
 				OriginalName: a.OriginalName,
 				Thumb:        a.Thumb,
@@ -301,7 +301,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 			_, err = qtx.CreateCrewMember(c.Context(), database.CreateCrewMemberParams{
 				ArtistID: pgtype.Int4{
-					Int32: artistID,
+					Int32: artist.ID,
 					Valid: true,
 				},
 				MovieID: pgtype.Int4{

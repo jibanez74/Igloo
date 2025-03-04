@@ -7,80 +7,59 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createArtist = `-- name: CreateArtist :one
-INSERT INTO artists (
-    name,
-    original_name,
-    thumb,
-    tmdb_id
-) VALUES (
-    $1, $2, $3, $4
+const getOrCreateArtist = `-- name: GetOrCreateArtist :one
+WITH existing_artist AS (
+    SELECT a.id, a.created_at, a.updated_at, a.name, a.original_name, a.thumb, a.tmdb_id 
+    FROM artists a
+    WHERE a.tmdb_id = $1
+    LIMIT 1
+), new_artist AS (
+    INSERT INTO artists (
+        name,
+        original_name,
+        thumb,
+        tmdb_id
+    )
+    SELECT $2, $3, $4, $1
+    WHERE NOT EXISTS (SELECT 1 FROM existing_artist)
+    RETURNING id, created_at, updated_at, name, original_name, thumb, tmdb_id
 )
-RETURNING id, created_at, updated_at, name, original_name, thumb, tmdb_id
+SELECT e.id, e.created_at, e.updated_at, e.name, e.original_name, e.thumb, e.tmdb_id 
+FROM existing_artist e
+UNION ALL
+SELECT n.id, n.created_at, n.updated_at, n.name, n.original_name, n.thumb, n.tmdb_id 
+FROM new_artist n
 `
 
-type CreateArtistParams struct {
+type GetOrCreateArtistParams struct {
+	TmdbID       int32  `json:"tmdb_id"`
 	Name         string `json:"name"`
 	OriginalName string `json:"original_name"`
 	Thumb        string `json:"thumb"`
-	TmdbID       int32  `json:"tmdb_id"`
 }
 
-func (q *Queries) CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error) {
-	row := q.db.QueryRow(ctx, createArtist,
+type GetOrCreateArtistRow struct {
+	ID           int32              `json:"id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Name         string             `json:"name"`
+	OriginalName string             `json:"original_name"`
+	Thumb        string             `json:"thumb"`
+	TmdbID       int32              `json:"tmdb_id"`
+}
+
+func (q *Queries) GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error) {
+	row := q.db.QueryRow(ctx, getOrCreateArtist,
+		arg.TmdbID,
 		arg.Name,
 		arg.OriginalName,
 		arg.Thumb,
-		arg.TmdbID,
 	)
-	var i Artist
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.OriginalName,
-		&i.Thumb,
-		&i.TmdbID,
-	)
-	return i, err
-}
-
-const getArtistByTmdbID = `-- name: GetArtistByTmdbID :one
-SELECT id, tmdb_id FROM artists
-WHERE tmdb_id = $1
-LIMIT 1
-`
-
-type GetArtistByTmdbIDRow struct {
-	ID     int32 `json:"id"`
-	TmdbID int32 `json:"tmdb_id"`
-}
-
-func (q *Queries) GetArtistByTmdbID(ctx context.Context, tmdbID int32) (GetArtistByTmdbIDRow, error) {
-	row := q.db.QueryRow(ctx, getArtistByTmdbID, tmdbID)
-	var i GetArtistByTmdbIDRow
-	err := row.Scan(&i.ID, &i.TmdbID)
-	return i, err
-}
-
-const updateArtistThumb = `-- name: UpdateArtistThumb :one
-UPDATE artists
-SET thumb = $2
-WHERE id = $1
-RETURNING id, created_at, updated_at, name, original_name, thumb, tmdb_id
-`
-
-type UpdateArtistThumbParams struct {
-	ID    int32  `json:"id"`
-	Thumb string `json:"thumb"`
-}
-
-func (q *Queries) UpdateArtistThumb(ctx context.Context, arg UpdateArtistThumbParams) (Artist, error) {
-	row := q.db.QueryRow(ctx, updateArtistThumb, arg.ID, arg.Thumb)
-	var i Artist
+	var i GetOrCreateArtistRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,

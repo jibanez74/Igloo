@@ -8,16 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Artist struct {
-	ID           int32              `json:"id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Name         string             `json:"name"`
-	OriginalName string             `json:"original_name"`
-	Thumb        string             `json:"thumb"`
-	TmdbID       int32              `json:"tmdb_id"`
-}
-
 type AudioStream struct {
 	ID            int32              `json:"id"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`

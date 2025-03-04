@@ -14,7 +14,6 @@ type Querier interface {
 	AddMovieGenre(ctx context.Context, arg AddMovieGenreParams) error
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	AddUserMovie(ctx context.Context, arg AddUserMovieParams) error
-	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
 	CreateAudioStream(ctx context.Context, arg CreateAudioStreamParams) (AudioStream, error)
 	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)
 	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
@@ -27,7 +26,6 @@ type Querier interface {
 	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
-	GetArtistByTmdbID(ctx context.Context, tmdbID int32) (GetArtistByTmdbIDRow, error)
 	GetGenreByID(ctx context.Context, id int32) (string, error)
 	GetGenreByTmdbID(ctx context.Context, tmdbID int32) (GetGenreByTmdbIDRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
@@ -38,6 +36,7 @@ type Querier interface {
 	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error)
+	GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error)
 	GetSettings(ctx context.Context) (GlobalSetting, error)
 	GetStudioByTmdbID(ctx context.Context, tmdbID int32) (GetStudioByTmdbIDRow, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
@@ -46,7 +45,6 @@ type Querier interface {
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
-	UpdateArtistThumb(ctx context.Context, arg UpdateArtistThumbParams) (Artist, error)
 }
 
 var _ Querier = (*Queries)(nil)
