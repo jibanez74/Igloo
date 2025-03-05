@@ -12,6 +12,7 @@ import (
 	"igloo/cmd/internal/tokens"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -84,6 +85,24 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
+
+	if app.settings.Debug {
+		workDir, err := os.Getwd()
+
+		api.Static("/assets", filepath.Join(workDir, "cmd", "client", "dist"), fiber.Static{
+			Compress: true,
+			Browse:   false,
+			Index:    "",
+			Next:     nil,
+		})
+
+		api.Static("*", filepath.Join(workDir, "cmd", "client"), fiber.Static{
+			Compress: true,
+			Browse:   false,
+			Index:    "index.html",
+			Next:     nil,
+		})
+	}
 
 	err = f.Listen(fmt.Sprintf(":%d", app.settings.Port))
 	if err != nil {
