@@ -106,12 +106,10 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 		movie.Year = int32(releaseDate.Year())
 	}
 
-	download := app.settings.DownloadImages
-
 	if movieInfo.Thumb != "" {
 		thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
 
-		if download {
+		if app.settings.DownloadImages {
 			fullPath, err := helpers.SaveImage(
 				thumbUrl,
 				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
@@ -129,7 +127,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 	if movieInfo.Art != "" {
 		artURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
 
-		if download {
+		if app.settings.DownloadImages {
 			fullPath, err := helpers.SaveImage(
 				artURL,
 				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
@@ -188,11 +186,25 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Studios) > 0 {
 		for _, s := range movieInfo.Studios {
+			logoUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
+
+			if app.settings.DownloadImages {
+				fullPath, err := helpers.SaveImage(
+					logoUrl,
+					app.settings.StudiosImgDir,
+					fmt.Sprintf("%d_studio_logo.jpg", s.ID),
+				)
+
+				if err == nil {
+					logoUrl = *fullPath
+				}
+			}
+
 			studio, err := qtx.GetOrCreateStudio(c.Context(), database.GetOrCreateStudioParams{
 				TmdbID:  s.ID,
 				Name:    s.Name,
 				Country: s.Country,
-				Logo:    s.Logo,
+				Logo:    logoUrl,
 			})
 
 			if err != nil {
@@ -216,6 +228,17 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Credits.Cast) > 0 {
 		for _, a := range movieInfo.Credits.Cast {
+            thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb)
+
+            if app.settings.DownloadImages {
+                fullPath, err := helpers.SaveImage(
+                    thumbUrl,
+                    filepath.Join(app.settings.MoviesImgDir, movie.FileName),
+                    "thumb.jpg",
+                )
+                
+            }
+
 			artist, err := qtx.GetOrCreateArtist(c.Context(), database.GetOrCreateArtistParams{
 				TmdbID:       int32(a.ID),
 				Name:         a.Name,

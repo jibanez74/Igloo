@@ -46,6 +46,7 @@ CREATE TABLE global_settings (
     tvshows_dir_list VARCHAR(255) NOT NULL,
     transcode_dir VARCHAR(255) NOT NULL,
     studios_img_dir VARCHAR(255) NOT NULL,
+    artists_img_dir VARCHAR(255) NOT NULL,
     static_dir VARCHAR(255) NOT NULL,
     download_images BOOLEAN NOT NULL,
     tmdb_api_key VARCHAR(255) NOT NULL,

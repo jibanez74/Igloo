@@ -12,6 +12,7 @@ INSERT INTO global_settings (
     transcode_dir,
     studios_img_dir,
     static_dir,
+    artists_img_dir,
     download_images,
     tmdb_api_key,
     ffmpeg_path,
@@ -19,6 +20,6 @@ INSERT INTO global_settings (
     hardware_acceleration,
     jellyfin_token
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
 RETURNING *;
