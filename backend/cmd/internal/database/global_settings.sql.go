@@ -20,6 +20,7 @@ INSERT INTO global_settings (
     transcode_dir,
     studios_img_dir,
     static_dir,
+    artists_img_dir,
     download_images,
     tmdb_api_key,
     ffmpeg_path,
@@ -27,9 +28,9 @@ INSERT INTO global_settings (
     hardware_acceleration,
     jellyfin_token
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
-RETURNING id, created_at, updated_at, port, debug, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token
+RETURNING id, created_at, updated_at, port, debug, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token
 `
 
 type CreateSettingsParams struct {
@@ -42,6 +43,7 @@ type CreateSettingsParams struct {
 	TranscodeDir         string `json:"transcode_dir"`
 	StudiosImgDir        string `json:"studios_img_dir"`
 	StaticDir            string `json:"static_dir"`
+	ArtistsImgDir        string `json:"artists_img_dir"`
 	DownloadImages       bool   `json:"download_images"`
 	TmdbApiKey           string `json:"tmdb_api_key"`
 	FfmpegPath           string `json:"ffmpeg_path"`
@@ -61,6 +63,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.TranscodeDir,
 		arg.StudiosImgDir,
 		arg.StaticDir,
+		arg.ArtistsImgDir,
 		arg.DownloadImages,
 		arg.TmdbApiKey,
 		arg.FfmpegPath,
@@ -81,6 +84,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.TvshowsDirList,
 		&i.TranscodeDir,
 		&i.StudiosImgDir,
+		&i.ArtistsImgDir,
 		&i.StaticDir,
 		&i.DownloadImages,
 		&i.TmdbApiKey,
@@ -93,7 +97,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, created_at, updated_at, port, debug, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token FROM global_settings LIMIT 1
+SELECT id, created_at, updated_at, port, debug, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token FROM global_settings LIMIT 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
@@ -111,6 +115,7 @@ func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
 		&i.TvshowsDirList,
 		&i.TranscodeDir,
 		&i.StudiosImgDir,
+		&i.ArtistsImgDir,
 		&i.StaticDir,
 		&i.DownloadImages,
 		&i.TmdbApiKey,

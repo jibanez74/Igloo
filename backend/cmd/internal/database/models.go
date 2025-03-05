@@ -63,6 +63,7 @@ type GlobalSetting struct {
 	TvshowsDirList       string             `json:"tvshows_dir_list"`
 	TranscodeDir         string             `json:"transcode_dir"`
 	StudiosImgDir        string             `json:"studios_img_dir"`
+	ArtistsImgDir        string             `json:"artists_img_dir"`
 	StaticDir            string             `json:"static_dir"`
 	DownloadImages       bool               `json:"download_images"`
 	TmdbApiKey           string             `json:"tmdb_api_key"`

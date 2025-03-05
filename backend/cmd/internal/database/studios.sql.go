@@ -28,11 +28,11 @@ WITH existing_studio AS (
     WHERE NOT EXISTS (SELECT 1 FROM existing_studio)
     RETURNING id, created_at, updated_at, name, country, logo, tmdb_id
 )
-SELECT e.id, e.created_at, e.updated_at, e.name, e.country, e.logo, e.tmdb_id 
-FROM existing_studio e
+SELECT id, created_at, updated_at, name, country, logo, tmdb_id 
+FROM existing_studio
 UNION ALL
-SELECT n.id, n.created_at, n.updated_at, n.name, n.country, n.logo, n.tmdb_id 
-FROM new_studio n
+SELECT id, created_at, updated_at, name, country, logo, tmdb_id 
+FROM new_studio
 `
 
 type GetOrCreateStudioParams struct {

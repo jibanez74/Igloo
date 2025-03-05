@@ -37,7 +37,7 @@ func (c *config) createDirs(sharePath string) error {
 	c.Settings.MusicDirList = os.Getenv("MUSIC_DIR_LIST")
 	c.Settings.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
 	c.Settings.StudiosImgDir = filepath.Join(imgDir, "studios")
-	c.Settings.ArtistImgDir = filepath.Join(imgDir, "artists")
-	
+	c.Settings.ArtistsImgDir = filepath.Join(imgDir, "artists")
+
 	return nil
 }
