@@ -68,6 +68,7 @@ func main() {
 		Compress: true,
 		Browse:   true,
 	})
+
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
 

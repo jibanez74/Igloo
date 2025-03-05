@@ -14,11 +14,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type createRequest struct {
+	FilePath string `json:"file_path"`
+	TmdbID   string `json:"tmdb_id"`
+}
+
 func (app *application) createTmdbMovie(c *fiber.Ctx) error {
-	var request struct {
-		FilePath string `json:"filePath"`
-		TmdbID   string `json:"tmdbID"`
-	}
+	var request createRequest
 
 	err := c.BodyParser(&request)
 	if err != nil {
