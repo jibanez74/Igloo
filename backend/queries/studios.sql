@@ -1,4 +1,4 @@
---- name: GetStudioByID
+--- name: GetStudioByID :one
 SELECT id, name, logo, tmdb_id FROM studios
 WHERE id = $1;
 
@@ -17,10 +17,10 @@ WITH existing_studio AS (
     )
     SELECT $2, $3, $4, $1
     WHERE NOT EXISTS (SELECT 1 FROM existing_studio)
-    RETURNING id, name, country, logo, tmdb_id
+    RETURNING id, created_at, updated_at, name, country, logo, tmdb_id
 )
-SELECT e.id, e.created_at, e.updated_at, e.name, e.country, e.logo, e.tmdb_id 
-FROM existing_studio e
+SELECT id, created_at, updated_at, name, country, logo, tmdb_id 
+FROM existing_studio
 UNION ALL
-SELECT n.id, n.created_at, n.updated_at, n.name, n.country, n.logo, n.tmdb_id 
-FROM new_studio n;
+SELECT id, created_at, updated_at, name, country, logo, tmdb_id 
+FROM new_studio;

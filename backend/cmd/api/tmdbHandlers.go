@@ -189,7 +189,10 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 	if len(movieInfo.Studios) > 0 {
 		for _, s := range movieInfo.Studios {
 			studio, err := qtx.GetOrCreateStudio(c.Context(), database.GetOrCreateStudioParams{
-				TmdbID: s.ID,
+				TmdbID:  s.ID,
+				Name:    s.Name,
+				Country: s.Country,
+				Logo:    s.Logo,
 			})
 
 			if err != nil {
