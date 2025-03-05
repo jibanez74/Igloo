@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS genres CASCADE;
 DROP TABLE IF EXISTS studios CASCADE;
 DROP TABLE IF EXISTS global_settings;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS device_codes CASCADE;
 
 --
 -- Core tables
@@ -40,6 +41,7 @@ CREATE TABLE global_settings (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     port INTEGER NOT NULL,
     debug BOOLEAN NOT NULL,
+    base_url VARCHAR(255) NOT NULL,
     movies_dir_list VARCHAR(255) NOT NULL,
     movies_img_dir VARCHAR(255) NOT NULL,
     music_dir_list VARCHAR(255) NOT NULL,
@@ -54,6 +56,16 @@ CREATE TABLE global_settings (
     ffprobe_path VARCHAR(255) NOT NULL,
     hardware_acceleration VARCHAR(255) NOT NULL,
     jellyfin_token VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE device_codes (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    device_code VARCHAR(255) NOT NULL UNIQUE,
+    user_code VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE movies (
@@ -252,3 +264,7 @@ CREATE INDEX idx_movie_studios_movie_id ON movie_studios(movie_id);
 CREATE INDEX idx_movie_studios_studio_id ON movie_studios(studio_id);
 CREATE INDEX idx_user_movies_user_id ON user_movies(user_id);
 CREATE INDEX idx_user_movies_movie_id ON user_movies(movie_id);
+
+CREATE INDEX idx_device_codes_device_code ON device_codes(device_code);
+CREATE INDEX idx_device_codes_user_code ON device_codes(user_code);
+CREATE INDEX idx_device_codes_expires_at ON device_codes(expires_at);

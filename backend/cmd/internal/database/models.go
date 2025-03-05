@@ -51,12 +51,23 @@ type CrewList struct {
 	Department string             `json:"department"`
 }
 
+type DeviceCode struct {
+	ID         int32              `json:"id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	DeviceCode string             `json:"device_code"`
+	UserCode   string             `json:"user_code"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	UserID     pgtype.Int4        `json:"user_id"`
+	IsVerified bool               `json:"is_verified"`
+}
+
 type GlobalSetting struct {
 	ID                   int32              `json:"id"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	Port                 int32              `json:"port"`
 	Debug                bool               `json:"debug"`
+	BaseUrl              string             `json:"base_url"`
 	MoviesDirList        string             `json:"movies_dir_list"`
 	MoviesImgDir         string             `json:"movies_img_dir"`
 	MusicDirList         string             `json:"music_dir_list"`

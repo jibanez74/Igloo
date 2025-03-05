@@ -21,13 +21,14 @@ import (
 )
 
 type application struct {
-	settings *database.GlobalSetting
 	db       *pgxpool.Pool
 	queries  *database.Queries
+	settings *database.GlobalSetting
 	ffmpeg   ffmpeg.FFmpeg
 	ffprobe  ffprobe.Ffprobe
 	tmdb     tmdb.Tmdb
 	tokens   tokens.TokenManager
+	BaseURL  string
 }
 
 const DefaultPassword = "AdminPassword"
@@ -67,10 +68,15 @@ func main() {
 	api.Static("/static", app.settings.StaticDir, fiber.Static{
 		Compress: true,
 		Browse:   true,
+		Index:    "",
+		Next:     nil,
 	})
 
 	auth := api.Group("/auth")
 	auth.Post("/login", app.login)
+	auth.Post("/device/code", app.requestDeviceCode)
+	auth.Post("/device/verify", app.verifyUserCode)
+	auth.Get("/device/token/:device_code", app.handleDeviceCodeWebSocket)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)

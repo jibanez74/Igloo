@@ -5,6 +5,7 @@ SELECT * FROM global_settings LIMIT 1;
 INSERT INTO global_settings (
     port,
     debug,
+    base_url,
     movies_dir_list,
     movies_img_dir,
     music_dir_list,
@@ -20,6 +21,6 @@ INSERT INTO global_settings (
     hardware_acceleration,
     jellyfin_token
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
 RETURNING *;

@@ -51,6 +51,11 @@ func New() (*config, error) {
 		}
 		s.Debug = debug
 
+		s.BaseUrl = os.Getenv("BASE_URL")
+		if s.BaseUrl == "" {
+			s.BaseUrl = "localhost"
+		}
+
 		downloadImages, err := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
 		if err != nil {
 			downloadImages = false
