@@ -251,23 +251,3 @@ CREATE INDEX idx_movie_studios_movie_id ON movie_studios(movie_id);
 CREATE INDEX idx_movie_studios_studio_id ON movie_studios(studio_id);
 CREATE INDEX idx_user_movies_user_id ON user_movies(user_id);
 CREATE INDEX idx_user_movies_movie_id ON user_movies(movie_id);
-
---
--- Constraints
---
--- Data validation constraints
-ALTER TABLE movies 
-    ADD CONSTRAINT check_year CHECK (year >= 1900 OR year = 0),
-    ADD CONSTRAINT check_runtime CHECK (run_time >= 0);
-
--- Name length constraints
-ALTER TABLE users 
-    ADD CONSTRAINT check_name_length CHECK (length(name) >= 2),
-    ADD CONSTRAINT check_username_length CHECK (length(username) >= 2),
-    ADD CONSTRAINT check_password_length CHECK (length(password) >= 9);
-
-ALTER TABLE artists 
-    ADD CONSTRAINT check_name_length CHECK (length(name) >= 2);
-
-ALTER TABLE studios 
-    ADD CONSTRAINT check_name_length CHECK (length(name) >= 2);
