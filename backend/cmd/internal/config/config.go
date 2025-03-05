@@ -80,6 +80,6 @@ func New() (*config, error) {
 			return nil, fmt.Errorf("failed to write config file: %w", err)
 		}
 	}
- 
+
 	return &cfg, nil
 }

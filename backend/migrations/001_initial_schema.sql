@@ -270,4 +270,4 @@ ALTER TABLE artists
     ADD CONSTRAINT check_name_length CHECK (length(name) >= 2);
 
 ALTER TABLE studios 
-    ADD CONSTRAINT check_name_length CHECK (length(name) >= 2); 
+    ADD CONSTRAINT check_name_length CHECK (char_length(name) >= 2); 
