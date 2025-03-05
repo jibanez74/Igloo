@@ -17,7 +17,7 @@ WITH existing_studio AS (
     )
     SELECT $2, $3, $4, $1
     WHERE NOT EXISTS (SELECT 1 FROM existing_studio)
-    RETURNING id, created_at, updated_at, name, country, logo, tmdb_id
+    RETURNING id, name, country, logo, tmdb_id
 )
 SELECT e.id, e.created_at, e.updated_at, e.name, e.country, e.logo, e.tmdb_id 
 FROM existing_studio e
