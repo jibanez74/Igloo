@@ -77,6 +77,7 @@ func main() {
 	auth.Post("/login", app.login)
 	auth.Post("/device/code", app.requestDeviceCode)
 	auth.Post("/device/verify", app.verifyUserCode)
+	auth.Post("/refresh", app.checkRefreshToken, app.refreshAuthData)
 	auth.Get("/device/token/:device_code", app.handleDeviceCodeWebSocket)
 
 	movies := api.Group("/movies")
@@ -88,6 +89,9 @@ func main() {
 
 	if app.settings.Debug {
 		workDir, err := os.Getwd()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		api.Static("/assets", filepath.Join(workDir, "cmd", "client", "dist"), fiber.Static{
 			Compress: true,

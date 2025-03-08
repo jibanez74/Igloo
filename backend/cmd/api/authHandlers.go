@@ -89,6 +89,43 @@ func (app *application) login(c *fiber.Ctx) error {
 	})
 }
 
+func (app *application) refreshAuthData(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(int32)
+
+	user, err := app.queries.GetUserByID(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": serverErr,
+		})
+	}
+
+	// get a new access token
+	tokenPair, err := app.tokens.GenerateTokenPair(tokens.Claims{
+		UserID:   int(user.ID),
+		Username: user.Username,
+		Email:    user.Email,
+		IsAdmin:  user.IsAdmin,
+	})
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": serverErr,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"tokens": tokenPair,
+		"user": fiber.Map{
+			"id":       user.ID,
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"is_admin": user.IsAdmin,
+			"avatar":   user.Avatar,
+		},
+	})
+}
+
 func (app *application) requestDeviceCode(c *fiber.Ctx) error {
 	deviceCode := helpers.GenerateRandomString(8)
 	userCode := helpers.GenerateRandomString(8)
