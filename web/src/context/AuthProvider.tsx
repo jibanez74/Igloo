@@ -1,33 +1,10 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import queryClient from "../utils/queryClient";
-import type { User } from "../types/User";
 import LoadingScreen from "../components/LoadingScreen";
-
-type TokenPair = {
-  access_token: string;
-  refresh_token: string;
-};
-
-type AuthResponse = {
-  tokens: TokenPair;
-  user: User;
-};
-
-type AuthContextType = {
-  user: User | null;
-  isAuthenticated: boolean;
-  login: (response: AuthResponse) => void;
-  logout: () => void;
-};
-
-const AuthContext = createContext<AuthContextType | null>(null);
+import AuthContext from "./AuthContext";
+import type { User } from "../types/User";
+import type { AuthResponse } from "../types/Auth";
 
 async function refreshAuth(): Promise<AuthResponse> {
   const refreshToken = localStorage.getItem("refresh_token");
@@ -35,7 +12,7 @@ async function refreshAuth(): Promise<AuthResponse> {
     throw new Error("No refresh token available");
   }
 
-  const response = await fetch("/api/v1/auth/refresh", {
+  const res = await fetch("/api/v1/auth/refresh", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -43,14 +20,14 @@ async function refreshAuth(): Promise<AuthResponse> {
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
 
-  if (!response.ok) {
+  if (!res.ok) {
     throw new Error("Failed to refresh authentication");
   }
 
-  return response.json();
+  return res.json();
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export default function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
@@ -103,18 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {isPending ? (
-        <LoadingScreen text="Checking authentication..." />
+        <LoadingScreen text='Checking authentication...' />
       ) : (
         children
       )}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
 }
