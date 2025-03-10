@@ -1,3 +1,6 @@
+-- name: GetSettingsCount :one
+SELECT COUNT(*) FROM global_settings;
+
 -- name: GetSettings :one
 SELECT * FROM global_settings LIMIT 1;
 
@@ -19,8 +22,13 @@ INSERT INTO global_settings (
     ffmpeg_path,
     ffprobe_path,
     hardware_acceleration,
-    jellyfin_token
+    jellyfin_token,
+    issuer,
+    audience,
+    secret,
+    cookie_domain,
+    cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
 RETURNING *;

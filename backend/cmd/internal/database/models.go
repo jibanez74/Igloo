@@ -82,6 +82,11 @@ type GlobalSetting struct {
 	FfprobePath          string             `json:"ffprobe_path"`
 	HardwareAcceleration string             `json:"hardware_acceleration"`
 	JellyfinToken        string             `json:"jellyfin_token"`
+	Issuer               string             `json:"issuer"`
+	Audience             string             `json:"audience"`
+	Secret               string             `json:"secret"`
+	CookieDomain         string             `json:"cookie_domain"`
+	CookiePath           string             `json:"cookie_path"`
 }
 
 type Movie struct {

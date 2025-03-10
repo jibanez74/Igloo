@@ -41,6 +41,7 @@ type Querier interface {
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error)
 	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)
 	GetSettings(ctx context.Context) (GlobalSetting, error)
+	GetSettingsCount(ctx context.Context) (int64, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)

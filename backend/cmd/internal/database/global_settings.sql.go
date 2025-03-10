@@ -27,11 +27,16 @@ INSERT INTO global_settings (
     ffmpeg_path,
     ffprobe_path,
     hardware_acceleration,
-    jellyfin_token
+    jellyfin_token,
+    issuer,
+    audience,
+    secret,
+    cookie_domain,
+    cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
-RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token
+RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
 `
 
 type CreateSettingsParams struct {
@@ -52,6 +57,11 @@ type CreateSettingsParams struct {
 	FfprobePath          string `json:"ffprobe_path"`
 	HardwareAcceleration string `json:"hardware_acceleration"`
 	JellyfinToken        string `json:"jellyfin_token"`
+	Issuer               string `json:"issuer"`
+	Audience             string `json:"audience"`
+	Secret               string `json:"secret"`
+	CookieDomain         string `json:"cookie_domain"`
+	CookiePath           string `json:"cookie_path"`
 }
 
 func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) (GlobalSetting, error) {
@@ -73,6 +83,11 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.FfprobePath,
 		arg.HardwareAcceleration,
 		arg.JellyfinToken,
+		arg.Issuer,
+		arg.Audience,
+		arg.Secret,
+		arg.CookieDomain,
+		arg.CookiePath,
 	)
 	var i GlobalSetting
 	err := row.Scan(
@@ -96,12 +111,17 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.FfprobePath,
 		&i.HardwareAcceleration,
 		&i.JellyfinToken,
+		&i.Issuer,
+		&i.Audience,
+		&i.Secret,
+		&i.CookieDomain,
+		&i.CookiePath,
 	)
 	return i, err
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token FROM global_settings LIMIT 1
+SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
@@ -128,6 +148,22 @@ func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
 		&i.FfprobePath,
 		&i.HardwareAcceleration,
 		&i.JellyfinToken,
+		&i.Issuer,
+		&i.Audience,
+		&i.Secret,
+		&i.CookieDomain,
+		&i.CookiePath,
 	)
 	return i, err
+}
+
+const getSettingsCount = `-- name: GetSettingsCount :one
+SELECT COUNT(*) FROM global_settings
+`
+
+func (q *Queries) GetSettingsCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, getSettingsCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }

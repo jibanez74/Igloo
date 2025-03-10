@@ -3,33 +3,35 @@ package main
 import (
 	"context"
 	"fmt"
-	"igloo/cmd/internal/config"
+	"igloo/cmd/internal/caching"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers" // Alias to avoid conflict
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
-	"igloo/cmd/internal/tokens"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/storage/redis/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type application struct {
 	db       *pgxpool.Pool
 	queries  *database.Queries
+	redis    *redis.Storage
+	session  *session.Store
 	settings *database.GlobalSetting
 	ffmpeg   ffmpeg.FFmpeg
 	ffprobe  ffprobe.Ffprobe
 	tmdb     tmdb.Tmdb
-	tokens   tokens.TokenManager
-	BaseURL  string
 }
 
 const DefaultPassword = "AdminPassword"
@@ -55,6 +57,8 @@ func main() {
 		TimeZone:   "Local",
 	}))
 
+	f.Use(app.session)
+
 	api := f.Group("/api/v1")
 
 	api.Static("/transcode", app.settings.TranscodeDir, fiber.Static{
@@ -74,11 +78,9 @@ func main() {
 	})
 
 	auth := api.Group("/auth")
+	auth.Get("/me", app.validateSession, app.getAuthUser)
 	auth.Post("/login", app.login)
-	auth.Post("/device/code", app.requestDeviceCode)
-	auth.Post("/device/verify", app.verifyUserCode)
-	auth.Post("/refresh", app.checkRefreshToken, app.refreshAuthData)
-	auth.Get("/device/token/:device_code", app.handleDeviceCodeWebSocket)
+	auth.Post("/logout", app.logout)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
@@ -108,46 +110,23 @@ func main() {
 		})
 	}
 
-	err = f.Listen(fmt.Sprintf(":%d", app.settings.Port))
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
 }
 
 func initApp() (*application, error) {
 	var app application
 
-	cfg, err := config.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load settings: %w", err)
-	}
-
-	err = app.initDB()
+	err := app.initDB()
 	if err != nil {
 		return nil, err
 	}
 
-	var settings database.GlobalSetting
-
-	if cfg.CreateSettings {
-		settings, err = app.queries.CreateSettings(context.Background(), *cfg.Settings)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create settings: %w", err)
-		}
-	} else {
-		settings, err = app.queries.GetSettings(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get settings: %w", err)
-		}
+	err = app.initSettings()
+	if err != nil {
+		return nil, err
 	}
-	app.settings = &settings
 
 	err = app.createDefaultUser()
-	if err != nil {
-		return nil, err
-	}
-
-	err = app.initTokens()
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +157,20 @@ func initApp() (*application, error) {
 
 		app.tmdb = t
 	}
+
+	app.redis = caching.New()
+
+	store := session.New(session.Config{
+		Storage:        app.redis,
+		Expiration:     time.Hour * 24 * 30,
+		CookieDomain:   app.settings.CookieDomain,
+		CookiePath:     app.settings.CookiePath,
+		CookieSecure:   !app.settings.Debug,
+		CookieHTTPOnly: true,
+		CookieSameSite: "Lax",
+	})
+
+	app.session = store
 
 	return &app, nil
 }
@@ -277,31 +270,6 @@ func (app *application) createDefaultUser() error {
 			return fmt.Errorf("failed to create default user: %w", err)
 		}
 	}
-
-	return nil
-}
-
-func (app *application) initTokens() error {
-	jwtAccessSecret := os.Getenv("JWT_ACCESS_SECRET")
-	if jwtAccessSecret == "" {
-		jwtAccessSecret = "your-256-bit-secret"
-	}
-
-	jwtRefreshSecret := os.Getenv("JWT_REFRESH_SECRET")
-	if jwtRefreshSecret == "" {
-		jwtRefreshSecret = "your-256-bit-refresh-secret"
-	}
-
-	tokenConfig := tokens.DefaultConfig().
-		WithAccessTokenSecret(jwtAccessSecret).
-		WithRefreshTokenSecret(jwtRefreshSecret)
-
-	tokenManager, err := tokens.New(tokenConfig)
-	if err != nil {
-		return fmt.Errorf("failed to initialize token manager: %w", err)
-	}
-
-	app.tokens = tokenManager
 
 	return nil
 }
