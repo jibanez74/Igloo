@@ -57,8 +57,6 @@ func main() {
 		TimeZone:   "Local",
 	}))
 
-	f.Use(app.session)
-
 	api := f.Group("/api/v1")
 
 	api.Static("/transcode", app.settings.TranscodeDir, fiber.Static{
