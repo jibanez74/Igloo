@@ -1,23 +1,22 @@
-import { useState } from "react";
-import { createLazyFileRoute } from "@tanstack/react-router";
-import { FiUser, FiMail, FiLock } from "react-icons/fi";
+import { createSignal } from "solid-js";
+import { createLazyFileRoute } from "@tanstack/solid-router";
+import { FiUser, FiMail, FiLock } from "solid-icons/fi";
 import ErrorWarning from "../components/ErrorWarning";
-import useAuth from "../hooks/useAuth";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
 });
 
-function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
-  const { login } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+function LoginPage() {
+  const [username, setUsername] = createSignal("");
+  const [email, setEmail] = createSignal("");
+  const [password, setPassword] = createSignal("");
+  const [error, setError] = createSignal("");
+  const [isLoading, setIsLoading] = createSignal(false);
+  const [isVisible, setIsVisible] = createSignal(false);
+
+  const handleSubmit = async (e: Event) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
@@ -30,9 +29,9 @@ function LoginPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username,
-          email,
-          password,
+          username: username(),
+          email: email(),
+          password: password(),
         }),
       });
 
@@ -44,7 +43,7 @@ function LoginPage() {
         return;
       }
 
-      login(data);
+      console.log(data);
     } catch (err) {
       console.error(err);
       setError("A network error occurred");
@@ -55,91 +54,101 @@ function LoginPage() {
   };
 
   return (
-    <main className='min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8'>
-      <section className='max-w-md w-full space-y-8 bg-slate-900/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20'>
+    <main class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+      <section class="max-w-md w-full space-y-8 bg-slate-900/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20">
         <header>
-          <h1 className='text-center text-3xl font-bold text-white'>
+          <h1 class="text-center text-3xl font-bold text-white">
             Sign in to your account
           </h1>
         </header>
+
         <form
-          className='mt-8 space-y-6'
+          class="mt-8 space-y-6"
           onSubmit={handleSubmit}
-          aria-label='Login form'
+          aria-label="Login form"
         >
-          <ErrorWarning error={error} isVisible={isVisible} />
-          <fieldset className='space-y-4 rounded-md'>
-            <legend className='sr-only'>Login credentials</legend>
+          <ErrorWarning error={error()} isVisible={isVisible()} />
+          <fieldset class="space-y-4 rounded-md">
+            <legend class="sr-only">Login credentials</legend>
+
             <div>
-              <label htmlFor='username' className='sr-only'>
+              <label for="username" class="sr-only">
                 Username
               </label>
-              <div className='relative'>
-                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FiUser
-                    className='h-5 w-5 text-blue-200'
-                    aria-hidden='true'
+                    class="h-5 w-5 text-blue-200"
+                    aria-hidden="true"
                   />
                 </div>
+
                 <input
-                  autoFocus
-                  id='username'
-                  name='username'
-                  type='text'
+                  autofocus
+                  id="username"
+                  name="username"
+                  type="text"
                   required
-                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
-                  placeholder='Username'
-                  aria-required='true'
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  placeholder="Username"
+                  aria-required="true"
+                  value={username()}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
                 />
               </div>
             </div>
+
             <div>
-              <label htmlFor='email' className='sr-only'>
+              <label for="email" class="sr-only">
                 Email
               </label>
-              <div className='relative'>
-                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FiMail
-                    className='h-5 w-5 text-blue-200'
-                    aria-hidden='true'
+                    class="h-5 w-5 text-blue-200"
+                    aria-hidden="true"
                   />
                 </div>
+
                 <input
-                  id='email'
-                  name='email'
-                  type='email'
+                  id="email"
+                  name="email"
+                  type="email"
                   required
-                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
-                  placeholder='Email address'
-                  aria-required='true'
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  placeholder="Email address"
+                  aria-required="true"
+                  value={email()}
+                  onInput={(e) => setEmail(e.currentTarget.value)}
                 />
               </div>
             </div>
+
             <div>
-              <label htmlFor='password' className='sr-only'>
+              <label for="password" class="sr-only">
                 Password
               </label>
-              <div className='relative'>
-                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FiLock
-                    className='h-5 w-5 text-blue-200'
-                    aria-hidden='true'
+                    class="h-5 w-5 text-blue-200"
+                    aria-hidden="true"
                   />
                 </div>
+
                 <input
-                  id='password'
-                  name='password'
-                  type='password'
+                  id="password"
+                  name="password"
+                  type="password"
                   required
-                  className='appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400'
-                  placeholder='Password'
-                  aria-required='true'
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  placeholder="Password"
+                  aria-required="true"
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
                 />
               </div>
             </div>
@@ -147,12 +156,12 @@ function LoginPage() {
 
           <div>
             <button
-              type='submit'
-              disabled={isLoading}
-              className='group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200'
-              aria-busy={isLoading}
+              type="submit"
+              disabled={isLoading()}
+              class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              aria-busy={isLoading()}
             >
-              {isLoading ? "Signing in..." : "Sign in"}
+              {isLoading() ? "Signing in..." : "Sign in"}
             </button>
           </div>
         </form>
@@ -160,3 +169,4 @@ function LoginPage() {
     </main>
   );
 }
+

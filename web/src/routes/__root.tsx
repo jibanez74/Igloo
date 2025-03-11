@@ -1,22 +1,19 @@
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
-import Navbar from "../components/Navbar";
-import type { AuthContextType } from "../types/Auth";
+import { createRootRoute, Outlet } from "@tanstack/solid-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 
-type RouteContext = {
-  auth: AuthContextType;
-};
+const queryClient = new QueryClient();
 
-export const Route = createRootRouteWithContext<RouteContext>()({
-  component: RootComponent,
+export const Route = createRootRoute({
+  component: RootLayout,
 });
 
-function RootComponent() {
+function RootLayout() {
   return (
-    <>
-      <header>
-        <Navbar />
-      </header>
-      <Outlet />
-    </>
+    <QueryClientProvider client={queryClient}>
+      <header>navbar goes here</header>
+      <main>
+        <Outlet />
+      </main>
+    </QueryClientProvider>
   );
 }

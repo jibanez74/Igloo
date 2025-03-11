@@ -1,11 +1,13 @@
-import { FiLoader } from "react-icons/fi";
+import { FiLoader } from "solid-icons/fi";
 
 type SpinnerProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
-}
+};
 
-export default function Spinner({ size = "md", className = "" }: SpinnerProps) {
+export default function Spinner(props: SpinnerProps) {
+  const { size = "md", className = "" } = props;
+
   const sizeClasses = {
     sm: "w-4 h-4",
     md: "w-5 h-5",
@@ -14,8 +16,8 @@ export default function Spinner({ size = "md", className = "" }: SpinnerProps) {
 
   return (
     <FiLoader
-      className={`text-blue-400 animate-spin ${sizeClasses[size]} ${className}`}
-      aria-hidden='true'
+      class={`text-blue-400 animate-spin ${sizeClasses[size]} ${className}`}
+      aria-hidden="true"
     />
   );
 }
