@@ -58,6 +58,13 @@ func (app *application) login(c *fiber.Ctx) error {
 		})
 	}
 
+	token, err := helpers.GenerateAccessToken(&user, app.settings)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": serverErr,
+		})
+	}
+
 	ses, err := app.session.Get(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -78,6 +85,7 @@ func (app *application) login(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"access_token": token,
 		"user": fiber.Map{
 			"id":       user.ID,
 			"name":     user.Name,

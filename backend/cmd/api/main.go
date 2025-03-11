@@ -78,7 +78,7 @@ func main() {
 	})
 
 	auth := api.Group("/auth")
-	auth.Get("/me", app.validateSession, app.getAuthUser)
+	auth.Get("/me", app.validateTokenInHeader, app.getAuthUser)
 	auth.Post("/login", app.login)
 	auth.Post("/logout", app.logout)
 
