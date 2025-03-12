@@ -1,9 +1,9 @@
 import { For } from "solid-js";
 import { FiMail, FiShield, FiCheck, FiX } from "solid-icons/fi";
-import type { User } from "../types/User";
+import type { SimpleUser } from "../types/User";
 
 type UsersTableProps = {
-  users: User[];
+  users: SimpleUser[];
 };
 
 export default function UsersTable(props: UsersTableProps) {
@@ -12,6 +12,7 @@ export default function UsersTable(props: UsersTableProps) {
       <caption class="sr-only">
         List of system users with their details
       </caption>
+
       <thead>
         <tr class="text-left border-b border-sky-200/10">
           <th scope="col" class="pb-3 text-sm font-medium text-sky-200">

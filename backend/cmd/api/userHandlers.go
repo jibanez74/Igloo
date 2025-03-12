@@ -41,10 +41,10 @@ func (app *application) getUsersPaginated(c *fiber.Ctx) error {
 	totalPages := (count + int64(limit) - 1) / int64(limit)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"users":        users,
+		"items":        users,
 		"current_page": page,
 		"total_pages":  totalPages,
-		"total_users":  count,
+		"count":        count,
 	})
 }
 

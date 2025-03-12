@@ -3,7 +3,8 @@ import UsersTable from "../../../../components/UsersTable";
 import Pagination from "../../../../components/Pagination";
 // import { FiUserPlus } from "solid-icons/fi";
 import type { PaginationSearch } from "../../../../types/Pagination";
-import type { UsersResponse } from "../../../../types/User";
+import type { PaginationResponse } from "../../../../types/Pagination";
+import type { SimpleUser } from "../../../../types/User";
 
 export const Route = createFileRoute("/_auth/settings/users/")({
   component: UsersPage,
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_auth/settings/users/")({
     limit: Number(search?.limit ?? 10),
   }),
   loaderDeps: ({ search }) => search,
-  loader: async ({ deps }): Promise<UsersResponse> => {
+  loader: async ({ deps }): Promise<PaginationResponse<SimpleUser>> => {
     try {
       const res = await fetch(
         `/api/v1/users?page=${deps.page}&limit=${deps.limit}`,
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/_auth/settings/users/")({
 
 function UsersPage() {
   const data = Route.useLoaderData();
-  const { total_pages, total_users, users } = data();
+  const { total_pages, count, items } = data();
   const search = Route.useSearch();
   const { page, limit } = search();
   const navigate = Route.useNavigate();
@@ -73,11 +74,11 @@ function UsersPage() {
           </div>
           <p class="text-sm text-sky-200">
             Total users:{" "}
-            <span class="text-white font-medium">{total_users}</span>
+            <span class="text-white font-medium">{count}</span>
           </p>
         </header>
 
-        {users.length === 0 ? (
+        {items.length === 0 ? (
           <p
             class="h-40 flex items-center justify-center text-sky-200"
             role="status"
@@ -87,7 +88,7 @@ function UsersPage() {
         ) : (
           <>
             <div class="overflow-x-auto mb-6">
-              <UsersTable users={users} />
+              <UsersTable users={items} />
             </div>
             <Pagination
               currentPage={page}

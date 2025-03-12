@@ -2,11 +2,12 @@ import { Show, For } from "solid-js";
 import { createFileRoute } from "@tanstack/solid-router";
 import MovieCard from "../../../components/MovieCard";
 import Pagination from "../../../components/Pagination";
-import type { MoviesResponse } from "../../../types/Movie";
+import type { PaginationResponse } from "../../../types/Pagination";
+import type { SimpleMovie } from "../../../types/Movie";
 
 export const Route = createFileRoute("/_auth/movies/")({
   component: MoviesPage,
-  loader: async (): Promise<MoviesResponse> => {
+  loader: async (): Promise<PaginationResponse<SimpleMovie>> => {
     try {
       const res = await fetch("/api/v1/movies", {
         credentials: "include",
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/_auth/movies/")({
 
 function MoviesPage() {
   const data = Route.useLoaderData();
-  const { movies, current_page, total_movies, total_pages } = data();
+  const { items, current_page, count, total_pages } = data();
 
   return (
     <main class="py-8">
@@ -38,11 +39,11 @@ function MoviesPage() {
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold text-white">Movies</h1>
 
-          <p class="text-blue-200">Total Movies: {total_movies}</p>
+          <p class="text-blue-200">Total Movies: {count}</p>
         </div>
 
         <ul class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
-          <For each={movies}>
+          <For each={items}>
             {(movie) => (
               <li>
                 <MovieCard movie={movie} imgLoading="lazy" />

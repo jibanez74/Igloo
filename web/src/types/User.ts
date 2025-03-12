@@ -8,9 +8,11 @@ export type User = {
   avatar?: string;
 };
 
-export type UsersResponse = {
-  users: User[];
-  current_page: number;
-  total_pages: number;
-  total_users: number;
+export type SimpleUser = {
+  id: never;
+  name: string;
+  email: string;
+  username: string;
+  is_active: boolean;
+  is_admin: boolean;
 };

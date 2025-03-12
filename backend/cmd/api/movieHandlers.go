@@ -87,9 +87,9 @@ func (app *application) getMoviesPaginated(c *fiber.Ctx) error {
 	totalPages := (count + int64(limit) - 1) / int64(limit)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"movies":       movies,
+		"items":        movies,
 		"current_page": page,
 		"total_pages":  totalPages,
-		"total_movies": count,
+		"count":        count,
 	})
 }
