@@ -34,7 +34,11 @@ type application struct {
 	tmdb     tmdb.Tmdb
 }
 
-const DefaultPassword = "AdminPassword"
+const (
+	DefaultPassword = "AdminPassword"
+	authErr         = "invalid credentials"
+	serverErr       = "server error"
+)
 
 func main() {
 	app, err := initApp()
@@ -86,6 +90,10 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
+
+	users := api.Group("/users")
+	users.Get("/", app.getUsersPaginated)
+	users.Post("/create", app.createUser)
 
 	if app.settings.Debug {
 		workDir, err := os.Getwd()

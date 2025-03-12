@@ -12,6 +12,7 @@
     "@tailwindcss/vite": "^4.0.12",
     "@tanstack/solid-query": "^5.67.3",
     "@tanstack/solid-router": "^1.114.14",
+    "hls.js": "^1.5.20",
     "solid-icons": "^1.1.0",
     "solid-js": "^1.9.5",
     "tailwindcss": "^4.0.12"

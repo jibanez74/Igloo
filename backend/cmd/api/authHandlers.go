@@ -13,11 +13,6 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-const (
-	authErr   = "invalid credentials"
-	serverErr = "server error"
-)
-
 func (app *application) login(c *fiber.Ctx) error {
 	var req loginRequest
 

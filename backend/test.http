@@ -1,8 +1,0 @@
-POST http://100.107.177.6:8080/api/v1/auth/login
-Content-Type: application/json
-
-{
-    "email": "admin@example.com",
-    "username": "admin",
-    "password": "AdminPassword"
-}

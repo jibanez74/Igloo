@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const checkUserExists = `-- name: CheckUserExists :one
+SELECT EXISTS (
+    SELECT 1 FROM users
+    WHERE email = $1 OR username = $2
+)
+`
+
+type CheckUserExistsParams struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+}
+
+func (q *Queries) CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkUserExists, arg.Email, arg.Username)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     name,

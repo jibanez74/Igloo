@@ -14,6 +14,7 @@ type Querier interface {
 	AddMovieGenre(ctx context.Context, arg AddMovieGenreParams) error
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	AddUserMovie(ctx context.Context, arg AddUserMovieParams) error
+	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CleanupExpiredDeviceCodes(ctx context.Context) error
 	CreateAudioStream(ctx context.Context, arg CreateAudioStreamParams) (AudioStream, error)
 	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)

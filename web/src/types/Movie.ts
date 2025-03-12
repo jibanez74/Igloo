@@ -55,3 +55,7 @@ export type Movie = {
   created_at?: string | Date;
   updated_at?: string | Date;
 };
+
+export type MovieDetailsResponse = {
+  movie: Movie;
+};

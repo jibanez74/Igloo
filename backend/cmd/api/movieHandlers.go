@@ -77,19 +77,19 @@ func (app *application) getMoviesPaginated(c *fiber.Ctx) error {
 		})
 	}
 
-	totalMovies, err := app.queries.GetMovieCount(c.Context())
+	count, err := app.queries.GetMovieCount(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
+			"error": serverErr,
 		})
 	}
 
-	totalPages := (totalMovies + int64(limit) - 1) / int64(limit)
+	totalPages := (count + int64(limit) - 1) / int64(limit)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movies":       movies,
 		"current_page": page,
 		"total_pages":  totalPages,
-		"total_movies": totalMovies,
+		"total_movies": count,
 	})
 }

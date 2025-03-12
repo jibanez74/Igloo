@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/solid-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import Navbar from "../components/Navbar";
 
 const queryClient = new QueryClient();
 
@@ -10,7 +11,9 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <header>navbar goes here</header>
+      <header>
+        <Navbar />
+      </header>
       <main>
         <Outlet />
       </main>
