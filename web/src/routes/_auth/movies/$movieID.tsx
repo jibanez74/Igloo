@@ -52,6 +52,8 @@ function MovieDetailsPage() {
   const data = Route.useLoaderData();
   const { movie } = data();
 
+  alert(movie.thumb);
+
   const audioOpts = createMemo(() => {
     if (!movie.audio_streams.length) return [];
 

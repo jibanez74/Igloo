@@ -107,38 +107,26 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 	}
 
 	if movieInfo.Thumb != "" {
-		thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
+		movie.Thumb = fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
 
 		if app.settings.DownloadImages {
-			fullPath, err := helpers.SaveImage(
-				thumbUrl,
-				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
+			go helpers.SaveImage(
+				movie.Thumb,
+				filepath.Join(app.settings.MoviesImgDir, movie.TmdbID),
 				"thumb.jpg",
 			)
-
-			if err == nil {
-				movie.Thumb = *fullPath
-			}
-		} else {
-			movie.Thumb = thumbUrl
 		}
 	}
 
 	if movieInfo.Art != "" {
-		artURL := fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
+		movie.Art = fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
 
 		if app.settings.DownloadImages {
-			fullPath, err := helpers.SaveImage(
-				artURL,
-				filepath.Join(app.settings.MoviesImgDir, movie.FileName),
+			go helpers.SaveImage(
+				movie.Art,
+				filepath.Join(app.settings.MoviesImgDir, movie.TmdbID),
 				"art.jpg",
 			)
-
-			if err == nil {
-				movie.Art = *fullPath
-			}
-		} else {
-			movie.Art = artURL
 		}
 	}
 
@@ -186,25 +174,11 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if len(movieInfo.Studios) > 0 {
 		for _, s := range movieInfo.Studios {
-			logoUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo)
-
-			if app.settings.DownloadImages {
-				fullPath, err := helpers.SaveImage(
-					logoUrl,
-					app.settings.StudiosImgDir,
-					fmt.Sprintf("%d_studio_logo.jpg", s.ID),
-				)
-
-				if err == nil {
-					logoUrl = *fullPath
-				}
-			}
-
 			studio, err := qtx.GetOrCreateStudio(c.Context(), database.GetOrCreateStudioParams{
 				TmdbID:  s.ID,
 				Name:    s.Name,
 				Country: s.Country,
-				Logo:    logoUrl,
+				Logo:    fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", s.Logo),
 			})
 
 			if err != nil {
@@ -223,30 +197,25 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 					"error": fmt.Sprintf("unable to link studio %s to the movie %s: %v", s.Name, movie.Title, err),
 				})
 			}
+
+			if app.settings.DownloadImages {
+				go helpers.SaveImage(
+					studio.Logo,
+					app.settings.StudiosImgDir,
+					fmt.Sprintf("%d_studio_logo.jpg", studio.TmdbID),
+				)
+			}
 		}
 	}
 
 	if len(movieInfo.Credits.Cast) > 0 {
 		for _, a := range movieInfo.Credits.Cast {
-			thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb)
-
-			if app.settings.DownloadImages {
-				fullPath, err := helpers.SaveImage(
-					thumbUrl,
-					filepath.Join(app.settings.ArtistsImgDir, movie.FileName),
-					fmt.Sprintf("%d_artist_thumb.jpg", a.ID),
-				)
-
-				if err == nil {
-					thumbUrl = *fullPath
-				}
-			}
 
 			artist, err := qtx.GetOrCreateArtist(c.Context(), database.GetOrCreateArtistParams{
 				TmdbID:       int32(a.ID),
 				Name:         a.Name,
 				OriginalName: a.OriginalName,
-				Thumb:        thumbUrl,
+				Thumb:        fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb),
 			})
 
 			if err != nil {
@@ -273,30 +242,24 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 					"error": fmt.Sprintf("unable to create cast member %s for the movie %s: %v", a.Name, movie.Title, err),
 				})
 			}
+
+			if app.settings.DownloadImages {
+				go helpers.SaveImage(
+					artist.Thumb,
+					app.settings.ArtistsImgDir,
+					fmt.Sprintf("%d_artist_thumb.jpg", artist.TmdbID),
+				)
+			}
 		}
 	}
 
 	if len(movieInfo.Credits.Crew) > 0 {
 		for _, a := range movieInfo.Credits.Crew {
-			thumbUrl := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb)
-
-			if app.settings.DownloadImages {
-				fullPath, err := helpers.SaveImage(
-					thumbUrl,
-					filepath.Join(app.settings.ArtistsImgDir, movie.FileName),
-					fmt.Sprintf("%d_artist_thumb.jpg", a.ID),
-				)
-
-				if err == nil {
-					thumbUrl = *fullPath
-				}
-			}
-
 			artist, err := qtx.GetOrCreateArtist(c.Context(), database.GetOrCreateArtistParams{
 				TmdbID:       int32(a.ID),
 				Name:         a.Name,
 				OriginalName: a.OriginalName,
-				Thumb:        thumbUrl,
+				Thumb:        fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb),
 			})
 
 			if err != nil {
@@ -322,6 +285,14 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": fmt.Sprintf("unable to create crew member %s for the movie %s: %v", a.Name, movie.Title, err),
 				})
+			}
+
+			if app.settings.DownloadImages {
+				go helpers.SaveImage(
+					artist.Thumb,
+					app.settings.ArtistsImgDir,
+					fmt.Sprintf("%d_artist_thumb.jpg", artist.TmdbID),
+				)
 			}
 		}
 	}
