@@ -33,8 +33,10 @@ func (app *application) createHlsStream(c *fiber.Ctx) error {
 		})
 	}
 
+	dirName := fmt.Sprintf("movie_%d", movie.ID)
+
 	req.InputPath = movie.FilePath
-	req.OutputDir = filepath.Join(app.settings.TranscodeDir, fmt.Sprintf("movie_%d", movie.ID))
+	req.OutputDir = filepath.Join(app.settings.TranscodeDir, "movies", dirName)
 
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
@@ -45,6 +47,6 @@ func (app *application) createHlsStream(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"pid":      pid,
-		"m3u8_url": fmt.Sprintf("%s/%s", req.OutputDir, ffmpeg.DefaultPlaylistName),
+		"m3u8_url": fmt.Sprintf("/api/v1/transcode/movies/%s/%s", dirName, ffmpeg.DefaultPlaylistName),
 	})
 }
