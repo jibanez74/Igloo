@@ -52,8 +52,6 @@ function MovieDetailsPage() {
   const data = Route.useLoaderData();
   const { movie } = data();
 
-  alert(movie.thumb);
-
   const audioOpts = createMemo(() => {
     if (!movie.audio_streams.length) return [];
 
@@ -300,7 +298,9 @@ function MovieDetailsPage() {
       {/* Cast & Crew Section */}
       <section class="container mx-auto px-4 py-12">
         <h2 class="text-2xl font-bold text-white mb-6">Cast & Crew</h2>
-        {movie.cast.length > 0 && <CastSection cast={movie.cast} />}
+        {movie.cast.length > 0 && (
+          <CastSection cast={movie.cast} />
+        )}
         {movie.crew.length > 0 && <CrewSection crew={movie.crew} />}
       </section>
 

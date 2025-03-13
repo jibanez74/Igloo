@@ -7,12 +7,14 @@ type CastSectionProps = {
 };
 
 export default function CastSection(props: CastSectionProps) {
+  const cast = props.cast.slice(0, 12);
+
   return (
     <div class="mb-12">
       <h3 class="text-lg font-medium text-sky-200 mb-4">Cast</h3>
 
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <For each={props.cast}>
+        <For each={cast}>
           {(castMember) => (
             <div class="text-center">
               <div class="aspect-[2/3] mb-2 rounded-lg bg-slate-800/50 overflow-hidden">

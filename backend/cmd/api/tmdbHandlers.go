@@ -108,26 +108,10 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 	if movieInfo.Thumb != "" {
 		movie.Thumb = fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", movieInfo.Thumb)
-
-		if app.settings.DownloadImages {
-			go helpers.SaveImage(
-				movie.Thumb,
-				filepath.Join(app.settings.MoviesImgDir, movie.TmdbID),
-				"thumb.jpg",
-			)
-		}
 	}
 
 	if movieInfo.Art != "" {
 		movie.Art = fmt.Sprintf("https://image.tmdb.org/t/p/w1280%s", movieInfo.Art)
-
-		if app.settings.DownloadImages {
-			go helpers.SaveImage(
-				movie.Art,
-				filepath.Join(app.settings.MoviesImgDir, movie.TmdbID),
-				"art.jpg",
-			)
-		}
 	}
 
 	tx, err := app.db.Begin(c.Context())
@@ -197,14 +181,6 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 					"error": fmt.Sprintf("unable to link studio %s to the movie %s: %v", s.Name, movie.Title, err),
 				})
 			}
-
-			if app.settings.DownloadImages {
-				go helpers.SaveImage(
-					studio.Logo,
-					app.settings.StudiosImgDir,
-					fmt.Sprintf("%d_studio_logo.jpg", studio.TmdbID),
-				)
-			}
 		}
 	}
 
@@ -242,14 +218,6 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 					"error": fmt.Sprintf("unable to create cast member %s for the movie %s: %v", a.Name, movie.Title, err),
 				})
 			}
-
-			if app.settings.DownloadImages {
-				go helpers.SaveImage(
-					artist.Thumb,
-					app.settings.ArtistsImgDir,
-					fmt.Sprintf("%d_artist_thumb.jpg", artist.TmdbID),
-				)
-			}
 		}
 	}
 
@@ -285,14 +253,6 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": fmt.Sprintf("unable to create crew member %s for the movie %s: %v", a.Name, movie.Title, err),
 				})
-			}
-
-			if app.settings.DownloadImages {
-				go helpers.SaveImage(
-					artist.Thumb,
-					app.settings.ArtistsImgDir,
-					fmt.Sprintf("%d_artist_thumb.jpg", artist.TmdbID),
-				)
 			}
 		}
 	}
