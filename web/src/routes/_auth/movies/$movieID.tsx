@@ -119,6 +119,7 @@ function MovieDetailsPage() {
         search: {
           title: movie.title,
           thumb: movie.thumb,
+          pid: data.pid,
           m3u8Url: data.m3u8_url,
         },
       });
