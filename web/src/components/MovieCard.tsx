@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/solid-router";
 import getImgSrc from "../utils/getImgSrc";
-import truncateText from "../utils/truncateText";
 import type { SimpleMovie } from "../types/Movie";
 
 type MovieCardProps = {
@@ -10,7 +9,6 @@ type MovieCardProps = {
 
 export default function MovieCard(props: MovieCardProps) {
   const imgSrc = getImgSrc(props.movie.thumb);
-  const truncatedTitle = truncateText(props.movie.title, 20);
 
   return (
     <Link
