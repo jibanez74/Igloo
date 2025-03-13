@@ -90,6 +90,7 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
+	movies.Post("/create-hls/:id", app.createHlsStream)
 
 	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)

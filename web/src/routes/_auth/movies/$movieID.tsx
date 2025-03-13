@@ -62,6 +62,7 @@ function MovieDetailsPage() {
         label: `${stream.title} ${stream.language}`,
       });
     }
+
     return opts;
   });
 
@@ -75,6 +76,7 @@ function MovieDetailsPage() {
         label: `${sub.title} ${sub.language}`,
       });
     }
+
     return opts;
   });
 
@@ -84,37 +86,46 @@ function MovieDetailsPage() {
   const navigate = Route.useNavigate();
 
   const handlePlayMovie = async () => {
-    const opts: MovieHlsOpts = {
-      title: movie.title,
-      audio_codec: "aac",
-      audio_bit_rate: 192,
-      audio_channels: 2,
-      audio_stream_index: movie.audio_streams[0].index,
-      video_stream_index: movie.video_streams[0].index,
-      video_codec: "copy",
-    };
+    try {
+      const opts: MovieHlsOpts = {
+        title: movie.title,
+        audio_codec: "aac",
+        audio_bit_rate: 192,
+        audio_channels: 2,
+        audio_stream_index: movie.audio_streams[0].index,
+        video_stream_index: movie.video_streams[0].index,
+        video_codec: "copy",
+      };
 
-    const res = await fetch(`/api/v1/ffmpeg/movie/create-hls/${movie.id}`, {
-      method: "post",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(opts),
-    });
+      const res = await fetch(`/api/v1/ffmpeg/movie/create-hls/${movie.id}`, {
+        method: "post",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (data.error) {
-      alert(data.error);
-      return;
+      if (data.error) {
+        alert(`${res.status} - ${data.error ? data.error : res.statusText}`);
+        return;
+      }
+
+      navigate({
+        to: "/movies/$movieID/play",
+        from: "/movies/$movieID",
+        search: {
+          title: movie.title,
+          thumb: movie.thumb,
+          m3u8Url: data.m3u8_url,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      alert("an error occurred while playing the movie");
     }
-
-    navigate({
-      to: "/movies/$movieID/play",
-      params: { movieID: movie.id.toString() },
-      search: { pid: data.pid, title: movie.title },
-    });
   };
 
   return (
@@ -298,9 +309,7 @@ function MovieDetailsPage() {
       {/* Cast & Crew Section */}
       <section class="container mx-auto px-4 py-12">
         <h2 class="text-2xl font-bold text-white mb-6">Cast & Crew</h2>
-        {movie.cast.length > 0 && (
-          <CastSection cast={movie.cast} />
-        )}
+        {movie.cast.length > 0 && <CastSection cast={movie.cast} />}
         {movie.crew.length > 0 && <CrewSection crew={movie.crew} />}
       </section>
 

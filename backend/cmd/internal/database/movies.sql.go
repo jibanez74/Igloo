@@ -442,6 +442,32 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 	return i, err
 }
 
+const getMovieForHls = `-- name: GetMovieForHls :one
+SELECT id, file_path, content_type, container, size FROM movies
+WHERE id = $1
+`
+
+type GetMovieForHlsRow struct {
+	ID          int32  `json:"id"`
+	FilePath    string `json:"file_path"`
+	ContentType string `json:"content_type"`
+	Container   string `json:"container"`
+	Size        int64  `json:"size"`
+}
+
+func (q *Queries) GetMovieForHls(ctx context.Context, id int32) (GetMovieForHlsRow, error) {
+	row := q.db.QueryRow(ctx, getMovieForHls, id)
+	var i GetMovieForHlsRow
+	err := row.Scan(
+		&i.ID,
+		&i.FilePath,
+		&i.ContentType,
+		&i.Container,
+		&i.Size,
+	)
+	return i, err
+}
+
 const getMovieForStreaming = `-- name: GetMovieForStreaming :one
 SELECT id, file_path, content_type, size FROM movies
 WHERE id = $1

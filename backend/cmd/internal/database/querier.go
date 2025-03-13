@@ -34,6 +34,7 @@ type Querier interface {
 	GetMovieByTmdbID(ctx context.Context, tmdbID string) (GetMovieByTmdbIDRow, error)
 	GetMovieCount(ctx context.Context) (int64, error)
 	GetMovieDetails(ctx context.Context, id int32) (GetMovieDetailsRow, error)
+	GetMovieForHls(ctx context.Context, id int32) (GetMovieForHlsRow, error)
 	GetMovieForStreaming(ctx context.Context, id int32) (GetMovieForStreamingRow, error)
 	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)

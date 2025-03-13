@@ -19,14 +19,12 @@ import { Route as AuthMusicIndexImport } from './routes/_auth/music/index'
 import { Route as AuthMoviesIndexImport } from './routes/_auth/movies/index'
 import { Route as AuthMoviesMovieIDImport } from './routes/_auth/movies/$movieID'
 import { Route as AuthSettingsUsersIndexImport } from './routes/_auth/settings/users/index'
+import { Route as AuthMoviesMovieIDPlayImport } from './routes/_auth/movies/$movieID.play'
 
 // Create Virtual Routes
 
 const LoginLazyImport = createFileRoute('/login')()
 const AuthSettingsIndexLazyImport = createFileRoute('/_auth/settings/')()
-const AuthMoviesMovieIDPlayLazyImport = createFileRoute(
-  '/_auth/movies/$movieID/play',
-)()
 
 // Create/Update Routes
 
@@ -80,13 +78,11 @@ const AuthSettingsUsersIndexRoute = AuthSettingsUsersIndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const AuthMoviesMovieIDPlayLazyRoute = AuthMoviesMovieIDPlayLazyImport.update({
+const AuthMoviesMovieIDPlayRoute = AuthMoviesMovieIDPlayImport.update({
   id: '/play',
   path: '/play',
   getParentRoute: () => AuthMoviesMovieIDRoute,
-} as any).lazy(() =>
-  import('./routes/_auth/movies/$movieID.play.lazy').then((d) => d.Route),
-)
+} as any)
 
 // Populate the FileRoutesByPath interface
 
@@ -145,7 +141,7 @@ declare module '@tanstack/solid-router' {
       id: '/_auth/movies/$movieID/play'
       path: '/play'
       fullPath: '/movies/$movieID/play'
-      preLoaderRoute: typeof AuthMoviesMovieIDPlayLazyImport
+      preLoaderRoute: typeof AuthMoviesMovieIDPlayImport
       parentRoute: typeof AuthMoviesMovieIDImport
     }
     '/_auth/settings/users/': {
@@ -161,11 +157,11 @@ declare module '@tanstack/solid-router' {
 // Create and export the route tree
 
 interface AuthMoviesMovieIDRouteChildren {
-  AuthMoviesMovieIDPlayLazyRoute: typeof AuthMoviesMovieIDPlayLazyRoute
+  AuthMoviesMovieIDPlayRoute: typeof AuthMoviesMovieIDPlayRoute
 }
 
 const AuthMoviesMovieIDRouteChildren: AuthMoviesMovieIDRouteChildren = {
-  AuthMoviesMovieIDPlayLazyRoute: AuthMoviesMovieIDPlayLazyRoute,
+  AuthMoviesMovieIDPlayRoute: AuthMoviesMovieIDPlayRoute,
 }
 
 const AuthMoviesMovieIDRouteWithChildren =
@@ -179,7 +175,7 @@ export interface FileRoutesByFullPath {
   '/music': typeof AuthMusicIndexRoute
   '/tvshows': typeof AuthTvshowsIndexRoute
   '/settings': typeof AuthSettingsIndexLazyRoute
-  '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayLazyRoute
+  '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/settings/users': typeof AuthSettingsUsersIndexRoute
 }
 
@@ -191,7 +187,7 @@ export interface FileRoutesByTo {
   '/music': typeof AuthMusicIndexRoute
   '/tvshows': typeof AuthTvshowsIndexRoute
   '/settings': typeof AuthSettingsIndexLazyRoute
-  '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayLazyRoute
+  '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/settings/users': typeof AuthSettingsUsersIndexRoute
 }
 
@@ -204,7 +200,7 @@ export interface FileRoutesById {
   '/_auth/music/': typeof AuthMusicIndexRoute
   '/_auth/tvshows/': typeof AuthTvshowsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexLazyRoute
-  '/_auth/movies/$movieID/play': typeof AuthMoviesMovieIDPlayLazyRoute
+  '/_auth/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/_auth/settings/users/': typeof AuthSettingsUsersIndexRoute
 }
 
@@ -312,7 +308,7 @@ export const routeTree = rootRoute
       "filePath": "_auth/settings/index.lazy.tsx"
     },
     "/_auth/movies/$movieID/play": {
-      "filePath": "_auth/movies/$movieID.play.lazy.tsx",
+      "filePath": "_auth/movies/$movieID.play.tsx",
       "parent": "/_auth/movies/$movieID"
     },
     "/_auth/settings/users/": {

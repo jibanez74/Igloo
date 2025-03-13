@@ -15,6 +15,10 @@ FROM movies
 ORDER BY created_at DESC
 LIMIT 12;
 
+-- name: GetMovieForHls :one
+SELECT id, file_path, content_type, container, size FROM movies
+WHERE id = $1;
+
 -- name: GetMoviesPaginated :many
 SELECT 
     id,
