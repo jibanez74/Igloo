@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import getImgSrc from "../utils/getImgSrc";
+import truncateText from "../utils/truncateText";
 import type { SimpleMovie } from "../types/Movie";
 
 type MovieCardProps = {
@@ -9,6 +10,7 @@ type MovieCardProps = {
 
 export default function MovieCard(props: MovieCardProps) {
   const imgSrc = getImgSrc(props.movie.thumb);
+  const truncatedTitle = truncateText(props.movie.title, 20);
 
   return (
     <Link
@@ -21,25 +23,23 @@ export default function MovieCard(props: MovieCardProps) {
         <img
           src={imgSrc}
           alt={`${props.movie.title}`}
-          class='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
+          class='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 group-hover:brightness-[0.3]'
           loading={props.imgLoading}
         />
 
-        <div class='absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-50' />
+        <div class='absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-90' />
 
-        <div class='p-4 space-y-4'>
-          <div>
-            <h3
-              class='text-lg font-semibold text-white line-clamp-1 group/title relative'
-              title={props.movie.title}
-            >
-              <span class='absolute invisible group-hover/title:visible opacity-0 group-hover/title:opacity-100 bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 rounded text-sm whitespace-nowrap transition-all duration-200 z-10 shadow-lg shadow-black/20'>
+        <div class='absolute inset-0 p-4 flex flex-col justify-end transition-all duration-300'>
+          <div class='transform transition-all duration-300 group-hover:translate-y-0'>
+            <h3 class='text-lg font-semibold text-white mb-2'>
+              <span class='line-clamp-1 group-hover:line-clamp-none transition-all duration-300'>
                 {props.movie.title}
               </span>
-              {props.movie.title}
             </h3>
 
-            <p class='text-sm text-blue-200'>{props.movie.year}</p>
+            <p class='text-sm text-blue-200/90 transition-opacity duration-300 group-hover:opacity-100'>
+              {props.movie.year}
+            </p>
           </div>
         </div>
       </div>
