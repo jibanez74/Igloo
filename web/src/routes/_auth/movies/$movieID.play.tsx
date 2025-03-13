@@ -21,7 +21,9 @@ export const Route = createFileRoute("/_auth/movies/$movieID/play")({
 
 function PlayMoviePage() {
   const search = Route.useSearch();
-  const {m3u8Url, pid, title, thumb} = search();
+  const { m3u8Url, pid, title, thumb } = search();
+
+  console.log(`your pid is ${pid}`);
 
   return (
     <section>

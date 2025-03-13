@@ -1,19 +1,14 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"igloo/cmd/internal/caching"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -48,7 +43,7 @@ func main() {
 
 	f := fiber.New(fiber.Config{
 		AppName:               "Igloo API",
-		DisableStartupMessage: false,
+		DisableStartupMessage: !app.settings.Debug,
 	})
 
 	f.Use(recover.New(recover.Config{
@@ -118,165 +113,4 @@ func main() {
 	}
 
 	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
-}
-
-func initApp() (*application, error) {
-	var app application
-
-	err := app.initDB()
-	if err != nil {
-		return nil, err
-	}
-
-	err = app.initSettings()
-	if err != nil {
-		return nil, err
-	}
-
-	err = app.createDefaultUser()
-	if err != nil {
-		return nil, err
-	}
-
-	if app.settings.FfmpegPath != "" {
-		f, err := ffmpeg.New(app.settings.FfmpegPath)
-		if err != nil {
-			return nil, err
-		}
-
-		app.ffmpeg = f
-	}
-
-	if app.settings.FfprobePath != "" {
-		f, err := ffprobe.New(app.settings.FfprobePath)
-		if err != nil {
-			return nil, err
-		}
-
-		app.ffprobe = f
-	}
-
-	if app.settings.TmdbApiKey != "" {
-		t, err := tmdb.New(&app.settings.TmdbApiKey)
-		if err != nil {
-			return nil, err
-		}
-
-		app.tmdb = t
-	}
-
-	app.redis = caching.New()
-
-	store := session.New(session.Config{
-		Storage:        app.redis,
-		Expiration:     time.Hour * 24 * 30,
-		CookieDomain:   app.settings.CookieDomain,
-		CookiePath:     app.settings.CookiePath,
-		CookieSecure:   !app.settings.Debug,
-		CookieHTTPOnly: true,
-		CookieSameSite: "Lax",
-	})
-
-	app.session = store
-
-	return &app, nil
-}
-
-func (app *application) initDB() error {
-	host := os.Getenv("POSTGRES_HOST")
-	if host == "" {
-		host = "localhost"
-	}
-
-	port, err := strconv.Atoi(os.Getenv("POSTGRES_PORT"))
-	if err != nil {
-		port = 5432
-	}
-
-	user := os.Getenv("POSTGRES_USER")
-	if user == "" {
-		user = "postgres"
-	}
-
-	pwd := os.Getenv("POSTGRES_PASSWORD")
-	if pwd == "" {
-		pwd = "postgres"
-	}
-
-	dbName := os.Getenv("POSTGRES_DB")
-	if dbName == "" {
-		dbName = "igloo"
-	}
-
-	sslMode := os.Getenv("POSTGRES_SSL_MODE")
-	if sslMode == "" {
-		sslMode = "disable"
-	}
-
-	maxCon, err := strconv.Atoi(os.Getenv("POSTGRES_MAX_CONNECTIONS"))
-	if err != nil {
-		maxCon = 10
-	}
-
-	dbUrl := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		user,
-		pwd,
-		host,
-		port,
-		dbName,
-		sslMode,
-	)
-
-	dbConfig, err := pgxpool.ParseConfig(dbUrl)
-	if err != nil {
-		return fmt.Errorf("failed to parse database config: %w", err)
-	}
-
-	dbConfig.MaxConns = int32(maxCon)
-
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create database pool: %w", err)
-	}
-
-	err = dbpool.Ping(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	queries := database.New(dbpool)
-
-	app.db = dbpool
-	app.queries = queries
-
-	return nil
-}
-
-func (app *application) createDefaultUser() error {
-	count, err := app.queries.GetTotalUsersCount(context.Background())
-	if err != nil {
-		return fmt.Errorf("unable to determine total users count: %w", err)
-	}
-
-	if count == 0 {
-		hashPassword, err := helpers.HashPassword(DefaultPassword)
-		if err != nil {
-			return fmt.Errorf("failed to hash password for default user: %w", err)
-		}
-
-		_, err = app.queries.CreateUser(context.Background(), database.CreateUserParams{
-			Name:     "Admin User",
-			Email:    "admin@example.com",
-			Username: "admin",
-			Password: hashPassword,
-			IsActive: true,
-			IsAdmin:  true,
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to create default user: %w", err)
-		}
-	}
-
-	return nil
 }
