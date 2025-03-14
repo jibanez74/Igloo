@@ -271,7 +271,7 @@ func (app *application) initDirs(s *database.CreateSettingsParams) error {
 		return fmt.Errorf("failed to get users home directory: %w", err)
 	}
 
-	sharePath := filepath.Join(homeDir, ".local", "share")
+	sharePath := filepath.Join(homeDir, ".local", "share", "igloo")
 
 	transcodeDir := filepath.Join(sharePath, "transcode")
 	err = helpers.CreateDir(transcodeDir)
