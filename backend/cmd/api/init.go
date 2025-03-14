@@ -209,16 +209,16 @@ func (app *application) initSettings() error {
 			s.Secret = fmt.Sprintf("secret_igloo_%d", time.Now().UnixNano())
 		}
 
+		err = app.initDirs(&s)
+		if err != nil {
+			return err
+		}
+
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
 		s.HardwareAcceleration = os.Getenv("HARDWARE_ACCELERATION")
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")
 		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
 		s.JellyfinToken = os.Getenv("JELLYFIN_TOKEN")
-
-		err = app.initDirs()
-		if err != nil {
-			return err
-		}
 
 		settings, err = app.queries.CreateSettings(context.Background(), s)
 		if err != nil {
@@ -265,7 +265,7 @@ func (app *application) initDefaultUser() error {
 	return nil
 }
 
-func (app *application) initDirs() error {
+func (app *application) initDirs(s *database.CreateSettingsParams) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get users home directory: %w", err)
@@ -287,14 +287,14 @@ func (app *application) initDirs() error {
 
 	imgDir := filepath.Join(staticDir, "images")
 
-	app.settings.TranscodeDir = transcodeDir
-	app.settings.StaticDir = staticDir
-	app.settings.MoviesDirList = os.Getenv("MOVIES_DIR_LIST")
-	app.settings.MoviesImgDir = filepath.Join(imgDir, "movies")
-	app.settings.MusicDirList = os.Getenv("MUSIC_DIR_LIST")
-	app.settings.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
-	app.settings.StudiosImgDir = filepath.Join(imgDir, "studios")
-	app.settings.ArtistsImgDir = filepath.Join(imgDir, "artists")
+	s.TranscodeDir = transcodeDir
+	s.StaticDir = staticDir
+	s.MoviesDirList = os.Getenv("MOVIES_DIR_LIST")
+	s.MoviesImgDir = filepath.Join(imgDir, "movies")
+	s.MusicDirList = os.Getenv("MUSIC_DIR_LIST")
+	s.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
+	s.StudiosImgDir = filepath.Join(imgDir, "studios")
+	s.ArtistsImgDir = filepath.Join(imgDir, "artists")
 
 	return nil
 }
