@@ -43,6 +43,7 @@ func main() {
 
 	f := fiber.New(fiber.Config{
 		AppName:               "Igloo API",
+		Prefork:               true,
 		DisableStartupMessage: !app.settings.Debug,
 	})
 
