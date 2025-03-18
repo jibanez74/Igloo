@@ -7,8 +7,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const notAuthMsg = "not authorized"
-
 func (app *application) validateTokenInHeader(c *fiber.Ctx) error {
 	accessToken := c.Get("Authorization")
 	if accessToken == "" {
@@ -24,6 +22,24 @@ func (app *application) validateTokenInHeader(c *fiber.Ctx) error {
 
 	err := helpers.VerifyAccessToken(token, app.settings)
 	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
+	}
+
+	return c.Next()
+}
+
+func (app *application) validateSession(c *fiber.Ctx) error {
+	ses, err := app.session.Get(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
+	}
+
+	userID := ses.Get("user_id")
+	if userID == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
+	}
+
+	if !ses.Fresh() {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
 	}
 

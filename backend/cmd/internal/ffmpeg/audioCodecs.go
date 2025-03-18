@@ -10,6 +10,8 @@ var (
 	ValidAudioCodecsMap = map[string]bool{
 		"copy": true,
 		"aac":  true,
+		"ac3":  true,
+		"flac": true,
 		"mp3":  true,
 	}
 
@@ -25,6 +27,7 @@ var (
 		192: true,
 		256: true,
 		320: true,
+		640: true,
 	}
 )
 

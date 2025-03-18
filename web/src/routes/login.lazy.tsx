@@ -7,7 +7,6 @@ export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
 });
 
-
 function LoginPage() {
   const [username, setUsername] = createSignal("");
   const [email, setEmail] = createSignal("");
@@ -15,6 +14,8 @@ function LoginPage() {
   const [error, setError] = createSignal("");
   const [isLoading, setIsLoading] = createSignal(false);
   const [isVisible, setIsVisible] = createSignal(false);
+
+  const navigate = Route.useNavigate();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -28,6 +29,7 @@ function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           username: username(),
           email: email(),
@@ -43,7 +45,13 @@ function LoginPage() {
         return;
       }
 
-      console.log(data);
+      sessionStorage.setItem("igloo-user", data.user);
+
+      navigate({
+        to: "/",
+        from: "/login",
+        replace: true,
+      });
     } catch (err) {
       console.error(err);
       setError("A network error occurred");
@@ -78,10 +86,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiUser
-                    class="h-5 w-5 text-blue-200"
-                    aria-hidden="true"
-                  />
+                  <FiUser class="h-5 w-5 text-blue-200" aria-hidden="true" />
                 </div>
 
                 <input
@@ -106,10 +111,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiMail
-                    class="h-5 w-5 text-blue-200"
-                    aria-hidden="true"
-                  />
+                  <FiMail class="h-5 w-5 text-blue-200" aria-hidden="true" />
                 </div>
 
                 <input
@@ -133,10 +135,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiLock
-                    class="h-5 w-5 text-blue-200"
-                    aria-hidden="true"
-                  />
+                  <FiLock class="h-5 w-5 text-blue-200" aria-hidden="true" />
                 </div>
 
                 <input
@@ -169,4 +168,3 @@ function LoginPage() {
     </main>
   );
 }
-
