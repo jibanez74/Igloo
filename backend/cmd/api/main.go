@@ -92,11 +92,7 @@ func main() {
 	users.Get("/", app.getUsersPaginated)
 	users.Post("/create", app.createUser)
 
-	log.Printf("your debug is %t", app.settings.Debug)
-
-    if app.settings.Debug {
-		log.Println("we are running in prod mode")
-
+	if !app.settings.Debug {
 		workDir, err := os.Getwd()
 		if err != nil {
 			log.Fatal(fmt.Errorf("unable to get working directory: %w", err))
