@@ -98,17 +98,24 @@ func main() {
 			log.Fatal(fmt.Errorf("unable to get working directory: %w", err))
 		}
 
-		f.Static("/assets", filepath.Join(workDir, "cmd", "client", "assets"), fiber.Static{
+		clientDir := filepath.Join(workDir, "cmd", "client")
+
+		f.Static("/assets", filepath.Join(clientDir, "assets"), fiber.Static{
 			Compress: true,
 			Browse:   false,
 			Index:    "",
 			Next:     nil,
 		})
 
-		f.Static("*", filepath.Join(workDir, "cmd", "client"), fiber.Static{
-			Compress: true,
-			Browse:   false,
+		f.Get("*", func(c *fiber.Ctx) error {
+			file, err = os.Stat(clientDir, "index.html")
+			if err != nil {
+				log.Fatal(fmt.Errorf("unable to get index.html file: %w", err))
+			}
+
+			return c.SendFile(file)
 		})
+
 	}
 
 	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
