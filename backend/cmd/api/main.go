@@ -108,8 +108,6 @@ func main() {
 		f.Static("*", filepath.Join(workDir, "cmd", "client"), fiber.Static{
 			Compress: true,
 			Browse:   false,
-			Index:    "index.html",
-			Next:     nil,
 		})
 	}
 
