@@ -98,7 +98,7 @@ func main() {
 			log.Fatal(fmt.Errorf("unable to get working directory: %w", err))
 		}
 
-		f.Static("/assets", filepath.Join(workDir, "cmd", "client"), fiber.Static{
+		f.Static("/assets", filepath.Join(workDir, "cmd", "client/assets"), fiber.Static{
 			Compress: true,
 			Browse:   false,
 			Index:    "",
