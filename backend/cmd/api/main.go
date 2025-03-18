@@ -95,17 +95,17 @@ func main() {
 	if app.settings.Debug {
 		workDir, err := os.Getwd()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(fmt.Errorf("unable to get working directory: %w", err))
 		}
 
-		api.Static("/assets", filepath.Join(workDir, "cmd", "client", "dist"), fiber.Static{
+		f.Static("/assets", filepath.Join(workDir, "cmd", "client"), fiber.Static{
 			Compress: true,
 			Browse:   false,
 			Index:    "",
 			Next:     nil,
 		})
 
-		api.Static("*", filepath.Join(workDir, "cmd", "client"), fiber.Static{
+		f.Static("*", filepath.Join(workDir, "cmd", "client"), fiber.Static{
 			Compress: true,
 			Browse:   false,
 			Index:    "index.html",
