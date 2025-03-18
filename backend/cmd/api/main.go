@@ -108,7 +108,9 @@ func main() {
 		})
 
 		f.Get("*", func(c *fiber.Ctx) error {
-			file, err = os.Stat(clientDir, "index.html")
+			file := filepath.Join(clientDir, "index.html")
+
+            _, err = os.Stat(file)
 			if err != nil {
 				log.Fatal(fmt.Errorf("unable to get index.html file: %w", err))
 			}
