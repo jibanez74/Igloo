@@ -107,17 +107,12 @@ func main() {
 			Next:     nil,
 		})
 
-		f.Get("*", func(c *fiber.Ctx) error {
-			file := filepath.Join(clientDir, "index.html")
-
-			_, err = os.Stat(file)
-			if err != nil {
-				log.Fatal(fmt.Errorf("unable to get index.html file: %w", err))
-			}
-
-			return c.SendFile(file)
+		f.Static("*", clientDir, fiber.Static{
+			Compress: true,
+			Browse:   false,
+			Index:    "index.html",
+			Next:     nil,
 		})
-
 	}
 
 	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
