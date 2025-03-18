@@ -9,14 +9,16 @@ import {
   FiX,
   FiSettings,
   FiLogOut,
+  FiLogIn,
 } from "solid-icons/fi";
 import iglooLogo from "../assets/images/logo-alt.png";
+import { authState, setAuthState } from "../stores/authStore";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(false);
   let mobileMenuRef: HTMLDivElement | undefined;
   let menuButtonRef: HTMLButtonElement | undefined;
-  const [user, setUser] = createSignal(true);
+  const { isAuthenticated } = authState;
 
   onMount(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -41,7 +43,11 @@ export default function Navbar() {
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen());
 
   const handleSignOut = async () => {
-    setUser(false);
+    setAuthState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
   };
 
   return (
@@ -72,18 +78,20 @@ export default function Navbar() {
               </Link>
 
               {/* Desktop Navigation Links */}
-              <Show when={user()}>
-                <div class="hidden md:flex items-center gap-1">
-                  <Link
-                    to="/"
-                    preload="intent"
-                    class="px-3 py-2 rounded-md text-sm font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
-                  >
-                    <FiHome class="w-4 h-4" aria-hidden={true} />
-                    Home
-                    <span class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  </Link>
+              <div class="hidden md:flex items-center gap-1">
+                {/* Home link - always visible */}
+                <Link
+                  to="/"
+                  preload="intent"
+                  class="px-3 py-2 rounded-md text-sm font-medium text-blue-200 hover:text-white hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                >
+                  <FiHome class="w-4 h-4" aria-hidden={true} />
+                  Home
+                  <span class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                </Link>
 
+                {/* Authenticated Navigation Links */}
+                <Show when={isAuthenticated}>
                   <Link
                     to="/movies"
                     preload="intent"
@@ -113,13 +121,23 @@ export default function Navbar() {
                     Music
                     <span class="absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   </Link>
-                </div>
-              </Show>
+                </Show>
+              </div>
             </div>
 
-            {/* Right side - Settings and Mobile Menu Button */}
+            {/* Right side - Settings, Sign In/Out, and Mobile Menu Button */}
             <div class="flex items-center gap-2">
-              <Show when={user()}>
+              <Show
+                when={isAuthenticated}
+                fallback={
+                  <Link
+                    to="/login"
+                    class="text-blue-200 hover:text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-500/10 transition-opacity duration-300 ease-in-out flex items-center gap-2"
+                  >
+                    <FiLogIn aria-hidden={true} /> Sign In
+                  </Link>
+                }
+              >
                 <>
                   {/* Settings Link */}
                   <Link
@@ -160,7 +178,7 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Navigation Menu */}
-        <Show when={user()}>
+        <Show when={isAuthenticated}>
           <div
             ref={mobileMenuRef}
             class={`md:hidden transition-all duration-300 ease-in-out ${
