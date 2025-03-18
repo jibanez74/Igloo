@@ -93,6 +93,8 @@ func main() {
 	users.Post("/create", app.createUser)
 
 	if app.settings.Debug {
+		log.Println("we are running in prod mode")
+
 		workDir, err := os.Getwd()
 		if err != nil {
 			log.Fatal(fmt.Errorf("unable to get working directory: %w", err))
@@ -110,7 +112,7 @@ func main() {
 		f.Get("*", func(c *fiber.Ctx) error {
 			file := filepath.Join(clientDir, "index.html")
 
-            _, err = os.Stat(file)
+			_, err = os.Stat(file)
 			if err != nil {
 				log.Fatal(fmt.Errorf("unable to get index.html file: %w", err))
 			}
