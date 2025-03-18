@@ -45,7 +45,7 @@ function LoginPage() {
         return;
       }
 
-      sessionStorage.setItem("igloo-user", data.user);
+      sessionStorage.setItem("user-igloo", JSON.stringify(data.user));
 
       navigate({
         to: "/",
