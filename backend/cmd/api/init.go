@@ -189,10 +189,7 @@ func (app *application) initSettings() error {
 			s.Audience = "igloo"
 		}
 
-		s.CookieDomain = os.Getenv("COOKIE_DOMAIN")
-		if s.CookieDomain == "" {
-			s.CookieDomain = "localhost"
-		}
+		s.CookieDomain = s.BaseUrl
 
 		s.CookiePath = os.Getenv("COOKIE_PATH")
 		if s.CookiePath == "" {
