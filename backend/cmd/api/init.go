@@ -70,7 +70,7 @@ func initApp() (*application, error) {
 		Expiration:     time.Hour * 24 * 30,
 		CookieDomain:   app.settings.CookieDomain,
 		CookiePath:     app.settings.CookiePath,
-		CookieSecure:   !app.settings.Debug,
+		CookieSecure:   true,
 		CookieHTTPOnly: true,
 		CookieSameSite: "Lax",
 	})
