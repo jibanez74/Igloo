@@ -1,18 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/solid-router";
 import { FiPlay, FiFilm } from "solid-icons/fi";
 import LatestMovies from "../components/LatestMovies";
+import { authState } from "../stores/authStore";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
-    const user = JSON.parse("user-igloo");
-
-    if (!user) {
+    if (!authState.user || !authState.isAuthenticated) {
       throw redirect({
         to: "/login",
         from: "/",
         search: {
           redirect: "/",
-        }
+        },
       });
     }
   },
