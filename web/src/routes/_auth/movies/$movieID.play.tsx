@@ -27,7 +27,7 @@ function PlayMoviePage() {
 
   return (
     <section>
-      <HlsPlayer src={m3u8Url} />
+      <HlsPlayer src={m3u8Url} poster={thumb} title={title} />
     </section>
   );
 }
