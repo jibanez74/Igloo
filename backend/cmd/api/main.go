@@ -92,7 +92,9 @@ func main() {
 	users.Get("/", app.getUsersPaginated)
 	users.Post("/create", app.createUser)
 
-	if app.settings.Debug {
+	log.Printf("your debug is %t", app.settings.Debug)
+
+    if app.settings.Debug {
 		log.Println("we are running in prod mode")
 
 		workDir, err := os.Getwd()
