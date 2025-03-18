@@ -272,6 +272,10 @@ func (app *application) initDirs(s *database.CreateSettingsParams) error {
 	}
 
 	sharePath := filepath.Join(homeDir, ".local", "share", "igloo")
+	err = helpers.CreateDir(sharePath)
+	if err != nil {
+		return err
+	}
 
 	transcodeDir := filepath.Join(sharePath, "transcode")
 	err = helpers.CreateDir(transcodeDir)
