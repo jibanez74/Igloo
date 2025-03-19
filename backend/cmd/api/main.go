@@ -86,6 +86,7 @@ func main() {
 
 	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)
+	users.Get("/:id", app.getUserByID)
 	users.Post("/create", app.createUser)
 
 	if !app.settings.Debug {
