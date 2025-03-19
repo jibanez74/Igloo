@@ -46,7 +46,7 @@ function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        credentials: "same-origin",
         body: JSON.stringify({
           username: username(),
           email: email(),

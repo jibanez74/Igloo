@@ -7,7 +7,7 @@ export const Route = createRootRoute({
   beforeLoad: async () => {
     try {
       const res = await fetch("/api/v1/auth/me", {
-        credentials: "include",
+        credentials: "same-origin",
       });
 
       const data = await res.json();

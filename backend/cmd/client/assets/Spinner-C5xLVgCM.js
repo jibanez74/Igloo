@@ -1,1 +1,0 @@
-import{e as n,U as r}from"./index-CB2orCiJ.js";function o(e){const{size:s="md",className:t=""}=e,a={sm:"w-4 h-4",md:"w-5 h-5",lg:"w-6 h-6"};return n(r,{get class(){return`text-blue-400 animate-spin ${a[s]} ${t}`},"aria-hidden":"true"})}export{o as S};
