@@ -4,6 +4,8 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -50,6 +52,25 @@ func (app *application) login(c *fiber.Ctx) error {
 			"error": authErr,
 		})
 	}
+
+	token, err := helpers.GenerateAccessToken(&user, app.settings)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": serverErr,
+		})
+	}
+
+	cookie := new(fiber.Cookie)
+	cookie.Name = "access_token"
+	cookie.Value = token
+	cookie.Expires = time.Now().Add(30 * time.Minute)
+	cookie.HTTPOnly = true
+	cookie.Secure = true
+	cookie.SameSite = "Strict"
+	cookie.Domain = app.settings.CookieDomain
+	cookie.Path = app.settings.CookiePath
+
+	c.Cookie(cookie)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"user": fiber.Map{
