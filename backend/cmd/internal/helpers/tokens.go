@@ -13,7 +13,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-const expiresIn = 30 * time.Minute
+// make the token last for 30 days
+const TokenExpiry = 30 * 24 * time.Hour
 
 func GenerateAccessToken(user *database.User, settings *database.GlobalSetting) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
@@ -24,7 +25,7 @@ func GenerateAccessToken(user *database.User, settings *database.GlobalSetting) 
 	claims["iat"] = time.Now().UTC().Unix()
 	claims["typ"] = "JWT"
 
-	claims["exp"] = time.Now().UTC().Add(expiresIn).Unix()
+	claims["exp"] = time.Now().UTC().Add(TokenExpiry.Abs()).Unix()
 
 	signedAccessToken, err := token.SignedString([]byte(settings.Secret))
 	if err != nil {
