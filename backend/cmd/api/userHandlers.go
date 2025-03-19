@@ -3,6 +3,7 @@ package main
 import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"os"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -138,5 +139,58 @@ func (app *application) getUsersPaginated(c *fiber.Ctx) error {
 		"current_page": page,
 		"total_pages":  totalPages,
 		"count":        count,
+	})
+}
+
+func (app *application) updateUserAvatar(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unable to parse user id from url params",
+		})
+	}
+
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unable to get avatar file from request",
+		})
+	}
+
+	resultChan := make(chan struct {
+		path string
+		err  error
+	})
+
+	go func() {
+		imagePath, err := helpers.SaveAvatar(file, app.settings.AvatarImgDir)
+		resultChan <- struct {
+			path string
+			err  error
+		}{imagePath, err}
+	}()
+
+	result := <-resultChan
+	if result.err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": result.err.Error(),
+		})
+	}
+
+	user, err := app.queries.UpdateUserAvatar(c.Context(), database.UpdateUserAvatarParams{
+		Avatar: result.path,
+		ID:     int32(id),
+	})
+
+	if err != nil {
+		// If database update fails, we should clean up the saved file
+		os.Remove(result.path)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "unable to update user avatar in database",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": user,
 	})
 }

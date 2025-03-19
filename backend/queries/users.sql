@@ -42,3 +42,10 @@ SELECT EXISTS (
     SELECT 1 FROM users
     WHERE email = $1 OR username = $2
 );
+
+-- name: UpdateUserAvatar :one
+UPDATE users
+SET avatar = $1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $2
+RETURNING id, name, email, username, is_active, is_admin, avatar;

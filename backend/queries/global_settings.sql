@@ -17,6 +17,7 @@ INSERT INTO global_settings (
     studios_img_dir,
     static_dir,
     artists_img_dir,
+    avatar_img_dir,
     download_images,
     tmdb_api_key,
     ffmpeg_path,
@@ -29,6 +30,6 @@ INSERT INTO global_settings (
     cookie_domain,
     cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 RETURNING *;

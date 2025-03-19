@@ -283,6 +283,7 @@ func (app *application) initDirs(s *database.CreateSettingsParams) error {
 	s.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
 	s.StudiosImgDir = filepath.Join(imgDir, "studios")
 	s.ArtistsImgDir = filepath.Join(imgDir, "artists")
+	s.AvatarImgDir = filepath.Join(imgDir, "avatar")
 
 	return nil
 }

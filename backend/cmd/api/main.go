@@ -88,6 +88,7 @@ func main() {
 	users.Get("/", app.getUsersPaginated)
 	users.Get("/:id", app.getUserByID)
 	users.Post("/create", app.createUser)
+	users.Patch("/:id/avatar", app.updateUserAvatar)
 
 	if !app.settings.Debug {
 		workDir, err := os.Getwd()

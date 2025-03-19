@@ -203,3 +203,41 @@ func (q *Queries) GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedPa
 	}
 	return items, nil
 }
+
+const updateUserAvatar = `-- name: UpdateUserAvatar :one
+UPDATE users
+SET avatar = $1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $2
+RETURNING id, name, email, username, is_active, is_admin, avatar
+`
+
+type UpdateUserAvatarParams struct {
+	Avatar string `json:"avatar"`
+	ID     int32  `json:"id"`
+}
+
+type UpdateUserAvatarRow struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	IsAdmin  bool   `json:"is_admin"`
+	Avatar   string `json:"avatar"`
+}
+
+func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error) {
+	row := q.db.QueryRow(ctx, updateUserAvatar, arg.Avatar, arg.ID)
+	var i UpdateUserAvatarRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Username,
+		&i.IsActive,
+		&i.IsAdmin,
+		&i.Avatar,
+	)
+	return i, err
+}
