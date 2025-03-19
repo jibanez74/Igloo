@@ -18,7 +18,7 @@ func (app *application) validateTokenInHeader(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
 	}
 
-	// Store the user ID in the context for later use
 	c.Locals("userID", claims.Subject)
+
 	return c.Next()
 }
