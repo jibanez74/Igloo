@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"igloo/cmd/internal/caching"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/ffprobe"
@@ -14,7 +13,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -62,20 +60,6 @@ func initApp() (*application, error) {
 
 		app.tmdb = t
 	}
-
-	app.redis = caching.New()
-
-	store := session.New(session.Config{
-		Storage:        app.redis,
-		Expiration:     time.Hour * 24 * 30,
-		CookieDomain:   app.settings.CookieDomain,
-		CookiePath:     app.settings.CookiePath,
-		CookieSecure:   true,
-		CookieHTTPOnly: true,
-		CookieSameSite: "Lax",
-	})
-
-	app.session = store
 
 	return &app, nil
 }

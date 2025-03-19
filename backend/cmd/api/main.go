@@ -13,16 +13,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/session"
-	"github.com/gofiber/storage/redis/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type application struct {
 	db       *pgxpool.Pool
 	queries  *database.Queries
-	redis    *redis.Storage
-	session  *session.Store
 	settings *database.GlobalSetting
 	ffmpeg   ffmpeg.FFmpeg
 	ffprobe  ffprobe.Ffprobe
@@ -77,14 +73,12 @@ func main() {
 	})
 
 	auth := api.Group("/auth")
-	auth.Get("/me", app.validateSession, app.getAuthUser)
 	auth.Post("/login", app.login)
-	auth.Post("/logout", app.logout)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/", app.getMoviesPaginated)
+	movies.Get("/", app.validateTokenInHeader, app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
 
