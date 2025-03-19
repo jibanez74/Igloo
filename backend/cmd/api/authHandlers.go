@@ -114,3 +114,21 @@ func (app *application) getCurrentUser(c *fiber.Ctx) error {
 		},
 	})
 }
+
+func (app *application) logout(c *fiber.Ctx) error {
+	cookie := new(fiber.Cookie)
+	cookie.Name = "access_token"
+	cookie.Value = ""
+	cookie.Expires = time.Now().Add(-1 * time.Hour) // Set to expire in the past
+	cookie.HTTPOnly = true
+	cookie.Secure = true
+	cookie.SameSite = "Strict"
+	cookie.Domain = app.settings.CookieDomain
+	cookie.Path = app.settings.CookiePath
+
+	c.Cookie(cookie)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Successfully logged out",
+	})
+}

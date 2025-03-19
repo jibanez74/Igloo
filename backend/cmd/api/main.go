@@ -75,6 +75,7 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Get("/me", app.validateTokenInHeader, app.getCurrentUser)
 	auth.Post("/login", app.login)
+	auth.Post("/logout", app.validateTokenInHeader, app.logout)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)

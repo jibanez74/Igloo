@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { Link } from "@tanstack/solid-router";
+import { Link, useNavigate } from "@tanstack/solid-router";
 import {
   FiHome,
   FiFilm,
@@ -19,6 +19,8 @@ export default function Navbar() {
   let mobileMenuRef: HTMLDivElement | undefined;
   let menuButtonRef: HTMLButtonElement | undefined;
   const { isAuthenticated } = authState;
+
+  const navigate = useNavigate();
 
   onMount(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -43,11 +45,25 @@ export default function Navbar() {
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen());
 
   const handleSignOut = async () => {
-    setAuthState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+    try {
+      await fetch("/api/v1/auth/logout", {
+        method: "post",
+        credentials: "include",
+      });
+
+      setAuthState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+
+      navigate({
+        to: "/login",
+        replace: true,
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
