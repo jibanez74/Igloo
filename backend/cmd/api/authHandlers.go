@@ -4,6 +4,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -71,6 +72,36 @@ func (app *application) login(c *fiber.Ctx) error {
 	cookie.Path = app.settings.CookiePath
 
 	c.Cookie(cookie)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"user": fiber.Map{
+			"id":       user.ID,
+			"name":     user.Name,
+			"email":    user.Email,
+			"username": user.Username,
+			"avatar":   user.Avatar,
+			"isAdmin":  user.IsAdmin,
+		},
+	})
+}
+
+func (app *application) getCurrentUser(c *fiber.Ctx) error {
+	userIDStr := c.Locals("userID").(string)
+	if userIDStr == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
+	}
+
+	userID, err := strconv.ParseInt(userIDStr, 10, 32)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	user, err := app.queries.GetUserByID(c.Context(), int32(userID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": serverErr,
+		})
+	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"user": fiber.Map{

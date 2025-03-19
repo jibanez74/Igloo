@@ -12,11 +12,13 @@ func (app *application) validateTokenInHeader(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
 	}
 
-	err := helpers.VerifyAccessToken(token, app.settings)
+	claims, err := helpers.VerifyAccessToken(token, app.settings)
 	if err != nil {
 		c.ClearCookie("access_token")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": notAuthMsg})
 	}
 
+	// Store the user ID in the context for later use
+	c.Locals("userID", claims.Subject)
 	return c.Next()
 }

@@ -73,6 +73,7 @@ func main() {
 	})
 
 	auth := api.Group("/auth")
+	auth.Get("/me", app.getCurrentUser)
 	auth.Post("/login", app.login)
 
 	movies := api.Group("/movies")

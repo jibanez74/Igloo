@@ -34,7 +34,7 @@ func GenerateAccessToken(user *database.User, settings *database.GlobalSetting) 
 	return signedAccessToken, nil
 }
 
-func VerifyAccessToken(token string, settings *database.GlobalSetting) error {
+func VerifyAccessToken(token string, settings *database.GlobalSetting) (*Claims, error) {
 	claims := &Claims{}
 
 	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
@@ -47,12 +47,12 @@ func VerifyAccessToken(token string, settings *database.GlobalSetting) error {
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if claims.Issuer != settings.Issuer {
-		return errors.New("invalid issuer")
+		return nil, errors.New("invalid issuer")
 	}
 
-	return nil
+	return claims, nil
 }
