@@ -57,30 +57,34 @@ function UsersPage() {
   return (
     <main class="container mx-auto px-4 py-8">
       <section
-        class="min-h-[400px] bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-lg"
+        class="min-h-[400px] bg-blue-950/50 backdrop-blur-sm rounded-2xl p-6 shadow-lg shadow-blue-900/20"
         aria-label="Users list"
       >
         <header class="mb-6 flex items-center justify-between">
           <div class="flex items-center gap-4">
-            <h2 class="text-2xl font-bold text-white">Users</h2>
+            <h2 class="text-2xl font-bold">
+              <span class="bg-gradient-to-r from-yellow-300 to-yellow-400 bg-clip-text text-transparent">
+                Users
+              </span>
+            </h2>
             {/* <Link
               to="/settings/users/create"
               search={{ page: 1, limit: 10 }}
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-sky-500/10 rounded-lg hover:bg-sky-500/20 transition-colors"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600/10 rounded-lg hover:bg-blue-600/20 transition-colors"
             >
               <FiUserPlus class="w-4 h-4" aria-hidden="true" />
               New User
             </Link> */}
           </div>
-          <p class="text-sm text-sky-200">
+          <p class="text-sm text-blue-200">
             Total users:{" "}
-            <span class="text-white font-medium">{count}</span>
+            <span class="text-yellow-300 font-medium">{count}</span>
           </p>
         </header>
 
         {items.length === 0 ? (
           <p
-            class="h-40 flex items-center justify-center text-sky-200"
+            class="h-40 flex items-center justify-center text-blue-200"
             role="status"
           >
             No users found
