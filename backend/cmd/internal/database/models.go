@@ -82,6 +82,7 @@ type GlobalSetting struct {
 	FfmpegPath           string             `json:"ffmpeg_path"`
 	FfprobePath          string             `json:"ffprobe_path"`
 	HardwareAcceleration string             `json:"hardware_acceleration"`
+	EnableTranscoding    bool               `json:"enable_transcoding"`
 	JellyfinToken        string             `json:"jellyfin_token"`
 	Issuer               string             `json:"issuer"`
 	Audience             string             `json:"audience"`

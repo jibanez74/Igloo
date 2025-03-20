@@ -84,6 +84,10 @@ func main() {
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
 
+	settings := api.Group("/settings")
+	settings.Get("/", app.getSettings)
+	settings.Put("/update", app.updateSettings)
+
 	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)
 	users.Get("/:id", app.getUserByID)

@@ -50,6 +50,7 @@ type Querier interface {
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
+	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
 	VerifyDeviceCode(ctx context.Context, arg VerifyDeviceCodeParams) error
 }

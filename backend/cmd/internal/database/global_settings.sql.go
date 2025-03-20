@@ -28,6 +28,7 @@ INSERT INTO global_settings (
     ffmpeg_path,
     ffprobe_path,
     hardware_acceleration,
+    enable_transcoding,
     jellyfin_token,
     issuer,
     audience,
@@ -35,9 +36,9 @@ INSERT INTO global_settings (
     cookie_domain,
     cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 )
-RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
+RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, enable_transcoding, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
 `
 
 type CreateSettingsParams struct {
@@ -58,6 +59,7 @@ type CreateSettingsParams struct {
 	FfmpegPath           string `json:"ffmpeg_path"`
 	FfprobePath          string `json:"ffprobe_path"`
 	HardwareAcceleration string `json:"hardware_acceleration"`
+	EnableTranscoding    bool   `json:"enable_transcoding"`
 	JellyfinToken        string `json:"jellyfin_token"`
 	Issuer               string `json:"issuer"`
 	Audience             string `json:"audience"`
@@ -85,6 +87,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.FfmpegPath,
 		arg.FfprobePath,
 		arg.HardwareAcceleration,
+		arg.EnableTranscoding,
 		arg.JellyfinToken,
 		arg.Issuer,
 		arg.Audience,
@@ -114,6 +117,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.FfmpegPath,
 		&i.FfprobePath,
 		&i.HardwareAcceleration,
+		&i.EnableTranscoding,
 		&i.JellyfinToken,
 		&i.Issuer,
 		&i.Audience,
@@ -125,7 +129,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
+SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, enable_transcoding, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
@@ -152,6 +156,7 @@ func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
 		&i.FfmpegPath,
 		&i.FfprobePath,
 		&i.HardwareAcceleration,
+		&i.EnableTranscoding,
 		&i.JellyfinToken,
 		&i.Issuer,
 		&i.Audience,
@@ -171,4 +176,124 @@ func (q *Queries) GetSettingsCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const updateSettings = `-- name: UpdateSettings :one
+UPDATE global_settings SET
+    port = $1,
+    debug = $2,
+    base_url = $3,
+    movies_dir_list = $4,
+    movies_img_dir = $5,
+    music_dir_list = $6,
+    tvshows_dir_list = $7,
+    transcode_dir = $8,
+    studios_img_dir = $9,
+    static_dir = $10,
+    artists_img_dir = $11,
+    avatar_img_dir = $12,
+    download_images = $13,
+    tmdb_api_key = $14,
+    ffmpeg_path = $15,
+    ffprobe_path = $16,
+    hardware_acceleration = $17,
+    enable_transcoding = $18,
+    jellyfin_token = $19,
+    issuer = $20,
+    audience = $21,
+    secret = $22,
+    cookie_domain = $23,
+    cookie_path = $24,
+    updated_at = NOW()
+WHERE id = $25
+RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, enable_transcoding, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
+`
+
+type UpdateSettingsParams struct {
+	Port                 int32  `json:"port"`
+	Debug                bool   `json:"debug"`
+	BaseUrl              string `json:"base_url"`
+	MoviesDirList        string `json:"movies_dir_list"`
+	MoviesImgDir         string `json:"movies_img_dir"`
+	MusicDirList         string `json:"music_dir_list"`
+	TvshowsDirList       string `json:"tvshows_dir_list"`
+	TranscodeDir         string `json:"transcode_dir"`
+	StudiosImgDir        string `json:"studios_img_dir"`
+	StaticDir            string `json:"static_dir"`
+	ArtistsImgDir        string `json:"artists_img_dir"`
+	AvatarImgDir         string `json:"avatar_img_dir"`
+	DownloadImages       bool   `json:"download_images"`
+	TmdbApiKey           string `json:"tmdb_api_key"`
+	FfmpegPath           string `json:"ffmpeg_path"`
+	FfprobePath          string `json:"ffprobe_path"`
+	HardwareAcceleration string `json:"hardware_acceleration"`
+	EnableTranscoding    bool   `json:"enable_transcoding"`
+	JellyfinToken        string `json:"jellyfin_token"`
+	Issuer               string `json:"issuer"`
+	Audience             string `json:"audience"`
+	Secret               string `json:"secret"`
+	CookieDomain         string `json:"cookie_domain"`
+	CookiePath           string `json:"cookie_path"`
+	ID                   int32  `json:"id"`
+}
+
+func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error) {
+	row := q.db.QueryRow(ctx, updateSettings,
+		arg.Port,
+		arg.Debug,
+		arg.BaseUrl,
+		arg.MoviesDirList,
+		arg.MoviesImgDir,
+		arg.MusicDirList,
+		arg.TvshowsDirList,
+		arg.TranscodeDir,
+		arg.StudiosImgDir,
+		arg.StaticDir,
+		arg.ArtistsImgDir,
+		arg.AvatarImgDir,
+		arg.DownloadImages,
+		arg.TmdbApiKey,
+		arg.FfmpegPath,
+		arg.FfprobePath,
+		arg.HardwareAcceleration,
+		arg.EnableTranscoding,
+		arg.JellyfinToken,
+		arg.Issuer,
+		arg.Audience,
+		arg.Secret,
+		arg.CookieDomain,
+		arg.CookiePath,
+		arg.ID,
+	)
+	var i GlobalSetting
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Port,
+		&i.Debug,
+		&i.BaseUrl,
+		&i.MoviesDirList,
+		&i.MoviesImgDir,
+		&i.MusicDirList,
+		&i.TvshowsDirList,
+		&i.TranscodeDir,
+		&i.StudiosImgDir,
+		&i.ArtistsImgDir,
+		&i.AvatarImgDir,
+		&i.StaticDir,
+		&i.DownloadImages,
+		&i.TmdbApiKey,
+		&i.FfmpegPath,
+		&i.FfprobePath,
+		&i.HardwareAcceleration,
+		&i.EnableTranscoding,
+		&i.JellyfinToken,
+		&i.Issuer,
+		&i.Audience,
+		&i.Secret,
+		&i.CookieDomain,
+		&i.CookiePath,
+	)
+	return i, err
 }
