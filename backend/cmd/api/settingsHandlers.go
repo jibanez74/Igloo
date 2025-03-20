@@ -8,7 +8,24 @@ import (
 
 func (app *application) getSettings(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"settings": app.settings,
+		"settings": fiber.Map{
+			"movies_dir_list":       app.settings.MoviesDirList,
+			"movies_img_dir":        app.settings.MoviesImgDir,
+			"music_dir_list":        app.settings.MusicDirList,
+			"tvshows_dir_list":      app.settings.TvshowsDirList,
+			"transcode_dir":         app.settings.TranscodeDir,
+			"studios_img_dir":       app.settings.StudiosImgDir,
+			"artists_img_dir":       app.settings.ArtistsImgDir,
+			"static_dir":            app.settings.StaticDir,
+			"avatar_img_dir":        app.settings.AvatarImgDir,
+			"download_images":       app.settings.DownloadImages,
+			"tmdb_api_key":          app.settings.TmdbApiKey,
+			"ffmpeg_path":           app.settings.FfmpegPath,
+			"ffprobe_path":          app.settings.FfprobePath,
+			"hardware_acceleration": app.settings.HardwareAcceleration,
+			"enable_transcoding":    app.settings.EnableTranscoding,
+			"jellyfin_token":        app.settings.JellyfinToken,
+		},
 	})
 }
 

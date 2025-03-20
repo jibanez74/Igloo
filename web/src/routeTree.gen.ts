@@ -15,8 +15,10 @@ import { createFileRoute } from '@tanstack/solid-router'
 import { Route as rootRoute } from './routes/__root'
 import { Route as IndexImport } from './routes/index'
 import { Route as AuthTvshowsIndexImport } from './routes/_auth/tvshows/index'
+import { Route as AuthSettingsIndexImport } from './routes/_auth/settings/index'
 import { Route as AuthMusicIndexImport } from './routes/_auth/music/index'
 import { Route as AuthMoviesIndexImport } from './routes/_auth/movies/index'
+import { Route as AuthSettingsLayoutImport } from './routes/_auth/settings/_layout'
 import { Route as AuthMoviesMovieIDImport } from './routes/_auth/movies/$movieID'
 import { Route as AuthSettingsUsersIndexImport } from './routes/_auth/settings/users/index'
 import { Route as AuthMoviesMovieIDPlayImport } from './routes/_auth/movies/$movieID.play'
@@ -24,7 +26,7 @@ import { Route as AuthMoviesMovieIDPlayImport } from './routes/_auth/movies/$mov
 // Create Virtual Routes
 
 const LoginLazyImport = createFileRoute('/login')()
-const AuthSettingsIndexLazyImport = createFileRoute('/_auth/settings/')()
+const AuthSettingsImport = createFileRoute('/_auth/settings')()
 
 // Create/Update Routes
 
@@ -40,19 +42,25 @@ const IndexRoute = IndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const AuthSettingsIndexLazyRoute = AuthSettingsIndexLazyImport.update({
-  id: '/_auth/settings/',
-  path: '/settings/',
+const AuthSettingsRoute = AuthSettingsImport.update({
+  id: '/_auth/settings',
+  path: '/settings',
   getParentRoute: () => rootRoute,
-} as any).lazy(() =>
-  import('./routes/_auth/settings/index.lazy').then((d) => d.Route),
-)
+} as any)
 
 const AuthTvshowsIndexRoute = AuthTvshowsIndexImport.update({
   id: '/_auth/tvshows/',
   path: '/tvshows/',
   getParentRoute: () => rootRoute,
 } as any)
+
+const AuthSettingsIndexRoute = AuthSettingsIndexImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthSettingsRoute,
+} as any).lazy(() =>
+  import('./routes/_auth/settings/index.lazy').then((d) => d.Route),
+)
 
 const AuthMusicIndexRoute = AuthMusicIndexImport.update({
   id: '/_auth/music/',
@@ -66,6 +74,11 @@ const AuthMoviesIndexRoute = AuthMoviesIndexImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const AuthSettingsLayoutRoute = AuthSettingsLayoutImport.update({
+  id: '/_layout',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
+
 const AuthMoviesMovieIDRoute = AuthMoviesMovieIDImport.update({
   id: '/_auth/movies/$movieID',
   path: '/movies/$movieID',
@@ -73,9 +86,9 @@ const AuthMoviesMovieIDRoute = AuthMoviesMovieIDImport.update({
 } as any)
 
 const AuthSettingsUsersIndexRoute = AuthSettingsUsersIndexImport.update({
-  id: '/_auth/settings/users/',
-  path: '/settings/users/',
-  getParentRoute: () => rootRoute,
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => AuthSettingsRoute,
 } as any)
 
 const AuthMoviesMovieIDPlayRoute = AuthMoviesMovieIDPlayImport.update({
@@ -109,6 +122,20 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthMoviesMovieIDImport
       parentRoute: typeof rootRoute
     }
+    '/_auth/settings': {
+      id: '/_auth/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthSettingsImport
+      parentRoute: typeof rootRoute
+    }
+    '/_auth/settings/_layout': {
+      id: '/_auth/settings/_layout'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthSettingsLayoutImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/movies/': {
       id: '/_auth/movies/'
       path: '/movies'
@@ -123,18 +150,18 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthMusicIndexImport
       parentRoute: typeof rootRoute
     }
+    '/_auth/settings/': {
+      id: '/_auth/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthSettingsIndexImport
+      parentRoute: typeof AuthSettingsImport
+    }
     '/_auth/tvshows/': {
       id: '/_auth/tvshows/'
       path: '/tvshows'
       fullPath: '/tvshows'
       preLoaderRoute: typeof AuthTvshowsIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/_auth/settings/': {
-      id: '/_auth/settings/'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthSettingsIndexLazyImport
       parentRoute: typeof rootRoute
     }
     '/_auth/movies/$movieID/play': {
@@ -146,10 +173,10 @@ declare module '@tanstack/solid-router' {
     }
     '/_auth/settings/users/': {
       id: '/_auth/settings/users/'
-      path: '/settings/users'
+      path: '/users'
       fullPath: '/settings/users'
       preLoaderRoute: typeof AuthSettingsUsersIndexImport
-      parentRoute: typeof rootRoute
+      parentRoute: typeof AuthSettingsImport
     }
   }
 }
@@ -167,14 +194,31 @@ const AuthMoviesMovieIDRouteChildren: AuthMoviesMovieIDRouteChildren = {
 const AuthMoviesMovieIDRouteWithChildren =
   AuthMoviesMovieIDRoute._addFileChildren(AuthMoviesMovieIDRouteChildren)
 
+interface AuthSettingsRouteChildren {
+  AuthSettingsLayoutRoute: typeof AuthSettingsLayoutRoute
+  AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
+  AuthSettingsUsersIndexRoute: typeof AuthSettingsUsersIndexRoute
+}
+
+const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
+  AuthSettingsLayoutRoute: AuthSettingsLayoutRoute,
+  AuthSettingsIndexRoute: AuthSettingsIndexRoute,
+  AuthSettingsUsersIndexRoute: AuthSettingsUsersIndexRoute,
+}
+
+const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
+  AuthSettingsRouteChildren,
+)
+
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginLazyRoute
   '/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
+  '/settings': typeof AuthSettingsLayoutRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
+  '/settings/': typeof AuthSettingsIndexRoute
   '/tvshows': typeof AuthTvshowsIndexRoute
-  '/settings': typeof AuthSettingsIndexLazyRoute
   '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/settings/users': typeof AuthSettingsUsersIndexRoute
 }
@@ -183,10 +227,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginLazyRoute
   '/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
+  '/settings': typeof AuthSettingsIndexRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
   '/tvshows': typeof AuthTvshowsIndexRoute
-  '/settings': typeof AuthSettingsIndexLazyRoute
   '/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/settings/users': typeof AuthSettingsUsersIndexRoute
 }
@@ -196,10 +240,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginLazyRoute
   '/_auth/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
+  '/_auth/settings': typeof AuthSettingsRouteWithChildren
+  '/_auth/settings/_layout': typeof AuthSettingsLayoutRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
+  '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/tvshows/': typeof AuthTvshowsIndexRoute
-  '/_auth/settings/': typeof AuthSettingsIndexLazyRoute
   '/_auth/movies/$movieID/play': typeof AuthMoviesMovieIDPlayRoute
   '/_auth/settings/users/': typeof AuthSettingsUsersIndexRoute
 }
@@ -210,10 +256,11 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/movies/$movieID'
+    | '/settings'
     | '/movies'
     | '/music'
+    | '/settings/'
     | '/tvshows'
-    | '/settings'
     | '/movies/$movieID/play'
     | '/settings/users'
   fileRoutesByTo: FileRoutesByTo
@@ -221,10 +268,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/movies/$movieID'
+    | '/settings'
     | '/movies'
     | '/music'
     | '/tvshows'
-    | '/settings'
     | '/movies/$movieID/play'
     | '/settings/users'
   id:
@@ -232,10 +279,12 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/_auth/movies/$movieID'
+    | '/_auth/settings'
+    | '/_auth/settings/_layout'
     | '/_auth/movies/'
     | '/_auth/music/'
-    | '/_auth/tvshows/'
     | '/_auth/settings/'
+    | '/_auth/tvshows/'
     | '/_auth/movies/$movieID/play'
     | '/_auth/settings/users/'
   fileRoutesById: FileRoutesById
@@ -245,22 +294,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginLazyRoute: typeof LoginLazyRoute
   AuthMoviesMovieIDRoute: typeof AuthMoviesMovieIDRouteWithChildren
+  AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
   AuthMusicIndexRoute: typeof AuthMusicIndexRoute
   AuthTvshowsIndexRoute: typeof AuthTvshowsIndexRoute
-  AuthSettingsIndexLazyRoute: typeof AuthSettingsIndexLazyRoute
-  AuthSettingsUsersIndexRoute: typeof AuthSettingsUsersIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginLazyRoute: LoginLazyRoute,
   AuthMoviesMovieIDRoute: AuthMoviesMovieIDRouteWithChildren,
+  AuthSettingsRoute: AuthSettingsRouteWithChildren,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
   AuthMusicIndexRoute: AuthMusicIndexRoute,
   AuthTvshowsIndexRoute: AuthTvshowsIndexRoute,
-  AuthSettingsIndexLazyRoute: AuthSettingsIndexLazyRoute,
-  AuthSettingsUsersIndexRoute: AuthSettingsUsersIndexRoute,
 }
 
 export const routeTree = rootRoute
@@ -276,11 +323,10 @@ export const routeTree = rootRoute
         "/",
         "/login",
         "/_auth/movies/$movieID",
+        "/_auth/settings",
         "/_auth/movies/",
         "/_auth/music/",
-        "/_auth/tvshows/",
-        "/_auth/settings/",
-        "/_auth/settings/users/"
+        "/_auth/tvshows/"
       ]
     },
     "/": {
@@ -295,24 +341,38 @@ export const routeTree = rootRoute
         "/_auth/movies/$movieID/play"
       ]
     },
+    "/_auth/settings": {
+      "filePath": "_auth/settings",
+      "children": [
+        "/_auth/settings/_layout",
+        "/_auth/settings/",
+        "/_auth/settings/users/"
+      ]
+    },
+    "/_auth/settings/_layout": {
+      "filePath": "_auth/settings/_layout.tsx",
+      "parent": "/_auth/settings"
+    },
     "/_auth/movies/": {
       "filePath": "_auth/movies/index.tsx"
     },
     "/_auth/music/": {
       "filePath": "_auth/music/index.tsx"
     },
+    "/_auth/settings/": {
+      "filePath": "_auth/settings/index.tsx",
+      "parent": "/_auth/settings"
+    },
     "/_auth/tvshows/": {
       "filePath": "_auth/tvshows/index.tsx"
-    },
-    "/_auth/settings/": {
-      "filePath": "_auth/settings/index.lazy.tsx"
     },
     "/_auth/movies/$movieID/play": {
       "filePath": "_auth/movies/$movieID.play.tsx",
       "parent": "/_auth/movies/$movieID"
     },
     "/_auth/settings/users/": {
-      "filePath": "_auth/settings/users/index.tsx"
+      "filePath": "_auth/settings/users/index.tsx",
+      "parent": "/_auth/settings"
     }
   }
 }

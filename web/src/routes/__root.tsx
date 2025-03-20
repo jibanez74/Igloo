@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet } from "@tanstack/solid-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { QueryClientProvider } from "@tanstack/solid-query";
 import { setAuthState } from "../stores/authStore";
+import queryClient from "../utils/queryClient";
 import Navbar from "../components/Navbar";
 
 export const Route = createRootRoute({
@@ -25,8 +26,6 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
-  const queryClient = new QueryClient();
-
   return (
     <QueryClientProvider client={queryClient}>
       <header>
