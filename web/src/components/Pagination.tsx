@@ -33,7 +33,7 @@ export default function Pagination(props: PaginationProps) {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        class="p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+        class="p-2 text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
         aria-label="Previous page"
       >
         <FiChevronLeft class="w-5 h-5" />
@@ -45,14 +45,14 @@ export default function Pagination(props: PaginationProps) {
           onClick={() => onPageChange(1)}
           class={`px-3 py-1 rounded-lg transition-colors ${
             currentPage === 1
-              ? "bg-sky-500 text-white"
-              : "text-sky-200 hover:text-white hover:bg-sky-500/10"
+              ? "bg-blue-600 text-white"
+              : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
           }`}
         >
           1
         </button>
         <Show when={getPageNumbers()[0] > 2}>
-          <span class="text-sky-200">...</span>
+          <span class="text-blue-200">...</span>
         </Show>
       </Show>
 
@@ -63,8 +63,8 @@ export default function Pagination(props: PaginationProps) {
             onClick={() => onPageChange(page)}
             class={`px-3 py-1 rounded-lg transition-colors ${
               currentPage === page
-                ? "bg-sky-500 text-white"
-                : "text-sky-200 hover:text-white hover:bg-sky-500/10"
+                ? "bg-blue-600 text-white"
+                : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
             }`}
           >
             {page}
@@ -75,14 +75,14 @@ export default function Pagination(props: PaginationProps) {
       {/* Last page */}
       <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages}>
         <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}>
-          <span class="text-sky-200">...</span>
+          <span class="text-blue-200">...</span>
         </Show>
         <button
           onClick={() => onPageChange(totalPages)}
           class={`px-3 py-1 rounded-lg transition-colors ${
             currentPage === totalPages
-              ? "bg-sky-500 text-white"
-              : "text-sky-200 hover:text-white hover:bg-sky-500/10"
+              ? "bg-blue-600 text-white"
+              : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
           }`}
         >
           {totalPages}
@@ -93,7 +93,7 @@ export default function Pagination(props: PaginationProps) {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        class="p-2 text-sky-200 hover:text-white hover:bg-sky-500/10 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
+        class="p-2 text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
         aria-label="Next page"
       >
         <FiChevronRight class="w-5 h-5" />

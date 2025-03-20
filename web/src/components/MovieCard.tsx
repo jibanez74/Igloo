@@ -17,7 +17,7 @@ export default function MovieCard(props: MovieCardProps) {
         movieID: props.movie.id.toString(),
       }}
     >
-      <div class='group relative bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 hover:shadow-blue-500/20 hover:scale-[1.02]'>
+      <div class='group relative bg-blue-950/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 hover:shadow-yellow-300/20 hover:scale-[1.02]'>
         <img
           src={imgSrc}
           alt={`${props.movie.title}`}
@@ -25,7 +25,7 @@ export default function MovieCard(props: MovieCardProps) {
           loading={props.imgLoading}
         />
 
-        <div class='absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-90' />
+        <div class='absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/50 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-90' />
 
         <div class='absolute inset-0 p-4 flex flex-col justify-end transition-all duration-300'>
           <div class='transform transition-all duration-300 group-hover:translate-y-0'>
@@ -35,7 +35,7 @@ export default function MovieCard(props: MovieCardProps) {
               </span>
             </h3>
 
-            <p class='text-sm text-blue-200/90 transition-opacity duration-300 group-hover:opacity-100'>
+            <p class='text-sm text-yellow-300/90 transition-opacity duration-300 group-hover:opacity-100'>
               {props.movie.year}
             </p>
           </div>
