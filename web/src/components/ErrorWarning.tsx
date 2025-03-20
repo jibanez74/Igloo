@@ -13,7 +13,7 @@ export default function ErrorWarning(props: ErrorWarningProps) {
       aria-live='polite'
     >
       <div
-        class={`flex items-center gap-2 text-red-500 text-sm font-medium bg-red-500/10 px-3 py-2 rounded-md transition-all duration-300 ${
+        class={`flex items-center gap-2 text-red-400 text-sm font-medium bg-red-400/10 px-3 py-2 rounded-md transition-all duration-300 ${
           props.isVisible
             ? "opacity-100 transform scale-100"
             : "opacity-0 transform scale-95"

@@ -78,7 +78,7 @@ function LoginPage() {
 
   return (
     <main class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      <section class="max-w-md w-full space-y-8 bg-slate-900/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20">
+      <section class="max-w-md w-full space-y-8 bg-blue-950/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20">
         <header>
           <h1 class="text-center text-3xl font-bold text-white">
             Sign in to your account
@@ -101,7 +101,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiUser class="h-5 w-5 text-blue-200" aria-hidden="true" />
+                  <FiUser class="h-5 w-5 text-yellow-300" aria-hidden="true" />
                 </div>
 
                 <input
@@ -110,7 +110,7 @@ function LoginPage() {
                   name="username"
                   type="text"
                   required
-                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-800/20 bg-blue-900/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-300 focus:z-10 sm:text-sm placeholder:text-blue-200/50"
                   placeholder="Username"
                   aria-required="true"
                   value={username()}
@@ -126,7 +126,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiMail class="h-5 w-5 text-blue-200" aria-hidden="true" />
+                  <FiMail class="h-5 w-5 text-yellow-300" aria-hidden="true" />
                 </div>
 
                 <input
@@ -134,7 +134,7 @@ function LoginPage() {
                   name="email"
                   type="email"
                   required
-                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-800/20 bg-blue-900/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-300 focus:z-10 sm:text-sm placeholder:text-blue-200/50"
                   placeholder="Email address"
                   aria-required="true"
                   value={email()}
@@ -150,7 +150,7 @@ function LoginPage() {
 
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiLock class="h-5 w-5 text-blue-200" aria-hidden="true" />
+                  <FiLock class="h-5 w-5 text-yellow-300" aria-hidden="true" />
                 </div>
 
                 <input
@@ -158,7 +158,7 @@ function LoginPage() {
                   name="password"
                   type="password"
                   required
-                  class="appearance-none relative block w-full px-10 py-2 border border-blue-900/20 bg-slate-800/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm placeholder:text-slate-400"
+                  class="appearance-none relative block w-full px-10 py-2 border border-blue-800/20 bg-blue-900/50 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-300 focus:z-10 sm:text-sm placeholder:text-blue-200/50"
                   placeholder="Password"
                   aria-required="true"
                   value={password()}
@@ -172,7 +172,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={isLoading()}
-              class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               aria-busy={isLoading()}
             >
               {isLoading() ? "Signing in..." : "Sign in"}
