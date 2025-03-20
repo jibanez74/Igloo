@@ -203,6 +203,7 @@ func (app *application) initSettings() error {
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")
 		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
 		s.JellyfinToken = os.Getenv("JELLYFIN_TOKEN")
+		s.EnableTranscoding = true
 
 		settings, err = app.queries.CreateSettings(context.Background(), s)
 		if err != nil {
