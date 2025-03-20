@@ -1,8 +1,8 @@
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { createSignal } from "solid-js";
 import { createLazyFileRoute } from "@tanstack/solid-router";
 import { FiUser, FiMail, FiLock } from "solid-icons/fi";
 import ErrorWarning from "../components/ErrorWarning";
-import { authState, setAuthState } from "../stores/authStore";
+import { setAuthState } from "../stores/authStore";
 
 export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
@@ -17,22 +17,6 @@ function LoginPage() {
   const [isVisible, setIsVisible] = createSignal(false);
 
   const navigate = Route.useNavigate();
-  let isNavigating = false;
-
-  createEffect(() => {
-    if (authState.isAuthenticated && !isNavigating) {
-      isNavigating = true;
-      navigate({
-        to: "/",
-        from: "/login",
-        replace: true,
-      });
-    }
-  });
-
-  onCleanup(() => {
-    isNavigating = false;
-  });
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -66,6 +50,12 @@ function LoginPage() {
         user: data.user,
         isAuthenticated: true,
         isLoading: false,
+      });
+
+      navigate({
+        to: "/",
+        from: "/login",
+        replace: true,
       });
     } catch (err) {
       console.error(err);

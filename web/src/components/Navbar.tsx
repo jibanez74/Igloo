@@ -176,7 +176,7 @@ export default function Navbar() {
                 <>
                   {/* Settings Link */}
                   <Link
-                    to="/"
+                    to="/settings"
                     class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
                   >
                     <FiSettings aria-hidden={true} /> Settings
