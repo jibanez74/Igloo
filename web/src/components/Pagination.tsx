@@ -8,7 +8,7 @@ type PaginationProps = {
 };
 
 export default function Pagination(props: PaginationProps) {
-  const { currentPage, totalPages, onPageChange } = props;
+  const { onPageChange, currentPage, totalPages } = props;
 
   const getPageNumbers = () => {
     const pages = [];
@@ -74,7 +74,9 @@ export default function Pagination(props: PaginationProps) {
 
       {/* Last page */}
       <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages}>
-        <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}>
+        <Show
+          when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}
+        >
           <span class="text-blue-200">...</span>
         </Show>
         <button
