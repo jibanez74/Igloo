@@ -28,12 +28,12 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <header>
+      <div class="min-h-screen bg-blue-950">
         <Navbar />
-      </header>
-      <main>
-        <Outlet />
-      </main>
+        <main class="pt-16">
+          <Outlet />
+        </main>
+      </div>
     </QueryClientProvider>
   );
 }

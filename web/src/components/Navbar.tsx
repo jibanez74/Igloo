@@ -84,8 +84,8 @@ export default function Navbar() {
             <div class="flex items-center gap-8">
               <Link
                 to="/"
+                resetScroll={true}
                 class="flex items-center gap-2 text-white hover:text-yellow-300 transition-colors"
-                preload="intent"
               >
                 <img src={iglooLogo} alt="Igloo" class="h-8 w-auto" />
                 <span class="text-xl font-semibold bg-gradient-to-r from-yellow-300 to-yellow-200 text-transparent bg-clip-text">
@@ -98,7 +98,7 @@ export default function Navbar() {
                 {/* Home link - always visible */}
                 <Link
                   to="/"
-                  preload="intent"
+                  resetScroll={true}
                   class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                 >
                   <FiHome class="w-4 h-4" aria-hidden={true} />
@@ -110,8 +110,9 @@ export default function Navbar() {
                 <Show when={isAuthenticated}>
                   <Link
                     to="/movies"
-                    preload="intent"
+                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    preload="intent"
                   >
                     <FiFilm class="w-4 h-4" aria-hidden={true} />
                     Movies
@@ -120,8 +121,9 @@ export default function Navbar() {
 
                   <Link
                     to="/tvshows"
-                    preload="intent"
+                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    preload="intent"
                   >
                     <FiTv class="w-4 h-4" aria-hidden={true} />
                     TV Shows
@@ -130,8 +132,9 @@ export default function Navbar() {
 
                   <Link
                     to="/music"
-                    preload="intent"
+                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    preload="intent"
                   >
                     <FiMusic class="w-4 h-4" aria-hidden={true} />
                     Music
@@ -149,6 +152,7 @@ export default function Navbar() {
                   <>
                     <Link
                       to="/login"
+                      resetScroll={true}
                       class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
                     >
                       <FiLogIn aria-hidden={true} /> Sign In

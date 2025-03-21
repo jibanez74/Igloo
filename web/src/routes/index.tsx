@@ -1,20 +1,9 @@
-import { createFileRoute, redirect } from "@tanstack/solid-router";
+import { createFileRoute } from "@tanstack/solid-router";
 import { FiPlay, FiFilm } from "solid-icons/fi";
 import LatestMovies from "../components/LatestMovies";
-import { authState } from "../stores/authStore";
+
 
 export const Route = createFileRoute("/")({
-  beforeLoad: () => {
-    if (!authState.user || !authState.isAuthenticated) {
-      throw redirect({
-        to: "/login",
-        from: "/",
-        search: {
-          redirect: "/",
-        },
-      });
-    }
-  },
   component: HomePage,
 });
 
