@@ -1,15 +1,14 @@
-import { createFileRoute } from "@tanstack/solid-router";
+import { createLazyFileRoute } from "@tanstack/solid-router";
 import { FiPlay, FiFilm } from "solid-icons/fi";
 import LatestMovies from "../components/LatestMovies";
 
-
-export const Route = createFileRoute("/")({
+export const Route = createLazyFileRoute("/")({
   component: HomePage,
 });
 
 function HomePage() {
   return (
-    <main class="min-h-screen">
+    <>
       <section class="relative h-[60vh] flex items-center justify-center overflow-hidden">
         <div class="absolute inset-0 bg-gradient-to-b from-blue-950/90 via-blue-950/80 to-blue-950" />
 
@@ -47,6 +46,6 @@ function HomePage() {
         {/* Latest Movies Section */}
         <LatestMovies />
       </div>
-    </main>
+    </>
   );
 }

@@ -1,17 +1,27 @@
-import { createRootRoute, Outlet } from "@tanstack/solid-router";
+import { redirect, createRootRoute, Outlet } from "@tanstack/solid-router";
 import { QueryClientProvider } from "@tanstack/solid-query";
 import { setAuthState } from "../stores/authStore";
 import queryClient from "../utils/queryClient";
 import Navbar from "../components/Navbar";
 
 export const Route = createRootRoute({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     try {
       const res = await fetch("/api/v1/auth/me", {
         credentials: "same-origin",
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        throw redirect({
+          to: "/login",
+          replace: true,
+          search: {
+            redirect: location.href,
+          },
+        });
+      }
 
       setAuthState({
         user: data.user,
@@ -20,6 +30,7 @@ export const Route = createRootRoute({
       });
     } catch (err) {
       console.error(err);
+      throw new Error("unable to check auth state with backend");
     }
   },
   component: RootLayout,
@@ -28,12 +39,10 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div class="min-h-screen bg-blue-950">
         <Navbar />
         <main class="pt-16">
           <Outlet />
         </main>
-      </div>
     </QueryClientProvider>
   );
 }

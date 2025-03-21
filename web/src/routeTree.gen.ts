@@ -13,7 +13,6 @@ import { createFileRoute } from '@tanstack/solid-router'
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
-import { Route as IndexImport } from './routes/index'
 import { Route as AuthTvshowsIndexImport } from './routes/_auth/tvshows/index'
 import { Route as AuthSettingsIndexImport } from './routes/_auth/settings/index'
 import { Route as AuthMusicIndexImport } from './routes/_auth/music/index'
@@ -26,6 +25,7 @@ import { Route as AuthMoviesMovieIDPlayImport } from './routes/_auth/movies/$mov
 // Create Virtual Routes
 
 const LoginLazyImport = createFileRoute('/login')()
+const IndexLazyImport = createFileRoute('/')()
 const AuthSettingsImport = createFileRoute('/_auth/settings')()
 
 // Create/Update Routes
@@ -36,11 +36,11 @@ const LoginLazyRoute = LoginLazyImport.update({
   getParentRoute: () => rootRoute,
 } as any).lazy(() => import('./routes/login.lazy').then((d) => d.Route))
 
-const IndexRoute = IndexImport.update({
+const IndexLazyRoute = IndexLazyImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRoute,
-} as any)
+} as any).lazy(() => import('./routes/index.lazy').then((d) => d.Route))
 
 const AuthSettingsRoute = AuthSettingsImport.update({
   id: '/_auth/settings',
@@ -105,7 +105,7 @@ declare module '@tanstack/solid-router' {
       id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexImport
+      preLoaderRoute: typeof IndexLazyImport
       parentRoute: typeof rootRoute
     }
     '/login': {
@@ -211,7 +211,7 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 )
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof IndexLazyRoute
   '/login': typeof LoginLazyRoute
   '/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
   '/settings': typeof AuthSettingsLayoutRoute
@@ -224,7 +224,7 @@ export interface FileRoutesByFullPath {
 }
 
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/': typeof IndexLazyRoute
   '/login': typeof LoginLazyRoute
   '/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
   '/settings': typeof AuthSettingsIndexRoute
@@ -237,7 +237,7 @@ export interface FileRoutesByTo {
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
-  '/': typeof IndexRoute
+  '/': typeof IndexLazyRoute
   '/login': typeof LoginLazyRoute
   '/_auth/movies/$movieID': typeof AuthMoviesMovieIDRouteWithChildren
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
@@ -291,7 +291,7 @@ export interface FileRouteTypes {
 }
 
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  IndexLazyRoute: typeof IndexLazyRoute
   LoginLazyRoute: typeof LoginLazyRoute
   AuthMoviesMovieIDRoute: typeof AuthMoviesMovieIDRouteWithChildren
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
@@ -301,7 +301,7 @@ export interface RootRouteChildren {
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  IndexLazyRoute: IndexLazyRoute,
   LoginLazyRoute: LoginLazyRoute,
   AuthMoviesMovieIDRoute: AuthMoviesMovieIDRouteWithChildren,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
@@ -330,7 +330,7 @@ export const routeTree = rootRoute
       ]
     },
     "/": {
-      "filePath": "index.tsx"
+      "filePath": "index.lazy.tsx"
     },
     "/login": {
       "filePath": "login.lazy.tsx"

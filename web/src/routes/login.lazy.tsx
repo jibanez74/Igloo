@@ -9,7 +9,7 @@ export const Route = createLazyFileRoute("/login")({
 });
 
 function LoginPage() {
-  const [username, setUsername] = createSignal("");
+  const [ username, setUsername] = createSignal("");
   const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal("");
@@ -67,7 +67,7 @@ function LoginPage() {
   };
 
   return (
-    <main class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <section class="max-w-md w-full space-y-8 bg-blue-950/50 backdrop-blur-sm p-8 rounded-xl shadow-lg shadow-blue-900/20">
         <header>
           <h1 class="text-center text-3xl font-bold text-white">
@@ -170,6 +170,6 @@ function LoginPage() {
           </div>
         </form>
       </section>
-    </main>
+    </div>
   );
 }
