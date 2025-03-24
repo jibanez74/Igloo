@@ -52,6 +52,9 @@ function UsersPage() {
             <h1 class="text-2xl font-bold text-yellow-300">Users</h1>
             <Link
               to="/users/form"
+              search={{
+                update: false,
+              }}
               class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-950 bg-yellow-300 rounded-lg hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20"
             >
               <FiUserPlus class="w-4 h-4" aria-hidden="true" />
@@ -81,7 +84,10 @@ function UsersPage() {
             when={!query.isError}
             fallback={
               <div class="h-40 flex items-center justify-center">
-                <ErrorWarning error={query.error?.message ?? ""} isVisible={true} />
+                <ErrorWarning
+                  error={query.error?.message ?? ""}
+                  isVisible={true}
+                />
               </div>
             }
           >

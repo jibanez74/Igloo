@@ -1,11 +1,132 @@
-import { createLazyFileRoute } from "@tanstack/solid-router";
+import { createSignal } from "solid-js";
+import { createFileRoute } from "@tanstack/solid-router";
+import { createMutation } from "@tanstack/solid-query";
 import { FiUser, FiMail, FiLock, FiShield } from "solid-icons/fi";
+import type { UserForm } from "../../../../types/User";
 
-export const Route = createLazyFileRoute("/_auth/_admin/users/form")({
+type FormParams = {
+  id?: number;
+  update: boolean;
+};
+
+type UserResponse = {
+  user: UserForm;
+  update: boolean;
+};
+
+export const Route = createFileRoute("/_auth/_admin/users/form")({
+  validateSearch: (search: Record<string, unknown>): FormParams => ({
+    id: Number(search?.id ?? 0),
+    update: Boolean(search?.update),
+  }),
+  loaderDeps: ({ search }) => search,
+  loader: async ({ deps }): Promise<UserResponse> => {
+    const result = {
+      user: {
+        id: deps.id ?? 0,
+        name: "",
+        email: "",
+        username: "",
+        password: "",
+        is_admin: false,
+        is_active: false,
+      },
+      update: deps.update,
+    };
+
+    if (deps.id) {
+      try {
+        const res = await fetch(`/api/v1/users/${deps.id}`, {
+          credentials: "same-origin",
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          );
+        }
+
+        result.update = true;
+        result.user = data.user;
+      } catch (err) {
+        console.error(err);
+        throw new Error(
+          `a network error occurred while fetching user with id of ${deps.id}`
+        );
+      }
+    }
+
+    return result;
+  },
   component: UserFormPage,
 });
 
 function UserFormPage() {
+  const navigate = Route.useNavigate();
+  const data = Route.useLoaderData();
+  const { user, update } = data();
+  const ctx = Route.useRouteContext();
+  const { queryClient } = ctx();
+
+  const [name, setName] = createSignal(user.name);
+  const [username, setUsername] = createSignal(user.username);
+  const [email, setEmail] = createSignal(user.email);
+  const [password, setPassword] = createSignal(user.password);
+  const [isAdmin, setIsAdmin] = createSignal(false);
+  const [isActive, setIsActive] = createSignal(true);
+
+  const mutation = createMutation(() => ({
+    mutationFn: async () => {
+      try {
+        const input = {
+          name: name(),
+          email: email(),
+          username: username(),
+          is_admin: isAdmin(),
+          is_active: isActive,
+        };
+
+        const res = await fetch(`/api/v1/users/update/${user?.id}`, {
+          method: "put",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(input),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          );
+        }
+
+        queryClient.invalidateQueries({
+          queryKey: ["users"],
+        });
+      } catch (err) {
+        console.error(err);
+        throw new Error("a network error occurred while submitting the form");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      navigate({
+        to: "/users",
+        from: Route.fullPath,
+      });
+    },
+  }));
+
+  const handleSubmit = (e: Event) => {
+    e.preventDefault();
+    mutation.mutate();
+  };
+
   return (
     <div class="container mx-auto">
       <section
@@ -21,7 +142,7 @@ function UserFormPage() {
           </p>
         </header>
 
-        <form class="space-y-6">
+        <form class="space-y-6" onSubmit={handleSubmit}>
           {/* Name Field */}
           <div>
             <label for="name" class="block text-sm font-medium text-white mb-2">
@@ -32,13 +153,15 @@ function UserFormPage() {
                 <FiUser class="h-5 w-5 text-yellow-300" aria-hidden="true" />
               </div>
               <input
-              autofocus
+                autofocus
                 type="text"
                 id="name"
                 name="name"
                 required
                 minLength={2}
                 maxLength={60}
+                value={name()}
+                onInput={(e) => setName(e.currentTarget.value)}
                 class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
                 placeholder="John Doe"
               />
@@ -64,6 +187,8 @@ function UserFormPage() {
                 required
                 minLength={2}
                 maxLength={20}
+                value={username()}
+                onInput={(e) => setUsername(e.currentTarget.value)}
                 class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
                 placeholder="johndoe"
               />
@@ -87,6 +212,8 @@ function UserFormPage() {
                 id="email"
                 name="email"
                 required
+                value={email()}
+                onInput={(e) => setEmail(e.currentTarget.value)}
                 class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
                 placeholder="john@example.com"
               />
@@ -112,6 +239,8 @@ function UserFormPage() {
                 required
                 minLength={9}
                 maxLength={128}
+                value={password()}
+                onInput={(e) => setPassword(e.currentTarget.value)}
                 class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
                 placeholder="••••••••"
               />
@@ -129,13 +258,18 @@ function UserFormPage() {
               </label>
               <div class="relative flex items-center">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiShield class="h-5 w-5 text-yellow-300" aria-hidden="true" />
+                  <FiShield
+                    class="h-5 w-5 text-yellow-300"
+                    aria-hidden="true"
+                  />
                 </div>
                 <div class="pl-10 flex items-center">
                   <input
                     type="checkbox"
                     id="is_admin"
                     name="is_admin"
+                    checked={isAdmin()}
+                    onChange={(e) => setIsAdmin(e.currentTarget.checked)}
                     class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950"
                   />
                   <label for="is_admin" class="ml-2 text-sm text-white">
@@ -158,7 +292,8 @@ function UserFormPage() {
                     type="checkbox"
                     id="is_active"
                     name="is_active"
-                    checked
+                    checked={isActive()}
+                    onChange={(e) => setIsActive(e.currentTarget.checked)}
                     class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950"
                   />
                   <label for="is_active" class="ml-2 text-sm text-white">
@@ -173,16 +308,21 @@ function UserFormPage() {
           <div class="pt-4 flex gap-4">
             <button
               type="button"
+              onClick={() =>
+                navigate({
+                  to: "/users",
+                  from: Route.fullPath,
+                })
+              }
               class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-900/50 border border-blue-800 rounded-lg hover:bg-blue-900/70 focus:outline-none focus:ring-2 focus:ring-blue-800/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20"
             >
               Cancel
             </button>
             <button
               type="submit"
-              class="flex-1 px-4 py-2 text-sm font-medium text-blue-950 bg-yellow-300 rounded-lg hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20"
-            >
-              Create User
-            </button>
+              disabled={mutation.isPending}
+              class="flex-1 px-4 py-2 text-sm font-medium text-blue-950 bg-yellow-300 rounded-lg hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            ></button>
           </div>
         </form>
       </section>
