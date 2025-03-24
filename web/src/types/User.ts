@@ -9,7 +9,7 @@ export type User = {
 };
 
 export type SimpleUser = {
-  id: never;
+  id: number;
   name: string;
   email: string;
   username: string;
