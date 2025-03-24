@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_auth/movies/$movieID")({
   loader: async ({ params }): Promise<MovieDetailsResponse> => {
     try {
       const res = await fetch(`/api/v1/movies/${params.movieID}`, {
-        credentials: "include",
+        credentials: "same-origin",
       });
 
       const data = await res.json();

@@ -48,6 +48,7 @@ function MoviesPage() {
     navigate({
       to: "/movies",
       from: Route.fullPath,
+      resetScroll: true,
       search: {
         limit: 24,
         page,

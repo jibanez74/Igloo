@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import UsersTable from "../../../../components/UsersTable";
-import Pagination from "../../../../components/Pagination";
+import UsersTable from "../../../components/UsersTable";
+import Pagination from "../../../components/Pagination";
 // import { FiUserPlus } from "solid-icons/fi";
-import type { PaginationSearch } from "../../../../types/Pagination";
-import type { PaginationResponse } from "../../../../types/Pagination";
-import type { SimpleUser } from "../../../../types/User";
+import type {
+  PaginationResponse,
+  PaginationSearch,
+} from "../../../types/Pagination";
+import type { SimpleUser } from "../../../types/User";
 
-export const Route = createFileRoute("/_auth/settings/users/")({
+export const Route = createFileRoute("/_auth/_admin/users")({
   component: UsersPage,
   validateSearch: (search: Record<string, unknown>): PaginationSearch => ({
     page: Number(search?.page ?? 1),

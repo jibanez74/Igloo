@@ -1,15 +1,31 @@
 import { createSignal } from "solid-js";
-import { createLazyFileRoute } from "@tanstack/solid-router";
+import { redirect, createFileRoute } from "@tanstack/solid-router";
 import { FiUser, FiMail, FiLock } from "solid-icons/fi";
 import ErrorWarning from "../components/ErrorWarning";
-import { setAuthState } from "../stores/authStore";
+import { authState, setAuthState } from "../stores/authStore";
 
-export const Route = createLazyFileRoute("/login")({
+type SearchParams = {
+  redirect?: string;
+};
+
+export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>): SearchParams => ({
+    redirect: String(search.redirect ?? "/"),
+  }),
+  loaderDeps: ({ search }) => search,
+  beforeLoad: ({ search }) => {
+    if (authState.isAuthenticated) {
+      throw redirect({
+        to: search.redirect,
+        replace: true,
+      });
+    }
+  },
   component: LoginPage,
 });
 
 function LoginPage() {
-  const [ username, setUsername] = createSignal("");
+  const [username, setUsername] = createSignal("");
   const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal("");
@@ -17,6 +33,7 @@ function LoginPage() {
   const [isVisible, setIsVisible] = createSignal(false);
 
   const navigate = Route.useNavigate();
+  const search = Route.useSearch();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -52,9 +69,11 @@ function LoginPage() {
         isLoading: false,
       });
 
+      const {redirect} = search()
+
       navigate({
-        to: "/",
-        from: "/login",
+        to: redirect,
+        from: Route.fullPath,
         replace: true,
       });
     } catch (err) {

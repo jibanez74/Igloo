@@ -1,10 +1,17 @@
 import "./assets/styles.css";
 import { render } from "solid-js/web";
 import { RouterProvider, createRouter } from "@tanstack/solid-router";
+import { QueryClientProvider, QueryClient } from "@tanstack/solid-query";
 import { routeTree } from "./routeTree.gen";
 import NotFound from "./components/NotFound";
 
-const router = createRouter({ routeTree, defaultNotFoundComponent: NotFound });
+const queryClient = new QueryClient();
+
+const router = createRouter({
+  routeTree,
+  defaultNotFoundComponent: NotFound,
+  context: { queryClient },
+});
 
 declare module "@tanstack/solid-router" {
   interface Register {
@@ -15,5 +22,13 @@ declare module "@tanstack/solid-router" {
 const rootElement = document.getElementById("root")!;
 
 if (!rootElement.innerHTML) {
-  render(() => <RouterProvider router={router} />, rootElement);
+  render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        {" "}
+        <RouterProvider router={router} />{" "}
+      </QueryClientProvider>
+    ),
+    rootElement
+  );
 }

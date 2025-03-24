@@ -113,6 +113,10 @@ export default function Navbar() {
                     resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                     preload="intent"
+                    search={{
+                      limit: 24,
+                      page: 1,
+                    }}
                   >
                     <FiFilm class="w-4 h-4" aria-hidden={true} />
                     Movies
@@ -244,6 +248,10 @@ export default function Navbar() {
                 preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
+                search={{
+                  limit: 24,
+                  page: 1,
+                }}
               >
                 <FiFilm class="w-5 h-5" aria-hidden={true} />
                 Movies
