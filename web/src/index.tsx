@@ -9,6 +9,8 @@ const queryClient = new QueryClient();
 
 const router = createRouter({
   routeTree,
+  scrollRestoration: true,
+  defaultPreload: "intent",
   defaultNotFoundComponent: NotFound,
   context: { queryClient },
 });

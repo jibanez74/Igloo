@@ -84,7 +84,6 @@ export default function Navbar() {
             <div class="flex items-center gap-8">
               <Link
                 to="/"
-                resetScroll={true}
                 class="flex items-center gap-2 text-white hover:text-yellow-300 transition-colors"
               >
                 <img src={iglooLogo} alt="Igloo" class="h-8 w-auto" />
@@ -98,7 +97,6 @@ export default function Navbar() {
                 {/* Home link - always visible */}
                 <Link
                   to="/"
-                  resetScroll={true}
                   class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                 >
                   <FiHome class="w-4 h-4" aria-hidden={true} />
@@ -110,9 +108,7 @@ export default function Navbar() {
                 <Show when={isAuthenticated}>
                   <Link
                     to="/movies"
-                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
-                    preload="intent"
                     search={{
                       limit: 24,
                       page: 1,
@@ -125,9 +121,7 @@ export default function Navbar() {
 
                   <Link
                     to="/tvshows"
-                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
-                    preload="intent"
                   >
                     <FiTv class="w-4 h-4" aria-hidden={true} />
                     TV Shows
@@ -136,9 +130,7 @@ export default function Navbar() {
 
                   <Link
                     to="/music"
-                    resetScroll={true}
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
-                    preload="intent"
                   >
                     <FiMusic class="w-4 h-4" aria-hidden={true} />
                     Music
@@ -156,7 +148,6 @@ export default function Navbar() {
                   <>
                     <Link
                       to="/login"
-                      resetScroll={true}
                       class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
                     >
                       <FiLogIn aria-hidden={true} /> Sign In
@@ -233,7 +224,6 @@ export default function Navbar() {
             {/* Home link - always visible */}
             <Link
               to="/"
-              preload="intent"
               class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
               onClick={() => setIsMobileMenuOpen(false)}
             >
@@ -245,7 +235,6 @@ export default function Navbar() {
             <Show when={isAuthenticated}>
               <Link
                 to="/movies"
-                preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
                 search={{
@@ -259,7 +248,6 @@ export default function Navbar() {
 
               <Link
                 to="/tvshows"
-                preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -269,7 +257,6 @@ export default function Navbar() {
 
               <Link
                 to="/music"
-                preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -279,7 +266,6 @@ export default function Navbar() {
 
               <Link
                 to="/"
-                preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -303,7 +289,6 @@ export default function Navbar() {
             <Show when={!isAuthenticated}>
               <Link
                 to="/login"
-                preload="intent"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 onClick={() => setIsMobileMenuOpen(false)}
               >

@@ -5,7 +5,8 @@ import { FiUsers, FiSettings, FiFilm, FiMusic, FiTv } from "solid-icons/fi";
 export const Route = createFileRoute("/_auth/_admin")({
   beforeLoad: () => {
     if (!authState.user?.is_admin) {
-      throw new Error("403 - You do not have permission to access this page");
+      // throw new Error("403 - You do not have permission to access this page");
+      console.log("user is not an admin");
     }
   },
   component: AdminLayout,

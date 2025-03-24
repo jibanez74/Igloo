@@ -13,11 +13,9 @@ export default function MovieCard(props: MovieCardProps) {
   return (
     <Link
       to="/movies/$movieID"
-      resetScroll={true}
-      params={{
+     params={{
         movieID: props.movie.id.toString(),
       }}
-      preload="intent"
     >
       <div class="group relative bg-blue-950/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 hover:shadow-yellow-300/20 hover:scale-[1.02]">
         <img
