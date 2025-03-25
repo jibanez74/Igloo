@@ -59,7 +59,7 @@ function SettingsPage() {
   const mutation = createMutation(() => ({
     mutationFn: async (input: Settings): Promise<SettingsResponse> => {
       try {
-        const res = await fetch("/api/v1/settings/update", {
+        const res = await fetch("/api/v1/settings", {
           method: "put",
           headers: {
             "Content-Type": "application/json",
