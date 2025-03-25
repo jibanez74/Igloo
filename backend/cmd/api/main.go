@@ -86,7 +86,7 @@ func main() {
 
 	settings := api.Group("/settings")
 	settings.Get("/", app.getSettings)
-	settings.Put("/update", app.updateSettings)
+	settings.Put("/", app.updateSettings)
 
 	users := api.Group("/users")
 	users.Get("/", app.getUsersPaginated)
