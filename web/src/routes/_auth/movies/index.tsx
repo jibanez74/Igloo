@@ -46,8 +46,6 @@ function MoviesPage() {
 
   const onPageChange = (page: number) =>
     navigate({
-      to: "/movies",
-      from: Route.fullPath,
       resetScroll: true,
       search: {
         limit: 24,
