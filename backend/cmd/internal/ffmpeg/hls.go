@@ -31,7 +31,7 @@ const (
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
 	DefaultHlsFlags       = "independent_segments+program_date_time+append_list+discont_start"
-	DefaultPlaylistType   = "event"
+	DefaultPlaylistType   = "vod"
 	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"
 	DefaultInitFileName   = "init.mp4"

@@ -3,9 +3,9 @@ import { createQuery } from "@tanstack/solid-query";
 import { Show } from "solid-js";
 import { setAuthState } from "../stores/authStore";
 import Navbar from "../components/Navbar";
+import iglooLogo from "../assets/images/logo-alt.png";
 import type { QueryClient } from "@tanstack/solid-query";
 import type { User } from "../types/User";
-import iglooLogo from "../assets/images/logo-alt.png";
 
 type RouterContext = {
   queryClient: QueryClient;
@@ -41,6 +41,8 @@ function RootLayout() {
         isAuthenticated: !!user,
       });
     },
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   }));
 
   return (
@@ -60,7 +62,9 @@ function RootLayout() {
                 <div class="w-3 h-3 rounded-full bg-yellow-300 animate-[pulse_1s_ease-in-out_0.2s_infinite]" />
                 <div class="w-3 h-3 rounded-full bg-yellow-300 animate-[pulse_1s_ease-in-out_0.4s_infinite]" />
               </div>
-              <p class="mt-4 text-yellow-300 text-lg font-medium">Loading your experience...</p>
+              <p class="mt-4 text-yellow-300 text-lg font-medium">
+                Loading your experience...
+              </p>
             </div>
           </div>
         }
