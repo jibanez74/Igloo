@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js";
 import { createFileRoute } from "@tanstack/solid-router";
 import { createMutation } from "@tanstack/solid-query";
-import { FiUser, FiMail, FiLock, FiShield } from "solid-icons/fi";
+import { FiUser, FiMail, FiLock, FiShield, FiX, FiSave } from "solid-icons/fi";
 import type { UserForm } from "../../../../types/User";
 
 type FormParams = {
@@ -69,6 +69,8 @@ function UserFormPage() {
   const { user, update } = data();
   const ctx = Route.useRouteContext();
   const { queryClient } = ctx();
+
+  console.log(update)
 
   const [name, setName] = createSignal(user.name);
   const [username, setUsername] = createSignal(user.username);
@@ -161,9 +163,9 @@ function UserFormPage() {
                 minLength={2}
                 maxLength={60}
                 value={name()}
+                disabled={mutation.isPending}
                 onInput={(e) => setName(e.currentTarget.value)}
-                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
-                placeholder="John Doe"
+                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -188,9 +190,9 @@ function UserFormPage() {
                 minLength={2}
                 maxLength={20}
                 value={username()}
+                disabled={mutation.isPending}
                 onInput={(e) => setUsername(e.currentTarget.value)}
-                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
-                placeholder="johndoe"
+                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -213,9 +215,9 @@ function UserFormPage() {
                 name="email"
                 required
                 value={email()}
+                disabled={mutation.isPending}
                 onInput={(e) => setEmail(e.currentTarget.value)}
-                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
-                placeholder="john@example.com"
+                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -240,9 +242,9 @@ function UserFormPage() {
                 minLength={9}
                 maxLength={128}
                 value={password()}
+                disabled={mutation.isPending}
                 onInput={(e) => setPassword(e.currentTarget.value)}
-                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300"
-                placeholder="••••••••"
+                class="block w-full pl-10 pr-3 py-2 bg-blue-900/50 border border-blue-800 rounded-lg text-white placeholder-blue-300/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:border-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <p class="mt-2 text-sm text-blue-300">
@@ -269,8 +271,9 @@ function UserFormPage() {
                     id="is_admin"
                     name="is_admin"
                     checked={isAdmin()}
+                    disabled={mutation.isPending}
                     onChange={(e) => setIsAdmin(e.currentTarget.checked)}
-                    class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950"
+                    class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <label for="is_admin" class="ml-2 text-sm text-white">
                     Administrator
@@ -293,8 +296,9 @@ function UserFormPage() {
                     id="is_active"
                     name="is_active"
                     checked={isActive()}
+                    disabled={mutation.isPending}
                     onChange={(e) => setIsActive(e.currentTarget.checked)}
-                    class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950"
+                    class="h-4 w-4 rounded border-blue-800 bg-blue-900/50 text-yellow-300 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <label for="is_active" class="ml-2 text-sm text-white">
                     Active Account
@@ -308,21 +312,31 @@ function UserFormPage() {
           <div class="pt-4 flex gap-4">
             <button
               type="button"
+              disabled={mutation.isPending}
               onClick={() =>
                 navigate({
                   to: "/users",
                   from: Route.fullPath,
                 })
               }
-              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-900/50 border border-blue-800 rounded-lg hover:bg-blue-900/70 focus:outline-none focus:ring-2 focus:ring-blue-800/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20"
+              class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-900/50 border border-blue-800 rounded-lg hover:bg-blue-900/70 focus:outline-none focus:ring-2 focus:ring-blue-800/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              <span class="flex items-center justify-center gap-2">
+                <FiX class="w-4 h-4" />
+                Cancel
+              </span>
             </button>
+
             <button
               type="submit"
               disabled={mutation.isPending}
               class="flex-1 px-4 py-2 text-sm font-medium text-blue-950 bg-yellow-300 rounded-lg hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors shadow-sm shadow-black/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            ></button>
+            >
+              <span class="flex items-center justify-center gap-2">
+                <FiSave class="w-4 h-4" />
+                {update ? "Update" : "Create"}
+              </span>
+            </button>
           </div>
         </form>
       </section>

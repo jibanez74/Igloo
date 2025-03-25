@@ -1,5 +1,13 @@
 import { For } from "solid-js";
-import { FiMail, FiShield, FiCheck, FiX } from "solid-icons/fi";
+import { useRouter } from "@tanstack/solid-router";
+import {
+  FiMail,
+  FiShield,
+  FiCheck,
+  FiX,
+  FiEdit2,
+  FiTrash2,
+} from "solid-icons/fi";
 import type { SimpleUser } from "../types/User";
 
 type UsersTableProps = {
@@ -7,11 +15,11 @@ type UsersTableProps = {
 };
 
 export default function UsersTable(props: UsersTableProps) {
+  const router = useRouter();
+
   return (
     <table class="w-full" role="grid">
-      <caption class="sr-only">
-        List of system users with their details
-      </caption>
+      <caption class="sr-only">List of system users with their details</caption>
 
       <thead>
         <tr class="text-left border-b border-blue-800/20">
@@ -29,6 +37,9 @@ export default function UsersTable(props: UsersTableProps) {
           </th>
           <th scope="col" class="pb-3 text-sm font-medium text-white">
             Role
+          </th>
+          <th scope="col" class="pb-3 text-sm font-medium text-white">
+            Actions
           </th>
         </tr>
       </thead>
@@ -65,6 +76,34 @@ export default function UsersTable(props: UsersTableProps) {
                 ) : (
                   <span class="text-blue-200">User</span>
                 )}
+              </td>
+              <td class="py-4">
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.navigate({
+                        to: "/users/form",
+                        search: {
+                          id: user.id,
+                          update: true,
+                        },
+                      })
+                    }
+                    class="p-1.5 text-blue-200 hover:text-yellow-300 rounded-lg hover:bg-blue-800/50 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors"
+                    aria-label={`Edit ${user.name}`}
+                  >
+                    <FiEdit2 class="w-4 h-4" aria-hidden={true} />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="p-1.5 text-blue-200 hover:text-red-400 rounded-lg hover:bg-blue-800/50 focus:outline-none focus:ring-2 focus:ring-red-400/50 focus:ring-offset-2 focus:ring-offset-blue-950 transition-colors"
+                    aria-label={`Delete ${user.name}`}
+                  >
+                    <FiTrash2 class="w-4 h-4" aria-hidden={true} />
+                  </button>
+                </div>
               </td>
             </tr>
           )}

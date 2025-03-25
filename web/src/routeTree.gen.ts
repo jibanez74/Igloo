@@ -109,7 +109,7 @@ const AuthMoviesMovieIDPlayRoute = AuthMoviesMovieIDPlayImport.update({
 } as any)
 
 const AuthAdminUsersFormRoute = AuthAdminUsersFormImport.update({
-  id: '/us./routes/_auth/_admin/users/form
+  id: '/users/form',
   path: '/users/form',
   getParentRoute: () => AuthAdminRoute,
 } as any)
