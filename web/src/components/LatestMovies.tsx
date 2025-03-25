@@ -82,7 +82,7 @@ export default function LatestMovies() {
               <Match when={query.data?.movies}>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
                   <For each={query.data?.movies}>
-                    {(movie) => <MovieCard movie={movie} imgLoading="eager" />}
+                    {(movie) => <MovieCard movie={movie} />}
                   </For>
                 </div>
               </Match>
