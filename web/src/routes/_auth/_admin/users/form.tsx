@@ -81,19 +81,23 @@ function UserFormPage() {
 
   const mutation = createMutation(() => ({
     mutationFn: async () => {
-      try {
-        const input = {
-          name: name(),
-          email: email(),
-          username: username(),
-          password: password(),
-          is_admin: isAdmin(),
-          is_active: isActive,
-        };
+      const url = update
+        ? `/api/v1/users/update/${user.id}`
+        : "/api/v1/users/create";
 
-        const res = await fetch("/api/v1/users/create", {
-          method: "post",
-          // credentials: "same-origin",
+      const input = {
+        name: name(),
+        email: email(),
+        username: username(),
+        password: password(),
+        is_admin: isAdmin(),
+        is_active: isActive,
+      };
+
+      try {
+        const res = await fetch(url, {
+          method: update ? "put" : "post",
+          credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
           },
