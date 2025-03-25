@@ -75,12 +75,13 @@ func (app *application) login(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"user": fiber.Map{
-			"id":       user.ID,
-			"name":     user.Name,
-			"email":    user.Email,
-			"username": user.Username,
-			"avatar":   user.Avatar,
-			"isAdmin":  user.IsAdmin,
+			"id":        user.ID,
+			"name":      user.Name,
+			"email":     user.Email,
+			"username":  user.Username,
+			"avatar":    user.Avatar,
+			"is_admin":  user.IsAdmin,
+			"is_active": user.IsActive,
 		},
 	})
 }

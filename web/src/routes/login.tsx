@@ -66,13 +66,10 @@ function LoginPage() {
       setAuthState({
         user: data.user,
         isAuthenticated: true,
-        isLoading: false,
       });
 
-      const {redirect} = search()
-
       navigate({
-        to: redirect,
+        to: search().redirect,
         from: Route.fullPath,
         replace: true,
       });

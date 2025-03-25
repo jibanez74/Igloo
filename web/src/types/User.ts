@@ -15,7 +15,7 @@ export type UserForm = {
   username: string;
   password: string;
   is_admin: boolean;
-  is_active?: boolean;
+  is_active: boolean;
   avatar?: string;
 };
 
