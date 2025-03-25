@@ -58,24 +58,29 @@ function SettingsPage() {
 
   const mutation = createMutation(() => ({
     mutationFn: async (input: Settings): Promise<SettingsResponse> => {
-      const res = await fetch("/api/v1/settings", {
-        method: "put",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(input),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(
-          `${res.status} - ${data.error ? data.error : res.statusText}`
-        );
+      try {
+        const res = await fetch("/api/v1/settings/update", {
+          method: "put",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(input),
+        });
+  
+        const data = await res.json();
+  
+        if (!res.ok) {
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          );
+        }
+  
+        return data;
+        } catch (err) {
+        console.error(err);
+        throw new Error("a network error occurred while updating settings");
       }
-
-      return data;
     },
     onSuccess: () => {
       setShowSuccess(true);

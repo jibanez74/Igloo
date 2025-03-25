@@ -54,5 +54,5 @@ UPDATE global_settings SET
     enable_transcoding = $15,
     jellyfin_token = $16,
     updated_at = NOW()
-WHERE id = $17
+WHERE id = (SELECT id FROM global_settings LIMIT 1)
 RETURNING *;

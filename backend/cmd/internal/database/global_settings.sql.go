@@ -197,7 +197,7 @@ UPDATE global_settings SET
     enable_transcoding = $15,
     jellyfin_token = $16,
     updated_at = NOW()
-WHERE id = $17
+WHERE id = (SELECT id FROM global_settings LIMIT 1)
 RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, hardware_acceleration, enable_transcoding, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
 `
 
@@ -218,7 +218,6 @@ type UpdateSettingsParams struct {
 	HardwareAcceleration string `json:"hardware_acceleration"`
 	EnableTranscoding    bool   `json:"enable_transcoding"`
 	JellyfinToken        string `json:"jellyfin_token"`
-	ID                   int32  `json:"id"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error) {
@@ -239,7 +238,6 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.HardwareAcceleration,
 		arg.EnableTranscoding,
 		arg.JellyfinToken,
-		arg.ID,
 	)
 	var i GlobalSetting
 	err := row.Scan(
