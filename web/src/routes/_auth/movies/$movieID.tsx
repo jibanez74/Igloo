@@ -99,7 +99,7 @@ function MovieDetailsPage() {
 
       const res = await fetch(`/api/v1/movies/create-hls/${movie.id}`, {
         method: "post",
-        credentials: "include",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
         },
@@ -115,7 +115,7 @@ function MovieDetailsPage() {
 
       navigate({
         to: "/movies/$movieID/play",
-        from: "/movies/$movieID",
+        from: Route.fullPath,
         search: {
           title: movie.title,
           thumb: movie.thumb,

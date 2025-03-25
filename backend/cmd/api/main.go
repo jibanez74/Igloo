@@ -82,6 +82,7 @@ func main() {
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
+	movies.Post("/create-hls/:id", app.createMovieHls)
 	movies.Get("/:id", app.getMovieDetails)
 
 	settings := api.Group("/settings")
