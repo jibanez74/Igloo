@@ -49,3 +49,14 @@ SET avatar = $1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $2
 RETURNING id, name, email, username, is_active, is_admin, avatar;
+
+-- name: DeleteUser :exec
+DELETE FROM users 
+WHERE users.id = $1 
+AND users.id != (
+    -- Prevent deletion of the last admin user
+    SELECT users.id FROM users 
+    WHERE users.is_admin = true 
+    ORDER BY users.created_at ASC 
+    LIMIT 1
+);

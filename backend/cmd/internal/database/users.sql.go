@@ -79,6 +79,23 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users 
+WHERE users.id = $1 
+AND users.id != (
+    -- Prevent deletion of the last admin user
+    SELECT users.id FROM users 
+    WHERE users.is_admin = true 
+    ORDER BY users.created_at ASC 
+    LIMIT 1
+)
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
 const getTotalUsersCount = `-- name: GetTotalUsersCount :one
 SELECT COUNT(*) FROM users
 `
