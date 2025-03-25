@@ -1,0 +1,1 @@
+import{f as n,a1 as a}from"./index-q4ThUUcc.js";function i(e){const{size:s="md"}=e,t={sm:"w-4 h-4",md:"w-5 h-5",lg:"w-6 h-6"};return n(a,{get class(){return`text-yellow-300 animate-spin ${t[s]}`},"aria-hidden":"true"})}export{i as S};

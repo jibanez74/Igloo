@@ -97,7 +97,7 @@ function MovieDetailsPage() {
         video_codec: "copy",
       };
 
-      const res = await fetch(`/api/v1/movies/create-hls/${movie.id}`, {
+      const res = await fetch(`/api/v1/ffmpeg/create-hls-movie/${movie.id}`, {
         method: "post",
         credentials: "same-origin",
         headers: {
