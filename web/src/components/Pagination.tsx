@@ -29,77 +29,89 @@ export default function Pagination(props: PaginationProps) {
   };
 
   return (
-    <div class="flex items-center justify-center gap-2 mt-6">
-      <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        class="p-2 text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        aria-label="Previous page"
-      >
-        <FiChevronLeft class="w-5 h-5" />
-      </button>
-
-      {/* First page */}
-      <Show when={getPageNumbers()[0] > 1}>
+    <nav aria-label="Pagination" class="mt-6">
+      <div class="flex items-center justify-center gap-2">
         <button
-          onClick={() => onPageChange(1)}
-          class={`px-3 py-1 rounded-lg transition-colors ${
-            currentPage === 1
-              ? "bg-blue-600 text-white"
-              : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
-          }`}
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          class="p-2 text-white hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg 
+                 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed 
+                 disabled:text-blue-200 transition-colors"
+          aria-label="Previous page"
         >
-          1
+          <FiChevronLeft class="w-5 h-5" />
         </button>
-        <Show when={getPageNumbers()[0] > 2}>
-          <span class="text-blue-200">...</span>
-        </Show>
-      </Show>
 
-      {/* Page numbers */}
-      <For each={getPageNumbers()}>
-        {(page) => (
+        {/* First page */}
+        <Show when={getPageNumbers()[0] > 1}>
           <button
-            onClick={() => onPageChange(page)}
+            onClick={() => onPageChange(1)}
             class={`px-3 py-1 rounded-lg transition-colors ${
-              currentPage === page
-                ? "bg-blue-600 text-white"
-                : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
+              currentPage === 1
+                ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
+                : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
             }`}
+            aria-label="Page 1"
+            aria-current={currentPage === 1 ? "page" : undefined}
           >
-            {page}
+            1
           </button>
-        )}
-      </For>
-
-      {/* Last page */}
-      <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages}>
-        <Show
-          when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}
-        >
-          <span class="text-blue-200">...</span>
+          <Show when={getPageNumbers()[0] > 2}>
+            <span class="text-white/50" aria-hidden="true">...</span>
+          </Show>
         </Show>
-        <button
-          onClick={() => onPageChange(totalPages)}
-          class={`px-3 py-1 rounded-lg transition-colors ${
-            currentPage === totalPages
-              ? "bg-blue-600 text-white"
-              : "text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50"
-          }`}
-        >
-          {totalPages}
-        </button>
-      </Show>
 
-      {/* Next button */}
-      <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        class="p-2 text-blue-200 hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-        aria-label="Next page"
-      >
-        <FiChevronRight class="w-5 h-5" />
-      </button>
-    </div>
+        {/* Page numbers */}
+        <For each={getPageNumbers()}>
+          {(page) => (
+            <button
+              onClick={() => onPageChange(page)}
+              class={`px-3 py-1 rounded-lg transition-colors ${
+                currentPage === page
+                  ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
+                  : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
+              }`}
+              aria-label={`Page ${page}`}
+              aria-current={currentPage === page ? "page" : undefined}
+            >
+              {page}
+            </button>
+          )}
+        </For>
+
+        {/* Last page */}
+        <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages}>
+          <Show
+            when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}
+          >
+            <span class="text-white/50" aria-hidden="true">...</span>
+          </Show>
+          <button
+            onClick={() => onPageChange(totalPages)}
+            class={`px-3 py-1 rounded-lg transition-colors ${
+              currentPage === totalPages
+                ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
+                : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
+            }`}
+            aria-label={`Page ${totalPages}`}
+            aria-current={currentPage === totalPages ? "page" : undefined}
+          >
+            {totalPages}
+          </button>
+        </Show>
+
+        {/* Next button */}
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          class="p-2 text-white hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg 
+                 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed 
+                 disabled:text-blue-200 transition-colors"
+          aria-label="Next page"
+        >
+          <FiChevronRight class="w-5 h-5" />
+        </button>
+      </div>
+    </nav>
   );
 }

@@ -85,6 +85,9 @@ export default function Navbar() {
               <Link
                 to="/"
                 class="flex items-center gap-2 text-white hover:text-yellow-300 transition-colors"
+                activeProps={{
+                  class: "text-yellow-300"
+                }}
               >
                 <img src={iglooLogo} alt="Igloo" class="h-8 w-auto" />
                 <span class="text-xl font-semibold bg-gradient-to-r from-yellow-300 to-yellow-200 text-transparent bg-clip-text">
@@ -98,6 +101,9 @@ export default function Navbar() {
                 <Link
                   to="/"
                   class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                  activeProps={{
+                    class: "text-yellow-300 bg-blue-800/50"
+                  }}
                 >
                   <FiHome class="w-4 h-4" aria-hidden={true} />
                   Home
@@ -109,6 +115,9 @@ export default function Navbar() {
                   <Link
                     to="/movies"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    activeProps={{
+                      class: "text-yellow-300 bg-blue-800/50"
+                    }}
                     search={{
                       limit: 24,
                       page: 1,
@@ -122,6 +131,9 @@ export default function Navbar() {
                   <Link
                     to="/tvshows"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    activeProps={{
+                      class: "text-yellow-300 bg-blue-800/50"
+                    }}
                   >
                     <FiTv class="w-4 h-4" aria-hidden={true} />
                     TV Shows
@@ -131,6 +143,9 @@ export default function Navbar() {
                   <Link
                     to="/music"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
+                    activeProps={{
+                      class: "text-yellow-300 bg-blue-800/50"
+                    }}
                   >
                     <FiMusic class="w-4 h-4" aria-hidden={true} />
                     Music
@@ -149,6 +164,9 @@ export default function Navbar() {
                     <Link
                       to="/login"
                       class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
+                      activeProps={{
+                        class: "text-yellow-300 bg-blue-800/50"
+                      }}
                     >
                       <FiLogIn aria-hidden={true} /> Sign In
                     </Link>
@@ -177,6 +195,9 @@ export default function Navbar() {
                   <Link
                     to="/settings"
                     class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
+                    activeProps={{
+                      class: "text-yellow-300 bg-blue-800/50"
+                    }}
                   >
                     <FiSettings aria-hidden={true} /> Settings
                   </Link>
@@ -225,6 +246,9 @@ export default function Navbar() {
             <Link
               to="/"
               class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+              activeProps={{
+                class: "text-yellow-300 bg-blue-800/50"
+              }}
               onClick={() => setIsMobileMenuOpen(false)}
             >
               <FiHome class="w-5 h-5" aria-hidden={true} />
@@ -236,6 +260,9 @@ export default function Navbar() {
               <Link
                 to="/movies"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+                activeProps={{
+                  class: "text-yellow-300 bg-blue-800/50"
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
                 search={{
                   limit: 24,
@@ -249,6 +276,9 @@ export default function Navbar() {
               <Link
                 to="/tvshows"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+                activeProps={{
+                  class: "text-yellow-300 bg-blue-800/50"
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FiTv class="w-5 h-5" aria-hidden={true} />
@@ -258,6 +288,9 @@ export default function Navbar() {
               <Link
                 to="/music"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+                activeProps={{
+                  class: "text-yellow-300 bg-blue-800/50"
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FiMusic class="w-5 h-5" aria-hidden={true} />
@@ -265,8 +298,11 @@ export default function Navbar() {
               </Link>
 
               <Link
-                to="/"
+                to="/settings"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+                activeProps={{
+                  class: "text-yellow-300 bg-blue-800/50"
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FiSettings class="w-5 h-5" aria-hidden={true} />
@@ -290,6 +326,9 @@ export default function Navbar() {
               <Link
                 to="/login"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
+                activeProps={{
+                  class: "text-yellow-300 bg-blue-800/50"
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <FiLogIn class="w-5 h-5" aria-hidden={true} />
