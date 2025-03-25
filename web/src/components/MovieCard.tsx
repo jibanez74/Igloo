@@ -4,7 +4,6 @@ import type { SimpleMovie } from "../types/Movie";
 
 type MovieCardProps = {
   movie: SimpleMovie;
-  imgLoading: "eager" | "lazy";
 };
 
 export default function MovieCard(props: MovieCardProps) {
@@ -22,7 +21,6 @@ export default function MovieCard(props: MovieCardProps) {
           src={imgSrc}
           alt={`${props.movie.title}`}
           class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 group-hover:brightness-[0.3]"
-          loading={props.imgLoading}
         />
 
         <div class="absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/50 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-90" />

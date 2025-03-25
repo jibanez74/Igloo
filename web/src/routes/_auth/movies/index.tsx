@@ -63,7 +63,7 @@ function MoviesPage() {
 
         <section class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
           <For each={items}>
-            {(movie) => <MovieCard movie={movie} imgLoading="lazy" />}
+            {(movie) => <MovieCard movie={movie} />}
           </For>
         </section>
 
