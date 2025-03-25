@@ -93,6 +93,7 @@ func main() {
 	users.Get("/:id", app.getUserByID)
 	users.Post("/create", app.createUser)
 	users.Patch("/:id/avatar", app.updateUserAvatar)
+	users.Delete("/delete/:id", app.deleteUser)
 
 	if !app.settings.Debug {
 		workDir, err := os.Getwd()

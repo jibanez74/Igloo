@@ -221,6 +221,63 @@ func (q *Queries) GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedPa
 	return items, nil
 }
 
+const updateUser = `-- name: UpdateUser :one
+UPDATE users
+SET 
+    name = $1,
+    email = $2,
+    username = $3,
+    password = $4,
+    is_active = $5,
+    is_admin = $6,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $7
+RETURNING id, name, email, username, is_active, is_admin, avatar
+`
+
+type UpdateUserParams struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	IsActive bool   `json:"is_active"`
+	IsAdmin  bool   `json:"is_admin"`
+	ID       int32  `json:"id"`
+}
+
+type UpdateUserRow struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	IsAdmin  bool   `json:"is_admin"`
+	Avatar   string `json:"avatar"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.Name,
+		arg.Email,
+		arg.Username,
+		arg.Password,
+		arg.IsActive,
+		arg.IsAdmin,
+		arg.ID,
+	)
+	var i UpdateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Username,
+		&i.IsActive,
+		&i.IsAdmin,
+		&i.Avatar,
+	)
+	return i, err
+}
+
 const updateUserAvatar = `-- name: UpdateUserAvatar :one
 UPDATE users
 SET avatar = $1,

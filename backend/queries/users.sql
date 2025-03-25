@@ -50,6 +50,19 @@ SET avatar = $1,
 WHERE id = $2
 RETURNING id, name, email, username, is_active, is_admin, avatar;
 
+-- name: UpdateUser :one
+UPDATE users
+SET 
+    name = $1,
+    email = $2,
+    username = $3,
+    password = $4,
+    is_active = $5,
+    is_admin = $6,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $7
+RETURNING id, name, email, username, is_active, is_admin, avatar;
+
 -- name: DeleteUser :exec
 DELETE FROM users 
 WHERE users.id = $1 
