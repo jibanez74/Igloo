@@ -8,14 +8,12 @@ type PaginationProps = {
 };
 
 export default function Pagination(props: PaginationProps) {
-  const { onPageChange, currentPage, totalPages } = props;
-
   const getPageNumbers = () => {
     const pages = [];
     const showPages = 10;
 
-    let startPage = Math.max(1, currentPage - Math.floor(showPages / 2));
-    const endPage = Math.min(totalPages, startPage + showPages - 1);
+    let startPage = Math.max(1, props.currentPage - Math.floor(showPages / 2));
+    const endPage = Math.min(props.totalPages, startPage + showPages - 1);
 
     if (endPage - startPage + 1 < showPages) {
       startPage = Math.max(1, endPage - showPages + 1);
@@ -32,8 +30,8 @@ export default function Pagination(props: PaginationProps) {
     <nav aria-label="Pagination" class="mt-6">
       <div class="flex items-center justify-center gap-2">
         <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
+          onClick={() => props.onPageChange(props.currentPage - 1)}
+          disabled={props.currentPage === 1}
           class="p-2 text-white hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg 
                  disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed 
                  disabled:text-blue-200 transition-colors"
@@ -45,19 +43,21 @@ export default function Pagination(props: PaginationProps) {
         {/* First page */}
         <Show when={getPageNumbers()[0] > 1}>
           <button
-            onClick={() => onPageChange(1)}
+            onClick={() => props.onPageChange(1)}
             class={`px-3 py-1 rounded-lg transition-colors ${
-              currentPage === 1
+              props.currentPage === 1
                 ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
                 : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
             }`}
             aria-label="Page 1"
-            aria-current={currentPage === 1 ? "page" : undefined}
+            aria-current={props.currentPage === 1 ? "page" : undefined}
           >
             1
           </button>
           <Show when={getPageNumbers()[0] > 2}>
-            <span class="text-white/50" aria-hidden="true">...</span>
+            <span class="text-white/50" aria-hidden="true">
+              ...
+            </span>
           </Show>
         </Show>
 
@@ -65,14 +65,14 @@ export default function Pagination(props: PaginationProps) {
         <For each={getPageNumbers()}>
           {(page) => (
             <button
-              onClick={() => onPageChange(page)}
+              onClick={() => props.onPageChange(page)}
               class={`px-3 py-1 rounded-lg transition-colors ${
-                currentPage === page
+                props.currentPage === page
                   ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
                   : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
               }`}
               aria-label={`Page ${page}`}
-              aria-current={currentPage === page ? "page" : undefined}
+              aria-current={props.currentPage === page ? "page" : undefined}
             >
               {page}
             </button>
@@ -80,30 +80,34 @@ export default function Pagination(props: PaginationProps) {
         </For>
 
         {/* Last page */}
-        <Show when={getPageNumbers()[getPageNumbers().length - 1] < totalPages}>
+        <Show when={getPageNumbers()[getPageNumbers().length - 1] < props.totalPages}>
           <Show
-            when={getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1}
+            when={
+              getPageNumbers()[getPageNumbers().length - 1] < props.totalPages - 1
+            }
           >
-            <span class="text-white/50" aria-hidden="true">...</span>
+            <span class="text-white/50" aria-hidden="true">
+              ...
+            </span>
           </Show>
           <button
-            onClick={() => onPageChange(totalPages)}
+            onClick={() => props.onPageChange(props.totalPages)}
             class={`px-3 py-1 rounded-lg transition-colors ${
-              currentPage === totalPages
+              props.currentPage === props.totalPages
                 ? "bg-yellow-300 text-blue-950 font-semibold ring-2 ring-yellow-300/50"
                 : "text-white hover:text-yellow-300 hover:bg-blue-800/50"
             }`}
-            aria-label={`Page ${totalPages}`}
-            aria-current={currentPage === totalPages ? "page" : undefined}
+            aria-label={`Page ${props.totalPages}`}
+            aria-current={props.currentPage === props.totalPages ? "page" : undefined}
           >
-            {totalPages}
+            {props.totalPages}
           </button>
         </Show>
 
         {/* Next button */}
         <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
+          onClick={() => props.onPageChange(props.currentPage + 1)}
+          disabled={props.currentPage === props.totalPages}
           class="p-2 text-white hover:text-yellow-300 hover:bg-blue-800/50 rounded-lg 
                  disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed 
                  disabled:text-blue-200 transition-colors"

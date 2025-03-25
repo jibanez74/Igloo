@@ -53,7 +53,6 @@ export default function Navbar() {
       setAuthState({
         user: null,
         isAuthenticated: false,
-        isLoading: false,
       });
 
       navigate({

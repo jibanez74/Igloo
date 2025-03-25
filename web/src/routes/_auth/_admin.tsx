@@ -3,7 +3,7 @@ import { authState } from "../../stores/authStore";
 import { FiUsers, FiSettings, FiBarChart2 } from "solid-icons/fi";
 export const Route = createFileRoute("/_auth/_admin")({
   beforeLoad: () => {
-    if (!authState.user?.is_admin) {
+    if (authState.user && !authState.user.is_admin) {
       throw new Error("403 - You do not have permission to access this page");
     }
   },
