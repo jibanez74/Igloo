@@ -77,12 +77,15 @@ func main() {
 	auth.Post("/login", app.login)
 	auth.Post("/logout", app.validateTokenInHeader, app.logout)
 
+	ffmpegRoutes := api.Group("/ffmpeg")
+	ffmpegRoutes.Post("/create-hls-movie/:id", app.createMovieHls)
+	ffmpegRoutes.Post("/cancel-job/:pid", app.cancelFFmpegJob)
+
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
-	movies.Post("/create-hls/:id", app.createMovieHls)
 	movies.Get("/:id", app.getMovieDetails)
 
 	settings := api.Group("/settings")
