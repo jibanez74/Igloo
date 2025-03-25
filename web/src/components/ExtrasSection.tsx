@@ -51,9 +51,9 @@ export default function ExtrasSection(props: ExtrasSectionProps) {
                 />
 
                 {/* Dark Overlay for Better Text Contrast */}
-                <div
-                  class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent
-                         opacity-75 group-hover:opacity-60 transition-opacity"
+                <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/10" />
+                <div 
+                  class="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-300"
                 />
 
                 {/* Play Button */}
@@ -68,10 +68,10 @@ export default function ExtrasSection(props: ExtrasSectionProps) {
                 </div>
 
                 {/* Text Content */}
-                <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black to-transparent">
+                <div class="absolute bottom-0 left-0 right-0 p-6">
                   <h3
-                    class="text-lg font-bold text-white line-clamp-2 mb-2 drop-shadow-lg
-                           group-hover:text-yellow-300 transition-colors"
+                    class="text-lg font-bold text-white line-clamp-2 mb-2 drop-shadow
+                           group-hover:text-white transition-colors"
                   >
                     {extra.title}
                   </h3>
