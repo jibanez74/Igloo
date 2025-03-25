@@ -80,7 +80,7 @@ func main() {
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
-	movies.Get("/", app.validateTokenInHeader, app.getMoviesPaginated)
+	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
 
