@@ -18,7 +18,6 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(false);
   let mobileMenuRef: HTMLDivElement | undefined;
   let menuButtonRef: HTMLButtonElement | undefined;
-  const { isAuthenticated } = authState;
 
   const navigate = useNavigate();
 
@@ -111,7 +110,7 @@ export default function Navbar() {
                 </Link>
 
                 {/* Authenticated Navigation Links */}
-                <Show when={isAuthenticated}>
+                <Show when={authState.isAuthenticated}>
                   <Link
                     to="/movies"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
@@ -158,7 +157,7 @@ export default function Navbar() {
             {/* Right side - Settings, Sign In/Out, and Mobile Menu Button */}
             <div class="flex items-center gap-2">
               <Show
-                when={isAuthenticated}
+                when={authState.isAuthenticated}
                 fallback={
                   <>
                     <Link
@@ -256,7 +255,7 @@ export default function Navbar() {
             </Link>
 
             {/* Authenticated Navigation Links */}
-            <Show when={isAuthenticated}>
+            <Show when={authState.isAuthenticated}>
               <Link
                 to="/movies"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
@@ -322,7 +321,7 @@ export default function Navbar() {
             </Show>
 
             {/* Non-authenticated Navigation Links */}
-            <Show when={!isAuthenticated}>
+            <Show when={!authState.isAuthenticated}>
               <Link
                 to="/login"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
