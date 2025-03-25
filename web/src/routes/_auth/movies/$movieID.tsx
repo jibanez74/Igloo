@@ -130,17 +130,16 @@ function MovieDetailsPage() {
   };
 
   return (
-    <main class="min-h-screen pt-16">
-      {/* Hero Section with Backdrop */}
+ <>      {/* Hero Section with Backdrop */}
       <div class="relative min-h-[90vh] w-full">
         {/* Backdrop Image */}
         <div
           class="absolute inset-0 bg-cover bg-center"
           style={{ "background-image": `url(${getImgSrc(movie.art)})` }}
         >
-          {/* Even lighter overlays */}
-          <div class="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-900/50 to-transparent" />
-          <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent" />
+          {/* Gradient overlays */}
+          <div class="absolute inset-0 bg-gradient-to-r from-blue-950/80 via-blue-950/50 to-transparent" />
+          <div class="absolute inset-0 bg-gradient-to-t from-blue-950/90 via-blue-950/40 to-transparent" />
         </div>
 
         {/* Content */}
@@ -163,13 +162,13 @@ function MovieDetailsPage() {
                 {movie.title}
               </h1>
               {movie.tag_line && (
-                <p class="text-xl text-sky-200 mb-4 italic drop-shadow-xl">
+                <p class="text-xl text-blue-200 mb-4 italic drop-shadow-xl">
                   {movie.tag_line}
                 </p>
               )}
 
               {/* Movie Meta */}
-              <div class="flex flex-wrap gap-4 text-sm text-sky-200 mb-6 drop-shadow-lg bg-slate-900/20 backdrop-blur-sm rounded-lg px-4 py-2">
+              <div class="flex flex-wrap gap-4 text-sm text-blue-200 mb-6 drop-shadow-lg bg-blue-950/20 backdrop-blur-sm rounded-lg px-4 py-2">
                 <div class="flex items-center gap-1">
                   <FiCalendar class="w-4 h-4" aria-hidden="true" />
                   <span>{formatDate(movie.release_date)}</span>
@@ -180,7 +179,7 @@ function MovieDetailsPage() {
                   <span>{formatRuntime(movie.run_time)}</span>
                 </div>
                 {movie.content_rating && (
-                  <span class="px-2 py-0.5 bg-sky-500/20 rounded">
+                  <span class="px-2 py-0.5 bg-yellow-300/20 rounded">
                     {movie.content_rating}
                   </span>
                 )}
@@ -192,38 +191,38 @@ function MovieDetailsPage() {
               <div class="flex gap-6 mb-6">
                 {movie.audience_rating > 0 && (
                   <div class="flex items-center gap-2">
-                    <FiStar class="w-5 h-5 text-sky-400" aria-hidden="true" />
+                    <FiStar class="w-5 h-5 text-yellow-300" aria-hidden="true" />
                     <div>
                       <div class="text-lg font-medium text-white">
                         {movie.audience_rating.toFixed(1)}
                       </div>
-                      <div class="text-xs text-sky-200">Audience Rating</div>
+                      <div class="text-xs text-blue-200">Audience Rating</div>
                     </div>
                   </div>
                 )}
                 {movie.critic_rating > 0 && (
                   <div class="flex items-center gap-2">
-                    <FiAward class="w-5 h-5 text-sky-400" aria-hidden="true" />
+                    <FiAward class="w-5 h-5 text-yellow-300" aria-hidden="true" />
                     <div>
                       <div class="text-lg font-medium text-white">
                         {movie.critic_rating.toFixed(1)}
                       </div>
-                      <div class="text-xs text-sky-200">Critic Rating</div>
+                      <div class="text-xs text-blue-200">Critic Rating</div>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Summary */}
-              <p class="text-sky-200 leading-relaxed mb-8">{movie.summary}</p>
+              <p class="text-blue-200 leading-relaxed mb-8">{movie.summary}</p>
 
               {/* Action Buttons */}
               <div class="flex flex-wrap items-center gap-4 mb-8">
                 <button
                   type="button"
                   onClick={handlePlayMovie}
-                  class="inline-flex items-center gap-2 px-6 py-3 bg-sky-500 hover:bg-sky-400 
-                           text-white font-medium rounded-lg transition-colors"
+                  class="inline-flex items-center gap-2 px-6 py-3 bg-yellow-300 hover:bg-yellow-400 
+                           text-blue-950 font-medium rounded-lg transition-colors"
                 >
                   <FiPlay class="w-5 h-5" aria-hidden="true" />
                   Play
@@ -282,7 +281,7 @@ function MovieDetailsPage() {
               <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
                 {movie.budget > 0 && (
                   <div>
-                    <div class="flex items-center gap-1 text-sky-400 mb-1">
+                    <div class="flex items-center gap-1 text-yellow-300 mb-1">
                       <FiDollarSign class="w-4 h-4" aria-hidden="true" />
                       <span class="text-sm font-medium">Budget</span>
                     </div>
@@ -292,7 +291,7 @@ function MovieDetailsPage() {
 
                 {movie.revenue > 0 && (
                   <div>
-                    <div class="flex items-center gap-1 text-sky-400 mb-1">
+                    <div class="flex items-center gap-1 text-yellow-300 mb-1">
                       <FiDollarSign class="w-4 h-4" aria-hidden="true" />
                       <span class="text-sm font-medium">Revenue</span>
                     </div>
@@ -309,7 +308,7 @@ function MovieDetailsPage() {
 
       {/* Cast & Crew Section */}
       <section class="container mx-auto px-4 py-12">
-        <h2 class="text-2xl font-bold text-white mb-6">Cast & Crew</h2>
+        <h2 class="text-2xl font-bold text-yellow-300 mb-6">Cast & Crew</h2>
         {movie.cast.length > 0 && <CastSection cast={movie.cast} />}
         {movie.crew.length > 0 && <CrewSection crew={movie.crew} />}
       </section>
@@ -333,6 +332,6 @@ function MovieDetailsPage() {
         audioOpts={audioOpts()}
         subtitleOpts={subtitleOpts()}
       />
-    </main>
+    </>
   );
 }
