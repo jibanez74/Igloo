@@ -70,7 +70,7 @@ function UserFormPage() {
   const ctx = Route.useRouteContext();
   const { queryClient } = ctx();
 
-  console.log(update)
+  console.log(update);
 
   const [name, setName] = createSignal(user.name);
   const [username, setUsername] = createSignal(user.username);
@@ -86,13 +86,14 @@ function UserFormPage() {
           name: name(),
           email: email(),
           username: username(),
+          password: password(),
           is_admin: isAdmin(),
           is_active: isActive,
         };
 
-        const res = await fetch(`/api/v1/users/update/${user?.id}`, {
-          method: "put",
-          credentials: "same-origin",
+        const res = await fetch("/api/v1/users/create", {
+          method: "post",
+          // credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
           },
@@ -122,6 +123,7 @@ function UserFormPage() {
         from: Route.fullPath,
       });
     },
+    onError: (err) => alert(err.message),
   }));
 
   const handleSubmit = (e: Event) => {
