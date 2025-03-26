@@ -15,7 +15,7 @@ export default defineConfig({
     open: true,
     proxy: {
       "/api/v1": {
-        target: "https://swifty.hare-crocodile.ts.net/api/v1",
+        target: "     /api/v1",
         changeOrigin: true,
         rewrite: function (path) {
           return path.replace(/^\/api\/v1/, "");

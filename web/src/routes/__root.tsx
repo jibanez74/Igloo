@@ -44,13 +44,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
   const query = createQuery(() => ({
     ...opts,
-    onSuccess: (user: User | null) => {
+    onSuccess: (user: User | null) =>
       setAuthState({
-        user,
         isAuthenticated: !!user,
-      });
-    },
-    staleTime: Infinity,
+        user,
+      }),
     refetchOnWindowFocus: false,
   }));
 
