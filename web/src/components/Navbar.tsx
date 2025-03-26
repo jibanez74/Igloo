@@ -13,7 +13,7 @@ import {
   FiLogIn,
 } from "solid-icons/fi";
 import iglooLogo from "../assets/images/logo-alt.png";
-import { authState } from "../stores/authStore";
+import { authState, setAuthState } from "../stores/authStore";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(false);
@@ -58,6 +58,11 @@ export default function Navbar() {
       });
 
       router.invalidate();
+
+      setAuthState({
+        isAuthenticated: false,
+        user: null,
+      });
 
       router.navigate({
         to: "/login",
