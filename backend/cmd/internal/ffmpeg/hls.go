@@ -13,6 +13,7 @@ import (
 type HlsOpts struct {
 	InputPath        string `json:"input_path"`
 	OutputDir        string `json:"output_dir"`
+	StartTime        int64  `json:"start_time"`
 	AudioStreamIndex int    `json:"audio_stream_index"`
 	AudioCodec       string `json:"audio_codec"`
 	AudioBitRate     int    `json:"audio_bit_rate"`
@@ -89,6 +90,8 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
+		"ss", fmt.Sprintf("%d", opts.StartTime),
+		"-re",
 		"-y",
 		"-i", opts.InputPath,
 		"-sn",

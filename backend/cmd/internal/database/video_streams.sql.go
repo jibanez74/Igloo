@@ -15,6 +15,7 @@ const createVideoStream = `-- name: CreateVideoStream :one
 INSERT INTO video_streams (
     title,
     index,
+    duration,
     profile,
     aspect_ratio,
     bit_rate,
@@ -34,14 +35,15 @@ INSERT INTO video_streams (
     movie_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
-RETURNING id, created_at, updated_at, title, index, profile, aspect_ratio, bit_rate, bit_depth, codec, width, height, coded_width, coded_height, color_transfer, color_primaries, color_space, color_range, frame_rate, avg_frame_rate, level, movie_id
+RETURNING id, created_at, updated_at, title, index, duration, profile, aspect_ratio, bit_rate, bit_depth, codec, width, height, coded_width, coded_height, color_transfer, color_primaries, color_space, color_range, frame_rate, avg_frame_rate, level, movie_id
 `
 
 type CreateVideoStreamParams struct {
 	Title          string      `json:"title"`
 	Index          int32       `json:"index"`
+	Duration       int64       `json:"duration"`
 	Profile        string      `json:"profile"`
 	AspectRatio    string      `json:"aspect_ratio"`
 	BitRate        string      `json:"bit_rate"`
@@ -65,6 +67,7 @@ func (q *Queries) CreateVideoStream(ctx context.Context, arg CreateVideoStreamPa
 	row := q.db.QueryRow(ctx, createVideoStream,
 		arg.Title,
 		arg.Index,
+		arg.Duration,
 		arg.Profile,
 		arg.AspectRatio,
 		arg.BitRate,
@@ -90,6 +93,7 @@ func (q *Queries) CreateVideoStream(ctx context.Context, arg CreateVideoStreamPa
 		&i.UpdatedAt,
 		&i.Title,
 		&i.Index,
+		&i.Duration,
 		&i.Profile,
 		&i.AspectRatio,
 		&i.BitRate,
@@ -112,7 +116,7 @@ func (q *Queries) CreateVideoStream(ctx context.Context, arg CreateVideoStreamPa
 }
 
 const getMovieVideoStreams = `-- name: GetMovieVideoStreams :many
-SELECT id, created_at, updated_at, title, index, profile, aspect_ratio, bit_rate, bit_depth, codec, width, height, coded_width, coded_height, color_transfer, color_primaries, color_space, color_range, frame_rate, avg_frame_rate, level, movie_id FROM video_streams
+SELECT id, created_at, updated_at, title, index, duration, profile, aspect_ratio, bit_rate, bit_depth, codec, width, height, coded_width, coded_height, color_transfer, color_primaries, color_space, color_range, frame_rate, avg_frame_rate, level, movie_id FROM video_streams
 WHERE movie_id = $1
 ORDER BY index
 `
@@ -132,6 +136,7 @@ func (q *Queries) GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4)
 			&i.UpdatedAt,
 			&i.Title,
 			&i.Index,
+			&i.Duration,
 			&i.Profile,
 			&i.AspectRatio,
 			&i.BitRate,

@@ -160,6 +160,7 @@ CREATE TABLE video_streams (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     title VARCHAR(255) NOT NULL,
     index INTEGER NOT NULL,
+    duration BIGINT NOT NULL,
     profile VARCHAR(20) NOT NULL,
     aspect_ratio VARCHAR(50) NOT NULL,
     bit_rate VARCHAR(60) NOT NULL,

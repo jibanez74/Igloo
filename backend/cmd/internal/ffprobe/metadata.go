@@ -3,6 +3,7 @@ package ffprobe
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
 	"strconv"
@@ -35,7 +36,6 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		return nil, errors.New("no streams found")
 	}
 
-	// Use maps to store unique streams
 	videoStreams := make(map[int]database.CreateVideoStreamParams)
 	audioStreams := make(map[int]database.CreateAudioStreamParams)
 	subtitleStreams := make(map[int]database.CreateSubtitleParams)
@@ -129,6 +129,13 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 	if len(result.VideoList) == 0 {
 		return nil, errors.New("no video streams found")
 	}
+
+	duration, err := strconv.Atoi(probeResult.Format.Duration)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert duration to int: %w", err)
+	}
+
+	result.VideoList[0].Duration = int64(duration)
 
 	return result, nil
 }

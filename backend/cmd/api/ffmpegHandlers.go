@@ -32,6 +32,10 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 		})
 	}
 
+	if req.StartTime < 0 {
+		req.StartTime = 0
+	}
+
 	req.InputPath = movie.FilePath
 	req.OutputDir = fmt.Sprintf("%s/movies/%d", app.settings.TranscodeDir, movie.ID)
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
