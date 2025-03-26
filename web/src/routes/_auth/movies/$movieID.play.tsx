@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/solid-router";
+import { onCleanup } from "solid-js";
 import HlsPlayer from "../../../components/HlsPlayer";
 
 type SearchParams = {
@@ -21,13 +22,30 @@ export const Route = createFileRoute("/_auth/movies/$movieID/play")({
 
 function PlayMoviePage() {
   const search = Route.useSearch();
-  const { m3u8Url, pid, title, thumb } = search();
 
-  console.log(`your pid is ${pid}`);
+  onCleanup(async () => {
+    try {
+      const res = await fetch(`/api/v1/ffmpeg/cancel-job/${search().pid}`, {
+        method: "post",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        console.error("Failed to cancel FFmpeg job:", await res.json());
+      }
+    } catch (err) {
+      console.error("Error canceling FFmpeg job:", err);
+    }
+  });
+
 
   return (
     <section>
-      <HlsPlayer src={m3u8Url} poster={thumb} title={title} />
+      <HlsPlayer
+        src={search().m3u8Url}
+        poster={search().thumb}
+        title={search().title}
+      />
     </section>
   );
 }
