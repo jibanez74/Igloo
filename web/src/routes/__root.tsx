@@ -1,5 +1,5 @@
 import { createRootRouteWithContext, Outlet } from "@tanstack/solid-router";
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { Show } from "solid-js";
 import { setAuthState } from "../stores/authStore";
 import Navbar from "../components/Navbar";
@@ -11,30 +11,39 @@ type RouterContext = {
   queryClient: QueryClient;
 };
 
+const opts = queryOptions({
+  queryKey: ["auth"],
+  queryFn: async (): Promise<User | null> => {
+    try {
+      const res = await fetch("/api/v1/auth/me", {
+        credentials: "same-origin",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return data.user;
+      }
+
+      return null;
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  },
+  refetchOnWindowFocus: false,
+  staleTime: Infinity,
+});
+
 export const Route = createRootRouteWithContext<RouterContext>()({
+  loader: ({ context }) => {
+    context.queryClient.ensureQueryData(opts);
+  },
   component: RootLayout,
 });
 
 function RootLayout() {
   const query = createQuery(() => ({
-    queryKey: ["auth"],
-    queryFn: async (): Promise<User | null> => {
-      try {
-        const res = await fetch("/api/v1/auth/me", {
-          credentials: "same-origin",
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          return data.user;
-        }
-
-        return null;
-      } catch (err) {
-        console.error(err);
-        return null;
-      }
-    },
+    ...opts,
     onSuccess: (user: User | null) => {
       setAuthState({
         user,
