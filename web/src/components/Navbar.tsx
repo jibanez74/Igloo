@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { Link, useNavigate } from "@tanstack/solid-router";
+import { Link, useRouter } from "@tanstack/solid-router";
+import { useQueryClient } from "@tanstack/solid-query";
 import {
   FiHome,
   FiFilm,
@@ -12,14 +13,16 @@ import {
   FiLogIn,
 } from "solid-icons/fi";
 import iglooLogo from "../assets/images/logo-alt.png";
-import { authState, setAuthState } from "../stores/authStore";
+import { authState } from "../stores/authStore";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(false);
   let mobileMenuRef: HTMLDivElement | undefined;
   let menuButtonRef: HTMLButtonElement | undefined;
 
-  const navigate = useNavigate();
+  const router = useRouter();
+
+  const queryClient = useQueryClient();
 
   onMount(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,12 +53,13 @@ export default function Navbar() {
         credentials: "include",
       });
 
-      setAuthState({
-        user: null,
-        isAuthenticated: false,
+      queryClient.invalidateQueries({
+        queryKey: ["auth"],
       });
 
-      navigate({
+      router.invalidate();
+
+      router.navigate({
         to: "/login",
         replace: true,
       });
@@ -84,7 +88,7 @@ export default function Navbar() {
                 to="/"
                 class="flex items-center gap-2 text-white hover:text-yellow-300 transition-colors"
                 activeProps={{
-                  class: "text-yellow-300"
+                  class: "text-yellow-300",
                 }}
               >
                 <img src={iglooLogo} alt="Igloo" class="h-8 w-auto" />
@@ -100,7 +104,7 @@ export default function Navbar() {
                   to="/"
                   class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                   activeProps={{
-                    class: "text-yellow-300 bg-blue-800/50"
+                    class: "text-yellow-300 bg-blue-800/50",
                   }}
                 >
                   <FiHome class="w-4 h-4" aria-hidden={true} />
@@ -114,7 +118,7 @@ export default function Navbar() {
                     to="/movies"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                     activeProps={{
-                      class: "text-yellow-300 bg-blue-800/50"
+                      class: "text-yellow-300 bg-blue-800/50",
                     }}
                     search={{
                       limit: 24,
@@ -130,7 +134,7 @@ export default function Navbar() {
                     to="/tvshows"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                     activeProps={{
-                      class: "text-yellow-300 bg-blue-800/50"
+                      class: "text-yellow-300 bg-blue-800/50",
                     }}
                   >
                     <FiTv class="w-4 h-4" aria-hidden={true} />
@@ -142,7 +146,7 @@ export default function Navbar() {
                     to="/music"
                     class="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2 relative group"
                     activeProps={{
-                      class: "text-yellow-300 bg-blue-800/50"
+                      class: "text-yellow-300 bg-blue-800/50",
                     }}
                   >
                     <FiMusic class="w-4 h-4" aria-hidden={true} />
@@ -163,7 +167,7 @@ export default function Navbar() {
                       to="/login"
                       class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
                       activeProps={{
-                        class: "text-yellow-300 bg-blue-800/50"
+                        class: "text-yellow-300 bg-blue-800/50",
                       }}
                     >
                       <FiLogIn aria-hidden={true} /> Sign In
@@ -194,7 +198,7 @@ export default function Navbar() {
                     to="/settings"
                     class="text-white hover:text-yellow-300 px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800/50 transition-opacity duration-300 ease-in-out flex items-center gap-2"
                     activeProps={{
-                      class: "text-yellow-300 bg-blue-800/50"
+                      class: "text-yellow-300 bg-blue-800/50",
                     }}
                   >
                     <FiSettings aria-hidden={true} /> Settings
@@ -245,7 +249,7 @@ export default function Navbar() {
               to="/"
               class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
               activeProps={{
-                class: "text-yellow-300 bg-blue-800/50"
+                class: "text-yellow-300 bg-blue-800/50",
               }}
               onClick={() => setIsMobileMenuOpen(false)}
             >
@@ -259,7 +263,7 @@ export default function Navbar() {
                 to="/movies"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 activeProps={{
-                  class: "text-yellow-300 bg-blue-800/50"
+                  class: "text-yellow-300 bg-blue-800/50",
                 }}
                 onClick={() => setIsMobileMenuOpen(false)}
                 search={{
@@ -275,7 +279,7 @@ export default function Navbar() {
                 to="/tvshows"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 activeProps={{
-                  class: "text-yellow-300 bg-blue-800/50"
+                  class: "text-yellow-300 bg-blue-800/50",
                 }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -287,7 +291,7 @@ export default function Navbar() {
                 to="/music"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 activeProps={{
-                  class: "text-yellow-300 bg-blue-800/50"
+                  class: "text-yellow-300 bg-blue-800/50",
                 }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -299,7 +303,7 @@ export default function Navbar() {
                 to="/settings"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 activeProps={{
-                  class: "text-yellow-300 bg-blue-800/50"
+                  class: "text-yellow-300 bg-blue-800/50",
                 }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -325,7 +329,7 @@ export default function Navbar() {
                 to="/login"
                 class="px-3 py-2 rounded-md text-base font-medium text-white hover:text-yellow-300 hover:bg-blue-800/50 transition-colors flex items-center gap-3"
                 activeProps={{
-                  class: "text-yellow-300 bg-blue-800/50"
+                  class: "text-yellow-300 bg-blue-800/50",
                 }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >

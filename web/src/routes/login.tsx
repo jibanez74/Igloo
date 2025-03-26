@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { useRouter, redirect, createFileRoute } from "@tanstack/solid-router";
 import { FiUser, FiMail, FiLock } from "solid-icons/fi";
 import ErrorWarning from "../components/ErrorWarning";
-import { authState, setAuthState } from "../stores/authStore";
+import { authState } from "../stores/authStore";
 
 type SearchParams = {
   redirect?: string;
@@ -35,6 +35,8 @@ function LoginPage() {
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
   const router = useRouter();
+  const ctx = Route.useRouteContext();
+  const queryClient = ctx().queryClient;
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -64,12 +66,11 @@ function LoginPage() {
         return;
       }
 
-      setAuthState({
-        user: data.user,
-        isAuthenticated: true,
+      queryClient.invalidateQueries({
+        queryKey: ["auth"],
       });
 
-      router.invalidate()
+      router.invalidate();
 
       navigate({
         to: search().redirect,
