@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_auth/movies/$movieID")({
   loader: async ({ params }): Promise<MovieDetailsResponse> => {
     try {
       const res = await fetch(`/api/v1/movies/${params.movieID}`, {
-        credentials: "same-origin",
+        credentials: "include",
       });
 
       const data = await res.json();
@@ -99,7 +99,7 @@ function MovieDetailsPage() {
 
       const res = await fetch(`/api/v1/ffmpeg/create-hls-movie/${movie.id}`, {
         method: "post",
-        credentials: "same-origin",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -130,7 +130,9 @@ function MovieDetailsPage() {
   };
 
   return (
- <>      {/* Hero Section with Backdrop */}
+    <>
+      {" "}
+      {/* Hero Section with Backdrop */}
       <div class="relative min-h-[90vh] w-full">
         {/* Backdrop Image */}
         <div
@@ -191,7 +193,10 @@ function MovieDetailsPage() {
               <div class="flex gap-6 mb-6">
                 {movie.audience_rating > 0 && (
                   <div class="flex items-center gap-2">
-                    <FiStar class="w-5 h-5 text-yellow-300" aria-hidden="true" />
+                    <FiStar
+                      class="w-5 h-5 text-yellow-300"
+                      aria-hidden="true"
+                    />
                     <div>
                       <div class="text-lg font-medium text-white">
                         {movie.audience_rating.toFixed(1)}
@@ -202,7 +207,10 @@ function MovieDetailsPage() {
                 )}
                 {movie.critic_rating > 0 && (
                   <div class="flex items-center gap-2">
-                    <FiAward class="w-5 h-5 text-yellow-300" aria-hidden="true" />
+                    <FiAward
+                      class="w-5 h-5 text-yellow-300"
+                      aria-hidden="true"
+                    />
                     <div>
                       <div class="text-lg font-medium text-white">
                         {movie.critic_rating.toFixed(1)}
@@ -305,27 +313,23 @@ function MovieDetailsPage() {
           </div>
         </div>
       </div>
-
       {/* Cast & Crew Section */}
       <section class="container mx-auto px-4 py-12">
         <h2 class="text-2xl font-bold text-yellow-300 mb-6">Cast & Crew</h2>
         {movie.cast.length > 0 && <CastSection cast={movie.cast} />}
         {movie.crew.length > 0 && <CrewSection crew={movie.crew} />}
       </section>
-
       {/* Extras Section */}
       <ExtrasSection
         extras={movie.extras}
         onSelectVideo={(url) => setSelectedVideo(url)}
       />
-
       {/* YouTube Modal */}
       <YoutubeModal
         isOpen={!!selectedVideo()}
         onClose={() => setSelectedVideo(null)}
         videoUrl={selectedVideo()}
       />
-
       <PlaybackSettingsModal
         isOpen={isPlaybackModalOpen()}
         onClose={() => setIsPlaybackModalOpen(false)}

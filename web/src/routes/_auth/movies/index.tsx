@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_auth/movies/")({
       const res = await fetch(
         `/api/v1/movies?page=${deps.page}&limit=${deps.limit}`,
         {
-          credentials: "same-origin",
+          credentials: "include",
         }
       );
 

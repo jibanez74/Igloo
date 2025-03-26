@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { redirect, createFileRoute } from "@tanstack/solid-router";
+import { useRouter, redirect, createFileRoute } from "@tanstack/solid-router";
 import { FiUser, FiMail, FiLock } from "solid-icons/fi";
 import ErrorWarning from "../components/ErrorWarning";
 import { authState, setAuthState } from "../stores/authStore";
@@ -34,6 +34,7 @@ function LoginPage() {
 
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
+  const router = useRouter();
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -47,7 +48,7 @@ function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "same-origin",
+        credentials: "include",
         body: JSON.stringify({
           username: username(),
           email: email(),
@@ -67,6 +68,8 @@ function LoginPage() {
         user: data.user,
         isAuthenticated: true,
       });
+
+      router.invalidate()
 
       navigate({
         to: search().redirect,
