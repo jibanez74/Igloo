@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
-	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -40,7 +39,6 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
-		log.Printf("your error is %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
