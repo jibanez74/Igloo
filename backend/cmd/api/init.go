@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -190,7 +190,7 @@ func (app *application) initSettings() error {
 
 		s.Secret = os.Getenv("SECRET")
 		if s.Secret == "" {
-			s.Secret = fmt.Sprintf("secret_igloo_%d", time.Now().UnixNano())
+			s.Secret = uuid.NewString()
 		}
 
 		err = app.initDirs(&s)
@@ -198,12 +198,16 @@ func (app *application) initSettings() error {
 			return err
 		}
 
+		enableTranscoding, err := strconv.ParseBool(os.Getenv("ENABLE_TRANSCODING"))
+		if err != nil {
+			enableTranscoding = false
+		}
+		s.EnableHardwareAcceleration = enableTranscoding
+
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
-		s.HardwareAcceleration = os.Getenv("HARDWARE_ACCELERATION")
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")
 		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
 		s.JellyfinToken = os.Getenv("JELLYFIN_TOKEN")
-		s.EnableTranscoding = true
 
 		settings, err = app.queries.CreateSettings(context.Background(), s)
 		if err != nil {
