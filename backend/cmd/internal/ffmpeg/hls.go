@@ -13,7 +13,6 @@ import (
 type HlsOpts struct {
 	InputPath        string `json:"input_path"`
 	OutputDir        string `json:"output_dir"`
-	Duration         int64  `json:"duration"`
 	StartTime        int64  `json:"start_time"`
 	AudioStreamIndex int    `json:"audio_stream_index"`
 	AudioCodec       string `json:"audio_codec"`
@@ -37,12 +36,27 @@ const (
 	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"
 	DefaultInitFileName   = "init.mp4"
+
+	// HLS playlist tags
+	HlsTagExtM3U              = "#EXTM3U"
+	HlsTagVersion             = "#EXT-X-VERSION:7"
+	HlsTagTargetDuration      = "#EXT-X-TARGETDURATION:%s"
+	HlsTagMediaSequence       = "#EXT-X-MEDIA-SEQUENCE:0"
+	HlsTagPlaylistType        = "#EXT-X-PLAYLIST-TYPE:%s"
+	HlsTagIndependentSegments = "#EXT-X-INDEPENDENT-SEGMENTS"
+	HlsTagProgramDateTime     = "#EXT-X-PROGRAM-DATE-TIME:2024-01-01T00:00:00Z"
+	HlsTagMap                 = "#EXT-X-MAP:URI=\"%s\",BANDWIDTH=0"
 )
 
 func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	err := f.validateHlsOpts(opts)
 	if err != nil {
 		return "", err
+	}
+
+	err = f.createVodPlaylist(opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to create VOD playlist: %w", err)
 	}
 
 	cmd := f.prepareHlsCmd(opts)
@@ -89,23 +103,58 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	return nil
 }
 
-func (f *ffmpeg) generatePlaylist(opts *HlsOpts) error {
+func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
 
-	// Create initial playlist structure that ffmpeg will update
-	playlist := fmt.Sprintf(`#EXTM3U
-#EXT-X-VERSION:7
-#EXT-X-TARGETDURATION:%s
-#EXT-X-MEDIA-SEQUENCE:0
-#EXT-X-PLAYLIST-TYPE:%s
-#EXT-X-INDEPENDENT-SEGMENTS
-#EXT-X-PROGRAM-DATE-TIME:2024-01-01T00:00:00Z
-#EXT-X-MAP:URI="%s",BANDWIDTH=0
-`, DefaultHlsTime, DefaultPlaylistType, DefaultInitFileName)
-
-	err := os.WriteFile(playlistPath, []byte(playlist), 0644)
+	err := os.MkdirAll(opts.OutputDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to write playlist file: %w", err)
+		return fmt.Errorf("failed to create output directory for playlist: %w", err)
+	}
+
+	file, err := os.Create(playlistPath)
+	if err != nil {
+		return fmt.Errorf("failed to create playlist file at %s: %w", playlistPath, err)
+	}
+	defer file.Close()
+
+	_, err = fmt.Fprintf(file, "%s\n", HlsTagExtM3U)
+	if err != nil {
+		return fmt.Errorf("failed to write EXTM3U tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, "%s\n", HlsTagVersion)
+	if err != nil {
+		return fmt.Errorf("failed to write version tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, HlsTagTargetDuration+"\n", DefaultHlsTime)
+	if err != nil {
+		return fmt.Errorf("failed to write target duration tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, "%s\n", HlsTagMediaSequence)
+	if err != nil {
+		return fmt.Errorf("failed to write media sequence tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, HlsTagPlaylistType+"\n", DefaultPlaylistType)
+	if err != nil {
+		return fmt.Errorf("failed to write playlist type tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, "%s\n", HlsTagIndependentSegments)
+	if err != nil {
+		return fmt.Errorf("failed to write independent segments tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, "%s\n", HlsTagProgramDateTime)
+	if err != nil {
+		return fmt.Errorf("failed to write program date time tag: %w", err)
+	}
+
+	_, err = fmt.Fprintf(file, HlsTagMap+"\n", DefaultInitFileName)
+	if err != nil {
+		return fmt.Errorf("failed to write map tag: %w", err)
 	}
 
 	return nil
@@ -115,6 +164,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
 		"ss", fmt.Sprintf("%d", opts.StartTime),
 		"-re",
+		"-fflags", "+genpts+igndts+ignidx+discardcorrupt+fastseek",
 		"-y",
 		"-i", opts.InputPath,
 		"-sn",
