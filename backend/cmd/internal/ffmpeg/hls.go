@@ -182,17 +182,26 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
+	fmt.Printf("Preparing ffmpeg command with input: %s\n", opts.InputPath)
+
 	cmdArgs := []string{
+		"-y", // Force overwrite output files
 		"-i", opts.InputPath,
-		"-re",
+		"-re", // Read input at native frame rate
 		"-fflags", "+genpts+igndts+ignidx+discardcorrupt+fastseek",
-		"-sn",
+		"-sn", // Disable subtitles
+	}
+
+	if opts.StartTime > 0 {
+		cmdArgs = append([]string{"-ss", fmt.Sprintf("%d", opts.StartTime)}, cmdArgs...)
 	}
 
 	if opts.VideoCodec == "copy" && opts.AudioCodec == "copy" {
 		cmdArgs = append(cmdArgs, "-c", "copy")
+		fmt.Printf("Using copy mode for both video and audio\n")
 	} else {
 		cmdArgs = append(cmdArgs, "-c:a", opts.AudioCodec)
+		fmt.Printf("Using audio codec: %s\n", opts.AudioCodec)
 
 		if opts.AudioCodec != "copy" {
 			cmdArgs = append(cmdArgs,
@@ -200,10 +209,13 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				"-ac", fmt.Sprintf("%d", opts.AudioChannels),
 				"-map", fmt.Sprintf("0:%d", opts.AudioStreamIndex),
 			)
+			fmt.Printf("Audio settings: bitrate=%dk, channels=%d, stream=%d\n",
+				opts.AudioBitRate, opts.AudioChannels, opts.AudioStreamIndex)
 		}
 
 		if opts.VideoCodec == "copy" {
 			cmdArgs = append(cmdArgs, "-c:v", opts.VideoCodec)
+			fmt.Printf("Using video codec: copy\n")
 		} else {
 			var videoCodec string
 
@@ -223,14 +235,15 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 				"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
 				"-preset", opts.Preset,
-				// "-g", "120",
-				// "-keyint_min", "120",
-				// "-force_key_frames", "expr:gte(t,n_forced*2)",
 				"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
 			)
 
+			fmt.Printf("Video settings: codec=%s, bitrate=%dk, height=%d, preset=%s, stream=%d\n",
+				videoCodec, opts.VideoBitrate, opts.VideoHeight, opts.Preset, opts.VideoStreamIndex)
+
 			if opts.VideoProfile != "" {
 				cmdArgs = append(cmdArgs, "-profile:v", opts.VideoProfile)
+				fmt.Printf("Video profile: %s\n", opts.VideoProfile)
 			}
 		}
 	}
@@ -246,6 +259,10 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_base_url", opts.SegmentsUrl+"/",
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
+
+	fmt.Printf("Output directory: %s\n", opts.OutputDir)
+	fmt.Printf("Segments URL: %s\n", opts.SegmentsUrl)
+	fmt.Printf("Full ffmpeg command: %s %v\n", f.Bin, cmdArgs)
 
 	return exec.Command(f.Bin, cmdArgs...)
 }
