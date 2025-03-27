@@ -35,6 +35,7 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.InputPath = movie.FilePath
 	req.OutputDir = fmt.Sprintf("%s/movies/%d", app.settings.TranscodeDir, movie.ID)
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
+	req.StartTime = 0
 
 	fmt.Printf("Starting HLS stream creation for movie %d\n", movie.ID)
 	fmt.Printf("Input path: %s\n", req.InputPath)
