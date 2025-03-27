@@ -186,15 +186,18 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 
 	cmdArgs := []string{
 		"-y", // Force overwrite output files
-		"-i", opts.InputPath,
-		"-re", // Read input at native frame rate
-		"-fflags", "+genpts+igndts+ignidx+discardcorrupt+fastseek",
-		"-sn", // Disable subtitles
 	}
 
+	// Input options must come before the input file
 	if opts.StartTime > 0 {
-		cmdArgs = append([]string{"-ss", fmt.Sprintf("%d", opts.StartTime)}, cmdArgs...)
+		cmdArgs = append(cmdArgs, "-ss", fmt.Sprintf("%d", opts.StartTime))
 	}
+	cmdArgs = append(cmdArgs,
+		"-re", // Read input at native frame rate
+		"-fflags", "+genpts+igndts+ignidx+discardcorrupt+fastseek",
+		"-i", opts.InputPath,
+		"-sn", // Disable subtitles
+	)
 
 	if opts.VideoCodec == "copy" && opts.AudioCodec == "copy" {
 		cmdArgs = append(cmdArgs, "-c", "copy")
