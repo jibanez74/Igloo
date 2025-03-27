@@ -60,14 +60,16 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	err = cmd.Start()
-	if err != nil {
-		return "", fmt.Errorf("failed to start ffmpeg command: %w", err)
-	}
-
+	// Create stderr pipe BEFORE starting the command
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the command after creating the pipe
+	err = cmd.Start()
+	if err != nil {
+		return "", fmt.Errorf("failed to start ffmpeg command: %w", err)
 	}
 
 	// create a go routine to read the stderr
@@ -83,7 +85,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 			}
 			fmt.Printf("ffmpeg stderr: %s", string(buf[:n]))
 		}
-
 		stderr.Close()
 	}()
 
@@ -100,6 +101,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	go func() {
 		err = cmd.Wait()
 		if err != nil {
+			fmt.Printf("ffmpeg process error: %v\n", err)
 			f.mu.Lock()
 			delete(f.jobs, pid)
 			f.mu.Unlock()
