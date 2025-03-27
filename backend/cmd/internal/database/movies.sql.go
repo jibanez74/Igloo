@@ -469,7 +469,7 @@ type GetMovieForHlsRow struct {
 	ContentType string      `json:"content_type"`
 	Container   string      `json:"container"`
 	Size        int64       `json:"size"`
-	Duration    pgtype.Int8 `json:"duration"`
+	Duration    pgtype.Text `json:"duration"`
 	Codec       pgtype.Text `json:"codec"`
 	Profile     pgtype.Text `json:"profile"`
 	Width       pgtype.Int4 `json:"width"`

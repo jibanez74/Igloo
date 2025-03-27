@@ -13,6 +13,7 @@ import (
 type HlsOpts struct {
 	InputPath        string `json:"input_path"`
 	OutputDir        string `json:"output_dir"`
+	Duration         int64  `json:"duration"`
 	StartTime        int64  `json:"start_time"`
 	AudioStreamIndex int    `json:"audio_stream_index"`
 	AudioCodec       string `json:"audio_codec"`
@@ -84,6 +85,28 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	validateAudioSettings(opts)
 
 	validateVideoSettings(opts, f.AccelMethod)
+
+	return nil
+}
+
+func (f *ffmpeg) generatePlaylist(opts *HlsOpts) error {
+	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
+
+	// Create initial playlist structure that ffmpeg will update
+	playlist := fmt.Sprintf(`#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:%s
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:%s
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXT-X-PROGRAM-DATE-TIME:2024-01-01T00:00:00Z
+#EXT-X-MAP:URI="%s",BANDWIDTH=0
+`, DefaultHlsTime, DefaultPlaylistType, DefaultInitFileName)
+
+	err := os.WriteFile(playlistPath, []byte(playlist), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write playlist file: %w", err)
+	}
 
 	return nil
 }

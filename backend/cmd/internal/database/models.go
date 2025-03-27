@@ -169,7 +169,7 @@ type VideoStream struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	Title          string             `json:"title"`
 	Index          int32              `json:"index"`
-	Duration       int64              `json:"duration"`
+	Duration       string             `json:"duration"`
 	Profile        string             `json:"profile"`
 	AspectRatio    string             `json:"aspect_ratio"`
 	BitRate        string             `json:"bit_rate"`

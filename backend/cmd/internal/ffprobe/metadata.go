@@ -3,7 +3,6 @@ package ffprobe
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
 	"strconv"
@@ -130,13 +129,11 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		return nil, errors.New("no video streams found")
 	}
 
-	duration, err := strconv.ParseFloat(probeResult.Format.Duration, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert duration to float: %w", err)
+	if probeResult.Format.Duration != "" {
+		result.VideoList[0].Duration = probeResult.Format.Duration
+	} else {
+		result.VideoList[0].Duration = "0"
 	}
-
-	// Round to nearest second
-	result.VideoList[0].Duration = int64(duration + 0.5)
 
 	return result, nil
 }
