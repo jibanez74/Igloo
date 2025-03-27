@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
-	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,8 +36,6 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.OutputDir = fmt.Sprintf("%s/movies/%d", app.settings.TranscodeDir, movie.ID)
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
 	req.StartTime = 0
-
-	log.Printf("your movie file path is %s", req.InputPath)
 
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
