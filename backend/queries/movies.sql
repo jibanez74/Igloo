@@ -16,8 +16,24 @@ ORDER BY created_at DESC
 LIMIT 12;
 
 -- name: GetMovieForHls :one
-SELECT id, file_path, content_type, container, size FROM movies
-WHERE id = $1;
+SELECT 
+    m.id,
+    m.file_path,
+    m.content_type,
+    m.container,
+    m.size,
+    vs.duration,
+    vs.codec,
+    vs.profile,
+    vs.width,
+    vs.height,
+    vs.frame_rate,
+    vs.bit_rate
+FROM movies m
+LEFT JOIN video_streams vs ON vs.movie_id = m.id
+WHERE m.id = $1
+ORDER BY vs.index ASC
+LIMIT 1;
 
 -- name: GetMoviesPaginated :many
 SELECT 
