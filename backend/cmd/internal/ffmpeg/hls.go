@@ -183,11 +183,9 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := []string{
-		"ss", fmt.Sprintf("%d", opts.StartTime),
+		"-i", opts.InputPath,
 		"-re",
 		"-fflags", "+genpts+igndts+ignidx+discardcorrupt+fastseek",
-		"-y",
-		"-i", opts.InputPath,
 		"-sn",
 	}
 
