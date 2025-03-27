@@ -49,36 +49,45 @@ const (
 )
 
 func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
+	fmt.Printf("Validating HLS options...\n")
 	err := f.validateHlsOpts(opts)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("validation failed: %w", err)
 	}
 
+	fmt.Printf("Creating VOD playlist...\n")
 	err = f.createVodPlaylist(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create VOD playlist: %w", err)
 	}
 
+	fmt.Printf("Preparing ffmpeg command...\n")
 	cmd := f.prepareHlsCmd(opts)
+	if cmd == nil {
+		return "", fmt.Errorf("failed to prepare ffmpeg command")
+	}
 
 	pid := uuid.NewString()
+	fmt.Printf("Generated PID: %s\n", pid)
 
 	f.mu.Lock()
-
 	f.jobs[pid] = job{
 		process:   cmd,
 		startTime: time.Now(),
 		status:    "running",
 	}
-
 	f.mu.Unlock()
 
+	fmt.Printf("Starting ffmpeg process...\n")
 	go func() {
 		err = cmd.Run()
 		if err != nil {
+			fmt.Printf("Error running ffmpeg process: %v\n", err)
 			f.mu.Lock()
 			delete(f.jobs, pid)
 			f.mu.Unlock()
+		} else {
+			fmt.Printf("ffmpeg process completed successfully\n")
 		}
 	}()
 
@@ -161,6 +170,7 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
+	fmt.Printf("Building ffmpeg command arguments...\n")
 	cmdArgs := []string{
 		"ss", fmt.Sprintf("%d", opts.StartTime),
 		"-re",
@@ -228,5 +238,6 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
+	fmt.Printf("ffmpeg command: %s %v\n", f.Bin, cmdArgs)
 	return exec.Command(f.Bin, cmdArgs...)
 }
