@@ -28,16 +28,14 @@ type HlsOpts struct {
 }
 
 const (
-	DefaultHlsTime        = "6"
-	DefaultHlsListSize    = "0"
-	DefaultSegmentType    = "fmp4"
-	DefaultHlsFlags       = "independent_segments+program_date_time+append_list+discont_start"
-	DefaultPlaylistType   = "vod"
-	DefaultSegmentPattern = "segment_%d.m4s"
-	DefaultPlaylistName   = "playlist.m3u8"
-	DefaultInitFileName   = "init.mp4"
-
-	// HLS playlist tags
+	DefaultHlsTime            = "6"
+	DefaultHlsListSize        = "0"
+	DefaultSegmentType        = "fmp4"
+	DefaultHlsFlags           = "independent_segments+program_date_time+append_list+discont_start"
+	DefaultPlaylistType       = "vod"
+	DefaultSegmentPattern     = "segment_%d.m4s"
+	DefaultPlaylistName       = "playlist.m3u8"
+	DefaultInitFileName       = "init.mp4"
 	HlsTagExtM3U              = "#EXTM3U"
 	HlsTagVersion             = "#EXT-X-VERSION:7"
 	HlsTagTargetDuration      = "#EXT-X-TARGETDURATION:%s"
@@ -49,37 +47,24 @@ const (
 )
 
 func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
-	fmt.Printf("Validating HLS options...\n")
 	err := f.validateHlsOpts(opts)
 	if err != nil {
 		return "", fmt.Errorf("validation failed: %w", err)
 	}
 
-	fmt.Printf("Creating VOD playlist...\n")
 	err = f.createVodPlaylist(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create VOD playlist: %w", err)
 	}
 
-	fmt.Printf("Preparing ffmpeg command...\n")
 	cmd := f.prepareHlsCmd(opts)
-	if cmd == nil {
-		return "", fmt.Errorf("failed to prepare ffmpeg command")
-	}
 
-	// Create a pipe for stderr
-	stderr, err := cmd.StderrPipe()
+	err = cmd.Start()
 	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("failed to start ffmpeg command: %w", err)
 	}
 
 	pid := uuid.NewString()
-	fmt.Printf("Generated PID: %s\n", pid)
 
 	f.mu.Lock()
 	f.jobs[pid] = job{
@@ -89,31 +74,12 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	}
 	f.mu.Unlock()
 
-	fmt.Printf("Starting ffmpeg process...\n")
 	go func() {
-		// Read stderr in a separate goroutine
-		go func() {
-			buf := make([]byte, 1024)
-			for {
-				n, err := stderr.Read(buf)
-				if n > 0 {
-					fmt.Printf("ffmpeg stderr: %s", string(buf[:n]))
-				}
-				if err != nil {
-					break
-				}
-			}
-		}()
-
-		// Wait for the command to finish
 		err = cmd.Wait()
 		if err != nil {
-			fmt.Printf("Error running ffmpeg process: %v\n", err)
 			f.mu.Lock()
 			delete(f.jobs, pid)
 			f.mu.Unlock()
-		} else {
-			fmt.Printf("ffmpeg process completed successfully\n")
 		}
 	}()
 
@@ -123,7 +89,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	_, err := os.Stat(opts.InputPath)
 	if err != nil {
-		return fmt.Errorf("input path error: %w", err)
+		return fmt.Errorf("unable to locate input file: %w", err)
 	}
 
 	err = os.MkdirAll(opts.OutputDir, 0755)
@@ -140,11 +106,6 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 
 func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
-
-	err := os.MkdirAll(opts.OutputDir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create output directory for playlist: %w", err)
-	}
 
 	file, err := os.Create(playlistPath)
 	if err != nil {
@@ -196,7 +157,6 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
-	fmt.Printf("Building ffmpeg command arguments...\n")
 	cmdArgs := []string{
 		"ss", fmt.Sprintf("%d", opts.StartTime),
 		"-re",
@@ -240,9 +200,9 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 				"-vf", fmt.Sprintf("scale=-2:%d", opts.VideoHeight),
 				"-preset", opts.Preset,
-				"-g", "120",
-				"-keyint_min", "120",
-				"-force_key_frames", "expr:gte(t,n_forced*2)",
+				// "-g", "120",
+				// "-keyint_min", "120",
+				// "-force_key_frames", "expr:gte(t,n_forced*2)",
 				"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
 			)
 
@@ -264,6 +224,5 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
-	fmt.Printf("ffmpeg command: %s %v\n", f.Bin, cmdArgs)
 	return exec.Command(f.Bin, cmdArgs...)
 }

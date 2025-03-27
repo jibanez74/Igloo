@@ -443,39 +443,16 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 }
 
 const getMovieForHls = `-- name: GetMovieForHls :one
-SELECT 
-    m.id,
-    m.file_path,
-    m.content_type,
-    m.container,
-    m.size,
-    vs.duration,
-    vs.codec,
-    vs.profile,
-    vs.width,
-    vs.height,
-    vs.frame_rate,
-    vs.bit_rate
-FROM movies m
-LEFT JOIN video_streams vs ON vs.movie_id = m.id
-WHERE m.id = $1
-ORDER BY vs.index ASC
-LIMIT 1
+SELECT id, file_path, file_name, size, container, content_type FROM movies WHERE id = $1
 `
 
 type GetMovieForHlsRow struct {
-	ID          int32       `json:"id"`
-	FilePath    string      `json:"file_path"`
-	ContentType string      `json:"content_type"`
-	Container   string      `json:"container"`
-	Size        int64       `json:"size"`
-	Duration    pgtype.Text `json:"duration"`
-	Codec       pgtype.Text `json:"codec"`
-	Profile     pgtype.Text `json:"profile"`
-	Width       pgtype.Int4 `json:"width"`
-	Height      pgtype.Int4 `json:"height"`
-	FrameRate   pgtype.Text `json:"frame_rate"`
-	BitRate     pgtype.Text `json:"bit_rate"`
+	ID          int32  `json:"id"`
+	FilePath    string `json:"file_path"`
+	FileName    string `json:"file_name"`
+	Size        int64  `json:"size"`
+	Container   string `json:"container"`
+	ContentType string `json:"content_type"`
 }
 
 func (q *Queries) GetMovieForHls(ctx context.Context, id int32) (GetMovieForHlsRow, error) {
@@ -484,16 +461,10 @@ func (q *Queries) GetMovieForHls(ctx context.Context, id int32) (GetMovieForHlsR
 	err := row.Scan(
 		&i.ID,
 		&i.FilePath,
-		&i.ContentType,
-		&i.Container,
+		&i.FileName,
 		&i.Size,
-		&i.Duration,
-		&i.Codec,
-		&i.Profile,
-		&i.Width,
-		&i.Height,
-		&i.FrameRate,
-		&i.BitRate,
+		&i.Container,
+		&i.ContentType,
 	)
 	return i, err
 }

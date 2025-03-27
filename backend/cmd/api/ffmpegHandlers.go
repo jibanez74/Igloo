@@ -37,11 +37,6 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
 	req.StartTime = 0
 
-	fmt.Printf("Starting HLS stream creation for movie %d\n", movie.ID)
-	fmt.Printf("Input path: %s\n", req.InputPath)
-	fmt.Printf("Output dir: %s\n", req.OutputDir)
-	fmt.Printf("Segments URL: %s\n", req.SegmentsUrl)
-
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
 		fmt.Printf("Error creating HLS stream: %v\n", err)
@@ -49,8 +44,6 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
-
-	fmt.Printf("Successfully started HLS stream with PID: %s\n", pid)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"pid":      pid,

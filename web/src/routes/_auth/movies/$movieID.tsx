@@ -85,6 +85,8 @@ function MovieDetailsPage() {
 
   const navigate = Route.useNavigate();
 
+  alert(movie.file_path);
+
   const handlePlayMovie = async () => {
     try {
       const opts: MovieHlsOpts = {
