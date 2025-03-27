@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,7 +157,6 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 }
 
 func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
-	log.Printf("your file input path is %s", opts.InputPath)
 	cmdArgs := []string{
 		"ss", fmt.Sprintf("%d", opts.StartTime),
 		"-re",
