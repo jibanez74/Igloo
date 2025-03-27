@@ -49,7 +49,7 @@ var (
 	}
 )
 
-func validateVideoSettings(opts *HlsOpts, accelMethod string) {
+func validateVideoSettings(opts *HlsOpts, enableHardwareEncoding bool) {
 	if opts.VideoCodec == "copy" {
 		return
 	}
@@ -66,7 +66,7 @@ func validateVideoSettings(opts *HlsOpts, accelMethod string) {
 		opts.Preset = DefaultPreset
 	}
 
-	if opts.VideoProfile != "" && (accelMethod != NoAccel && accelMethod != NVENC) {
+	if opts.VideoProfile != "" && !enableHardwareEncoding {
 		opts.VideoProfile = ""
 	}
 

@@ -55,14 +55,13 @@ CREATE TABLE global_settings (
     tmdb_api_key VARCHAR(255) NOT NULL,
     ffmpeg_path VARCHAR(255) NOT NULL,
     ffprobe_path VARCHAR(255) NOT NULL,
-    hardware_acceleration VARCHAR(255) NOT NULL,
-    enable_transcoding BOOLEAN NOT NULL,
+    enable_hardware_acceleration BOOLEAN NOT NULL DEFAULT true,
     jellyfin_token VARCHAR(255) NOT NULL,
-        issuer VARCHAR(255) NOT NULL,
-    audience      VARCHAR(255) NOT NULL,
-    secret        VARCHAR(255) NOT NULL,
-    cookie_domain  VARCHAR(255) NOT NULL,
-    cookie_path    VARCHAR(255) NOT NULL
+    issuer VARCHAR(255) NOT NULL,
+    audience VARCHAR(255) NOT NULL,
+    secret VARCHAR(255) NOT NULL,
+    cookie_domain VARCHAR(255) NOT NULL,
+    cookie_path VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE device_codes (

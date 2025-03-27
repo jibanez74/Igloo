@@ -14,18 +14,11 @@ type FFmpeg interface {
 }
 
 type ffmpeg struct {
-	Bin         string
-	AccelMethod string
-	jobs        map[string]job
-	mu          sync.RWMutex
+	Bin                    string
+	EnableHardwareEncoding bool
+	jobs                   map[string]job
+	mu                     sync.RWMutex
 }
-
-const (
-	NoAccel      = ""
-	NVENC        = "nvenc"        // NVIDIA GPU acceleration
-	QSV          = "qsv"          // Intel QuickSync
-	VideoToolbox = "videotoolbox" // Apple VideoToolbox
-)
 
 func New(ffmpegPath string) (FFmpeg, error) {
 	if ffmpegPath == "" {
@@ -43,9 +36,9 @@ func New(ffmpegPath string) (FFmpeg, error) {
 	}
 
 	f := ffmpeg{
-		Bin:         path,
-		AccelMethod: NVENC,
-		jobs:        make(map[string]job),
+		Bin:                    path,
+		EnableHardwareEncoding: true,
+		jobs:                   make(map[string]job),
 	}
 
 	return &f, nil

@@ -22,8 +22,7 @@ INSERT INTO global_settings (
     tmdb_api_key,
     ffmpeg_path,
     ffprobe_path,
-    hardware_acceleration,
-    enable_transcoding,
+    enable_hardware_acceleration,
     jellyfin_token,
     issuer,
     audience,
@@ -31,7 +30,7 @@ INSERT INTO global_settings (
     cookie_domain,
     cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 RETURNING *;
 
@@ -50,9 +49,8 @@ UPDATE global_settings SET
     tmdb_api_key = $11,
     ffmpeg_path = $12,
     ffprobe_path = $13,
-    hardware_acceleration = $14,
-    enable_transcoding = $15,
-    jellyfin_token = $16,
+    enable_hardware_acceleration = $14,
+    jellyfin_token = $15,
     updated_at = NOW()
 WHERE id = (SELECT id FROM global_settings LIMIT 1)
 RETURNING *;
