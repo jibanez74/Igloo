@@ -2,9 +2,6 @@ package ffmpeg
 
 const (
 	DefaultVideoCodec  = "libx264"
-	NvencVideoCodec    = "h264_nvenc"
-	QsvVideoCodec      = "h264_qsv"
-	VtVideoCodec       = "h264_videotoolbox"
 	DefaultVideoHeight = 480
 	DefaultVideoRate   = 2000
 	DefaultPreset      = "fast"
