@@ -1,9 +1,10 @@
 package ffprobe
 
 import (
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
-	"os"
+	"os/exec"
 )
 
 type Ffprobe interface {
@@ -79,17 +80,28 @@ type ffprobe struct {
 	bin string
 }
 
-func New(ffprobePath string) (Ffprobe, error) {
-	info, err := os.Stat(ffprobePath)
+func New(s *database.GlobalSetting) (Ffprobe, error) {
+	var f ffprobe
+
+	if s == nil {
+		return nil, errors.New("provided nil value for settings in ffprobe package")
+	}
+
+	if s.FfprobePath == "" {
+		return nil, errors.New("ffprobe path is empty")
+	}
+
+	path, err := exec.LookPath(s.FfmpegPath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find ffprobe: %w", err)
+		return nil, fmt.Errorf("unable to find ffprobe at %s: %w", s.FfmpegPath, err)
 	}
 
-	if info.Mode()&0111 == 0 {
-		return nil, fmt.Errorf("ffprobe is not executable")
+	_, err = exec.LookPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe not found or not executable at %s: %w", path, err)
 	}
 
-	return &ffprobe{
-		bin: ffprobePath,
-	}, nil
+	f.bin = s.FfprobePath
+
+	return &f, nil
 }

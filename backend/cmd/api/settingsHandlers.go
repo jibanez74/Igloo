@@ -23,6 +23,7 @@ func (app *application) getSettings(c *fiber.Ctx) error {
 			"ffmpeg_path":        app.settings.FfmpegPath,
 			"ffprobe_path":       app.settings.FfprobePath,
 			"enable_transcoding": app.settings.EnableHardwareAcceleration,
+			"hardware_encoder":   app.settings.HardwareEncoder,
 			"jellyfin_token":     app.settings.JellyfinToken,
 		},
 	})
@@ -63,6 +64,7 @@ func (app *application) updateSettings(c *fiber.Ctx) error {
 			"ffmpeg_path":        app.settings.FfmpegPath,
 			"ffprobe_path":       app.settings.FfprobePath,
 			"enable_transcoding": app.settings.EnableHardwareAcceleration,
+			"hardware_encoder":   app.settings.HardwareEncoder,
 			"jellyfin_token":     app.settings.JellyfinToken,
 		},
 	})

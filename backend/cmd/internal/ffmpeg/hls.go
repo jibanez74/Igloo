@@ -211,19 +211,23 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		if opts.VideoCodec == "copy" {
 			cmdArgs = append(cmdArgs, "-c:v", opts.VideoCodec)
 		} else {
-			videoCodec := DefaultVideoCodec
-
 			if f.EnableHardwareEncoding {
-				videoCodec = NvencVideoCodec
+				cmdArgs = append(cmdArgs,
+					"-c:v", "h264",
+					"-preset", opts.Preset,
+				)
+			} else {
+				cmdArgs = append(cmdArgs,
+					"-c:v", DefaultVideoCodec,
+					"-preset", opts.Preset,
+					"-crf", "23",
+				)
 			}
 
 			videoFilter := fmt.Sprintf("scale=-2:%d:format=yuv420p", opts.VideoHeight)
-
 			cmdArgs = append(cmdArgs,
-				"-c:v", videoCodec,
 				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 				"-vf", videoFilter,
-				"-preset", opts.Preset,
 				"-map", fmt.Sprintf("0:%d", opts.VideoStreamIndex),
 			)
 
@@ -245,5 +249,5 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
-	return exec.Command(f.Bin, cmdArgs...)
+	return exec.Command(f.bin, cmdArgs...)
 }

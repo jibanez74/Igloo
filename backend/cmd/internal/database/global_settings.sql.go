@@ -28,6 +28,7 @@ INSERT INTO global_settings (
     ffmpeg_path,
     ffprobe_path,
     enable_hardware_acceleration,
+    hardware_encoder,
     jellyfin_token,
     issuer,
     audience,
@@ -35,9 +36,9 @@ INSERT INTO global_settings (
     cookie_domain,
     cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 )
-RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
+RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, hardware_encoder, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
 `
 
 type CreateSettingsParams struct {
@@ -58,6 +59,7 @@ type CreateSettingsParams struct {
 	FfmpegPath                 string `json:"ffmpeg_path"`
 	FfprobePath                string `json:"ffprobe_path"`
 	EnableHardwareAcceleration bool   `json:"enable_hardware_acceleration"`
+	HardwareEncoder            string `json:"hardware_encoder"`
 	JellyfinToken              string `json:"jellyfin_token"`
 	Issuer                     string `json:"issuer"`
 	Audience                   string `json:"audience"`
@@ -85,6 +87,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.FfmpegPath,
 		arg.FfprobePath,
 		arg.EnableHardwareAcceleration,
+		arg.HardwareEncoder,
 		arg.JellyfinToken,
 		arg.Issuer,
 		arg.Audience,
@@ -114,6 +117,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.FfmpegPath,
 		&i.FfprobePath,
 		&i.EnableHardwareAcceleration,
+		&i.HardwareEncoder,
 		&i.JellyfinToken,
 		&i.Issuer,
 		&i.Audience,
@@ -125,7 +129,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
+SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, hardware_encoder, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
@@ -152,6 +156,7 @@ func (q *Queries) GetSettings(ctx context.Context) (GlobalSetting, error) {
 		&i.FfmpegPath,
 		&i.FfprobePath,
 		&i.EnableHardwareAcceleration,
+		&i.HardwareEncoder,
 		&i.JellyfinToken,
 		&i.Issuer,
 		&i.Audience,
@@ -189,10 +194,11 @@ UPDATE global_settings SET
     ffmpeg_path = $12,
     ffprobe_path = $13,
     enable_hardware_acceleration = $14,
-    jellyfin_token = $15,
+    hardware_encoder = $15,
+    jellyfin_token = $16,
     updated_at = NOW()
 WHERE id = (SELECT id FROM global_settings LIMIT 1)
-RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
+RETURNING id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, hardware_encoder, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path
 `
 
 type UpdateSettingsParams struct {
@@ -210,6 +216,7 @@ type UpdateSettingsParams struct {
 	FfmpegPath                 string `json:"ffmpeg_path"`
 	FfprobePath                string `json:"ffprobe_path"`
 	EnableHardwareAcceleration bool   `json:"enable_hardware_acceleration"`
+	HardwareEncoder            string `json:"hardware_encoder"`
 	JellyfinToken              string `json:"jellyfin_token"`
 }
 
@@ -229,6 +236,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.FfmpegPath,
 		arg.FfprobePath,
 		arg.EnableHardwareAcceleration,
+		arg.HardwareEncoder,
 		arg.JellyfinToken,
 	)
 	var i GlobalSetting
@@ -253,6 +261,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.FfmpegPath,
 		&i.FfprobePath,
 		&i.EnableHardwareAcceleration,
+		&i.HardwareEncoder,
 		&i.JellyfinToken,
 		&i.Issuer,
 		&i.Audience,

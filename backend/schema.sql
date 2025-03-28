@@ -56,6 +56,7 @@ CREATE TABLE global_settings (
     ffmpeg_path VARCHAR(255) NOT NULL,
     ffprobe_path VARCHAR(255) NOT NULL,
     enable_hardware_acceleration BOOLEAN NOT NULL DEFAULT true,
+    hardware_encoder VARCHAR(20) NOT NULL,
     jellyfin_token VARCHAR(255) NOT NULL,
     issuer VARCHAR(255) NOT NULL,
     audience VARCHAR(255) NOT NULL,

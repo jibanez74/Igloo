@@ -23,6 +23,7 @@ INSERT INTO global_settings (
     ffmpeg_path,
     ffprobe_path,
     enable_hardware_acceleration,
+    hardware_encoder,
     jellyfin_token,
     issuer,
     audience,
@@ -30,7 +31,7 @@ INSERT INTO global_settings (
     cookie_domain,
     cookie_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 )
 RETURNING *;
 
@@ -50,7 +51,8 @@ UPDATE global_settings SET
     ffmpeg_path = $12,
     ffprobe_path = $13,
     enable_hardware_acceleration = $14,
-    jellyfin_token = $15,
+    hardware_encoder = $15,
+    jellyfin_token = $16,
     updated_at = NOW()
 WHERE id = (SELECT id FROM global_settings LIMIT 1)
 RETURNING *;

@@ -35,7 +35,7 @@ func initApp() (*application, error) {
 	}
 
 	if app.settings.FfmpegPath != "" {
-		f, err := ffmpeg.New(app.settings.FfmpegPath)
+		f, err := ffmpeg.New(app.settings)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +44,7 @@ func initApp() (*application, error) {
 	}
 
 	if app.settings.FfprobePath != "" {
-		f, err := ffprobe.New(app.settings.FfprobePath)
+		f, err := ffprobe.New(app.settings)
 		if err != nil {
 			return nil, err
 		}
@@ -202,8 +202,9 @@ func (app *application) initSettings() error {
 		if err != nil {
 			enableTranscoding = false
 		}
-		s.EnableHardwareAcceleration = enableTranscoding
 
+		s.EnableHardwareAcceleration = enableTranscoding
+		s.HardwareEncoder = os.Getenv("HARDWARE_ENCODER")
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")
 		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
