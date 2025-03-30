@@ -53,12 +53,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		return "", fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Create initial VOD playlist with proper headers
-	err = f.createVodPlaylist(opts)
-	if err != nil {
-		return "", fmt.Errorf("failed to create VOD playlist: %w", err)
-	}
-
 	cmd := f.prepareHlsCmd(opts)
 
 	stderr, err := cmd.StderrPipe()
@@ -107,59 +101,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	}()
 
 	return pid, nil
-}
-
-func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
-	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
-
-	file, err := os.Create(playlistPath)
-	if err != nil {
-		return fmt.Errorf("failed to create playlist file at %s: %w", playlistPath, err)
-	}
-	defer file.Close()
-
-	// Write VOD playlist headers
-	_, err = fmt.Fprintf(file, "%s\n", HlsTagExtM3U)
-	if err != nil {
-		return fmt.Errorf("failed to write EXTM3U tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, "%s\n", HlsTagVersion)
-	if err != nil {
-		return fmt.Errorf("failed to write version tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, HlsTagTargetDuration+"\n", DefaultHlsTime)
-	if err != nil {
-		return fmt.Errorf("failed to write target duration tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, "%s\n", HlsTagMediaSequence)
-	if err != nil {
-		return fmt.Errorf("failed to write media sequence tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, HlsTagPlaylistType+"\n", DefaultPlaylistType)
-	if err != nil {
-		return fmt.Errorf("failed to write playlist type tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, "%s\n", HlsTagIndependentSegments)
-	if err != nil {
-		return fmt.Errorf("failed to write independent segments tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, "%s\n", HlsTagProgramDateTime)
-	if err != nil {
-		return fmt.Errorf("failed to write program date time tag: %w", err)
-	}
-
-	_, err = fmt.Fprintf(file, HlsTagMap+"\n", DefaultInitFileName)
-	if err != nil {
-		return fmt.Errorf("failed to write map tag: %w", err)
-	}
-
-	return nil
 }
 
 func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
@@ -270,6 +211,8 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		"-hls_base_url", opts.SegmentsUrl+"/",
 		"-hls_allow_cache", "0", // Disable caching for VOD
+		"-hls_playlist_type", "vod", // Explicitly set VOD type
+		"-hls_flags", "independent_segments+program_date_time+append_list+discont_start+omit_endlist", // Add omit_endlist flag
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 
