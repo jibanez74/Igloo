@@ -212,10 +212,30 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 			cmdArgs = append(cmdArgs, "-c:v", opts.VideoCodec)
 		} else {
 			if f.EnableHardwareEncoding {
-				cmdArgs = append(cmdArgs,
-					"-c:v", "h264",
-					"-preset", opts.Preset,
-				)
+				cmdArgs = append(cmdArgs, "-c:v", Encoders[f.HardwareEncoder]["h264"])
+
+				switch f.HardwareEncoder {
+				case "nvenc":
+					cmdArgs = append(cmdArgs,
+						"-preset", "p4",
+						"-rc", "vbr",
+						"-cq", "19",
+						"-spatial_aq", "1",
+						"-temporal_aq", "1",
+					)
+				case "qsv":
+					cmdArgs = append(cmdArgs,
+						"-preset", "medium",
+						"-global_quality", "19",
+						"-look_ahead", "1",
+					)
+				case "videotoolbox":
+					cmdArgs = append(cmdArgs,
+						"-preset", "medium",
+						"-allow_sw", "1",
+						"-realtime", "0",
+					)
+				}
 			} else {
 				cmdArgs = append(cmdArgs,
 					"-c:v", DefaultVideoCodec,

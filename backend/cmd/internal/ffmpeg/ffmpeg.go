@@ -23,22 +23,22 @@ type ffmpeg struct {
 }
 
 var Encoders = map[string]map[string]string{
-	"software": map[string]string{
+	"software": {
 		"name": "libx264",
 		"h264": "libx264",
 		"h265": "libx265",
 	},
-	"nvidia": map[string]string{
+	"nvidia": {
 		"name": "nvenc",
 		"h264": "h264_nvenc",
 		"h265": "hevc_nvenc",
 	},
-	"intel": map[string]string{
+	"intel": {
 		"name": "qsv",
 		"h264": "h264_qsv",
 		"h265": "hevc_qsv",
 	},
-	"mac": map[string]string{
+	"mac": {
 		"name": "videotoolbox",
 		"h264": "h264_videotoolbox",
 		"h265": "hevc_videotoolbox",

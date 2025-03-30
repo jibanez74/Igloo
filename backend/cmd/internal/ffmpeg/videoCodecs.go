@@ -44,6 +44,12 @@ var (
 		1080: true,
 		2160: true,
 	}
+
+	// Valid codec types supported by our encoders
+	ValidCodecTypes = map[string]bool{
+		"h264": true,
+		"h265": true,
+	}
 )
 
 func validateVideoSettings(opts *HlsOpts, enableHardwareEncoding bool) {
@@ -63,6 +69,7 @@ func validateVideoSettings(opts *HlsOpts, enableHardwareEncoding bool) {
 		opts.Preset = DefaultPreset
 	}
 
+	// Only allow video profiles when hardware encoding is enabled
 	if opts.VideoProfile != "" && !enableHardwareEncoding {
 		opts.VideoProfile = ""
 	}
