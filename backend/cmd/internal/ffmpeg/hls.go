@@ -244,7 +244,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 				)
 			}
 
-			videoFilter := fmt.Sprintf("scale=-2:%d:format=yuv420p", opts.VideoHeight)
+			videoFilter := fmt.Sprintf("scale=-2:%d", opts.VideoHeight)
 			cmdArgs = append(cmdArgs,
 				"-b:v", fmt.Sprintf("%dk", opts.VideoBitrate),
 				"-vf", videoFilter,
