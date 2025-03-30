@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
+	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,12 +38,16 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
 	req.StartTime = 0
 
+	log.Println("about to start command")
+
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
+
+	log.Println("about to return response")
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"pid":      pid,

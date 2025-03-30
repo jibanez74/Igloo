@@ -85,8 +85,6 @@ function MovieDetailsPage() {
 
   const navigate = Route.useNavigate();
 
-  alert(movie.file_path);
-
   const handlePlayMovie = async () => {
     try {
       const opts: MovieHlsOpts = {
@@ -108,6 +106,11 @@ function MovieDetailsPage() {
         body: JSON.stringify(opts),
       });
 
+      if (!res.ok) {
+        alert("the request failed with status " + res.status);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.error) {
@@ -115,9 +118,14 @@ function MovieDetailsPage() {
         return;
       }
 
+      alert("about to navigate");
+
       navigate({
         to: "/movies/$movieID/play",
         from: Route.fullPath,
+        params: {
+          movieID: movie.id.toString(),
+        },
         search: {
           title: movie.title,
           thumb: movie.thumb,

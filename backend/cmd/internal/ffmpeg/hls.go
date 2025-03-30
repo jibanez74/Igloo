@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,30 +59,30 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 
 	cmd := f.prepareHlsCmd(opts)
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
+	// stderr, err := cmd.StderrPipe()
+	// if err != nil {
+	// 	return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	// }
 
 	err = cmd.Start()
 	if err != nil {
 		return "", fmt.Errorf("failed to start ffmpeg command: %w", err)
 	}
 
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := stderr.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					fmt.Printf("failed to read stderr: %v", err)
-				}
-				break
-			}
-			fmt.Printf("ffmpeg stderr: %s", string(buf[:n]))
-		}
-		stderr.Close()
-	}()
+	// go func() {
+	// 	buf := make([]byte, 1024)
+	// 	for {
+	// 		n, err := stderr.Read(buf)
+	// 		if err != nil {
+	// 			if err != io.EOF {
+	// 				fmt.Printf("failed to read stderr: %v", err)
+	// 			}
+	// 			break
+	// 		}
+	// 		fmt.Printf("ffmpeg stderr: %s", string(buf[:n]))
+	// 	}
+	// 	stderr.Close()
+	// }()
 
 	pid := uuid.NewString()
 
