@@ -53,6 +53,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		return "", fmt.Errorf("validation failed: %w", err)
 	}
 
+	// Create initial VOD playlist with proper headers
 	err = f.createVodPlaylist(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create VOD playlist: %w", err)
@@ -108,24 +109,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	return pid, nil
 }
 
-func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
-	_, err := os.Stat(opts.InputPath)
-	if err != nil {
-		return fmt.Errorf("unable to locate input file: %w", err)
-	}
-
-	err = os.MkdirAll(opts.OutputDir, 0755)
-	if err != nil {
-		return fmt.Errorf("output directory error: %w", err)
-	}
-
-	validateAudioSettings(opts)
-
-	validateVideoSettings(opts, f.EnableHardwareEncoding)
-
-	return nil
-}
-
 func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
 
@@ -135,6 +118,7 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 	}
 	defer file.Close()
 
+	// Write VOD playlist headers
 	_, err = fmt.Fprintf(file, "%s\n", HlsTagExtM3U)
 	if err != nil {
 		return fmt.Errorf("failed to write EXTM3U tag: %w", err)
@@ -174,6 +158,24 @@ func (f *ffmpeg) createVodPlaylist(opts *HlsOpts) error {
 	if err != nil {
 		return fmt.Errorf("failed to write map tag: %w", err)
 	}
+
+	return nil
+}
+
+func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
+	_, err := os.Stat(opts.InputPath)
+	if err != nil {
+		return fmt.Errorf("unable to locate input file: %w", err)
+	}
+
+	err = os.MkdirAll(opts.OutputDir, 0755)
+	if err != nil {
+		return fmt.Errorf("output directory error: %w", err)
+	}
+
+	validateAudioSettings(opts)
+
+	validateVideoSettings(opts, f.EnableHardwareEncoding)
 
 	return nil
 }
@@ -258,6 +260,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	}
 
 	cmdArgs = append(cmdArgs,
+		"-f", "hls",
 		"-hls_playlist_type", DefaultPlaylistType,
 		"-hls_time", DefaultHlsTime,
 		"-hls_list_size", DefaultHlsListSize,
@@ -266,6 +269,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 		"-hls_fmp4_init_filename", DefaultInitFileName,
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
 		"-hls_base_url", opts.SegmentsUrl+"/",
+		"-hls_allow_cache", "0", // Disable caching for VOD
 		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	)
 

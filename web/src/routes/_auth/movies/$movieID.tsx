@@ -113,6 +113,8 @@ function MovieDetailsPage() {
         return;
       }
 
+      alert(JSON.stringify(data));
+
       navigate({
         to: "/movies/$movieID/play",
         from: Route.fullPath,
