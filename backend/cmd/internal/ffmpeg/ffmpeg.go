@@ -49,6 +49,7 @@ func New(s *database.GlobalSetting) (FFmpeg, error) {
 	f := ffmpeg{
 		EnableHardwareEncoding: false,
 		HardwareEncoder:        Encoders["software"]["name"],
+		jobs:                   make(map[string]job),
 	}
 
 	if s == nil {

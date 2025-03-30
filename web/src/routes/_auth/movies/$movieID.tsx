@@ -106,19 +106,12 @@ function MovieDetailsPage() {
         body: JSON.stringify(opts),
       });
 
-      if (!res.ok) {
-        alert("the request failed with status " + res.status);
-        return;
-      }
-
       const data = await res.json();
 
-      if (data.error) {
+      if (!res.ok) {
         alert(`${res.status} - ${data.error ? data.error : res.statusText}`);
         return;
       }
-
-      alert("about to navigate");
 
       navigate({
         to: "/movies/$movieID/play",
