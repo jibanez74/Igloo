@@ -3,9 +3,11 @@ package ffmpeg
 import (
 	"errors"
 	"fmt"
-	"igloo/cmd/internal/database"
+	"os"
 	"os/exec"
 	"sync"
+
+	"golang.org/x/sys/unix"
 )
 
 type FFmpeg interface {
@@ -20,6 +22,12 @@ type ffmpeg struct {
 	EnableHardwareEncoding bool
 	jobs                   map[string]job
 	mu                     sync.RWMutex
+}
+
+type Settings struct {
+	FfmpegPath                 string
+	EnableHardwareAcceleration bool
+	HardwareEncoder            string
 }
 
 var Encoders = map[string]map[string]string{
@@ -45,7 +53,7 @@ var Encoders = map[string]map[string]string{
 	},
 }
 
-func New(s *database.GlobalSetting) (FFmpeg, error) {
+func New(s *Settings) (FFmpeg, error) {
 	f := ffmpeg{
 		EnableHardwareEncoding: false,
 		HardwareEncoder:        Encoders["software"]["name"],
@@ -62,21 +70,28 @@ func New(s *database.GlobalSetting) (FFmpeg, error) {
 
 	path, err := exec.LookPath(s.FfmpegPath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find ffmpeg at %s: %w", s.FfmpegPath, err)
+		_, err = os.Stat(s.FfmpegPath)
+		if err != nil {
+			return nil, fmt.Errorf("ffmpeg not found at %s: %w", s.FfmpegPath, err)
+		}
+
+		path = s.FfmpegPath
 	}
 
-	_, err = exec.LookPath(path)
+	err = unix.Access(path, unix.X_OK)
 	if err != nil {
-		return nil, fmt.Errorf("ffmpeg not found or not executable at %s: %w", path, err)
+		return nil, fmt.Errorf("ffmpeg at %s is not executable: %w", path, err)
 	}
 
-	f.bin = s.FfmpegPath
+	f.bin = path
 
 	if s.EnableHardwareAcceleration {
-		_, exists := Encoders[s.HardwareEncoder]
+		encoder, exists := Encoders[s.HardwareEncoder]
 		if exists {
 			f.EnableHardwareEncoding = true
-			f.HardwareEncoder = Encoders[s.HardwareEncoder]["name"]
+			f.HardwareEncoder = encoder["name"]
+		} else {
+			return nil, fmt.Errorf("invalid hardware encoder: %s", s.HardwareEncoder)
 		}
 	}
 
