@@ -20,7 +20,7 @@ type HlsOpts struct {
 	AudioBitRate     int    `json:"audio_bit_rate"`
 	AudioChannels    int    `json:"audio_channels"`
 	VideoStreamIndex int    `json:"video_stream_index"`
-	VideoCodec       string
+	VideoCodec       string `json:"video_codec"`
 	VideoBitrate     int    `json:"video_bitrate"`
 	VideoHeight      int    `json:"video_height"`
 	VideoProfile     string `json:"video_profile"`
