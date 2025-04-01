@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"errors"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"os"
 	"os/exec"
 	"sync"
@@ -22,12 +23,6 @@ type ffmpeg struct {
 	EnableHardwareEncoding bool
 	jobs                   map[string]job
 	mu                     sync.RWMutex
-}
-
-type Settings struct {
-	FfmpegPath                 string
-	EnableHardwareAcceleration bool
-	HardwareEncoder            string
 }
 
 var Encoders = map[string]map[string]string{
@@ -53,7 +48,7 @@ var Encoders = map[string]map[string]string{
 	},
 }
 
-func New(s *Settings) (FFmpeg, error) {
+func New(s *database.GlobalSetting) (FFmpeg, error) {
 	f := ffmpeg{
 		EnableHardwareEncoding: false,
 		HardwareEncoder:        Encoders["software"]["name"],
