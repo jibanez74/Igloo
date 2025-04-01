@@ -1,15 +1,5 @@
 package ffmpeg
 
-const (
-	DefaultAudioRate     = 128
-	DefaultAudioChannels = 2
-	DefaultAudioCodec    = "aac"
-	AudioCodecCopy       = "copy"
-	AudioCodecAAC        = "aac"
-	AudioCodecAC3        = "ac3"
-	AudioCodecFLAC       = "flac"
-	AudioCodecMP3        = "mp3"
-)
 
 var (
 	ValidAudioCodecsMap = map[string]bool{

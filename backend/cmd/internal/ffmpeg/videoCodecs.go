@@ -1,28 +1,5 @@
 package ffmpeg
 
-const (
-	DefaultVideoCodec    = "libx264"
-	DefaultVideoHeight   = 480
-	DefaultVideoRate     = 1000
-	DefaultPreset        = "fast"
-	VideoCodecCopy       = "copy"
-	VideoCodecH264       = "h264"
-	VideoCodecH265       = "h265"
-	VideoPresetUltrafast = "ultrafast"
-	VideoPresetSuperfast = "superfast"
-	VideoPresetVeryfast  = "veryfast"
-	VideoPresetFaster    = "faster"
-	VideoPresetFast      = "fast"
-	VideoPresetMedium    = "medium"
-	VideoPresetSlow      = "slow"
-	VideoPresetSlower    = "slower"
-	VideoPresetVeryslow  = "veryslow"
-	VideoProfileBaseline = "baseline"
-	VideoProfileMain     = "main"
-	VideoProfileHigh     = "high"
-	VideoProfileHigh10   = "high10"
-)
-
 var (
 	ValidPresetsMap = map[string]bool{
 		VideoPresetUltrafast: true,

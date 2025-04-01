@@ -97,3 +97,12 @@ func New(s *Settings) (FFmpeg, error) {
 
 	return &f, nil
 }
+
+func NewFFmpeg() *ffmpeg {
+	return &ffmpeg{
+		bin:                    "ffmpeg",
+		jobs:                   make(map[string]job),
+		EnableHardwareEncoding: false,
+		HardwareEncoder:        "",
+	}
+}
