@@ -96,7 +96,7 @@ func TestComputeSegments(t *testing.T) {
 
 func TestExtractKeyframes(t *testing.T) {
 	// Get the path to the test video file
-	testVideoPath := filepath.Join("..", "..", "..", "test.mkv")
+	testVideoPath := filepath.Join("..", "..", "..", "test.mp4")
 
 	// Verify the test file exists
 	if _, err := os.Stat(testVideoPath); os.IsNotExist(err) {
@@ -116,7 +116,7 @@ func TestExtractKeyframes(t *testing.T) {
 	}{
 		{
 			name:        "non-existent file",
-			filePath:    "non_existent_file.mkv",
+			filePath:    "non_existent_file.mp4",
 			expectError: true,
 		},
 		{
