@@ -92,7 +92,6 @@ func TestGetMovieMetadata(t *testing.T) {
 	// Create mock ffprobe instance
 	settings := &database.GlobalSetting{
 		FfprobePath: "ffprobe",
-		FfmpegPath:  "ffmpeg",
 	}
 	f := &mockFfprobe{}
 	f.bin = settings.FfprobePath
