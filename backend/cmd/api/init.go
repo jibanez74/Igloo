@@ -280,16 +280,52 @@ func (app *application) initDirs(s *database.CreateSettingsParams) error {
 	}
 
 	imgDir := filepath.Join(staticDir, "images")
+	err = helpers.CreateDir(imgDir)
+	if err != nil {
+		return err
+	}
+
+	moviesImgDir := filepath.Join(imgDir, "movies")
+	err = helpers.CreateDir(moviesImgDir)
+	if err != nil {
+		return err
+	}
+
+	studiosImgDir := filepath.Join(imgDir, "studios")
+	err = helpers.CreateDir(studiosImgDir)
+	if err != nil {
+		return err
+	}
+
+	artistsImgDir := filepath.Join(imgDir, "artists")
+	err = helpers.CreateDir(artistsImgDir)
+	if err != nil {
+		return err
+	}
+
+	avatarImgDir := filepath.Join(imgDir, "avatar")
+	err = helpers.CreateDir(avatarImgDir)
+	if err != nil {
+		return err
+	}
+
+	// Preserve existing directory list settings if they exist
+	if s.MoviesDirList == "" {
+		s.MoviesDirList = os.Getenv("MOVIES_DIR_LIST")
+	}
+	if s.MusicDirList == "" {
+		s.MusicDirList = os.Getenv("MUSIC_DIR_LIST")
+	}
+	if s.TvshowsDirList == "" {
+		s.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
+	}
 
 	s.TranscodeDir = transcodeDir
 	s.StaticDir = staticDir
-	s.MoviesDirList = os.Getenv("MOVIES_DIR_LIST")
-	s.MoviesImgDir = filepath.Join(imgDir, "movies")
-	s.MusicDirList = os.Getenv("MUSIC_DIR_LIST")
-	s.TvshowsDirList = os.Getenv("TVSHOWS_DIR_LIST")
-	s.StudiosImgDir = filepath.Join(imgDir, "studios")
-	s.ArtistsImgDir = filepath.Join(imgDir, "artists")
-	s.AvatarImgDir = filepath.Join(imgDir, "avatar")
+	s.MoviesImgDir = moviesImgDir
+	s.StudiosImgDir = studiosImgDir
+	s.ArtistsImgDir = artistsImgDir
+	s.AvatarImgDir = avatarImgDir
 
 	return nil
 }

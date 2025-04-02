@@ -13,6 +13,8 @@ func CreateDir(path string) error {
 			if err != nil {
 				return fmt.Errorf("failed to create dir: %w", err)
 			}
+
+			return nil
 		}
 
 		return fmt.Errorf("failed to check dir: %w", err)
