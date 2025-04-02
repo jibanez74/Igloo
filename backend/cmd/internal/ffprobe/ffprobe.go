@@ -65,38 +65,52 @@ func (d *disposition) GetInt(field json.RawMessage) int {
 }
 
 type mediaStream struct {
-	Index          int          `json:"index"`
-	CodecName      string       `json:"codec_name,omitempty"`
-	CodecLongName  string       `json:"codec_long_name,omitempty"`
-	CodecType      string       `json:"codec_type,omitempty"`
-	Profile        string       `json:"profile,omitempty"`
-	Height         uint         `json:"height,omitempty"`
-	Width          uint         `json:"width,omitempty"`
-	CodedHeight    uint         `json:"coded_height,omitempty"`
-	CodedWidth     uint         `json:"coded_width,omitempty"`
-	AspectRatio    string       `json:"display_aspect_ratio,omitempty"`
-	Level          int          `json:"level,omitempty"`
-	AvgFrameRate   string       `json:"avg_frame_rate,omitempty"`
-	FrameRate      string       `json:"r_frame_rate,omitempty"`
-	BitDepth       string       `json:"bits_per_raw_sample,omitempty"`
-	BitRate        string       `json:"bit_rate,omitempty"`
-	ColorRange     string       `json:"color_range,omitempty"`
-	ColorTransfer  string       `json:"color_transfer,omitempty"`
-	ColorPrimaries string       `json:"color_primaries,omitempty"`
-	ColorSpace     string       `json:"color_space,omitempty"`
-	Channels       int          `json:"channels,omitempty"`
-	ChannelLayout  string       `json:"channel_layout,omitempty"`
-	Tags           tags         `json:"tags,omitempty"`
-	Disposition    *disposition `json:"disposition"`
+	Index            int             `json:"index"`
+	CodecName        string          `json:"codec_name,omitempty"`
+	CodecLongName    string          `json:"codec_long_name,omitempty"`
+	CodecType        string          `json:"codec_type,omitempty"`
+	Profile          string          `json:"profile,omitempty"`
+	Height           uint            `json:"height,omitempty"`
+	Width            uint            `json:"width,omitempty"`
+	CodedHeight      uint            `json:"coded_height,omitempty"`
+	CodedWidth       uint            `json:"coded_width,omitempty"`
+	AspectRatio      string          `json:"display_aspect_ratio,omitempty"`
+	Level            int             `json:"level,omitempty"`
+	AvgFrameRate     string          `json:"avg_frame_rate,omitempty"`
+	FrameRate        string          `json:"r_frame_rate,omitempty"`
+	BitDepth         string          `json:"bits_per_raw_sample,omitempty"`
+	BitRate          string          `json:"bit_rate,omitempty"`
+	ColorRange       string          `json:"color_range,omitempty"`
+	ColorTransfer    string          `json:"color_transfer,omitempty"`
+	ColorPrimaries   string          `json:"color_primaries,omitempty"`
+	ColorSpace       string          `json:"color_space,omitempty"`
+	Channels         int             `json:"channels,omitempty"`
+	ChannelLayout    string          `json:"channel_layout,omitempty"`
+	Tags             tags            `json:"tags,omitempty"`
+	Disposition      *disposition    `json:"disposition"`
+	HasBFrames       json.RawMessage `json:"has_b_frames,omitempty"`
+	IsAvc            json.RawMessage `json:"is_avc,omitempty"`
+	NalLengthSize    json.RawMessage `json:"nal_length_size,omitempty"`
+	RFrameRate       json.RawMessage `json:"r_frame_rate,omitempty"`
+	StartPts         json.RawMessage `json:"start_pts,omitempty"`
+	StartTime        json.RawMessage `json:"start_time,omitempty"`
+	Duration         json.RawMessage `json:"duration,omitempty"`
+	BitRateRaw       json.RawMessage `json:"bit_rate,omitempty"`
+	BitsPerSample    json.RawMessage `json:"bits_per_sample,omitempty"`
+	BitsPerRawSample json.RawMessage `json:"bits_per_raw_sample,omitempty"`
+	NbFrames         json.RawMessage `json:"nb_frames,omitempty"`
+	ExtradataSize    json.RawMessage `json:"extradata_size,omitempty"`
 }
 
 type format struct {
-	Filename       string `json:"filename"`
-	BitRate        string `json:"bit_rate,omitempty"`
-	Size           string `json:"size,omitempty"`
-	Duration       string `json:"duration,omitempty"`
-	FormatName     string `json:"format_name,omitempty"`
-	FormatLongName string `json:"format_long_name,omitempty"`
+	Filename       string          `json:"filename"`
+	BitRate        string          `json:"bit_rate,omitempty"`
+	Size           string          `json:"size,omitempty"`
+	Duration       string          `json:"duration,omitempty"`
+	FormatName     string          `json:"format_name,omitempty"`
+	FormatLongName string          `json:"format_long_name,omitempty"`
+	ProbeScore     json.RawMessage `json:"probe_score,omitempty"`
+	Tags           json.RawMessage `json:"tags,omitempty"`
 }
 
 type tmdbChapter struct {
@@ -108,9 +122,10 @@ type tmdbChapter struct {
 }
 
 type result struct {
-	Streams  []mediaStream `json:"streams"`
-	Chapters []tmdbChapter `json:"chapters"`
-	Format   format        `json:"format"`
+	Streams  []mediaStream   `json:"streams"`
+	Chapters []tmdbChapter   `json:"chapters"`
+	Format   format          `json:"format"`
+	Programs json.RawMessage `json:"programs,omitempty"`
 }
 
 type movieMetadataResult struct {
