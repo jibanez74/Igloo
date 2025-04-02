@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -49,8 +50,8 @@ func (f *ffprobe) ExtractKeyframes(filePath string) (*KeyframeData, error) {
 		return nil, fmt.Errorf("failed to get valid duration from video")
 	}
 
-	cmd := exec.Command("ffprobe",
-		"-v", "error",
+	cmd := exec.Command(f.bin,
+		"-v", "quiet",
 		"-skip_frame", "nokey",
 		"-select_streams", "v:0",
 		"-show_entries", "frame=pts_time",
@@ -88,6 +89,11 @@ func (f *ffprobe) ExtractKeyframes(filePath string) (*KeyframeData, error) {
 	if len(keyframes) == 0 {
 		return nil, fmt.Errorf("no keyframes found in video")
 	}
+
+	// Sort keyframes in ascending order
+	sort.Slice(keyframes, func(i, j int) bool {
+		return keyframes[i] < keyframes[j]
+	})
 
 	return &KeyframeData{
 		TotalDuration: totalDuration,

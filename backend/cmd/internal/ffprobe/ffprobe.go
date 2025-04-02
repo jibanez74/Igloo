@@ -25,7 +25,25 @@ type tags struct {
 }
 
 type disposition struct {
-	AttachedPic int `json:"attached_pic"`
+	Default         int `json:"default"`
+	Dub             int `json:"dub"`
+	Original        int `json:"original"`
+	Comment         int `json:"comment"`
+	Lyrics          int `json:"lyrics"`
+	Karaoke         int `json:"karaoke"`
+	Forced          int `json:"forced"`
+	HearingImpaired int `json:"hearing_impaired"`
+	VisualImpaired  int `json:"visual_impaired"`
+	CleanEffects    int `json:"clean_effects"`
+	AttachedPic     int `json:"attached_pic"`
+	TimedThumbnails int `json:"timed_thumbnails"`
+	NonDiegetic     int `json:"non_diegetic"`
+	Captions        int `json:"captions"`
+	Descriptions    int `json:"descriptions"`
+	Metadata        int `json:"metadata"`
+	Dependent       int `json:"dependent"`
+	StillImage      int `json:"still_image"`
+	Multilayer      int `json:"multilayer"`
 }
 
 type mediaStream struct {
