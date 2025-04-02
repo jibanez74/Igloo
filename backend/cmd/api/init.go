@@ -202,8 +202,8 @@ func (app *application) initSettings() error {
 		if err != nil {
 			enableTranscoding = false
 		}
-
 		s.EnableHardwareAcceleration = enableTranscoding
+
 		s.HardwareEncoder = os.Getenv("HARDWARE_ENCODER")
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")

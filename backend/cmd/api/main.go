@@ -122,5 +122,7 @@ func main() {
 		})
 	}
 
+	log.Printf("your settings are %+v", app.settings)
+
 	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
 }
