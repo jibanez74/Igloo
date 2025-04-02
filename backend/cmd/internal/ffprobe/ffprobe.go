@@ -1,6 +1,7 @@
 package ffprobe
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
@@ -25,25 +26,42 @@ type tags struct {
 }
 
 type disposition struct {
-	Default         int `json:"default"`
-	Dub             int `json:"dub"`
-	Original        int `json:"original"`
-	Comment         int `json:"comment"`
-	Lyrics          int `json:"lyrics"`
-	Karaoke         int `json:"karaoke"`
-	Forced          int `json:"forced"`
-	HearingImpaired int `json:"hearing_impaired"`
-	VisualImpaired  int `json:"visual_impaired"`
-	CleanEffects    int `json:"clean_effects"`
-	AttachedPic     int `json:"attached_pic"`
-	TimedThumbnails int `json:"timed_thumbnails"`
-	NonDiegetic     int `json:"non_diegetic"`
-	Captions        int `json:"captions"`
-	Descriptions    int `json:"descriptions"`
-	Metadata        int `json:"metadata"`
-	Dependent       int `json:"dependent"`
-	StillImage      int `json:"still_image"`
-	Multilayer      int `json:"multilayer"`
+	Default         json.RawMessage `json:"default"`
+	Dub             json.RawMessage `json:"dub"`
+	Original        json.RawMessage `json:"original"`
+	Comment         json.RawMessage `json:"comment"`
+	Lyrics          json.RawMessage `json:"lyrics"`
+	Karaoke         json.RawMessage `json:"karaoke"`
+	Forced          json.RawMessage `json:"forced"`
+	HearingImpaired json.RawMessage `json:"hearing_impaired"`
+	VisualImpaired  json.RawMessage `json:"visual_impaired"`
+	CleanEffects    json.RawMessage `json:"clean_effects"`
+	AttachedPic     json.RawMessage `json:"attached_pic"`
+	TimedThumbnails json.RawMessage `json:"timed_thumbnails"`
+	NonDiegetic     json.RawMessage `json:"non_diegetic"`
+	Captions        json.RawMessage `json:"captions"`
+	Descriptions    json.RawMessage `json:"descriptions"`
+	Metadata        json.RawMessage `json:"metadata"`
+	Dependent       json.RawMessage `json:"dependent"`
+	StillImage      json.RawMessage `json:"still_image"`
+	Multilayer      json.RawMessage `json:"multilayer"`
+}
+
+func (d *disposition) GetInt(field json.RawMessage) int {
+	if len(field) == 0 {
+		return 0
+	}
+	if string(field) == "false" {
+		return 0
+	}
+	if string(field) == "true" {
+		return 1
+	}
+	var val int
+	if err := json.Unmarshal(field, &val); err != nil {
+		return 0
+	}
+	return val
 }
 
 type mediaStream struct {
@@ -117,9 +135,9 @@ func New(s *database.GlobalSetting) (Ffprobe, error) {
 		return nil, errors.New("ffprobe path is empty")
 	}
 
-	path, err := exec.LookPath(s.FfmpegPath)
+	path, err := exec.LookPath(s.FfprobePath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find ffprobe at %s: %w", s.FfmpegPath, err)
+		return nil, fmt.Errorf("unable to find ffprobe at %s: %w", s.FfprobePath, err)
 	}
 
 	_, err = exec.LookPath(path)

@@ -2,7 +2,6 @@ package ffprobe
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -95,8 +94,7 @@ func TestComputeSegments(t *testing.T) {
 }
 
 func TestExtractKeyframes(t *testing.T) {
-	// Get the path to the test video file
-	testVideoPath := filepath.Join("..", "..", "..", "test.mp4")
+	testVideoPath := "test.mp4"
 
 	// Verify the test file exists
 	if _, err := os.Stat(testVideoPath); os.IsNotExist(err) {

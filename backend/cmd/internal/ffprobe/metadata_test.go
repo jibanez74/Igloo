@@ -11,48 +11,71 @@ type mockFfprobe struct {
 }
 
 func (f *mockFfprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, error) {
-	// Mock result with test data
+	// Mock result with test data based on test.mp4
 	mockResult := &result{
 		Streams: []mediaStream{
 			{
-				Index:          0,
+				Index:          1,
 				CodecName:      "h264",
 				CodecLongName:  "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
 				CodecType:      "video",
-				Profile:        "high",
+				Profile:        "High",
 				Width:          1920,
-				Height:         1080,
+				Height:         800,
 				CodedWidth:     1920,
-				CodedHeight:    1080,
-				AspectRatio:    "16:9",
-				Level:          41,
+				CodedHeight:    800,
+				AspectRatio:    "12:5",
+				Level:          40,
 				ColorTransfer:  "bt709",
 				ColorPrimaries: "bt709",
 				ColorSpace:     "bt709",
 				ColorRange:     "tv",
-				AvgFrameRate:   "24000/1001",
+				AvgFrameRate:   "83029800/3463037",
 				FrameRate:      "24000/1001",
 				BitDepth:       "8",
-				BitRate:        "5000000",
+				BitRate:        "4498650",
+				Disposition: &disposition{
+					Default:         1,
+					AttachedPic:     0,
+					Forced:          0,
+					HearingImpaired: 0,
+					VisualImpaired:  0,
+				},
 			},
 			{
-				Index:         1,
+				Index:         0,
 				CodecName:     "aac",
 				CodecLongName: "AAC (Advanced Audio Coding)",
 				CodecType:     "audio",
 				Profile:       "LC",
-				Channels:      6,
-				ChannelLayout: "5.1",
-				BitRate:       "384000",
+				Channels:      2,
+				ChannelLayout: "stereo",
+				BitRate:       "125643",
+				Tags: tags{
+					Language: "eng",
+				},
+				Disposition: &disposition{
+					Default:         1,
+					AttachedPic:     0,
+					Forced:          0,
+					HearingImpaired: 0,
+					VisualImpaired:  0,
+				},
 			},
 			{
-				Index:         2,
-				CodecName:     "subrip",
-				CodecLongName: "SubRip subtitle",
+				Index:         5,
+				CodecName:     "mov_text",
+				CodecLongName: "MOV text",
 				CodecType:     "subtitle",
 				Tags: tags{
 					Language: "eng",
-					Title:    "English",
+				},
+				Disposition: &disposition{
+					Default:         1,
+					AttachedPic:     0,
+					Forced:          0,
+					HearingImpaired: 0,
+					VisualImpaired:  0,
 				},
 			},
 		},
@@ -60,13 +83,20 @@ func (f *mockFfprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, 
 			{
 				Start:     0,
 				StartTime: "0.000000",
-				End:       300,
-				EndTime:   "5.000000",
-				Title:     "Chapter 1",
+				End:       459000,
+				EndTime:   "459.000000",
+				Title:     "A Christmas Carol",
+			},
+			{
+				Start:     459000,
+				StartTime: "459.000000",
+				End:       965000,
+				EndTime:   "965.000000",
+				Title:     "Bah, Humbug!",
 			},
 		},
 		Format: format{
-			Duration: "6784.875000",
+			Duration: "5771.771666",
 		},
 	}
 
@@ -98,7 +128,7 @@ func TestGetMovieMetadata(t *testing.T) {
 
 	// Test GetMovieMetadata
 	t.Run("GetMovieMetadata", func(t *testing.T) {
-		testPath := "test.mkv"
+		testPath := "test.mp4"
 		result, err := f.GetMovieMetadata(&testPath)
 		if err != nil {
 			t.Fatalf("GetMovieMetadata failed: %v", err)
@@ -115,11 +145,11 @@ func TestGetMovieMetadata(t *testing.T) {
 		if videoStream.Width != 1920 {
 			t.Errorf("Expected width 1920, got %d", videoStream.Width)
 		}
-		if videoStream.Height != 1080 {
-			t.Errorf("Expected height 1080, got %d", videoStream.Height)
+		if videoStream.Height != 800 {
+			t.Errorf("Expected height 800, got %d", videoStream.Height)
 		}
-		if videoStream.Duration != "6784.875000" {
-			t.Errorf("Expected duration 6784.875000, got %s", videoStream.Duration)
+		if videoStream.Duration != "5771.771666" {
+			t.Errorf("Expected duration 5771.771666, got %s", videoStream.Duration)
 		}
 
 		// Verify audio streams
@@ -130,8 +160,11 @@ func TestGetMovieMetadata(t *testing.T) {
 		if audioStream.Codec != "aac" {
 			t.Errorf("Expected codec aac, got %s", audioStream.Codec)
 		}
-		if audioStream.Channels != 6 {
-			t.Errorf("Expected channels 6, got %d", audioStream.Channels)
+		if audioStream.Channels != 2 {
+			t.Errorf("Expected channels 2, got %d", audioStream.Channels)
+		}
+		if audioStream.Language != "eng" {
+			t.Errorf("Expected language eng, got %s", audioStream.Language)
 		}
 
 		// Verify subtitle streams
@@ -139,8 +172,8 @@ func TestGetMovieMetadata(t *testing.T) {
 			t.Error("Expected at least one subtitle stream")
 		}
 		subtitleStream := result.SubtitleList[0]
-		if subtitleStream.Codec != "subrip" {
-			t.Errorf("Expected codec subrip, got %s", subtitleStream.Codec)
+		if subtitleStream.Codec != "mov_text" {
+			t.Errorf("Expected codec mov_text, got %s", subtitleStream.Codec)
 		}
 		if subtitleStream.Language != "eng" {
 			t.Errorf("Expected language eng, got %s", subtitleStream.Language)
@@ -151,32 +184,39 @@ func TestGetMovieMetadata(t *testing.T) {
 			t.Error("Expected at least one chapter")
 		}
 		chapter := result.ChapterList[0]
-		if chapter.Title != "Chapter 1" {
-			t.Errorf("Expected title Chapter 1, got %s", chapter.Title)
+		if chapter.Title != "A Christmas Carol" {
+			t.Errorf("Expected title 'A Christmas Carol', got %s", chapter.Title)
 		}
 	})
 
 	// Test processVideoStream
 	t.Run("processVideoStream", func(t *testing.T) {
 		testStream := mediaStream{
-			Index:          0,
+			Index:          1,
 			CodecName:      "h264",
 			CodecLongName:  "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
-			Profile:        "high",
+			Profile:        "High",
 			Width:          1920,
-			Height:         1080,
+			Height:         800,
 			CodedWidth:     1920,
-			CodedHeight:    1080,
-			AspectRatio:    "16:9",
-			Level:          41,
+			CodedHeight:    800,
+			AspectRatio:    "12:5",
+			Level:          40,
 			ColorTransfer:  "bt709",
 			ColorPrimaries: "bt709",
 			ColorSpace:     "bt709",
 			ColorRange:     "tv",
-			AvgFrameRate:   "24000/1001",
+			AvgFrameRate:   "83029800/3463037",
 			FrameRate:      "24000/1001",
 			BitDepth:       "8",
-			BitRate:        "5000000",
+			BitRate:        "4498650",
+			Disposition: &disposition{
+				Default:         1,
+				AttachedPic:     0,
+				Forced:          0,
+				HearingImpaired: 0,
+				VisualImpaired:  0,
+			},
 		}
 
 		videoStream := f.processVideoStream(testStream)
@@ -194,13 +234,23 @@ func TestGetMovieMetadata(t *testing.T) {
 	// Test processAudioStream
 	t.Run("processAudioStream", func(t *testing.T) {
 		testStream := mediaStream{
-			Index:         1,
+			Index:         0,
 			CodecName:     "aac",
 			CodecLongName: "AAC (Advanced Audio Coding)",
 			Profile:       "LC",
-			Channels:      6,
-			ChannelLayout: "5.1",
-			BitRate:       "384000",
+			Channels:      2,
+			ChannelLayout: "stereo",
+			BitRate:       "125643",
+			Tags: tags{
+				Language: "eng",
+			},
+			Disposition: &disposition{
+				Default:         1,
+				AttachedPic:     0,
+				Forced:          0,
+				HearingImpaired: 0,
+				VisualImpaired:  0,
+			},
 		}
 
 		audioStream := f.processAudioStream(testStream)
@@ -210,17 +260,26 @@ func TestGetMovieMetadata(t *testing.T) {
 		if audioStream.Channels != int32(testStream.Channels) {
 			t.Errorf("Expected channels %d, got %d", testStream.Channels, audioStream.Channels)
 		}
+		if audioStream.Language != testStream.Tags.Language {
+			t.Errorf("Expected language %s, got %s", testStream.Tags.Language, audioStream.Language)
+		}
 	})
 
 	// Test processSubtitleStream
 	t.Run("processSubtitleStream", func(t *testing.T) {
 		testStream := mediaStream{
-			Index:         2,
-			CodecName:     "subrip",
-			CodecLongName: "SubRip subtitle",
+			Index:         5,
+			CodecName:     "mov_text",
+			CodecLongName: "MOV text",
 			Tags: tags{
 				Language: "eng",
-				Title:    "English",
+			},
+			Disposition: &disposition{
+				Default:         1,
+				AttachedPic:     0,
+				Forced:          0,
+				HearingImpaired: 0,
+				VisualImpaired:  0,
 			},
 		}
 
@@ -239,9 +298,16 @@ func TestGetMovieMetadata(t *testing.T) {
 			{
 				Start:     0,
 				StartTime: "0.000000",
-				End:       300,
-				EndTime:   "5.000000",
-				Title:     "Chapter 1",
+				End:       459000,
+				EndTime:   "459.000000",
+				Title:     "A Christmas Carol",
+			},
+			{
+				Start:     459000,
+				StartTime: "459.000000",
+				End:       965000,
+				EndTime:   "965.000000",
+				Title:     "Bah, Humbug!",
 			},
 		}
 
