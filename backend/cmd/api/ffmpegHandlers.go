@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -36,6 +37,24 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.OutputDir = fmt.Sprintf("%s/movies/%d", app.settings.TranscodeDir, movie.ID)
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d/", movie.ID)
 	req.StartTime = 0
+
+	keyframeData, err := app.ffprobe.ExtractKeyframes(req.InputPath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to extract keyframes: %v", err),
+		})
+	}
+
+	segmentLength := time.Duration(ffmpeg.DefaultHlsTime * time.Second)
+	segments := app.ffprobe.ComputeSegments(keyframeData, segmentLength)
+
+	if len(segments) == 0 {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to compute segments",
+		})
+	}
+
+	req.Segments = segments
 
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {

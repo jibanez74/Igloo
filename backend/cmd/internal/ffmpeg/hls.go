@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"fmt"
-	"igloo/cmd/internal/ffprobe"
 	"io"
 	"os"
 	"os/exec"
@@ -14,21 +13,22 @@ import (
 )
 
 type HlsOpts struct {
-	InputPath        string `json:"input_path"`
-	OutputDir        string `json:"output_dir"`
-	StartTime        int64  `json:"start_time"`
-	AudioStreamIndex int    `json:"audio_stream_index"`
-	AudioCodec       string `json:"audio_codec"`
-	AudioBitRate     int    `json:"audio_bit_rate"`
-	AudioChannels    int    `json:"audio_channels"`
-	VideoStreamIndex int    `json:"video_stream_index"`
-	VideoCodec       string `json:"video_codec"`
-	VideoBitrate     int    `json:"video_bitrate"`
-	VideoHeight      int    `json:"video_height"`
-	VideoProfile     string `json:"video_profile"`
-	Preset           string `json:"preset"`
-	SegmentsUrl      string `json:"segments_url"`
-	TotalDuration    int64  `json:"total_duration"`
+	InputPath        string          `json:"input_path"`
+	OutputDir        string          `json:"output_dir"`
+	StartTime        int64           `json:"start_time"`
+	AudioStreamIndex int             `json:"audio_stream_index"`
+	AudioCodec       string          `json:"audio_codec"`
+	AudioBitRate     int             `json:"audio_bit_rate"`
+	AudioChannels    int             `json:"audio_channels"`
+	VideoStreamIndex int             `json:"video_stream_index"`
+	VideoCodec       string          `json:"video_codec"`
+	VideoBitrate     int             `json:"video_bitrate"`
+	VideoHeight      int             `json:"video_height"`
+	VideoProfile     string          `json:"video_profile"`
+	Preset           string          `json:"preset"`
+	SegmentsUrl      string          `json:"segments_url"`
+	TotalDuration    int64           `json:"total_duration"`
+	Segments         []time.Duration `json:"-"`
 }
 
 func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
@@ -41,29 +41,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		}
 	}
 
-	// Extract keyframes and compute segments
-	keyframeData, err := f.probe.ExtractKeyframes(opts.InputPath)
-	if err != nil {
-		return "", &ffmpegError{
-			Field: "keyframe_extraction",
-			Value: opts.InputPath,
-			Msg:   fmt.Sprintf("failed to extract keyframes: %v", err),
-		}
-	}
-
-	// Compute segments based on keyframes
-	segmentLength := time.Duration(6 * time.Second) // Default HLS segment length
-	segments := ffprobe.ComputeSegments(keyframeData, segmentLength)
-	if len(segments) == 0 {
-		return "", &ffmpegError{
-			Field: "segments",
-			Value: "computation",
-			Msg:   "failed to compute segments",
-		}
-	}
-
-	// Create the command with segment information
-	cmd := f.prepareHlsCmd(opts, segments)
+	cmd := f.prepareHlsCmd(opts)
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -199,11 +177,11 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	return nil
 }
 
-func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts, segments []time.Duration) *exec.Cmd {
+func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
 	cmdArgs := f.buildBaseArgs(opts)
 	cmdArgs = append(cmdArgs, f.buildInputArgs(opts)...)
 	cmdArgs = append(cmdArgs, f.buildCodecArgs(opts)...)
-	cmdArgs = append(cmdArgs, f.buildOutputArgs(opts, segments)...)
+	cmdArgs = append(cmdArgs, f.buildOutputArgs(opts)...)
 
 	return exec.Command(f.bin, cmdArgs...)
 }
@@ -310,10 +288,10 @@ func (f *ffmpeg) getHardwareEncoderArgs() []string {
 	}
 }
 
-func (f *ffmpeg) buildOutputArgs(opts *HlsOpts, segments []time.Duration) []string {
+func (f *ffmpeg) buildOutputArgs(opts *HlsOpts) []string {
 	args := []string{
 		"-f", "hls",
-		"-hls_time", DefaultHlsTime,
+		"-hls_time", fmt.Sprintf("%d", DefaultHlsTime),
 		"-hls_playlist_type", DefaultPlaylistType,
 		"-hls_segment_type", DefaultSegmentType,
 		"-hls_segment_filename", filepath.Join(opts.OutputDir, DefaultSegmentPattern),
@@ -324,10 +302,10 @@ func (f *ffmpeg) buildOutputArgs(opts *HlsOpts, segments []time.Duration) []stri
 	}
 
 	// Add force keyframe options based on segments
-	if len(segments) > 0 {
+	if len(opts.Segments) > 0 {
 		var keyframeTimes []string
 		currentTime := time.Duration(0)
-		for _, segment := range segments {
+		for _, segment := range opts.Segments {
 			currentTime += segment
 			keyframeTimes = append(keyframeTimes, fmt.Sprintf("%.3f", currentTime.Seconds()))
 		}

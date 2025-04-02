@@ -8,13 +8,11 @@ import (
 	"time"
 )
 
-// KeyframeData represents the keyframe information extracted from a video
 type KeyframeData struct {
 	TotalDuration time.Duration
 	Keyframes     []time.Duration
 }
 
-// ExtractKeyframes extracts keyframe information from a video file
 func (f *ffprobe) ExtractKeyframes(filePath string) (*KeyframeData, error) {
 	durationCmd := exec.Command(f.bin,
 		"-v", "error",
@@ -97,8 +95,7 @@ func (f *ffprobe) ExtractKeyframes(filePath string) (*KeyframeData, error) {
 	}, nil
 }
 
-// ComputeSegments computes segment boundaries based on keyframe information
-func ComputeSegments(keyframeData *KeyframeData, desiredSegmentLength time.Duration) []time.Duration {
+func (f *ffprobe) ComputeSegments(keyframeData *KeyframeData, desiredSegmentLength time.Duration) []time.Duration {
 	if keyframeData == nil {
 		return nil
 	}
@@ -109,21 +106,28 @@ func ComputeSegments(keyframeData *KeyframeData, desiredSegmentLength time.Durat
 	}
 
 	var segments []time.Duration
-	lastKeyframe := time.Duration(0)
-	desiredCutTime := desiredSegmentLength
+	currentTime := time.Duration(0)
+	nextKeyframeIndex := 0
 
-	for _, keyframe := range keyframeData.Keyframes {
-		if keyframe >= desiredCutTime {
-			// Add segment from last keyframe to current keyframe
-			segments = append(segments, keyframe-lastKeyframe)
-			lastKeyframe = keyframe
-			desiredCutTime += desiredSegmentLength
+	for currentTime < keyframeData.TotalDuration {
+		// Find the next keyframe that's at least desiredSegmentLength away
+		nextKeyframe := keyframeData.TotalDuration
+		for i := nextKeyframeIndex; i < len(keyframeData.Keyframes); i++ {
+			if keyframeData.Keyframes[i] >= currentTime+desiredSegmentLength {
+				nextKeyframe = keyframeData.Keyframes[i]
+				nextKeyframeIndex = i
+				break
+			}
 		}
-	}
 
-	// Add final segment with remaining duration
-	if lastKeyframe < keyframeData.TotalDuration {
-		segments = append(segments, keyframeData.TotalDuration-lastKeyframe)
+		// Calculate segment duration
+		segmentDuration := nextKeyframe - currentTime
+		if segmentDuration > desiredSegmentLength {
+			segmentDuration = desiredSegmentLength
+		}
+
+		segments = append(segments, segmentDuration)
+		currentTime += segmentDuration
 	}
 
 	return segments

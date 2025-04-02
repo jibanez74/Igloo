@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
+	"time"
 )
 
 type Ffprobe interface {
 	GetMovieMetadata(filePath *string) (*movieMetadataResult, error)
 	ExtractKeyframes(filePath string) (*KeyframeData, error)
+	ComputeSegments(*KeyframeData, time.Duration) []time.Duration
 }
 
 type tags struct {
