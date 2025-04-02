@@ -83,7 +83,6 @@ func (f *ffprobe) processStreams(streams []mediaStream) ([]database.CreateVideoS
 	return videoStreams, audioStreams, subtitleStreams
 }
 
-
 func (f *ffprobe) processVideoStream(s mediaStream) database.CreateVideoStreamParams {
 	return database.CreateVideoStreamParams{
 		Index:          int32(s.Index),

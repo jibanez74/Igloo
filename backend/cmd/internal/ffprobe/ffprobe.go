@@ -12,6 +12,11 @@ type Ffprobe interface {
 	GetMovieMetadata(filePath *string) (*movieMetadataResult, error)
 	ExtractKeyframes(filePath string) (*KeyframeData, error)
 	ComputeSegments(*KeyframeData, time.Duration) []time.Duration
+	processStreams(streams []mediaStream) ([]database.CreateVideoStreamParams, []database.CreateAudioStreamParams, []database.CreateSubtitleParams)
+	processVideoStream(s mediaStream) database.CreateVideoStreamParams
+	processAudioStream(s mediaStream) database.CreateAudioStreamParams
+	processSubtitleStream(s mediaStream) database.CreateSubtitleParams
+	processChapters(chapters []tmdbChapter) []database.CreateChapterParams
 }
 
 type tags struct {
