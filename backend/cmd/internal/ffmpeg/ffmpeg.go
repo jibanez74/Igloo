@@ -1,10 +1,9 @@
 package ffmpeg
 
 import (
-	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
-	"os"
+	"igloo/cmd/internal/ffprobe"
 	"os/exec"
 	"sync"
 
@@ -23,6 +22,7 @@ type ffmpeg struct {
 	EnableHardwareEncoding bool
 	jobs                   map[string]job
 	mu                     sync.RWMutex
+	probe                  ffprobe.Ffprobe
 }
 
 var Encoders = map[string]map[string]string{
@@ -49,28 +49,45 @@ var Encoders = map[string]map[string]string{
 }
 
 func New(s *database.GlobalSetting) (FFmpeg, error) {
-	f := ffmpeg{
-		EnableHardwareEncoding: false,
-		HardwareEncoder:        Encoders["software"]["name"],
-		jobs:                   make(map[string]job),
-	}
-
 	if s == nil {
-		return nil, errors.New("provided nil value for settings in ffmpeg package")
+		return nil, &ffmpegError{
+			Field: "settings",
+			Value: "nil",
+			Msg:   "settings cannot be nil",
+		}
 	}
 
 	if s.FfmpegPath == "" {
-		return nil, errors.New("ffmpeg path is empty")
+		return nil, &ffmpegError{
+			Field: "ffmpeg_path",
+			Value: "",
+			Msg:   "ffmpeg path is required",
+		}
 	}
 
 	path, err := exec.LookPath(s.FfmpegPath)
 	if err != nil {
-		_, err = os.Stat(s.FfmpegPath)
-		if err != nil {
-			return nil, fmt.Errorf("ffmpeg not found at %s: %w", s.FfmpegPath, err)
+		return nil, &ffmpegError{
+			Field: "ffmpeg_path",
+			Value: s.FfmpegPath,
+			Msg:   fmt.Sprintf("unable to find ffmpeg at %s: %v", s.FfmpegPath, err),
 		}
+	}
 
-		path = s.FfmpegPath
+	probe, err := ffprobe.New(s)
+	if err != nil {
+		return nil, &ffmpegError{
+			Field: "ffprobe",
+			Value: "initialization",
+			Msg:   fmt.Sprintf("failed to initialize ffprobe: %v", err),
+		}
+	}
+
+	f := ffmpeg{
+		EnableHardwareEncoding: false,
+		HardwareEncoder:        Encoders["software"]["name"],
+		jobs:                   make(map[string]job),
+		probe:                  probe,
 	}
 
 	err = unix.Access(path, unix.X_OK)

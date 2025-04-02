@@ -2,10 +2,12 @@ package ffmpeg
 
 import (
 	"fmt"
+	"igloo/cmd/internal/ffprobe"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,16 +41,29 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		}
 	}
 
-	err = f.createMasterPlaylist(opts)
+	// Extract keyframes and compute segments
+	keyframeData, err := f.probe.ExtractKeyframes(opts.InputPath)
 	if err != nil {
 		return "", &ffmpegError{
-			Field: "master_playlist",
-			Value: opts.OutputDir,
-			Msg:   fmt.Sprintf("failed to create master playlist: %v", err),
+			Field: "keyframe_extraction",
+			Value: opts.InputPath,
+			Msg:   fmt.Sprintf("failed to extract keyframes: %v", err),
 		}
 	}
 
-	cmd := f.prepareHlsCmd(opts)
+	// Compute segments based on keyframes
+	segmentLength := time.Duration(6 * time.Second) // Default HLS segment length
+	segments := ffprobe.ComputeSegments(keyframeData, segmentLength)
+	if len(segments) == 0 {
+		return "", &ffmpegError{
+			Field: "segments",
+			Value: "computation",
+			Msg:   "failed to compute segments",
+		}
+	}
+
+	// Create the command with segment information
+	cmd := f.prepareHlsCmd(opts, segments)
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -79,9 +94,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		}
 
 		f.mu.Lock()
-
 		delete(f.jobs, jobID)
-
 		f.mu.Unlock()
 	}
 
@@ -89,23 +102,19 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		defer stderr.Close()
 
 		buf := make([]byte, 1024)
-
 		for {
 			n, err := stderr.Read(buf)
 			if err != nil {
 				if err != io.EOF {
 					fmt.Printf("failed to read stderr: %v\n", err)
 				}
-
 				break
 			}
-
 			fmt.Printf("ffmpeg stderr: %s", string(buf[:n]))
 		}
 	}()
 
 	f.mu.Lock()
-
 	f.jobs[jobID] = job{
 		process:   cmd,
 		startTime: time.Now(),
@@ -113,7 +122,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		opts:      opts,
 		cleanup:   cleanup,
 	}
-
 	f.mu.Unlock()
 
 	go func() {
@@ -121,7 +129,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		if err != nil {
 			fmt.Printf("ffmpeg process error: %v\n", err)
 		}
-
 		cleanup()
 	}()
 
@@ -192,11 +199,11 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	return nil
 }
 
-func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *exec.Cmd {
+func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts, segments []time.Duration) *exec.Cmd {
 	cmdArgs := f.buildBaseArgs(opts)
 	cmdArgs = append(cmdArgs, f.buildInputArgs(opts)...)
 	cmdArgs = append(cmdArgs, f.buildCodecArgs(opts)...)
-	cmdArgs = append(cmdArgs, f.buildOutputArgs(opts)...)
+	cmdArgs = append(cmdArgs, f.buildOutputArgs(opts, segments)...)
 
 	return exec.Command(f.bin, cmdArgs...)
 }
@@ -303,8 +310,8 @@ func (f *ffmpeg) getHardwareEncoderArgs() []string {
 	}
 }
 
-func (f *ffmpeg) buildOutputArgs(opts *HlsOpts) []string {
-	return []string{
+func (f *ffmpeg) buildOutputArgs(opts *HlsOpts, segments []time.Duration) []string {
+	args := []string{
 		"-f", "hls",
 		"-hls_time", DefaultHlsTime,
 		"-hls_playlist_type", DefaultPlaylistType,
@@ -314,9 +321,19 @@ func (f *ffmpeg) buildOutputArgs(opts *HlsOpts) []string {
 		"-hls_base_url", opts.SegmentsUrl + "/",
 		"-hls_flags", DefaultHlsFlags,
 		"-hls_list_size", DefaultHlsListSize,
-		"-hls_allow_cache", "0",
-		"-master_pl_name", DefaultMasterPlaylist,
-		"-hls_init_time", "0",
-		filepath.Join(opts.OutputDir, DefaultPlaylistName),
 	}
+
+	// Add force keyframe options based on segments
+	if len(segments) > 0 {
+		var keyframeTimes []string
+		currentTime := time.Duration(0)
+		for _, segment := range segments {
+			currentTime += segment
+			keyframeTimes = append(keyframeTimes, fmt.Sprintf("%.3f", currentTime.Seconds()))
+		}
+		args = append(args, "-force_key_frames", strings.Join(keyframeTimes, ","))
+	}
+
+	args = append(args, filepath.Join(opts.OutputDir, DefaultPlaylistName))
+	return args
 }

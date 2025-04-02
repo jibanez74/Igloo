@@ -5,24 +5,10 @@ const (
 	DefaultHlsListSize    = "0"
 	DefaultSegmentType    = "fmp4"
 	DefaultHlsFlags       = "independent_segments+program_date_time+append_list+discont_start+omit_endlist"
-	DefaultPlaylistType   = "vod"
+	DefaultPlaylistType   = "event"
 	DefaultSegmentPattern = "segment_%d.m4s"
 	DefaultPlaylistName   = "playlist.m3u8"
-	DefaultMasterPlaylist = "master.m3u8"
 	DefaultInitFileName   = "init.mp4"
-
-	HlsTagExtM3U              = "#EXTM3U"
-	HlsTagVersion             = "#EXT-X-VERSION:7"
-	HlsTagTargetDuration      = "#EXT-X-TARGETDURATION:%s"
-	HlsTagMediaSequence       = "#EXT-X-MEDIA-SEQUENCE:0"
-	HlsTagPlaylistType        = "#EXT-X-PLAYLIST-TYPE:%s"
-	HlsTagIndependentSegments = "#EXT-X-INDEPENDENT-SEGMENTS"
-	HlsTagProgramDateTime     = "#EXT-X-PROGRAM-DATE-TIME:%s"
-	HlsTagMap                 = "#EXT-X-MAP:URI=\"%s\",BANDWIDTH=0"
-	HlsTagStreamInf           = "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=\"%s\",FRAME-RATE=%s"
-	HlsTagStreamInfAudio      = "#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS=\"%s\",FRAME-RATE=%s,AUDIO=\"audio\""
-	HlsTagMedia               = "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"%s\",DEFAULT=YES,URI=\"%s\",LANGUAGE=\"%s\",CODECS=\"%s\",CHANNELS=\"%d\""
-	HlsTagEndList             = "#EXT-X-ENDLIST"
 
 	DefaultAudioRate     = 128
 	DefaultAudioChannels = 2

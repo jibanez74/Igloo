@@ -9,6 +9,7 @@ import (
 
 type Ffprobe interface {
 	GetMovieMetadata(filePath *string) (*movieMetadataResult, error)
+	ExtractKeyframes(filePath string) (*KeyframeData, error)
 }
 
 type tags struct {
