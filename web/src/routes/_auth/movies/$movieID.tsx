@@ -94,7 +94,7 @@ function MovieDetailsPage() {
         audio_channels: 2,
         audio_stream_index: movie.audio_streams[0].index,
         video_stream_index: movie.video_streams[0].index,
-        video_codec: "copy",
+        video_codec: "libx264",
       };
 
       const res = await fetch(`/api/v1/ffmpeg/create-hls-movie/${movie.id}`, {
@@ -105,6 +105,8 @@ function MovieDetailsPage() {
         },
         body: JSON.stringify(opts),
       });
+
+      
 
       const data = await res.json();
 

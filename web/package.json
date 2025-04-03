@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.1",
-    "@tanstack/solid-query": "^5.71.6",
+    "@tanstack/solid-query": "^5.71.7",
     "@tanstack/solid-router": "^1.114.33",
     "hls.js": "^1.6.0",
     "solid-icons": "^1.1.0",
@@ -18,7 +18,7 @@
     "tailwindcss": "^4.1.1"
   },
   "devDependencies": {
-    "@tanstack/router-plugin": "^1.114.33",
+    "@tanstack/router-plugin": "^1.114.34",
     "typescript": "~5.7.3",
     "vite": "^6.2.4",
     "vite-plugin-solid": "^2.11.6"
