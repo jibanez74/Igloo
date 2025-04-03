@@ -41,6 +41,19 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		}
 	}
 
+	f.mu.Lock()
+
+	if len(f.jobs) >= 10 {
+		f.mu.Unlock()
+		return "", &ffmpegError{
+			Field: "jobs",
+			Value: "max_concurrent",
+			Msg:   "maximum number of concurrent jobs (10) reached",
+		}
+	}
+
+	f.mu.Unlock()
+
 	cmd := f.prepareHlsCmd(opts)
 
 	stderr, err := cmd.StderrPipe()
@@ -103,18 +116,17 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	}
 	f.mu.Unlock()
 
-	go func() {
-		err := f.waitForSegments(playlistPath, 3, 5*time.Second)
-		if err != nil {
-			fmt.Printf("failed to wait for segments: %v\n", err)
-			return
-		}
+	
+    err := f.waitForSegments(playlistPath, 3, 5*time.Second)
+	if err != nil {
+		fmt.Printf("failed to wait for segments: %v\n", err)
+		return
+	}
 
-		err = f.convertToVod(playlistPath)
-		if err != nil {
-			fmt.Printf("failed to convert to VOD: %v\n", err)
-		}
-	}()
+	err = f.convertToVod(playlistPath)
+	if err != nil {
+		fmt.Printf("failed to convert to VOD: %v\n", err)
+	}
 
 	go func() {
 		err := cmd.Wait()

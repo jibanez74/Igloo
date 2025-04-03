@@ -94,7 +94,11 @@ function MovieDetailsPage() {
         audio_channels: 2,
         audio_stream_index: movie.audio_streams[0].index,
         video_stream_index: movie.video_streams[0].index,
-        video_codec: "libx264",
+        video_codec: "h264",
+        video_height: 720,
+        video_bit_rate: 2000,
+        preset: "veryfast",
+        video_profile: "main",
       };
 
       const res = await fetch(`/api/v1/ffmpeg/create-hls-movie/${movie.id}`, {
@@ -106,8 +110,6 @@ function MovieDetailsPage() {
         body: JSON.stringify(opts),
       });
 
-      
-
       const data = await res.json();
 
       if (!res.ok) {
@@ -117,19 +119,19 @@ function MovieDetailsPage() {
 
       alert(JSON.stringify(data));
 
-      navigate({
-        to: "/movies/$movieID/play",
-        from: Route.fullPath,
-        params: {
-          movieID: movie.id.toString(),
-        },
-        search: {
-          title: movie.title,
-          thumb: movie.thumb,
-          pid: data.pid,
-          m3u8Url: data.m3u8_url,
-        },
-      });
+      // navigate({
+      //   to: "/movies/$movieID/play",
+      //   from: Route.fullPath,
+      //   params: {
+      //     movieID: movie.id.toString(),
+      //   },
+      //   search: {
+      //     title: movie.title,
+      //     thumb: movie.thumb,
+      //     pid: data.pid,
+      //     m3u8Url: data.m3u8_url,
+      //   },
+      // });
     } catch (err) {
       console.error(err);
       alert("an error occurred while playing the movie");
