@@ -3,7 +3,6 @@ package ffprobe
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"igloo/cmd/internal/database"
 	"os/exec"
 	"strconv"
@@ -22,30 +21,17 @@ func (f *ffprobe) GetMovieMetadata(filePath *string) (*movieMetadataResult, erro
 		"-show_format",
 		"-print_format", "json")
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to run ffprobe: %w, output: %s", err, output)
+		return nil, err
 	}
-
-	// Print the raw output for debugging
-	fmt.Printf("Raw ffprobe output: %s\n", string(output))
 
 	var probeResult result
 
 	err = json.Unmarshal(output, &probeResult)
 	if err != nil {
-		// Print the error and the raw output for debugging
-		fmt.Printf("Error parsing ffprobe output: %v\n", err)
-		fmt.Printf("Raw output that caused the error: %s\n", string(output))
-		return nil, fmt.Errorf("failed to parse ffprobe output: %w, raw output: %s", err, string(output))
+		return nil, err
 	}
-
-	if len(probeResult.Streams) == 0 {
-		return nil, errors.New("no streams found")
-	}
-
-	// Print the parsed streams for debugging
-	fmt.Printf("Parsed streams: %+v\n", probeResult.Streams)
 
 	videoStreams, audioStreams, subtitleStreams := f.processStreams(probeResult.Streams)
 
@@ -75,10 +61,6 @@ func (f *ffprobe) processStreams(streams []mediaStream) ([]database.CreateVideoS
 	subtitleStreams := make([]database.CreateSubtitleParams, 0)
 
 	for _, s := range streams {
-		if s.Disposition != nil && s.Disposition.GetInt(s.Disposition.AttachedPic) == 1 {
-			continue
-		}
-
 		switch s.CodecType {
 		case "video":
 			videoStreams = append(videoStreams, f.processVideoStream(s))
