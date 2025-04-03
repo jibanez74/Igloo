@@ -117,7 +117,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	f.mu.Unlock()
 
 	
-    err := f.waitForSegments(playlistPath, 3, 5*time.Second)
+    err = f.waitForSegments(playlistPath, 3, 5*time.Second)
 	if err != nil {
 		fmt.Printf("failed to wait for segments: %v\n", err)
 		return
