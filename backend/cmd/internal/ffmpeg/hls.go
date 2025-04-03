@@ -63,6 +63,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	}
 
 	jobID := uuid.New().String()
+	playlistPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
 
 	cleanup := func() {
 		stderr.Close()
@@ -101,6 +102,19 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		cleanup:   cleanup,
 	}
 	f.mu.Unlock()
+
+	go func() {
+		err := f.waitForSegments(playlistPath, 3, 5*time.Second)
+		if err != nil {
+			fmt.Printf("failed to wait for segments: %v\n", err)
+			return
+		}
+
+		err = f.convertToVod(playlistPath)
+		if err != nil {
+			fmt.Printf("failed to convert to VOD: %v\n", err)
+		}
+	}()
 
 	go func() {
 		err := cmd.Wait()

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type playlistInfo struct {
@@ -250,4 +251,28 @@ func (f *ffmpeg) getSegmentCount(playlistPath string) (int, error) {
 	}
 
 	return len(info.Segments), nil
+}
+
+func (f *ffmpeg) waitForSegments(playlistPath string, minSegments int, timeout time.Duration) error {
+	startTime := time.Now()
+	for {
+		count, err := f.getSegmentCount(playlistPath)
+		if err != nil {
+			return err
+		}
+
+		if count >= minSegments {
+			return nil
+		}
+
+		if time.Since(startTime) > timeout {
+			return &ffmpegError{
+				Field: "timeout",
+				Value: fmt.Sprintf("%v", timeout),
+				Msg:   fmt.Sprintf("timed out waiting for %d segments", minSegments),
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
 }
