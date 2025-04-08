@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	fluentffmpeg "github.com/modfy/fluent-ffmpeg"
@@ -71,6 +72,8 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 			return
 		}
 	}()
+
+	time.Sleep(12 * time.Second)
 
 	go func() {
 		err = f.monitorAndUpdatePlaylists(&monitorParams{
