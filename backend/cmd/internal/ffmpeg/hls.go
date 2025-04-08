@@ -167,7 +167,7 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *fluentffmpeg.Command {
 		"-hls_fmp4_init_filename", DefaultInitFileName,
 		"-hls_flags", DefaultHlsFlags,
 		"-hls_list_size", DefaultHlsListSize,
-		"-ar", "48000",
+		"-hls_base_url", opts.SegmentsUrl,
 	}
 
 	cmd := fluentffmpeg.NewCommand(f.bin).
