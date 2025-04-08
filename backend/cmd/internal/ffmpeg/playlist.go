@@ -1,278 +1,157 @@
 package ffmpeg
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"os"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
-type playlistInfo struct {
-	Version        int
-	TargetDuration float64
-	MediaSequence  int
-	Segments       []segmentInfo
-	InitSegment    string
-	KeyframeBased  bool    // Indicates if segments are keyframe-based
-	MaxDuration    float64 // Maximum allowed segment duration
-	MinDuration    float64 // Minimum allowed segment duration
-}
-
-type segmentInfo struct {
-	Duration   float64
-	URI        string
-	IsKeyframe bool    // Indicates if this segment starts with a keyframe
-	StartTime  float64 // Start time of the segment in the video
-	EndTime    float64 // End time of the segment in the video
-}
-
-func (f *ffmpeg) convertToVod(playlistPath string) error {
-	content, err := os.ReadFile(playlistPath)
+func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string) error {
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return &ffmpegError{
-			Field: "playlist",
-			Value: playlistPath,
-			Msg:   fmt.Sprintf("failed to read playlist: %v", err),
+		return fmt.Errorf("failed to create watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	eventPath := filepath.Join(outputDir, DefaultPlaylistName)
+	vodPath := filepath.Join(outputDir, VodPlaylistName)
+
+	err = f.createInitialVodPlaylist(eventPath, vodPath)
+	if err != nil {
+		return fmt.Errorf("failed to create initial VOD playlist: %w", err)
+	}
+
+	err = watcher.Add(outputDir)
+	if err != nil {
+		return fmt.Errorf("failed to watch directory: %w", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return fmt.Errorf("watcher channel closed")
+			}
+
+			if event.Name != eventPath {
+				continue
+			}
+
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				if err := f.updateVodPlaylist(eventPath, vodPath); err != nil {
+					return fmt.Errorf("failed to update VOD playlist: %w", err)
+				}
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return fmt.Errorf("watcher error channel closed")
+			}
+
+			return fmt.Errorf("watcher error: %w", err)
+		}
+	}
+}
+
+func (f *ffmpeg) createInitialVodPlaylist(eventPath, vodPath string) error {
+	for i := 0; i < 10; i++ {
+		_, err := os.Stat(eventPath)
+		if err == nil {
+			break
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	content, err := os.ReadFile(eventPath)
+	if err != nil {
+		return fmt.Errorf("failed to read event playlist: %w", err)
+	}
+
+	vodContent := strings.Replace(
+		string(content),
+		"#EXT-X-PLAYLIST-TYPE:EVENT",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		1,
+	)
+
+	return os.WriteFile(vodPath, []byte(vodContent), 0644)
+}
+
+func (f *ffmpeg) updateVodPlaylist(eventPath, vodPath string) error {
+	eventContent, err := os.ReadFile(eventPath)
+	if err != nil {
+		return fmt.Errorf("failed to read event playlist: %w", err)
+	}
+
+	vodContent, err := os.ReadFile(vodPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read VOD playlist: %w", err)
+	}
+
+	eventLines := strings.Split(string(eventContent), "\n")
+	vodLines := strings.Split(string(vodContent), "\n")
+
+	lastSegment := ""
+
+	for i := len(vodLines) - 1; i >= 0; i-- {
+		if strings.HasPrefix(vodLines[i], "#EXTINF") {
+			lastSegment = vodLines[i+1]
+			break
 		}
 	}
 
-	info, err := f.parsePlaylist(string(content))
-	if err != nil {
-		return &ffmpegError{
-			Field: "playlist",
-			Value: playlistPath,
-			Msg:   fmt.Sprintf("failed to parse playlist: %v", err),
+	var newSegments []string
+
+	foundLastSegment := lastSegment == ""
+
+	for _, line := range eventLines {
+		if foundLastSegment {
+			if strings.HasPrefix(line, "#EXTINF") || strings.HasPrefix(line, "#EXT-X-") {
+				newSegments = append(newSegments, line)
+			}
+		} else if line == lastSegment {
+			foundLastSegment = true
 		}
 	}
 
-	vodContent := f.generateVodPlaylist(info)
-
-	err = os.WriteFile(playlistPath, []byte(vodContent), 0644)
-	if err != nil {
-		return &ffmpegError{
-			Field: "playlist",
-			Value: playlistPath,
-			Msg:   fmt.Sprintf("failed to write VOD playlist: %v", err),
+	if len(newSegments) > 0 {
+		vodContentStr := strings.TrimSpace(string(vodContent))
+		if vodContentStr != "" {
+			vodContentStr += "\n"
 		}
+		vodContentStr += strings.Join(newSegments, "\n")
+
+		return os.WriteFile(vodPath, []byte(vodContentStr), 0644)
 	}
 
 	return nil
 }
 
-func (f *ffmpeg) parsePlaylist(content string) (*playlistInfo, error) {
-	info := &playlistInfo{
-		Version:       7,
-		Segments:      make([]segmentInfo, 0),
-		KeyframeBased: true, // Default to keyframe-based segmentation
-		MaxDuration:   10.0, // Maximum segment duration in seconds
-		MinDuration:   2.0,  // Minimum segment duration in seconds
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	currentTime := 0.0
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		switch {
-		case strings.HasPrefix(line, "#EXT-X-VERSION:"):
-			version, err := strconv.Atoi(strings.TrimPrefix(line, "#EXT-X-VERSION:"))
-			if err != nil {
-				return nil, &ffmpegError{
-					Field: "version",
-					Value: strings.TrimPrefix(line, "#EXT-X-VERSION:"),
-					Msg:   "invalid version format",
-				}
-			}
-			info.Version = version
-
-		case strings.HasPrefix(line, "#EXT-X-TARGETDURATION:"):
-			duration, err := strconv.ParseFloat(strings.TrimPrefix(line, "#EXT-X-TARGETDURATION:"), 64)
-			if err != nil {
-				return nil, &ffmpegError{
-					Field: "target_duration",
-					Value: strings.TrimPrefix(line, "#EXT-X-TARGETDURATION:"),
-					Msg:   "invalid duration format",
-				}
-			}
-			info.TargetDuration = duration
-
-		case strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:"):
-			sequence, err := strconv.Atoi(strings.TrimPrefix(line, "#EXT-X-MEDIA-SEQUENCE:"))
-			if err != nil {
-				return nil, &ffmpegError{
-					Field: "media_sequence",
-					Value: strings.TrimPrefix(line, "#EXT-X-MEDIA-SEQUENCE:"),
-					Msg:   "invalid sequence format",
-				}
-			}
-			info.MediaSequence = sequence
-
-		case strings.HasPrefix(line, "#EXT-X-MAP:"):
-			uri := f.extractUriFromMap(line)
-			info.InitSegment = uri
-
-		case strings.HasPrefix(line, "#EXTINF:"):
-			durationStr := strings.TrimPrefix(line, "#EXTINF:")
-			durationStr = strings.TrimSuffix(durationStr, ",")
-			duration, err := strconv.ParseFloat(durationStr, 64)
-			if err != nil {
-				return nil, &ffmpegError{
-					Field: "segment_duration",
-					Value: durationStr,
-					Msg:   "invalid segment duration format",
-				}
-			}
-
-			// Check if duration is within allowed range
-			if duration > info.MaxDuration {
-				return nil, &ffmpegError{
-					Field: "segment_duration",
-					Value: fmt.Sprintf("%.3f", duration),
-					Msg:   fmt.Sprintf("segment duration exceeds maximum allowed duration of %.1f seconds", info.MaxDuration),
-				}
-			}
-
-			if duration < info.MinDuration {
-				return nil, &ffmpegError{
-					Field: "segment_duration",
-					Value: fmt.Sprintf("%.3f", duration),
-					Msg:   fmt.Sprintf("segment duration is below minimum allowed duration of %.1f seconds", info.MinDuration),
-				}
-			}
-
-			if !scanner.Scan() {
-				return nil, &ffmpegError{
-					Field: "segment_uri",
-					Value: "missing",
-					Msg:   "missing segment URI after duration",
-				}
-			}
-			uri := strings.TrimSpace(scanner.Text())
-
-			// Check for keyframe indicator in URI (if present)
-			isKeyframe := strings.Contains(uri, "#keyframe")
-			if isKeyframe {
-				uri = strings.TrimSuffix(uri, "#keyframe")
-			}
-
-			segment := segmentInfo{
-				Duration:   duration,
-				URI:        uri,
-				IsKeyframe: isKeyframe,
-				StartTime:  currentTime,
-				EndTime:    currentTime + duration,
-			}
-
-			info.Segments = append(info.Segments, segment)
-			currentTime += duration
-		}
-	}
-
-	return info, nil
-}
-
-func (f *ffmpeg) generateVodPlaylist(info *playlistInfo) string {
-	var builder strings.Builder
-
-	builder.WriteString("#EXTM3U\n")
-	builder.WriteString(fmt.Sprintf("#EXT-X-VERSION:%d\n", info.Version))
-	builder.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")
-	builder.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%.0f\n", info.TargetDuration))
-	builder.WriteString(fmt.Sprintf("#EXT-X-MEDIA-SEQUENCE:%d\n", info.MediaSequence))
-
-	if info.InitSegment != "" {
-		builder.WriteString(fmt.Sprintf("#EXT-X-MAP:URI=\"%s\"\n", info.InitSegment))
-	}
-
-	for _, segment := range info.Segments {
-		// Add keyframe indicator if present
-		uri := segment.URI
-		if segment.IsKeyframe {
-			uri += "#keyframe"
-		}
-
-		builder.WriteString(fmt.Sprintf("#EXTINF:%.3f,\n", segment.Duration))
-		builder.WriteString(uri + "\n")
-	}
-
-	builder.WriteString("#EXT-X-ENDLIST\n")
-
-	return builder.String()
-}
-
-func (f *ffmpeg) extractUriFromMap(line string) string {
-	line = strings.TrimPrefix(line, "#EXT-X-MAP:")
-
-	if strings.Contains(line, "URI=") {
-		parts := strings.Split(line, "URI=")
-		if len(parts) > 1 {
-			// Find the first quote
-			start := strings.Index(parts[1], "\"")
-			if start == -1 {
-				return ""
-			}
-			// Find the next quote after the first one
-			end := strings.Index(parts[1][start+1:], "\"")
-			if end == -1 {
-				return ""
-			}
-			// Adjust end index to account for the substring
-			end = start + 1 + end
-			return parts[1][start+1 : end]
-		}
-	}
-
-	return ""
-}
-
-func (f *ffmpeg) getSegmentCount(playlistPath string) (int, error) {
-	content, err := os.ReadFile(playlistPath)
+func (f *ffmpeg) finalizeVODPlaylist(vodPath string) error {
+	content, err := os.ReadFile(vodPath)
 	if err != nil {
-		return 0, &ffmpegError{
-			Field: "playlist",
-			Value: playlistPath,
-			Msg:   fmt.Sprintf("failed to read playlist: %v", err),
-		}
+		return fmt.Errorf("failed to read VOD playlist: %w", err)
 	}
 
-	info, err := f.parsePlaylist(string(content))
-	if err != nil {
-		return 0, &ffmpegError{
-			Field: "playlist",
-			Value: playlistPath,
-			Msg:   fmt.Sprintf("failed to parse playlist: %v", err),
-		}
+	if strings.Contains(string(content), "#EXT-X-ENDLIST") {
+		return nil
 	}
 
-	return len(info.Segments), nil
-}
-
-func (f *ffmpeg) waitForSegments(playlistPath string, minSegments int, timeout time.Duration) error {
-	startTime := time.Now()
-	for {
-		count, err := f.getSegmentCount(playlistPath)
-		if err != nil {
-			return err
-		}
-
-		if count >= minSegments {
-			return nil
-		}
-
-		if time.Since(startTime) > timeout {
-			return &ffmpegError{
-				Field: "timeout",
-				Value: fmt.Sprintf("%v", timeout),
-				Msg:   fmt.Sprintf("timed out waiting for %d segments", minSegments),
-			}
-		}
-
-		time.Sleep(500 * time.Millisecond)
+	vodContent := string(content)
+	if !strings.HasSuffix(vodContent, "\n") {
+		vodContent += "\n"
 	}
+
+	vodContent += "#EXT-X-ENDLIST\n"
+
+	return os.WriteFile(vodPath, []byte(vodContent), 0644)
 }

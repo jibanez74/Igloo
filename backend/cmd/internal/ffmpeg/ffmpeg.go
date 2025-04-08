@@ -3,7 +3,6 @@ package ffmpeg
 import (
 	"fmt"
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/ffprobe"
 	"os/exec"
 	"sync"
 
@@ -11,23 +10,23 @@ import (
 )
 
 type FFmpeg interface {
+	JobsFull() bool
 	CreateHlsStream(opts *HlsOpts) (string, error)
-	CancelJob(string) error
-	JobsFull(int) bool
+	CancelJob(jobID string) error
 }
 
 type ffmpeg struct {
-	bin                    string
-	HardwareEncoder        string
-	EnableHardwareEncoding bool
-	jobs                   map[string]job
-	mu                     sync.RWMutex
-	probe                  ffprobe.Ffprobe
+	bin                        string
+	enableHardwareAcceleration bool
+	encoder                    map[string]string
+	jobs                       map[string]job
+	mu                         sync.RWMutex
+	maxJobs                    int
 }
 
 var Encoders = map[string]map[string]string{
 	"software": {
-		"name": "libx264",
+		"name": "software",
 		"h264": "libx264",
 		"h265": "libx265",
 	},
@@ -57,6 +56,14 @@ func New(s *database.GlobalSetting) (FFmpeg, error) {
 		}
 	}
 
+	f := ffmpeg{
+		bin:                        s.FfmpegPath,
+		enableHardwareAcceleration: false,
+		encoder:                    Encoders["software"],
+		jobs:                       make(map[string]job),
+		maxJobs:                    10,
+	}
+
 	if s.FfmpegPath == "" {
 		return nil, &ffmpegError{
 			Field: "ffmpeg_path",
@@ -74,47 +81,24 @@ func New(s *database.GlobalSetting) (FFmpeg, error) {
 		}
 	}
 
-	probe, err := ffprobe.New(s)
-	if err != nil {
-		return nil, &ffmpegError{
-			Field: "ffprobe",
-			Value: "initialization",
-			Msg:   fmt.Sprintf("failed to initialize ffprobe: %v", err),
-		}
-	}
-
-	f := ffmpeg{
-		EnableHardwareEncoding: false,
-		HardwareEncoder:        Encoders["software"]["name"],
-		jobs:                   make(map[string]job),
-		probe:                  probe,
-	}
-
 	err = unix.Access(path, unix.X_OK)
 	if err != nil {
-		return nil, fmt.Errorf("ffmpeg at %s is not executable: %w", path, err)
+		return nil, &ffmpegError{
+			Field: "ffmpeg_path",
+			Value: s.FfmpegPath,
+			Msg:   fmt.Sprintf("unable to access ffmpeg at %s: %v", s.FfmpegPath, err),
+		}
 	}
-
-	f.bin = path
 
 	if s.EnableHardwareAcceleration {
 		encoder, exists := Encoders[s.HardwareEncoder]
 		if exists {
-			f.EnableHardwareEncoding = true
-			f.HardwareEncoder = encoder["name"]
+			f.enableHardwareAcceleration = true
+			f.encoder = encoder
 		} else {
 			return nil, fmt.Errorf("invalid hardware encoder: %s", s.HardwareEncoder)
 		}
 	}
 
 	return &f, nil
-}
-
-func NewFFmpeg() *ffmpeg {
-	return &ffmpeg{
-		bin:                    "ffmpeg",
-		jobs:                   make(map[string]job),
-		EnableHardwareEncoding: false,
-		HardwareEncoder:        "",
-	}
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"igloo/cmd/internal/ffmpeg"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -38,24 +37,6 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 	req.SegmentsUrl = fmt.Sprintf("/api/v1/static/movies/%d", movie.ID)
 	req.StartTime = 0
 
-	keyframeData, err := app.ffprobe.ExtractKeyframes(req.InputPath)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("failed to extract keyframes: %v", err),
-		})
-	}
-
-	segmentLength := time.Duration(ffmpeg.DefaultHlsTime * time.Second)
-	segments := app.ffprobe.ComputeSegments(keyframeData, segmentLength)
-
-	if len(segments) == 0 {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to compute segments",
-		})
-	}
-
-	req.Segments = segments
-
 	pid, err := app.ffmpeg.CreateHlsStream(&req)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -65,22 +46,22 @@ func (app *application) createMovieHls(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"pid":      pid,
-		"m3u8_url": fmt.Sprintf("/api/v1/transcode/movies/%d/%s", movie.ID, ffmpeg.DefaultPlaylistName),
+		"m3u8_url": fmt.Sprintf("/api/v1/transcode/movies/%d/%s", movie.ID, ffmpeg.VodPlaylistName),
 	})
 }
 
-func (app *application) cancelFFmpegJob(c *fiber.Ctx) error {
+func (app *application) cancelJob(c *fiber.Ctx) error {
 	pid := c.Params("pid")
 	if pid == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "job pid is required",
+			"error": "pid parameter is required",
 		})
 	}
 
 	err := app.ffmpeg.CancelJob(pid)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("failed to cancel job: %v", err),
+			"error": err.Error(),
 		})
 	}
 

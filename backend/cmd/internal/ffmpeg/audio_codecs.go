@@ -1,6 +1,5 @@
 package ffmpeg
 
-
 var (
 	ValidAudioCodecsMap = map[string]bool{
 		AudioCodecCopy: true,
@@ -16,17 +15,14 @@ var (
 		6: true, // 5.1 surround
 		8: true, // 7.1 surround
 	}
-
-	ValidAudioBitratesMap = map[int]bool{
-		128: true, // Standard quality
-		192: true, // High quality
-		256: true, // Very high quality
-		320: true, // Maximum quality for lossy codecs
-		640: true, // High quality for lossless codecs
-	}
 )
 
-func validateAudioSettings(opts *HlsOpts) error {
+type audioSettings struct {
+	Codec    string
+	Channels int
+}
+
+func (f *ffmpeg) validateAudioSettings(opts *audioSettings) error {
 	if opts == nil {
 		return &ffmpegError{
 			Field: "options",
@@ -35,51 +31,19 @@ func validateAudioSettings(opts *HlsOpts) error {
 		}
 	}
 
-	if !ValidAudioCodecsMap[opts.AudioCodec] {
+	if !ValidAudioCodecsMap[opts.Codec] {
 		return &ffmpegError{
 			Field: "codec",
-			Value: opts.AudioCodec,
+			Value: opts.Codec,
 			Msg:   "unsupported audio codec",
 		}
 	}
 
-	if opts.AudioCodec == AudioCodecCopy {
-		return nil
-	}
-
-	if !ValidAudioBitratesMap[opts.AudioBitRate] {
-		return &ffmpegError{
-			Field: "bitrate",
-			Value: opts.AudioBitRate,
-			Msg:   "unsupported audio bitrate",
-		}
-	}
-
-	if !ValidAudioChannelsMap[opts.AudioChannels] {
+	if !ValidAudioChannelsMap[opts.Channels] {
 		return &ffmpegError{
 			Field: "channels",
-			Value: opts.AudioChannels,
+			Value: opts.Channels,
 			Msg:   "unsupported audio channel configuration",
-		}
-	}
-
-	switch opts.AudioCodec {
-	case AudioCodecFLAC:
-		if opts.AudioBitRate < 256 {
-			return &ffmpegError{
-				Field: "bitrate",
-				Value: opts.AudioBitRate,
-				Msg:   "FLAC requires minimum bitrate of 256kbps",
-			}
-		}
-
-	case AudioCodecMP3:
-		if opts.AudioBitRate > 320 {
-			return &ffmpegError{
-				Field: "bitrate",
-				Value: opts.AudioBitRate,
-				Msg:   "MP3 maximum bitrate is 320kbps",
-			}
 		}
 	}
 

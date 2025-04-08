@@ -39,4 +39,6 @@ const (
 	VideoProfileMain     = "main"
 	VideoProfileHigh     = "high"
 	VideoProfileHigh10   = "high10"
+
+	VodPlaylistName = "vod.m3u8"
 )

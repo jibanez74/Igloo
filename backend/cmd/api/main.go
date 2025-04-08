@@ -79,7 +79,7 @@ func main() {
 
 	ffmpegRoutes := api.Group("/ffmpeg")
 	ffmpegRoutes.Post("/create-hls-movie/:id", app.createMovieHls)
-	ffmpegRoutes.Post("/cancel-job/:pid", app.cancelFFmpegJob)
+	ffmpegRoutes.Post("/cancel-job/:pid", app.cancelJob)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
