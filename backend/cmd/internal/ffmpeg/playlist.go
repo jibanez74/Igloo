@@ -27,8 +27,8 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 		return fmt.Errorf("failed to watch directory: %w", err)
 	}
 
-	// Wait for the event playlist to be created
 	playlistCreated := make(chan struct{})
+
 	go func() {
 		for {
 			select {
@@ -51,18 +51,15 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 		}
 	}()
 
-	// Wait for playlist creation or context cancellation
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-playlistCreated:
-		// Create initial VOD playlist
 		if err := f.createInitialVodPlaylist(eventPath, vodPath); err != nil {
 			return fmt.Errorf("failed to create initial VOD playlist: %w", err)
 		}
 	}
 
-	// Continue monitoring for updates
 	for {
 		select {
 		case <-ctx.Done():
@@ -118,53 +115,22 @@ func (f *ffmpeg) createInitialVodPlaylist(eventPath, vodPath string) error {
 }
 
 func (f *ffmpeg) updateVodPlaylist(eventPath, vodPath string) error {
-	eventContent, err := os.ReadFile(eventPath)
+	// Read the event playlist content
+	content, err := os.ReadFile(eventPath)
 	if err != nil {
 		return fmt.Errorf("failed to read event playlist: %w", err)
 	}
 
-	vodContent, err := os.ReadFile(vodPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to read VOD playlist: %w", err)
-	}
+	// Replace EVENT with VOD in the playlist type
+	vodContent := strings.Replace(
+		string(content),
+		"#EXT-X-PLAYLIST-TYPE:EVENT",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		1,
+	)
 
-	eventLines := strings.Split(string(eventContent), "\n")
-	vodLines := strings.Split(string(vodContent), "\n")
-
-	lastSegment := ""
-
-	for i := len(vodLines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(vodLines[i], "#EXTINF") {
-			lastSegment = vodLines[i+1]
-			break
-		}
-	}
-
-	var newSegments []string
-
-	foundLastSegment := lastSegment == ""
-
-	for _, line := range eventLines {
-		if foundLastSegment {
-			if strings.HasPrefix(line, "#EXTINF") || strings.HasPrefix(line, "#EXT-X-") {
-				newSegments = append(newSegments, line)
-			}
-		} else if line == lastSegment {
-			foundLastSegment = true
-		}
-	}
-
-	if len(newSegments) > 0 {
-		vodContentStr := strings.TrimSpace(string(vodContent))
-		if vodContentStr != "" {
-			vodContentStr += "\n"
-		}
-		vodContentStr += strings.Join(newSegments, "\n")
-
-		return os.WriteFile(vodPath, []byte(vodContentStr), 0644)
-	}
-
-	return nil
+	// Write the updated content to the VOD playlist
+	return os.WriteFile(vodPath, []byte(vodContent), 0644)
 }
 
 func (f *ffmpeg) finalizeVODPlaylist(vodPath string) error {
