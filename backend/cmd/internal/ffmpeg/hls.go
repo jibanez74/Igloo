@@ -144,7 +144,7 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 	}
 
 	if opts.VideoCodec != VideoCodecCopy {
-		err = f.validateVideoSettings(&videoSettings{Resolution: opts.Resolution})
+		err = f.validateVideoSettings(&videoSettings{Resolution: opts.Resolution, Codec: opts.VideoCodec, Preset: opts.Preset})
 		if err != nil {
 			return err
 		}

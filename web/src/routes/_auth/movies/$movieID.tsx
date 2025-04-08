@@ -22,7 +22,6 @@ import StudioList from "../../../components/StudioList";
 import ExtrasSection from "../../../components/ExtrasSection";
 import PlaybackSettingsModal from "../../../components/PlaybackSettingsModal";
 import type { MovieDetailsResponse } from "../../../types/Movie";
-import type { MovieHlsOpts } from "../../../types/Transcode";
 
 export const Route = createFileRoute("/_auth/movies/$movieID")({
   component: MovieDetailsPage,
@@ -83,22 +82,19 @@ function MovieDetailsPage() {
   const [selectedVideo, setSelectedVideo] = createSignal<string | null>(null);
   const [isPlaybackModalOpen, setIsPlaybackModalOpen] = createSignal(false);
 
-  const navigate = Route.useNavigate();
+  // const navigate = Route.useNavigate();
 
   const handlePlayMovie = async () => {
     try {
-      const opts: MovieHlsOpts = {
+      const opts = {
         title: movie.title,
         audio_codec: "aac",
-        audio_bit_rate: 192,
         audio_channels: 2,
         audio_stream_index: movie.audio_streams[0].index,
         video_stream_index: movie.video_streams[0].index,
         video_codec: "h264",
-        video_height: 720,
-        video_bit_rate: 2000,
+        resolution: 720,
         preset: "veryfast",
-        video_profile: "main",
       };
 
       const res = await fetch(`/api/v1/ffmpeg/create-hls-movie/${movie.id}`, {
