@@ -29,11 +29,13 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 
 	// Check if event playlist already exists
 	if _, err := os.Stat(eventPath); err == nil {
+		fmt.Printf("Event playlist already exists at %s\n", eventPath)
 		// Create initial VOD playlist if event playlist exists
 		if err := f.createInitialVodPlaylist(eventPath, vodPath); err != nil {
 			return fmt.Errorf("failed to create initial VOD playlist: %w", err)
 		}
 	} else {
+		fmt.Printf("Waiting for event playlist to be created at %s\n", eventPath)
 		// Wait for the event playlist to be created
 		playlistCreated := make(chan struct{})
 		go func() {
@@ -45,7 +47,9 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 					if !ok {
 						return
 					}
+					fmt.Printf("Received event: %s %s\n", event.Op, event.Name)
 					if event.Name == eventPath && (event.Op&fsnotify.Create == fsnotify.Create) {
+						fmt.Printf("Event playlist created at %s\n", eventPath)
 						close(playlistCreated)
 						return
 					}
@@ -83,7 +87,9 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 				continue
 			}
 
+			fmt.Printf("Received update event: %s %s\n", event.Op, event.Name)
 			if event.Op&fsnotify.Write == fsnotify.Write {
+				fmt.Printf("Updating VOD playlist from event playlist\n")
 				if err := f.updateVodPlaylist(eventPath, vodPath); err != nil {
 					return fmt.Errorf("failed to update VOD playlist: %w", err)
 				}

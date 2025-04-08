@@ -59,7 +59,35 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 
 	vodPath := filepath.Join(opts.OutputDir, VodPlaylistName)
 
-	// Start playlist monitoring before FFmpeg
+	// Create a channel to signal when FFmpeg has started
+	ffmpegStarted := make(chan struct{})
+
+	// Start FFmpeg process
+	go func() {
+		// Signal that FFmpeg has started
+		close(ffmpegStarted)
+
+		defer func() {
+			f.mu.Lock()
+			delete(f.jobs, jobID)
+			f.mu.Unlock()
+			cancelJob()
+
+			if err := f.finalizeVODPlaylist(vodPath); err != nil {
+				fmt.Printf("error finalizing VOD playlist: %v", err)
+			}
+		}()
+
+		err = cmd.RunWithContext(ffmpegCtx)
+		if err != nil {
+			fmt.Printf("error running ffmpeg: %v", err)
+		}
+	}()
+
+	// Wait for FFmpeg to start before starting playlist monitoring
+	<-ffmpegStarted
+
+	// Start playlist monitoring
 	go func() {
 		err = f.monitorAndUpdatePlaylists(ffmpegCtx, opts.OutputDir)
 		if err != nil {
@@ -76,25 +104,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 			if err := f.finalizeVODPlaylist(vodPath); err != nil {
 				fmt.Printf("error finalizing VOD playlist: %v", err)
 			}
-		}
-	}()
-
-	// Start FFmpeg process
-	go func() {
-		defer func() {
-			f.mu.Lock()
-			delete(f.jobs, jobID)
-			f.mu.Unlock()
-			cancelJob()
-
-			if err := f.finalizeVODPlaylist(vodPath); err != nil {
-				fmt.Printf("error finalizing VOD playlist: %v", err)
-			}
-		}()
-
-		err = cmd.RunWithContext(ffmpegCtx)
-		if err != nil {
-			fmt.Printf("error running ffmpeg: %v", err)
 		}
 	}()
 
