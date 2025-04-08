@@ -75,19 +75,6 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 
 	time.Sleep(12 * time.Second)
 
-	go func() {
-		err = f.monitorAndUpdatePlaylists(&monitorParams{
-			vodPath:   filepath.Join(opts.OutputDir, VodPlaylistName),
-			eventPath: filepath.Join(opts.OutputDir, DefaultPlaylistName),
-			ctx:       ffmpegCtx,
-		})
-
-		if err != nil {
-			fmt.Printf("error monitoring and updating playlists: %v", err)
-			cancelJob()
-		}
-	}()
-
 	return jobID, nil
 }
 

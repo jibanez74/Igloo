@@ -72,6 +72,15 @@ func main() {
 		Next:     nil,
 	})
 
+	if app.settings.MoviesDirList != "" {
+		api.Static("/media/movies", app.settings.MoviesDirList, fiber.Static{
+			Compress: true,
+			Browse:   false,
+			Download: true,
+			Next:     nil,
+		})
+	}
+
 	auth := api.Group("/auth")
 	auth.Get("/me", app.validateTokenInHeader, app.getCurrentUser)
 	auth.Post("/login", app.login)
