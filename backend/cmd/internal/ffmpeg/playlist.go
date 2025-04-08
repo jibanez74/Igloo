@@ -21,16 +21,48 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 	eventPath := filepath.Join(outputDir, DefaultPlaylistName)
 	vodPath := filepath.Join(outputDir, VodPlaylistName)
 
-	err = f.createInitialVodPlaylist(eventPath, vodPath)
-	if err != nil {
-		return fmt.Errorf("failed to create initial VOD playlist: %w", err)
-	}
-
+	// Start watching the output directory
 	err = watcher.Add(outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to watch directory: %w", err)
 	}
 
+	// Wait for the event playlist to be created
+	playlistCreated := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Name == eventPath && (event.Op&fsnotify.Create == fsnotify.Create) {
+					close(playlistCreated)
+					return
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				fmt.Printf("watcher error: %v", err)
+			}
+		}
+	}()
+
+	// Wait for playlist creation or context cancellation
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-playlistCreated:
+		// Create initial VOD playlist
+		if err := f.createInitialVodPlaylist(eventPath, vodPath); err != nil {
+			return fmt.Errorf("failed to create initial VOD playlist: %w", err)
+		}
+	}
+
+	// Continue monitoring for updates
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,7 +87,6 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 			if !ok {
 				return fmt.Errorf("watcher error channel closed")
 			}
-
 			return fmt.Errorf("watcher error: %w", err)
 		}
 	}

@@ -6,7 +6,6 @@ import (
 	"igloo/cmd/internal/helpers"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/google/uuid"
 	fluentffmpeg "github.com/modfy/fluent-ffmpeg"
@@ -59,37 +58,8 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 	f.mu.Unlock()
 
 	vodPath := filepath.Join(opts.OutputDir, VodPlaylistName)
-	eventPath := filepath.Join(opts.OutputDir, DefaultPlaylistName)
 
-	// Start FFmpeg process
-	go func() {
-		defer func() {
-			f.mu.Lock()
-			delete(f.jobs, jobID)
-			f.mu.Unlock()
-			cancelJob()
-
-			// Finalize the VOD playlist when FFmpeg completes
-			if err := f.finalizeVODPlaylist(vodPath); err != nil {
-				fmt.Printf("error finalizing VOD playlist: %v", err)
-			}
-		}()
-
-		err = cmd.RunWithContext(ffmpegCtx)
-		if err != nil {
-			fmt.Printf("error running ffmpeg: %v", err)
-		}
-	}()
-
-	// Wait for the event playlist to be created before starting monitoring
-	for i := 0; i < 10; i++ {
-		if _, err := os.Stat(eventPath); err == nil {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	// Start playlist monitoring
+	// Start playlist monitoring before FFmpeg
 	go func() {
 		err = f.monitorAndUpdatePlaylists(ffmpegCtx, opts.OutputDir)
 		if err != nil {
@@ -103,10 +73,28 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 			}
 			f.mu.Unlock()
 
-			// Finalize the VOD playlist if monitoring fails
 			if err := f.finalizeVODPlaylist(vodPath); err != nil {
 				fmt.Printf("error finalizing VOD playlist: %v", err)
 			}
+		}
+	}()
+
+	// Start FFmpeg process
+	go func() {
+		defer func() {
+			f.mu.Lock()
+			delete(f.jobs, jobID)
+			f.mu.Unlock()
+			cancelJob()
+
+			if err := f.finalizeVODPlaylist(vodPath); err != nil {
+				fmt.Printf("error finalizing VOD playlist: %v", err)
+			}
+		}()
+
+		err = cmd.RunWithContext(ffmpegCtx)
+		if err != nil {
+			fmt.Printf("error running ffmpeg: %v", err)
 		}
 	}()
 
