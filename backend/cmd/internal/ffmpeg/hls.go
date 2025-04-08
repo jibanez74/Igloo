@@ -80,6 +80,7 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 		})
 
 		if err != nil {
+			fmt.Printf("error monitoring and updating playlists: %v", err)
 			cancelJob()
 		}
 	}()
