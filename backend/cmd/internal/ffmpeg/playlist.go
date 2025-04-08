@@ -27,39 +27,48 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 		return fmt.Errorf("failed to watch directory: %w", err)
 	}
 
-	playlistCreated := make(chan struct{})
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Name == eventPath && (event.Op&fsnotify.Create == fsnotify.Create) {
-					close(playlistCreated)
-					return
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				fmt.Printf("watcher error: %v", err)
-			}
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-playlistCreated:
+	// Check if event playlist already exists
+	if _, err := os.Stat(eventPath); err == nil {
+		// Create initial VOD playlist if event playlist exists
 		if err := f.createInitialVodPlaylist(eventPath, vodPath); err != nil {
 			return fmt.Errorf("failed to create initial VOD playlist: %w", err)
 		}
+	} else {
+		// Wait for the event playlist to be created
+		playlistCreated := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					if event.Name == eventPath && (event.Op&fsnotify.Create == fsnotify.Create) {
+						close(playlistCreated)
+						return
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					fmt.Printf("watcher error: %v", err)
+				}
+			}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-playlistCreated:
+			if err := f.createInitialVodPlaylist(eventPath, vodPath); err != nil {
+				return fmt.Errorf("failed to create initial VOD playlist: %w", err)
+			}
+		}
 	}
 
+	// Continue monitoring for updates
 	for {
 		select {
 		case <-ctx.Done():
