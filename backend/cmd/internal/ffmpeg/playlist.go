@@ -21,10 +21,13 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 	eventPath := filepath.Join(outputDir, DefaultPlaylistName)
 	vodPath := filepath.Join(outputDir, VodPlaylistName)
 
-	// Start watching the output directory
-	err = watcher.Add(outputDir)
+	fmt.Printf("Watching event playlist at: %s\n", eventPath)
+	fmt.Printf("Updating VOD playlist at: %s\n", vodPath)
+
+	// Start watching the specific event playlist file
+	err = watcher.Add(eventPath)
 	if err != nil {
-		return fmt.Errorf("failed to watch directory: %w", err)
+		return fmt.Errorf("failed to watch event playlist: %w", err)
 	}
 
 	// Check if event playlist already exists
@@ -83,16 +86,27 @@ func (f *ffmpeg) monitorAndUpdatePlaylists(ctx context.Context, outputDir string
 				return fmt.Errorf("watcher channel closed")
 			}
 
-			if event.Name != eventPath {
-				continue
-			}
+			fmt.Printf("Received event for file: %s, operation: %s\n", event.Name, event.Op)
+			if event.Name == eventPath && event.Op&fsnotify.Write == fsnotify.Write {
+				fmt.Printf("Event playlist updated, updating VOD playlist\n")
+				// Read current event playlist content
+				eventContent, err := os.ReadFile(eventPath)
+				if err != nil {
+					return fmt.Errorf("failed to read event playlist: %w", err)
+				}
+				fmt.Printf("Event playlist content:\n%s\n", string(eventContent))
 
-			fmt.Printf("Received update event: %s %s\n", event.Op, event.Name)
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				fmt.Printf("Updating VOD playlist from event playlist\n")
+				// Update VOD playlist
 				if err := f.updateVodPlaylist(eventPath, vodPath); err != nil {
 					return fmt.Errorf("failed to update VOD playlist: %w", err)
 				}
+
+				// Verify VOD playlist was updated
+				vodContent, err := os.ReadFile(vodPath)
+				if err != nil {
+					return fmt.Errorf("failed to read updated VOD playlist: %w", err)
+				}
+				fmt.Printf("VOD playlist content after update:\n%s\n", string(vodContent))
 			}
 
 		case err, ok := <-watcher.Errors:
@@ -136,13 +150,24 @@ func (f *ffmpeg) updateVodPlaylist(eventPath, vodPath string) error {
 		return fmt.Errorf("failed to read event playlist: %w", err)
 	}
 
-	// Replace EVENT with VOD in the playlist type
-	vodContent := strings.Replace(
-		string(content),
-		"#EXT-X-PLAYLIST-TYPE:EVENT",
-		"#EXT-X-PLAYLIST-TYPE:VOD",
-		1,
-	)
+	// Split the content into lines
+	lines := strings.Split(string(content), "\n")
+	var updatedLines []string
+
+	// Process each line
+	for _, line := range lines {
+		// Replace EVENT with VOD in the playlist type
+		if strings.Contains(line, "#EXT-X-PLAYLIST-TYPE:EVENT") {
+			updatedLines = append(updatedLines, "#EXT-X-PLAYLIST-TYPE:VOD")
+			continue
+		}
+
+		// Keep all other lines as is, including segment URLs
+		updatedLines = append(updatedLines, line)
+	}
+
+	// Join the lines back together
+	vodContent := strings.Join(updatedLines, "\n")
 
 	// Write the updated content to the VOD playlist
 	return os.WriteFile(vodPath, []byte(vodContent), 0644)
