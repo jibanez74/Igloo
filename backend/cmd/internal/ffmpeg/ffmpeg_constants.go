@@ -10,19 +10,12 @@ const (
 	DefaultPlaylistName   = "playlist.m3u8"
 	DefaultInitFileName   = "init.mp4"
 
-	DefaultAudioRate     = 128
-	DefaultAudioChannels = 2
-	DefaultAudioCodec    = "aac"
-	AudioCodecCopy       = "copy"
-	AudioCodecAAC        = "aac"
-	AudioCodecAC3        = "ac3"
-	AudioCodecFLAC       = "flac"
-	AudioCodecMP3        = "mp3"
+	AudioCodecCopy = "copy"
+	AudioCodecAAC  = "aac"
+	AudioCodecAC3  = "ac3"
+	AudioCodecFLAC = "flac"
+	AudioCodecMP3  = "mp3"
 
-	DefaultVideoCodec    = "libx264"
-	DefaultVideoHeight   = 480
-	DefaultVideoRate     = 1000
-	DefaultPreset        = "fast"
 	VideoCodecCopy       = "copy"
 	VideoCodecH264       = "h264"
 	VideoCodecH265       = "h265"

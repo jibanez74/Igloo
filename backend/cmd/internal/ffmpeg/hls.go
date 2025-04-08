@@ -136,14 +136,14 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 		}
 	}
 
-	if opts.AudioCodec != "copy" {
+	if opts.AudioCodec != AudioCodecCopy {
 		err = f.validateAudioSettings(&audioSettings{Codec: opts.AudioCodec, Channels: opts.AudioChannels})
 		if err != nil {
 			return err
 		}
 	}
 
-	if opts.VideoCodec != "copy" {
+	if opts.VideoCodec != VideoCodecCopy {
 		err = f.validateVideoSettings(&videoSettings{Resolution: opts.Resolution})
 		if err != nil {
 			return err
@@ -180,16 +180,18 @@ func (f *ffmpeg) prepareHlsCmd(opts *HlsOpts) *fluentffmpeg.Command {
 		OutputOptions(outputOpts...).
 		OutputPath(filepath.Join(opts.OutputDir, DefaultPlaylistName))
 
-	if opts.AudioCodec != "copy" {
+	if opts.AudioCodec != AudioCodecCopy {
 		cmd.AudioChannels(opts.AudioChannels)
 	}
 
-	if opts.VideoCodec == "copy" {
+	if opts.VideoCodec == VideoCodecCopy {
 		cmd.VideoCodec(opts.VideoCodec)
 	} else {
-		cmd.VideoCodec(f.encoder[opts.VideoCodec]).
-			Resolution(ValidResolutions[opts.Resolution]).
-			Preset(opts.Preset)
+		cmd.VideoCodec(f.encoder[opts.VideoCodec]).Resolution(ValidResolutions[opts.Resolution])
+
+		if opts.VideoCodec == "software" {
+			cmd.Preset(opts.Preset).ConstantRateFactor(23)
+		}
 	}
 
 	return cmd
