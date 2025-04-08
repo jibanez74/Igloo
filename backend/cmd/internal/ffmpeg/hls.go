@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/helpers"
 	"os"
 	"path/filepath"
 
@@ -90,8 +91,8 @@ func (f *ffmpeg) CreateHlsStream(opts *HlsOpts) (string, error) {
 			}
 			f.mu.Unlock()
 
-			// Finalize the VOD playlist if monitoring fails
-			if err := f.finalizeVODPlaylist(vodPath); err != nil {
+			err = f.finalizeVODPlaylist(vodPath)
+			if err != nil {
 				fmt.Printf("error finalizing VOD playlist: %v", err)
 			}
 		}
@@ -118,7 +119,7 @@ func (f *ffmpeg) validateHlsOpts(opts *HlsOpts) error {
 		}
 	}
 
-	_, err = os.Stat(opts.OutputDir)
+	err = helpers.CreateDir(opts.OutputDir)
 	if err != nil {
 		return &ffmpegError{
 			Field: "output_dir",
