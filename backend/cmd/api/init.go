@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -59,6 +60,18 @@ func initApp() (*application, error) {
 		}
 
 		app.tmdb = t
+	}
+
+	if app.settings.MoviesDirList != "" {
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			return nil, err
+		}
+
+		err = watcher.Add(app.settings.MoviesDirList)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &app, nil

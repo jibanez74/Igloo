@@ -48,9 +48,12 @@ type Querier interface {
 	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
+	GetUserLikedMovies(ctx context.Context, userID int32) ([]Movie, error)
 	GetUserMovies(ctx context.Context, userID int32) ([]Movie, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
+	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	RemoveUserMovie(ctx context.Context, arg RemoveUserMovieParams) error
+	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) error
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -17,12 +18,13 @@ import (
 )
 
 type application struct {
-	db       *pgxpool.Pool
-	queries  *database.Queries
-	settings *database.GlobalSetting
-	ffmpeg   ffmpeg.FFmpeg
-	ffprobe  ffprobe.Ffprobe
-	tmdb     tmdb.Tmdb
+	db           *pgxpool.Pool
+	queries      *database.Queries
+	settings     *database.GlobalSetting
+	ffmpeg       ffmpeg.FFmpeg
+	ffprobe      ffprobe.Ffprobe
+	tmdb         tmdb.Tmdb
+	movieWatcher *fsnotify.Watcher
 }
 
 const (
@@ -130,8 +132,6 @@ func main() {
 			Next:     nil,
 		})
 	}
-
-	log.Printf("your settings are %+v", app.settings)
 
 	log.Fatal(f.Listen(fmt.Sprintf(":%d", app.settings.Port)))
 }

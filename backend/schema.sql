@@ -242,6 +242,7 @@ CREATE TABLE movie_studios (
 CREATE TABLE user_movies (
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     movie_id INTEGER REFERENCES movies(id) ON DELETE CASCADE,
+    liked BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (user_id, movie_id)
 );
 
