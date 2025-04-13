@@ -52,14 +52,14 @@ func SaveTmdbImage(tmdbUrl, output, fileName string) error {
 		return errors.New("tmdbUrl, output, and fileName are required")
 	}
 
-	err = os.MkdirAll(output, 0755)
+	err := os.MkdirAll(output, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	outputFile := filepath.Join(output, fileName)
 
-	_, err := os.Stat(outputFile)
+	_, err = os.Stat(outputFile)
 	if err == nil {
 		return nil
 	}
