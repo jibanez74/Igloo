@@ -111,7 +111,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 		if app.settings.DownloadImages {
 			fileName := fmt.Sprintf("thumb_%s.jpg", movie.TmdbID)
-			outputDir := filepath.Join(app.settings.MoviesDirList, request.TmdbID)
+			outputDir := filepath.Join(app.settings.MoviesImgDir, request.TmdbID)
 
 			err = helpers.SaveTmdbImage(movie.Thumb, outputDir, fileName)
 			if err == nil {
@@ -125,7 +125,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 		if app.settings.DownloadImages {
 			fileName := fmt.Sprintf("art_%s.jpg", movie.TmdbID)
-			outputDir := filepath.Join(app.settings.MoviesDirList, request.TmdbID)
+			outputDir := filepath.Join(app.settings.MoviesImgDir, request.TmdbID)
 
 			err = helpers.SaveTmdbImage(movie.Art, outputDir, fileName)
 			if err == nil {
@@ -182,8 +182,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 			if app.settings.DownloadImages {
 				fileName := fmt.Sprintf("logo_%d.jpg", s.ID)
-
-				err = helpers.SaveTmdbImage(s.Logo, app.settings.StudiosImgDir, fileName)
+				err = helpers.SaveTmdbImage(logoPath, app.settings.StudiosImgDir, fileName)
 				if err == nil {
 					logoPath = fmt.Sprintf("/static/images/studios/%s", fileName)
 				}
@@ -220,9 +219,8 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 			thumbPath := fmt.Sprintf("https://image.tmdb.org/t/p/w500%s", a.Thumb)
 
 			if app.settings.DownloadImages {
-				fileName := fmt.Sprintf("artist_%d", a.ID)
-
-				err = helpers.SaveTmdbImage(a.Thumb, app.settings.ArtistsImgDir, fileName)
+				fileName := fmt.Sprintf("artist_%d.jpg", a.ID)
+				err = helpers.SaveTmdbImage(thumbPath, app.settings.ArtistsImgDir, fileName)
 				if err == nil {
 					thumbPath = fmt.Sprintf("/static/images/artists/%s", fileName)
 				}
@@ -268,8 +266,7 @@ func (app *application) createTmdbMovie(c *fiber.Ctx) error {
 
 			if app.settings.DownloadImages {
 				fileName := fmt.Sprintf("artist_%d.jpg", a.ID)
-
-				err = helpers.SaveTmdbImage(a.Thumb, app.settings.ArtistsImgDir, fileName)
+				err = helpers.SaveTmdbImage(thumbPath, app.settings.ArtistsImgDir, fileName)
 				if err == nil {
 					thumbPath = fmt.Sprintf("/static/images/artists/%s", fileName)
 				}
