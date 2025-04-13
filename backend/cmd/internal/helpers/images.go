@@ -52,20 +52,18 @@ func SaveTmdbImage(tmdbUrl, output, fileName string) error {
 		return errors.New("tmdbUrl, output, and fileName are required")
 	}
 
-	// Ensure output directory exists
-	if err := os.MkdirAll(output, 0755); err != nil {
+	err = os.MkdirAll(output, 0755)
+	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	outputFile := filepath.Join(output, fileName)
 
-	// Check if file already exists
 	_, err := os.Stat(outputFile)
 	if err == nil {
 		return nil
 	}
 
-	// Download the image
 	response, err := http.Get(tmdbUrl)
 	if err != nil {
 		return fmt.Errorf("failed to get image from tmdb: %w", err)
@@ -76,14 +74,12 @@ func SaveTmdbImage(tmdbUrl, output, fileName string) error {
 		return fmt.Errorf("failed to download image: status code %d", response.StatusCode)
 	}
 
-	// Create the output file
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer file.Close()
 
-	// Copy the image data to the file
 	_, err = io.Copy(file, response.Body)
 	if err != nil {
 		os.Remove(outputFile) // Clean up if copy fails
