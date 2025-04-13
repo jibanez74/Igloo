@@ -1,68 +1,137 @@
-import { View, Text, Pressable, useTVEventHandler } from "react-native";
-import { Image } from "expo-image";
+import { useRef, useState, useEffect } from "react";
+import {
+  Image,
+  Pressable,
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+} from "react-native";
 import { Link } from "expo-router";
-import { useState } from "react";
+import { primary, dark, light, info, secondary } from "@/constants/Colors";
+import getImgSrc from "@/lib/getImgSrc";
 import type { SimpleMovie } from "@/types/Movie";
+
+const POSTER_WIDTH = 200; // Base width for 1080p TV
+const POSTER_HEIGHT = 300; // Maintain 2:3 aspect ratio (500:750 = 2:3)
 
 type MovieCardProps = {
   movie: SimpleMovie;
+  hasTvFocus?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
-export default function MovieCard({ movie }: MovieCardProps) {
+export default function MovieCard({
+  movie,
+  hasTvFocus = false,
+  onFocus,
+  onBlur,
+}: MovieCardProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const scaleValue = useRef(new Animated.Value(1)).current;
 
-  useTVEventHandler((event) => {
-    if (event.eventType === "focus") {
-      setIsFocused(true);
-    } else if (event.eventType === "blur") {
-      setIsFocused(false);
-    }
-  });
+  useEffect(() => {
+    Animated.spring(scaleValue, {
+      toValue: hasTvFocus ? 1.1 : 1,
+      useNativeDriver: true,
+    }).start();
+  }, [hasTvFocus]);
+
+  const handleFocus = () => {
+    onFocus?.();
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    onBlur?.();
+    setIsFocused(false);
+  };
 
   return (
-    <Link href="/" asChild>
+    <Link
+      href={{
+        pathname: "/(tabs)/movies/[movieID]",
+        params: { movieID: movie.ID },
+      }}
+      asChild
+    >
       <Pressable
-        className={`group relative bg-blue-950/50 rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 ${
-          isFocused ? "shadow-yellow-300/20 scale-[1.02]" : ""
-        }`}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
+        accessibilityLabel={`Movie: ${movie.title}, released in ${movie.year}`}
+        focusable={true}
+        hasTVPreferredFocus={hasTvFocus}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={({ pressed }) => [styles.pressable, pressed && { opacity: 0.9 }]}
       >
-        {({ pressed, focused }) => (
-          <View className="w-full h-full">
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              transform: [{ scale: scaleValue }],
+            },
+          ]}
+        >
+          <View style={styles.posterContainer}>
             <Image
-              source={{ uri: movie.thumb }}
-              className="w-full h-full"
-              contentFit="cover"
-              transition={300}
-              style={{
-                transform: [{ scale: focused ? 1.05 : 1 }],
-                opacity: focused ? 0.3 : 1,
-              }}
+              source={{ uri: getImgSrc(movie.thumb) }}
+              style={styles.poster}
+              resizeMode='cover'
             />
-
-            <View
-              className="absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/50 to-transparent"
-              style={{ opacity: focused ? 0.9 : 0.5 }}
-            />
-
-            <View className="absolute inset-0 p-4 flex flex-col justify-end">
-              <View
-                className="transform transition-all duration-300"
-                style={{
-                  transform: [{ translateY: focused ? 0 : 20 }],
-                }}
-              >
-                <Text className="text-lg font-semibold text-white mb-2">
-                  {movie.title}
-                </Text>
-
-                <Text className="text-sm text-yellow-300/90">{movie.year}</Text>
-              </View>
-            </View>
           </View>
-        )}
+          <View style={styles.content}>
+            <Text style={styles.title} numberOfLines={1} allowFontScaling>
+              {movie.title}
+            </Text>
+            <Text style={styles.year}>{movie.year}</Text>
+          </View>
+          {isFocused && <View style={styles.focusBorder} />}
+        </Animated.View>
       </Pressable>
     </Link>
   );
 }
+
+const styles = StyleSheet.create({
+  pressable: {
+    margin: 8,
+  },
+  card: {
+    width: POSTER_WIDTH,
+    backgroundColor: `${primary}33`,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  posterContainer: {
+    width: POSTER_WIDTH,
+    height: POSTER_HEIGHT,
+    backgroundColor: dark,
+  },
+  poster: {
+    width: "100%",
+    height: "100%",
+  },
+  content: {
+    padding: 12,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: light,
+    marginBottom: 4,
+  },
+  year: {
+    fontSize: 14,
+    color: info,
+  },
+  focusBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 3,
+    borderColor: secondary,
+    borderRadius: 8,
+  },
+});

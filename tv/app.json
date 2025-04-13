@@ -46,7 +46,8 @@
       "splash": {
         "image": "./assets/images/splash.png"
       },
-      "package": "com.anonymous.Igloo"
+      "permissions": [],
+      "package": "com.blindpenguincoder.igloo"
     },
     "ios": {
       "splash": {
@@ -58,6 +59,9 @@
     },
     "newArchEnabled": true,
     "name": "Igloo",
-    "slug": "Igloo"
+    "slug": "Igloo",
+    "extra": {
+      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net"
+    }
   }
 }

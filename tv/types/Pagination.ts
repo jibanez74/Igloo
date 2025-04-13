@@ -8,5 +8,4 @@ export type PaginationResponse<T> = {
   current_page: number;
   total_pages: number;
   items: T[];
-  onPageChange: (page: number) => void;
 };

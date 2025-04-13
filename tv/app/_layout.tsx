@@ -1,11 +1,11 @@
-import "../assets/styles.css";
-import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-const queryClient = new QueryClient();
+import { StyleSheet, View } from "react-native";
+import { Slot } from "expo-router";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { dark } from "@/constants/Colors";
+import queryClient from "@/lib/queryClient";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -17,6 +17,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded || error) {
       SplashScreen.hideAsync();
+
       if (error) {
         console.warn(`Error in loading fonts: ${error}`);
       }
@@ -29,12 +30,16 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Stack>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      <View style={styles.container}>
+        <Slot />
+      </View>
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: dark,
+  },
+});
