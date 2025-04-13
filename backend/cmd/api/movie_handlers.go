@@ -93,4 +93,3 @@ func (app *application) getMoviesPaginated(c *fiber.Ctx) error {
 		"count":        count,
 	})
 }
-
