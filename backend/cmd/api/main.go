@@ -12,6 +12,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -55,6 +56,8 @@ func main() {
 		TimeFormat: "2006-01-02 15:04:05",
 		TimeZone:   "Local",
 	}))
+
+	f.Use(cors.New())
 
 	api := f.Group("/api/v1")
 

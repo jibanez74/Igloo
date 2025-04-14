@@ -1,109 +1,88 @@
-import { useState } from "react";
-import { FlatList, View, Text, StyleSheet } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import getError from "@/lib/getError";
-import api from "@/lib/api";
-import { dark, light } from "@/constants/Colors";
-import Loading from "./Loading";
-import Alert from "./Alert";
-import MovieCard from "./MovieCard";
+import MovieCard from "@/components/MovieCard";
+import ErrorWarning from "@/components/ErrorWarning";
+import Spinner from "@/components/Spinner";
+import { fetchGet } from "@/utils/api";
 import type { SimpleMovie } from "@/types/Movie";
 
-// Card dimensions based on MovieCard
-const CARD_WIDTH = 200;
-const CARD_HEIGHT = 300;
-const CONTAINER_PADDING = 32;
-const CARD_MARGIN = 24;
-
-type MoviesResponse = {
+type LatestMoviesResponse = {
   movies: SimpleMovie[];
 };
 
 export default function LatestMovies() {
-  const [showError, setShowError] = useState(true);
-
-  const { data, isPending, isError, error } = useQuery({
+  const { isPending, data, isError, error } = useQuery({
     queryKey: ["latest-movies"],
-    queryFn: async (): Promise<MoviesResponse> => {
+    queryFn: async (): Promise<LatestMoviesResponse> => {
       try {
-        const { data } = await api.get("/movies/latest");
+        const res = await fetchGet("/movies/latest");
+        const data = await res.json();
 
-        return data
+        if (!res.ok) {
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          );
+        }
+
+        return data;
       } catch (err) {
-        throw new Error(getError(err));
+        console.error(err);
+        throw new Error(
+          "a network error occurred while fetching latest movies"
+        );
       }
     },
   });
 
-  const renderMovie = ({
-    item,
-    index,
-  }: {
-    item: SimpleMovie;
-    index: number;
-  }) => (
-    <View
-      style={[
-        styles.movieContainer,
-        index === (data?.movies.length || 0) - 1 && styles.lastMovie,
-      ]}
-    >
-      <MovieCard movie={item} hasTvFocus={index === 0} />
-    </View>
-  );
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Latest Movies</Text>
+    <View className="py-8">
+      <View className="max-w-7xl mx-auto px-4">
+        <View className="flex-row items-center justify-between h-10 mb-6">
+          <Text className="text-2xl font-bold text-white">
+            <Text className="text-yellow-300">Latest Movies</Text>
+          </Text>
 
-      <View style={styles.contentContainer}>
-        {isPending ? (
-          <Loading message='Loading latest movies...' />
-        ) : isError && showError ? (
-          <Alert
-            type='error'
-            message={
-              error instanceof Error ? error.message : "An error occurred"
-            }
-            onDismiss={() => setShowError(false)}
+          <View className="w-5 h-5">
+            {isPending && <Spinner size="sm" />}
+          </View>
+        </View>
+
+        <View className="h-10">
+          <ErrorWarning
+            error={error?.message || ""}
+            isVisible={isError}
           />
-        ) : (
-          <FlatList
-            data={data?.movies}
-            renderItem={renderMovie}
-            keyExtractor={item => item.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-          />
-        )}
+        </View>
+
+        <View className="min-h-[200px]">
+          {isPending ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View className="flex-row gap-4">
+                {Array(12).fill(null).map((_, index) => (
+                  <View
+                    key={index}
+                    className="w-[200px] h-[300px] rounded-xl bg-blue-950/50"
+                  />
+                ))}
+              </View>
+            </ScrollView>
+          ) : data?.movies.length === 0 ? (
+            <View className="h-full items-center justify-center">
+              <Text className="text-blue-200/80">No movies available</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 16 }}
+            >
+              {data?.movies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} />
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingVertical: CONTAINER_PADDING,
-    backgroundColor: dark,
-  },
-  sectionTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: light,
-    marginBottom: 24,
-    paddingHorizontal: CONTAINER_PADDING,
-  },
-  contentContainer: {
-    height: CARD_HEIGHT + CONTAINER_PADDING, // Based on MovieCard height + padding
-  },
-  listContent: {
-    paddingHorizontal: CONTAINER_PADDING,
-  },
-  movieContainer: {
-    marginRight: CARD_MARGIN,
-  },
-  lastMovie: {
-    marginRight: 0,
-  },
-});

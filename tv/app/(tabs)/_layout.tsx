@@ -1,44 +1,56 @@
-import { StyleSheet } from "react-native";
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { dark, primary, secondary, info } from "@/constants/Colors";
-import { Layout } from "@/constants/Layout";
+import { Tabs } from 'expo-router';
+import { Pressable } from 'react-native';
+import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
+import { TabBarIcon } from '@/components/navigation/TabBarIcon';
+import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { useTextStyles } from '@/hooks/useTextStyles';
+import { useScale } from '@/hooks/useScale';
 
 export default function TabLayout() {
+  const colorScheme = useColorScheme();
+  const textStyles = useTextStyles();
+  const scale = useScale();
+
+  const tabBarButton = (props: BottomTabBarButtonProps) => {
+    const style: any = props.style ?? {};
+    return (
+      <Pressable
+        {...props}
+        style={({ pressed, focused }) => [
+          style,
+          {
+            opacity: pressed || focused ? 0.6 : 1.0,
+          },
+        ]}
+      />
+    );
+  };
+
   return (
     <Tabs
       screenOptions={{
-        tabBarPosition: "top",
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarStyle: {
+          height: textStyles.title.lineHeight * 2,
+        },
+        tabBarPosition: 'top',
+        tabBarIconStyle: {
+          height: textStyles.title.lineHeight,
+          width: 30 * scale,
+        },
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: secondary,
-        tabBarInactiveTintColor: info,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarIconStyle: styles.tabBarIcon,
       }}
     >
       <Tabs.Screen
-        name='index'
+        name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
-              size={Layout.isFHD ? 32 : 24}
-              color={color}
-            />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name='movies'
-        options={{
-          title: "Movies",
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons
-              name={focused ? "film" : "film-outline"}
-              size={Layout.isFHD ? 32 : 24}
+          title: 'Home',
+          tabBarButton,
+          tabBarLabelStyle: textStyles.default,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name={focused ? 'home' : 'home-outline'}
               color={color}
             />
           ),
@@ -47,21 +59,3 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: dark,
-    borderBottomColor: primary,
-    borderBottomWidth: 1,
-    height: Layout.isFHD ? 80 : 60,
-    paddingVertical: Layout.spacing.sm,
-  },
-  tabBarLabel: {
-    fontSize: Layout.isFHD ? 18 : 14,
-    fontWeight: "500",
-    marginTop: Layout.spacing.xs,
-  },
-  tabBarIcon: {
-    marginBottom: -Layout.spacing.xs,
-  },
-});
