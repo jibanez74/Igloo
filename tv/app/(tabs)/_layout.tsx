@@ -36,7 +36,7 @@ export default function TabsLayout() {
       />
 
       <Tabs.Screen
-        name="movies"
+        name="movies/index"
         options={{
           title: "Movies",
           headerShown: false,

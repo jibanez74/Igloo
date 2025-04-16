@@ -1,14 +1,20 @@
-import { View, Text } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { Button, View, Text } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import API_URL from "@/constants/Backend";
 import type { Movie } from "@/types/Movie";
 import Spinner from "@/components/Spinner";
 
 export default function MovieDetailsScreen() {
+  const router = useRouter();
   const { movieID } = useLocalSearchParams();
 
-  const { isPending, isError, error, data } = useQuery({
+  const {
+    isPending,
+    isError,
+    error,
+    data: movie,
+  } = useQuery({
     queryKey: ["movie-details", movieID],
     queryFn: async (): Promise<Movie> => {
       try {
@@ -39,11 +45,27 @@ export default function MovieDetailsScreen() {
     return <Spinner />;
   }
 
+  if (!movie) {
+    return null;
+  }
+
   return (
     <View>
       <Text>Your movie id is {movieID}</Text>
 
-      <Text>{data?.title}</Text>
+      <Text>{movie.title}</Text>
+
+      <Button
+        title={`play movie ${movie.title}`}
+        onPress={() =>
+          router.navigate({
+            pathname: "/(tabs)/movies/[movieID]/play",
+            params: {
+              movieID: movie.id.toString(),
+            }
+          })
+        }
+      />
     </View>
   );
 }
