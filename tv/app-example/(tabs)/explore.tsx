@@ -1,22 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Image, Platform } from 'react-native';
+import { scale } from 'react-native-size-matters';
 
 import { Collapsible } from '@/components/Collapsible';
 import { ExternalLink } from '@/components/ExternalLink';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useScale } from '@/hooks/useScale';
 
 export default function ExploreScreen() {
-  const styles = useExploreScreenStyles();
-  const scale = useScale();
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
       headerImage={
         <Ionicons
-          size={310 * scale}
+          size={scale(200)}
           name="code-slash"
           style={styles.headerImage}
         />
@@ -122,18 +120,15 @@ export default function ExploreScreen() {
   );
 }
 
-const useExploreScreenStyles = function () {
-  const scale = useScale();
-  return StyleSheet.create({
-    headerImage: {
-      color: '#808080',
-      bottom: -90 * scale,
-      left: -35 * scale,
-      position: 'absolute',
-    },
-    titleContainer: {
-      flexDirection: 'row',
-      gap: 8 * scale,
-    },
-  });
-};
+const styles = StyleSheet.create({
+  headerImage: {
+    color: '#808080',
+    bottom: scale(-30),
+    left: 0,
+    position: 'absolute',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    gap: scale(8),
+  },
+});

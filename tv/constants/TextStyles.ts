@@ -3,37 +3,39 @@
  */
 
 import { TextStyle } from 'react-native';
+import { scale } from 'react-native-size-matters';
 
-export const textStyles = function (
-  scale: number,
-  linkColor: string,
-): {
+export const textStyles = function (linkColor: string): {
   [key: string]: TextStyle & { fontSize: number; lineHeight: number };
 } {
   return {
     default: {
-      fontSize: 16 * scale,
-      lineHeight: 24 * scale,
+      fontSize: scale(10),
+      lineHeight: scale(12),
     },
     defaultSemiBold: {
-      fontSize: 16 * scale,
-      lineHeight: 24 * scale,
+      fontSize: scale(10),
+      lineHeight: scale(12),
       fontWeight: '600',
     },
     title: {
-      fontSize: 32 * scale,
+      fontSize: scale(16),
       fontWeight: 'bold',
-      lineHeight: 32 * scale,
+      lineHeight: scale(20),
     },
     subtitle: {
-      fontSize: 20 * scale,
-      lineHeight: 20 * scale,
+      fontSize: scale(12),
+      lineHeight: scale(15),
       fontWeight: 'bold',
     },
     link: {
-      lineHeight: 30 * scale,
-      fontSize: 16 * scale,
+      lineHeight: scale(8),
+      fontSize: scale(10),
       color: linkColor,
+    },
+    small: {
+      lineHeight: scale(5),
+      fontSize: scale(4),
     },
   };
 };

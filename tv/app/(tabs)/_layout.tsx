@@ -1,58 +1,47 @@
-import { Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
-import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { TabBarIcon } from '@/components/navigation/TabBarIcon';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { useTextStyles } from '@/hooks/useTextStyles';
-import { useScale } from '@/hooks/useScale';
+import { Tabs } from "expo-router";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { Colors } from "@/constants/Colors";
+import { FontAwesome6 } from "@expo/vector-icons";
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const textStyles = useTextStyles();
-  const scale = useScale();
-
-  const tabBarButton = (props: BottomTabBarButtonProps) => {
-    const style: any = props.style ?? {};
-    return (
-      <Pressable
-        {...props}
-        style={({ pressed, focused }) => [
-          style,
-          {
-            opacity: pressed || focused ? 0.6 : 1.0,
-          },
-        ]}
-      />
-    );
-  };
+export default function TabsLayout() {
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = Colors[colorScheme];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarPosition: "top",
+        tabBarActiveTintColor: colors.tabIconSelected,
+        tabBarInactiveTintColor: colors.tabIconDefault,
         tabBarStyle: {
-          height: textStyles.title.lineHeight * 2,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.tint,
+          borderBottomWidth: 2,
         },
-        tabBarPosition: 'top',
-        tabBarIconStyle: {
-          height: textStyles.title.lineHeight,
-          width: 30 * scale,
+        tabBarLabelStyle: {
+          fontWeight: "bold",
+          textTransform: "none",
         },
-        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarButton,
-          tabBarLabelStyle: textStyles.default,
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? 'home' : 'home-outline'}
-              color={color}
-            />
+          title: "Home",
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="house" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="movies"
+        options={{
+          title: "Movies",
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="film" size={size} color={color} />
           ),
         }}
       />

@@ -1,14 +1,14 @@
 import type { PropsWithChildren, ReactElement } from 'react';
-import { useColorScheme } from 'react-native';
+import { StyleSheet, useColorScheme } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedRef,
   useAnimatedStyle,
   useScrollViewOffset,
 } from 'react-native-reanimated';
+import { scale } from 'react-native-size-matters';
 
 import { ThemedView } from '@/components/ThemedView';
-import { useScale } from '@/hooks/useScale';
 
 type Props = PropsWithChildren<{
   headerImage: ReactElement;
@@ -23,9 +23,8 @@ export default function ParallaxScrollView({
   const colorScheme = useColorScheme() ?? 'light';
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
-  const scale = useScale();
 
-  const HEADER_HEIGHT = 125 * scale;
+  const HEADER_HEIGHT = scale(75);
 
   const headerAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -49,28 +48,35 @@ export default function ParallaxScrollView({
   });
 
   return (
-    <ThemedView className="flex-1">
-      <Animated.ScrollView 
-        ref={scrollRef} 
-        scrollEventThrottle={16}
-        className="flex-1"
-      >
+    <ThemedView style={styles.container}>
+      <Animated.ScrollView ref={scrollRef} scrollEventThrottle={16}>
         <Animated.View
-          className="overflow-hidden"
           style={[
-            { 
-              height: HEADER_HEIGHT,
-              backgroundColor: headerBackgroundColor[colorScheme]
-            },
+            styles.header,
+            { backgroundColor: headerBackgroundColor[colorScheme] },
             headerAnimatedStyle,
           ]}
         >
           {headerImage}
         </Animated.View>
-        <ThemedView className="flex-1 p-8 gap-4 overflow-hidden">
-          {children}
-        </ThemedView>
+        <ThemedView style={styles.content}>{children}</ThemedView>
       </Animated.ScrollView>
     </ThemedView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    height: scale(75),
+    overflow: 'hidden',
+  },
+  content: {
+    flex: 1,
+    padding: scale(32),
+    gap: scale(16),
+    overflow: 'hidden',
+  },
+});

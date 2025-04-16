@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 3.15.1"
+    "version": ">= 3.15.1",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -16,7 +17,7 @@
         "simulator": true
       }
     },
-    "development_tv": {
+    "development:tv": {
       "extends": "development",
       "env": {
         "EXPO_TV": "1"
@@ -24,6 +25,7 @@
     },
     "preview": {
       "extends": "production",
+      "autoIncrement": true,
       "distribution": "internal",
       "ios": {
         "simulator": true
@@ -33,14 +35,15 @@
         "withoutCredentials": true
       }
     },
-    "preview_tv": {
+    "preview:tv": {
+      "autoIncrement": true,
       "extends": "preview",
       "env": {
         "EXPO_TV": "1"
       }
     },
     "production": {},
-    "production_tv": {
+    "production:tv": {
       "extends": "production", 
       "env": {
         "EXPO_TV": "1"

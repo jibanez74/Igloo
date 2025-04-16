@@ -1,21 +1,18 @@
-import { View, Text, ScrollView } from "react-native";
+import { TVFocusGuideView, View, FlatList, StyleSheet } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { scale } from "react-native-size-matters";
 import MovieCard from "@/components/MovieCard";
-import ErrorWarning from "@/components/ErrorWarning";
-import Spinner from "@/components/Spinner";
-import { fetchGet } from "@/utils/api";
-import type { SimpleMovie } from "@/types/Movie";
-
-type LatestMoviesResponse = {
-  movies: SimpleMovie[];
-};
+import API_URL from "@/constants/Backend";
+import type { MoviesResponse } from "@/types/Movie";
+import { ThemedText } from "./ThemedText";
+import Spinner from "./Spinner";
 
 export default function LatestMovies() {
-  const { isPending, data, isError, error } = useQuery({
+  const { isPending, isError, error, data } = useQuery({
     queryKey: ["latest-movies"],
-    queryFn: async (): Promise<LatestMoviesResponse> => {
+    queryFn: async (): Promise<MoviesResponse> => {
       try {
-        const res = await fetchGet("/movies/latest");
+        const res = await fetch(`${API_URL}/movies/latest`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -34,55 +31,61 @@ export default function LatestMovies() {
     },
   });
 
+  if (isError) {
+    console.error(error);
+  }
+
+  if (isPending) {
+    return <Spinner />;
+  }
+
   return (
-    <View className="py-8">
-      <View className="max-w-7xl mx-auto px-4">
-        <View className="flex-row items-center justify-between h-10 mb-6">
-          <Text className="text-2xl font-bold text-white">
-            <Text className="text-yellow-300">Latest Movies</Text>
-          </Text>
-
-          <View className="w-5 h-5">
-            {isPending && <Spinner size="sm" />}
-          </View>
-        </View>
-
-        <View className="h-10">
-          <ErrorWarning
-            error={error?.message || ""}
-            isVisible={isError}
-          />
-        </View>
-
-        <View className="min-h-[200px]">
-          {isPending ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-4">
-                {Array(12).fill(null).map((_, index) => (
-                  <View
-                    key={index}
-                    className="w-[200px] h-[300px] rounded-xl bg-blue-950/50"
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          ) : data?.movies.length === 0 ? (
-            <View className="h-full items-center justify-center">
-              <Text className="text-blue-200/80">No movies available</Text>
-            </View>
-          ) : (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 16 }}
-            >
-              {data?.movies.map((movie) => (
-                <MovieCard key={movie.id} movie={movie} />
-              ))}
-            </ScrollView>
-          )}
-        </View>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <ThemedText type="subtitle">
+          Latest Movies
+        </ThemedText>
       </View>
+
+      <TVFocusGuideView
+        style={styles.focusGuide}
+        destinations={[]}
+        trapFocusLeft={true}
+        trapFocusRight={true}
+        autoFocus={true}
+      >
+        <FlatList
+          data={data?.movies}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item, index }) => (
+            <View style={styles.movieCardContainer}>
+              <MovieCard movie={item} index={index} />
+            </View>
+          )}
+          contentContainerStyle={styles.listContent}
+        />
+      </TVFocusGuideView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  focusGuide: {
+    flex: 1,
+  },
+  header: {
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(20),
+  },
+  movieCardContainer: {
+    marginRight: scale(20),
+  },
+  listContent: {
+    paddingHorizontal: scale(20),
+  },
+});

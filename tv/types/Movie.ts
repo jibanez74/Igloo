@@ -16,9 +16,6 @@ export type SimpleMovie = {
 
 export type MoviesResponse = {
   movies: SimpleMovie[];
-  current_page: number;
-  total_pages: number;
-  total_movies: number;
 };
 
 export type Movie = {

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "scheme": "routertv",
     "plugins": [
       [
         "@react-native-tvos/config-tv",
         {
           "androidTVBanner": "./assets/tv_icons/icon-400x240.png",
+          "androidTVIcon": "./assets/tv_icons/icon-760x760.png",
           "appleTVImages": {
             "icon": "./assets/tv_icons/icon-1280x768.png",
             "iconSmall": "./assets/tv_icons/icon-400x240.png",
@@ -17,50 +17,40 @@
           }
         }
       ],
-      "expo-router",
-      "expo-font",
       [
-        "react-native-video",
+        "expo-build-properties",
         {
-          "enableNotificationControls": false,
-          "enableBackgroundAudio": false,
-          "androidExtensions": {
-            "useExoplayerRtsp": false,
-            "useExoplayerSmoothStreaming": false,
-            "useExoplayerHls": true,
-            "useExoplayerDash": false,
-            "useExoplayerCache": true,
-            "useExoplayerCodecs": true,
-            "useExoplayerFfmpeg": true,
-            "useExoplayerMediaSession": true,
-            "useExoplayerIma": false
-          },
-          "enableAudioTrackSelection": true,
-          "enableSubtitleSelection": true,
-          "enableQualitySelection": true,
-          "enableTvMode": true
+          "ios": {
+            "useFrameworks": "static"
+          }
         }
-      ]
+      ],
+      "expo-router",
+      "expo-font"
     ],
-    "android": {
-      "splash": {
-        "image": "./assets/images/splash.png"
-      },
-      "package": "com.anonymous.Igloo"
-    },
-    "ios": {
-      "splash": {
-        "image": "./assets/images/splash.png"
-      }
-    },
     "experiments": {
       "typedRoutes": true
     },
-    "newArchEnabled": true,
-    "name": "Igloo",
-    "slug": "Igloo",
+    "name": "ExpoRouterTV",
+    "slug": "ExpoRouterTV",
+    "scheme": "exporoutertv",
+    "icon": "./assets/tv_icons/icon-760x760.png",
+    "version": "1.0.0",
     "extra": {
-      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1"
+            "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1",
+      "router": {
+        "origin": false
+      }
+    },
+    "splash": {
+      "image": "./assets/tv_icons/icon-1280x768.png"
+    },
+    "android": {
+      "newArchEnabled": true,
+      "package": "com.anonymous.ExpoRouterTV"
+    },
+    "ios": {
+      "newArchEnabled": true
     }
   }
 }

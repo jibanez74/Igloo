@@ -1,22 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Platform } from 'react-native';
+import { scale } from 'react-native-size-matters';
 
 import { Collapsible } from '@/components/Collapsible';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { EventHandlingDemo } from '@/components/EventHandlingDemo';
-import { useScale } from '@/hooks/useScale';
 
 export default function FocusDemoScreen() {
-  const styles = useFocusDemoScreenStyles();
-  const scale = useScale();
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
       headerImage={
         <Ionicons
-          size={310 * scale}
+          size={scale(200)}
           name="tv-outline"
           style={styles.headerImage}
         />
@@ -30,27 +28,29 @@ export default function FocusDemoScreen() {
         <ThemedText type="defaultSemiBold">Pressable</ThemedText> and{' '}
         <ThemedText type="defaultSemiBold">Touchable</ThemedText> components.
       </ThemedText>
+
       <Collapsible title="How it works">
         <ThemedText>
           • On TV platforms, these components have "onFocus()" and "onBlur()"
           props, in addition to the usual "onPress()". These can be used to
           modify the style of the component when it is navigated to or navigated
-          away from by the TV focus engine.
-        </ThemedText>
-        <ThemedText>
-          • In addition, the functional forms of the Pressable style prop and
-          the Pressable content, which in React Native core take a "pressed"
-          boolean parameter, can also take "focused" as a parameter on TV
-          platforms.
+          away from by the TV focus engine. In addition, the functional forms of
+          the Pressable style prop and the Pressable content, which in React
+          Native core take a "pressed" boolean parameter, can also take
+          "focused" as a parameter on TV platforms.
         </ThemedText>
         <ThemedText>
           • As you use the arrow keys to navigate around the screen, the demo
           uses the above props to update lists of recent events.
         </ThemedText>
         <ThemedText>
-          In RNTV 0.76, `Pressable` and `Touchable` components receive "focus",
-          "blur", "pressIn", and "pressOut" events directly from native code,
-          for improved performance when navigating around the screen.
+          • In RNTV 0.76.2, the focus, blur, pressIn, and pressOut events of
+          Pressable and Touchable components are implemented as core React
+          Native events, emitted directly from native code for better
+          performance. They can be received by containing views in either the
+          capture or bubble phase. This demo shows how information can be
+          attached to these events by a Pressable, and then received by a
+          containing View's event handler.
         </ThemedText>
       </Collapsible>
       {Platform.isTV ? (
@@ -64,18 +64,15 @@ export default function FocusDemoScreen() {
   );
 }
 
-const useFocusDemoScreenStyles = function () {
-  const scale = useScale();
-  return StyleSheet.create({
-    headerImage: {
-      color: '#808080',
-      bottom: -45 * scale,
-      left: 0,
-      position: 'absolute',
-    },
-    titleContainer: {
-      flexDirection: 'row',
-      gap: 8 * scale,
-    },
-  });
-};
+const styles = StyleSheet.create({
+  headerImage: {
+    color: '#808080',
+    bottom: scale(-30),
+    left: 0,
+    position: 'absolute',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    gap: scale(8),
+  },
+});

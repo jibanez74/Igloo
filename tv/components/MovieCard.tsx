@@ -1,68 +1,128 @@
-import { View, Text, Pressable, useTVEventHandler } from "react-native";
-import { Image } from "expo-image";
+import { useEffect } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
 import { Link } from "expo-router";
-import { useState } from "react";
+import { Image } from "expo-image";
+import { scale } from "react-native-size-matters";
+import getImgSrc from "@/lib/getImgSrc";
 import type { SimpleMovie } from "@/types/Movie";
-import getImgSrc from "@/utils/getImgSrc";
+import { ThemedText } from "./ThemedText";
+import { useThemeColor } from "@/hooks/useThemeColor";
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  useSharedValue,
+} from "react-native-reanimated";
+
 type MovieCardProps = {
   movie: SimpleMovie;
+  index: number;
 };
 
-export default function MovieCard({ movie }: MovieCardProps) {
-  const [isFocused, setIsFocused] = useState(false);
+export default function MovieCard({ movie, index = 0 }: MovieCardProps) {
+  const thumb = getImgSrc(movie.thumb);
+  const tintColor = useThemeColor({}, "tint");
+  const opacity = useSharedValue(0);
 
-  useTVEventHandler((event) => {
-    if (event.eventType === "focus") {
-      setIsFocused(true);
-    } else if (event.eventType === "blur") {
-      setIsFocused(false);
-    }
+  useEffect(() => {
+    opacity.value = withDelay(
+      index * 100, // Stagger the animations based on index
+      withTiming(1, { duration: 500 })
+    );
+  }, [index, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: opacity.value,
+      transform: [{ scale: opacity.value }],
+    };
   });
 
   return (
-    <Link href="/" asChild>
+    <Link
+      href={{
+        pathname: "/(tabs)/movies/[movieID]",
+        params: { movieID: movie.id.toString() },
+      }}
+      asChild
+    >
       <Pressable
-        className={`group relative bg-blue-950/50 rounded-xl overflow-hidden shadow-lg shadow-blue-900/20 transition-all duration-300 ${
-          isFocused ? "shadow-yellow-300/20 scale-[1.02]" : ""
-        }`}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
+        style={({ focused, pressed }) => [
+          styles.cardContainer,
+          focused && { ...styles.focusedCard, borderColor: tintColor },
+          pressed && styles.pressedCard,
+        ]}
       >
-        {({ pressed, focused }) => (
-          <View className="w-full h-full">
-            <Image
-              source={{ uri: getImgSrc(movie.thumb) }}
-              className="w-full h-full"
-              contentFit="cover"
-              transition={300}
-              style={{
-                transform: [{ scale: focused ? 1.05 : 1 }],
-                opacity: focused ? 0.3 : 1,
-              }}
-            />
-
-            <View
-              className="absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/50 to-transparent"
-              style={{ opacity: focused ? 0.9 : 0.5 }}
-            />
-
-            <View className="absolute inset-0 p-4 flex flex-col justify-end">
-              <View
-                className="transform transition-all duration-300"
-                style={{
-                  transform: [{ translateY: focused ? 0 : 20 }],
-                }}
-              >
-                <Text className="text-lg font-semibold text-white mb-2">
-                  {movie.title}
-                </Text>
-
-                <Text className="text-sm text-yellow-300/90">{movie.year}</Text>
-              </View>
+        {({ focused, pressed }) => (
+          <Animated.View style={[styles.innerContainer, animatedStyle]}>
+            <View style={styles.imageContainer}>
+              <Image
+                source={thumb}
+                contentFit="cover"
+                allowDownscaling={true}
+                cachePolicy="memory-disk"
+                style={styles.image}
+              />
             </View>
-          </View>
+            <View style={styles.textContainer}>
+              <ThemedText
+                type="defaultSemiBold"
+                style={[styles.titleText, focused && { color: tintColor }]}
+                numberOfLines={2}
+              >
+                {movie.title}
+              </ThemedText>
+              <ThemedText type="default" style={styles.yearText}>
+                {movie.year}
+              </ThemedText>
+            </View>
+          </Animated.View>
         )}
       </Pressable>
     </Link>
   );
 }
+
+const styles = StyleSheet.create({
+  cardContainer: {
+    margin: scale(10),
+    borderWidth: scale(2),
+    borderColor: "transparent",
+    borderRadius: scale(8),
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  focusedCard: {
+    borderWidth: scale(3),
+    transform: [{ scale: 1.05 }],
+  },
+  pressedCard: {
+    opacity: 0.8,
+  },
+  innerContainer: {
+    flexDirection: "column",
+    width: scale(200),
+  },
+  imageContainer: {
+    width: scale(200),
+    height: scale(300),
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+  },
+  textContainer: {
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(5),
+    backgroundColor: "transparent",
+  },
+  titleText: {
+    fontSize: scale(16),
+    marginBottom: scale(4),
+  },
+  yearText: {
+    fontSize: scale(14),
+    opacity: 0.7,
+  },
+});

@@ -1,13 +1,13 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet, Platform, Pressable } from 'react-native';
+import { Link } from 'expo-router';
+import { scale } from 'react-native-size-matters';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useScale } from '@/hooks/useScale';
 
 export default function HomeScreen() {
-  const styles = useHomeScreenStyles();
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -52,28 +52,41 @@ export default function HomeScreen() {
           <ThemedText type="defaultSemiBold">app-example</ThemedText>.
         </ThemedText>
       </ThemedView>
+      <ThemedView>
+        <Link href="/modal" asChild>
+          <Pressable>
+            {({ focused }) => {
+              return (
+                <ThemedText
+                  type="defaultSemiBold"
+                  style={{ opacity: focused ? 0.6 : 1.0 }}
+                >
+                  About this demo
+                </ThemedText>
+              );
+            }}
+          </Pressable>
+        </Link>
+      </ThemedView>
     </ParallaxScrollView>
   );
 }
 
-const useHomeScreenStyles = function () {
-  const scale = useScale();
-  return StyleSheet.create({
-    titleContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8 * scale,
-    },
-    stepContainer: {
-      gap: 8 * scale,
-      marginBottom: 8 * scale,
-    },
-    reactLogo: {
-      height: 178 * scale,
-      width: 290 * scale,
-      bottom: 0,
-      left: 0,
-      position: 'absolute',
-    },
-  });
-};
+const styles = StyleSheet.create({
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+  },
+  stepContainer: {
+    gap: scale(8),
+    marginBottom: scale(8),
+  },
+  reactLogo: {
+    height: scale(75),
+    width: scale(150),
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+  },
+});
