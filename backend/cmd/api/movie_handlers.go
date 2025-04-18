@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -108,6 +109,9 @@ func (app *application) getMovieForDirectPlayback(c *fiber.Ctx) error {
 			"error": fmt.Sprintf("unable to find details for movie with id of %d", id),
 		})
 	}
+
+	path := strings.TrimPrefix(movie.FilePath, app.settings.MoviesDirList)
+	movie.FilePath = path
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movie": movie,
