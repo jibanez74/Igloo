@@ -128,6 +128,15 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 	return i, err
 }
 
+const deleteAllSettings = `-- name: DeleteAllSettings :exec
+DELETE FROM global_settings
+`
+
+func (q *Queries) DeleteAllSettings(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllSettings)
+	return err
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT id, created_at, updated_at, port, debug, base_url, movies_dir_list, movies_img_dir, music_dir_list, tvshows_dir_list, transcode_dir, studios_img_dir, artists_img_dir, avatar_img_dir, static_dir, download_images, tmdb_api_key, ffmpeg_path, ffprobe_path, enable_hardware_acceleration, hardware_encoder, jellyfin_token, issuer, audience, secret, cookie_domain, cookie_path FROM global_settings LIMIT 1
 `

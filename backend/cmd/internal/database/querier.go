@@ -27,6 +27,7 @@ type Querier interface {
 	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
+	DeleteAllSettings(ctx context.Context) error
 	DeleteUser(ctx context.Context, id int32) error
 	GetDeviceCode(ctx context.Context, deviceCode string) (DeviceCode, error)
 	GetDeviceCodeByUserCode(ctx context.Context, userCode string) (DeviceCode, error)

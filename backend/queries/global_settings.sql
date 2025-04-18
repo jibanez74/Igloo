@@ -56,3 +56,6 @@ UPDATE global_settings SET
     updated_at = NOW()
 WHERE id = (SELECT id FROM global_settings LIMIT 1)
 RETURNING *;
+
+-- name: DeleteAllSettings :exec
+DELETE FROM global_settings;

@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -135,6 +136,10 @@ func (app *application) initDB() error {
 }
 
 func (app *application) initSettings() error {
+	err := app.queries.DeleteAllSettings(context.Background())
+	if err != nil {
+		log.Println("settings were not deleted")
+	}
 	count, err := app.queries.GetSettingsCount(context.Background())
 	if err != nil {
 		return fmt.Errorf("unable to determine settings count: %w", err)
