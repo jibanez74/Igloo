@@ -97,6 +97,7 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id", app.getMovieDetails)
+	app.Get("/:id/direct-play", app.getMovieForDirectPlayback())
 
 	settings := api.Group("/settings")
 	settings.Get("/", app.getSettings)
