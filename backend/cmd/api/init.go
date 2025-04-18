@@ -142,7 +142,7 @@ func (app *application) initSettings() error {
 
 	var settings database.GlobalSetting
 
-	if count == 0 {
+	if count != 0 {
 		var s database.CreateSettingsParams
 
 		port, err := strconv.Atoi(os.Getenv("PORT"))
