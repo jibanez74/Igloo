@@ -442,29 +442,25 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 	return i, err
 }
 
-const getMovieForHls = `-- name: GetMovieForHls :one
-SELECT id, file_path, file_name, size, container, content_type FROM movies WHERE id = $1
+const getMovieForDirectPlayback = `-- name: GetMovieForDirectPlayback :one
+SELECT id, title, thumb, file_path FROM movies WHERE id = $1
 `
 
-type GetMovieForHlsRow struct {
-	ID          int32  `json:"id"`
-	FilePath    string `json:"file_path"`
-	FileName    string `json:"file_name"`
-	Size        int64  `json:"size"`
-	Container   string `json:"container"`
-	ContentType string `json:"content_type"`
+type GetMovieForDirectPlaybackRow struct {
+	ID       int32  `json:"id"`
+	Title    string `json:"title"`
+	Thumb    string `json:"thumb"`
+	FilePath string `json:"file_path"`
 }
 
-func (q *Queries) GetMovieForHls(ctx context.Context, id int32) (GetMovieForHlsRow, error) {
-	row := q.db.QueryRow(ctx, getMovieForHls, id)
-	var i GetMovieForHlsRow
+func (q *Queries) GetMovieForDirectPlayback(ctx context.Context, id int32) (GetMovieForDirectPlaybackRow, error) {
+	row := q.db.QueryRow(ctx, getMovieForDirectPlayback, id)
+	var i GetMovieForDirectPlaybackRow
 	err := row.Scan(
 		&i.ID,
+		&i.Title,
+		&i.Thumb,
 		&i.FilePath,
-		&i.FileName,
-		&i.Size,
-		&i.Container,
-		&i.ContentType,
 	)
 	return i, err
 }

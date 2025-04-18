@@ -15,8 +15,8 @@ FROM movies
 ORDER BY created_at DESC
 LIMIT 12;
 
--- name: GetMovieForHls :one
-SELECT id, file_path, file_name, size, container, content_type FROM movies WHERE id = $1;
+-- name: GetMovieForDirectPlayback :one
+SELECT id, title, thumb, file_path FROM movies WHERE id = $1;
 
 -- name: GetMoviesPaginated :many
 SELECT 
