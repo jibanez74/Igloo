@@ -139,7 +139,10 @@ func (app *application) initSettings() error {
 	err := app.queries.DeleteAllSettings(context.Background())
 	if err != nil {
 		log.Println("settings were not deleted")
+	} else {
+		log.Println("all settings deleted")
 	}
+
 	count, err := app.queries.GetSettingsCount(context.Background())
 	if err != nil {
 		return fmt.Errorf("unable to determine settings count: %w", err)
