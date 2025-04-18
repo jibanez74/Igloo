@@ -119,7 +119,7 @@ func (app *application) getMovieForDirectPlayback(c *fiber.Ctx) error {
 
 	movie.FilePath = path
 
-	log.Printff("your new movie file path is %s", movie.FilePath)
+	log.Printf("your new movie file path is %s", movie.FilePath)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movie": movie,
