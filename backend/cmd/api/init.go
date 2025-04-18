@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -330,21 +329,4 @@ func (app *application) initDirs(s *database.CreateSettingsParams) error {
 	s.AvatarImgDir = avatarImgDir
 
 	return nil
-}
-
-func (app *application) initWatchers() error {
-	if app.settings.MoviesDirList != "" {
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			return nil, err
-		}
-
-		err = watcher.Add(app.settings.MoviesDirList)
-		if err != nil {
-			return fmt.Errorf("unable to start watcher for movies directory %w", err)
-		}
-
-		app.movieWatcher = watcher
-	}
-
 }
