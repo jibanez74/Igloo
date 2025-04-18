@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/database"
+	"log"
 	"strconv"
 	"strings"
 
@@ -112,6 +113,8 @@ func (app *application) getMovieForDirectPlayback(c *fiber.Ctx) error {
 
 	path := strings.TrimPrefix(movie.FilePath, app.settings.MoviesDirList)
 	movie.FilePath = path
+
+	log.Printf("your file path is %s", path)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movie": movie,
