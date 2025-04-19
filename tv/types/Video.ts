@@ -1,5 +1,5 @@
 export type Video = {
-  ID: number;
+  id: number;
   title: string;
   index: number;
   profile: string;

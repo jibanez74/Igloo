@@ -26,7 +26,29 @@
         }
       ],
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "react-native-video",
+        {
+          "enableNotificationControls": false,
+          "enableBackgroundAudio": false,
+          "androidExtensions": {
+            "useExoplayerRtsp": false,
+            "useExoplayerSmoothStreaming": false,
+            "useExoplayerHls": true,
+            "useExoplayerDash": false,
+            "useExoplayerCache": true,
+            "useExoplayerCodecs": true,
+            "useExoplayerFfmpeg": true,
+            "useExoplayerMediaSession": true,
+            "useExoplayerIma": false
+          },
+          "enableAudioTrackSelection": true,
+          "enableSubtitleSelection": true,
+          "enableQualitySelection": true,
+          "enableTvMode": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -37,7 +59,7 @@
     "icon": "./assets/tv_icons/icon-760x760.png",
     "version": "1.0.0",
     "extra": {
-            "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1",
+      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1",
       "router": {
         "origin": false
       }

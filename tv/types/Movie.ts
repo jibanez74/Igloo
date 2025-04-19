@@ -56,3 +56,10 @@ export type Movie = {
 export type MovieDetailsResponse = {
   movie: Movie;
 };
+
+export type MovieDirectPlayData = {
+  id: number;
+  title: string;
+  thumb: string;
+  file_path: string;
+};

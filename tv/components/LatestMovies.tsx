@@ -7,6 +7,39 @@ import type { MoviesResponse } from "@/types/Movie";
 import { ThemedText } from "./ThemedText";
 import Spinner from "./Spinner";
 
+type MoviePlaybackResponse = {
+  id: number;
+  title: string;
+  thumb: string;
+  file_path: string;
+};
+
+export function useMoviePlayback(movieId: number) {
+  return useQuery<MoviePlaybackResponse>({
+    queryKey: ["movie-playback", movieId],
+    queryFn: async (): Promise<MoviePlaybackResponse> => {
+      try {
+        const res = await fetch(`${API_URL}/movies/${movieId}/playback`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            `${res.status} - ${data.error ? data.error : res.statusText}`
+          );
+        }
+
+        return data;
+      } catch (err) {
+        console.error(err);
+        throw new Error(
+          "a network error occurred while fetching movie playback"
+        );
+      }
+    },
+    enabled: !!movieId,
+  });
+}
+
 export default function LatestMovies() {
   const { isPending, isError, error, data } = useQuery({
     queryKey: ["latest-movies"],
