@@ -6,10 +6,11 @@ import VideoPlayer from "@/components/VideoPlayer";
 import API_URL from "../../../../constants/Backend";
 import type { MovieDirectPlayData } from "../../../../types/Movie";
 import Spinner from "@/components/Spinner";
+import { ThemedText } from "@/components/ThemedText";
 
 export default function PlayMovieScreen() {
   const { movieID } = useLocalSearchParams<{ movieID: string }>();
-
+  
   const {
     isPending,
     isError,
@@ -48,20 +49,34 @@ export default function PlayMovieScreen() {
   }
 
   if (isError) {
-    console.error(error);
-    return null;
+    return (
+      <View style={styles.container}>
+        <ThemedText type="subtitle" style={styles.errorText}>
+          Error: {error.message}
+        </ThemedText>
+      </View>
+    );
   }
 
   if (!movie) {
-    return null;
+    return (
+      <View style={styles.container}>
+        <ThemedText type="subtitle" style={styles.errorText}>
+          No movie data available
+        </ThemedText>
+      </View>
+    );
   }
+
+  const videoUri = `${API_URL}/media/movies${movie.file_path}`;
+  console.log("Attempting to play video from:", videoUri);
 
   return (
     <View style={styles.container}>
       <VideoPlayer
         thumb={getImgSrc(movie.thumb)}
         title={movie.title}
-        uri={`${API_URL}/media/movies${movie.file_path}`}
+        uri={videoUri}
       />
     </View>
   );
@@ -71,5 +86,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "black",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: "white",
+    textAlign: "center",
   },
 });

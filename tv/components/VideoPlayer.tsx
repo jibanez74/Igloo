@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, ActivityIndicator } from "react-native";
 import { VideoRef, Video } from "react-native-video";
+import { ThemedText } from "./ThemedText";
+
 
 type VideoPlayerProps = {
   uri: string;
@@ -11,8 +13,22 @@ type VideoPlayerProps = {
 export default function VideoPlayer({ uri, thumb, title }: VideoPlayerProps) {
   const videoRef = useRef<VideoRef>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [isPaused, setIsPaused] = useState(true);
-  const [volume, setVolume] = useState(0.5);
+  const [isPaused, setIsPaused] = useState(false);
+  const [volume, setVolume] = useState(1.0);
+  const [isBuffering, setIsBuffering] = useState(false);
+
+  useEffect(() => {
+    console.log("VideoPlayer mounted with URI:", uri);
+    console.log("VideoPlayer configuration:", {
+      isMuted,
+      isPaused,
+      volume,
+      thumb,
+      title,
+    });
+
+
+  }, [uri, isMuted, isPaused, volume, thumb, title]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -61,6 +77,7 @@ export default function VideoPlayer({ uri, thumb, title }: VideoPlayerProps) {
     }
   }, [isPaused, isMuted]);
 
+
   return (
     <View style={styles.container}>
       <Video
@@ -84,14 +101,34 @@ export default function VideoPlayer({ uri, thumb, title }: VideoPlayerProps) {
         style={styles.video}
         resizeMode="cover"
         onLoad={() => {
-          console.log("video loaded");
-          console.log(`your video url is ${uri}`);
+          console.log("Video loaded successfully");
+          console.log("Video metadata:", {
+            uri,
+          });
         }}
         onError={(err) => {
-          console.error(err);
-          console.log("an error occurred while loading the video");
+          console.error("Video error:", err);
+        }}
+        onProgress={({ currentTime, playableDuration, seekableDuration }) => {
+          console.log("Video progress:", {
+            currentTime,
+            playableDuration,
+            seekableDuration,
+          });
+        }}
+        onBuffer={({ isBuffering }) => {
+          console.log("Buffering state:", isBuffering);
+          setIsBuffering(isBuffering);
         }}
       />
+      {isBuffering && (
+        <View style={styles.bufferingContainer}>
+          <ActivityIndicator size="large" color="white" />
+          <ThemedText type="subtitle" style={styles.bufferingText}>
+            Buffering...
+          </ThemedText>
+        </View>
+      )}
     </View>
   );
 }
@@ -110,5 +147,24 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     height: "100%",
+  },
+  errorText: {
+    color: "white",
+    textAlign: "center",
+    marginVertical: 10,
+  },
+  bufferingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  bufferingText: {
+    color: "white",
+    marginTop: 10,
   },
 });
