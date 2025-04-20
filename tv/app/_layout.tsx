@@ -1,22 +1,16 @@
 import { useEffect } from "react";
-import { TVEventControl } from "react-native";
-import { Stack } from "expo-router";
+import { TVEventControl, View, StyleSheet } from "react-native";
+import { Slot } from "expo-router";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from '@react-navigation/native';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { dark } from "@/constants/Colors";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 export default function MainLayout() {
-  const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -34,12 +28,16 @@ export default function MainLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false, title: "Sign In" }} />
-      </Stack>
-      </ThemeProvider>
+      <View style={styles.container}>
+        <Slot />
+      </View>
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: dark,
+  },
+});

@@ -1,12 +1,10 @@
-import { View, Text } from "react-native";
+import { View, Text } from "react-native"
 
 export default function LoginScreen() {
-  return (
-    <View>
-      <Text>Sign In</Text>
-
+    return(
+        <View>
             <Text>
-Use the QR Code to login to your Igloo account.
+                Login Screen
             </Text>
         </View>
     )

@@ -1,9 +1,11 @@
 import Constants from "expo-constants";
 
-const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
+let API_URL =
+  Constants.expoConfig?.extra?.apiUrl ||
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
 
 if (!API_URL) {
-  throw new Error("API_URL is not defined in app.json");
+  API_URL = "http://127.0.0.1:8080";
 }
 
 export default API_URL;
