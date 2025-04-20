@@ -18,7 +18,7 @@ export default function MovieDetailsScreen() {
     queryKey: ["movie-details", movieID],
     queryFn: async (): Promise<Movie> => {
       try {
-        const res = await fetch(`${API_URL}/movies/${movieID}`);
+        const res = await fetch(`${API_URL}/movies/${movieID}/details`);
         const data = await res.json();
 
         if (!res.ok) {

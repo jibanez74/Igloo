@@ -79,7 +79,6 @@ func main() {
 
 	if app.settings.MoviesDirList != "" {
 		api.Static("/media/movies", app.settings.MoviesDirList, fiber.Static{
-			Compress: true,
 			Browse:   false,
 			Download: true,
 			Next:     nil,

@@ -1,10 +1,11 @@
-import { View } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import getImgSrc from "@/lib/getImgSrc";
 import VideoPlayer from "@/components/VideoPlayer";
 import API_URL from "../../../../constants/Backend";
 import type { MovieDirectPlayData } from "../../../../types/Movie";
+import Spinner from "@/components/Spinner";
 
 export default function PlayMovieScreen() {
   const { movieID } = useLocalSearchParams<{ movieID: string }>();
@@ -39,22 +40,36 @@ export default function PlayMovieScreen() {
   });
 
   if (isPending) {
-    return null;
+    return (
+      <View style={styles.container}>
+        <Spinner />
+      </View>
+    );
   }
 
   if (isError) {
-    alert(error.message);
+    console.error(error);
+    return null;
+  }
+
+  if (!movie) {
+    return null;
   }
 
   return (
-    movie && (
-      <View>
-        <VideoPlayer
-          thumb={getImgSrc(movie.thumb)}
-          title={movie?.title}
-          uri={`${API_URL}/media/movies${movie?.file_path}`}
-        />
-      </View>
-    )
+    <View style={styles.container}>
+      <VideoPlayer
+        thumb={getImgSrc(movie.thumb)}
+        title={movie.title}
+        uri={`${API_URL}/media/movies${movie.file_path}`}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+});
