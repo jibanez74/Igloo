@@ -9,6 +9,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { initializeFFmpeg } from '@/lib/ffmpeg';
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,17 @@ export default function RootLayout() {
       }
     }
   }, [loaded, error]);
+
+  useEffect(() => {
+    // Initialize FFmpeg when the app starts
+    initializeFFmpeg().then((success) => {
+      if (success) {
+        console.log('FFmpeg ready to use');
+      } else {
+        console.error('FFmpeg initialization failed');
+      }
+    });
+  }, []);
 
   if (!loaded && !error) {
     return null;

@@ -8,7 +8,7 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-const defaultMaxBitRate = 40000000;
+const defaultMaxBitRate = 0;
 
 const defaultBufferConfig = {
   minBufferMs: 10000, // 10s

@@ -76,28 +76,13 @@ func main() {
 		Next:     nil,
 	})
 
-	if app.settings.MoviesDirList != "" {
-		api.Static("/media/movies", app.settings.MoviesDirList, fiber.Static{
-			Compress:  true,
-			Browse:    false,
-			Download:  true,
-			ByteRange: true,
-			Next:      nil,
-		})
-	}
-
-	auth := api.Group("/auth")
-	auth.Get("/me", app.validateTokenInHeader, app.getCurrentUser)
-	auth.Post("/login", app.login)
-	auth.Post("/logout", app.validateTokenInHeader, app.logout)
-
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)
 	movies.Get("/latest", app.getLatestMovies)
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id/details", app.getMovieDetails)
-	movies.Get("/:id/direct-play", app.getMovieForDirectPlayback)
+	movies.Get("/:id/stream", app.streamMovie)
 
 	settings := api.Group("/settings")
 	settings.Get("/", app.getSettings)

@@ -443,14 +443,17 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 }
 
 const getMovieForDirectPlayback = `-- name: GetMovieForDirectPlayback :one
-SELECT id, title, thumb, file_path FROM movies WHERE id = $1
+SELECT id, title, thumb, file_path, size, container, content_type FROM movies WHERE id = $1
 `
 
 type GetMovieForDirectPlaybackRow struct {
-	ID       int32  `json:"id"`
-	Title    string `json:"title"`
-	Thumb    string `json:"thumb"`
-	FilePath string `json:"file_path"`
+	ID          int32  `json:"id"`
+	Title       string `json:"title"`
+	Thumb       string `json:"thumb"`
+	FilePath    string `json:"file_path"`
+	Size        int64  `json:"size"`
+	Container   string `json:"container"`
+	ContentType string `json:"content_type"`
 }
 
 func (q *Queries) GetMovieForDirectPlayback(ctx context.Context, id int32) (GetMovieForDirectPlaybackRow, error) {
@@ -461,6 +464,9 @@ func (q *Queries) GetMovieForDirectPlayback(ctx context.Context, id int32) (GetM
 		&i.Title,
 		&i.Thumb,
 		&i.FilePath,
+		&i.Size,
+		&i.Container,
+		&i.ContentType,
 	)
 	return i, err
 }
