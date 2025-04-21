@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/database"
-	"io"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -112,76 +110,17 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		})
 	}
 
-	// Ensure the file exists
-	if _, err := os.Stat(movie.FilePath); os.IsNotExist(err) {
+	_, err := os.Stat(movie.FilePath)
+	if os.IsNotExist(err) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "movie file not found",
 		})
 	}
 
-	// Set proper headers for video streaming
-	c.Set("Content-Type", "video/mp4")
+	c.Set("Content-Type", movie.ContentType)
 	c.Set("Accept-Ranges", "bytes")
-	c.Set("Cache-Control", "public, max-age=31536000")
 	c.Set("Content-Length", strconv.FormatInt(movie.Size, 10))
-	c.Set("Access-Control-Allow-Origin", "*")
-	c.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	c.Set("Access-Control-Allow-Headers", "Range, Accept-Encoding, Content-Type")
-
-	// Handle OPTIONS request for CORS
-	if c.Method() == "OPTIONS" {
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	rangeHeader := c.Get("Range")
-	if rangeHeader != "" {
-		file, err := os.Open(movie.FilePath)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "failed to open movie file",
-			})
-		}
-		defer file.Close()
-
-		rangeParts := strings.Split(rangeHeader, "=")
-		if len(rangeParts) != 2 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid range header",
-			})
-		}
-
-		rangeValues := strings.Split(rangeParts[1], "-")
-		start, err := strconv.ParseInt(rangeValues[0], 10, 64)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid range start",
-			})
-		}
-
-		var end int64
-		if rangeValues[1] == "" {
-			end = movie.Size - 1
-		} else {
-			end, err = strconv.ParseInt(rangeValues[1], 10, 64)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "invalid range end",
-				})
-			}
-		}
-
-		c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, movie.Size))
-		c.Status(fiber.StatusPartialContent)
-
-		_, err = file.Seek(start, io.SeekStart)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "failed to seek in file",
-			})
-		}
-
-		return c.SendStream(file, int(end-start+1))
-	}
 
 	return c.SendFile(movie.FilePath)
+
 }
