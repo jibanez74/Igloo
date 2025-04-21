@@ -112,10 +112,26 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		})
 	}
 
-	c.Set("Content-Type", movie.ContentType)
+	// Ensure the file exists
+	if _, err := os.Stat(movie.FilePath); os.IsNotExist(err) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "movie file not found",
+		})
+	}
+
+	// Set proper headers for video streaming
+	c.Set("Content-Type", "video/mp4")
 	c.Set("Accept-Ranges", "bytes")
 	c.Set("Cache-Control", "public, max-age=31536000")
 	c.Set("Content-Length", strconv.FormatInt(movie.Size, 10))
+	c.Set("Access-Control-Allow-Origin", "*")
+	c.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	c.Set("Access-Control-Allow-Headers", "Range, Accept-Encoding, Content-Type")
+
+	// Handle OPTIONS request for CORS
+	if c.Method() == "OPTIONS" {
+		return c.SendStatus(fiber.StatusOK)
+	}
 
 	rangeHeader := c.Get("Range")
 	if rangeHeader != "" {

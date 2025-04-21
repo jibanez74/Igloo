@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Platform, useTVEventHandler, View, StyleSheet } from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { Platform, useTVEventHandler, View, StyleSheet, Text } from "react-native";
 import Video, { OnBufferData, VideoRef } from "react-native-video";
 
 type TvVideoPlayerProps = {
@@ -8,7 +8,7 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-const defaultMaxBitRate = 0;
+const defaultMaxBitRate = 90000000;
 
 const defaultBufferConfig = {
   minBufferMs: 10000, // 10s
@@ -27,11 +27,19 @@ export default function TvVideoPlayer({
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.5);
+  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<VideoRef>(null);
+
+  const handleError = (error: any) => {
+    console.error("Video error:", error);
+    setError(error.error?.errorString || "Failed to play video");
+  };
 
   return (
     <View style={styles.container}>
       <Video
-        controls={Platform.OS === "ios"} // Only enable controls on iOS
+        ref={videoRef}
+        controls={Platform.OS === "ios"}
         fullscreen
         fullscreenAutorotate={false}
         fullscreenOrientation="landscape"
@@ -39,23 +47,34 @@ export default function TvVideoPlayer({
         maxBitRate={defaultMaxBitRate}
         muted={isMuted}
         onBuffer={(b: OnBufferData) => setIsBuffering(b.isBuffering)}
-        onError={(err) => console.error(err)}
+        onError={handleError}
         onProgress={({ currentTime: t }) => setCurrentTime(t)}
-        onReadyForDisplay={() => setIsPaused(false)}
+        onReadyForDisplay={() => {
+          setIsPaused(false);
+          setIsBuffering(false);
+        }}
         playInBackground={false}
         poster={thumb}
         paused={isPaused}
-        renderToHardwareTextureAndroid={
-          Platform.isTV && Platform.OS === "android"
-        }
+        renderToHardwareTextureAndroid={Platform.isTV && Platform.OS === "android"}
         resizeMode="contain"
         style={styles.video}
         source={{
           uri: videoUri,
           isNetwork: true,
+          type: "mp4",
+          headers: {
+            Range: "bytes=0-",
+          },
         }}
         volume={volume}
+        bufferConfig={defaultBufferConfig}
       />
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -69,5 +88,21 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     height: "100%",
+  },
+  errorContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  errorText: {
+    color: "white",
+    fontSize: 16,
+    textAlign: "center",
+    padding: 20,
   },
 });

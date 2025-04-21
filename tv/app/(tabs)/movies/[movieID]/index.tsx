@@ -49,6 +49,14 @@ export default function MovieDetailsScreen() {
 
           <Text>{movie.summary}</Text>
 
+          <Text>
+            Container - {movie.container}
+          </Text>
+
+          <Text>
+            Content Type - {movie.content_type}
+          </Text>
+
           <Link
             href={{
               pathname: "/(tabs)/movies/[movieID]/play",
