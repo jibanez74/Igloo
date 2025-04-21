@@ -110,7 +110,7 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		})
 	}
 
-	_, err := os.Stat(movie.FilePath)
+	_, err = os.Stat(movie.FilePath)
 	if os.IsNotExist(err) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "movie file not found",
