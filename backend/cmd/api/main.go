@@ -43,7 +43,6 @@ func main() {
 
 	f := fiber.New(fiber.Config{
 		AppName:               "Igloo API",
-		Prefork:               true,
 		DisableStartupMessage: !app.settings.Debug,
 	})
 
@@ -79,9 +78,9 @@ func main() {
 
 	if app.settings.MoviesDirList != "" {
 		api.Static("/media/movies", app.settings.MoviesDirList, fiber.Static{
-			Compress:  false,
+			Compress:  true,
 			Browse:    false,
-			Download:  false,
+			Download:  true,
 			ByteRange: true,
 			Next:      nil,
 		})

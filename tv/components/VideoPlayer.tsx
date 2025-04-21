@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Platform, useTVEventHandler, View } from "react-native";
+import { useState } from "react";
+import { Platform, useTVEventHandler, View, StyleSheet } from "react-native";
 import Video, { OnBufferData, VideoRef } from "react-native-video";
 
 type TvVideoPlayerProps = {
@@ -8,7 +8,7 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-const defaultMaxBitRate = 90000000;
+const defaultMaxBitRate = 40000000;
 
 const defaultBufferConfig = {
   minBufferMs: 10000, // 10s
@@ -22,19 +22,16 @@ export default function TvVideoPlayer({
   thumb,
   videoUri,
 }: TvVideoPlayerProps) {
-  const videoRef = useRef<VideoRef>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
-
-  
+  const [volume, setVolume] = useState(0.5);
 
   return (
-    <View>
+    <View style={styles.container}>
       <Video
-        bufferConfig={defaultBufferConfig}
-        controls
+        controls={Platform.OS === "ios"} // Only enable controls on iOS
         fullscreen
         fullscreenAutorotate={false}
         fullscreenOrientation="landscape"
@@ -48,15 +45,29 @@ export default function TvVideoPlayer({
         playInBackground={false}
         poster={thumb}
         paused={isPaused}
-        ref={videoRef}
         renderToHardwareTextureAndroid={
           Platform.isTV && Platform.OS === "android"
         }
+        resizeMode="contain"
+        style={styles.video}
         source={{
           uri: videoUri,
           isNetwork: true,
         }}
+        volume={volume}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  video: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+});

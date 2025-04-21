@@ -19,13 +19,33 @@
       ],
       "expo-router",
       "expo-font",
-      "react-native-video"
+      [
+        "react-native-video",
+        {
+          "enableNotificationControls": false,
+          "enableBackgroundAudio": false,
+          "androidExtensions": {
+            "useExoplayerRtsp": false,
+            "useExoplayerSmoothStreaming": false,
+            "useExoplayerHls": true,
+            "useExoplayerDash": false,
+            "useExoplayerCache": true,
+            "useExoplayerCodecs": true,
+            "useExoplayerFfmpeg": true,
+            "useExoplayerMediaSession": true,
+            "useExoplayerIma": false
+          },
+          "enableAudioTrackSelection": true,
+          "enableSubtitleSelection": true,
+          "enableQualitySelection": true,
+          "enableTvMode": true
+        }
+      ]
     ],
     "android": {
       "splash": {
         "image": "./assets/images/splash.png"
       },
-      "permissions": [],
       "package": "com.anonymous.Igloo"
     },
     "ios": {
@@ -44,6 +64,9 @@
     },
     "newArchEnabled": true,
     "name": "Igloo",
-    "slug": "Igloo"
+    "slug": "Igloo",
+    "extra": {
+      "EXPO_PUBLIC_API_URL": "https://swifty.hare-crocodile.ts.net/api/v1"
+    }
   }
 }
