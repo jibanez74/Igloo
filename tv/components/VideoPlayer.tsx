@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Platform, useTVEventHandler, View, StyleSheet, Text } from "react-native";
+import {
+  Platform,
+  useTVEventHandler,
+  View,
+  StyleSheet,
+  Text,
+} from "react-native";
 import Video, { OnBufferData, VideoRef } from "react-native-video";
 
 type TvVideoPlayerProps = {
@@ -8,7 +14,7 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-const defaultMaxBitRate = 90000000;
+const defaultMaxBitRate = 0;
 
 const defaultBufferConfig = {
   minBufferMs: 10000, // 10s
@@ -51,24 +57,20 @@ export default function TvVideoPlayer({
         onProgress={({ currentTime: t }) => setCurrentTime(t)}
         onReadyForDisplay={() => {
           setIsPaused(false);
-          setIsBuffering(false);
         }}
         playInBackground={false}
         poster={thumb}
         paused={isPaused}
-        renderToHardwareTextureAndroid={Platform.isTV && Platform.OS === "android"}
+        renderToHardwareTextureAndroid={
+          Platform.isTV && Platform.OS === "android"
+        }
         resizeMode="contain"
         style={styles.video}
         source={{
           uri: videoUri,
           isNetwork: true,
-          type: "mp4",
-          headers: {
-            Range: "bytes=0-",
-          },
         }}
         volume={volume}
-        bufferConfig={defaultBufferConfig}
       />
       {error && (
         <View style={styles.errorContainer}>

@@ -71,10 +71,15 @@ func main() {
 
 	api.Static("/static", app.settings.StaticDir, fiber.Static{
 		Compress: true,
-		Browse:   true,
+		Browse:   false,
 		Index:    "",
 		Next:     nil,
 	})
+
+	auth := api.Group("/auth")
+	auth.Get("/me", app.getCurrentUser)
+	auth.Post("/login", app.login)
+	auth.Post("/logout", app.logout)
 
 	movies := api.Group("/movies")
 	movies.Get("/count", app.getTotalMovieCount)

@@ -1,75 +1,36 @@
 package helpers
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 	"strings"
 )
 
-type HttpRange struct {
-	Start, End int64
-}
-
-func ParseRange(rangeHeader string, size int64) ([]HttpRange, error) {
-	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return nil, fmt.Errorf("invalid range format")
+func ParseRange(rangeHdr string, fileSize int64) (int64, int64, error) {
+	if !strings.HasPrefix(rangeHdr, "bytes=") {
+		return 0, 0, errors.New("invalid range")
 	}
 
-	ranges := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), ",")
-	parsedRanges := make([]HttpRange, 0, len(ranges))
-
-	for _, r := range ranges {
-		r = strings.TrimSpace(r)
-		if r == "" {
-			continue
-		}
-
-		i := strings.Index(r, "-")
-		if i < 0 {
-			return nil, fmt.Errorf("invalid range format")
-		}
-
-		start, end := strings.TrimSpace(r[:i]), strings.TrimSpace(r[i+1:])
-
-		var startByte, endByte int64
-
-		if start == "" {
-			n, err := strconv.ParseInt(end, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid range format")
-			}
-
-			if n > size {
-				n = size
-			}
-
-			startByte = size - n
-			endByte = size - 1
-		} else {
-			n, err := strconv.ParseInt(start, 10, 64)
-			if err != nil || n >= size {
-				return nil, fmt.Errorf("invalid range format")
-			}
-
-			startByte = n
-			if end == "" {
-				endByte = size - 1
-			} else {
-				n, err := strconv.ParseInt(end, 10, 64)
-				if err != nil || n >= size {
-					endByte = size - 1
-				} else {
-					endByte = n
-				}
-			}
-		}
-
-		if startByte > endByte {
-			return nil, fmt.Errorf("invalid range format")
-		}
-
-		parsedRanges = append(parsedRanges, HttpRange{startByte, endByte})
+	parts := strings.Split(strings.TrimPrefix(rangeHdr, "bytes="), "-")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("invalid range format")
 	}
 
-	return parsedRanges, nil
+	start, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || start < 0 {
+		return 0, 0, errors.New("invalid range start")
+	}
+
+	var end int64
+
+	if parts[1] == "" {
+		end = fileSize - 1
+	} else {
+		end, err = strconv.ParseInt(parts[1], 10, 64)
+		if err != nil || end < start {
+			return 0, 0, errors.New("invalid range end")
+		}
+	}
+
+	return start, end, nil
 }
