@@ -125,14 +125,13 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	fmt.Printf("File size: %d bytes\n", fileInfo.Size())
 	fmt.Printf("Content type: %s\n", movie.ContentType)
 
-	// Set headers
+	// Set base headers
 	c.Set("Content-Type", movie.ContentType)
 	c.Set("Accept-Ranges", "bytes")
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
-	c.Set("Connection", "close")
-	c.Set("Transfer-Encoding", "chunked")
+	c.Set("Connection", "keep-alive")
 	c.Set("X-Content-Type-Options", "nosniff")
 
 	rangeHdr := c.Get("Range")
@@ -190,7 +189,7 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		return c.SendStream(file, int(length), bufferSize)
 	}
 
-	// For full file requests, we'll still use chunked transfer
+	// For full file requests
 	c.Set("Content-Length", strconv.FormatInt(fileInfo.Size(), 10))
 
 	// Log the response headers for full file request
