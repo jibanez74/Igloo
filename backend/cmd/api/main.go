@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gofiber/fiber/v2"
@@ -87,7 +88,16 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id/details", app.getMovieDetails)
-	movies.Get("/:id/stream", app.streamMovie)
+	movies.Get("/:id/playback-details", app.getMovieForStreaming)
+	movies.Static("/stream", app.settings.MoviesDirList, fiber.Static{
+		Compress:      true,
+		Browse:        false,
+		Download:      true,
+		ByteRange:     true,
+		CacheDuration: 4 * time.Hour,
+		Index:         "",
+		Next:          nil,
+	})
 
 	settings := api.Group("/settings")
 	settings.Get("/", app.getSettings)

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Platform,
   useTVEventHandler,
@@ -14,75 +14,44 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-const defaultMaxBitRate = 0;
 
-const defaultBufferConfig = {
-  minBufferMs: 10000, // 10s
-  maxBufferMs: 30000,
-  bufferForPlaybackMs: 2000,
-  bufferForPlaybackAfterRebufferMs: 3000,
-};
 
 export default function TvVideoPlayer({
   title,
   thumb,
   videoUri,
 }: TvVideoPlayerProps) {
-  const [isMuted, setIsMuted] = useState(false);
-  const [isPaused, setIsPaused] = useState(true);
-  const [isBuffering, setIsBuffering] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(0.5);
-  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<VideoRef>(null);
 
-  const handleError = (err: any) => {
-    console.error("Video error:", err);
-    setError(err.error?.errorString || "Failed to play video");
-  };
-
-  console.log("Video URI:", videoUri);
+  console.log("component rendering");
 
   return (
     <View style={styles.container}>
       <Video
+        ref={videoRef}
         controls={Platform.OS === "ios"}
         fullscreen
         fullscreenAutorotate={false}
         fullscreenOrientation="landscape"
         enterPictureInPictureOnLeave={false}
-        maxBitRate={defaultMaxBitRate}
-        muted={isMuted}
-        onBuffer={(b: OnBufferData) => {
-          console.log("Buffering:", b.isBuffering);
-          setIsBuffering(b.isBuffering);
-        }}
-        onError={handleError}
-        onProgress={({ currentTime: t }) => setCurrentTime(t)}
-        onReadyForDisplay={() => {
-          console.log("Video ready for display");
-          setIsPaused(false);
-        }}
+        muted={false}
+        onError={err => console.error(err)}
         playInBackground={false}
         poster={thumb}
-        paused={isPaused}
-        renderToHardwareTextureAndroid={Platform.isTV && Platform.OS === "android"}
+        paused={false}
+        renderToHardwareTextureAndroid={
+          Platform.isTV && Platform.OS === "android"
+        }
         resizeMode="contain"
         style={styles.video}
         source={{
           uri: videoUri,
           isNetwork: true,
-          headers: {
-            Range: "bytes=0-",
-          },
+          isLocalAssetFile: false,
+          type: "mkv",
         }}
-        volume={volume}
-        bufferConfig={defaultBufferConfig}
+        volume={1}
       />
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
     </View>
   );
 }

@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
-	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -96,7 +95,7 @@ func (app *application) getMoviesPaginated(c *fiber.Ctx) error {
 	})
 }
 
-func (app *application) streamMovie(c *fiber.Ctx) error {
+func (app *application) getMovieForStreaming(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -106,48 +105,15 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 
 	movie, err := app.queries.GetMovieForDirectPlayback(c.Context(), int32(id))
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to locate movie with id %d", id),
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
 		})
 	}
 
-	// Set common headers
-	c.Set("Content-Type", movie.ContentType)
-	c.Set("Accept-Ranges", "bytes")
-	c.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", movie.FileName))
+	path := strings.TrimPrefix(movie.FilePath, app.settings.MoviesDirList)
+	movie.FilePath = path
 
-	rangeHeader := c.Get("Range")
-
-	if rangeHeader != "" {
-		start, end, err := helpers.ParseRange(rangeHeader, movie.Size)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": fmt.Sprintf("invalid range request: %v", err),
-			})
-		}
-
-		c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, movie.Size))
-		c.Set("Content-Length", strconv.FormatInt(end-start+1, 10))
-
-		file, err := os.Open(movie.FilePath)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": fmt.Sprintf("unable to open file: %v", err),
-			})
-		}
-		defer file.Close()
-
-		_, err = file.Seek(start, 0)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": fmt.Sprintf("unable to seek file: %v", err),
-			})
-		}
-
-		return c.Status(fiber.StatusPartialContent).SendStream(file, int(end-start+1))
-	}
-
-	c.Set("Content-Length", strconv.FormatInt(movie.Size, 10))
-
-	return c.SendFile(movie.FilePath, true)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"movie": movie,
+	})
 }
