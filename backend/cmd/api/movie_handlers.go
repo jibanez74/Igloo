@@ -131,11 +131,7 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
-
-	// Force HTTP/1.1
 	c.Set("Connection", "close")
-
-	// Additional headers for better streaming support
 	c.Set("Transfer-Encoding", "chunked")
 	c.Set("X-Content-Type-Options", "nosniff")
 
@@ -148,6 +144,12 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusRequestedRangeNotSatisfiable).JSON(fiber.Map{
 				"error": fmt.Sprintf("invalid range request: %v", err),
 			})
+		}
+
+		// Limit the range to a reasonable size (e.g., 10MB chunks)
+		maxChunkSize := int64(10 * 1024 * 1024) // 10MB
+		if end-start+1 > maxChunkSize {
+			end = start + maxChunkSize - 1
 		}
 
 		if end >= fileInfo.Size() {
@@ -183,10 +185,12 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		fmt.Printf("  Content-Range: %s\n", c.Get("Content-Range"))
 		fmt.Printf("  Content-Length: %s\n", c.Get("Content-Length"))
 
-		return c.SendStream(file, int(length))
+		// Use a buffer to read the file in chunks
+		bufferSize := 1024 * 1024 // 1MB buffer
+		return c.SendStream(file, int(length), bufferSize)
 	}
 
-	// For full file requests
+	// For full file requests, we'll still use chunked transfer
 	c.Set("Content-Length", strconv.FormatInt(fileInfo.Size(), 10))
 
 	// Log the response headers for full file request
@@ -194,5 +198,15 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	fmt.Printf("  Content-Type: %s\n", c.Get("Content-Type"))
 	fmt.Printf("  Content-Length: %s\n", c.Get("Content-Length"))
 
-	return c.SendFile(movie.FilePath)
+	file, err := os.Open(movie.FilePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("unable to open movie file: %v", err),
+		})
+	}
+	defer file.Close()
+
+	// Use a buffer to read the file in chunks
+	bufferSize := 1024 * 1024 // 1MB buffer
+	return c.SendStream(file, int(fileInfo.Size()), bufferSize)
 }
