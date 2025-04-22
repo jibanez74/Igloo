@@ -33,6 +33,14 @@ export default function TvVideoPlayer({
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.5);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleError = (err: any) => {
+    console.error("Video error:", err);
+    setError(err.error?.errorString || "Failed to play video");
+  };
+
+  console.log("Video URI:", videoUri);
 
   return (
     <View style={styles.container}>
@@ -44,10 +52,14 @@ export default function TvVideoPlayer({
         enterPictureInPictureOnLeave={false}
         maxBitRate={defaultMaxBitRate}
         muted={isMuted}
-        onBuffer={(b: OnBufferData) => setIsBuffering(b.isBuffering)}
-        onError={err => console.error(err)}
+        onBuffer={(b: OnBufferData) => {
+          console.log("Buffering:", b.isBuffering);
+          setIsBuffering(b.isBuffering);
+        }}
+        onError={handleError}
         onProgress={({ currentTime: t }) => setCurrentTime(t)}
         onReadyForDisplay={() => {
+          console.log("Video ready for display");
           setIsPaused(false);
         }}
         playInBackground={false}
@@ -66,6 +78,11 @@ export default function TvVideoPlayer({
         volume={volume}
         bufferConfig={defaultBufferConfig}
       />
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }

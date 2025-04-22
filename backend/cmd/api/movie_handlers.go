@@ -132,6 +132,13 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
 
+	// Force HTTP/1.1
+	c.Set("Connection", "close")
+
+	// Additional headers for better streaming support
+	c.Set("Transfer-Encoding", "chunked")
+	c.Set("X-Content-Type-Options", "nosniff")
+
 	rangeHdr := c.Get("Range")
 	fmt.Printf("Range header: %s\n", rangeHdr)
 
