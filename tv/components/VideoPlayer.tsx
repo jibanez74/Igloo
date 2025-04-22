@@ -53,16 +53,18 @@ export default function TvVideoPlayer({
         playInBackground={false}
         poster={thumb}
         paused={isPaused}
-        renderToHardwareTextureAndroid={
-          Platform.isTV && Platform.OS === "android"
-        }
+        renderToHardwareTextureAndroid={Platform.isTV && Platform.OS === "android"}
         resizeMode="contain"
         style={styles.video}
         source={{
           uri: videoUri,
           isNetwork: true,
+          headers: {
+            Range: "bytes=0-",
+          },
         }}
         volume={volume}
+        bufferConfig={defaultBufferConfig}
       />
     </View>
   );

@@ -112,48 +112,43 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		})
 	}
 
-	_, err = os.Stat(movie.FilePath)
+	// Ensure the file exists and get its info
+	fileInfo, err := os.Stat(movie.FilePath)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": fmt.Sprintf("movie file not found: %v", err),
 		})
 	}
 
-	// Content type mapping
-	contentTypes := map[string]string{
-		".mp4":  "video/mp4",
-		".mkv":  "video/x-matroska",
-		".webm": "video/webm",
-		".avi":  "video/x-msvideo",
-	}
-	contentType := contentTypes[movie.Container]
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
+	// Log the file details for debugging
+	fmt.Printf("Streaming file: %s\n", movie.FilePath)
+	fmt.Printf("File size: %d bytes\n", fileInfo.Size())
+	fmt.Printf("Content type: %s\n", movie.ContentType)
 
 	// Set headers
-	c.Set("Content-Type", contentType)
+	c.Set("Content-Type", movie.ContentType)
 	c.Set("Accept-Ranges", "bytes")
-
-	// Prevent caching of video content
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
 
 	rangeHdr := c.Get("Range")
+	fmt.Printf("Range header: %s\n", rangeHdr)
+
 	if rangeHdr != "" {
-		start, end, err := helpers.ParseRange(rangeHdr, movie.Size)
+		start, end, err := helpers.ParseRange(rangeHdr, fileInfo.Size())
 		if err != nil {
 			return c.Status(fiber.StatusRequestedRangeNotSatisfiable).JSON(fiber.Map{
 				"error": fmt.Sprintf("invalid range request: %v", err),
 			})
 		}
 
-		if end >= movie.Size {
-			end = movie.Size - 1
+		if end >= fileInfo.Size() {
+			end = fileInfo.Size() - 1
 		}
 
 		length := end - start + 1
+		fmt.Printf("Range request: %d-%d (length: %d)\n", start, end, length)
 
 		file, err := os.Open(movie.FilePath)
 		if err != nil {
@@ -172,12 +167,25 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		}
 
 		c.Status(fiber.StatusPartialContent)
-		c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, movie.Size))
+		c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileInfo.Size()))
 		c.Set("Content-Length", strconv.FormatInt(length, 10))
+
+		// Log the response headers
+		fmt.Printf("Response headers:\n")
+		fmt.Printf("  Content-Type: %s\n", c.Get("Content-Type"))
+		fmt.Printf("  Content-Range: %s\n", c.Get("Content-Range"))
+		fmt.Printf("  Content-Length: %s\n", c.Get("Content-Length"))
 
 		return c.SendStream(file, int(length))
 	}
 
-	c.Set("Content-Length", strconv.FormatInt(movie.Size, 10))
+	// For full file requests
+	c.Set("Content-Length", strconv.FormatInt(fileInfo.Size(), 10))
+
+	// Log the response headers for full file request
+	fmt.Printf("Full file response headers:\n")
+	fmt.Printf("  Content-Type: %s\n", c.Get("Content-Type"))
+	fmt.Printf("  Content-Length: %s\n", c.Get("Content-Length"))
+
 	return c.SendFile(movie.FilePath)
 }
