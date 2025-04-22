@@ -90,11 +90,12 @@ func main() {
 	movies.Get("/:id/details", app.getMovieDetails)
 	movies.Get("/:id/playback-details", app.getMovieForStreaming)
 	movies.Static("/stream", app.settings.MoviesDirList, fiber.Static{
-		Compress:      true,
+		Compress:      false,
 		Browse:        false,
-		Download:      true,
+		Download:      false,
 		ByteRange:     true,
 		CacheDuration: 4 * time.Hour,
+		MaxAge:        14400,
 		Index:         "",
 		Next:          nil,
 	})
