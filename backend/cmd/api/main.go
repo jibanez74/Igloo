@@ -87,7 +87,13 @@ func main() {
 	movies.Get("/", app.getMoviesPaginated)
 	movies.Post("/create", app.createTmdbMovie)
 	movies.Get("/:id/details", app.getMovieDetails)
-	movies.Get("/:id/stream", app.streamMovie)
+	movies.Static("/stream", app.settings.MoviesDirList, fiber.Static{
+		Compress:  true,
+		Browse:    false,
+		ByteRange: true,
+		Download:  false,
+		Next:      nil,
+	})
 
 	settings := api.Group("/settings")
 	settings.Get("/", app.getSettings)
