@@ -37,6 +37,10 @@ export default function MovieDetailsScreen() {
     console.error(error);
   }
 
+  if (movie) {
+    console.log(movie.content_type);
+  }
+
   return (
     <View>
       <Text>Your movie id is {movieID}</Text>
@@ -49,13 +53,9 @@ export default function MovieDetailsScreen() {
 
           <Text>{movie.summary}</Text>
 
-          <Text>
-            Container - {movie.container}
-          </Text>
+          <Text>Container - {movie.container}</Text>
 
-          <Text>
-            Content Type - {movie.content_type}
-          </Text>
+          <Text>Content Type - {movie.content_type}</Text>
 
           <Link
             href={{

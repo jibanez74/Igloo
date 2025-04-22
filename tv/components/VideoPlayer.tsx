@@ -33,18 +33,10 @@ export default function TvVideoPlayer({
   const [isBuffering, setIsBuffering] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(0.5);
-  const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<VideoRef>(null);
-
-  const handleError = (error: any) => {
-    console.error("Video error:", error);
-    setError(error.error?.errorString || "Failed to play video");
-  };
 
   return (
     <View style={styles.container}>
       <Video
-        ref={videoRef}
         controls={Platform.OS === "ios"}
         fullscreen
         fullscreenAutorotate={false}
@@ -53,7 +45,7 @@ export default function TvVideoPlayer({
         maxBitRate={defaultMaxBitRate}
         muted={isMuted}
         onBuffer={(b: OnBufferData) => setIsBuffering(b.isBuffering)}
-        onError={handleError}
+        onError={err => console.error(err)}
         onProgress={({ currentTime: t }) => setCurrentTime(t)}
         onReadyForDisplay={() => {
           setIsPaused(false);
@@ -72,11 +64,6 @@ export default function TvVideoPlayer({
         }}
         volume={volume}
       />
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
     </View>
   );
 }

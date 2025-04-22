@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"io"
 	"os"
 	"strconv"
 
@@ -100,27 +101,51 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "unable to parse movie id from url params",
+			"error": fmt.Sprintf("unable to parse movie id from url params: %v", err),
 		})
 	}
 
 	movie, err := app.queries.GetMovieForDirectPlayback(c.Context(), int32(id))
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": fmt.Sprintf("unable to find movie with id %d", id),
+			"error": fmt.Sprintf("unable to find movie with id %d: %v", id, err),
 		})
 	}
 
+	_, err = os.Stat(movie.FilePath)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": fmt.Sprintf("movie file not found: %v", err),
+		})
+	}
+
+	// Content type mapping
+	contentTypes := map[string]string{
+		".mp4":  "video/mp4",
+		".mkv":  "video/x-matroska",
+		".webm": "video/webm",
+		".avi":  "video/x-msvideo",
+	}
+	contentType := contentTypes[movie.Container]
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	// Set headers
+	c.Set("Content-Type", contentType)
 	c.Set("Accept-Ranges", "bytes")
-	c.Set("Content-Type", movie.ContentType)
+
+	// Prevent caching of video content
+	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	c.Set("Pragma", "no-cache")
+	c.Set("Expires", "0")
 
 	rangeHdr := c.Get("Range")
-
 	if rangeHdr != "" {
 		start, end, err := helpers.ParseRange(rangeHdr, movie.Size)
 		if err != nil {
 			return c.Status(fiber.StatusRequestedRangeNotSatisfiable).JSON(fiber.Map{
-				"error": err.Error(),
+				"error": fmt.Sprintf("invalid range request: %v", err),
 			})
 		}
 
@@ -133,10 +158,18 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 		file, err := os.Open(movie.FilePath)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "unable to open movie file",
+				"error": fmt.Sprintf("unable to open movie file: %v", err),
 			})
 		}
 		defer file.Close()
+
+		// Seek to the start position
+		_, err = file.Seek(start, io.SeekStart)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("failed to seek in file: %v", err),
+			})
+		}
 
 		c.Status(fiber.StatusPartialContent)
 		c.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, movie.Size))
@@ -146,6 +179,5 @@ func (app *application) streamMovie(c *fiber.Ctx) error {
 	}
 
 	c.Set("Content-Length", strconv.FormatInt(movie.Size, 10))
-
 	return c.SendFile(movie.FilePath)
 }
