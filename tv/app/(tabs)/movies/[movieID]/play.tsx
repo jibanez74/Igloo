@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import getImgSrc from "@/lib/getImgSrc";
 import API_URL from "@/constants/Backend";
 import TvVideoPlayer from "@/components/VideoPlayer";
-import type { Movie } from "@/types/Movie";
+import type { MovieDirectPlayData } from "@/types/Movie";
 
 export default function PlayMovieScreen() {
   const { movieID } = useLocalSearchParams();
@@ -15,10 +15,10 @@ export default function PlayMovieScreen() {
     isError,
     error,
   } = useQuery({
-    queryKey: ["movie", movieID],
-    queryFn: async (): Promise<Movie> => {
+    queryKey: ["play-movie", movieID],
+    queryFn: async (): Promise<MovieDirectPlayData> => {
       try {
-        const res = await fetch(`${API_URL}/movies/${movieID}/details`);
+        const res = await fetch(`${API_URL}/movies/${movieID}/playback-details`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -50,7 +50,7 @@ export default function PlayMovieScreen() {
         <TvVideoPlayer
           thumb={getImgSrc(data.thumb)}
           title={data.title}
-          videoUri={`${API_URL}/movies/${movieID}/stream`}
+          videoUri={`${API_URL}/movies/stream${data.file_path}`}
         />
       )}
     </View>
