@@ -113,6 +113,9 @@ func (app *application) getMovieForStreaming(c *fiber.Ctx) error {
 	path := strings.TrimPrefix(movie.FilePath, app.settings.MoviesDirList)
 	movie.FilePath = path
 
+	container := strings.TrimPrefix(movie.Container, ".")
+	movie.Container = container
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"movie": movie,
 	})

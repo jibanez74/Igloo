@@ -50,6 +50,7 @@ export default function PlayMovieScreen() {
         <TvVideoPlayer
           title={data.title}
           videoUri={`${API_URL}/movies/stream${data.file_path}`}
+          container={data.container}
         />
       )}
     </View>

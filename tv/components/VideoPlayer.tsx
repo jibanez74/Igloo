@@ -6,18 +6,24 @@ import {
   StyleSheet,
   Text,
 } from "react-native";
-import Video, { OnBufferData, BufferingStrategyType, VideoRef } from "react-native-video";
+import Video, {
+  OnBufferData,
+  BufferingStrategyType,
+  VideoRef,
+} from "react-native-video";
 
 type TvVideoPlayerProps = {
   title: string;
   thumb: string;
   videoUri: string;
+  container: string;
 };
 
 export default function TvVideoPlayer({
   title,
   thumb,
   videoUri,
+  container,
 }: TvVideoPlayerProps) {
   const videoRef = useRef<VideoRef>(null);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -52,8 +58,7 @@ export default function TvVideoPlayer({
         source={{
           uri: videoUri,
           isNetwork: true,
-          isLocalAssetFile: false,
-          type: "mkv",
+          type: container,
           headers: {
             Range: "bytes=0-",
           },
