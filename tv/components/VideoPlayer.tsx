@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Text,
 } from "react-native";
-import Video, { OnBufferData, VideoRef } from "react-native-video";
+import Video, { OnBufferData, BufferingStrategyType, VideoRef } from "react-native-video";
 
 type TvVideoPlayerProps = {
   title: string;
@@ -14,14 +14,17 @@ type TvVideoPlayerProps = {
   videoUri: string;
 };
 
-
-
 export default function TvVideoPlayer({
   title,
   thumb,
   videoUri,
 }: TvVideoPlayerProps) {
   const videoRef = useRef<VideoRef>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
+
+  const handleBuffer = useCallback((data: OnBufferData) => {
+    setIsBuffering(data.isBuffering);
+  }, []);
 
   console.log("component rendering");
 
@@ -29,13 +32,15 @@ export default function TvVideoPlayer({
     <View style={styles.container}>
       <Video
         ref={videoRef}
+        bufferingStrategy={BufferingStrategyType.DEPENDING_ON_MEMORY}
         controls={Platform.OS === "ios"}
         fullscreen
         fullscreenAutorotate={false}
         fullscreenOrientation="landscape"
         enterPictureInPictureOnLeave={false}
         muted={false}
-        onError={err => console.error(err)}
+        onError={(err) => console.error(err)}
+        onBuffer={handleBuffer}
         playInBackground={false}
         poster={thumb}
         paused={false}
@@ -49,9 +54,17 @@ export default function TvVideoPlayer({
           isNetwork: true,
           isLocalAssetFile: false,
           type: "mkv",
+          headers: {
+            Range: "bytes=0-",
+          },
         }}
         volume={1}
       />
+      {isBuffering && (
+        <View style={styles.bufferingContainer}>
+          <Text style={styles.bufferingText}>Buffering...</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -66,7 +79,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  errorContainer: {
+  bufferingContainer: {
     position: "absolute",
     top: 0,
     left: 0,
@@ -76,7 +89,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.7)",
   },
-  errorText: {
+  bufferingText: {
     color: "white",
     fontSize: 16,
     textAlign: "center",

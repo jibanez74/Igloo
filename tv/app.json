@@ -41,6 +41,7 @@
           "enableTvMode": true
         }
       ]
+
     ],
     "android": {
       "splash": {

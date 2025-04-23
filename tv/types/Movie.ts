@@ -62,4 +62,6 @@ export type MovieDirectPlayData = {
   title: string;
   thumb: string;
   file_path: string;
+  size: number;
+  content_type: string;
 };
