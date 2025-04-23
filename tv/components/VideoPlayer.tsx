@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Platform,
   useTVEventHandler,
   View,
   StyleSheet,
   Text,
+  ActivityIndicator,
 } from "react-native";
 import Video, {
   OnBufferData,
@@ -25,19 +25,11 @@ export default function TvVideoPlayer({
   videoUri,
   container,
 }: TvVideoPlayerProps) {
-  const videoRef = useRef<VideoRef>(null);
-  const [isBuffering, setIsBuffering] = useState(false);
-
-  const handleBuffer = useCallback((data: OnBufferData) => {
-    setIsBuffering(data.isBuffering);
-  }, []);
-
   console.log("component rendering");
 
   return (
     <View style={styles.container}>
       <Video
-        ref={videoRef}
         bufferingStrategy={BufferingStrategyType.DEPENDING_ON_MEMORY}
         controls={Platform.OS === "ios"}
         fullscreen
@@ -46,7 +38,7 @@ export default function TvVideoPlayer({
         enterPictureInPictureOnLeave={false}
         muted={false}
         onError={(err) => console.error(err)}
-        onBuffer={handleBuffer}
+        onBuffer={(b: OnBufferData) => console.log("video is buffering...")}
         playInBackground={false}
         poster={thumb}
         paused={false}
@@ -59,17 +51,9 @@ export default function TvVideoPlayer({
           uri: videoUri,
           isNetwork: true,
           type: container,
-          headers: {
-            Range: "bytes=0-",
-          },
         }}
         volume={1}
       />
-      {isBuffering && (
-        <View style={styles.bufferingContainer}>
-          <Text style={styles.bufferingText}>Buffering...</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -84,7 +68,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  bufferingContainer: {
+  overlay: {
     position: "absolute",
     top: 0,
     left: 0,
@@ -92,12 +76,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
-  bufferingText: {
+  overlayText: {
     color: "white",
-    fontSize: 16,
-    textAlign: "center",
-    padding: 20,
+    fontSize: 18,
+    marginTop: 10,
+    fontWeight: "500",
   },
 });
