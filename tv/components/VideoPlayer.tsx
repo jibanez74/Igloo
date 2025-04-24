@@ -36,6 +36,7 @@ export default function TvVideoPlayer({
         fullscreenAutorotate={false}
         fullscreenOrientation="landscape"
         enterPictureInPictureOnLeave={false}
+        maxBitRate={25000000}
         muted={false}
         onError={(err) => console.error(err)}
         onBuffer={(b: OnBufferData) => console.log("video is buffering...")}
