@@ -1,50 +1,53 @@
-import { View, Text, FlatList } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import API_URL from "@/constants/Backend";
-import MovieCard from "@/components/MovieCard";
-import type { SimpleMovie } from "@/types/Movie";
+import { StyleSheet, ScrollView } from 'react-native';
+import { ThemedText } from '@/components/ThemedText';
+import { HelloWave } from '@/components/HelloWave';
+import { ThemedView } from '@/components/ThemedView';
+import LatestMovies from '@/components/LatestMovies';
 
 export default function HomeScreen() {
-  const { isPending, error, isError, data } = useQuery({
-    queryKey: ["latest-movies"],
-    queryFn: async (): Promise<SimpleMovie[]> => {
-      try {
-        const res = await fetch(`${API_URL}/movies/latest`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(
-            `${res.status} - ${data.error ? data.error : res.statusText}`
-          );
-        }
-
-        return data.movies;
-      } catch (err) {
-        console.error(err);
-        return [];
-      }
-    },
-  });
-
-  if (isError) {
-    console.error(error);
-  }
-
   return (
-    <View>
-      <Text>Home Screen</Text>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      <ThemedView style={styles.header}>
+        <ThemedView style={styles.welcomeContainer}>
+          <ThemedText type="title" style={styles.welcomeText}>
+            Welcome to Igloo
+          </ThemedText>
+          <HelloWave />
+        </ThemedView>
+        <ThemedText type="subtitle" style={styles.subtitle}>
+          Your personal movie collection
+        </ThemedText>
+      </ThemedView>
 
-      {isPending && <Text>Loading...</Text>}
-
-      {data && (
-        <FlatList
-          data={data}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item, index }) => <MovieCard index={index} movie={item} />}
-        />
-      )}
-    </View>
+      <LatestMovies />
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingVertical: 32,
+  },
+  header: {
+    paddingHorizontal: 32,
+    marginBottom: 48,
+  },
+  welcomeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  welcomeText: {
+    marginRight: 12,
+  },
+  subtitle: {
+    opacity: 0.8,
+  },
+}); 
