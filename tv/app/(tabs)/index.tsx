@@ -1,4 +1,4 @@
-import { StyleSheet, ScrollView } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { HelloWave } from '@/components/HelloWave';
 import { ThemedView } from '@/components/ThemedView';
@@ -6,11 +6,7 @@ import LatestMovies from '@/components/LatestMovies';
 
 export default function HomeScreen() {
   return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
+    <ThemedView style={styles.container}>
       <ThemedView style={styles.header}>
         <ThemedView style={styles.welcomeContainer}>
           <ThemedText type="title" style={styles.welcomeText}>
@@ -19,25 +15,28 @@ export default function HomeScreen() {
           <HelloWave />
         </ThemedView>
         <ThemedText type="subtitle" style={styles.subtitle}>
-          Your personal movie collection
+          Your personal media collection
         </ThemedText>
       </ThemedView>
 
-      <LatestMovies />
-    </ScrollView>
+      <ThemedView style={styles.content}>
+        <LatestMovies />
+      </ThemedView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  contentContainer: {
     paddingVertical: 32,
   },
   header: {
     paddingHorizontal: 32,
     marginBottom: 48,
+  },
+  content: {
+    flex: 1,
   },
   welcomeContainer: {
     flexDirection: 'row',
@@ -50,4 +49,4 @@ const styles = StyleSheet.create({
   subtitle: {
     opacity: 0.8,
   },
-}); 
+});
