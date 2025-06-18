@@ -53,7 +53,7 @@ func initApp() (*application, error) {
 	}
 
 	if app.settings.TmdbApiKey != "" {
-		t, err := tmdb.New(&app.settings.TmdbApiKey)
+		t, err := tmdb.New(app.settings.TmdbApiKey)
 		if err != nil {
 			return nil, err
 		}

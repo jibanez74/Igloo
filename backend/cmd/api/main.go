@@ -25,7 +25,7 @@ type application struct {
 	settings     *database.GlobalSetting
 	ffmpeg       ffmpeg.FFmpeg
 	ffprobe      ffprobe.Ffprobe
-	tmdb         tmdb.Tmdb
+	tmdb         tmdb.TmdbInterface
 	movieWatcher *fsnotify.Watcher
 }
 

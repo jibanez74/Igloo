@@ -2,11 +2,9 @@ package tmdb
 
 import (
 	"errors"
-	"os"
 )
 
-func New() (TmdbInterface, error) {
-	apiKey := os.Getenv("TMDB_API_KEY")
+func New(apiKey string) (TmdbInterface, error) {
 	if apiKey == "" {
 		return nil, errors.New("TMDB_API_KEY environment variable is not set")
 	}
