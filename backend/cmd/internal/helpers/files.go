@@ -9,6 +9,25 @@ import (
 	"strings"
 )
 
+var videoExtensions = map[string]bool{
+	".mp4":  true,
+	".mkv":  true,
+	".avi":  true,
+	".mov":  true,
+	".wmv":  true,
+	".flv":  true,
+	".webm": true,
+	".m4v":  true,
+	".mpeg": true,
+	".mpg":  true,
+	".3gp":  true,
+}
+
+func IsVideoFile(fileName string) bool {
+	ext := strings.ToLower(filepath.Ext(fileName))
+	return videoExtensions[ext]
+}
+
 func CheckDirExistAndReadable(dirPath string) error {
 	if dirPath == "" {
 		return errors.New("directory path is required")
@@ -50,7 +69,10 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 
 	year, err := strconv.Atoi(yearStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid year in filename: %s", fileName)
+		return &TitleYearResponse{
+			Title: fileNameWithoutExt,
+			Year:  0,
+		}, fmt.Errorf("invalid year in filename: %s", fileName)
 	}
 
 	titleParts := parts[:len(parts)-1]
