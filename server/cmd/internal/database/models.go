@@ -8,6 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Album struct {
+	ID                   int32              `json:"id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Title                string             `json:"title"`
+	SpotifyID            string             `json:"spotify_id"`
+	ReleaseDate          pgtype.Date        `json:"release_date"`
+	Year                 pgtype.Int4        `json:"year"`
+	SpotifyPopularity    int32              `json:"spotify_popularity"`
+	TotalTracks          int32              `json:"total_tracks"`
+	TotalAvailableTracks int32              `json:"total_available_tracks"`
+}
+
 type AlbumGenre struct {
 	AlbumID int32 `json:"album_id"`
 	GenreID int32 `json:"genre_id"`
@@ -68,6 +81,7 @@ type GlobalSetting struct {
 	Port                       int32              `json:"port"`
 	Debug                      bool               `json:"debug"`
 	EnableLogger               bool               `json:"enable_logger"`
+	BaseUrl                    string             `json:"base_url"`
 	LogsDir                    string             `json:"logs_dir"`
 	EnableWatcher              bool               `json:"enable_watcher"`
 	MoviesDir                  string             `json:"movies_dir"`

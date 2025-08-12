@@ -67,6 +67,7 @@ CREATE TABLE global_settings (
   port INTEGER NOT NULL DEFAULT 8080,
   debug BOOLEAN NOT NULL DEFAULT false,
   enable_logger BOOLEAN NOT NULL DEFAULT false,
+  base_url VARCHAR(255) NOT NULL,
   logs_dir VARCHAR(255) NOT NULL,
   enable_watcher BOOLEAN NOT NULL DEFAULT false,
   movies_dir VARCHAR(255) NOT NULL,

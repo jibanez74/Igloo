@@ -156,14 +156,8 @@ func (app *Application) InitDB() error {
 }
 
 func (app *Application) InitSettings() error {
-	count, err := app.Queries.GetSettingsCount(context.Background())
+	settings, err := app.Queries.GetSettings(context.Background())
 	if err != nil {
-		return fmt.Errorf("unable to determine settings count: %w", err)
-	}
-
-	var settings database.GlobalSetting
-
-	if count == 0 {
 		var s database.CreateSettingsParams
 
 		port, err := strconv.Atoi(os.Getenv("PORT"))
@@ -229,15 +223,18 @@ func (app *Application) InitSettings() error {
 		s.MoviesDir = os.Getenv("MOVIES_DIR")
 		s.MusicDir = os.Getenv("MUSIC_DIR")
 		s.TvshowsDir = os.Getenv("TVSHOWS_DIR")
+		s.TranscodeDir = os.Getenv("TRANSCODE_DIR")
+		s.MoviesImgDir = os.Getenv("MOVIES_IMG_DIR")
+		s.StudiosImgDir = os.Getenv("STUDIOS_IMG_DIR")
+		s.ArtistsImgDir = os.Getenv("ARTISTS_IMG_DIR")
+		s.AvatarImgDir = os.Getenv("AVATAR_IMG_DIR")
+		s.PlexToken = os.Getenv("PLEX_TOKEN")
+		s.SpotifyClientID = os.Getenv("SPOTIFY_CLIENT_ID")
+		s.SpotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
 
 		settings, err = app.Queries.CreateSettings(context.Background(), s)
 		if err != nil {
 			return fmt.Errorf("failed to create settings: %w", err)
-		}
-	} else {
-		settings, err = app.Queries.GetSettings(context.Background())
-		if err != nil {
-			return fmt.Errorf("failed to get settings: %w", err)
 		}
 	}
 
