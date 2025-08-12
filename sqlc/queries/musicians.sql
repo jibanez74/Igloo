@@ -28,3 +28,4 @@ RETURNING *;
 SELECT EXISTS(
     SELECT 1 FROM musicians WHERE spotify_id = $1
 ) as exists;
+

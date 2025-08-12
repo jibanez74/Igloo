@@ -64,7 +64,7 @@ SELECT
     m.summary as musician_summary,
     m.spotify_id as musician_spotify_id,
     m.spotify_popularity as musician_spotify_popularity,
-    m.spotify_followers_count as musician_spotify_followers_count,
+    m.spotify_followers as musician_spotify_followers,
     si.id as image_id,
     si.created_at as image_created_at,
     si.updated_at as image_updated_at,
