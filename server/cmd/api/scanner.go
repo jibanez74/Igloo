@@ -69,3 +69,37 @@ func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musicia
 
 	return &musician, nil
 }
+
+func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*database.Album, error) {
+	albumList, err := app.Spotify.SearchAlbums(dir.Name(), 1)
+	if err != nil {
+		return nil, fmt.Errorf("fail to get data for album %s\n%s", dir.Name(), err.Error())
+	}
+
+	if len(albumList) == 0 {
+		return nil, fmt.Errorf("ffail to fetch any data from spotify for album %s", dir.Name())
+	}
+
+	album, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("fail to fetch details for %s with spotify id %s\n%s", dir.Name(), albumList[0].ID.String(), err.Error())
+	}
+
+	exist, err := app.Queries.CheckAlbumExistsBySpotifyID(context.Background(), album.ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("fail to check if %s album exist in the data base\n%s", album.Name, err.Error())
+	}
+
+	var dbAlbum database.Album
+
+	if !exist {
+
+	} else {
+		dbAlbum, err = app.Queries.GetAlbumBySpotifyID(context.Background(), album.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("failt to fetch album %s from data base\n%s", album.Name, err.Error())
+		}
+	}
+
+	return &dbAlbum, nil
+}
