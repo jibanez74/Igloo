@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"os"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musician, error) {
@@ -31,7 +33,7 @@ func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musicia
 			Name:              artist.Name,
 			SpotifyPopularity: int32(artist.Popularity),
 			SpotifyFollowers:  int32(artist.Followers.Count),
-			Summary:           fmt.Sprintf("%s is a artist with %D followers and %d rating on spotify", artist.Name, artist.Followers, artist.Popularity),
+			Summary:           fmt.Sprintf("%s is a talented artist with %d followers and a popularity rating of %d on Spotify. Their music has resonated with listeners worldwide, establishing them as a notable presence in the music industry.", artist.Name, artist.Followers.Count, artist.Popularity),
 		})
 
 		if err != nil {
@@ -42,10 +44,13 @@ func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musicia
 			go func() {
 				for _, img := range artist.Images {
 					_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
-						Path:       img.URL,
-						Width:      int32(img.Width),
-						Height:     int32(img.Height),
-						MusicianID: musician.ID,
+						Path:   img.URL,
+						Width:  int32(img.Width),
+						Height: int32(img.Height),
+						MusicianID: pgtype.Int4{
+							Int32: musician.ID,
+							Valid: true,
+						},
 					})
 
 					if err != nil {
