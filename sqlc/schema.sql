@@ -138,7 +138,7 @@ CREATE TABLE musicians (
   summary TEXT NOT NULL,
   spotify_id VARCHAR(255) NOT NULL UNIQUE,
   spotify_popularity INTEGER NOT NULL CHECK (spotify_popularity >= 0),
-  spotify_followers_count INTEGER NOT NULL
+  spotify_followers INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE albums (

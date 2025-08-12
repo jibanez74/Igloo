@@ -77,3 +77,8 @@ SELECT
 FROM albums a
 LEFT JOIN spotify_images si ON a.id = si.album_id
 ORDER BY a.title ASC;
+
+-- name: CheckAlbumExistsBySpotifyID :one
+SELECT EXISTS(
+    SELECT 1 FROM albums WHERE spotify_id = $1
+) as exists;
