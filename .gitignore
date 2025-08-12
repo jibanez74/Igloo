@@ -1,0 +1,7 @@
+/server/.env*
+/server/pg_data
+.DS_Store
+.vscode
+.idea
+error.txt
+todo.txt
