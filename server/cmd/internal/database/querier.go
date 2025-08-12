@@ -72,7 +72,6 @@ type Querier interface {
 	GetMusicianTracks(ctx context.Context, musicianID int32) ([]TrackMusician, error)
 	GetMusicianWithImages(ctx context.Context, id int32) ([]GetMusicianWithImagesRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
-	GetOrCreateAlbumByTitle(ctx context.Context, arg GetOrCreateAlbumByTitleParams) (GetOrCreateAlbumByTitleRow, error)
 	GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error)
 	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)

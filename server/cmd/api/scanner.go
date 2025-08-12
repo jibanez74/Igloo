@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -93,7 +95,48 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	var dbAlbum database.Album
 
 	if !exist {
+		releaseDate, err := helpers.FormatDate(album.ReleaseDate)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to format release date for album %s\n%s", album.Name, err.Error()))
+			releaseDate = time.Now()
+		}
 
+		tx, err := app.Db.Begin(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("fail to start data base transaction to save album %s data\n%s", album.Name, err.Error())
+		}
+		defer tx.Rollback(context.Background())
+
+		qtx := app.Queries.WithTx(tx)
+
+		dbAlbum, err = qtx.CreateAlbum(context.Background(), database.CreateAlbumParams{
+			Title:             album.Name,
+			SpotifyID:         album.ID.String(),
+			TotalTracks:       int32(album.TotalTracks),
+			SpotifyPopularity: int32(album.Popularity),
+			ReleaseDate: pgtype.Date{
+				Time:  releaseDate,
+				Valid: true,
+			},
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("fail to create %s album in the data base\n%s", album.Name, err.Error())
+		}
+
+		err = qtx.CreateAlbumMusician(context.Background(), database.CreateAlbumMusicianParams{
+			MusicianID: musicianID,
+			AlbumID:    dbAlbum.ID,
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("fail to create relation between musciian with id of %d and album with id of %d\n%s", musicianID, dbAlbum.ID, err.Error())
+		}
+
+		err = tx.Commit(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("fail to commit transaction to save album %s to data base\n%s", album.Name, err.Error())
+		}
 	} else {
 		dbAlbum, err = app.Queries.GetAlbumBySpotifyID(context.Background(), album.ID.String())
 		if err != nil {
