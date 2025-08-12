@@ -1,9 +1,5 @@
 -- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks 
-FROM albums 
-WHERE spotify_id = $1 
-LIMIT 1;
-
+SELECT * FROM albums WHERE spotify_id = $1 LIMIT 1;
 -- name: GetAllAlbums :many
 SELECT 
     a.id, a.title, a.release_date,

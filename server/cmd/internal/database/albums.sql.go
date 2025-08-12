@@ -73,27 +73,12 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks 
-FROM albums 
-WHERE spotify_id = $1 
-LIMIT 1
+SELECT id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
-type GetAlbumBySpotifyIDRow struct {
-	ID                   int32              `json:"id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	Title                string             `json:"title"`
-	SpotifyID            string             `json:"spotify_id"`
-	ReleaseDate          pgtype.Date        `json:"release_date"`
-	SpotifyPopularity    int32              `json:"spotify_popularity"`
-	TotalTracks          int32              `json:"total_tracks"`
-	TotalAvailableTracks int32              `json:"total_available_tracks"`
-}
-
-func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (GetAlbumBySpotifyIDRow, error) {
+func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error) {
 	row := q.db.QueryRow(ctx, getAlbumBySpotifyID, spotifyID)
-	var i GetAlbumBySpotifyIDRow
+	var i Album
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -101,6 +86,7 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Ge
 		&i.Title,
 		&i.SpotifyID,
 		&i.ReleaseDate,
+		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,

@@ -79,7 +79,7 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	}
 
 	if len(albumList) == 0 {
-		return nil, fmt.Errorf("ffail to fetch any data from spotify for album %s", dir.Name())
+		return nil, fmt.Errorf("fail to fetch any data from spotify for album %s", dir.Name())
 	}
 
 	album, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
@@ -110,10 +110,11 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 		qtx := app.Queries.WithTx(tx)
 
 		dbAlbum, err = qtx.CreateAlbum(context.Background(), database.CreateAlbumParams{
-			Title:             album.Name,
-			SpotifyID:         album.ID.String(),
-			TotalTracks:       int32(album.TotalTracks),
-			SpotifyPopularity: int32(album.Popularity),
+			Title:                album.Name,
+			SpotifyID:            album.ID.String(),
+			TotalTracks:          int32(album.TotalTracks),
+			TotalAvailableTracks: int32(album.TotalTracks), // Assuming all tracks are available initially
+			SpotifyPopularity:    int32(album.Popularity),
 			ReleaseDate: pgtype.Date{
 				Time:  releaseDate,
 				Valid: true,
@@ -140,7 +141,7 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	} else {
 		dbAlbum, err = app.Queries.GetAlbumBySpotifyID(context.Background(), album.ID.String())
 		if err != nil {
-			return nil, fmt.Errorf("failt to fetch album %s from data base\n%s", album.Name, err.Error())
+			return nil, fmt.Errorf("fail to fetch album %s from data base\n%s", album.Name, err.Error())
 		}
 	}
 

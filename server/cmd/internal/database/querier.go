@@ -45,7 +45,7 @@ type Querier interface {
 	DeleteTrackGenre(ctx context.Context, arg DeleteTrackGenreParams) error
 	DeleteTrackMusician(ctx context.Context, arg DeleteTrackMusicianParams) error
 	DeleteUser(ctx context.Context, id int32) error
-	GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (GetAlbumBySpotifyIDRow, error)
+	GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error)
 	GetAlbumGenres(ctx context.Context, albumID int32) ([]AlbumGenre, error)
 	GetAlbumMusicians(ctx context.Context, albumID int32) ([]AlbumMusician, error)
 	GetAlbumWithImages(ctx context.Context, id int32) ([]GetAlbumWithImagesRow, error)
