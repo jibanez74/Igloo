@@ -18,9 +18,10 @@ INSERT INTO musicians (
     name,
     spotify_id,
     spotify_popularity,
-    spotify_followers
+    spotify_followers,
+    summary
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5
 )
 RETURNING *;
 

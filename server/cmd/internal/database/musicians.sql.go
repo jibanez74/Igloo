@@ -29,9 +29,10 @@ INSERT INTO musicians (
     name,
     spotify_id,
     spotify_popularity,
-    spotify_followers
+    spotify_followers,
+    summary
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5
 )
 RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers
 `
@@ -41,6 +42,7 @@ type CreateMusicianParams struct {
 	SpotifyID         string `json:"spotify_id"`
 	SpotifyPopularity int32  `json:"spotify_popularity"`
 	SpotifyFollowers  int32  `json:"spotify_followers"`
+	Summary           string `json:"summary"`
 }
 
 func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error) {
@@ -49,6 +51,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.SpotifyFollowers,
+		arg.Summary,
 	)
 	var i Musician
 	err := row.Scan(
