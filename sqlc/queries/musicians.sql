@@ -30,3 +30,5 @@ SELECT EXISTS(
     SELECT 1 FROM musicians WHERE spotify_id = $1
 ) as exists;
 
+-- name: GetMusicianBySpotifyID :one
+SELECT * FROM musicians WHERE spotify_id = $1;

@@ -67,6 +67,7 @@ type Querier interface {
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error)
 	GetMusicianAlbums(ctx context.Context, musicianID int32) ([]AlbumMusician, error)
+	GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error)
 	GetMusicianGenres(ctx context.Context, musicianID int32) ([]MusicianGenre, error)
 	GetMusicianTracks(ctx context.Context, musicianID int32) ([]TrackMusician, error)
 	GetMusicianWithImages(ctx context.Context, id int32) ([]GetMusicianWithImagesRow, error)

@@ -7,86 +7,60 @@ import (
 	"os"
 )
 
-func (app *Application) ScanForMusicians() error {
-	dirs, err := os.ReadDir(app.Settings.MusicDir)
+func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musician, error) {
+	artistList, err := app.Spotify.SearchAlbums(dir.Name(), 1)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("unable to scan music directory at %s for musicians", app.Settings.MusicDir))
-		app.Logger.Error(err.Error())
-		return err
+		return nil, fmt.Errorf("fail to fetch results from spotify for musician %s\n%s", dir.Name(), err.Error())
 	}
 
-	var musicianList []database.Musician
-
-	if len(dirs) == 0 {
-		app.Logger.Info(fmt.Sprintf("no musicians at %s", app.Settings.MusicDir))
-		return nil
+	artist, err := app.Spotify.GetArtistBySpotifyID(artistList[0].ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("fail to get details for musician %s\n%s", dir.Name(), err.Error())
 	}
 
-	for _, d := range dirs {
-		if !d.IsDir() {
-			continue
-		}
+	exist, err := app.Queries.CheckMusicianExistsBySpotifyID(context.Background(), artist.ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("fail to check if %s exists in the data base\n%s", artist.Name, err.Error())
+	}
 
-		artistList, err := app.Spotify.SearchArtists(d.Name(), 1)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("unable to fetch data for musician %s", d.Name()))
-			app.Logger.Error(err.Error())
-			continue
-		}
+	var musician database.Musician
 
-		if len(artistList) == 0 {
-			app.Logger.Info(fmt.Sprintf("no results on spotify for musician %s", d.Name()))
-			continue
-		}
-
-		artist, err := app.Spotify.GetArtistBySpotifyID(artistList[0].ID.String())
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("an error happened while fetching the details from musician %s from spotify", artistList[0].Name))
-			app.Logger.Error(err.Error())
-		}
-
-		exist, err := app.Queries.CheckMusicianExistsBySpotifyID(context.Background(), artist.ID.String())
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("unable to check if musician %s with id of %s is already in the system", artist.Name, artist.ID))
-			continue
-		}
-
-		if exist {
-			continue
-		}
-
-		musician, err := app.Queries.CreateMusician(context.Background(), database.CreateMusicianParams{
-			Name:              artist.Name,
+	if !exist {
+		musician, err = app.Queries.CreateMusician(context.Background(), database.CreateMusicianParams{
 			SpotifyID:         artist.ID.String(),
+			Name:              artist.Name,
 			SpotifyPopularity: int32(artist.Popularity),
 			SpotifyFollowers:  int32(artist.Followers.Count),
-			Summary:           fmt.Sprintf("% is a artist with a rating of %d and %d followers on spotify", artist.Name, artist.Popularity, artist.Followers.Count),
+			Summary:           fmt.Sprintf("%s is a artist with %D followers and %d rating on spotify", artist.Name, artist.Followers, artist.Popularity),
 		})
 
 		if err != nil {
-			app.Logger.Error(fmt.Sprintf("unable to create musician %s", artist.Name))
-			app.Logger.Info(err.Error())
-			continue
+			return nil, fmt.Errorf("fail to save %s musician to data base\n%s", artist.Name, err.Error())
 		}
 
-		musicianList = append(musicianList, musician)
-
 		if len(artist.Images) > 0 {
-			for _, img := range artist.Images {
-				_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
-					Path:       img.URL,
-					Width:      int32(img.Width),
-					Height:     int32(img.Height),
-					MusicianID: musician.ID,
-				})
+			go func() {
+				for _, img := range artist.Images {
+					_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
+						Path:       img.URL,
+						Width:      int32(img.Width),
+						Height:     int32(img.Height),
+						MusicianID: musician.ID,
+					})
 
-				if err != nil {
-					app.Logger.Error(fmt.Sprintf("unable to save musician image for url %s", img.URL))
-					app.Logger.Error(err.Error())
+					if err != nil {
+						app.Logger.Error(fmt.Sprintf("fail to save image %s for musician %s\n%s", img.URL, musician.Name, err.Error()))
+					}
 				}
-			}
+			}()
+		}
+
+	} else {
+		musician, err = app.Queries.GetMusicianBySpotifyID(context.Background(), artist.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("fail to fetch %s with spotify id %s from the data base\n%s", artist.Name, artist.ID, err.Error())
 		}
 	}
 
-	return nil
+	return &musician, nil
 }

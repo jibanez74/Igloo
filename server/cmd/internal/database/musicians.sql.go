@@ -116,6 +116,26 @@ func (q *Queries) GetAllMusiciansWithImages(ctx context.Context) ([]GetAllMusici
 	return items, nil
 }
 
+const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
+SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers FROM musicians WHERE spotify_id = $1
+`
+
+func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error) {
+	row := q.db.QueryRow(ctx, getMusicianBySpotifyID, spotifyID)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Summary,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.SpotifyFollowers,
+	)
+	return i, err
+}
+
 const getMusiciansCount = `-- name: GetMusiciansCount :one
 SELECT COUNT(*) FROM musicians
 `
