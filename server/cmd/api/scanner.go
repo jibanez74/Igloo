@@ -51,6 +51,7 @@ func (app *Application) ScanMusicLibrary() {
 				app.Logger.Error(err.Error())
 				continue
 			}
+
 		}
 	}
 }
@@ -210,4 +211,8 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	}
 
 	return &dbAlbum, nil
+}
+
+func (app *Application) ScanFileForTrack(f os.FileInfo) error {
+
 }
