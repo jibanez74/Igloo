@@ -147,8 +147,7 @@ CREATE TABLE albums (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   title VARCHAR(100) NOT NULL,
   spotify_id VARCHAR(255) NOT NULL UNIQUE,
-  release_date DATE,
-  year INTEGER GENERATED ALWAYS AS (EXTRACT(YEAR FROM release_date)) STORED,
+  release_date VARCHAR(100) NOT NULL,
   spotify_popularity INTEGER NOT NULL CHECK (spotify_popularity >= 0),
   total_tracks INTEGER NOT NULL,
   total_available_tracks INTEGER NOT NULL DEFAULT 0

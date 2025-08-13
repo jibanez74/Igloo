@@ -14,8 +14,7 @@ type Album struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	Title                string             `json:"title"`
 	SpotifyID            string             `json:"spotify_id"`
-	ReleaseDate          pgtype.Date        `json:"release_date"`
-	Year                 pgtype.Int4        `json:"year"`
+	ReleaseDate          string             `json:"release_date"`
 	SpotifyPopularity    int32              `json:"spotify_popularity"`
 	TotalTracks          int32              `json:"total_tracks"`
 	TotalAvailableTracks int32              `json:"total_available_tracks"`

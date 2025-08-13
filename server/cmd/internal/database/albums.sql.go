@@ -27,34 +27,32 @@ func (q *Queries) CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID str
 const createAlbum = `-- name: CreateAlbum :one
 INSERT INTO albums (
     title,
-    spotify_id,
     release_date,
+    spotify_id,
     spotify_popularity,
     total_tracks,
     total_available_tracks
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, 6
 )
-RETURNING id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks
+RETURNING id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks
 `
 
 type CreateAlbumParams struct {
-	Title                string      `json:"title"`
-	SpotifyID            string      `json:"spotify_id"`
-	ReleaseDate          pgtype.Date `json:"release_date"`
-	SpotifyPopularity    int32       `json:"spotify_popularity"`
-	TotalTracks          int32       `json:"total_tracks"`
-	TotalAvailableTracks int32       `json:"total_available_tracks"`
+	Title             string `json:"title"`
+	ReleaseDate       string `json:"release_date"`
+	SpotifyID         string `json:"spotify_id"`
+	SpotifyPopularity int32  `json:"spotify_popularity"`
+	TotalTracks       int32  `json:"total_tracks"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
 	row := q.db.QueryRow(ctx, createAlbum,
 		arg.Title,
-		arg.SpotifyID,
 		arg.ReleaseDate,
+		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
-		arg.TotalAvailableTracks,
 	)
 	var i Album
 	err := row.Scan(
@@ -64,7 +62,6 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.Title,
 		&i.SpotifyID,
 		&i.ReleaseDate,
-		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
@@ -73,7 +70,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error) {
@@ -86,7 +83,6 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Al
 		&i.Title,
 		&i.SpotifyID,
 		&i.ReleaseDate,
-		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
@@ -105,58 +101,11 @@ func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const getAllAlbums = `-- name: GetAllAlbums :many
-SELECT 
-    a.id, a.title, a.release_date,
-    si.id as image_id, si.path as image_path, si.width as image_width, si.height as image_height
-FROM albums a
-LEFT JOIN spotify_images si ON a.id = si.album_id
-ORDER BY a.title ASC
-`
-
-type GetAllAlbumsRow struct {
-	ID          int32       `json:"id"`
-	Title       string      `json:"title"`
-	ReleaseDate pgtype.Date `json:"release_date"`
-	ImageID     pgtype.Int4 `json:"image_id"`
-	ImagePath   pgtype.Text `json:"image_path"`
-	ImageWidth  pgtype.Int4 `json:"image_width"`
-	ImageHeight pgtype.Int4 `json:"image_height"`
-}
-
-func (q *Queries) GetAllAlbums(ctx context.Context) ([]GetAllAlbumsRow, error) {
-	rows, err := q.db.Query(ctx, getAllAlbums)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAllAlbumsRow{}
-	for rows.Next() {
-		var i GetAllAlbumsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.ReleaseDate,
-			&i.ImageID,
-			&i.ImagePath,
-			&i.ImageWidth,
-			&i.ImageHeight,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getAllAlbumsWithImages = `-- name: GetAllAlbumsWithImages :many
 SELECT 
     a.id, 
     a.title, 
-    a.year,
+    a.release_date,
     si.id as image_id, 
     si.path as image_path, 
     si.width as image_width, 
@@ -169,7 +118,7 @@ ORDER BY a.title ASC
 type GetAllAlbumsWithImagesRow struct {
 	ID          int32       `json:"id"`
 	Title       string      `json:"title"`
-	Year        pgtype.Int4 `json:"year"`
+	ReleaseDate string      `json:"release_date"`
 	ImageID     pgtype.Int4 `json:"image_id"`
 	ImagePath   pgtype.Text `json:"image_path"`
 	ImageWidth  pgtype.Int4 `json:"image_width"`
@@ -188,7 +137,7 @@ func (q *Queries) GetAllAlbumsWithImages(ctx context.Context) ([]GetAllAlbumsWit
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.Year,
+			&i.ReleaseDate,
 			&i.ImageID,
 			&i.ImagePath,
 			&i.ImageWidth,
@@ -202,53 +151,4 @@ func (q *Queries) GetAllAlbumsWithImages(ctx context.Context) ([]GetAllAlbumsWit
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateAlbum = `-- name: UpdateAlbum :one
-UPDATE albums SET
-    title = $1,
-    spotify_id = $2,
-    release_date = $3,
-    spotify_popularity = $4,
-    total_tracks = $5,
-    total_available_tracks = $6,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $7
-RETURNING id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks
-`
-
-type UpdateAlbumParams struct {
-	Title                string      `json:"title"`
-	SpotifyID            string      `json:"spotify_id"`
-	ReleaseDate          pgtype.Date `json:"release_date"`
-	SpotifyPopularity    int32       `json:"spotify_popularity"`
-	TotalTracks          int32       `json:"total_tracks"`
-	TotalAvailableTracks int32       `json:"total_available_tracks"`
-	ID                   int32       `json:"id"`
-}
-
-func (q *Queries) UpdateAlbum(ctx context.Context, arg UpdateAlbumParams) (Album, error) {
-	row := q.db.QueryRow(ctx, updateAlbum,
-		arg.Title,
-		arg.SpotifyID,
-		arg.ReleaseDate,
-		arg.SpotifyPopularity,
-		arg.TotalTracks,
-		arg.TotalAvailableTracks,
-		arg.ID,
-	)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.SpotifyID,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.SpotifyPopularity,
-		&i.TotalTracks,
-		&i.TotalAvailableTracks,
-	)
-	return i, err
 }

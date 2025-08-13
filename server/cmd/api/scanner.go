@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -31,7 +29,7 @@ func (app *Application) ScanMusicLibrary() {
 		musician, err := app.ScanDirsForMusicians(d)
 		if err != nil {
 			app.Logger.Error(err.Error())
-			return
+			continue
 		}
 
 		albumsDir, err := os.ReadDir(fmt.Sprintf("%s/%s", app.Settings.MusicDir, d.Name()))
@@ -42,11 +40,11 @@ func (app *Application) ScanMusicLibrary() {
 
 		if len(albumsDir) == 0 {
 			app.Logger.Info(fmt.Sprintf("no albums found for %s", musician.Name))
-			return
+			continue
 		}
 
 		for _, ad := range albumsDir {
-			album, err := app.ScanDIrsForAlbums(ad, musician.ID)
+			_, err := app.ScanDIrsForAlbums(ad, musician.ID)
 			if err != nil {
 				app.Logger.Error(err.Error())
 				continue
@@ -57,14 +55,9 @@ func (app *Application) ScanMusicLibrary() {
 }
 
 func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musician, error) {
-	artistList, err := app.Spotify.SearchAlbums(dir.Name(), 1)
+	artist, err := app.Spotify.SearchArtistByName(dir.Name())
 	if err != nil {
 		return nil, fmt.Errorf("fail to fetch results from spotify for musician %s\n%s", dir.Name(), err.Error())
-	}
-
-	artist, err := app.Spotify.GetArtistBySpotifyID(artistList[0].ID.String())
-	if err != nil {
-		return nil, fmt.Errorf("fail to get details for musician %s\n%s", dir.Name(), err.Error())
 	}
 
 	exist, err := app.Queries.CheckMusicianExistsBySpotifyID(context.Background(), artist.ID.String())
@@ -139,12 +132,6 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	var dbAlbum database.Album
 
 	if !exist {
-		releaseDate, err := helpers.FormatDate(album.ReleaseDate)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to format release date for album %s\n%s", album.Name, err.Error()))
-			releaseDate = time.Now()
-		}
-
 		tx, err := app.Db.Begin(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("fail to start data base transaction to save album %s data\n%s", album.Name, err.Error())
@@ -154,15 +141,11 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 		qtx := app.Queries.WithTx(tx)
 
 		dbAlbum, err = qtx.CreateAlbum(context.Background(), database.CreateAlbumParams{
-			Title:                album.Name,
-			SpotifyID:            album.ID.String(),
-			TotalTracks:          int32(album.TotalTracks),
-			TotalAvailableTracks: int32(album.TotalTracks), // Assuming all tracks are available initially
-			SpotifyPopularity:    int32(album.Popularity),
-			ReleaseDate: pgtype.Date{
-				Time:  releaseDate,
-				Valid: true,
-			},
+			Title:             album.Name,
+			SpotifyID:         album.ID.String(),
+			TotalTracks:       int32(album.TotalTracks),
+			SpotifyPopularity: int32(album.Popularity),
+			ReleaseDate:       album.ReleaseDate,
 		})
 
 		if err != nil {
@@ -211,8 +194,4 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 	}
 
 	return &dbAlbum, nil
-}
-
-func (app *Application) ScanFileForTrack(f os.FileInfo) error {
-
 }

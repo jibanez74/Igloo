@@ -60,3 +60,23 @@ func (s *SpotifyClient) SearchArtists(query string, limit int) ([]spotify.FullAr
 
 	return results.Artists.Artists, nil
 }
+
+// SearchArtistByName searches for an artist by name and returns the first result
+func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
+	if artistName == "" {
+		return nil, errors.New("artist name cannot be empty")
+	}
+
+	ctx := context.Background()
+
+	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for artist '%s': %w", artistName, err)
+	}
+
+	if len(results.Artists.Artists) == 0 {
+		return nil, fmt.Errorf("no artists found for name '%s'", artistName)
+	}
+
+	return &results.Artists.Artists[0], nil
+}

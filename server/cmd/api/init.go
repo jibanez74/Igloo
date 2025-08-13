@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,13 +47,6 @@ func InitApp() (*Application, error) {
 		return nil, err
 	}
 
-	if app.Settings.EnableWatcher {
-		err = app.InitWatcher()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	if app.Settings.FfprobePath != "" {
 		f, err := ffprobe.New(app.Settings.FfprobePath)
 		if err != nil {
@@ -80,6 +72,11 @@ func InitApp() (*Application, error) {
 		}
 
 		app.Spotify = s
+	}
+
+	if app.Settings.MusicDir != "" {
+		log.Println("will now scan for musicians and albums...")
+		go app.ScanMusicLibrary()
 	}
 
 	return &app, nil
@@ -319,25 +316,6 @@ func InitDirs(s *database.CreateSettingsParams) error {
 	s.StudiosImgDir = studiosImgDir
 	s.ArtistsImgDir = artistsImgDir
 	s.AvatarImgDir = avatarImgDir
-
-	return nil
-}
-
-func (app *Application) InitWatcher() error {
-	w, err := fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("failed to create watcher: %v", err)
-	}
-
-	if app.Settings.MoviesDir != "" {
-		app.Logger.Info(fmt.Sprintf("will watch %s for movies", app.Settings.MoviesDir))
-	}
-
-	if app.Settings.TvshowsDir != "" {
-		app.Logger.Info(fmt.Sprintf("will watch %s for music", app.Settings.TvshowsDir))
-	}
-
-	app.Watcher = w
 
 	return nil
 }
