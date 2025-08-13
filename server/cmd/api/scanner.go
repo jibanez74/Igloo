@@ -11,6 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func (app *Application) ScanMusicLibrary() {
+	dirs, err := os.ReadDir(app.Settings.MusicDir)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failt to read music directory at %s\n%s", app.Settings.MusicDir, err.Error()))
+		return
+	}
+
+	if len(dirs) == 0 {
+		app.Logger.Info(fmt.Sprintf("no music files or directories detected at %s", app.Settings.MusicDir))
+		return
+	}
+
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+
+		musician, err := app.ScanDirsForMusicians(d)
+		if err != nil {
+			app.Logger.Error(err.Error())
+			return
+		}
+
+		albumsDir, err := os.ReadDir(fmt.Sprintf("%s/%s", app.Settings.MusicDir, d.Name()))
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to read album directories for musician %s\n%s", musician.Name, err.Error()))
+			return
+		}
+
+		if len(albumsDir) == 0 {
+			app.Logger.Info(fmt.Sprintf("no albums found for %s", musician.Name))
+			return
+		}
+
+		for _, ad := range albumsDir {
+			album, err := app.ScanDIrsForAlbums(ad, musician.ID)
+			if err != nil {
+				app.Logger.Error(err.Error())
+				continue
+			}
+		}
+	}
+}
+
 func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musician, error) {
 	artistList, err := app.Spotify.SearchAlbums(dir.Name(), 1)
 	if err != nil {
@@ -61,7 +105,6 @@ func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musicia
 				}
 			}()
 		}
-
 	} else {
 		musician, err = app.Queries.GetMusicianBySpotifyID(context.Background(), artist.ID.String())
 		if err != nil {
@@ -137,6 +180,27 @@ func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*d
 		err = tx.Commit(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("fail to commit transaction to save album %s to data base\n%s", album.Name, err.Error())
+		}
+
+		if len(album.Images) > 0 {
+			go func() {
+				for _, img := range album.Images {
+					_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
+						Path:   img.URL,
+						Width:  int32(img.Width),
+						Height: int32(img.Height),
+						AlbumID: pgtype.Int4{
+							Int32: dbAlbum.ID,
+							Valid: true,
+						},
+					})
+
+					if err != nil {
+						app.Logger.Error(fmt.Sprintf("fail to save image %s for album %s\n%s", img.URL, dbAlbum.Title, err.Error()))
+					}
+
+				}
+			}()
 		}
 	} else {
 		dbAlbum, err = app.Queries.GetAlbumBySpotifyID(context.Background(), album.ID.String())
