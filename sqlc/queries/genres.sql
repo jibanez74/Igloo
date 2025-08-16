@@ -23,3 +23,5 @@ UNION ALL
 SELECT n.id, n.created_at, n.updated_at, n.tag, n.genre_type
 FROM new_genre n;
 
+-- name: GetAllGenres :many
+SELECT id, tag, genre_type FROM genres;

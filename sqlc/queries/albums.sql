@@ -13,7 +13,7 @@ INSERT INTO albums (
     total_tracks,
     total_available_tracks
 ) VALUES (
-    $1, $2, $3, $4, $5, 6
+    $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 

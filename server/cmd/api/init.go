@@ -333,11 +333,7 @@ func (app *Application) InitRouter() *chi.Mux {
 		})
 
 		r.Route("/movies", func(r chi.Router) {
-			r.Get("/count", app.getTotalMovieCount) // GET /api/v1/movies/count
-			r.Get("/latest", app.getLatestMovies)   // GET /api/v1/movies/latest
-			r.Get("/", app.getMoviesPaginated)      // GET /api/v1/movies?page=1&limit=24
-			r.Post("/", app.createTmdbMovie)        // POST /api/v1/movies
-			r.Get("/{id}", app.getMovieDetails)     // GET /api/v1/movies/{id}
+			r.Post("/", app.createTmdbMovie) // POST /api/v1/movies
 		})
 	})
 

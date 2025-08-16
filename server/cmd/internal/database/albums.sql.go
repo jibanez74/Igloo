@@ -33,17 +33,18 @@ INSERT INTO albums (
     total_tracks,
     total_available_tracks
 ) VALUES (
-    $1, $2, $3, $4, $5, 6
+    $1, $2, $3, $4, $5, $6
 )
 RETURNING id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks
 `
 
 type CreateAlbumParams struct {
-	Title             string `json:"title"`
-	ReleaseDate       string `json:"release_date"`
-	SpotifyID         string `json:"spotify_id"`
-	SpotifyPopularity int32  `json:"spotify_popularity"`
-	TotalTracks       int32  `json:"total_tracks"`
+	Title                string `json:"title"`
+	ReleaseDate          string `json:"release_date"`
+	SpotifyID            string `json:"spotify_id"`
+	SpotifyPopularity    int32  `json:"spotify_popularity"`
+	TotalTracks          int32  `json:"total_tracks"`
+	TotalAvailableTracks int32  `json:"total_available_tracks"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
@@ -53,6 +54,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
+		arg.TotalAvailableTracks,
 	)
 	var i Album
 	err := row.Scan(

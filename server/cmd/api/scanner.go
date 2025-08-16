@@ -10,80 +10,95 @@ import (
 )
 
 func (app *Application) ScanMusicLibrary() {
-	dirs, err := os.ReadDir(app.Settings.MusicDir)
+	entries, err := os.ReadDir(app.Settings.MusicDir)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failt to read music directory at %s\n%s", app.Settings.MusicDir, err.Error()))
+		app.Logger.Error(fmt.Sprintf("fail to scan music directory %s\n%s", app.Settings.MusicDir, err.Error()))
 		return
 	}
 
-	if len(dirs) == 0 {
-		app.Logger.Info(fmt.Sprintf("no music files or directories detected at %s", app.Settings.MusicDir))
+	if len(entries) == 0 {
+		app.Logger.Info(fmt.Sprintf("music directory %s appears to be empty", app.Settings.MusicDir))
 		return
 	}
 
-	for _, d := range dirs {
-		if !d.IsDir() {
+	ctx := context.Background()
+
+	for _, e := range entries {
+		if !e.IsDir() {
 			continue
 		}
 
-		musician, err := app.ScanDirsForMusicians(d)
+		musician, err := app.ScanDirForMusician(e, ctx)
 		if err != nil {
 			app.Logger.Error(err.Error())
 			continue
 		}
 
-		albumsDir, err := os.ReadDir(fmt.Sprintf("%s/%s", app.Settings.MusicDir, d.Name()))
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to read album directories for musician %s\n%s", musician.Name, err.Error()))
-			return
-		}
+		albumsDir := fmt.Sprintf("%s/%s", app.Settings.MusicDir, e.Name())
 
-		if len(albumsDir) == 0 {
-			app.Logger.Info(fmt.Sprintf("no albums found for %s", musician.Name))
+		albumDirEntries, err := os.ReadDir(albumsDir)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to read albums directory %s for musician %s\n%s", albumsDir, musician.Name, err.Error()))
 			continue
 		}
 
-		for _, ad := range albumsDir {
-			_, err := app.ScanDIrsForAlbums(ad, musician.ID)
+		if len(albumDirEntries) == 0 {
+			app.Logger.Info(fmt.Sprintf("%s does not appear to contain any albums at %s", musician.Name, albumsDir))
+			continue
+		}
+
+		for _, ae := range albumDirEntries {
+			album, err := app.ScanDirForAlbum(ae.Name(), musician.ID, ctx)
 			if err != nil {
 				app.Logger.Error(err.Error())
 				continue
 			}
 
+			// TODO: Use the album variable for additional processing if needed
 		}
 	}
 }
 
-func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musician, error) {
-	artist, err := app.Spotify.SearchArtistByName(dir.Name())
+func (app *Application) ScanDirForMusician(e os.DirEntry, ctx context.Context) (*database.Musician, error) {
+	artistList, err := app.Spotify.SearchArtistByName(e.Name())
 	if err != nil {
-		return nil, fmt.Errorf("fail to fetch results from spotify for musician %s\n%s", dir.Name(), err.Error())
+		return nil, err
 	}
 
-	exist, err := app.Queries.CheckMusicianExistsBySpotifyID(context.Background(), artist.ID.String())
+	exist, err := app.Queries.CheckMusicianExistsBySpotifyID(ctx, artistList.ID.String())
 	if err != nil {
-		return nil, fmt.Errorf("fail to check if %s exists in the data base\n%s", artist.Name, err.Error())
+		return nil, fmt.Errorf("fail to check if musician %s exists in the data base\n%s", artistList.Name, err.Error())
 	}
 
 	var musician database.Musician
 
-	if !exist {
-		musician, err = app.Queries.CreateMusician(context.Background(), database.CreateMusicianParams{
-			SpotifyID:         artist.ID.String(),
+	if exist {
+		musician, err = app.Queries.GetMusicianBySpotifyID(ctx, artistList.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("fail to fetch musician %s from data base\n%s", artistList.Name, err.Error())
+		}
+	} else {
+		artist, err := app.Spotify.GetArtistBySpotifyID(artistList.ID.String())
+		if err != nil {
+			return nil, err
+		}
+
+		musician, err = app.Queries.CreateMusician(ctx, database.CreateMusicianParams{
 			Name:              artist.Name,
+			SpotifyID:         artist.ID.String(),
 			SpotifyPopularity: int32(artist.Popularity),
 			SpotifyFollowers:  int32(artist.Followers.Count),
-			Summary:           fmt.Sprintf("%s is a talented artist with %d followers and a popularity rating of %d on Spotify. Their music has resonated with listeners worldwide, establishing them as a notable presence in the music industry.", artist.Name, artist.Followers.Count, artist.Popularity),
+			Summary:           fmt.Sprintf("%s is an artist with %d rating and %d followers on Spotify", artist.Name, artist.Popularity, artist.Followers.Count),
 		})
 
 		if err != nil {
-			return nil, fmt.Errorf("fail to save %s musician to data base\n%s", artist.Name, err.Error())
+			return nil, fmt.Errorf("fail to create musician %s in the data base\n%s", artist.Name, err.Error())
 		}
 
 		if len(artist.Images) > 0 {
 			go func() {
 				for _, img := range artist.Images {
-					_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
+					_, err := app.Queries.CreateSpotifyImage(ctx, database.CreateSpotifyImageParams{
 						Path:   img.URL,
 						Width:  int32(img.Width),
 						Height: int32(img.Height),
@@ -99,99 +114,75 @@ func (app *Application) ScanDirsForMusicians(dir os.DirEntry) (*database.Musicia
 				}
 			}()
 		}
-	} else {
-		musician, err = app.Queries.GetMusicianBySpotifyID(context.Background(), artist.ID.String())
-		if err != nil {
-			return nil, fmt.Errorf("fail to fetch %s with spotify id %s from the data base\n%s", artist.Name, artist.ID, err.Error())
-		}
 	}
 
 	return &musician, nil
 }
 
-func (app *Application) ScanDIrsForAlbums(dir os.DirEntry, musicianID int32) (*database.Album, error) {
-	albumList, err := app.Spotify.SearchAlbums(dir.Name(), 1)
+func (app *Application) ScanDirForAlbum(dirName string, musicianID int32, ctx context.Context) (*database.Album, error) {
+	albumList, err := app.Spotify.SearchAlbums(dirName, 1)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get data for album %s\n%s", dir.Name(), err.Error())
+		return nil, fmt.Errorf("fail to get any results from spotify for album %s\n%s", dirName, err.Error())
 	}
 
 	if len(albumList) == 0 {
-		return nil, fmt.Errorf("fail to fetch any data from spotify for album %s", dir.Name())
+		return nil, fmt.Errorf("fail to get any results from spotify for album %s", dirName)
 	}
 
-	album, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
+	exists, err := app.Queries.CheckAlbumExistsBySpotifyID(ctx, albumList[0].ID.String())
 	if err != nil {
-		return nil, fmt.Errorf("fail to fetch details for %s with spotify id %s\n%s", dir.Name(), albumList[0].ID.String(), err.Error())
+		return nil, fmt.Errorf("fail to check if album %s with spotify id %s exists in the data base\n%s", albumList[0].Name, albumList[0].ID, err.Error())
 	}
 
-	exist, err := app.Queries.CheckAlbumExistsBySpotifyID(context.Background(), album.ID.String())
-	if err != nil {
-		return nil, fmt.Errorf("fail to check if %s album exist in the data base\n%s", album.Name, err.Error())
-	}
+	var album database.Album
 
-	var dbAlbum database.Album
-
-	if !exist {
-		tx, err := app.Db.Begin(context.Background())
+	if exists {
+		album, err = app.Queries.GetAlbumBySpotifyID(ctx, albumList[0].ID.String())
 		if err != nil {
-			return nil, fmt.Errorf("fail to start data base transaction to save album %s data\n%s", album.Name, err.Error())
+			return nil, fmt.Errorf("fail to get existing album %s with spotify id %s from data base\n%s", albumList[0].Name, albumList[0].ID, err.Error())
 		}
-		defer tx.Rollback(context.Background())
-
-		qtx := app.Queries.WithTx(tx)
-
-		dbAlbum, err = qtx.CreateAlbum(context.Background(), database.CreateAlbumParams{
-			Title:             album.Name,
-			SpotifyID:         album.ID.String(),
-			TotalTracks:       int32(album.TotalTracks),
-			SpotifyPopularity: int32(album.Popularity),
-			ReleaseDate:       album.ReleaseDate,
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("fail to create %s album in the data base\n%s", album.Name, err.Error())
+	} else {
+		createAlbum := database.CreateAlbumParams{
+			Title:                albumList[0].Name,
+			SpotifyID:            albumList[0].ID.String(),
+			ReleaseDate:          albumList[0].ReleaseDate,
+			SpotifyPopularity:    0,
+			TotalTracks:          int32(albumList[0].TotalTracks),
+			TotalAvailableTracks: 0,
 		}
 
-		err = qtx.CreateAlbumMusician(context.Background(), database.CreateAlbumMusicianParams{
-			MusicianID: musicianID,
-			AlbumID:    dbAlbum.ID,
-		})
-
+		albumDetails, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
 		if err != nil {
-			return nil, fmt.Errorf("fail to create relation between musciian with id of %d and album with id of %d\n%s", musicianID, dbAlbum.ID, err.Error())
+			app.Logger.Error(fmt.Sprintf("fail to get album %s details from spotify\n%s", albumList[0].Name, err.Error()))
+		} else {
+			createAlbum.SpotifyPopularity = int32(albumDetails.Popularity)
 		}
 
-		err = tx.Commit(context.Background())
+		album, err = app.Queries.CreateAlbum(ctx, createAlbum)
 		if err != nil {
-			return nil, fmt.Errorf("fail to commit transaction to save album %s to data base\n%s", album.Name, err.Error())
+			return nil, fmt.Errorf("fail to create album %s\n%s", albumList[0].Name, err.Error())
 		}
 
-		if len(album.Images) > 0 {
+		if len(albumList[0].Images) > 0 {
 			go func() {
-				for _, img := range album.Images {
-					_, err = app.Queries.CreateSpotifyImage(context.Background(), database.CreateSpotifyImageParams{
+				for _, img := range albumList[0].Images {
+					_, err := app.Queries.CreateSpotifyImage(ctx, database.CreateSpotifyImageParams{
 						Path:   img.URL,
 						Width:  int32(img.Width),
 						Height: int32(img.Height),
 						AlbumID: pgtype.Int4{
-							Int32: dbAlbum.ID,
+							Int32: album.ID,
 							Valid: true,
 						},
 					})
 
 					if err != nil {
-						app.Logger.Error(fmt.Sprintf("fail to save image %s for album %s\n%s", img.URL, dbAlbum.Title, err.Error()))
+						app.Logger.Error(fmt.Sprintf("fail to create image %s for album %s\n%s", img.URL, album.Title, err.Error()))
 					}
-
 				}
 			}()
 		}
-	} else {
-		dbAlbum, err = app.Queries.GetAlbumBySpotifyID(context.Background(), album.ID.String())
-		if err != nil {
-			return nil, fmt.Errorf("fail to fetch album %s from data base\n%s", album.Name, err.Error())
-		}
 	}
 
-	return &dbAlbum, nil
+	return &album, nil
 }

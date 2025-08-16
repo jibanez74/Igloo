@@ -436,35 +436,6 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 	return i, err
 }
 
-const getMovieForDirectPlayback = `-- name: GetMovieForDirectPlayback :one
-SELECT id, title, thumb, file_path, size, container, content_type FROM movies WHERE id = $1
-`
-
-type GetMovieForDirectPlaybackRow struct {
-	ID          int32  `json:"id"`
-	Title       string `json:"title"`
-	Thumb       string `json:"thumb"`
-	FilePath    string `json:"file_path"`
-	Size        int64  `json:"size"`
-	Container   string `json:"container"`
-	ContentType string `json:"content_type"`
-}
-
-func (q *Queries) GetMovieForDirectPlayback(ctx context.Context, id int32) (GetMovieForDirectPlaybackRow, error) {
-	row := q.db.QueryRow(ctx, getMovieForDirectPlayback, id)
-	var i GetMovieForDirectPlaybackRow
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.Thumb,
-		&i.FilePath,
-		&i.Size,
-		&i.Container,
-		&i.ContentType,
-	)
-	return i, err
-}
-
 const getMovieForStreaming = `-- name: GetMovieForStreaming :one
 SELECT id, file_path, content_type, size FROM movies
 WHERE id = $1
@@ -487,52 +458,4 @@ func (q *Queries) GetMovieForStreaming(ctx context.Context, id int32) (GetMovieF
 		&i.Size,
 	)
 	return i, err
-}
-
-const getMoviesPaginated = `-- name: GetMoviesPaginated :many
-SELECT 
-    id,
-    title,
-    thumb,
-    year
-FROM movies
-ORDER BY title ASC
-LIMIT $1 OFFSET $2
-`
-
-type GetMoviesPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-type GetMoviesPaginatedRow struct {
-	ID    int32  `json:"id"`
-	Title string `json:"title"`
-	Thumb string `json:"thumb"`
-	Year  int32  `json:"year"`
-}
-
-func (q *Queries) GetMoviesPaginated(ctx context.Context, arg GetMoviesPaginatedParams) ([]GetMoviesPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getMoviesPaginated, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetMoviesPaginatedRow{}
-	for rows.Next() {
-		var i GetMoviesPaginatedRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Thumb,
-			&i.Year,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

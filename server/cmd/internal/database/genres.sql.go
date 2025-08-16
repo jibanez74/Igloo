@@ -11,6 +11,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getAllGenres = `-- name: GetAllGenres :many
+SELECT id, tag, genre_type FROM genres
+`
+
+type GetAllGenresRow struct {
+	ID        int32  `json:"id"`
+	Tag       string `json:"tag"`
+	GenreType string `json:"genre_type"`
+}
+
+func (q *Queries) GetAllGenres(ctx context.Context) ([]GetAllGenresRow, error) {
+	rows, err := q.db.Query(ctx, getAllGenres)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllGenresRow{}
+	for rows.Next() {
+		var i GetAllGenresRow
+		if err := rows.Scan(&i.ID, &i.Tag, &i.GenreType); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGenreByID = `-- name: GetGenreByID :one
 SELECt tag FROM genres
 WHERE id = $1
