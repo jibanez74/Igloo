@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"os"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -28,13 +29,13 @@ func (app *Application) ScanMusicLibrary() {
 			continue
 		}
 
-		musician, err := app.ScanDirForMusician(e, ctx)
+		musician, err := app.ScanDirForMusician(e.Name(), ctx)
 		if err != nil {
 			app.Logger.Error(err.Error())
 			continue
 		}
 
-		albumsDir := fmt.Sprintf("%s/%s", app.Settings.MusicDir, e.Name())
+		albumsDir := filepath.Join(app.Settings.MusicDir, e.Name())
 
 		albumDirEntries, err := os.ReadDir(albumsDir)
 		if err != nil {
@@ -59,8 +60,8 @@ func (app *Application) ScanMusicLibrary() {
 	}
 }
 
-func (app *Application) ScanDirForMusician(e os.DirEntry, ctx context.Context) (*database.Musician, error) {
-	artistList, err := app.Spotify.SearchArtistByName(e.Name())
+func (app *Application) ScanDirForMusician(name string, ctx context.Context) (*database.Musician, error) {
+	artistList, err := app.Spotify.SearchArtistByName(name)
 	if err != nil {
 		return nil, err
 	}
