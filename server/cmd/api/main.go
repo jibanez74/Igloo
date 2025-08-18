@@ -1,4 +1,4 @@
-package main
+scannpackage main
 
 import (
 	"context"
@@ -144,19 +144,19 @@ func (app *Application) InitDB() error {
 
 	dbConfig, err := pgxpool.ParseConfig(dbUrl)
 	if err != nil {
-		return fmt.Errorf("failed to parse database config: %w", err)
+    return err
 	}
 
 	dbConfig.MaxConns = int32(maxCon)
 
 	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
 	if err != nil {
-		return fmt.Errorf("failed to create database pool: %w", err)
+    return err
 	}
 
 	err = dbpool.Ping(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+    return err
 	}
 
 	queries := database.New(dbpool)
@@ -241,6 +241,11 @@ func (app *Application) InitSettings(ctx context.Context) error {
 			s.TranscodeDir = "transcode"
 		}
 
+		s.BaseUrl = os.Getenv("BASE_URL")
+		if s.BaseUrl == "" {
+			s.BaseUrl = "localhost"
+		}
+
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
 		s.FfprobePath = os.Getenv("FFPROBE_PATH")
 		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
@@ -255,6 +260,11 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		s.PlexToken = os.Getenv("PLEX_TOKEN")
 		s.SpotifyClientID = os.Getenv("SPOTIFY_CLIENT_ID")
 		s.SpotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
+
+		err = app.InitDirs(&s)
+		if err != nil {
+			return err
+		}
 
 		settings, err = app.Queries.CreateSettings(ctx, s)
 		if err != nil {
@@ -296,7 +306,7 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 	return nil
 }
 
-func InitDirs(s *database.GlobalSetting) error {
+func (app *Application) InitDirs(s *database.CreateSettingsParams) error {
 	err := helpers.CreateDir(s.StaticDir)
 	if err != nil {
 		return err
