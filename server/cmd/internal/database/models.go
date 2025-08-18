@@ -18,6 +18,7 @@ type Album struct {
 	SpotifyPopularity    int32              `json:"spotify_popularity"`
 	TotalTracks          int32              `json:"total_tracks"`
 	TotalAvailableTracks int32              `json:"total_available_tracks"`
+	DirPath              string             `json:"dir_path"`
 }
 
 type AlbumGenre struct {
@@ -150,11 +151,7 @@ type Musician struct {
 	SpotifyID         string             `json:"spotify_id"`
 	SpotifyPopularity int32              `json:"spotify_popularity"`
 	SpotifyFollowers  int32              `json:"spotify_followers"`
-}
-
-type MusicianGenre struct {
-	MusicianID int32 `json:"musician_id"`
-	GenreID    int32 `json:"genre_id"`
+	DirPath           string             `json:"dir_path"`
 }
 
 type SpotifyImage struct {

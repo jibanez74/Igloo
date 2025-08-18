@@ -30,11 +30,12 @@ INSERT INTO musicians (
     spotify_id,
     spotify_popularity,
     spotify_followers,
-    summary
+    summary,
+    dir_path
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6
 )
-RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers
+RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, dir_path
 `
 
 type CreateMusicianParams struct {
@@ -43,6 +44,7 @@ type CreateMusicianParams struct {
 	SpotifyPopularity int32  `json:"spotify_popularity"`
 	SpotifyFollowers  int32  `json:"spotify_followers"`
 	Summary           string `json:"summary"`
+	DirPath           string `json:"dir_path"`
 }
 
 func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error) {
@@ -52,6 +54,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		arg.SpotifyPopularity,
 		arg.SpotifyFollowers,
 		arg.Summary,
+		arg.DirPath,
 	)
 	var i Musician
 	err := row.Scan(
@@ -63,6 +66,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
 		&i.SpotifyFollowers,
+		&i.DirPath,
 	)
 	return i, err
 }
@@ -117,7 +121,7 @@ func (q *Queries) GetAllMusiciansWithImages(ctx context.Context) ([]GetAllMusici
 }
 
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers FROM musicians WHERE spotify_id = $1
+SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, dir_path FROM musicians WHERE spotify_id = $1
 `
 
 func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error) {
@@ -132,6 +136,7 @@ func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) 
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
 		&i.SpotifyFollowers,
+		&i.DirPath,
 	)
 	return i, err
 }

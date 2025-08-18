@@ -31,11 +31,12 @@ INSERT INTO albums (
     spotify_id,
     spotify_popularity,
     total_tracks,
-    total_available_tracks
+    total_available_tracks,
+    dir_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks
+RETURNING id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks, dir_path
 `
 
 type CreateAlbumParams struct {
@@ -45,6 +46,7 @@ type CreateAlbumParams struct {
 	SpotifyPopularity    int32  `json:"spotify_popularity"`
 	TotalTracks          int32  `json:"total_tracks"`
 	TotalAvailableTracks int32  `json:"total_available_tracks"`
+	DirPath              string `json:"dir_path"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
@@ -55,6 +57,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
 		arg.TotalAvailableTracks,
+		arg.DirPath,
 	)
 	var i Album
 	err := row.Scan(
@@ -67,12 +70,13 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
+		&i.DirPath,
 	)
 	return i, err
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks, dir_path FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error) {
@@ -88,6 +92,7 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Al
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
+		&i.DirPath,
 	)
 	return i, err
 }

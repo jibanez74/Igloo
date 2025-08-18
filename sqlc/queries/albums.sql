@@ -11,9 +11,10 @@ INSERT INTO albums (
     spotify_id,
     spotify_popularity,
     total_tracks,
-    total_available_tracks
+    total_available_tracks,
+    dir_path
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 

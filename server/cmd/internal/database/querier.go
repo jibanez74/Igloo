@@ -15,6 +15,7 @@ type Querier interface {
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
 	CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
+	CheckSpotifyImageExists(ctx context.Context, path string) (bool, error)
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
@@ -37,7 +38,6 @@ type Querier interface {
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
 	DeleteAlbumGenre(ctx context.Context, arg DeleteAlbumGenreParams) error
 	DeleteAlbumMusician(ctx context.Context, arg DeleteAlbumMusicianParams) error
-	DeleteMusicianGenre(ctx context.Context, arg DeleteMusicianGenreParams) error
 	DeleteTrack(ctx context.Context, id int32) error
 	DeleteTrackGenre(ctx context.Context, arg DeleteTrackGenreParams) error
 	DeleteTrackMusician(ctx context.Context, arg DeleteTrackMusicianParams) error
@@ -51,7 +51,6 @@ type Querier interface {
 	GetAllMusiciansWithImages(ctx context.Context) ([]GetAllMusiciansWithImagesRow, error)
 	GetGenreAlbums(ctx context.Context, genreID int32) ([]AlbumGenre, error)
 	GetGenreByID(ctx context.Context, id int32) (string, error)
-	GetGenreMusicians(ctx context.Context, genreID int32) ([]MusicianGenre, error)
 	GetGenreTracks(ctx context.Context, genreID int32) ([]TrackGenre, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetMovieByTmdbID(ctx context.Context, tmdbID string) (GetMovieByTmdbIDRow, error)
@@ -62,13 +61,13 @@ type Querier interface {
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMusicianAlbums(ctx context.Context, musicianID int32) ([]AlbumMusician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error)
-	GetMusicianGenres(ctx context.Context, musicianID int32) ([]MusicianGenre, error)
 	GetMusicianTracks(ctx context.Context, musicianID int32) ([]TrackMusician, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error)
 	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)
 	GetSettings(ctx context.Context) (GlobalSetting, error)
+	GetSpotifyImageByPath(ctx context.Context, path string) (SpotifyImage, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetTrack(ctx context.Context, id int32) (Track, error)
 	GetTrackByFilePath(ctx context.Context, filePath string) (Track, error)
@@ -80,6 +79,7 @@ type Querier interface {
 	ListTracks(ctx context.Context) ([]Track, error)
 	ListTracksByAlbum(ctx context.Context, albumID pgtype.Int4) ([]Track, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
+	UpdateSpotifyImageRelations(ctx context.Context, arg UpdateSpotifyImageRelationsParams) error
 	UpdateTrack(ctx context.Context, arg UpdateTrackParams) (Track, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)

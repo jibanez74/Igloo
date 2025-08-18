@@ -1,4 +1,4 @@
-scannpackage main
+package main
 
 import (
 	"context"

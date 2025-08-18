@@ -18,3 +18,11 @@ WHERE path = $1;
 SELECT EXISTS(
     SELECT 1 FROM spotify_images WHERE path = $1
 );
+
+-- name: UpdateSpotifyImageRelations :exec
+UPDATE spotify_images 
+SET 
+    musician_id = $2,
+    album_id = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE path = $1;
