@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -49,7 +50,7 @@ func (app *Application) ScanMusicLibrary() {
 		}
 
 		for _, ae := range albumDirEntries {
-			album, err := app.ScanDirForAlbum(ae.Name(), musician.ID, ctx)
+			_, err := app.ScanDirForAlbum(ae.Name(), musician.ID, ctx)
 			if err != nil {
 				app.Logger.Error(err.Error())
 				continue
@@ -58,6 +59,8 @@ func (app *Application) ScanMusicLibrary() {
 			// TODO: Use the album variable for additional processing if needed
 		}
 	}
+
+	log.Println("finished with musci library scan")
 }
 
 func (app *Application) ScanDirForMusician(name string, ctx context.Context) (*database.Musician, error) {
