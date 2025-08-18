@@ -46,7 +46,9 @@ func InitApp() (*Application, error) {
 		return nil, err
 	}
 
-	err = app.InitSettings()
+	ctx := context.Background()
+
+	err = app.InitSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +62,7 @@ func InitApp() (*Application, error) {
 		app.Logger = l
 	}
 
-	err = app.InitDefaultUser()
+	err = app.InitDefaultUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,11 +92,6 @@ func InitApp() (*Application, error) {
 		}
 
 		app.Spotify = s
-	}
-
-	if app.Settings.MusicDir != "" {
-		log.Println("will now scan for musicians and albums...")
-		go app.ScanMusicLibrary()
 	}
 
 	return &app, nil
@@ -170,65 +167,78 @@ func (app *Application) InitDB() error {
 	return nil
 }
 
-func (app *Application) InitSettings() error {
-	settings, err := app.Queries.GetSettings(context.Background())
+func (app *Application) InitSettings(ctx context.Context) error {
+	settings, err := app.Queries.GetSettings(ctx)
 	if err != nil {
 		var s database.CreateSettingsParams
 
 		port, err := strconv.Atoi(os.Getenv("PORT"))
 		if err != nil {
+			log.Println("fail to get PORT value from environment variables.  Will default to PORT 8080.")
 			port = 8080
 		}
 		s.Port = int32(port)
 
 		debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 		if err != nil {
+			log.Println("Fail to get DEBUG value from environment variables.  Debug mode will be turned off.")
 			debug = true
 		}
 		s.Debug = debug
 
 		enableLogger, err := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 		if err != nil {
+			log.Println("Fail to get ENABLE_LOGGER value from environment variables.  Log messages will be disabled.")
 			enableLogger = false
 		}
 		s.EnableLogger = enableLogger
 
-		s.LogsDir = os.Getenv("LOGS_DIR")
-		if s.LogsDir == "" {
-			s.LogsDir = "logs"
-		}
-
 		enableWatcher, err := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 		if err != nil {
+			log.Println("Fail to get ENABLE_WATCHER value from environment variables.  File monitoring for media directories will be disabled.")
 			enableWatcher = false
 		}
 		s.EnableWatcher = enableWatcher
 
 		downloadImages, err := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
 		if err != nil {
+			log.Println("Fail to get DOWNLOAD_IMAGES value from environment variables.  Defaulting to use remote images for all media.")
 			downloadImages = false
 		}
 		s.DownloadImages = downloadImages
 
+		enableTranscoding, err := strconv.ParseBool(os.Getenv("ENABLE_TRANSCODING"))
+		if err != nil {
+			log.Println("Fail to get ENABLE_TRANSCODING value from environment variables.  Media transcoding will be disabled.")
+			enableTranscoding = false
+		} else {
+			s.EnableHardwareAcceleration = enableTranscoding
+
+			if enableTranscoding {
+				s.HardwareAccelerationMethod = os.Getenv("HARDWARE_ACCELERATION_METHOD")
+				if s.HardwareAccelerationMethod == "" {
+					log.Println("Fail to get HARDWARE_ACCELERATION_METHOD from environment variables.  Defaulting to CPU transcoding.")
+					s.HardwareAccelerationMethod = "cpu"
+				}
+			}
+		}
+
+		s.LogsDir = os.Getenv("LOGS_DIR")
+		if s.LogsDir == "" {
+			log.Println("Fail to get LOGS_DIR value from environment variables.  Logs directory will be placed in the current working directory.")
+			s.LogsDir = "logs"
+		}
+
 		s.StaticDir = os.Getenv("STATIC_DIR")
 		if s.StaticDir == "" {
+			log.Println("Fail to get STATIC_DIR value from environment variables.  Static directory will be placed in the current working directory.")
 			s.StaticDir = "static"
 		}
 
-		err = InitDirs(&s)
-		if err != nil {
-			log.Println("unable to create directoreies correctly")
-		}
-
-		enableTranscoding, err := strconv.ParseBool(os.Getenv("ENABLE_TRANSCODING"))
-		if err != nil {
-			enableTranscoding = false
-		}
-		s.EnableHardwareAcceleration = enableTranscoding
-
-		s.HardwareAccelerationMethod = os.Getenv("HARDWARE_ACCELERATION_METHOD")
-		if s.HardwareAccelerationMethod == "" {
-			s.HardwareAccelerationMethod = "cpu"
+		s.TranscodeDir = os.Getenv("TRANSCODE_DIR")
+		if s.TranscodeDir == "" {
+			log.Println("Fail to get TRANSCODE_DIR from environment variables.  Transcoding directory will be placed on the current working directory.")
+			s.TranscodeDir = "transcode"
 		}
 
 		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
@@ -238,7 +248,6 @@ func (app *Application) InitSettings() error {
 		s.MoviesDir = os.Getenv("MOVIES_DIR")
 		s.MusicDir = os.Getenv("MUSIC_DIR")
 		s.TvshowsDir = os.Getenv("TVSHOWS_DIR")
-		s.TranscodeDir = os.Getenv("TRANSCODE_DIR")
 		s.MoviesImgDir = os.Getenv("MOVIES_IMG_DIR")
 		s.StudiosImgDir = os.Getenv("STUDIOS_IMG_DIR")
 		s.ArtistsImgDir = os.Getenv("ARTISTS_IMG_DIR")
@@ -247,7 +256,7 @@ func (app *Application) InitSettings() error {
 		s.SpotifyClientID = os.Getenv("SPOTIFY_CLIENT_ID")
 		s.SpotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
 
-		settings, err = app.Queries.CreateSettings(context.Background(), s)
+		settings, err = app.Queries.CreateSettings(ctx, s)
 		if err != nil {
 			return fmt.Errorf("failed to create settings: %w", err)
 		}
@@ -258,19 +267,19 @@ func (app *Application) InitSettings() error {
 	return nil
 }
 
-func (app *Application) InitDefaultUser() error {
-	count, err := app.Queries.GetTotalUsersCount(context.Background())
+func (app *Application) InitDefaultUser(ctx context.Context) error {
+	count, err := app.Queries.GetTotalUsersCount(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to determine total users count: %w", err)
+		return err
 	}
 
 	if count == 0 {
 		hashPassword, err := helpers.HashPassword(DEFAULT_PASSWORD)
 		if err != nil {
-			return fmt.Errorf("failed to hash password for default user: %w", err)
+			return err
 		}
 
-		_, err = app.Queries.CreateUser(context.Background(), database.CreateUserParams{
+		_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
 			Name:     "Admin User",
 			Email:    "admin@example.com",
 			Username: "admin",
@@ -280,14 +289,14 @@ func (app *Application) InitDefaultUser() error {
 		})
 
 		if err != nil {
-			return fmt.Errorf("failed to create default user: %w", err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-func InitDirs(s *database.CreateSettingsParams) error {
+func InitDirs(s *database.GlobalSetting) error {
 	err := helpers.CreateDir(s.StaticDir)
 	if err != nil {
 		return err
