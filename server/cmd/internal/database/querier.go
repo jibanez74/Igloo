@@ -15,7 +15,6 @@ type Querier interface {
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
 	CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
-	CheckSpotifyImageExists(ctx context.Context, path string) (bool, error)
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
@@ -29,7 +28,6 @@ type Querier interface {
 	CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error)
 	CreateMusicianGenre(ctx context.Context, arg CreateMusicianGenreParams) error
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (GlobalSetting, error)
-	CreateSpotifyImage(ctx context.Context, arg CreateSpotifyImageParams) (SpotifyImage, error)
 	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
 	CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
@@ -67,7 +65,6 @@ type Querier interface {
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error)
 	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)
 	GetSettings(ctx context.Context) (GlobalSetting, error)
-	GetSpotifyImageByPath(ctx context.Context, path string) (SpotifyImage, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetTrack(ctx context.Context, id int32) (Track, error)
 	GetTrackByFilePath(ctx context.Context, filePath string) (Track, error)
@@ -79,10 +76,10 @@ type Querier interface {
 	ListTracks(ctx context.Context) ([]Track, error)
 	ListTracksByAlbum(ctx context.Context, albumID pgtype.Int4) ([]Track, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
-	UpdateSpotifyImageRelations(ctx context.Context, arg UpdateSpotifyImageRelationsParams) error
 	UpdateTrack(ctx context.Context, arg UpdateTrackParams) (Track, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
+	UpsertSpotifyImage(ctx context.Context, arg UpsertSpotifyImageParams) (SpotifyImage, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -11,20 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const checkSpotifyImageExists = `-- name: CheckSpotifyImageExists :one
-SELECT EXISTS(
-    SELECT 1 FROM spotify_images WHERE path = $1
-)
-`
-
-func (q *Queries) CheckSpotifyImageExists(ctx context.Context, path string) (bool, error) {
-	row := q.db.QueryRow(ctx, checkSpotifyImageExists, path)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const createSpotifyImage = `-- name: CreateSpotifyImage :one
+const upsertSpotifyImage = `-- name: UpsertSpotifyImage :one
 INSERT INTO spotify_images (
     path,
     width,
@@ -33,10 +20,14 @@ INSERT INTO spotify_images (
     album_id
 ) VALUES (
     $1, $2, $3, $4, $5
-) RETURNING id, created_at, updated_at, path, width, height, musician_id, album_id
+) ON CONFLICT (path) DO UPDATE SET
+    musician_id = EXCLUDED.musician_id,
+    album_id = EXCLUDED.album_id,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, created_at, updated_at, path, width, height, musician_id, album_id
 `
 
-type CreateSpotifyImageParams struct {
+type UpsertSpotifyImageParams struct {
 	Path       string      `json:"path"`
 	Width      int32       `json:"width"`
 	Height     int32       `json:"height"`
@@ -44,8 +35,8 @@ type CreateSpotifyImageParams struct {
 	AlbumID    pgtype.Int4 `json:"album_id"`
 }
 
-func (q *Queries) CreateSpotifyImage(ctx context.Context, arg CreateSpotifyImageParams) (SpotifyImage, error) {
-	row := q.db.QueryRow(ctx, createSpotifyImage,
+func (q *Queries) UpsertSpotifyImage(ctx context.Context, arg UpsertSpotifyImageParams) (SpotifyImage, error) {
+	row := q.db.QueryRow(ctx, upsertSpotifyImage,
 		arg.Path,
 		arg.Width,
 		arg.Height,
@@ -64,46 +55,4 @@ func (q *Queries) CreateSpotifyImage(ctx context.Context, arg CreateSpotifyImage
 		&i.AlbumID,
 	)
 	return i, err
-}
-
-const getSpotifyImageByPath = `-- name: GetSpotifyImageByPath :one
-SELECT id, created_at, updated_at, path, width, height, musician_id, album_id
-FROM spotify_images
-WHERE path = $1
-`
-
-func (q *Queries) GetSpotifyImageByPath(ctx context.Context, path string) (SpotifyImage, error) {
-	row := q.db.QueryRow(ctx, getSpotifyImageByPath, path)
-	var i SpotifyImage
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Path,
-		&i.Width,
-		&i.Height,
-		&i.MusicianID,
-		&i.AlbumID,
-	)
-	return i, err
-}
-
-const updateSpotifyImageRelations = `-- name: UpdateSpotifyImageRelations :exec
-UPDATE spotify_images 
-SET 
-    musician_id = $2,
-    album_id = $3,
-    updated_at = CURRENT_TIMESTAMP
-WHERE path = $1
-`
-
-type UpdateSpotifyImageRelationsParams struct {
-	Path       string      `json:"path"`
-	MusicianID pgtype.Int4 `json:"musician_id"`
-	AlbumID    pgtype.Int4 `json:"album_id"`
-}
-
-func (q *Queries) UpdateSpotifyImageRelations(ctx context.Context, arg UpdateSpotifyImageRelationsParams) error {
-	_, err := q.db.Exec(ctx, updateSpotifyImageRelations, arg.Path, arg.MusicianID, arg.AlbumID)
-	return err
 }

@@ -11,66 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Helper function to ensure spotify image exists with correct relations
-func (app *Application) ensureSpotifyImage(ctx context.Context, path string, width, height int32, musicianID, albumID *int32) error {
-	// Check if image exists
-	exists, err := app.Queries.CheckSpotifyImageExists(ctx, path)
-	if err != nil {
-		return fmt.Errorf("failed to check if image exists: %w", err)
-	}
-
-	if exists {
-		// Image exists, check if it has the relationship we want
-		existingImage, err := app.Queries.GetSpotifyImageByPath(ctx, path)
-		if err != nil {
-			return fmt.Errorf("failed to get existing image: %w", err)
-		}
-
-		// Check if we need to update the relationships
-		needsUpdate := false
-		if musicianID != nil && (existingImage.MusicianID.Int32 != *musicianID || !existingImage.MusicianID.Valid) {
-			needsUpdate = true
-		}
-		if albumID != nil && (existingImage.AlbumID.Int32 != *albumID || !existingImage.AlbumID.Valid) {
-			needsUpdate = true
-		}
-
-		if needsUpdate {
-			// Update the image with new relationships
-			err = app.Queries.UpdateSpotifyImageRelations(ctx, database.UpdateSpotifyImageRelationsParams{
-				Path:       path,
-				MusicianID: pgtype.Int4{Int32: *musicianID, Valid: musicianID != nil},
-				AlbumID:    pgtype.Int4{Int32: *albumID, Valid: albumID != nil},
-			})
-			if err != nil {
-				return fmt.Errorf("failed to update image relationships: %w", err)
-			}
-		}
-		// Image exists and has correct relationships, no action needed
-		return nil
-	}
-
-	// Image doesn't exist, create it
-	_, err = app.Queries.CreateSpotifyImage(ctx, database.CreateSpotifyImageParams{
-		Path:   path,
-		Width:  width,
-		Height: height,
-		MusicianID: pgtype.Int4{
-			Int32: *musicianID,
-			Valid: musicianID != nil,
-		},
-		AlbumID: pgtype.Int4{
-			Int32: *albumID,
-			Valid: albumID != nil,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create image: %w", err)
-	}
-
-	return nil
-}
-
 func (app *Application) ScanMusicLibrary() {
 	entries, err := os.ReadDir(app.Settings.MusicDir)
 	if err != nil {
@@ -162,9 +102,18 @@ func (app *Application) ScanDirForMusician(ctx context.Context, name string) (*d
 		if len(artist.Images) > 0 {
 			go func() {
 				for _, img := range artist.Images {
-					err := app.ensureSpotifyImage(ctx, img.URL, int32(img.Width), int32(img.Height), &musician.ID, nil)
+					_, err := app.Queries.UpsertSpotifyImage(ctx, database.UpsertSpotifyImageParams{
+						Path:   img.URL,
+						Width:  int32(img.Width),
+						Height: int32(img.Height),
+						MusicianID: pgtype.Int4{
+							Int32: musician.ID,
+							Valid: true,
+						},
+					})
+
 					if err != nil {
-						app.Logger.Error(fmt.Sprintf("fail to save image %s for musician %s\n%s", img.URL, musician.Name, err.Error()))
+						app.Logger.Error(fmt.Sprintf("fail to create image %s for musician %s\n%s", img.URL, musician.Name, err.Error()))
 					}
 				}
 			}()
@@ -221,9 +170,18 @@ func (app *Application) ScanDirForAlbum(ctx context.Context, dirName string, mus
 		if len(albumList[0].Images) > 0 {
 			go func() {
 				for _, img := range albumList[0].Images {
-					err := app.ensureSpotifyImage(ctx, img.URL, int32(img.Width), int32(img.Height), nil, &album.ID)
+					_, err := app.Queries.UpsertSpotifyImage(ctx, database.UpsertSpotifyImageParams{
+						Path:   img.URL,
+						Width:  int32(img.Width),
+						Height: int32(img.Height),
+						AlbumID: pgtype.Int4{
+							Int32: album.ID,
+							Valid: true,
+						},
+					})
+
 					if err != nil {
-						app.Logger.Error(fmt.Sprintf("fail to create image %s for album %s\n%s", img.URL, album.Title, err.Error()))
+						app.Logger.Error(fmt.Sprintf("fail to save image %s for album %s\n%s", img.URL, album.Title, err.Error()))
 					}
 				}
 			}()
