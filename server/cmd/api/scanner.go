@@ -50,7 +50,11 @@ func (app *Application) ScanMusicLibrary() {
 		}
 
 		for _, ae := range albumDirEntries {
-			_, err := app.ScanDirForAlbum(ctx, ae.Name(), musician.ID)
+			if !ae.IsDir() {
+				continue
+			}
+
+			_, err := app.ScanDirForAlbum(ctx, filepath.Join(albumsDir, ae.Name()), musician.ID)
 			if err != nil {
 				app.Logger.Error(err.Error())
 				continue
@@ -102,7 +106,7 @@ func (app *Application) ScanDirForMusician(ctx context.Context, name string) (*d
 		if len(artist.Images) > 0 {
 			go func() {
 				for _, img := range artist.Images {
-					_, err := app.Queries.UpsertSpotifyImage(ctx, database.UpsertSpotifyImageParams{
+					_, err := app.Queries.UpsertSpotifyImage(context.Background(), database.UpsertSpotifyImageParams{
 						Path:   img.URL,
 						Width:  int32(img.Width),
 						Height: int32(img.Height),
@@ -123,14 +127,16 @@ func (app *Application) ScanDirForMusician(ctx context.Context, name string) (*d
 	return &musician, nil
 }
 
-func (app *Application) ScanDirForAlbum(ctx context.Context, dirName string, musicianID int32) (*database.Album, error) {
-	albumList, err := app.Spotify.SearchAlbums(dirName, 1)
+func (app *Application) ScanDirForAlbum(ctx context.Context, dirPath string, musicianID int32) (*database.Album, error) {
+	name := filepath.Base(dirPath)
+
+	albumList, err := app.Spotify.SearchAlbums(name, 1)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get any results from spotify for album %s\n%s", dirName, err.Error())
+		return nil, err
 	}
 
 	if len(albumList) == 0 {
-		return nil, fmt.Errorf("fail to get any results from spotify for album %s", dirName)
+		return nil, fmt.Errorf("fail to get any results from spotify for album %s", name)
 	}
 
 	exists, err := app.Queries.CheckAlbumExistsBySpotifyID(ctx, albumList[0].ID.String())
@@ -170,7 +176,7 @@ func (app *Application) ScanDirForAlbum(ctx context.Context, dirName string, mus
 		if len(albumList[0].Images) > 0 {
 			go func() {
 				for _, img := range albumList[0].Images {
-					_, err := app.Queries.UpsertSpotifyImage(ctx, database.UpsertSpotifyImageParams{
+					_, err := app.Queries.UpsertSpotifyImage(context.Background(), database.UpsertSpotifyImageParams{
 						Path:   img.URL,
 						Width:  int32(img.Width),
 						Height: int32(img.Height),
