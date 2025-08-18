@@ -144,19 +144,19 @@ func (app *Application) InitDB() error {
 
 	dbConfig, err := pgxpool.ParseConfig(dbUrl)
 	if err != nil {
-    return err
+		return err
 	}
 
 	dbConfig.MaxConns = int32(maxCon)
 
 	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
 	if err != nil {
-    return err
+		return err
 	}
 
 	err = dbpool.Ping(context.Background())
 	if err != nil {
-    return err
+		return err
 	}
 
 	queries := database.New(dbpool)
@@ -268,7 +268,11 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 		settings, err = app.Queries.CreateSettings(ctx, s)
 		if err != nil {
-			return fmt.Errorf("failed to create settings: %w", err)
+			return err
+		}
+
+		if settings.MusicDir != "" {
+			go app.ScanMusicLibrary()
 		}
 	}
 
