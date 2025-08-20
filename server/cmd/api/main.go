@@ -270,10 +270,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-
-		if settings.MusicDir != "" {
-			go app.ScanMusicLibrary()
-		}
 	}
 
 	app.Settings = &settings

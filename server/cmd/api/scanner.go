@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -31,7 +33,7 @@ func (app *Application) ScanMusicLibrary() {
 
 		musician, err := app.ScanDirForMusician(ctx, e.Name())
 		if err != nil {
-			app.Logger.Error(err.Error())
+			app.Logger.Error(fmt.Sprintf("fail to create musician %s\n%s", e.Name(), err.Error()))
 			continue
 		}
 
@@ -53,13 +55,32 @@ func (app *Application) ScanMusicLibrary() {
 				continue
 			}
 
-			_, err := app.ScanDirForAlbum(ctx, filepath.Join(albumsDir, ae.Name()), musician.ID)
+			currentAlbumDir := filepath.Join(albumsDir, ae.Name())
+
+			album, err := app.ScanDirForAlbum(ctx, currentAlbumDir, musician.ID)
 			if err != nil {
-				app.Logger.Error(err.Error())
+				app.Logger.Error(fmt.Sprintf("fail to save album %s\n%s", ae.Name(), err.Error()))
 				continue
 			}
 
-			// TODO: Use the album variable for additional processing if needed
+			err = filepath.WalkDir(currentAlbumDir, func(path string, td os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+
+				ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(td.Name()), "."))
+
+				if helpers.ValidAudioExtensions[ext] {
+					_, err := app.ScanFileForTrack(ctx, path, album.ID, musician.ID)
+					if err != nil {
+						app.Logger.Error(fmt.Sprintf("fail to create track %s\n%s", td.Name(), err.Error()))
+						return err
+					}
+				}
+
+				return nil
+			})
+
 		}
 	}
 }
@@ -194,4 +215,8 @@ func (app *Application) ScanDirForAlbum(ctx context.Context, dirPath string, mus
 	}
 
 	return &album, nil
+}
+
+func (app *Application) ScanFileForTrack(ctx context.Context, trackPath string, albumID, musicianID int32) (*database.Track, error) {
+	return &database.Track{}, nil
 }
