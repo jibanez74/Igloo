@@ -176,6 +176,7 @@ CREATE TABLE tracks (
   language VARCHAR(4) NOT NULL DEFAULT 'unknown',
   size BIGINT NOT NULL,
   profile VARCHAR(20) NOT NULL,
+  sample_rate INTEGER NOT NULL,
   album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE,
   CONSTRAINT chk_tracks_nonneg CHECK (duration > 0 AND channels >= 0 AND size > 0)
 );

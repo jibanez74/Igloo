@@ -50,6 +50,10 @@ func (app *Application) ScanMusicLibrary() {
 				return err
 			}
 
+			if len(trackMetadata.Streams) == 0 {
+				return fmt.Errorf("ffprobe detected no streams for track file %s", path)
+			}
+
 			musician, err := app.GetOrCreateMusician(ctx, trackMetadata.Format.Tags.Artist)
 			if err != nil {
 				return err
@@ -136,6 +140,12 @@ func (app *Application) ScanMusicLibrary() {
 					break
 				}
 			}
+
+			sampleRate, err := strconv.Atoi(trackMetadata.Streams[streamIndex].SampleRate)
+			if err != nil {
+				return err
+			}
+			createTrack.SampleRate = int32(sampleRate)
 
 			createTrack.Codec = trackMetadata.Streams[streamIndex].CodecName
 			createTrack.Profile = trackMetadata.Streams[streamIndex].Profile

@@ -13,7 +13,7 @@ type TrackFfprobeResult struct {
 		CodecName     string `json:"codec_name"`
 		CodecType     string `json:"codec_type"`
 		Profile       string `json:"profile"`
-		SampleRate    int    `json:"sample_rate"`
+		SampleRate    string `json:"sample_rate"`
 		Channels      int    `json:"channels"`
 		ChannelLayout string `json:"channel_layout"`
 		BitRate       int    `json:"bit_rate"`

@@ -202,6 +202,7 @@ type Track struct {
 	Language      string             `json:"language"`
 	Size          int64              `json:"size"`
 	Profile       string             `json:"profile"`
+	SampleRate    int32              `json:"sample_rate"`
 	AlbumID       pgtype.Int4        `json:"album_id"`
 }
 

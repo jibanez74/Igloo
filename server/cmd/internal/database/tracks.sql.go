@@ -13,10 +13,10 @@ import (
 
 const createTrack = `-- name: CreateTrack :one
 INSERT INTO tracks (
-    title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile
+    title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile, sample_rate
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
-) RETURNING id, created_at, updated_at, title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, album_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+) RETURNING id, created_at, updated_at, title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id
 `
 
 type CreateTrackParams struct {
@@ -37,6 +37,7 @@ type CreateTrackParams struct {
 	AlbumID       pgtype.Int4    `json:"album_id"`
 	Language      string         `json:"language"`
 	Profile       string         `json:"profile"`
+	SampleRate    int32          `json:"sample_rate"`
 }
 
 func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
@@ -58,6 +59,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		arg.AlbumID,
 		arg.Language,
 		arg.Profile,
+		arg.SampleRate,
 	)
 	var i Track
 	err := row.Scan(
@@ -81,6 +83,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.Language,
 		&i.Size,
 		&i.Profile,
+		&i.SampleRate,
 		&i.AlbumID,
 	)
 	return i, err
