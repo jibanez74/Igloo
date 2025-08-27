@@ -9,26 +9,23 @@ import (
 )
 
 type Album struct {
-	ID                   int32              `json:"id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	Title                string             `json:"title"`
-	SpotifyID            string             `json:"spotify_id"`
-	ReleaseDate          string             `json:"release_date"`
-	SpotifyPopularity    int32              `json:"spotify_popularity"`
-	TotalTracks          int32              `json:"total_tracks"`
-	TotalAvailableTracks int32              `json:"total_available_tracks"`
-	DirPath              string             `json:"dir_path"`
+	ID                int32              `json:"id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Title             string             `json:"title"`
+	SpotifyID         string             `json:"spotify_id"`
+	ReleaseDate       pgtype.Date        `json:"release_date"`
+	Year              int32              `json:"year"`
+	SpotifyPopularity int32              `json:"spotify_popularity"`
+	TotalTracks       int32              `json:"total_tracks"`
+	DiscCount         int32              `json:"disc_count"`
+	Cover             string             `json:"cover"`
+	MusicianID        pgtype.Int4        `json:"musician_id"`
 }
 
 type AlbumGenre struct {
 	AlbumID int32 `json:"album_id"`
 	GenreID int32 `json:"genre_id"`
-}
-
-type AlbumMusician struct {
-	AlbumID    int32 `json:"album_id"`
-	MusicianID int32 `json:"musician_id"`
 }
 
 type AudioStream struct {
@@ -74,6 +71,14 @@ type CrewList struct {
 	Department string             `json:"department"`
 }
 
+type Genre struct {
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Tag       string             `json:"tag"`
+	GenreType string             `json:"genre_type"`
+}
+
 type GlobalSetting struct {
 	ID                         int32              `json:"id"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
@@ -111,6 +116,7 @@ type Movie struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	Title           string             `json:"title"`
 	FilePath        string             `json:"file_path"`
+	FileName        string             `json:"file_name"`
 	Container       string             `json:"container"`
 	Size            int64              `json:"size"`
 	ContentType     string             `json:"content_type"`
@@ -151,18 +157,7 @@ type Musician struct {
 	SpotifyID         string             `json:"spotify_id"`
 	SpotifyPopularity int32              `json:"spotify_popularity"`
 	SpotifyFollowers  int32              `json:"spotify_followers"`
-	DirPath           string             `json:"dir_path"`
-}
-
-type SpotifyImage struct {
-	ID         int32              `json:"id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	Path       string             `json:"path"`
-	Width      int32              `json:"width"`
-	Height     int32              `json:"height"`
-	MusicianID pgtype.Int4        `json:"musician_id"`
-	AlbumID    pgtype.Int4        `json:"album_id"`
+	Thumb             string             `json:"thumb"`
 }
 
 type Studio struct {
@@ -187,32 +182,33 @@ type Subtitle struct {
 }
 
 type Track struct {
-	ID          int32              `json:"id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Title       string             `json:"title"`
-	Index       int32              `json:"index"`
-	Duration    int32              `json:"duration"`
-	Composer    string             `json:"composer"`
-	ReleaseDate pgtype.Date        `json:"release_date"`
-	FilePath    string             `json:"file_path"`
-	Container   string             `json:"container"`
-	Codec       string             `json:"codec"`
-	BitRate     string             `json:"bit_rate"`
-	Channels    int32              `json:"channels"`
-	SampleRate  pgtype.Int4        `json:"sample_rate"`
-	BitDepth    pgtype.Int4        `json:"bit_depth"`
-	AlbumID     pgtype.Int4        `json:"album_id"`
+	ID            int32              `json:"id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Title         string             `json:"title"`
+	Disc          int32              `json:"disc"`
+	Index         int32              `json:"index"`
+	Duration      pgtype.Numeric     `json:"duration"`
+	Composer      string             `json:"composer"`
+	ReleaseDate   pgtype.Date        `json:"release_date"`
+	Year          int32              `json:"year"`
+	FilePath      string             `json:"file_path"`
+	FileName      string             `json:"file_name"`
+	Container     string             `json:"container"`
+	Codec         string             `json:"codec"`
+	BitRate       int32              `json:"bit_rate"`
+	ChannelLayout string             `json:"channel_layout"`
+	SampleRate    pgtype.Int4        `json:"sample_rate"`
+	Copyright     string             `json:"copyright"`
+	Language      string             `json:"language"`
+	Size          int64              `json:"size"`
+	Profile       string             `json:"profile"`
+	AlbumID       pgtype.Int4        `json:"album_id"`
 }
 
 type TrackGenre struct {
 	TrackID int32 `json:"track_id"`
 	GenreID int32 `json:"genre_id"`
-}
-
-type TrackMusician struct {
-	TrackID    int32 `json:"track_id"`
-	MusicianID int32 `json:"musician_id"`
 }
 
 type User struct {
@@ -234,7 +230,7 @@ type VideoStream struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	Title          string             `json:"title"`
 	Index          int32              `json:"index"`
-	Duration       string             `json:"duration"`
+	Duration       int32              `json:"duration"`
 	Profile        string             `json:"profile"`
 	AspectRatio    string             `json:"aspect_ratio"`
 	BitRate        string             `json:"bit_rate"`

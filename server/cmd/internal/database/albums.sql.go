@@ -31,22 +31,24 @@ INSERT INTO albums (
     spotify_id,
     spotify_popularity,
     total_tracks,
-    total_available_tracks,
-    dir_path
+    musician_id,
+    cover,
+    disc_count
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks, dir_path
+RETURNING id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id
 `
 
 type CreateAlbumParams struct {
-	Title                string `json:"title"`
-	ReleaseDate          string `json:"release_date"`
-	SpotifyID            string `json:"spotify_id"`
-	SpotifyPopularity    int32  `json:"spotify_popularity"`
-	TotalTracks          int32  `json:"total_tracks"`
-	TotalAvailableTracks int32  `json:"total_available_tracks"`
-	DirPath              string `json:"dir_path"`
+	Title             string      `json:"title"`
+	ReleaseDate       pgtype.Date `json:"release_date"`
+	SpotifyID         string      `json:"spotify_id"`
+	SpotifyPopularity int32       `json:"spotify_popularity"`
+	TotalTracks       int32       `json:"total_tracks"`
+	MusicianID        pgtype.Int4 `json:"musician_id"`
+	Cover             string      `json:"cover"`
+	DiscCount         int32       `json:"disc_count"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
@@ -56,8 +58,9 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
-		arg.TotalAvailableTracks,
-		arg.DirPath,
+		arg.MusicianID,
+		arg.Cover,
+		arg.DiscCount,
 	)
 	var i Album
 	err := row.Scan(
@@ -67,16 +70,18 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.Title,
 		&i.SpotifyID,
 		&i.ReleaseDate,
+		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
-		&i.DirPath,
+		&i.DiscCount,
+		&i.Cover,
+		&i.MusicianID,
 	)
 	return i, err
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, spotify_popularity, total_tracks, total_available_tracks, dir_path FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error) {
@@ -89,73 +94,12 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Al
 		&i.Title,
 		&i.SpotifyID,
 		&i.ReleaseDate,
+		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
-		&i.DirPath,
+		&i.DiscCount,
+		&i.Cover,
+		&i.MusicianID,
 	)
 	return i, err
-}
-
-const getAlbumsCount = `-- name: GetAlbumsCount :one
-SELECT COUNT(*) FROM albums
-`
-
-func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getAlbumsCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const getAllAlbumsWithImages = `-- name: GetAllAlbumsWithImages :many
-SELECT 
-    a.id, 
-    a.title, 
-    a.release_date,
-    si.id as image_id, 
-    si.path as image_path, 
-    si.width as image_width, 
-    si.height as image_height
-FROM albums a
-LEFT JOIN spotify_images si ON a.id = si.album_id
-ORDER BY a.title ASC
-`
-
-type GetAllAlbumsWithImagesRow struct {
-	ID          int32       `json:"id"`
-	Title       string      `json:"title"`
-	ReleaseDate string      `json:"release_date"`
-	ImageID     pgtype.Int4 `json:"image_id"`
-	ImagePath   pgtype.Text `json:"image_path"`
-	ImageWidth  pgtype.Int4 `json:"image_width"`
-	ImageHeight pgtype.Int4 `json:"image_height"`
-}
-
-func (q *Queries) GetAllAlbumsWithImages(ctx context.Context) ([]GetAllAlbumsWithImagesRow, error) {
-	rows, err := q.db.Query(ctx, getAllAlbumsWithImages)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAllAlbumsWithImagesRow{}
-	for rows.Next() {
-		var i GetAllAlbumsWithImagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.ReleaseDate,
-			&i.ImageID,
-			&i.ImagePath,
-			&i.ImageWidth,
-			&i.ImageHeight,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

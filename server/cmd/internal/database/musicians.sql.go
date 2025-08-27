@@ -7,8 +7,6 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const checkMusicianExistsBySpotifyID = `-- name: CheckMusicianExistsBySpotifyID :one
@@ -31,11 +29,11 @@ INSERT INTO musicians (
     spotify_popularity,
     spotify_followers,
     summary,
-    dir_path
+    thumb
 ) VALUES (
     $1, $2, $3, $4, $5, $6
 )
-RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, dir_path
+RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, thumb
 `
 
 type CreateMusicianParams struct {
@@ -44,7 +42,7 @@ type CreateMusicianParams struct {
 	SpotifyPopularity int32  `json:"spotify_popularity"`
 	SpotifyFollowers  int32  `json:"spotify_followers"`
 	Summary           string `json:"summary"`
-	DirPath           string `json:"dir_path"`
+	Thumb             string `json:"thumb"`
 }
 
 func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error) {
@@ -54,7 +52,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		arg.SpotifyPopularity,
 		arg.SpotifyFollowers,
 		arg.Summary,
-		arg.DirPath,
+		arg.Thumb,
 	)
 	var i Musician
 	err := row.Scan(
@@ -66,62 +64,13 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
 		&i.SpotifyFollowers,
-		&i.DirPath,
+		&i.Thumb,
 	)
 	return i, err
 }
 
-const getAllMusiciansWithImages = `-- name: GetAllMusiciansWithImages :many
-SELECT 
-    m.id, 
-    m.name,
-    si.id as image_id, 
-    si.path as image_path, 
-    si.width as image_width, 
-    si.height as image_height
-FROM musicians m
-LEFT JOIN spotify_images si ON m.id = si.musician_id
-ORDER BY m.name ASC
-`
-
-type GetAllMusiciansWithImagesRow struct {
-	ID          int32       `json:"id"`
-	Name        string      `json:"name"`
-	ImageID     pgtype.Int4 `json:"image_id"`
-	ImagePath   pgtype.Text `json:"image_path"`
-	ImageWidth  pgtype.Int4 `json:"image_width"`
-	ImageHeight pgtype.Int4 `json:"image_height"`
-}
-
-func (q *Queries) GetAllMusiciansWithImages(ctx context.Context) ([]GetAllMusiciansWithImagesRow, error) {
-	rows, err := q.db.Query(ctx, getAllMusiciansWithImages)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAllMusiciansWithImagesRow{}
-	for rows.Next() {
-		var i GetAllMusiciansWithImagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.ImageID,
-			&i.ImagePath,
-			&i.ImageWidth,
-			&i.ImageHeight,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, dir_path FROM musicians WHERE spotify_id = $1
+SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
 `
 
 func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error) {
@@ -136,18 +85,7 @@ func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) 
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
 		&i.SpotifyFollowers,
-		&i.DirPath,
+		&i.Thumb,
 	)
 	return i, err
-}
-
-const getMusiciansCount = `-- name: GetMusiciansCount :one
-SELECT COUNT(*) FROM musicians
-`
-
-func (q *Queries) GetMusiciansCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getMusiciansCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }

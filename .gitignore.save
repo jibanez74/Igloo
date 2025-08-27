@@ -1,0 +1,10 @@
+/server/static/*
+/server/logs/*
+/server/.env*
+/server/pg_data
+.DS_Store
+clear
+.vscode
+.idea
+error.txt
+todo.txt

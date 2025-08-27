@@ -94,6 +94,10 @@ func InitApp() (*Application, error) {
 		app.Spotify = s
 	}
 
+	if app.Settings.MusicDir != "" {
+		go app.ScanMusicLibrary()
+	}
+
 	return &app, nil
 }
 
@@ -362,12 +366,6 @@ func (app *Application) InitRouter() *chi.Mux {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.RequestID)
-
-	router.Route("/api/v1", func(r chi.Router) {
-		r.Route("/music", func(r chi.Router) {
-			r.Get("/musician/count", app.GetMusicianCount)
-		})
-	})
 
 	return router
 }

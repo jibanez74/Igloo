@@ -43,7 +43,7 @@ RETURNING id, created_at, updated_at, title, index, duration, profile, aspect_ra
 type CreateVideoStreamParams struct {
 	Title          string      `json:"title"`
 	Index          int32       `json:"index"`
-	Duration       string      `json:"duration"`
+	Duration       int32       `json:"duration"`
 	Profile        string      `json:"profile"`
 	AspectRatio    string      `json:"aspect_ratio"`
 	BitRate        string      `json:"bit_rate"`

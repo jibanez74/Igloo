@@ -13,38 +13,57 @@ import (
 
 const createMovie = `-- name: CreateMovie :one
 INSERT INTO movies (
-    title,
-    file_path,
-    container,
-    size,
-    content_type,
-    run_time,
-    adult,
-    tag_line,
-    summary,
-    art,
-    thumb,
-    tmdb_id,
-    imdb_id,
-    year,
-    release_date,
-    budget,
-    revenue,
-    content_rating,
-    audience_rating,
-    critic_rating,
-    spoken_languages
+  title,
+  file_path,
+  file_name,
+  container,
+  size,
+  content_type,
+  run_time,
+  adult,
+  tag_line,
+  summary,
+  art,
+  thumb,
+  tmdb_id,
+  imdb_id,
+  release_date,
+  budget,
+  revenue,
+  content_rating,
+  audience_rating,
+  critic_rating,
+  spoken_languages
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-    $21
+  $1,  -- title
+  $2,  -- file_path
+  $3,  -- file_name
+  $4,  -- container
+  $5,  -- size
+  $6,  -- content_type
+  $7,  -- run_time
+  $8,  -- adult
+  $9,  -- tag_line
+  $10, -- summary
+  $11, -- art
+  $12, -- thumb
+  $13, -- tmdb_id
+  $14, -- imdb_id
+  $15, -- release_date (DATE)
+  $16, -- budget
+  $17, -- revenue
+  $18, -- content_rating
+  $19, -- audience_rating (NUMERIC(3,1))
+  $20, -- critic_rating   (NUMERIC(3,1))
+  $21  -- spoken_languages
 )
-RETURNING id, created_at, updated_at, title, file_path, container, size, content_type, run_time, adult, tag_line, summary, art, thumb, tmdb_id, imdb_id, release_date, year, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages
+RETURNING id, created_at, updated_at, title, file_path, file_name, container, size, content_type, run_time, adult, tag_line, summary, art, thumb, tmdb_id, imdb_id, release_date, year, budget, revenue, content_rating, audience_rating, critic_rating, spoken_languages
 `
 
 type CreateMovieParams struct {
 	Title           string         `json:"title"`
 	FilePath        string         `json:"file_path"`
+	FileName        string         `json:"file_name"`
 	Container       string         `json:"container"`
 	Size            int64          `json:"size"`
 	ContentType     string         `json:"content_type"`
@@ -56,7 +75,6 @@ type CreateMovieParams struct {
 	Thumb           string         `json:"thumb"`
 	TmdbID          string         `json:"tmdb_id"`
 	ImdbID          string         `json:"imdb_id"`
-	Year            int32          `json:"year"`
 	ReleaseDate     pgtype.Date    `json:"release_date"`
 	Budget          int64          `json:"budget"`
 	Revenue         int64          `json:"revenue"`
@@ -70,6 +88,7 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 	row := q.db.QueryRow(ctx, createMovie,
 		arg.Title,
 		arg.FilePath,
+		arg.FileName,
 		arg.Container,
 		arg.Size,
 		arg.ContentType,
@@ -81,7 +100,6 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		arg.Thumb,
 		arg.TmdbID,
 		arg.ImdbID,
-		arg.Year,
 		arg.ReleaseDate,
 		arg.Budget,
 		arg.Revenue,
@@ -97,6 +115,7 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		&i.UpdatedAt,
 		&i.Title,
 		&i.FilePath,
+		&i.FileName,
 		&i.Container,
 		&i.Size,
 		&i.ContentType,
@@ -193,7 +212,7 @@ func (q *Queries) GetMovieCount(ctx context.Context) (int64, error) {
 
 const getMovieDetails = `-- name: GetMovieDetails :one
 WITH movie_base AS (
-    SELECT m.id, m.created_at, m.updated_at, m.title, m.file_path, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.release_date, m.year, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages
+    SELECT m.id, m.created_at, m.updated_at, m.title, m.file_path, m.file_name, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.release_date, m.year, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages
     FROM movies m
     WHERE m.id = $1
 ),
@@ -339,7 +358,7 @@ movie_chapters AS (
     LEFT JOIN chapters ch ON ch.movie_id = m.id
 )
 SELECT 
-    m.id, m.created_at, m.updated_at, m.title, m.file_path, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.release_date, m.year, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages,
+    m.id, m.created_at, m.updated_at, m.title, m.file_path, m.file_name, m.container, m.size, m.content_type, m.run_time, m.adult, m.tag_line, m.summary, m.art, m.thumb, m.tmdb_id, m.imdb_id, m.release_date, m.year, m.budget, m.revenue, m.content_rating, m.audience_rating, m.critic_rating, m.spoken_languages,
     g.genres,
     s.studios,
     c.cast,
@@ -365,6 +384,7 @@ type GetMovieDetailsRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	Title           string             `json:"title"`
 	FilePath        string             `json:"file_path"`
+	FileName        string             `json:"file_name"`
 	Container       string             `json:"container"`
 	Size            int64              `json:"size"`
 	ContentType     string             `json:"content_type"`
@@ -404,6 +424,7 @@ func (q *Queries) GetMovieDetails(ctx context.Context, id int32) (GetMovieDetail
 		&i.UpdatedAt,
 		&i.Title,
 		&i.FilePath,
+		&i.FileName,
 		&i.Container,
 		&i.Size,
 		&i.ContentType,

@@ -18,7 +18,6 @@ type Querier interface {
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
-	CreateAlbumMusician(ctx context.Context, arg CreateAlbumMusicianParams) error
 	CreateAudioStream(ctx context.Context, arg CreateAudioStreamParams) (AudioStream, error)
 	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)
 	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
@@ -31,24 +30,15 @@ type Querier interface {
 	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
 	CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
-	CreateTrackMusician(ctx context.Context, arg CreateTrackMusicianParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
 	DeleteAlbumGenre(ctx context.Context, arg DeleteAlbumGenreParams) error
-	DeleteAlbumMusician(ctx context.Context, arg DeleteAlbumMusicianParams) error
-	DeleteTrack(ctx context.Context, id int32) error
 	DeleteTrackGenre(ctx context.Context, arg DeleteTrackGenreParams) error
-	DeleteTrackMusician(ctx context.Context, arg DeleteTrackMusicianParams) error
 	DeleteUser(ctx context.Context, id int32) error
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error)
 	GetAlbumGenres(ctx context.Context, albumID int32) ([]AlbumGenre, error)
-	GetAlbumMusicians(ctx context.Context, albumID int32) ([]AlbumMusician, error)
-	GetAlbumsCount(ctx context.Context) (int64, error)
-	GetAllAlbumsWithImages(ctx context.Context) ([]GetAllAlbumsWithImagesRow, error)
-	GetAllGenres(ctx context.Context) ([]GetAllGenresRow, error)
-	GetAllMusiciansWithImages(ctx context.Context) ([]GetAllMusiciansWithImagesRow, error)
 	GetGenreAlbums(ctx context.Context, genreID int32) ([]AlbumGenre, error)
-	GetGenreByID(ctx context.Context, id int32) (string, error)
+	GetGenreByTag(ctx context.Context, tag string) (Genre, error)
 	GetGenreTracks(ctx context.Context, genreID int32) ([]TrackGenre, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetMovieByTmdbID(ctx context.Context, tmdbID string) (GetMovieByTmdbIDRow, error)
@@ -57,29 +47,20 @@ type Querier interface {
 	GetMovieForStreaming(ctx context.Context, id int32) (GetMovieForStreamingRow, error)
 	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
-	GetMusicianAlbums(ctx context.Context, musicianID int32) ([]AlbumMusician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error)
-	GetMusicianTracks(ctx context.Context, musicianID int32) ([]TrackMusician, error)
-	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error)
-	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (GetOrCreateGenreRow, error)
 	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)
 	GetSettings(ctx context.Context) (GlobalSetting, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
-	GetTrack(ctx context.Context, id int32) (Track, error)
-	GetTrackByFilePath(ctx context.Context, filePath string) (Track, error)
 	GetTrackGenres(ctx context.Context, trackID int32) ([]TrackGenre, error)
-	GetTrackMusicians(ctx context.Context, trackID int32) ([]TrackMusician, error)
+	GetUnknownGenre(ctx context.Context) (Genre, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
-	ListTracks(ctx context.Context) ([]Track, error)
-	ListTracksByAlbum(ctx context.Context, albumID pgtype.Int4) ([]Track, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
-	UpdateTrack(ctx context.Context, arg UpdateTrackParams) (Track, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
-	UpsertSpotifyImage(ctx context.Context, arg UpsertSpotifyImageParams) (SpotifyImage, error)
+	UpsertGenre(ctx context.Context, arg UpsertGenreParams) (Genre, error)
 }
 
 var _ Querier = (*Queries)(nil)

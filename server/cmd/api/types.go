@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/logger"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,7 +23,10 @@ type Application struct {
 	Watcher  *fsnotify.Watcher
 }
 
-type CreateTmdbMovieRequest struct {
-	FilePath string `json:"file_path"`
-	TmdbID   string `json:"tmdb_id"`
+type CreateAlbumParams struct {
+	AlbumTitle  string
+	MusicianID  int32
+	TotalTracks []int32
+	DiscCount   []int32
+	ReleaseDate time.Time
 }

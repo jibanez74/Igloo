@@ -13,26 +13,32 @@ import (
 
 const createTrack = `-- name: CreateTrack :one
 INSERT INTO tracks (
-    title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id
+    title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, sample_rate, copyright, album_id, size, file_name, disc, album_id, language, profile
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-) RETURNING id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+) RETURNING id, created_at, updated_at, title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, sample_rate, copyright, language, size, profile, album_id
 `
 
 type CreateTrackParams struct {
-	Title       string      `json:"title"`
-	Index       int32       `json:"index"`
-	Duration    int32       `json:"duration"`
-	Composer    string      `json:"composer"`
-	ReleaseDate pgtype.Date `json:"release_date"`
-	FilePath    string      `json:"file_path"`
-	Container   string      `json:"container"`
-	Codec       string      `json:"codec"`
-	BitRate     string      `json:"bit_rate"`
-	Channels    int32       `json:"channels"`
-	SampleRate  pgtype.Int4 `json:"sample_rate"`
-	BitDepth    pgtype.Int4 `json:"bit_depth"`
-	AlbumID     pgtype.Int4 `json:"album_id"`
+	Title         string         `json:"title"`
+	Index         int32          `json:"index"`
+	Duration      pgtype.Numeric `json:"duration"`
+	Composer      string         `json:"composer"`
+	ReleaseDate   pgtype.Date    `json:"release_date"`
+	FilePath      string         `json:"file_path"`
+	Container     string         `json:"container"`
+	Codec         string         `json:"codec"`
+	BitRate       int32          `json:"bit_rate"`
+	ChannelLayout string         `json:"channel_layout"`
+	SampleRate    pgtype.Int4    `json:"sample_rate"`
+	Copyright     string         `json:"copyright"`
+	AlbumID       pgtype.Int4    `json:"album_id"`
+	Size          int64          `json:"size"`
+	FileName      string         `json:"file_name"`
+	Disc          int32          `json:"disc"`
+	AlbumID_2     pgtype.Int4    `json:"album_id_2"`
+	Language      string         `json:"language"`
+	Profile       string         `json:"profile"`
 }
 
 func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
@@ -46,10 +52,16 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		arg.Container,
 		arg.Codec,
 		arg.BitRate,
-		arg.Channels,
+		arg.ChannelLayout,
 		arg.SampleRate,
-		arg.BitDepth,
+		arg.Copyright,
 		arg.AlbumID,
+		arg.Size,
+		arg.FileName,
+		arg.Disc,
+		arg.AlbumID_2,
+		arg.Language,
+		arg.Profile,
 	)
 	var i Track
 	err := row.Scan(
@@ -57,233 +69,23 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.Disc,
 		&i.Index,
 		&i.Duration,
 		&i.Composer,
 		&i.ReleaseDate,
+		&i.Year,
 		&i.FilePath,
+		&i.FileName,
 		&i.Container,
 		&i.Codec,
 		&i.BitRate,
-		&i.Channels,
+		&i.ChannelLayout,
 		&i.SampleRate,
-		&i.BitDepth,
-		&i.AlbumID,
-	)
-	return i, err
-}
-
-const deleteTrack = `-- name: DeleteTrack :exec
-DELETE FROM tracks
-WHERE id = $1
-`
-
-func (q *Queries) DeleteTrack(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteTrack, id)
-	return err
-}
-
-const getTrack = `-- name: GetTrack :one
-SELECT id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id FROM tracks
-WHERE id = $1 LIMIT 1
-`
-
-func (q *Queries) GetTrack(ctx context.Context, id int32) (Track, error) {
-	row := q.db.QueryRow(ctx, getTrack, id)
-	var i Track
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.Index,
-		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.FilePath,
-		&i.Container,
-		&i.Codec,
-		&i.BitRate,
-		&i.Channels,
-		&i.SampleRate,
-		&i.BitDepth,
-		&i.AlbumID,
-	)
-	return i, err
-}
-
-const getTrackByFilePath = `-- name: GetTrackByFilePath :one
-SELECT id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id FROM tracks
-WHERE file_path = $1 LIMIT 1
-`
-
-func (q *Queries) GetTrackByFilePath(ctx context.Context, filePath string) (Track, error) {
-	row := q.db.QueryRow(ctx, getTrackByFilePath, filePath)
-	var i Track
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.Index,
-		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.FilePath,
-		&i.Container,
-		&i.Codec,
-		&i.BitRate,
-		&i.Channels,
-		&i.SampleRate,
-		&i.BitDepth,
-		&i.AlbumID,
-	)
-	return i, err
-}
-
-const listTracks = `-- name: ListTracks :many
-SELECT id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id FROM tracks
-ORDER BY title
-`
-
-func (q *Queries) ListTracks(ctx context.Context) ([]Track, error) {
-	rows, err := q.db.Query(ctx, listTracks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Track{}
-	for rows.Next() {
-		var i Track
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.Index,
-			&i.Duration,
-			&i.Composer,
-			&i.ReleaseDate,
-			&i.FilePath,
-			&i.Container,
-			&i.Codec,
-			&i.BitRate,
-			&i.Channels,
-			&i.SampleRate,
-			&i.BitDepth,
-			&i.AlbumID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTracksByAlbum = `-- name: ListTracksByAlbum :many
-SELECT id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id FROM tracks
-WHERE album_id = $1
-ORDER BY index
-`
-
-func (q *Queries) ListTracksByAlbum(ctx context.Context, albumID pgtype.Int4) ([]Track, error) {
-	rows, err := q.db.Query(ctx, listTracksByAlbum, albumID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Track{}
-	for rows.Next() {
-		var i Track
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Title,
-			&i.Index,
-			&i.Duration,
-			&i.Composer,
-			&i.ReleaseDate,
-			&i.FilePath,
-			&i.Container,
-			&i.Codec,
-			&i.BitRate,
-			&i.Channels,
-			&i.SampleRate,
-			&i.BitDepth,
-			&i.AlbumID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateTrack = `-- name: UpdateTrack :one
-UPDATE tracks
-SET title = $2, index = $3, duration = $4, composer = $5, release_date = $6, file_path = $7, container = $8, codec = $9, bit_rate = $10, channels = $11, sample_rate = $12, bit_depth = $13, album_id = $14, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, created_at, updated_at, title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channels, sample_rate, bit_depth, album_id
-`
-
-type UpdateTrackParams struct {
-	ID          int32       `json:"id"`
-	Title       string      `json:"title"`
-	Index       int32       `json:"index"`
-	Duration    int32       `json:"duration"`
-	Composer    string      `json:"composer"`
-	ReleaseDate pgtype.Date `json:"release_date"`
-	FilePath    string      `json:"file_path"`
-	Container   string      `json:"container"`
-	Codec       string      `json:"codec"`
-	BitRate     string      `json:"bit_rate"`
-	Channels    int32       `json:"channels"`
-	SampleRate  pgtype.Int4 `json:"sample_rate"`
-	BitDepth    pgtype.Int4 `json:"bit_depth"`
-	AlbumID     pgtype.Int4 `json:"album_id"`
-}
-
-func (q *Queries) UpdateTrack(ctx context.Context, arg UpdateTrackParams) (Track, error) {
-	row := q.db.QueryRow(ctx, updateTrack,
-		arg.ID,
-		arg.Title,
-		arg.Index,
-		arg.Duration,
-		arg.Composer,
-		arg.ReleaseDate,
-		arg.FilePath,
-		arg.Container,
-		arg.Codec,
-		arg.BitRate,
-		arg.Channels,
-		arg.SampleRate,
-		arg.BitDepth,
-		arg.AlbumID,
-	)
-	var i Track
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.Index,
-		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.FilePath,
-		&i.Container,
-		&i.Codec,
-		&i.BitRate,
-		&i.Channels,
-		&i.SampleRate,
-		&i.BitDepth,
+		&i.Copyright,
+		&i.Language,
+		&i.Size,
+		&i.Profile,
 		&i.AlbumID,
 	)
 	return i, err

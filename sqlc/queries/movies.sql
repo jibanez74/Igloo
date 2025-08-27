@@ -188,30 +188,48 @@ WHERE id = $1;
 
 -- name: CreateMovie :one
 INSERT INTO movies (
-    title,
-    file_path,
-    container,
-    size,
-    content_type,
-    run_time,
-    adult,
-    tag_line,
-    summary,
-    art,
-    thumb,
-    tmdb_id,
-    imdb_id,
-    year,
-    release_date,
-    budget,
-    revenue,
-    content_rating,
-    audience_rating,
-    critic_rating,
-    spoken_languages
+  title,
+  file_path,
+  file_name,
+  container,
+  size,
+  content_type,
+  run_time,
+  adult,
+  tag_line,
+  summary,
+  art,
+  thumb,
+  tmdb_id,
+  imdb_id,
+  release_date,
+  budget,
+  revenue,
+  content_rating,
+  audience_rating,
+  critic_rating,
+  spoken_languages
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-    $21
+  $1,  -- title
+  $2,  -- file_path
+  $3,  -- file_name
+  $4,  -- container
+  $5,  -- size
+  $6,  -- content_type
+  $7,  -- run_time
+  $8,  -- adult
+  $9,  -- tag_line
+  $10, -- summary
+  $11, -- art
+  $12, -- thumb
+  $13, -- tmdb_id
+  $14, -- imdb_id
+  $15, -- release_date (DATE)
+  $16, -- budget
+  $17, -- revenue
+  $18, -- content_rating
+  $19, -- audience_rating (NUMERIC(3,1))
+  $20, -- critic_rating   (NUMERIC(3,1))
+  $21  -- spoken_languages
 )
 RETURNING *;

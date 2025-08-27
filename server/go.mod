@@ -5,9 +5,9 @@ go 1.24.6
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.2
-	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/joho/godotenv v1.5.1
+	github.com/shopspring/decimal v1.4.0
 	github.com/zmb3/spotify/v2 v2.4.3
 	golang.org/x/crypto v0.41.0
 	golang.org/x/oauth2 v0.30.0
