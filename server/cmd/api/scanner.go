@@ -142,9 +142,34 @@ func (app *Application) ScanMusicLibrary() {
 			createTrack.ChannelLayout = trackMetadata.Streams[streamIndex].ChannelLayout
 			createTrack.Language = trackMetadata.Streams[streamIndex].Tags.Language
 
-			_, err = app.Queries.CreateTrack(ctx, createTrack)
+			track, err := app.Queries.CreateTrack(ctx, createTrack)
 			if err != nil {
 				return err
+			}
+
+			if trackMetadata.Format.Tags.Genre != "" {
+				if strings.Contains(trackMetadata.Format.Tags.Genre, ",") {
+					genreList := strings.Split(trackMetadata.Format.Tags.Genre, ",")
+
+					for _, g := range genreList {
+						app.SaveGenres(ctx, &SaveGenresParams{
+							Tag:        g,
+							GenreType:  "music",
+							MusicianID: musician.ID,
+							AlbumID:    album.ID,
+							TrackID:    track.ID,
+						})
+					}
+
+				} else {
+					app.SaveGenres(ctx, &SaveGenresParams{
+						Tag:        trackMetadata.Format.Tags.Genre,
+						GenreType:  "music",
+						MusicianID: data.MusicianID,
+						AlbumID:    album.ID,
+						TrackID:    track.ID,
+					})
+				}
 			}
 		}
 
@@ -154,38 +179,6 @@ func (app *Application) ScanMusicLibrary() {
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("fail to scan music directory at %s\n%s", app.Settings.MusicDir, err.Error()))
 	}
-}
-
-func (app *Application) GetOrCreateGenres(ctx context.Context, genreStr string) ([]int32, error) {
-	var genreIDs []int32
-
-	if genreStr == "" {
-		genre, err := app.Queries.GetUnknownGenre(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		genreIDs = append(genreIDs, genre.ID)
-	} else {
-		parts := strings.Split(genreStr, ",")
-		genreList := make([]string, 0, len(parts))
-
-		for _, g := range genreList {
-			genre, err := app.Queries.UpsertGenre(ctx, database.UpsertGenreParams{
-				Tag:       g,
-				GenreType: GENRE_MUSIC_TYPE,
-			})
-
-			if err != nil {
-				app.Logger.Error(fmt.Sprintf("fail to save genre %s\n%s", g, err.Error()))
-				continue
-			}
-
-			genreIDs = append(genreIDs, genre.ID)
-		}
-	}
-
-	return genreIDs, nil
 }
 
 func (app *Application) GetOrCreateMusician(ctx context.Context, name string) (*database.Musician, error) {
@@ -290,4 +283,77 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, data *CreateAlbumP
 	}
 
 	return &album, nil
+}
+
+func (app *Application) SaveGenres(ctx context.Context, data *SaveGenresParams) {
+	if data == nil {
+		app.Logger.Error(fmt.Sprintf("got nil value for data in SaveGenres function"))
+		return
+	}
+
+	if data.Tag == "" {
+		app.Logger.Error("got empty data.Tag string in SaveGenres function")
+		return
+	}
+
+	if data.GenreType == "" {
+		app.Logger.Error("got empty string for data.GenreType in SaveGenres function")
+		return
+	}
+
+	tag := strings.ToLower(strings.TrimSpace(data.Tag))
+
+	genre, err := app.Queries.UpsertGenre(ctx, database.UpsertGenreParams{
+		Tag:       tag,
+		GenreType: data.GenreType,
+	})
+
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("fail to save genre %s\n%s", data.Tag, err.Error()))
+		return
+	}
+
+	if genre.GenreType == "music" {
+		err = app.Queries.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{
+			MusicianID: data.MusicianID,
+			GenreID:    genre.ID,
+		})
+
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to save relationship between musician and genre\n%s", err.Error()))
+			return
+		}
+
+		err = app.Queries.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{
+			AlbumID: data.AlbumID,
+			GenreID: genre.ID,
+		})
+
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to save relationship between album and genre\n%s", err.Error()))
+			return
+		}
+
+		err = app.Queries.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
+			TrackID: data.TrackID,
+			GenreID: genre.ID,
+		})
+
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to save relationship between track and genre\n%s", err.Error()))
+			return
+		}
+	}
+
+	if genre.GenreType == "movie" {
+		err = app.Queries.AddMovieGenre(ctx, database.AddMovieGenreParams{
+			MovieID: data.MovieID,
+			GenreID: genre.ID,
+		})
+
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to save relationship between movie and genre\n%s", err.Error()))
+			return
+		}
+	}
 }

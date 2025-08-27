@@ -198,7 +198,6 @@ type Track struct {
 	Codec         string             `json:"codec"`
 	BitRate       int32              `json:"bit_rate"`
 	ChannelLayout string             `json:"channel_layout"`
-	SampleRate    pgtype.Int4        `json:"sample_rate"`
 	Copyright     string             `json:"copyright"`
 	Language      string             `json:"language"`
 	Size          int64              `json:"size"`

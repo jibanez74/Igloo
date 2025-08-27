@@ -172,7 +172,6 @@ CREATE TABLE tracks (
   codec VARCHAR(20) NOT NULL,
   bit_rate INTEGER NOT NULL,
   channel_layout VARCHAR(20) NOT NULL,
-  sample_rate INTEGER,
   copyright VARCHAR(100) NOT NULL DEFAULT 'unknown',
   language VARCHAR(4) NOT NULL DEFAULT 'unknown',
   size BIGINT NOT NULL,

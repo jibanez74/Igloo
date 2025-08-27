@@ -30,3 +30,12 @@ type CreateAlbumParams struct {
 	DiscCount   []int32
 	ReleaseDate time.Time
 }
+
+type SaveGenresParams struct {
+	Tag        string
+	GenreType  string
+	MusicianID int32
+	AlbumID    int32
+	TrackID    int32
+	MovieID    int32
+}
