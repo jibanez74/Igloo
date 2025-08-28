@@ -13,6 +13,7 @@ type Album struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	Title             string             `json:"title"`
+	SortTitle         string             `json:"sort_title"`
 	SpotifyID         string             `json:"spotify_id"`
 	ReleaseDate       pgtype.Date        `json:"release_date"`
 	Year              int32              `json:"year"`
@@ -153,6 +154,7 @@ type Musician struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	Name              string             `json:"name"`
+	SortName          string             `json:"sort_name"`
 	Summary           string             `json:"summary"`
 	SpotifyID         string             `json:"spotify_id"`
 	SpotifyPopularity int32              `json:"spotify_popularity"`
@@ -186,6 +188,7 @@ type Track struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	Title         string             `json:"title"`
+	SortTitle     string             `json:"sort_title"`
 	Disc          int32              `json:"disc"`
 	Index         int32              `json:"index"`
 	Duration      pgtype.Numeric     `json:"duration"`

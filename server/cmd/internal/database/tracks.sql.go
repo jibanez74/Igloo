@@ -11,16 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkTrackExistByFilePath = `-- name: CheckTrackExistByFilePath :one
+SELECT EXISTS(
+    SELECT 1 FROM tracks WHERE file_path = $1
+) as exists
+`
+
+func (q *Queries) CheckTrackExistByFilePath(ctx context.Context, filePath string) (bool, error) {
+	row := q.db.QueryRow(ctx, checkTrackExistByFilePath, filePath)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createTrack = `-- name: CreateTrack :one
 INSERT INTO tracks (
-    title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile, sample_rate
+    title, sort_title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile, sample_rate
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-) RETURNING id, created_at, updated_at, title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+) RETURNING id, created_at, updated_at, title, sort_title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id
 `
 
 type CreateTrackParams struct {
 	Title         string         `json:"title"`
+	SortTitle     string         `json:"sort_title"`
 	Index         int32          `json:"index"`
 	Duration      pgtype.Numeric `json:"duration"`
 	Composer      string         `json:"composer"`
@@ -43,6 +57,7 @@ type CreateTrackParams struct {
 func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
 	row := q.db.QueryRow(ctx, createTrack,
 		arg.Title,
+		arg.SortTitle,
 		arg.Index,
 		arg.Duration,
 		arg.Composer,
@@ -67,6 +82,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.SortTitle,
 		&i.Disc,
 		&i.Index,
 		&i.Duration,

@@ -14,7 +14,9 @@ type Querier interface {
 	AddMovieGenre(ctx context.Context, arg AddMovieGenreParams) error
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
+	CheckGenreExistByTag(ctx context.Context, tag string) (bool, error)
 	CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID string) (bool, error)
+	CheckTrackExistByFilePath(ctx context.Context, filePath string) (bool, error)
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
@@ -22,6 +24,7 @@ type Querier interface {
 	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)
 	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
 	CreateCrewMember(ctx context.Context, arg CreateCrewMemberParams) (CrewList, error)
+	CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error)
 	CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie, error)
 	CreateMovieExtra(ctx context.Context, arg CreateMovieExtraParams) (MovieExtra, error)
 	CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error)
@@ -53,14 +56,12 @@ type Querier interface {
 	GetSettings(ctx context.Context) (GlobalSetting, error)
 	GetTotalUsersCount(ctx context.Context) (int64, error)
 	GetTrackGenres(ctx context.Context, trackID int32) ([]TrackGenre, error)
-	GetUnknownGenre(ctx context.Context) (Genre, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
-	UpsertGenre(ctx context.Context, arg UpsertGenreParams) (Genre, error)
 }
 
 var _ Querier = (*Queries)(nil)

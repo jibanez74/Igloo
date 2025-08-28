@@ -16,7 +16,7 @@ type TrackFfprobeResult struct {
 		SampleRate    string `json:"sample_rate"`
 		Channels      int    `json:"channels"`
 		ChannelLayout string `json:"channel_layout"`
-		BitRate       int    `json:"bit_rate"`
+		BitRate       string `json:"bit_rate"`
 
 		Tags StreamTag `json:"tags"`
 	} `json:"streams"`
@@ -42,7 +42,7 @@ type TrackFfprobeResult struct {
 			SortName     string `json:"sort_name"`
 			SortAlbum    string `json:"sort_album"`
 			SortArtist   string `json:"sort_artist"`
-		} `json:"tagsd"`
+		} `json:"tags"`
 	} `json:"format"`
 }
 

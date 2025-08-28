@@ -25,19 +25,21 @@ func (q *Queries) CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID 
 const createMusician = `-- name: CreateMusician :one
 INSERT INTO musicians (
     name,
+    sort_name,
     spotify_id,
     spotify_popularity,
     spotify_followers,
     summary,
     thumb
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, thumb
+RETURNING id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb
 `
 
 type CreateMusicianParams struct {
 	Name              string `json:"name"`
+	SortName          string `json:"sort_name"`
 	SpotifyID         string `json:"spotify_id"`
 	SpotifyPopularity int32  `json:"spotify_popularity"`
 	SpotifyFollowers  int32  `json:"spotify_followers"`
@@ -48,6 +50,7 @@ type CreateMusicianParams struct {
 func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error) {
 	row := q.db.QueryRow(ctx, createMusician,
 		arg.Name,
+		arg.SortName,
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.SpotifyFollowers,
@@ -60,6 +63,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.SortName,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
@@ -70,7 +74,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 }
 
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, created_at, updated_at, name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
+SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
 `
 
 func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) (Musician, error) {
@@ -81,6 +85,7 @@ func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID string) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Name,
+		&i.SortName,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,

@@ -133,6 +133,7 @@ CREATE TABLE musicians (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   name VARCHAR(100) NOT NULL,
+  sort_name VARCHAR(100) NOT NULL,
   summary TEXT NOT NULL,
   spotify_id VARCHAR(255) NOT NULL UNIQUE,
   spotify_popularity INTEGER NOT NULL CHECK (spotify_popularity >= 0),
@@ -145,6 +146,7 @@ CREATE TABLE albums (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   title VARCHAR(100) NOT NULL,
+  sort_title VARCHAR(100) NOT NULL,
   spotify_id VARCHAR(255) NOT NULL UNIQUE,
   release_date DATE NOT NULL,
     year INTEGER NOT NULL GENERATED ALWAYS AS (EXTRACT(YEAR FROM release_date)) STORED,
@@ -160,6 +162,7 @@ CREATE TABLE tracks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   title VARCHAR(255) NOT NULL,
+  sort_title VARCHAR(100) NOT NULL,
   disc INTEGER NOT NULL DEFAULT 0,
   index INTEGER NOT NULL,
   duration DECIMAL NOT NULL,
@@ -177,8 +180,7 @@ CREATE TABLE tracks (
   size BIGINT NOT NULL,
   profile VARCHAR(20) NOT NULL,
   sample_rate INTEGER NOT NULL,
-  album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE,
-  CONSTRAINT chk_tracks_nonneg CHECK (duration > 0 AND channels >= 0 AND size > 0)
+  album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE
 );
 
 CREATE TABLE genres (
@@ -371,8 +373,6 @@ CREATE INDEX idx_musician_genres_musician_id ON musician_genres (musician_id);
 CREATE INDEX idx_musician_genres_genre_id ON musician_genres (genre_id);
 CREATE INDEX idx_track_genres_track_id ON track_genres (track_id);
 CREATE INDEX idx_track_genres_genre_id ON track_genres (genre_id);
-CREATE INDEX idx_spotify_images_musician_id ON spotify_images (musician_id);
-CREATE INDEX idx_spotify_images_album_id ON spotify_images (album_id);
 
 -- =========================================================
 -- Constraints to prevent duplicates & ensure consistency
@@ -412,7 +412,6 @@ CREATE TRIGGER update_movies_updated_at          BEFORE UPDATE ON movies        
 CREATE TRIGGER update_artists_updated_at         BEFORE UPDATE ON artists         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_musicians_updated_at       BEFORE UPDATE ON musicians       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_albums_updated_at          BEFORE UPDATE ON albums          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_spotify_images_updated_at  BEFORE UPDATE ON spotify_images  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_tracks_updated_at          BEFORE UPDATE ON tracks          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_genres_updated_at          BEFORE UPDATE ON genres          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_studios_updated_at         BEFORE UPDATE ON studios         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

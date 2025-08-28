@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
+	"log"
+	"math"
+	"math/big"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -42,143 +44,259 @@ func (app *Application) ScanMusicLibrary() {
 			return err
 		}
 
-		ext := strings.ToLower(strings.TrimPrefix(entry.Name(), "."))
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
 
 		if helpers.ValidAudioExtensions[ext] {
-			trackMetadata, err := app.Ffprobe.GetTrackMetadata(path)
+			exist, err := app.Queries.CheckTrackExistByFilePath(ctx, path)
 			if err != nil {
 				return err
 			}
 
-			if len(trackMetadata.Streams) == 0 {
-				return fmt.Errorf("ffprobe detected no streams for track file %s", path)
-			}
-
-			musician, err := app.GetOrCreateMusician(ctx, trackMetadata.Format.Tags.Artist)
-			if err != nil {
-				return err
-			}
-
-			data := CreateAlbumParams{
-				AlbumTitle:  trackMetadata.Format.Tags.Album,
-				MusicianID:  musician.ID,
-				TotalTracks: []int32{0, 0},
-				DiscCount:   []int32{0, 0},
-			}
-
-			if trackMetadata.Format.Tags.Date != "" {
-				date, err := helpers.FormatDate(trackMetadata.Format.Tags.Date)
+			if !exist {
+				trackMetadata, err := app.Ffprobe.GetTrackMetadata(path)
 				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to parse date for album %s\n%s", data.AlbumTitle, err.Error()))
-				} else {
-					data.ReleaseDate = date
+					return err
 				}
-			}
 
-			if trackMetadata.Format.Tags.Track != "" {
-				tracks, err := helpers.SplitSliceBySlash(trackMetadata.Format.Tags.Track)
+				if len(trackMetadata.Streams) == 0 {
+					return fmt.Errorf("ffprobe failed to detect any streams for track file %s", path)
+				}
+
+				artist, err := app.Spotify.SearchArtistByName(entry.Name())
 				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to get track count for album %s\n%s", data.AlbumTitle, err.Error()))
-				} else {
-					data.TotalTracks = tracks
+					return err
 				}
-			}
 
-			if trackMetadata.Format.Tags.Disc != "" {
-				disc, err := helpers.SplitSliceBySlash(trackMetadata.Format.Tags.Disc)
+				tx, err := app.Db.Begin(ctx)
 				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to get disc count for album %s\n%s", data.AlbumTitle, err.Error()))
-				} else {
-					data.DiscCount = disc
+					return err
 				}
-			}
+				defer tx.Rollback(ctx)
 
-			album, err := app.GetOrCreateAlbum(ctx, &data)
-			if err != nil {
-				return err
-			}
+				qtx := app.Queries.WithTx(tx)
 
-			createTrack := database.CreateTrackParams{
-				Title:       trackMetadata.Format.Tags.Title,
-				Index:       data.TotalTracks[0],
-				Disc:        data.DiscCount[0],
-				Composer:    trackMetadata.Format.Tags.Composer,
-				Copyright:   trackMetadata.Format.Tags.Copyright,
-				Container:   ext,
-				ReleaseDate: album.ReleaseDate,
-				FilePath:    path,
-				FileName:    entry.Name(),
-				AlbumID: pgtype.Int4{
-					Int32: album.ID,
+				exist, err = qtx.CheckMusicianExistsBySpotifyID(ctx, artist.ID.String())
+				if err != nil {
+					return err
+				}
+
+				var musician database.Musician
+
+				if !exist {
+					createMusician := database.CreateMusicianParams{
+						Name:              artist.Name,
+						SortName:          trackMetadata.Format.Tags.SortArtist,
+						SpotifyID:         artist.ID.String(),
+						SpotifyPopularity: int32(artist.Popularity),
+						SpotifyFollowers:  int32(artist.Followers.Count),
+						Summary:           fmt.Sprintf("%s is an artist on spotify with %d followers and %d of popularity", artist.Name, artist.Followers.Count, artist.Popularity),
+					}
+
+					if len(artist.Images) > 0 {
+						createMusician.Thumb = artist.Images[0].URL
+					}
+
+					musician, err = qtx.CreateMusician(ctx, createMusician)
+					if err != nil {
+						return err
+					}
+				} else {
+					musician, err = qtx.GetMusicianBySpotifyID(ctx, artist.ID.String())
+					if err != nil {
+						return err
+					}
+				}
+
+				var album database.Album
+				discCount := []int32{0, 0}
+				trackCount := []int32{0, 0}
+
+				if trackMetadata.Format.Tags.Album != "" {
+					albumList, err := app.Spotify.SearchAlbums(trackMetadata.Format.Tags.Album, 1)
+					if err != nil {
+						return nil
+					}
+
+					if len(albumList) == 0 {
+						return fmt.Errorf("fail to get any results for album %s from spotify api", trackMetadata.Format.Tags.Album)
+					}
+
+					exist, err = qtx.CheckAlbumExistsBySpotifyID(ctx, albumList[0].ID.String())
+					if err != nil {
+						return err
+					}
+
+					if !exist {
+						createAlbum := database.CreateAlbumParams{
+							Title:             albumList[0].Name,
+							SortTitle:         trackMetadata.Format.Tags.SortAlbum,
+							SpotifyID:         albumList[0].ID.String(),
+							SpotifyPopularity: 0,
+							TotalTracks:       0,
+							DiscCount:         0,
+							MusicianID: pgtype.Int4{
+								Int32: musician.ID,
+								Valid: true,
+							},
+						}
+
+						if trackMetadata.Format.Tags.Date != "" {
+							date, err := helpers.FormatDate(trackMetadata.Format.Tags.Date)
+							if err != nil {
+								return err
+							}
+
+							createAlbum.ReleaseDate = pgtype.Date{
+								Time:  date,
+								Valid: true,
+							}
+						}
+
+						if trackMetadata.Format.Tags.Track != "" {
+							trackCount, err = helpers.SplitSliceBySlash(trackMetadata.Format.Tags.Track)
+							if err != nil {
+								app.Logger.Error(fmt.Sprintf("fail to get track count for album %s\n%s", createAlbum.Title, err.Error()))
+							} else {
+								createAlbum.TotalTracks = trackCount[1]
+							}
+						}
+
+						if trackMetadata.Format.Tags.Disc != "" {
+							discCount, err = helpers.SplitSliceBySlash(trackMetadata.Format.Tags.Disc)
+							if err != nil {
+								app.Logger.Error(fmt.Sprintf("fail to get disc count for album %s\n%s", createAlbum.Title, err.Error()))
+							} else {
+								createAlbum.DiscCount = discCount[1]
+							}
+						}
+
+						if len(albumList[0].Images) > 0 {
+							createAlbum.Cover = albumList[0].Images[0].URL
+						}
+
+						albumDetails, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
+						if err != nil {
+							app.Logger.Error(fmt.Sprintf("fail to get details for album %s from spotify api\n%s", createAlbum.Title, err.Error()))
+						} else {
+							createAlbum.SpotifyPopularity = int32(albumDetails.Popularity)
+						}
+
+						album, err = qtx.CreateAlbum(ctx, createAlbum)
+						if err != nil {
+							return err
+						}
+					} else {
+						album, err = qtx.GetAlbumBySpotifyID(ctx, albumList[0].ID.String())
+						if err != nil {
+							return err
+						}
+					}
+				}
+
+				createTrack := database.CreateTrackParams{
+					Title:       trackMetadata.Format.Tags.Title,
+					SortTitle:   trackMetadata.Format.Tags.SortName,
+					Index:       trackCount[0],
+					Disc:        discCount[0],
+					Composer:    trackMetadata.Format.Tags.Composer,
+					Copyright:   trackMetadata.Format.Tags.Copyright,
+					Container:   ext,
+					ReleaseDate: album.ReleaseDate,
+					FilePath:    path,
+					FileName:    entry.Name(),
+					AlbumID: pgtype.Int4{
+						Int32: album.ID,
+						Valid: true,
+					},
+				}
+
+				duration, err := strconv.ParseFloat(trackMetadata.Format.Duration, 64)
+				if err != nil {
+					return err
+				}
+
+				precision := int32(6)
+				multiplier := math.Pow(10, float64(precision))
+				integerPart := int64(duration * multiplier)
+
+				createTrack.Duration = pgtype.Numeric{
+					Int:   big.NewInt(integerPart),
+					Exp:   -precision,
 					Valid: true,
-				},
-			}
-
-			duration, err := helpers.GetPreciseDecimalFromStr(trackMetadata.Format.Duration)
-			if err != nil {
-				return err
-			}
-			createTrack.Duration = duration
-
-			size, err := strconv.Atoi(trackMetadata.Format.Size)
-			if err != nil {
-				return err
-			}
-			createTrack.Size = int64(size)
-
-			bitRate, err := strconv.Atoi(trackMetadata.Format.BitRate)
-			if err != nil {
-				return err
-			}
-			createTrack.BitRate = int32(bitRate)
-
-			var streamIndex int
-
-			for i, s := range trackMetadata.Streams {
-				if s.CodecType == "audio" {
-					streamIndex = i
-					break
 				}
-			}
 
-			sampleRate, err := strconv.Atoi(trackMetadata.Streams[streamIndex].SampleRate)
-			if err != nil {
-				return err
-			}
-			createTrack.SampleRate = int32(sampleRate)
+				size, err := strconv.Atoi(trackMetadata.Format.Size)
+				if err != nil {
+					return err
+				}
+				createTrack.Size = int64(size)
 
-			createTrack.Codec = trackMetadata.Streams[streamIndex].CodecName
-			createTrack.Profile = trackMetadata.Streams[streamIndex].Profile
-			createTrack.ChannelLayout = trackMetadata.Streams[streamIndex].ChannelLayout
-			createTrack.Language = trackMetadata.Streams[streamIndex].Tags.Language
+				bitRate, err := strconv.Atoi(trackMetadata.Format.BitRate)
+				if err != nil {
+					return err
+				}
+				createTrack.BitRate = int32(bitRate)
 
-			track, err := app.Queries.CreateTrack(ctx, createTrack)
-			if err != nil {
-				return err
-			}
+				var streamIndex int
 
-			if trackMetadata.Format.Tags.Genre != "" {
-				if strings.Contains(trackMetadata.Format.Tags.Genre, ",") {
-					genreList := strings.Split(trackMetadata.Format.Tags.Genre, ",")
+				for i, s := range trackMetadata.Streams {
+					if s.CodecType == "audio" {
+						streamIndex = i
+						break
+					}
+				}
 
-					for _, g := range genreList {
-						app.SaveGenres(ctx, &SaveGenresParams{
-							Tag:        g,
+				sampleRate, err := strconv.Atoi(trackMetadata.Streams[streamIndex].SampleRate)
+				if err != nil {
+					return err
+				}
+				createTrack.SampleRate = int32(sampleRate)
+
+				createTrack.Codec = trackMetadata.Streams[streamIndex].CodecName
+				createTrack.Profile = trackMetadata.Streams[streamIndex].Profile
+				createTrack.ChannelLayout = trackMetadata.Streams[streamIndex].ChannelLayout
+				createTrack.Language = trackMetadata.Streams[streamIndex].Tags.Language
+
+				track, err := qtx.CreateTrack(ctx, createTrack)
+				if err != nil {
+					return err
+				}
+
+				if trackMetadata.Format.Tags.Genre != "" {
+					if strings.Contains(trackMetadata.Format.Tags.Genre, ",") {
+						genreList := strings.Split(trackMetadata.Format.Tags.Genre, ",")
+
+						for _, g := range genreList {
+							err := helpers.SaveGenres(ctx, qtx, &helpers.SaveGenresParams{
+								Tag:        g,
+								GenreType:  "music",
+								MusicianID: musician.ID,
+								AlbumID:    album.ID,
+								TrackID:    track.ID,
+							})
+
+							if err != nil {
+								return err
+							}
+						}
+					} else {
+						err = helpers.SaveGenres(ctx, qtx, &helpers.SaveGenresParams{
+							Tag:        trackMetadata.Format.Tags.Genre,
 							GenreType:  "music",
 							MusicianID: musician.ID,
 							AlbumID:    album.ID,
 							TrackID:    track.ID,
 						})
-					}
 
-				} else {
-					app.SaveGenres(ctx, &SaveGenresParams{
-						Tag:        trackMetadata.Format.Tags.Genre,
-						GenreType:  "music",
-						MusicianID: data.MusicianID,
-						AlbumID:    album.ID,
-						TrackID:    track.ID,
-					})
+						if err != nil {
+							return err
+						}
+					}
+				}
+
+				err = tx.Commit(ctx)
+				if err != nil {
+					return err
 				}
 			}
 		}
@@ -187,183 +305,9 @@ func (app *Application) ScanMusicLibrary() {
 	})
 
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to scan music directory at %s\n%s", app.Settings.MusicDir, err.Error()))
-	}
-}
-
-func (app *Application) GetOrCreateMusician(ctx context.Context, name string) (*database.Musician, error) {
-	if name == "" {
-		return nil, errors.New("got empty name for ScanDirForMusician function")
-	}
-
-	artistList, err := app.Spotify.SearchArtistByName(name)
-	if err != nil {
-		return nil, err
-	}
-
-	exist, err := app.Queries.CheckMusicianExistsBySpotifyID(ctx, artistList.ID.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var musician database.Musician
-
-	if exist {
-		musician, err = app.Queries.GetMusicianBySpotifyID(ctx, artistList.ID.String())
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		thumb := ""
-		if len(artistList.Images) > 0 {
-			thumb = artistList.Images[0].URL
-		}
-
-		musician, err = app.Queries.CreateMusician(ctx, database.CreateMusicianParams{
-			Name:              artistList.Name,
-			SpotifyID:         artistList.ID.String(),
-			SpotifyPopularity: int32(artistList.Popularity),
-			SpotifyFollowers:  int32(artistList.Followers.Count),
-			Summary:           fmt.Sprintf("%s is an artist on spotify with a popularity of %d and %d followers", artistList.Name, artistList.Popularity, artistList.Followers.Count),
-			Thumb:             thumb,
-		})
-	}
-
-	return &musician, nil
-}
-
-func (app *Application) GetOrCreateAlbum(ctx context.Context, data *CreateAlbumParams) (*database.Album, error) {
-	if data == nil {
-		return nil, errors.New("got nil value for data in GetOrCreateAlbum function")
-	}
-
-	albumList, err := app.Spotify.SearchAlbums(data.AlbumTitle, 1)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(albumList) == 0 {
-		return nil, fmt.Errorf("no results were returned from spotify for album %s", data.AlbumTitle)
-	}
-
-	exist, err := app.Queries.CheckAlbumExistsBySpotifyID(ctx, albumList[0].ID.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var album database.Album
-
-	if exist {
-		album, err = app.Queries.GetAlbumBySpotifyID(ctx, albumList[0].ID.String())
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		createAlbum := database.CreateAlbumParams{
-			Title:             albumList[0].Name,
-			SpotifyID:         albumList[0].ID.String(),
-			DiscCount:         data.DiscCount[1],
-			TotalTracks:       data.TotalTracks[1],
-			SpotifyPopularity: 0,
-			ReleaseDate: pgtype.Date{
-				Time:  data.ReleaseDate,
-				Valid: true,
-			},
-			MusicianID: pgtype.Int4{
-				Int32: data.MusicianID,
-				Valid: true,
-			},
-		}
-
-		if len(albumList[0].Images) > 0 {
-			createAlbum.Cover = albumList[0].Images[0].URL
-		}
-
-		albumDetails, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to get details from spotify for album %s\n%s", albumList[0].Name, err.Error()))
-		} else {
-			createAlbum.SpotifyPopularity = int32(albumDetails.Popularity)
-		}
-
-		album, err = app.Queries.CreateAlbum(ctx, createAlbum)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &album, nil
-}
-
-func (app *Application) SaveGenres(ctx context.Context, data *SaveGenresParams) {
-	if data == nil {
-		app.Logger.Error(fmt.Sprintf("got nil value for data in SaveGenres function"))
+		log.Printf("your error is \n%v", err)
 		return
 	}
 
-	if data.Tag == "" {
-		app.Logger.Error("got empty data.Tag string in SaveGenres function")
-		return
-	}
-
-	if data.GenreType == "" {
-		app.Logger.Error("got empty string for data.GenreType in SaveGenres function")
-		return
-	}
-
-	tag := strings.ToLower(strings.TrimSpace(data.Tag))
-
-	genre, err := app.Queries.UpsertGenre(ctx, database.UpsertGenreParams{
-		Tag:       tag,
-		GenreType: data.GenreType,
-	})
-
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to save genre %s\n%s", data.Tag, err.Error()))
-		return
-	}
-
-	if genre.GenreType == "music" {
-		err = app.Queries.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{
-			MusicianID: data.MusicianID,
-			GenreID:    genre.ID,
-		})
-
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to save relationship between musician and genre\n%s", err.Error()))
-			return
-		}
-
-		err = app.Queries.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{
-			AlbumID: data.AlbumID,
-			GenreID: genre.ID,
-		})
-
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to save relationship between album and genre\n%s", err.Error()))
-			return
-		}
-
-		err = app.Queries.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
-			TrackID: data.TrackID,
-			GenreID: genre.ID,
-		})
-
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to save relationship between track and genre\n%s", err.Error()))
-			return
-		}
-	}
-
-	if genre.GenreType == "movie" {
-		err = app.Queries.AddMovieGenre(ctx, database.AddMovieGenreParams{
-			MovieID: data.MovieID,
-			GenreID: genre.ID,
-		})
-
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to save relationship between movie and genre\n%s", err.Error()))
-			return
-		}
-	}
+	app.Logger.Info("finished with music library scan")
 }

@@ -1,13 +1,14 @@
 -- name: CreateMusician :one
 INSERT INTO musicians (
     name,
+    sort_name,
     spotify_id,
     spotify_popularity,
     spotify_followers,
     summary,
     thumb
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 

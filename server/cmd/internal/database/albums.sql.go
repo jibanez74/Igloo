@@ -27,6 +27,7 @@ func (q *Queries) CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID str
 const createAlbum = `-- name: CreateAlbum :one
 INSERT INTO albums (
     title,
+    sort_title,
     release_date,
     spotify_id,
     spotify_popularity,
@@ -35,13 +36,14 @@ INSERT INTO albums (
     cover,
     disc_count
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id
+RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id
 `
 
 type CreateAlbumParams struct {
 	Title             string      `json:"title"`
+	SortTitle         string      `json:"sort_title"`
 	ReleaseDate       pgtype.Date `json:"release_date"`
 	SpotifyID         string      `json:"spotify_id"`
 	SpotifyPopularity int32       `json:"spotify_popularity"`
@@ -54,6 +56,7 @@ type CreateAlbumParams struct {
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
 	row := q.db.QueryRow(ctx, createAlbum,
 		arg.Title,
+		arg.SortTitle,
 		arg.ReleaseDate,
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
@@ -68,6 +71,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.SortTitle,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
@@ -81,7 +85,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Album, error) {
@@ -92,6 +96,7 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Al
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.SortTitle,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
