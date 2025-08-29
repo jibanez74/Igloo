@@ -24,11 +24,6 @@ type Album struct {
 	MusicianID        pgtype.Int4        `json:"musician_id"`
 }
 
-type AlbumGenre struct {
-	AlbumID int32 `json:"album_id"`
-	GenreID int32 `json:"genre_id"`
-}
-
 type AudioStream struct {
 	ID            int32              `json:"id"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
@@ -207,11 +202,7 @@ type Track struct {
 	Profile       string             `json:"profile"`
 	SampleRate    int32              `json:"sample_rate"`
 	AlbumID       pgtype.Int4        `json:"album_id"`
-}
-
-type TrackGenre struct {
-	TrackID int32 `json:"track_id"`
-	GenreID int32 `json:"genre_id"`
+	MusicianID    pgtype.Int4        `json:"musician_id"`
 }
 
 type User struct {

@@ -26,10 +26,10 @@ func (q *Queries) CheckTrackExistByFilePath(ctx context.Context, filePath string
 
 const createTrack = `-- name: CreateTrack :one
 INSERT INTO tracks (
-    title, sort_title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile, sample_rate
+    title, sort_title, index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, copyright, size, file_name, disc, album_id, language, profile, sample_rate, musician_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
-) RETURNING id, created_at, updated_at, title, sort_title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+) RETURNING id, created_at, updated_at, title, sort_title, disc, index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id, musician_id
 `
 
 type CreateTrackParams struct {
@@ -52,6 +52,7 @@ type CreateTrackParams struct {
 	Language      string         `json:"language"`
 	Profile       string         `json:"profile"`
 	SampleRate    int32          `json:"sample_rate"`
+	MusicianID    pgtype.Int4    `json:"musician_id"`
 }
 
 func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
@@ -75,6 +76,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		arg.Language,
 		arg.Profile,
 		arg.SampleRate,
+		arg.MusicianID,
 	)
 	var i Track
 	err := row.Scan(
@@ -101,6 +103,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.Profile,
 		&i.SampleRate,
 		&i.AlbumID,
+		&i.MusicianID,
 	)
 	return i, err
 }

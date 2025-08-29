@@ -9,17 +9,39 @@ import (
 	"context"
 )
 
-const addMovieGenre = `-- name: AddMovieGenre :exec
-INSERT INTO movie_genres (movie_id, genre_id)
-VALUES ($1, $2)
+const checkMovieGenreExists = `-- name: CheckMovieGenreExists :one
+SELECT EXISTS(
+  SELECT 1 FROM movie_genres WHERE movie_id = $1 AND genre_id = $2
+) as exists
 `
 
-type AddMovieGenreParams struct {
+type CheckMovieGenreExistsParams struct {
 	MovieID int32 `json:"movie_id"`
 	GenreID int32 `json:"genre_id"`
 }
 
-func (q *Queries) AddMovieGenre(ctx context.Context, arg AddMovieGenreParams) error {
-	_, err := q.db.Exec(ctx, addMovieGenre, arg.MovieID, arg.GenreID)
+func (q *Queries) CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkMovieGenreExists, arg.MovieID, arg.GenreID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const createMovieGenre = `-- name: CreateMovieGenre :exec
+INSERT INTO movie_genres (
+  movie_id,
+  genre_id
+) VALUES (
+  $1, $2
+)
+`
+
+type CreateMovieGenreParams struct {
+	MovieID int32 `json:"movie_id"`
+	GenreID int32 `json:"genre_id"`
+}
+
+func (q *Queries) CreateMovieGenre(ctx context.Context, arg CreateMovieGenreParams) error {
+	_, err := q.db.Exec(ctx, createMovieGenre, arg.MovieID, arg.GenreID)
 	return err
 }

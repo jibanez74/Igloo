@@ -1,3 +1,6 @@
+-- name: GetMusicianUnknown :one
+SELECT * FROM musicians WHERE name = 'unknown';
+
 -- name: CreateMusician :one
 INSERT INTO musicians (
     name,

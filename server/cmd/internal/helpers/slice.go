@@ -11,6 +11,10 @@ func SplitSliceBySlash(str string) ([]int32, error) {
 		return nil, errors.New("got empty string iSplitSliceBySlash function")
 	}
 
+	if !strings.Contains(str, "/") {
+		return []int32{1, 1}, nil
+	}
+
 	parts := strings.Split(str, "/")
 
 	val1, err := strconv.Atoi(parts[0])

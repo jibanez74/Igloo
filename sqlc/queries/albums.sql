@@ -1,3 +1,6 @@
+-- name: GetAlbumUnknown :one
+SELECT * FROM albums WHERE title = 'unknown';
+
 -- name: GetAlbumBySpotifyID :one
 SELECT * FROM albums WHERE spotify_id = $1 LIMIT 1;
 

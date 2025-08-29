@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -62,11 +63,6 @@ func (app *Application) ScanMusicLibrary() {
 					return fmt.Errorf("ffprobe failed to detect any streams for track file %s", path)
 				}
 
-				artist, err := app.Spotify.SearchArtistByName(entry.Name())
-				if err != nil {
-					return err
-				}
-
 				tx, err := app.Db.Begin(ctx)
 				if err != nil {
 					return err
@@ -75,35 +71,59 @@ func (app *Application) ScanMusicLibrary() {
 
 				qtx := app.Queries.WithTx(tx)
 
-				exist, err = qtx.CheckMusicianExistsBySpotifyID(ctx, artist.ID.String())
-				if err != nil {
-					return err
-				}
-
 				var musician database.Musician
 
-				if !exist {
-					createMusician := database.CreateMusicianParams{
-						Name:              artist.Name,
-						SortName:          trackMetadata.Format.Tags.SortArtist,
-						SpotifyID:         artist.ID.String(),
-						SpotifyPopularity: int32(artist.Popularity),
-						SpotifyFollowers:  int32(artist.Followers.Count),
-						Summary:           fmt.Sprintf("%s is an artist on spotify with %d followers and %d of popularity", artist.Name, artist.Followers.Count, artist.Popularity),
-					}
-
-					if len(artist.Images) > 0 {
-						createMusician.Thumb = artist.Images[0].URL
-					}
-
-					musician, err = qtx.CreateMusician(ctx, createMusician)
+				if trackMetadata.Format.Tags.Artist != "" {
+					artist, err := app.Spotify.SearchArtistByName(trackMetadata.Format.Tags.Artist)
 					if err != nil {
 						return err
 					}
-				} else {
-					musician, err = qtx.GetMusicianBySpotifyID(ctx, artist.ID.String())
+
+					exist, err = qtx.CheckMusicianExistsBySpotifyID(ctx, artist.ID.String())
 					if err != nil {
 						return err
+					}
+
+					if !exist {
+						createMusician := database.CreateMusicianParams{
+							Name:              artist.Name,
+							SortName:          trackMetadata.Format.Tags.SortArtist,
+							SpotifyID:         artist.ID.String(),
+							SpotifyPopularity: int32(artist.Popularity),
+							SpotifyFollowers:  int32(artist.Followers.Count),
+							Summary:           fmt.Sprintf("%s is an artist on spotify with %d followers and %d of popularity", artist.Name, artist.Followers.Count, artist.Popularity),
+						}
+
+						if len(artist.Images) > 0 {
+							createMusician.Thumb = artist.Images[0].URL
+						}
+
+						musician, err = qtx.CreateMusician(ctx, createMusician)
+						if err != nil {
+							return err
+						}
+					} else {
+						musician, err = qtx.GetMusicianBySpotifyID(ctx, artist.ID.String())
+						if err != nil {
+							return err
+						}
+					}
+				}
+
+				date := pgtype.Date{
+					Time:  time.Now(),
+					Valid: true,
+				}
+
+				if trackMetadata.Format.Tags.Date != "" {
+					parsedDate, err := helpers.FormatDate(trackMetadata.Format.Tags.Date)
+					if err != nil {
+						return err
+					}
+
+					date = pgtype.Date{
+						Time:  parsedDate,
+						Valid: true,
 					}
 				}
 
@@ -134,20 +154,12 @@ func (app *Application) ScanMusicLibrary() {
 							SpotifyPopularity: 0,
 							TotalTracks:       0,
 							DiscCount:         0,
-							MusicianID: pgtype.Int4{
-								Int32: musician.ID,
-								Valid: true,
-							},
+							ReleaseDate:       date,
 						}
 
-						if trackMetadata.Format.Tags.Date != "" {
-							date, err := helpers.FormatDate(trackMetadata.Format.Tags.Date)
-							if err != nil {
-								return err
-							}
-
-							createAlbum.ReleaseDate = pgtype.Date{
-								Time:  date,
+						if musician.ID != 0 {
+							createAlbum.MusicianID = pgtype.Int4{
+								Int32: musician.ID,
 								Valid: true,
 							}
 						}
@@ -201,13 +213,23 @@ func (app *Application) ScanMusicLibrary() {
 					Composer:    trackMetadata.Format.Tags.Composer,
 					Copyright:   trackMetadata.Format.Tags.Copyright,
 					Container:   ext,
-					ReleaseDate: album.ReleaseDate,
+					ReleaseDate: date,
 					FilePath:    path,
 					FileName:    entry.Name(),
-					AlbumID: pgtype.Int4{
+				}
+
+				if musician.ID != 0 {
+					createTrack.MusicianID = pgtype.Int4{
+						Int32: musician.ID,
+						Valid: true,
+					}
+				}
+
+				if album.ID != 0 {
+					createTrack.AlbumID = pgtype.Int4{
 						Int32: album.ID,
 						Valid: true,
-					},
+					}
 				}
 
 				duration, err := strconv.ParseFloat(trackMetadata.Format.Duration, 64)

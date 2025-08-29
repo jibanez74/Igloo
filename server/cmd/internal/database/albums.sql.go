@@ -108,3 +108,28 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID string) (Al
 	)
 	return i, err
 }
+
+const getAlbumUnknown = `-- name: GetAlbumUnknown :one
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, disc_count, cover, musician_id FROM albums WHERE title = 'unknown'
+`
+
+func (q *Queries) GetAlbumUnknown(ctx context.Context) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumUnknown)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.SortTitle,
+		&i.SpotifyID,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.SpotifyPopularity,
+		&i.TotalTracks,
+		&i.DiscCount,
+		&i.Cover,
+		&i.MusicianID,
+	)
+	return i, err
+}

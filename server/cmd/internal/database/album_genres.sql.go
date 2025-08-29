@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const checkAlbumGenreExist = `-- name: CheckAlbumGenreExist :one
+SELECT EXISTS(
+    SELECT 1 FROM album_genres WHERE album_id = $1 AND genre_id = $2
+) as exists
+`
+
+type CheckAlbumGenreExistParams struct {
+	AlbumID int32 `json:"album_id"`
+	GenreID int32 `json:"genre_id"`
+}
+
+func (q *Queries) CheckAlbumGenreExist(ctx context.Context, arg CheckAlbumGenreExistParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkAlbumGenreExist, arg.AlbumID, arg.GenreID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createAlbumGenre = `-- name: CreateAlbumGenre :exec
 INSERT INTO album_genres (
     album_id, genre_id
@@ -25,69 +43,4 @@ type CreateAlbumGenreParams struct {
 func (q *Queries) CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error {
 	_, err := q.db.Exec(ctx, createAlbumGenre, arg.AlbumID, arg.GenreID)
 	return err
-}
-
-const deleteAlbumGenre = `-- name: DeleteAlbumGenre :exec
-DELETE FROM album_genres
-WHERE album_id = $1 AND genre_id = $2
-`
-
-type DeleteAlbumGenreParams struct {
-	AlbumID int32 `json:"album_id"`
-	GenreID int32 `json:"genre_id"`
-}
-
-func (q *Queries) DeleteAlbumGenre(ctx context.Context, arg DeleteAlbumGenreParams) error {
-	_, err := q.db.Exec(ctx, deleteAlbumGenre, arg.AlbumID, arg.GenreID)
-	return err
-}
-
-const getAlbumGenres = `-- name: GetAlbumGenres :many
-SELECT album_id, genre_id FROM album_genres
-WHERE album_id = $1
-`
-
-func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int32) ([]AlbumGenre, error) {
-	rows, err := q.db.Query(ctx, getAlbumGenres, albumID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AlbumGenre{}
-	for rows.Next() {
-		var i AlbumGenre
-		if err := rows.Scan(&i.AlbumID, &i.GenreID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getGenreAlbums = `-- name: GetGenreAlbums :many
-SELECT album_id, genre_id FROM album_genres
-WHERE genre_id = $1
-`
-
-func (q *Queries) GetGenreAlbums(ctx context.Context, genreID int32) ([]AlbumGenre, error) {
-	rows, err := q.db.Query(ctx, getGenreAlbums, genreID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AlbumGenre{}
-	for rows.Next() {
-		var i AlbumGenre
-		if err := rows.Scan(&i.AlbumID, &i.GenreID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

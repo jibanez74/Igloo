@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const checkTrackGenreExists = `-- name: CheckTrackGenreExists :one
+SELECT EXISTS(
+    SELECT 1 FROM track_genres WHERE track_id = $1 AND genre_id = $2
+) as exists
+`
+
+type CheckTrackGenreExistsParams struct {
+	TrackID int32 `json:"track_id"`
+	GenreID int32 `json:"genre_id"`
+}
+
+func (q *Queries) CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkTrackGenreExists, arg.TrackID, arg.GenreID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createTrackGenre = `-- name: CreateTrackGenre :exec
 INSERT INTO track_genres (
     track_id, genre_id
@@ -25,69 +43,4 @@ type CreateTrackGenreParams struct {
 func (q *Queries) CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error {
 	_, err := q.db.Exec(ctx, createTrackGenre, arg.TrackID, arg.GenreID)
 	return err
-}
-
-const deleteTrackGenre = `-- name: DeleteTrackGenre :exec
-DELETE FROM track_genres
-WHERE track_id = $1 AND genre_id = $2
-`
-
-type DeleteTrackGenreParams struct {
-	TrackID int32 `json:"track_id"`
-	GenreID int32 `json:"genre_id"`
-}
-
-func (q *Queries) DeleteTrackGenre(ctx context.Context, arg DeleteTrackGenreParams) error {
-	_, err := q.db.Exec(ctx, deleteTrackGenre, arg.TrackID, arg.GenreID)
-	return err
-}
-
-const getGenreTracks = `-- name: GetGenreTracks :many
-SELECT track_id, genre_id FROM track_genres
-WHERE genre_id = $1
-`
-
-func (q *Queries) GetGenreTracks(ctx context.Context, genreID int32) ([]TrackGenre, error) {
-	rows, err := q.db.Query(ctx, getGenreTracks, genreID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []TrackGenre{}
-	for rows.Next() {
-		var i TrackGenre
-		if err := rows.Scan(&i.TrackID, &i.GenreID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getTrackGenres = `-- name: GetTrackGenres :many
-SELECT track_id, genre_id FROM track_genres
-WHERE track_id = $1
-`
-
-func (q *Queries) GetTrackGenres(ctx context.Context, trackID int32) ([]TrackGenre, error) {
-	rows, err := q.db.Query(ctx, getTrackGenres, trackID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []TrackGenre{}
-	for rows.Next() {
-		var i TrackGenre
-		if err := rows.Scan(&i.TrackID, &i.GenreID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

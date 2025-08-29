@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const checkMusicianGenreExist = `-- name: CheckMusicianGenreExist :one
+SELECT EXISTS(
+    SELECT 1 FROM musician_genres WHERE musician_id = $1 AND genre_id = $2
+) as exists
+`
+
+type CheckMusicianGenreExistParams struct {
+	MusicianID int32 `json:"musician_id"`
+	GenreID    int32 `json:"genre_id"`
+}
+
+func (q *Queries) CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkMusicianGenreExist, arg.MusicianID, arg.GenreID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createMusicianGenre = `-- name: CreateMusicianGenre :exec
 INSERT INTO musician_genres (
     musician_id, genre_id

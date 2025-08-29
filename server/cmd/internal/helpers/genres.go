@@ -59,7 +59,7 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, data *SaveGenresPara
 	}
 
 	if genre.GenreType == "music" {
-		err = qtx.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{
+		exist, err = qtx.CheckMusicianGenreExist(ctx, database.CheckMusicianGenreExistParams{
 			MusicianID: data.MusicianID,
 			GenreID:    genre.ID,
 		})
@@ -68,7 +68,18 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, data *SaveGenresPara
 			return err
 		}
 
-		err = qtx.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{
+		if !exist {
+			err = qtx.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{
+				MusicianID: data.MusicianID,
+				GenreID:    genre.ID,
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+
+		exist, err = qtx.CheckAlbumGenreExist(ctx, database.CheckAlbumGenreExistParams{
 			AlbumID: data.AlbumID,
 			GenreID: genre.ID,
 		})
@@ -77,7 +88,18 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, data *SaveGenresPara
 			return err
 		}
 
-		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
+		if !exist {
+			err = qtx.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{
+				AlbumID: data.AlbumID,
+				GenreID: genre.ID,
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+
+		exist, err = qtx.CheckTrackGenreExists(ctx, database.CheckTrackGenreExistsParams{
 			TrackID: data.TrackID,
 			GenreID: genre.ID,
 		})
@@ -85,16 +107,40 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, data *SaveGenresPara
 		if err != nil {
 			return err
 		}
+
+		if !exist {
+			err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
+				TrackID: data.TrackID,
+				GenreID: genre.ID,
+			})
+
+			if err != nil {
+				return err
+			}
+
+		}
+
 	}
 
 	if genre.GenreType == "movie" {
-		err = qtx.AddMovieGenre(ctx, database.AddMovieGenreParams{
+		exist, err = qtx.CheckMovieGenreExists(ctx, database.CheckMovieGenreExistsParams{
 			MovieID: data.MovieID,
 			GenreID: genre.ID,
 		})
 
 		if err != nil {
 			return err
+		}
+
+		if !exist {
+			err = qtx.CreateMovieGenre(ctx, database.CreateMovieGenreParams{
+				MovieID: data.MovieID,
+				GenreID: genre.ID,
+			})
+
+			if err != nil {
+				return err
+			}
 		}
 	}
 

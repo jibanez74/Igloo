@@ -1,10 +1,7 @@
--- name: GetTrackGenres :many
-SELECT * FROM track_genres
-WHERE track_id = $1;
-
--- name: GetGenreTracks :many
-SELECT * FROM track_genres
-WHERE genre_id = $1;
+-- name: CheckTrackGenreExists :one
+SELECT EXISTS(
+    SELECT 1 FROM track_genres WHERE track_id = $1 AND genre_id = $2
+) as exists;
 
 -- name: CreateTrackGenre :exec
 INSERT INTO track_genres (
@@ -12,8 +9,3 @@ INSERT INTO track_genres (
 ) VALUES (
     $1, $2
 );
-
--- name: DeleteTrackGenre :exec
-DELETE FROM track_genres
-WHERE track_id = $1 AND genre_id = $2;
-
