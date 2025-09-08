@@ -1,7 +1,7 @@
 -- name: CreateSubtitle :one
 INSERT INTO subtitles (
     title,
-    index,
+    subtitle_index,
     codec,
     language,
     movie_id

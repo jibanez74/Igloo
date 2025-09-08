@@ -1,7 +1,7 @@
 -- name: CreateAudioStream :one
 INSERT INTO audio_streams (
     title,
-    index,
+    audio_index,
     codec,
     channels,
     channel_layout,

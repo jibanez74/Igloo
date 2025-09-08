@@ -1,16 +1,11 @@
 package helpers
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 )
 
 func SplitSliceBySlash(str string) ([]int32, error) {
-	if str == "" {
-		return nil, errors.New("got empty string iSplitSliceBySlash function")
-	}
-
 	if !strings.Contains(str, "/") {
 		return []int32{1, 1}, nil
 	}

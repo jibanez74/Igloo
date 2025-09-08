@@ -146,3 +146,24 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, data *SaveGenresPara
 
 	return nil
 }
+
+func ParseGenres(genreString string) []string {
+  if genreString == "" {
+    return nil
+  }
+
+  if !strings.Contains(genreString, ",") {
+    return []string{strings.TrimSpace(genreString)}
+  }
+
+  parts := strings.Split(genreString, ",")
+  genres := make([]string, 0, len(parts))
+
+  for _, part := range parts {
+    if trimmed := strings.TrimSpace(part); trimmed != "" {
+      genres = append(genres, trimmed)
+    }
+  }
+
+  return genres
+}

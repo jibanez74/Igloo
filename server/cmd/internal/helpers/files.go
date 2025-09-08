@@ -14,7 +14,6 @@ type TitleYearResponse struct {
 
 var ValidAudioExtensions = map[string]bool{
 	"mp3":  true,
-	"aac":  true,
 	"flac": true,
 	"m4a":  true,
 }
@@ -25,36 +24,6 @@ var ValidVideoExtensions = map[string]bool{
 	"mkv": true,
 	"mov": true,
 	"m4v": true,
-}
-
-func IsVideoFile(filePath string) bool {
-	if filePath == "" {
-		return false
-	}
-
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if ext == "" {
-		return false
-	}
-
-	extWithoutDot := strings.TrimPrefix(ext, ".")
-
-	return ValidVideoExtensions[extWithoutDot]
-}
-
-func IsTrackFile(filePath string) bool {
-	if filePath == "" {
-		return false
-	}
-
-	ext := strings.ToLower(filepath.Ext(filePath))
-	if ext == "" {
-		return false
-	}
-
-	extWithoutDot := strings.TrimPrefix(ext, ".")
-
-	return ValidAudioExtensions[extWithoutDot]
 }
 
 func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
@@ -84,4 +53,14 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 		Title: title,
 		Year:  year,
 	}, nil
+}
+
+func GetFileExtension(path string) string {
+	ext := filepath.Ext(path)
+
+	if len(ext) == 0 {
+		return ""
+	}
+
+	return ext[1:]
 }

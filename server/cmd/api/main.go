@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -67,8 +68,8 @@ func InitApp() (*Application, error) {
 		return nil, err
 	}
 
-	if app.Settings.FfprobePath != "" {
-		f, err := ffprobe.New(app.Settings.FfprobePath)
+	if app.Settings.FfprobePath.Valid && app.Settings.FfprobePath.String != "" {
+		f, err := ffprobe.New(app.Settings.FfprobePath.String)
 		if err != nil {
 			return nil, err
 		}
@@ -76,8 +77,8 @@ func InitApp() (*Application, error) {
 		app.Ffprobe = f
 	}
 
-	if app.Settings.TmdbApiKey != "" {
-		t, err := tmdb.New(app.Settings.TmdbApiKey)
+	if app.Settings.TmdbApiKey.Valid && app.Settings.TmdbApiKey.String != "" {
+		t, err := tmdb.New(app.Settings.TmdbApiKey.String)
 		if err != nil {
 			return nil, err
 		}
@@ -85,8 +86,19 @@ func InitApp() (*Application, error) {
 		app.Tmdb = t
 	}
 
-	if app.Settings.SpotifyClientID != "" || app.Settings.SpotifyClientSecret != "" {
-		s, err := spotify.New(app.Settings.SpotifyClientID, app.Settings.SpotifyClientSecret)
+	if (app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "") ||
+		(app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "") {
+		clientID := ""
+		clientSecret := ""
+
+		if app.Settings.SpotifyClientID.Valid {
+			clientID = app.Settings.SpotifyClientID.String
+		}
+		if app.Settings.SpotifyClientSecret.Valid {
+			clientSecret = app.Settings.SpotifyClientSecret.String
+		}
+
+		s, err := spotify.New(clientID, clientSecret)
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +106,7 @@ func InitApp() (*Application, error) {
 		app.Spotify = s
 	}
 
-	if app.Settings.MusicDir != "" {
+	if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
 		go app.ScanMusicLibrary()
 	}
 
@@ -239,31 +251,38 @@ func (app *Application) InitSettings(ctx context.Context) error {
 			s.StaticDir = "static"
 		}
 
-		s.TranscodeDir = os.Getenv("TRANSCODE_DIR")
-		if s.TranscodeDir == "" {
+		transcodeDir := os.Getenv("TRANSCODE_DIR")
+		if transcodeDir == "" {
 			log.Println("Fail to get TRANSCODE_DIR from environment variables.  Transcoding directory will be placed on the current working directory.")
-			s.TranscodeDir = "transcode"
+			transcodeDir = "transcode"
 		}
+		s.TranscodeDir = pgtype.Text{String: transcodeDir, Valid: true}
 
 		s.BaseUrl = os.Getenv("BASE_URL")
 		if s.BaseUrl == "" {
 			s.BaseUrl = "localhost"
 		}
 
-		s.FfmpegPath = os.Getenv("FFMPEG_PATH")
-		s.FfprobePath = os.Getenv("FFPROBE_PATH")
-		s.TmdbApiKey = os.Getenv("TMDB_API_KEY")
-		s.JellyfinToken = os.Getenv("JELLYFIN_TOKEN")
-		s.MoviesDir = os.Getenv("MOVIES_DIR")
-		s.MusicDir = os.Getenv("MUSIC_DIR")
-		s.TvshowsDir = os.Getenv("TVSHOWS_DIR")
+		// Helper function to create pgtype.Text from environment variable
+		createTextFromEnv := func(envVar string) pgtype.Text {
+			value := os.Getenv(envVar)
+			return pgtype.Text{String: value, Valid: value != ""}
+		}
+
+		s.FfmpegPath = createTextFromEnv("FFMPEG_PATH")
+		s.FfprobePath = createTextFromEnv("FFPROBE_PATH")
+		s.TmdbApiKey = createTextFromEnv("TMDB_API_KEY")
+		s.JellyfinToken = createTextFromEnv("JELLYFIN_TOKEN")
+		s.MoviesDir = createTextFromEnv("MOVIES_DIR")
+		s.MusicDir = createTextFromEnv("MUSIC_DIR")
+		s.TvshowsDir = createTextFromEnv("TVSHOWS_DIR")
 		s.MoviesImgDir = os.Getenv("MOVIES_IMG_DIR")
 		s.StudiosImgDir = os.Getenv("STUDIOS_IMG_DIR")
 		s.ArtistsImgDir = os.Getenv("ARTISTS_IMG_DIR")
 		s.AvatarImgDir = os.Getenv("AVATAR_IMG_DIR")
-		s.PlexToken = os.Getenv("PLEX_TOKEN")
-		s.SpotifyClientID = os.Getenv("SPOTIFY_CLIENT_ID")
-		s.SpotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
+		s.PlexToken = createTextFromEnv("PLEX_TOKEN")
+		s.SpotifyClientID = createTextFromEnv("SPOTIFY_CLIENT_ID")
+		s.SpotifyClientSecret = createTextFromEnv("SPOTIFY_CLIENT_SECRET")
 
 		err = app.InitDirs(&s)
 		if err != nil {

@@ -1,5 +1,13 @@
--- name: GetAlbumUnknown :one
-SELECT * FROM albums WHERE title = 'unknown';
+-- name: GetAlbumCount :one
+SELECT COUNT(*) FROM albums;
+
+-- name: CheckAlbumExistsBySpotifyID :one
+SELECT EXISTS(
+    SELECT 1 FROM albums WHERE spotify_id = $1
+) as exists;
+
+-- name: GetAlbumByTitle :one
+SELECT * FROM albums Where title = $1;
 
 -- name: GetAlbumBySpotifyID :one
 SELECT * FROM albums WHERE spotify_id = $1 LIMIT 1;
@@ -19,8 +27,3 @@ INSERT INTO albums (
     $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
 RETURNING *;
-
--- name: CheckAlbumExistsBySpotifyID :one
-SELECT EXISTS(
-    SELECT 1 FROM albums WHERE spotify_id = $1
-) as exists;

@@ -1,7 +1,7 @@
 -- name: CreateVideoStream :one
 INSERT INTO video_streams (
     title,
-    index,
+    video_index,
     duration,
     profile,
     aspect_ratio,
@@ -29,4 +29,4 @@ RETURNING *;
 -- name: GetMovieVideoStreams :many
 SELECT * FROM video_streams
 WHERE movie_id = $1
-ORDER BY index;
+ORDER BY video_index;
