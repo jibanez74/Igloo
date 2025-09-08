@@ -2,15 +2,11 @@ package ffprobe
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"os/exec"
 )
 
 func (f *Ffprobe) GetTrackMetadata(trackPath string) (*TrackFfprobeResult, error) {
-	if trackPath == "" {
-		return nil, errors.New("got empty track file path in GetTrackMetadata function")
-	}
-
 	cmd := exec.Command(f.bin,
 		"-v", "quiet",
 		"-print_format", "json",
@@ -28,6 +24,10 @@ func (f *Ffprobe) GetTrackMetadata(trackPath string) (*TrackFfprobeResult, error
 	err = json.Unmarshal(output, &probeResult)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(probeResult.Streams) == 0 {
+		return nil, fmt.Errorf("fail to get any streams for %s", trackPath)
 	}
 
 	return &probeResult, nil

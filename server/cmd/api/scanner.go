@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -36,11 +36,12 @@ func (app *Application) ScanMusicLibrary() {
 
 		if helpers.ValidAudioExtensions[ext] {
 			exist, err := qtx.CheckTrackExistByFilePath(ctx, path)
-			if err != nil {
+			if err != nil && err != pgx.ErrNoRows {
 				return err
 			}
 
 			if !exist {
+
 				metadata, err := app.Ffprobe.GetTrackMetadata(path)
 				if err != nil {
 					return err
@@ -88,11 +89,9 @@ func (app *Application) ScanMusicLibrary() {
 
 				trackIndex, err := helpers.SplitSliceBySlash(metadata.Format.Tags.Track)
 				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to get track index for track %s\n%s", createTrack.Title, err.Error()))
-					createTrack.TrackIndex = 0
-				} else {
-					createTrack.TrackIndex = trackIndex[0]
+					return err
 				}
+				createTrack.TrackIndex = trackIndex[0]
 
 				disc, err := helpers.SplitSliceBySlash(metadata.Format.Tags.Disc)
 				if err != nil {
@@ -170,9 +169,34 @@ func (app *Application) ScanMusicLibrary() {
 					}
 				}
 
-				_, err = qtx.CreateTrack(ctx, createTrack)
+				track, err := qtx.CreateTrack(ctx, createTrack)
 				if err != nil {
 					return err
+				}
+
+				if metadata.Format.Tags.Genre != "" {
+					genreList := helpers.ParseGenres(metadata.Format.Tags.Genre)
+
+					for _, g := range genreList {
+						data := helpers.SaveGenresParams{
+							Tag:       g,
+							GenreType: "music",
+							TrackID:   track.ID,
+						}
+
+						if musician != nil {
+							data.MusicianID = musician.ID
+						}
+
+						if album != nil {
+							data.AlbumID = album.ID
+						}
+
+						err = helpers.SaveGenres(ctx, qtx, &data)
+						if err != nil {
+							app.Logger.Error(fmt.Sprintf("fail to save genre %s\n%s", g, err.Error()))
+						}
+					}
 				}
 
 			}
@@ -198,7 +222,7 @@ func (app *Application) ScanMusicLibrary() {
 func (app *Application) GetOrCreateMusician(ctx context.Context, qtx *database.Queries, metadata *ffprobe.TrackFfprobeResult) (*database.Musician, error) {
 	musician, err := qtx.GetMusicianByName(ctx, metadata.Format.Tags.Artist)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			createMusician := database.CreateMusicianParams{
 				Name:     metadata.Format.Tags.Artist,
 				SortName: metadata.Format.Tags.SortArtist,
@@ -233,7 +257,7 @@ func (app *Application) GetOrCreateMusician(ctx context.Context, qtx *database.Q
 func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Queries, metadata *ffprobe.TrackFfprobeResult, musicianID int32) (*database.Album, error) {
 	album, err := qtx.GetAlbumByTitle(ctx, metadata.Format.Tags.Album)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			createAlbum := database.CreateAlbumParams{
 				Title:       metadata.Format.Tags.Album,
 				SortTitle:   metadata.Format.Tags.SortAlbum,
