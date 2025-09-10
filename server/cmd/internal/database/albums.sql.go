@@ -29,6 +29,7 @@ INSERT INTO albums (
     title,
     sort_title,
     release_date,
+    year,
     spotify_id,
     spotify_popularity,
     total_tracks,
@@ -36,7 +37,7 @@ INSERT INTO albums (
     cover,
     disc_count
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
 RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, disc_count, cover, musician_id
 `
@@ -45,6 +46,7 @@ type CreateAlbumParams struct {
 	Title             string      `json:"title"`
 	SortTitle         string      `json:"sort_title"`
 	ReleaseDate       pgtype.Date `json:"release_date"`
+	Year              pgtype.Int4 `json:"year"`
 	SpotifyID         pgtype.Text `json:"spotify_id"`
 	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
 	TotalTracks       int32       `json:"total_tracks"`
@@ -58,6 +60,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.Title,
 		arg.SortTitle,
 		arg.ReleaseDate,
+		arg.Year,
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,

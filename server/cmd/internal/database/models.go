@@ -153,7 +153,7 @@ type Musician struct {
 	SortName          string             `json:"sort_name"`
 	Summary           pgtype.Text        `json:"summary"`
 	SpotifyID         pgtype.Text        `json:"spotify_id"`
-	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
+	SpotifyPopularity int32              `json:"spotify_popularity"`
 	SpotifyFollowers  int32              `json:"spotify_followers"`
 	Thumb             pgtype.Text        `json:"thumb"`
 }

@@ -43,7 +43,7 @@ type CreateMusicianParams struct {
 	Name              string      `json:"name"`
 	SortName          string      `json:"sort_name"`
 	SpotifyID         pgtype.Text `json:"spotify_id"`
-	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
+	SpotifyPopularity int32       `json:"spotify_popularity"`
 	SpotifyFollowers  int32       `json:"spotify_followers"`
 	Summary           pgtype.Text `json:"summary"`
 	Thumb             pgtype.Text `json:"thumb"`

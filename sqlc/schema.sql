@@ -91,8 +91,8 @@ CREATE TABLE musicians (
   name VARCHAR(255) NOT NULL,
   sort_name VARCHAR(255) NOT NULL,
   summary TEXT,
-  spotify_id VARCHAR(255) UNIQUE,
-  spotify_popularity INTEGER CHECK (spotify_popularity >= 0),
+  spotify_id VARCHAR(255),
+  spotify_popularity INTEGER NOT NULL DEFAULT 0 CHECK (spotify_popularity >= 0),
   spotify_followers INTEGER NOT NULL DEFAULT 0 CHECK (spotify_followers >= 0),
   thumb TEXT
 );
@@ -103,7 +103,7 @@ CREATE TABLE albums (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   title VARCHAR(100) NOT NULL,
   sort_title VARCHAR(100) NOT NULL,
-  spotify_id VARCHAR(255) UNIQUE,
+  spotify_id VARCHAR(255),
   release_date DATE,
   year INTEGER,
   spotify_popularity INTEGER CHECK (spotify_popularity >= 0),

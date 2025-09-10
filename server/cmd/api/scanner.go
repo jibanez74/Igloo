@@ -41,7 +41,6 @@ func (app *Application) ScanMusicLibrary() {
 			}
 
 			if !exist {
-
 				metadata, err := app.Ffprobe.GetTrackMetadata(path)
 				if err != nil {
 					return err
@@ -101,13 +100,16 @@ func (app *Application) ScanMusicLibrary() {
 					createTrack.Disc = disc[0]
 				}
 
-				date, err := helpers.FormatDate(metadata.Format.Tags.Date)
-				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to get release date for track %s\n%s", createTrack.Title, err.Error()))
-				} else {
-					createTrack.ReleaseDate = pgtype.Date{
-						Time:  date,
-						Valid: true,
+				if metadata.Format.Tags.Date != "" {
+					date, err := helpers.FormatDate(metadata.Format.Tags.Date)
+					if err != nil {
+						app.Logger.Error(fmt.Sprintf("fail to get release date for track %s\n%s", createTrack.Title, err.Error()))
+						createTrack.ReleaseDate = album.ReleaseDate
+					} else {
+						createTrack.ReleaseDate = pgtype.Date{
+							Time:  date,
+							Valid: true,
+						}
 					}
 				}
 
@@ -233,7 +235,7 @@ func (app *Application) GetOrCreateMusician(ctx context.Context, qtx *database.Q
 				app.Logger.Error(fmt.Sprintf("fail to get musician %s details from spotify api\n%s", createMusician.Name, err.Error()))
 			} else {
 				createMusician.SpotifyFollowers = int32(artist.Followers.Count)
-				createMusician.SpotifyPopularity = pgtype.Int4{Int32: int32(artist.Popularity), Valid: true}
+				createMusician.SpotifyPopularity = int32(artist.Popularity)
 				createMusician.SpotifyID = pgtype.Text{String: artist.ID.String(), Valid: true}
 				createMusician.Summary = pgtype.Text{String: fmt.Sprintf("%s is a musician with %d followers and with a popularity on spotify of %d", artist.Name, artist.Followers.Count, artist.Popularity), Valid: true}
 
@@ -306,6 +308,11 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				if !date.IsZero() {
 					createAlbum.ReleaseDate = pgtype.Date{
 						Time:  date,
+						Valid: true,
+					}
+					// Extract year from the date
+					createAlbum.Year = pgtype.Int4{
+						Int32: int32(date.Year()),
 						Valid: true,
 					}
 				}

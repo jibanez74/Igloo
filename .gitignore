@@ -1,7 +1,8 @@
 /server/static/*
 /server/logs/*
 /server/.env*
-/server/pg_data
+/server/pg_data/*
+/server/redis_data/*
 .DS_Store
 .vscode
 .idea

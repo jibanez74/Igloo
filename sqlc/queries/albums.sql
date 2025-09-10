@@ -17,6 +17,7 @@ INSERT INTO albums (
     title,
     sort_title,
     release_date,
+    year,
     spotify_id,
     spotify_popularity,
     total_tracks,
@@ -24,6 +25,6 @@ INSERT INTO albums (
     cover,
     disc_count
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
 RETURNING *;
