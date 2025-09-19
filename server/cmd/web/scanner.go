@@ -47,7 +47,7 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 				Timestamp: time.Now(),
 			})
 
-			return ni
+			return nil
 		}
 
 		ext := helpers.GetFileExtension(path)
@@ -55,7 +55,6 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 			return nil
 		}
 
-		// Process individual file with error isolation
 		if err := app.processTrackWithErrorHandling(ctx, qtx, path, result); err != nil {
 			// Error already added to result.Errors in processTrackWithErrorHandling
 			return nil // Continue processing
@@ -255,7 +254,7 @@ func (app *Application) processTrackWithErrorHandling(ctx context.Context, qtx *
 	}
 
 	// Process track with existing logic but wrapped in error handling
-	if err := app.processTrackMetadata(ctx, qtx, path, metadata, result); err != nil {
+	if err := app.processTrackMetadata(ctx, qtx, path, metadata); err != nil {
 		result.Errors = append(result.Errors, ScanError{
 			FilePath:  path,
 			Error:     err,
@@ -268,7 +267,7 @@ func (app *Application) processTrackWithErrorHandling(ctx context.Context, qtx *
 	return nil
 }
 
-func (app *Application) processTrackMetadata(ctx context.Context, qtx *database.Queries, path string, metadata *ffprobe.TrackFfprobeResult, result *ScanResult) error {
+func (app *Application) processTrackMetadata(ctx context.Context, qtx *database.Queries, path string, metadata *ffprobe.TrackFfprobeResult) error {
 	var musician *database.Musician
 
 	if metadata.Format.Tags.Artist != "" {
