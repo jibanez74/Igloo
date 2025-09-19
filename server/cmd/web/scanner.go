@@ -23,22 +23,7 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 
 	ctx := context.Background()
 
-	tx, err := app.Db.Begin(ctx)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to start database transaction for ScanMusicLibrary function\n%s", err.Error()))
-		result.Errors = append(result.Errors, ScanError{
-			Error:     err,
-			ErrorType: "database",
-			Timestamp: time.Now(),
-		})
-
-		return result
-	}
-	defer tx.Rollback(ctx)
-
-	qtx := app.Queries.WithTx(tx)
-
-	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			result.Errors = append(result.Errors, ScanError{
 				FilePath:  path,
@@ -55,12 +40,39 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 			return nil
 		}
 
-		if err := app.processTrackWithErrorHandling(ctx, qtx, path, result); err != nil {
-			// Error already added to result.Errors in processTrackWithErrorHandling
-			return nil // Continue processing
+		tx, err := app.Db.Begin(ctx)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("fail to start database transaction for ScanMusicLibrary function\n%s", err.Error()))
+			result.Errors = append(result.Errors, ScanError{
+				Error:     err,
+				ErrorType: "database",
+				Timestamp: time.Now(),
+			})
+
+			return nil
+		}
+		defer tx.Rollback(ctx)
+
+		qtx := app.Queries.WithTx(tx)
+
+		err = app.processTrackWithErrorHandling(ctx, qtx, path, result)
+		if err != nil {
+			return nil
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil {
+			result.Errors = append(result.Errors, ScanError{
+				Error:     err,
+				ErrorType: "database",
+				Timestamp: time.Now(),
+			})
+
+			return nil
 		}
 
 		result.Processed++
+
 		return nil
 	})
 
@@ -71,17 +83,7 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 			ErrorType: "filesystem",
 			Timestamp: time.Now(),
 		})
-		return result
-	}
 
-	// Commit transaction
-	if err = tx.Commit(ctx); err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to commit database transaction\n%s", err.Error()))
-		result.Errors = append(result.Errors, ScanError{
-			Error:     err,
-			ErrorType: "database",
-			Timestamp: time.Now(),
-		})
 		return result
 	}
 
