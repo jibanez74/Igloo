@@ -12,10 +12,10 @@ func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArti
 		return nil, fmt.Errorf("artist name cannot be empty")
 	}
 
-	// Normalize the cache key for better hit rates
 	normalizedKey := normalizeCacheKey(artistName)
 
-	if cachedArtist, exists := s.artistCache[normalizedKey]; exists {
+	cachedArtist, exists := s.artistCache[normalizedKey]
+	if exists {
 		return cachedArtist, nil
 	}
 

@@ -87,6 +87,8 @@ func (app *Application) ScanMusicLibrary() *ScanResult {
 		return result
 	}
 
+	app.Spotify.ClearCaches()
+
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(result.StartTime)
 

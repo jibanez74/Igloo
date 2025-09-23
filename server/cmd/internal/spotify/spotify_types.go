@@ -7,6 +7,7 @@ import (
 type SpotifyInterface interface {
 	SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error)
 	SearchArtistByName(artistName string) (*spotify.FullArtist, error)
+	ClearCaches()
 }
 
 type SpotifyClient struct {

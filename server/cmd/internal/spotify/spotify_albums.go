@@ -12,10 +12,10 @@ func (s *SpotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlb
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
 
-	// Normalize the cache key for better hit rates
 	normalizedKey := normalizeCacheKey(query)
 
-	if cachedAlbum, exists := s.albumCache[normalizedKey]; exists {
+	cachedAlbum, exists := s.albumCache[normalizedKey]
+	if exists {
 		return cachedAlbum, nil
 	}
 
