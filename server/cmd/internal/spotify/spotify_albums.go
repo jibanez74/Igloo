@@ -8,6 +8,17 @@ import (
 )
 
 func (s *SpotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error) {
+	if query == "" {
+		return nil, fmt.Errorf("search query cannot be empty")
+	}
+
+	// Normalize the cache key for better hit rates
+	normalizedKey := normalizeCacheKey(query)
+
+	if cachedAlbum, exists := s.albumCache[normalizedKey]; exists {
+		return cachedAlbum, nil
+	}
+
 	ctx := context.Background()
 
 	results, err := s.client.Search(ctx, query, spotify.SearchTypeAlbum, spotify.Limit(1))
@@ -21,21 +32,13 @@ func (s *SpotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlb
 
 	albumID := results.Albums.Albums[0].ID.String()
 
-	if cachedAlbum, exists := s.albumCache[albumID]; exists {
-		return cachedAlbum, nil
-	}
-
-	// Get full album details
 	album, err := s.client.GetAlbum(ctx, spotify.ID(albumID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get album details for ID %s: %w", albumID, err)
 	}
 
-	// Clean cache if needed before adding new item
 	s.cleanAlbumCache()
-
-	// Cache the result
-	s.albumCache[albumID] = album
+	s.albumCache[normalizedKey] = album
 
 	return album, nil
 }

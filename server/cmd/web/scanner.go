@@ -109,6 +109,7 @@ func (app *Application) GetOrCreateMusician(ctx context.Context, qtx *database.Q
 			if err != nil {
 				app.Logger.Error(fmt.Sprintf("fail to get musician %s details from spotify api\n%s", createMusician.Name, err.Error()))
 			} else {
+				createMusician.Name = artist.Name
 				createMusician.SpotifyFollowers = int32(artist.Followers.Count)
 				createMusician.SpotifyPopularity = int32(artist.Popularity)
 				createMusician.SpotifyID = pgtype.Text{String: artist.ID.String(), Valid: true}
@@ -167,6 +168,8 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 			if err != nil {
 				app.Logger.Error(fmt.Sprintf("fail to get details for album %s from spotify api\n%s", createAlbum.Title, err.Error()))
 			} else {
+				createAlbum.Title = albumDetails.Name
+
 				createAlbum.SpotifyID = pgtype.Text{
 					String: albumDetails.ID.String(),
 					Valid:  true,
@@ -185,7 +188,6 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 						Time:  date,
 						Valid: true,
 					}
-					// Extract year from the date
 					createAlbum.Year = pgtype.Int4{
 						Int32: int32(date.Year()),
 						Valid: true,

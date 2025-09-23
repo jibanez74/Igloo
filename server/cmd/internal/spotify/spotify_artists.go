@@ -7,28 +7,18 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-func (s *SpotifyClient) GetArtistBySpotifyID(artistID string) (*spotify.FullArtist, error) {
-	if cachedArtist, exists := s.artistCache[artistID]; exists {
+func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
+	if artistName == "" {
+		return nil, fmt.Errorf("artist name cannot be empty")
+	}
+
+	// Normalize the cache key for better hit rates
+	normalizedKey := normalizeCacheKey(artistName)
+
+	if cachedArtist, exists := s.artistCache[normalizedKey]; exists {
 		return cachedArtist, nil
 	}
 
-	ctx := context.Background()
-
-	artist, err := s.client.GetArtist(ctx, spotify.ID(artistID))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get artist with ID %s: %w", artistID, err)
-	}
-
-	// Clean cache if needed before adding new item
-	s.cleanArtistCache()
-
-	// Cache the result
-	s.artistCache[artistID] = artist
-
-	return artist, nil
-}
-
-func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
 	ctx := context.Background()
 
 	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(1))
@@ -41,12 +31,8 @@ func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArti
 	}
 
 	artist := &results.Artists.Artists[0]
-
-	// Clean cache if needed before adding new item
 	s.cleanArtistCache()
-
-	// Cache the result using the artist ID as key
-	s.artistCache[artist.ID.String()] = artist
+	s.artistCache[normalizedKey] = artist
 
 	return artist, nil
 }
