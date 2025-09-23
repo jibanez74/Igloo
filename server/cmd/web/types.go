@@ -4,7 +4,6 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/logger"
-	"igloo/cmd/internal/redis"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 	"time"
@@ -21,7 +20,6 @@ type Application struct {
 	Tmdb     tmdb.TmdbInterface
 	Spotify  spotify.SpotifyInterface
 	Ffprobe  ffprobe.FfprobeInterface
-	Redis    *redis.RedisClient
 	Watcher  *fsnotify.Watcher
 }
 

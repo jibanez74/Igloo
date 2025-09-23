@@ -18,28 +18,3 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  redis:
-    image: redis:alpine
-    container_name: igloo_redis
-    env_file:
-      - .env
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - "${REDIS_DATA_PATH:-./redis_data}:/data"
-    command: >
-      sh -c "
-        if [ -n \"$$REDIS_PASSWORD\" ]; then
-          redis-server --requirepass $$REDIS_PASSWORD --appendonly yes
-        else
-          redis-server --appendonly yes
-        fi
-      "
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5

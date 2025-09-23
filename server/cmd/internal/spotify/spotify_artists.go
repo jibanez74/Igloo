@@ -2,15 +2,14 @@ package spotify
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/zmb3/spotify/v2"
 )
 
 func (s *SpotifyClient) GetArtistBySpotifyID(artistID string) (*spotify.FullArtist, error) {
-	if artistID == "" {
-		return nil, errors.New("artist ID cannot be empty")
+	if cachedArtist, exists := s.artistCache[artistID]; exists {
+		return cachedArtist, nil
 	}
 
 	ctx := context.Background()
@@ -20,53 +19,16 @@ func (s *SpotifyClient) GetArtistBySpotifyID(artistID string) (*spotify.FullArti
 		return nil, fmt.Errorf("failed to get artist with ID %s: %w", artistID, err)
 	}
 
+	// Clean cache if needed before adding new item
+	s.cleanArtistCache()
+
+	// Cache the result
+	s.artistCache[artistID] = artist
+
 	return artist, nil
 }
 
-func (s *SpotifyClient) GetArtistAlbums(artistID string, limit int) ([]spotify.SimpleAlbum, error) {
-	if artistID == "" {
-		return nil, errors.New("artist ID cannot be empty")
-	}
-
-	if limit <= 0 {
-		limit = 20
-	}
-
-	ctx := context.Background()
-
-	albums, err := s.client.GetArtistAlbums(ctx, spotify.ID(artistID), []spotify.AlbumType{spotify.AlbumTypeAlbum, spotify.AlbumTypeSingle}, spotify.Limit(limit))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get albums for artist with ID %s: %w", artistID, err)
-	}
-
-	return albums.Albums, nil
-}
-
-func (s *SpotifyClient) SearchArtists(query string, limit int) ([]spotify.FullArtist, error) {
-	if query == "" {
-		return nil, errors.New("search query cannot be empty")
-	}
-
-	if limit <= 0 {
-		limit = 20 // default limit
-	}
-
-	ctx := context.Background()
-
-	results, err := s.client.Search(ctx, query, spotify.SearchTypeArtist, spotify.Limit(limit))
-	if err != nil {
-		return nil, fmt.Errorf("failed to search artists for query '%s': %w", query, err)
-	}
-
-	return results.Artists.Artists, nil
-}
-
-// SearchArtistByName searches for an artist by name and returns the first result
 func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
-	if artistName == "" {
-		return nil, errors.New("artist name cannot be empty")
-	}
-
 	ctx := context.Background()
 
 	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(1))
@@ -78,5 +40,13 @@ func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArti
 		return nil, fmt.Errorf("no artists found for name '%s'", artistName)
 	}
 
-	return &results.Artists.Artists[0], nil
+	artist := &results.Artists.Artists[0]
+
+	// Clean cache if needed before adding new item
+	s.cleanArtistCache()
+
+	// Cache the result using the artist ID as key
+	s.artistCache[artist.ID.String()] = artist
+
+	return artist, nil
 }

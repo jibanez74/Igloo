@@ -2,15 +2,15 @@ package spotify
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/zmb3/spotify/v2"
 )
 
 func (s *SpotifyClient) GetAlbumBySpotifyID(albumID string) (*spotify.FullAlbum, error) {
-	if albumID == "" {
-		return nil, errors.New("album ID cannot be empty")
+	cachedAlbum, exists := s.albumCache[albumID]
+	if exists {
+		return cachedAlbum, nil
 	}
 
 	ctx := context.Background()
@@ -20,14 +20,13 @@ func (s *SpotifyClient) GetAlbumBySpotifyID(albumID string) (*spotify.FullAlbum,
 		return nil, fmt.Errorf("failed to get album with ID %s: %w", albumID, err)
 	}
 
+	s.cleanAlbumCache()
+	s.albumCache[albumID] = album
+
 	return album, nil
 }
 
 func (s *SpotifyClient) SearchAlbums(query string, limit int) ([]spotify.SimpleAlbum, error) {
-	if query == "" {
-		return nil, errors.New("searching for albums on spotify requires search query to not be empty")
-	}
-
 	if limit <= 0 {
 		limit = 5
 	}
@@ -39,5 +38,7 @@ func (s *SpotifyClient) SearchAlbums(query string, limit int) ([]spotify.SimpleA
 		return nil, fmt.Errorf("failed to search albums for query '%s': %w", query, err)
 	}
 
-	return results.Albums.Albums, nil
+	albums := results.Albums.Albums
+
+	return albums, nil
 }

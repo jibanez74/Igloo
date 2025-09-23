@@ -2,7 +2,6 @@ package spotify
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/zmb3/spotify/v2"
@@ -11,10 +10,6 @@ import (
 )
 
 func New(clientID, clientSecret string) (*SpotifyClient, error) {
-	if clientID == "" || clientSecret == "" {
-		return nil, errors.New("spotify client requires a client id and a client secret")
-	}
-
 	ctx := context.Background()
 
 	config := &clientcredentials.Config{
@@ -31,5 +26,9 @@ func New(clientID, clientSecret string) (*SpotifyClient, error) {
 	httpClient := spotifyauth.New().Client(ctx, token)
 	client := spotify.New(httpClient)
 
-	return &SpotifyClient{client: client}, nil
+	return &SpotifyClient{
+		client:      client,
+		artistCache: make(map[string]*spotify.FullArtist),
+		albumCache:  make(map[string]*spotify.FullAlbum),
+	}, nil
 }
