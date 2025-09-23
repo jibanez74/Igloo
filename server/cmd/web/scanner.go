@@ -163,16 +163,16 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				}
 			}
 
-			albumList, err := app.Spotify.SearchAlbums(createAlbum.Title, 1)
+			albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(createAlbum.Title)
 			if err != nil {
 				app.Logger.Error(fmt.Sprintf("fail to get details for album %s from spotify api\n%s", createAlbum.Title, err.Error()))
-			} else if len(albumList) > 0 {
+			} else {
 				createAlbum.SpotifyID = pgtype.Text{
-					String: albumList[0].ID.String(),
+					String: albumDetails.ID.String(),
 					Valid:  true,
 				}
 
-				date, err := helpers.FormatDate(albumList[0].ReleaseDate)
+				date, err := helpers.FormatDate(albumDetails.ReleaseDate)
 				if err != nil {
 					date, err = helpers.FormatDate(metadata.Format.Tags.Date)
 					if err != nil {
@@ -192,24 +192,17 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 					}
 				}
 
-				if len(albumList[0].Images) > 0 {
+				if len(albumDetails.Images) > 0 {
 					createAlbum.Cover = pgtype.Text{
-						String: albumList[0].Images[0].URL,
+						String: albumDetails.Images[0].URL,
 						Valid:  true,
 					}
 				}
 
-				albumDetails, err := app.Spotify.GetAlbumBySpotifyID(albumList[0].ID.String())
-				if err != nil {
-					app.Logger.Error(fmt.Sprintf("fail to get extra details for album %s from spotify api\n%s", createAlbum.Title, err.Error()))
-				} else {
-					createAlbum.SpotifyPopularity = pgtype.Int4{
-						Int32: int32(albumDetails.Popularity),
-						Valid: true,
-					}
+				createAlbum.SpotifyPopularity = pgtype.Int4{
+					Int32: int32(albumDetails.Popularity),
+					Valid: true,
 				}
-			} else {
-				app.Logger.Error(fmt.Sprintf("no results were found in the spotify api for album %s", createAlbum.Title))
 			}
 
 			album, err = qtx.CreateAlbum(ctx, createAlbum)
