@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -186,6 +187,10 @@ func (app *Application) InitDB() error {
 func (app *Application) InitSettings(ctx context.Context) error {
 	settings, err := app.Queries.GetSettings(ctx)
 	if err != nil {
+		if err != pgx.ErrNoRows {
+			return err
+		}
+
 		var s database.CreateSettingsParams
 
 		port, err := strconv.Atoi(os.Getenv("PORT"))
