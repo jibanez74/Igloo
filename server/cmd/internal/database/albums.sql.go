@@ -150,3 +150,177 @@ func (q *Queries) GetAlbumCount(ctx context.Context) (int64, error) {
 	err := row.Scan(&count)
 	return count, err
 }
+
+const getAlbumDetails = `-- name: GetAlbumDetails :one
+WITH album_base AS (
+    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.disc_count, a.cover, a.musician_id
+    FROM albums a
+    WHERE a.id = $1
+),
+album_musician AS (
+    SELECT COALESCE(
+        jsonb_build_object(
+            'id', m.id,
+            'name', m.name,
+            'sort_name', m.sort_name,
+            'spotify_id', m.spotify_id,
+            'spotify_popularity', m.spotify_popularity,
+            'thumb', m.thumb
+        ), 'null'
+    ) as musician
+    FROM album_base a
+    LEFT JOIN musicians m ON m.id = a.musician_id
+),
+album_genres AS (
+    SELECT COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+            'id', g.id,
+            'tag', g.tag
+        )) FILTER (WHERE g.id IS NOT NULL), '[]'
+    ) as genres
+    FROM album_base a
+    LEFT JOIN album_genres ag ON ag.album_id = a.id
+    LEFT JOIN genres g ON g.id = ag.genre_id
+),
+album_tracks AS (
+    SELECT COALESCE(
+        json_agg(
+            jsonb_build_object(
+                'id', t.id,
+                'title', t.title,
+                'sort_title', t.sort_title,
+                'track_index', t.track_index,
+                'duration', t.duration,
+                'composer', t.composer,
+                'release_date', t.release_date,
+                'file_path', t.file_path,
+                'container', t.container,
+                'codec', t.codec,
+                'bit_rate', t.bit_rate,
+                'channel_layout', t.channel_layout,
+                'copyright', t.copyright,
+                'size', t.size,
+                'file_name', t.file_name,
+                'disc', t.disc,
+                'language', t.language,
+                'profile', t.profile,
+                'sample_rate', t.sample_rate,
+                'genres', COALESCE(
+                    (SELECT json_agg(DISTINCT jsonb_build_object(
+                        'id', tg_genre.id,
+                        'tag', tg_genre.tag
+                    )) FROM track_genres tg 
+                     JOIN genres tg_genre ON tg_genre.id = tg.genre_id 
+                     WHERE tg.track_id = t.id), '[]'
+                )
+            )
+            ORDER BY t.disc, t.track_index
+        ) FILTER (WHERE t.id IS NOT NULL), '[]'
+    ) as tracks
+    FROM album_base a
+    LEFT JOIN tracks t ON t.album_id = a.id
+)
+SELECT 
+    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.disc_count, a.cover, a.musician_id,
+    m.musician,
+    g.genres,
+    t.tracks
+FROM album_base a
+CROSS JOIN album_musician m
+CROSS JOIN album_genres g
+CROSS JOIN album_tracks t
+`
+
+type GetAlbumDetailsRow struct {
+	ID                   int32              `json:"id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Title                string             `json:"title"`
+	SortTitle            string             `json:"sort_title"`
+	SpotifyID            pgtype.Text        `json:"spotify_id"`
+	ReleaseDate          pgtype.Date        `json:"release_date"`
+	Year                 pgtype.Int4        `json:"year"`
+	SpotifyPopularity    pgtype.Int4        `json:"spotify_popularity"`
+	TotalTracks          int32              `json:"total_tracks"`
+	TotalAvailableTracks int32              `json:"total_available_tracks"`
+	DiscCount            int32              `json:"disc_count"`
+	Cover                pgtype.Text        `json:"cover"`
+	MusicianID           pgtype.Int4        `json:"musician_id"`
+	Musician             interface{}        `json:"musician"`
+	Genres               interface{}        `json:"genres"`
+	Tracks               interface{}        `json:"tracks"`
+}
+
+func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error) {
+	row := q.db.QueryRow(ctx, getAlbumDetails, id)
+	var i GetAlbumDetailsRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.SortTitle,
+		&i.SpotifyID,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.SpotifyPopularity,
+		&i.TotalTracks,
+		&i.TotalAvailableTracks,
+		&i.DiscCount,
+		&i.Cover,
+		&i.MusicianID,
+		&i.Musician,
+		&i.Genres,
+		&i.Tracks,
+	)
+	return i, err
+}
+
+const getAlbumsPaginated = `-- name: GetAlbumsPaginated :many
+SELECT 
+    a.id,
+    a.title,
+    a.cover,
+    m.name as musician_name
+FROM albums a
+LEFT JOIN musicians m ON m.id = a.musician_id
+ORDER BY a.sort_title ASC
+LIMIT $1 OFFSET $2
+`
+
+type GetAlbumsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetAlbumsPaginatedRow struct {
+	ID           int32       `json:"id"`
+	Title        string      `json:"title"`
+	Cover        pgtype.Text `json:"cover"`
+	MusicianName pgtype.Text `json:"musician_name"`
+}
+
+func (q *Queries) GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginatedParams) ([]GetAlbumsPaginatedRow, error) {
+	rows, err := q.db.Query(ctx, getAlbumsPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAlbumsPaginatedRow{}
+	for rows.Next() {
+		var i GetAlbumsPaginatedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Cover,
+			&i.MusicianName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

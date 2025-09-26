@@ -391,5 +391,22 @@ func (app *Application) InitRouter() *chi.Mux {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.RequestID)
 
+	router.Route("/api/v1", func(r chi.Router) {
+		r.Route("/albums", func(r chi.Router) {
+			r.Get("/count", app.RouteGetAlbumCount)
+			r.Get("/details/{id}", app.RouteGetAlbumDetails)
+		})
+
+		r.Route("/musicians", func(r chi.Router) {
+			r.Get("/count", app.RouteGetMusicianCount)
+			r.Get("/list", app.RouteGetMusicianList)
+			r.Post("/create", app.RouteCreateMusician)
+		})
+
+		r.Route("/tracks", func(r chi.Router) {
+			r.Get("/count", app.RouteGetTrackCount)
+		})
+	})
+
 	return router
 }

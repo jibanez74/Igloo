@@ -75,6 +75,28 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 	return i, err
 }
 
+const getMusicianByID = `-- name: GetMusicianByID :one
+SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE id = $1 ORDER BY sort_name
+`
+
+func (q *Queries) GetMusicianByID(ctx context.Context, id int32) (Musician, error) {
+	row := q.db.QueryRow(ctx, getMusicianByID, id)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.SortName,
+		&i.Summary,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.SpotifyFollowers,
+		&i.Thumb,
+	)
+	return i, err
+}
+
 const getMusicianByName = `-- name: GetMusicianByName :one
 SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE name = $1
 `
@@ -128,4 +150,34 @@ func (q *Queries) GetMusicianCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getMusicianList = `-- name: GetMusicianList :many
+SELECT id, name, sort_name FROM musicians ORDER BY sort_name ASC
+`
+
+type GetMusicianListRow struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	SortName string `json:"sort_name"`
+}
+
+func (q *Queries) GetMusicianList(ctx context.Context) ([]GetMusicianListRow, error) {
+	rows, err := q.db.Query(ctx, getMusicianList)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMusicianListRow{}
+	for rows.Next() {
+		var i GetMusicianListRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.SortName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
