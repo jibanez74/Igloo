@@ -324,3 +324,47 @@ func (q *Queries) GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginated
 	}
 	return items, nil
 }
+
+const getLatestAlbums = `-- name: GetLatestAlbums :many
+SELECT DISTINCT ON (a.title)
+    a.title,
+    a.cover,
+    m.name as musician_name,
+    a.year
+FROM albums a
+LEFT JOIN musicians m ON m.id = a.musician_id
+ORDER BY a.title, a.created_at DESC
+LIMIT 12
+`
+
+type GetLatestAlbumsRow struct {
+	Title        string      `json:"title"`
+	Cover        pgtype.Text `json:"cover"`
+	MusicianName pgtype.Text `json:"musician_name"`
+	Year         pgtype.Int4 `json:"year"`
+}
+
+func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error) {
+	rows, err := q.db.Query(ctx, getLatestAlbums)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetLatestAlbumsRow{}
+	for rows.Next() {
+		var i GetLatestAlbumsRow
+		if err := rows.Scan(
+			&i.Title,
+			&i.Cover,
+			&i.MusicianName,
+			&i.Year,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

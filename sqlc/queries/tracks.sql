@@ -12,3 +12,6 @@ INSERT INTO tracks (
 
 -- name: GetTrackCount :one
 SELECT COUNT(*) FROM tracks;
+
+-- name: GetTrackByID :one
+SELECT * FROM tracks WHERE id = $1;

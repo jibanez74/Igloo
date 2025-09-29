@@ -5,17 +5,22 @@ import (
 	"time"
 )
 
-var DateFormats = [5]string{
+var DateFormats = [6]string{
 	"2006-01-02T15:04:05Z",             // ISO 8601 with Z timezone
 	"2006-01-02T15:04:05.000000Z",      // ISO 8601 with microseconds and Z
 	"2006-01-02T15:04:05-07:00",        // ISO 8601 with timezone offset
 	"2006-01-02T15:04:05.000000-07:00", // ISO 8601 with microseconds and timezone offset
 	"2006-01-02",                       // Date only
+	"2006",                             // Year only
 }
 
 func FormatDate(date string) (time.Time, error) {
-	for _, format := range DateFormats {
+	for i, format := range DateFormats {
 		if parsed, err := time.Parse(format, date); err == nil {
+			// If this is the year-only format (last in the array), set to January 1st
+			if i == len(DateFormats)-1 {
+				return time.Date(parsed.Year(), 1, 1, 0, 0, 0, 0, parsed.Location()), nil
+			}
 			return parsed, nil
 		}
 	}

@@ -6,11 +6,17 @@ SELECT EXISTS(
     SELECT 1 FROM musicians WHERE spotify_id = $1
 ) as exists;
 
+-- name: GetMusicianBySpotifyID :one
+SELECT * FROM musicians WHERE spotify_id = $1;
+
 -- name: GetMusicianByName :one
 SELECT * FROM musicians WHERE name = $1;
 
--- name: GetMusicianBySpotifyID :one
-SELECT * FROM musicians WHERE spotify_id = $1;
+-- name: GetMusicianByID :one
+SELECT * FROM musicians WHERE id = $1 ORDER BY sort_name;
+
+-- name: GetMusicianList :many
+SELECT id, name, sort_name FROM musicians ORDER BY sort_name ASC;
 
 -- name: CreateMusician :one
 INSERT INTO musicians (

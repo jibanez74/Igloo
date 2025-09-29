@@ -11,7 +11,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - "${POSTGRES_DATA_PATH:-./pg_data}:/var/lib/postgresql/data"
+      - "${POSTGRES_DATA_PATH:-./pg_data}:/var/lib/postgresql/18/docker"
       - ../sqlc/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

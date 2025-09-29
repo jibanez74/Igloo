@@ -108,6 +108,42 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 	return i, err
 }
 
+const getTrackByID = `-- name: GetTrackByID :one
+SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channel_layout, copyright, language, size, profile, sample_rate, album_id, musician_id FROM tracks WHERE id = $1
+`
+
+func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
+	row := q.db.QueryRow(ctx, getTrackByID, id)
+	var i Track
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.SortTitle,
+		&i.Disc,
+		&i.TrackIndex,
+		&i.Duration,
+		&i.Composer,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.Codec,
+		&i.BitRate,
+		&i.ChannelLayout,
+		&i.Copyright,
+		&i.Language,
+		&i.Size,
+		&i.Profile,
+		&i.SampleRate,
+		&i.AlbumID,
+		&i.MusicianID,
+	)
+	return i, err
+}
+
 const getTrackCount = `-- name: GetTrackCount :one
 SELECT COUNT(*) FROM tracks
 `
