@@ -14,13 +14,13 @@ type Album struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	Title                string             `json:"title"`
 	SortTitle            string             `json:"sort_title"`
+	DirectoryPath        string             `json:"directory_path"`
 	SpotifyID            pgtype.Text        `json:"spotify_id"`
 	ReleaseDate          pgtype.Date        `json:"release_date"`
 	Year                 pgtype.Int4        `json:"year"`
 	SpotifyPopularity    pgtype.Int4        `json:"spotify_popularity"`
 	TotalTracks          int32              `json:"total_tracks"`
 	TotalAvailableTracks int32              `json:"total_available_tracks"`
-	DiscCount            int32              `json:"disc_count"`
 	Cover                pgtype.Text        `json:"cover"`
 	MusicianID           pgtype.Int4        `json:"musician_id"`
 }
@@ -151,6 +151,7 @@ type Musician struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	Name              string             `json:"name"`
 	SortName          string             `json:"sort_name"`
+	DirectoryPath     string             `json:"directory_path"`
 	Summary           pgtype.Text        `json:"summary"`
 	SpotifyID         pgtype.Text        `json:"spotify_id"`
 	SpotifyPopularity int32              `json:"spotify_popularity"`
@@ -196,6 +197,7 @@ type Track struct {
 	Container     string             `json:"container"`
 	Codec         string             `json:"codec"`
 	BitRate       pgtype.Int4        `json:"bit_rate"`
+	Channels      int32              `json:"channels"`
 	ChannelLayout string             `json:"channel_layout"`
 	Copyright     pgtype.Text        `json:"copyright"`
 	Language      pgtype.Text        `json:"language"`

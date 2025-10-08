@@ -29,30 +29,30 @@ INSERT INTO albums (
     title,
     sort_title,
     release_date,
+    directory_path,
     year,
     spotify_id,
     spotify_popularity,
     total_tracks,
     musician_id,
-    cover,
-    disc_count
+    cover
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, disc_count, cover, musician_id
+RETURNING id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id
 `
 
 type CreateAlbumParams struct {
 	Title             string      `json:"title"`
 	SortTitle         string      `json:"sort_title"`
 	ReleaseDate       pgtype.Date `json:"release_date"`
+	DirectoryPath     string      `json:"directory_path"`
 	Year              pgtype.Int4 `json:"year"`
 	SpotifyID         pgtype.Text `json:"spotify_id"`
 	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
 	TotalTracks       int32       `json:"total_tracks"`
 	MusicianID        pgtype.Int4 `json:"musician_id"`
 	Cover             pgtype.Text `json:"cover"`
-	DiscCount         int32       `json:"disc_count"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
@@ -60,13 +60,13 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.Title,
 		arg.SortTitle,
 		arg.ReleaseDate,
+		arg.DirectoryPath,
 		arg.Year,
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
 		arg.MusicianID,
 		arg.Cover,
-		arg.DiscCount,
 	)
 	var i Album
 	err := row.Scan(
@@ -75,13 +75,44 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
-		&i.DiscCount,
+		&i.Cover,
+		&i.MusicianID,
+	)
+	return i, err
+}
+
+const getAlbumByPathAndTitle = `-- name: GetAlbumByPathAndTitle :one
+SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums WHERE directory_path = $1 AND title = $2
+`
+
+type GetAlbumByPathAndTitleParams struct {
+	DirectoryPath string `json:"directory_path"`
+	Title         string `json:"title"`
+}
+
+func (q *Queries) GetAlbumByPathAndTitle(ctx context.Context, arg GetAlbumByPathAndTitleParams) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumByPathAndTitle, arg.DirectoryPath, arg.Title)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Title,
+		&i.SortTitle,
+		&i.DirectoryPath,
+		&i.SpotifyID,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.SpotifyPopularity,
+		&i.TotalTracks,
+		&i.TotalAvailableTracks,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -89,7 +120,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, disc_count, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error) {
@@ -101,13 +132,13 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
-		&i.DiscCount,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -115,7 +146,7 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text
 }
 
 const getAlbumByTitle = `-- name: GetAlbumByTitle :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, disc_count, cover, musician_id FROM albums Where title = $1
+SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums Where title = $1
 `
 
 func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, error) {
@@ -127,13 +158,13 @@ func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, err
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
-		&i.DiscCount,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -153,7 +184,7 @@ func (q *Queries) GetAlbumCount(ctx context.Context) (int64, error) {
 
 const getAlbumDetails = `-- name: GetAlbumDetails :one
 WITH album_base AS (
-    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.disc_count, a.cover, a.musician_id
+    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.directory_path, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.cover, a.musician_id
     FROM albums a
     WHERE a.id = $1
 ),
@@ -221,7 +252,7 @@ album_tracks AS (
     LEFT JOIN tracks t ON t.album_id = a.id
 )
 SELECT 
-    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.disc_count, a.cover, a.musician_id,
+    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.directory_path, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.cover, a.musician_id,
     m.musician,
     g.genres,
     t.tracks
@@ -237,13 +268,13 @@ type GetAlbumDetailsRow struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	Title                string             `json:"title"`
 	SortTitle            string             `json:"sort_title"`
+	DirectoryPath        string             `json:"directory_path"`
 	SpotifyID            pgtype.Text        `json:"spotify_id"`
 	ReleaseDate          pgtype.Date        `json:"release_date"`
 	Year                 pgtype.Int4        `json:"year"`
 	SpotifyPopularity    pgtype.Int4        `json:"spotify_popularity"`
 	TotalTracks          int32              `json:"total_tracks"`
 	TotalAvailableTracks int32              `json:"total_available_tracks"`
-	DiscCount            int32              `json:"disc_count"`
 	Cover                pgtype.Text        `json:"cover"`
 	MusicianID           pgtype.Int4        `json:"musician_id"`
 	Musician             interface{}        `json:"musician"`
@@ -260,13 +291,13 @@ func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetail
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
 		&i.TotalAvailableTracks,
-		&i.DiscCount,
 		&i.Cover,
 		&i.MusicianID,
 		&i.Musician,

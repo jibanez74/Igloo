@@ -12,6 +12,9 @@ SELECT * FROM albums WHERE spotify_id = $1 LIMIT 1;
 -- name: GetAlbumByTitle :one
 SELECT * FROM albums Where title = $1;
 
+-- name: GetAlbumByPathAndTitle :one
+SELECT * FROM albums WHERE directory_path = $1 AND title = $2;
+
 -- name: GetAlbumDetails :one
 WITH album_base AS (
     SELECT a.*
@@ -118,13 +121,13 @@ INSERT INTO albums (
     title,
     sort_title,
     release_date,
+    directory_path,
     year,
     spotify_id,
     spotify_popularity,
     total_tracks,
     musician_id,
-    cover,
-    disc_count
+    cover
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )

@@ -15,6 +15,9 @@ SELECT * FROM musicians WHERE name = $1;
 -- name: GetMusicianByID :one
 SELECT * FROM musicians WHERE id = $1 ORDER BY sort_name;
 
+-- name: GetMusicianByPath :one
+SELECT * FROM musicians WHERE directory_path = $1;
+
 -- name: GetMusicianList :many
 SELECT id, name, sort_name FROM musicians ORDER BY sort_name ASC;
 
@@ -22,12 +25,13 @@ SELECT id, name, sort_name FROM musicians ORDER BY sort_name ASC;
 INSERT INTO musicians (
     name,
     sort_name,
+    directory_path,
     spotify_id,
     spotify_popularity,
     spotify_followers,
     summary,
     thumb
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
