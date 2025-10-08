@@ -49,15 +49,9 @@ func (app *Application) ScanMusicLibrary() {
 			continue
 		}
 
-		albums, err := app.ScanDirForAlbums(ctx, qtx, musician)
+		_, err = app.ScanDirForAlbums(ctx, qtx, musician)
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("an error occurred while scanning directory %s for albums\n%s", musician.DirectoryPath, err.Error()))
-			continue
-		}
-
-		err = app.ScanDirForTracks(ctx, qtx, albums)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to scan directory %s for tracks\n%s", musician.DirectoryPath, err.Error()))
 			continue
 		}
 	}
@@ -196,173 +190,177 @@ func (app *Application) ScanDirForAlbums(ctx context.Context, qtx *database.Quer
 				}
 
 				albums = append(albums, &album)
+
+				err = app.ScanDirForTracks(ctx, qtx, &album)
+				if err != nil {
+					app.Logger.Error(fmt.Sprintf("failed to scan tracks for album %s: %s", album.Title, err.Error()))
+				}
 			} else {
 				app.Logger.Error(fmt.Sprintf("fail to check if album at %s exists in the data base\n%s", albumDir, err.Error()))
 			}
 		} else {
 			albums = append(albums, &album)
+
+			// Scan tracks for existing album
+			err = app.ScanDirForTracks(ctx, qtx, &album)
+			if err != nil {
+				app.Logger.Error(fmt.Sprintf("failed to scan tracks for existing album %s: %s", album.Title, err.Error()))
+			}
 		}
 	}
 
 	return albums, nil
 }
 
-func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Queries, albums []*database.Album) error {
-	if len(albums) == 0 {
-		return errors.New("no albums provided for ScanDirForTracks function")
+func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Queries, album *database.Album) error {
+	if album == nil {
+		return errors.New("got a nil value for album in ScanDirForTracks function")
 	}
 
-	for _, album := range albums {
-		var tracks []*database.Track
+	err := filepath.WalkDir(album.DirectoryPath, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 
-		err := filepath.WalkDir(album.DirectoryPath, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
+		ext := helpers.GetFileExtension(path)
 
-			ext := helpers.GetFileExtension(path)
+		if !helpers.ValidAudioExtensions[ext] {
+			return nil
+		}
 
-			if !helpers.ValidAudioExtensions[ext] {
-				return nil
-			}
+		info, err := app.Ffprobe.GetTrackMetadata(path)
+		if err != nil {
+			return err
+		}
+		_, err = qtx.GetTrackByPath(ctx, path)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				createTrack := database.CreateTrackParams{
+					Title:     info.Format.Tags.Title,
+					SortTitle: info.Format.Tags.SortName,
+					FilePath:  path,
+					FileName:  entry.Name(),
+					Container: ext,
+					MusicianID: pgtype.Int4{
+						Int32: album.MusicianID.Int32,
+						Valid: true,
+					},
+					AlbumID: pgtype.Int4{
+						Int32: album.ID,
+						Valid: true,
+					},
+				}
 
-			info, err := app.Ffprobe.GetTrackMetadata(path)
-			if err != nil {
-				return err
-			}
-			track, err := qtx.GetTrackByPath(ctx, path)
-			if err != nil {
-				if err == pgx.ErrNoRows {
-					createTrack := database.CreateTrackParams{
-						Title:     info.Format.Tags.Title,
-						SortTitle: info.Format.Tags.SortName,
-						FilePath:  path,
-						FileName:  entry.Name(),
-						Container: ext,
-						MusicianID: pgtype.Int4{
-							Int32: album.MusicianID.Int32,
+				duration, err := helpers.GetPreciseDecimalFromStr(info.Format.Duration)
+				if err != nil {
+					return err
+				}
+				createTrack.Duration = duration
+
+				size, err := strconv.ParseInt(info.Format.Size, 10, 64)
+				if err != nil {
+					return err
+				}
+				createTrack.Size = size
+
+				trackCount, err := helpers.SplitSliceBySlash(info.Format.Tags.Track)
+				if err != nil {
+					return err
+				}
+				createTrack.TrackIndex = trackCount[0]
+
+				if info.Format.BitRate != "" {
+					bitRate, err := strconv.Atoi(info.Format.BitRate)
+					if err == nil {
+						createTrack.BitRate = pgtype.Int4{
+							Int32: int32(bitRate),
 							Valid: true,
-						},
-						AlbumID: pgtype.Int4{
-							Int32: album.ID,
-							Valid: true,
-						},
-					}
-
-					duration, err := helpers.GetPreciseDecimalFromStr(info.Format.Duration)
-					if err != nil {
-						return err
-					}
-					createTrack.Duration = duration
-
-					size, err := strconv.ParseInt(info.Format.Size, 10, 64)
-					if err != nil {
-						return err
-					}
-					createTrack.Size = size
-
-					trackCount, err := helpers.SplitSliceBySlash(info.Format.Tags.Track)
-					if err != nil {
-						return err
-					}
-					createTrack.TrackIndex = trackCount[0]
-
-					if info.Format.BitRate != "" {
-						bitRate, err := strconv.Atoi(info.Format.BitRate)
-						if err == nil {
-							createTrack.BitRate = pgtype.Int4{
-								Int32: int32(bitRate),
-								Valid: true,
-							}
 						}
-					}
-
-					disc, err := helpers.SplitSliceBySlash(info.Format.Tags.Disc)
-					if err != nil {
-						createTrack.Disc = 1
-					} else {
-						createTrack.Disc = disc[0]
-					}
-
-					if info.Format.Tags.Date != "" {
-						date, err := helpers.FormatDate(info.Format.Tags.Date)
-						if err == nil {
-							createTrack.ReleaseDate = pgtype.Date{
-								Time:  date,
-								Valid: true,
-							}
-
-							createTrack.Year = pgtype.Int4{
-								Int32: int32(date.Year()),
-								Valid: true,
-							}
-						}
-					}
-
-					if info.Format.Tags.Composer != "" {
-						createTrack.Composer = pgtype.Text{
-							String: info.Format.Tags.Composer,
-							Valid:  true,
-						}
-					}
-
-					if info.Format.Tags.Copyright != "" {
-						createTrack.Copyright = pgtype.Text{
-							String: info.Format.Tags.Copyright,
-							Valid:  true,
-						}
-					}
-
-					for _, s := range info.Streams {
-						if s.CodecType == CODEC_TYPE_AUDIO {
-							createTrack.ChannelLayout = s.ChannelLayout
-							createTrack.Codec = s.CodecName
-							createTrack.Channels = int32(s.Channels)
-
-							if s.SampleRate != "" {
-								sampleRate, err := strconv.Atoi(s.SampleRate)
-								if err == nil {
-									createTrack.SampleRate = pgtype.Int4{
-										Int32: int32(sampleRate),
-										Valid: true,
-									}
-								}
-							}
-
-							if s.Profile != "" {
-								createTrack.Profile = pgtype.Text{
-									String: s.Profile,
-									Valid:  true,
-								}
-							}
-
-							if s.Tags.Language != "" {
-								createTrack.Language = pgtype.Text{
-									String: s.Tags.Language,
-									Valid:  true,
-								}
-							}
-
-							break
-						}
-					}
-
-					track, err = qtx.CreateTrack(ctx, createTrack)
-					if err != nil {
-						return err
 					}
 				}
+
+				disc, err := helpers.SplitSliceBySlash(info.Format.Tags.Disc)
+				if err != nil {
+					createTrack.Disc = 1
+				} else {
+					createTrack.Disc = disc[0]
+				}
+
+				if info.Format.Tags.Date != "" {
+					date, err := helpers.FormatDate(info.Format.Tags.Date)
+					if err == nil {
+						createTrack.ReleaseDate = pgtype.Date{
+							Time:  date,
+							Valid: true,
+						}
+
+						createTrack.Year = pgtype.Int4{
+							Int32: int32(date.Year()),
+							Valid: true,
+						}
+					}
+				}
+
+				if info.Format.Tags.Composer != "" {
+					createTrack.Composer = pgtype.Text{
+						String: info.Format.Tags.Composer,
+						Valid:  true,
+					}
+				}
+
+				if info.Format.Tags.Copyright != "" {
+					createTrack.Copyright = pgtype.Text{
+						String: info.Format.Tags.Copyright,
+						Valid:  true,
+					}
+				}
+
+				for _, s := range info.Streams {
+					if s.CodecType == CODEC_TYPE_AUDIO {
+						createTrack.ChannelLayout = s.ChannelLayout
+						createTrack.Codec = s.CodecName
+						createTrack.Channels = int32(s.Channels)
+
+						if s.SampleRate != "" {
+							sampleRate, err := strconv.Atoi(s.SampleRate)
+							if err == nil {
+								createTrack.SampleRate = pgtype.Int4{
+									Int32: int32(sampleRate),
+									Valid: true,
+								}
+							}
+						}
+
+						if s.Profile != "" {
+							createTrack.Profile = pgtype.Text{
+								String: s.Profile,
+								Valid:  true,
+							}
+						}
+
+						if s.Tags.Language != "" {
+							createTrack.Language = pgtype.Text{
+								String: s.Tags.Language,
+								Valid:  true,
+							}
+						}
+
+						break
+					}
+				}
+
+				_, err = qtx.CreateTrack(ctx, createTrack)
+				if err != nil {
+					return err
+				}
 			}
-
-			tracks = append(tracks, &track)
-
-			return nil
-		})
-
-		if err != nil {
-			app.Logger.Error(err.Error())
-			continue
 		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to walk directory %s: %w", album.DirectoryPath, err)
 	}
 
 	return nil

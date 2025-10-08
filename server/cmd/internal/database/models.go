@@ -189,19 +189,19 @@ type Track struct {
 	Disc          int32              `json:"disc"`
 	TrackIndex    int32              `json:"track_index"`
 	Duration      pgtype.Numeric     `json:"duration"`
-	Composer      pgtype.Text        `json:"composer"`
-	ReleaseDate   pgtype.Date        `json:"release_date"`
-	Year          pgtype.Int4        `json:"year"`
 	FilePath      string             `json:"file_path"`
 	FileName      string             `json:"file_name"`
 	Container     string             `json:"container"`
 	Codec         string             `json:"codec"`
-	BitRate       pgtype.Int4        `json:"bit_rate"`
 	Channels      int32              `json:"channels"`
 	ChannelLayout string             `json:"channel_layout"`
+	Size          int64              `json:"size"`
+	Composer      pgtype.Text        `json:"composer"`
+	ReleaseDate   pgtype.Date        `json:"release_date"`
+	Year          pgtype.Int4        `json:"year"`
+	BitRate       pgtype.Int4        `json:"bit_rate"`
 	Copyright     pgtype.Text        `json:"copyright"`
 	Language      pgtype.Text        `json:"language"`
-	Size          int64              `json:"size"`
 	Profile       pgtype.Text        `json:"profile"`
 	SampleRate    pgtype.Int4        `json:"sample_rate"`
 	AlbumID       pgtype.Int4        `json:"album_id"`

@@ -16,7 +16,7 @@ INSERT INTO tracks (
     title, year, sort_title, track_index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, channels, copyright, size, file_name, disc, album_id, language, profile, sample_rate, musician_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
-) RETURNING id, created_at, updated_at, title, sort_title, disc, track_index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channels, channel_layout, copyright, language, size, profile, sample_rate, album_id, musician_id
+) RETURNING id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, sample_rate, album_id, musician_id
 `
 
 type CreateTrackParams struct {
@@ -79,19 +79,19 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.Disc,
 		&i.TrackIndex,
 		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.Year,
 		&i.FilePath,
 		&i.FileName,
 		&i.Container,
 		&i.Codec,
-		&i.BitRate,
 		&i.Channels,
 		&i.ChannelLayout,
+		&i.Size,
+		&i.Composer,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.BitRate,
 		&i.Copyright,
 		&i.Language,
-		&i.Size,
 		&i.Profile,
 		&i.SampleRate,
 		&i.AlbumID,
@@ -101,7 +101,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 }
 
 const getTrackByID = `-- name: GetTrackByID :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channels, channel_layout, copyright, language, size, profile, sample_rate, album_id, musician_id FROM tracks WHERE id = $1
+SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, sample_rate, album_id, musician_id FROM tracks WHERE id = $1
 `
 
 func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
@@ -116,19 +116,19 @@ func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
 		&i.Disc,
 		&i.TrackIndex,
 		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.Year,
 		&i.FilePath,
 		&i.FileName,
 		&i.Container,
 		&i.Codec,
-		&i.BitRate,
 		&i.Channels,
 		&i.ChannelLayout,
+		&i.Size,
+		&i.Composer,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.BitRate,
 		&i.Copyright,
 		&i.Language,
-		&i.Size,
 		&i.Profile,
 		&i.SampleRate,
 		&i.AlbumID,
@@ -138,7 +138,7 @@ func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
 }
 
 const getTrackByPath = `-- name: GetTrackByPath :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, composer, release_date, year, file_path, file_name, container, codec, bit_rate, channels, channel_layout, copyright, language, size, profile, sample_rate, album_id, musician_id FROM tracks WHERE file_path = $1
+SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, sample_rate, album_id, musician_id FROM tracks WHERE file_path = $1
 `
 
 func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, error) {
@@ -153,19 +153,19 @@ func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, e
 		&i.Disc,
 		&i.TrackIndex,
 		&i.Duration,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.Year,
 		&i.FilePath,
 		&i.FileName,
 		&i.Container,
 		&i.Codec,
-		&i.BitRate,
 		&i.Channels,
 		&i.ChannelLayout,
+		&i.Size,
+		&i.Composer,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.BitRate,
 		&i.Copyright,
 		&i.Language,
-		&i.Size,
 		&i.Profile,
 		&i.SampleRate,
 		&i.AlbumID,
