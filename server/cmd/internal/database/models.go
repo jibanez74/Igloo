@@ -208,6 +208,11 @@ type Track struct {
 	MusicianID    pgtype.Int4        `json:"musician_id"`
 }
 
+type TrackGenre struct {
+	TrackID int32 `json:"track_id"`
+	GenreID int32 `json:"genre_id"`
+}
+
 type User struct {
 	ID        int32              `json:"id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`

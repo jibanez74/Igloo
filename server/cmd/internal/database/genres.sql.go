@@ -9,19 +9,6 @@ import (
 	"context"
 )
 
-const checkGenreExistByTag = `-- name: CheckGenreExistByTag :one
-SELECT EXISTS(
-    SELECT 1 FROM genres WHERE tag = $1
-) as exists
-`
-
-func (q *Queries) CheckGenreExistByTag(ctx context.Context, tag string) (bool, error) {
-	row := q.db.QueryRow(ctx, checkGenreExistByTag, tag)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createGenre = `-- name: CreateGenre :one
 INSERT INTO genres (
   tag,
@@ -50,14 +37,17 @@ func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre
 	return i, err
 }
 
-const getGenreByTag = `-- name: GetGenreByTag :one
-SELECT id, created_at, updated_at, tag, genre_type
-FROM genres
-WHERE tag = $1
+const getGenreByTagAndType = `-- name: GetGenreByTagAndType :one
+SELECT id, created_at, updated_at, tag, genre_type FROM genres WHERE tag = $1 AND genre_type = $2
 `
 
-func (q *Queries) GetGenreByTag(ctx context.Context, tag string) (Genre, error) {
-	row := q.db.QueryRow(ctx, getGenreByTag, tag)
+type GetGenreByTagAndTypeParams struct {
+	Tag       string `json:"tag"`
+	GenreType string `json:"genre_type"`
+}
+
+func (q *Queries) GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error) {
+	row := q.db.QueryRow(ctx, getGenreByTagAndType, arg.Tag, arg.GenreType)
 	var i Genre
 	err := row.Scan(
 		&i.ID,

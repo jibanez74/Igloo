@@ -7,6 +7,8 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const checkTrackGenreExists = `-- name: CheckTrackGenreExists :one
@@ -43,4 +45,31 @@ type CreateTrackGenreParams struct {
 func (q *Queries) CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error {
 	_, err := q.db.Exec(ctx, createTrackGenre, arg.TrackID, arg.GenreID)
 	return err
+}
+
+const getTrackGenresByAlbumID = `-- name: GetTrackGenresByAlbumID :many
+SELECT tg.track_id, tg.genre_id
+FROM track_genres tg
+JOIN tracks t ON t.id = tg.track_id
+WHERE t.album_id = $1
+`
+
+func (q *Queries) GetTrackGenresByAlbumID(ctx context.Context, albumID pgtype.Int4) ([]TrackGenre, error) {
+	rows, err := q.db.Query(ctx, getTrackGenresByAlbumID, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TrackGenre{}
+	for rows.Next() {
+		var i TrackGenre
+		if err := rows.Scan(&i.TrackID, &i.GenreID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

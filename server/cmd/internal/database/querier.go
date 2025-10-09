@@ -14,7 +14,6 @@ type Querier interface {
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error)
 	CheckAlbumGenreExist(ctx context.Context, arg CheckAlbumGenreExistParams) (bool, error)
-	CheckGenreExistByTag(ctx context.Context, tag string) (bool, error)
 	CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error)
 	CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error)
 	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
@@ -45,7 +44,7 @@ type Querier interface {
 	GetAlbumCount(ctx context.Context) (int64, error)
 	GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error)
 	GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginatedParams) ([]GetAlbumsPaginatedRow, error)
-	GetGenreByTag(ctx context.Context, tag string) (Genre, error)
+	GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetMovieByTmdbID(ctx context.Context, tmdbID pgtype.Text) (GetMovieByTmdbIDRow, error)
@@ -67,9 +66,11 @@ type Querier interface {
 	GetTrackByID(ctx context.Context, id int32) (Track, error)
 	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
 	GetTrackCount(ctx context.Context) (int64, error)
+	GetTrackGenresByAlbumID(ctx context.Context, albumID pgtype.Int4) ([]TrackGenre, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
+	UpdateAlbumTotalAvailableTracks(ctx context.Context, arg UpdateAlbumTotalAvailableTracksParams) error
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)

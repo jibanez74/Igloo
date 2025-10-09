@@ -49,7 +49,7 @@ func (app *Application) ScanMusicLibrary() {
 			continue
 		}
 
-		_, err = app.ScanDirForAlbums(ctx, qtx, musician)
+		err = app.ScanDirForAlbums(ctx, qtx, musician)
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("an error occurred while scanning directory %s for albums\n%s", musician.DirectoryPath, err.Error()))
 			continue
@@ -117,20 +117,18 @@ func (app *Application) ScanDirsForMusicians(ctx context.Context, qtx *database.
 	return &musician, nil
 }
 
-func (app *Application) ScanDirForAlbums(ctx context.Context, qtx *database.Queries, musician *database.Musician) ([]*database.Album, error) {
+func (app *Application) ScanDirForAlbums(ctx context.Context, qtx *database.Queries, musician *database.Musician) error {
 	if musician == nil {
-		return nil, errors.New("got nil value for musician in ScanDirForAlbums function")
+		return errors.New("got nil value for musician in ScanDirForAlbums function")
 	}
 
 	albumEntries, err := os.ReadDir(musician.DirectoryPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var albums []*database.Album
-
 	if len(albumEntries) == 0 {
-		return albums, nil
+		return nil
 	}
 
 	for _, albumEntry := range albumEntries {
@@ -186,12 +184,10 @@ func (app *Application) ScanDirForAlbums(ctx context.Context, qtx *database.Quer
 
 				album, err = qtx.CreateAlbum(ctx, createAlbum)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
-				albums = append(albums, &album)
-
-				err = app.ScanDirForTracks(ctx, qtx, &album)
+				err = app.ScanDirForTracks(ctx, qtx, &album, musician)
 				if err != nil {
 					app.Logger.Error(fmt.Sprintf("failed to scan tracks for album %s: %s", album.Title, err.Error()))
 				}
@@ -199,23 +195,23 @@ func (app *Application) ScanDirForAlbums(ctx context.Context, qtx *database.Quer
 				app.Logger.Error(fmt.Sprintf("fail to check if album at %s exists in the data base\n%s", albumDir, err.Error()))
 			}
 		} else {
-			albums = append(albums, &album)
-
 			// Scan tracks for existing album
-			err = app.ScanDirForTracks(ctx, qtx, &album)
+			err = app.ScanDirForTracks(ctx, qtx, &album, musician)
 			if err != nil {
 				app.Logger.Error(fmt.Sprintf("failed to scan tracks for existing album %s: %s", album.Title, err.Error()))
 			}
 		}
 	}
 
-	return albums, nil
+	return nil
 }
 
-func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Queries, album *database.Album) error {
+func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Queries, album *database.Album, musician *database.Musician) error {
 	if album == nil {
 		return errors.New("got a nil value for album in ScanDirForTracks function")
 	}
+
+	trackCount := 0
 
 	err := filepath.WalkDir(album.DirectoryPath, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -263,11 +259,11 @@ func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Quer
 				}
 				createTrack.Size = size
 
-				trackCount, err := helpers.SplitSliceBySlash(info.Format.Tags.Track)
+				trackNumbers, err := helpers.SplitSliceBySlash(info.Format.Tags.Track)
 				if err != nil {
 					return err
 				}
-				createTrack.TrackIndex = trackCount[0]
+				createTrack.TrackIndex = trackNumbers[0]
 
 				if info.Format.BitRate != "" {
 					bitRate, err := strconv.Atoi(info.Format.BitRate)
@@ -349,10 +345,43 @@ func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Quer
 					}
 				}
 
-				_, err = qtx.CreateTrack(ctx, createTrack)
+				track, err := qtx.CreateTrack(ctx, createTrack)
 				if err != nil {
 					return err
 				}
+
+				// Save track genres if available
+				if info.Format.Tags.Genre != "" {
+					genreIDs, err := helpers.SaveGenres(ctx, qtx, info.Format.Tags.Genre, "music")
+					if err != nil {
+						app.Logger.Error(fmt.Sprintf("failed to save genres for track %s: %s", track.Title, err.Error()))
+					} else {
+						// Create track-genre relationships
+						for _, genreID := range genreIDs {
+							exists, err := qtx.CheckTrackGenreExists(ctx, database.CheckTrackGenreExistsParams{
+								TrackID: track.ID,
+								GenreID: genreID,
+							})
+							if err != nil {
+								app.Logger.Error(fmt.Sprintf("failed to check track-genre relationship: %s", err.Error()))
+								continue
+							}
+							if !exists {
+								err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
+									TrackID: track.ID,
+									GenreID: genreID,
+								})
+								if err != nil {
+									app.Logger.Error(fmt.Sprintf("failed to create track-genre relationship: %s", err.Error()))
+								}
+							}
+						}
+					}
+				}
+
+				trackCount++
+			} else {
+				trackCount++
 			}
 		}
 
@@ -361,6 +390,87 @@ func (app *Application) ScanDirForTracks(ctx context.Context, qtx *database.Quer
 
 	if err != nil {
 		return fmt.Errorf("failed to walk directory %s: %w", album.DirectoryPath, err)
+	}
+
+	err = qtx.UpdateAlbumTotalAvailableTracks(ctx, database.UpdateAlbumTotalAvailableTracksParams{
+		ID:                   album.ID,
+		TotalAvailableTracks: int32(trackCount),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update album %s total available tracks: %w", album.Title, err)
+	}
+
+	// Save album genres from Spotify if available
+	if album.SpotifyID.Valid && album.SpotifyID.String != "" {
+		// Note: We would need to get album genres from Spotify API here
+		// For now, we'll collect genres from tracks and apply them to the album
+	}
+
+	// Collect genres from tracks and apply them to album and musician
+	err = app.saveAlbumAndMusicianGenresFromTracks(ctx, qtx, album, musician)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to save album/musician genres from tracks: %s", err.Error()))
+	}
+
+	return nil
+}
+
+func (app *Application) saveAlbumAndMusicianGenresFromTracks(ctx context.Context, qtx *database.Queries, album *database.Album, musician *database.Musician) error {
+	// Get all track genres for this album
+	trackGenres, err := qtx.GetTrackGenresByAlbumID(ctx, pgtype.Int4{
+		Int32: album.ID,
+		Valid: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get track genres for album %s: %w", album.Title, err)
+	}
+
+	// Collect unique genre IDs
+	genreMap := make(map[int32]bool)
+	for _, trackGenre := range trackGenres {
+		genreMap[trackGenre.GenreID] = true
+	}
+
+	// Apply genres to album
+	for genreID := range genreMap {
+		exists, err := qtx.CheckAlbumGenreExist(ctx, database.CheckAlbumGenreExistParams{
+			AlbumID: album.ID,
+			GenreID: genreID,
+		})
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to check album-genre relationship: %s", err.Error()))
+			continue
+		}
+		if !exists {
+			err = qtx.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{
+				AlbumID: album.ID,
+				GenreID: genreID,
+			})
+			if err != nil {
+				app.Logger.Error(fmt.Sprintf("failed to create album-genre relationship: %s", err.Error()))
+			}
+		}
+	}
+
+	// Apply genres to musician
+	for genreID := range genreMap {
+		exists, err := qtx.CheckMusicianGenreExist(ctx, database.CheckMusicianGenreExistParams{
+			MusicianID: musician.ID,
+			GenreID:    genreID,
+		})
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to check musician-genre relationship: %s", err.Error()))
+			continue
+		}
+		if !exists {
+			err = qtx.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{
+				MusicianID: musician.ID,
+				GenreID:    genreID,
+			})
+			if err != nil {
+				app.Logger.Error(fmt.Sprintf("failed to create musician-genre relationship: %s", err.Error()))
+			}
+		}
 	}
 
 	return nil

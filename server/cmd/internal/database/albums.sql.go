@@ -28,45 +28,48 @@ const createAlbum = `-- name: CreateAlbum :one
 INSERT INTO albums (
     title,
     sort_title,
-    release_date,
     directory_path,
-    year,
     spotify_id,
+    release_date,
+    year,
     spotify_popularity,
     total_tracks,
-    musician_id,
-    cover
+    total_available_tracks,
+    cover,
+    musician_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 RETURNING id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id
 `
 
 type CreateAlbumParams struct {
-	Title             string      `json:"title"`
-	SortTitle         string      `json:"sort_title"`
-	ReleaseDate       pgtype.Date `json:"release_date"`
-	DirectoryPath     string      `json:"directory_path"`
-	Year              pgtype.Int4 `json:"year"`
-	SpotifyID         pgtype.Text `json:"spotify_id"`
-	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
-	TotalTracks       int32       `json:"total_tracks"`
-	MusicianID        pgtype.Int4 `json:"musician_id"`
-	Cover             pgtype.Text `json:"cover"`
+	Title                string      `json:"title"`
+	SortTitle            string      `json:"sort_title"`
+	DirectoryPath        string      `json:"directory_path"`
+	SpotifyID            pgtype.Text `json:"spotify_id"`
+	ReleaseDate          pgtype.Date `json:"release_date"`
+	Year                 pgtype.Int4 `json:"year"`
+	SpotifyPopularity    pgtype.Int4 `json:"spotify_popularity"`
+	TotalTracks          int32       `json:"total_tracks"`
+	TotalAvailableTracks int32       `json:"total_available_tracks"`
+	Cover                pgtype.Text `json:"cover"`
+	MusicianID           pgtype.Int4 `json:"musician_id"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
 	row := q.db.QueryRow(ctx, createAlbum,
 		arg.Title,
 		arg.SortTitle,
-		arg.ReleaseDate,
 		arg.DirectoryPath,
-		arg.Year,
 		arg.SpotifyID,
+		arg.ReleaseDate,
+		arg.Year,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
-		arg.MusicianID,
+		arg.TotalAvailableTracks,
 		arg.Cover,
+		arg.MusicianID,
 	)
 	var i Album
 	err := row.Scan(
@@ -398,4 +401,20 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAlbumTotalAvailableTracks = `-- name: UpdateAlbumTotalAvailableTracks :exec
+UPDATE albums 
+SET total_available_tracks = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateAlbumTotalAvailableTracksParams struct {
+	ID                   int32 `json:"id"`
+	TotalAvailableTracks int32 `json:"total_available_tracks"`
+}
+
+func (q *Queries) UpdateAlbumTotalAvailableTracks(ctx context.Context, arg UpdateAlbumTotalAvailableTracksParams) error {
+	_, err := q.db.Exec(ctx, updateAlbumTotalAvailableTracks, arg.ID, arg.TotalAvailableTracks)
+	return err
 }
