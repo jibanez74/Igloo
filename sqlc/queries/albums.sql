@@ -120,15 +120,21 @@ LIMIT 12;
 INSERT INTO albums (
     title,
     sort_title,
-    release_date,
     directory_path,
-    year,
     spotify_id,
+    release_date,
+    year,
     spotify_popularity,
     total_tracks,
-    musician_id,
-    cover
+    total_available_tracks,
+    cover,
+    musician_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 RETURNING *;
+
+-- name: UpdateAlbumTotalAvailableTracks :exec
+UPDATE albums 
+SET total_available_tracks = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
