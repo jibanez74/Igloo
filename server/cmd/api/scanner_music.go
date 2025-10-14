@@ -46,7 +46,9 @@ func (app *Application) ScanMusicLibrary() {
 
 		exists, err := qtx.CheckTrackExistByPath(ctx, path)
 		if err != nil {
-			return err
+			app.Logger.Error(fmt.Sprintf("fail to check if track at %s exists\n%s", path, err.Error()))
+			errorCount++
+			return nil
 		}
 
 		if exists {
@@ -55,7 +57,9 @@ func (app *Application) ScanMusicLibrary() {
 
 		err = app.ScanTrackFile(ctx, qtx, path, ext)
 		if err != nil {
-			return err
+			app.Logger.Error(fmt.Sprintf("ffprobe faile to scan track file %s\n%s", path, err.Error()))
+			errorCount++
+			return nil
 		}
 
 		tracksScanned++
@@ -63,7 +67,7 @@ func (app *Application) ScanMusicLibrary() {
 	})
 
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to scan music library at %s\n%s", app.Settings.MusicDir.String, err.Error()))
+		app.Logger.Error(fmt.Sprintf("an unexpected error occurred while scanning the music library\n%s", err.Error()))
 		return
 	}
 
