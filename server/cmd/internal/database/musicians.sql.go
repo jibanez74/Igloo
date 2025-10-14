@@ -11,39 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const checkMusicianExistsBySpotifyID = `-- name: CheckMusicianExistsBySpotifyID :one
-SELECT EXISTS(
-    SELECT 1 FROM musicians WHERE spotify_id = $1
-) as exists
-`
-
-func (q *Queries) CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error) {
-	row := q.db.QueryRow(ctx, checkMusicianExistsBySpotifyID, spotifyID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createMusician = `-- name: CreateMusician :one
 INSERT INTO musicians (
     name,
     sort_name,
-    directory_path,
     spotify_id,
     spotify_popularity,
     spotify_followers,
     summary,
     thumb
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, created_at, updated_at, name, sort_name, directory_path, summary, spotify_id, spotify_popularity, spotify_followers, thumb
+RETURNING id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb
 `
 
 type CreateMusicianParams struct {
 	Name              string      `json:"name"`
 	SortName          string      `json:"sort_name"`
-	DirectoryPath     string      `json:"directory_path"`
 	SpotifyID         pgtype.Text `json:"spotify_id"`
 	SpotifyPopularity int32       `json:"spotify_popularity"`
 	SpotifyFollowers  int32       `json:"spotify_followers"`
@@ -55,7 +40,6 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 	row := q.db.QueryRow(ctx, createMusician,
 		arg.Name,
 		arg.SortName,
-		arg.DirectoryPath,
 		arg.SpotifyID,
 		arg.SpotifyPopularity,
 		arg.SpotifyFollowers,
@@ -69,7 +53,6 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 		&i.UpdatedAt,
 		&i.Name,
 		&i.SortName,
-		&i.DirectoryPath,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
@@ -80,7 +63,7 @@ func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) 
 }
 
 const getMusicianByID = `-- name: GetMusicianByID :one
-SELECT id, created_at, updated_at, name, sort_name, directory_path, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE id = $1 ORDER BY sort_name
+SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE id = $1 ORDER BY sort_name
 `
 
 func (q *Queries) GetMusicianByID(ctx context.Context, id int32) (Musician, error) {
@@ -92,7 +75,6 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int32) (Musician, erro
 		&i.UpdatedAt,
 		&i.Name,
 		&i.SortName,
-		&i.DirectoryPath,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
@@ -103,7 +85,7 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int32) (Musician, erro
 }
 
 const getMusicianByName = `-- name: GetMusicianByName :one
-SELECT id, created_at, updated_at, name, sort_name, directory_path, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE name = $1
+SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE name = $1
 `
 
 func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
@@ -115,30 +97,6 @@ func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician,
 		&i.UpdatedAt,
 		&i.Name,
 		&i.SortName,
-		&i.DirectoryPath,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-	)
-	return i, err
-}
-
-const getMusicianByPath = `-- name: GetMusicianByPath :one
-SELECT id, created_at, updated_at, name, sort_name, directory_path, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE directory_path = $1
-`
-
-func (q *Queries) GetMusicianByPath(ctx context.Context, directoryPath string) (Musician, error) {
-	row := q.db.QueryRow(ctx, getMusicianByPath, directoryPath)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.SortName,
-		&i.DirectoryPath,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,
@@ -149,7 +107,7 @@ func (q *Queries) GetMusicianByPath(ctx context.Context, directoryPath string) (
 }
 
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, created_at, updated_at, name, sort_name, directory_path, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
+SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
 `
 
 func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Musician, error) {
@@ -161,7 +119,6 @@ func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID pgtype.T
 		&i.UpdatedAt,
 		&i.Name,
 		&i.SortName,
-		&i.DirectoryPath,
 		&i.Summary,
 		&i.SpotifyID,
 		&i.SpotifyPopularity,

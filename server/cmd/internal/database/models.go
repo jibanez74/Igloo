@@ -9,20 +9,18 @@ import (
 )
 
 type Album struct {
-	ID                   int32              `json:"id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	Title                string             `json:"title"`
-	SortTitle            string             `json:"sort_title"`
-	DirectoryPath        string             `json:"directory_path"`
-	SpotifyID            pgtype.Text        `json:"spotify_id"`
-	ReleaseDate          pgtype.Date        `json:"release_date"`
-	Year                 pgtype.Int4        `json:"year"`
-	SpotifyPopularity    pgtype.Int4        `json:"spotify_popularity"`
-	TotalTracks          int32              `json:"total_tracks"`
-	TotalAvailableTracks int32              `json:"total_available_tracks"`
-	Cover                pgtype.Text        `json:"cover"`
-	MusicianID           pgtype.Int4        `json:"musician_id"`
+	ID                int32              `json:"id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Title             string             `json:"title"`
+	SortTitle         string             `json:"sort_title"`
+	SpotifyID         pgtype.Text        `json:"spotify_id"`
+	ReleaseDate       pgtype.Date        `json:"release_date"`
+	Year              pgtype.Int4        `json:"year"`
+	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
+	TotalTracks       int32              `json:"total_tracks"`
+	Cover             pgtype.Text        `json:"cover"`
+	MusicianID        pgtype.Int4        `json:"musician_id"`
 }
 
 type AudioStream struct {
@@ -151,7 +149,6 @@ type Musician struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	Name              string             `json:"name"`
 	SortName          string             `json:"sort_name"`
-	DirectoryPath     string             `json:"directory_path"`
 	Summary           pgtype.Text        `json:"summary"`
 	SpotifyID         pgtype.Text        `json:"spotify_id"`
 	SpotifyPopularity int32              `json:"spotify_popularity"`
@@ -199,11 +196,10 @@ type Track struct {
 	Composer      pgtype.Text        `json:"composer"`
 	ReleaseDate   pgtype.Date        `json:"release_date"`
 	Year          pgtype.Int4        `json:"year"`
-	BitRate       pgtype.Int4        `json:"bit_rate"`
+	BitRate       int32              `json:"bit_rate"`
 	Copyright     pgtype.Text        `json:"copyright"`
 	Language      pgtype.Text        `json:"language"`
 	Profile       pgtype.Text        `json:"profile"`
-	SampleRate    pgtype.Int4        `json:"sample_rate"`
 	AlbumID       pgtype.Int4        `json:"album_id"`
 	MusicianID    pgtype.Int4        `json:"musician_id"`
 }

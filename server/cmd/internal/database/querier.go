@@ -12,11 +12,10 @@ import (
 
 type Querier interface {
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
-	CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error)
 	CheckAlbumGenreExist(ctx context.Context, arg CheckAlbumGenreExistParams) (bool, error)
 	CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error)
-	CheckMusicianExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error)
 	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
+	CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error)
 	CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error)
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
@@ -38,7 +37,6 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
 	DeleteUser(ctx context.Context, id int32) error
-	GetAlbumByPathAndTitle(ctx context.Context, arg GetAlbumByPathAndTitleParams) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error)
 	GetAlbumByTitle(ctx context.Context, title string) (Album, error)
 	GetAlbumCount(ctx context.Context) (int64, error)
@@ -55,7 +53,6 @@ type Querier interface {
 	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
 	GetMusicianByID(ctx context.Context, id int32) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
-	GetMusicianByPath(ctx context.Context, directoryPath string) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Musician, error)
 	GetMusicianCount(ctx context.Context) (int64, error)
 	GetMusicianList(ctx context.Context) ([]GetMusicianListRow, error)
@@ -70,7 +67,6 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
-	UpdateAlbumTotalAvailableTracks(ctx context.Context, arg UpdateAlbumTotalAvailableTracksParams) error
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)

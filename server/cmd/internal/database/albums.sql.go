@@ -11,63 +11,44 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const checkAlbumExistsBySpotifyID = `-- name: CheckAlbumExistsBySpotifyID :one
-SELECT EXISTS(
-    SELECT 1 FROM albums WHERE spotify_id = $1
-) as exists
-`
-
-func (q *Queries) CheckAlbumExistsBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (bool, error) {
-	row := q.db.QueryRow(ctx, checkAlbumExistsBySpotifyID, spotifyID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createAlbum = `-- name: CreateAlbum :one
 INSERT INTO albums (
     title,
     sort_title,
-    directory_path,
     spotify_id,
     release_date,
     year,
     spotify_popularity,
     total_tracks,
-    total_available_tracks,
     cover,
     musician_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id
+RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover, musician_id
 `
 
 type CreateAlbumParams struct {
-	Title                string      `json:"title"`
-	SortTitle            string      `json:"sort_title"`
-	DirectoryPath        string      `json:"directory_path"`
-	SpotifyID            pgtype.Text `json:"spotify_id"`
-	ReleaseDate          pgtype.Date `json:"release_date"`
-	Year                 pgtype.Int4 `json:"year"`
-	SpotifyPopularity    pgtype.Int4 `json:"spotify_popularity"`
-	TotalTracks          int32       `json:"total_tracks"`
-	TotalAvailableTracks int32       `json:"total_available_tracks"`
-	Cover                pgtype.Text `json:"cover"`
-	MusicianID           pgtype.Int4 `json:"musician_id"`
+	Title             string      `json:"title"`
+	SortTitle         string      `json:"sort_title"`
+	SpotifyID         pgtype.Text `json:"spotify_id"`
+	ReleaseDate       pgtype.Date `json:"release_date"`
+	Year              pgtype.Int4 `json:"year"`
+	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
+	TotalTracks       int32       `json:"total_tracks"`
+	Cover             pgtype.Text `json:"cover"`
+	MusicianID        pgtype.Int4 `json:"musician_id"`
 }
 
 func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
 	row := q.db.QueryRow(ctx, createAlbum,
 		arg.Title,
 		arg.SortTitle,
-		arg.DirectoryPath,
 		arg.SpotifyID,
 		arg.ReleaseDate,
 		arg.Year,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
-		arg.TotalAvailableTracks,
 		arg.Cover,
 		arg.MusicianID,
 	)
@@ -78,44 +59,11 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
-		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
-		&i.Cover,
-		&i.MusicianID,
-	)
-	return i, err
-}
-
-const getAlbumByPathAndTitle = `-- name: GetAlbumByPathAndTitle :one
-SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums WHERE directory_path = $1 AND title = $2
-`
-
-type GetAlbumByPathAndTitleParams struct {
-	DirectoryPath string `json:"directory_path"`
-	Title         string `json:"title"`
-}
-
-func (q *Queries) GetAlbumByPathAndTitle(ctx context.Context, arg GetAlbumByPathAndTitleParams) (Album, error) {
-	row := q.db.QueryRow(ctx, getAlbumByPathAndTitle, arg.DirectoryPath, arg.Title)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.SortTitle,
-		&i.DirectoryPath,
-		&i.SpotifyID,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.SpotifyPopularity,
-		&i.TotalTracks,
-		&i.TotalAvailableTracks,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -123,7 +71,7 @@ func (q *Queries) GetAlbumByPathAndTitle(ctx context.Context, arg GetAlbumByPath
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover, musician_id FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error) {
@@ -135,13 +83,11 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
-		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -149,7 +95,7 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text
 }
 
 const getAlbumByTitle = `-- name: GetAlbumByTitle :one
-SELECT id, created_at, updated_at, title, sort_title, directory_path, spotify_id, release_date, year, spotify_popularity, total_tracks, total_available_tracks, cover, musician_id FROM albums Where title = $1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover, musician_id FROM albums Where title = $1
 `
 
 func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, error) {
@@ -161,13 +107,11 @@ func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, err
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
-		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
 		&i.Cover,
 		&i.MusicianID,
 	)
@@ -187,7 +131,7 @@ func (q *Queries) GetAlbumCount(ctx context.Context) (int64, error) {
 
 const getAlbumDetails = `-- name: GetAlbumDetails :one
 WITH album_base AS (
-    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.directory_path, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.cover, a.musician_id
+    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.cover, a.musician_id
     FROM albums a
     WHERE a.id = $1
 ),
@@ -255,7 +199,7 @@ album_tracks AS (
     LEFT JOIN tracks t ON t.album_id = a.id
 )
 SELECT 
-    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.directory_path, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.total_available_tracks, a.cover, a.musician_id,
+    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.cover, a.musician_id,
     m.musician,
     g.genres,
     t.tracks
@@ -266,23 +210,21 @@ CROSS JOIN album_tracks t
 `
 
 type GetAlbumDetailsRow struct {
-	ID                   int32              `json:"id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	Title                string             `json:"title"`
-	SortTitle            string             `json:"sort_title"`
-	DirectoryPath        string             `json:"directory_path"`
-	SpotifyID            pgtype.Text        `json:"spotify_id"`
-	ReleaseDate          pgtype.Date        `json:"release_date"`
-	Year                 pgtype.Int4        `json:"year"`
-	SpotifyPopularity    pgtype.Int4        `json:"spotify_popularity"`
-	TotalTracks          int32              `json:"total_tracks"`
-	TotalAvailableTracks int32              `json:"total_available_tracks"`
-	Cover                pgtype.Text        `json:"cover"`
-	MusicianID           pgtype.Int4        `json:"musician_id"`
-	Musician             interface{}        `json:"musician"`
-	Genres               interface{}        `json:"genres"`
-	Tracks               interface{}        `json:"tracks"`
+	ID                int32              `json:"id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Title             string             `json:"title"`
+	SortTitle         string             `json:"sort_title"`
+	SpotifyID         pgtype.Text        `json:"spotify_id"`
+	ReleaseDate       pgtype.Date        `json:"release_date"`
+	Year              pgtype.Int4        `json:"year"`
+	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
+	TotalTracks       int32              `json:"total_tracks"`
+	Cover             pgtype.Text        `json:"cover"`
+	MusicianID        pgtype.Int4        `json:"musician_id"`
+	Musician          interface{}        `json:"musician"`
+	Genres            interface{}        `json:"genres"`
+	Tracks            interface{}        `json:"tracks"`
 }
 
 func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error) {
@@ -294,13 +236,11 @@ func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetail
 		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
-		&i.DirectoryPath,
 		&i.SpotifyID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.TotalAvailableTracks,
 		&i.Cover,
 		&i.MusicianID,
 		&i.Musician,
@@ -401,20 +341,4 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateAlbumTotalAvailableTracks = `-- name: UpdateAlbumTotalAvailableTracks :exec
-UPDATE albums 
-SET total_available_tracks = $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-`
-
-type UpdateAlbumTotalAvailableTracksParams struct {
-	ID                   int32 `json:"id"`
-	TotalAvailableTracks int32 `json:"total_available_tracks"`
-}
-
-func (q *Queries) UpdateAlbumTotalAvailableTracks(ctx context.Context, arg UpdateAlbumTotalAvailableTracksParams) error {
-	_, err := q.db.Exec(ctx, updateAlbumTotalAvailableTracks, arg.ID, arg.TotalAvailableTracks)
-	return err
 }

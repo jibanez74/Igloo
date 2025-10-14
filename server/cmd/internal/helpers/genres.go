@@ -58,3 +58,51 @@ func SaveGenres(ctx context.Context, qtx *database.Queries, genreString, genreTy
 
 	return genreIDs, nil
 }
+
+func SaveGenreMusic(ctx context.Context, qtx *database.Queries, track *database.Track, genreID int32) error {
+	if track == nil {
+		return errors.New("got nil pointer for track in SaveGenreMusic")
+	}
+
+	exist, err := qtx.CheckTrackGenreExists(ctx, database.CheckTrackGenreExistsParams{TrackID: track.ID, GenreID: genreID})
+	if err != nil {
+		return err
+	}
+
+	if !exist {
+		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{TrackID: track.ID, GenreID: genreID})
+		if err != nil {
+			return err
+		}
+	}
+
+	if track.MusicianID.Int32 > 0 {
+		exist, err = qtx.CheckMusicianGenreExist(ctx, database.CheckMusicianGenreExistParams{MusicianID: track.MusicianID.Int32, GenreID: genreID})
+		if err != nil {
+			return err
+		}
+
+		if !exist {
+			err = qtx.CreateMusicianGenre(ctx, database.CreateMusicianGenreParams{MusicianID: track.MusicianID.Int32, GenreID: genreID})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if track.AlbumID.Int32 > 0 {
+		exist, err = qtx.CheckAlbumGenreExist(ctx, database.CheckAlbumGenreExistParams{AlbumID: track.AlbumID.Int32, GenreID: genreID})
+		if err != nil {
+			return err
+		}
+
+		if !exist {
+			err = qtx.CreateAlbumGenre(ctx, database.CreateAlbumGenreParams{AlbumID: track.AlbumID.Int32, GenreID: genreID})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
