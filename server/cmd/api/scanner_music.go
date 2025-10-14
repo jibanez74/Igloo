@@ -8,10 +8,27 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// formatDuration formats a duration into a human-readable string with hours, minutes, and seconds
+func formatDuration(d time.Duration) string {
+	totalSeconds := int(d.Seconds())
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	} else {
+		return fmt.Sprintf("%ds", seconds)
+	}
+}
 
 func (app *Application) ScanMusicLibrary() {
 	if app.Settings.MusicDir.String == "" {
@@ -30,6 +47,7 @@ func (app *Application) ScanMusicLibrary() {
 	qtx := app.Queries.WithTx(tx)
 	errorCount := 0
 	tracksScanned := 0
+	startTime := time.Now()
 
 	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -77,7 +95,7 @@ func (app *Application) ScanMusicLibrary() {
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("scanned %d tracks with %d errors", tracksScanned, errorCount))
+	app.Logger.Info(fmt.Sprintf("scanned %d tracks with %d errors in %s", tracksScanned, errorCount, formatDuration(time.Since(startTime))))
 }
 
 func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) error {
