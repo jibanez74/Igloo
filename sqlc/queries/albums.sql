@@ -1,19 +1,11 @@
 -- name: GetAlbumCount :one
 SELECT COUNT(*) FROM albums;
 
--- name: CheckAlbumExistsBySpotifyID :one
-SELECT EXISTS(
-    SELECT 1 FROM albums WHERE spotify_id = $1
-) as exists;
-
 -- name: GetAlbumBySpotifyID :one
 SELECT * FROM albums WHERE spotify_id = $1 LIMIT 1;
 
 -- name: GetAlbumByTitle :one
 SELECT * FROM albums Where title = $1;
-
--- name: GetAlbumByPathAndTitle :one
-SELECT * FROM albums WHERE directory_path = $1 AND title = $2;
 
 -- name: GetAlbumDetails :one
 WITH album_base AS (
@@ -120,21 +112,15 @@ LIMIT 12;
 INSERT INTO albums (
     title,
     sort_title,
-    directory_path,
     spotify_id,
     release_date,
     year,
     spotify_popularity,
     total_tracks,
-    total_available_tracks,
     cover,
     musician_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
 RETURNING *;
 
--- name: UpdateAlbumTotalAvailableTracks :exec
-UPDATE albums 
-SET total_available_tracks = $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1;

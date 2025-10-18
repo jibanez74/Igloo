@@ -21,5 +21,10 @@
 		"tailwindcss": "^4.0.0",
 		"typescript": "^5.0.0",
 		"vite": "^7.0.4"
+	},
+	"dependencies": {
+		"@fortawesome/fontawesome-svg-core": "^7.1.0",
+		"@fortawesome/free-solid-svg-icons": "^7.1.0",
+		"@fortawesome/svelte-fontawesome": "^0.2.4"
 	}
 }

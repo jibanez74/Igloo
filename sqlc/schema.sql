@@ -90,12 +90,11 @@ CREATE TABLE musicians (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   name VARCHAR(255) NOT NULL,
   sort_name VARCHAR(255) NOT NULL,
-  directory_path TEXT NOT NULL UNIQUE,
   summary TEXT,
-  spotify_id VARCHAR(255),
+  spotify_id VARCHAR(255) UNIQUE,
   spotify_popularity INTEGER NOT NULL DEFAULT 0 CHECK (spotify_popularity >= 0),
   spotify_followers INTEGER NOT NULL DEFAULT 0 CHECK (spotify_followers >= 0),
-  thumb TEXT
+  thumb TEXT UNIQUE
 );
 
 CREATE TABLE albums (
@@ -104,14 +103,12 @@ CREATE TABLE albums (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   title VARCHAR(100) NOT NULL,
   sort_title VARCHAR(100) NOT NULL,
-  directory_path TEXT NOT NULL UNIQUE,
-  spotify_id VARCHAR(255),
+  spotify_id VARCHAR(255) UNIQUE,
   release_date DATE,
   year INTEGER,
   spotify_popularity INTEGER CHECK (spotify_popularity >= 0),
   total_tracks INTEGER NOT NULL DEFAULT 0 CHECK (total_tracks >= 0),
-  total_available_tracks INTEGER NOT NULL DEFAULT 0 CHECK (total_available_tracks >= 0),
-  cover TEXT,
+  cover TEXT UNIQUE,
   musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL
 );
 
@@ -134,11 +131,10 @@ CREATE TABLE tracks (
   composer VARCHAR(255),
   release_date DATE,
   year INTEGER,
-  bit_rate INTEGER CHECK (bit_rate >= 0),
+  bit_rate INTEGER CHECK (bit_rate >= 0) NOT NULL,
   copyright VARCHAR(255),
   language VARCHAR(10),
   profile VARCHAR(20),
-  sample_rate INTEGER CHECK (sample_rate >= 0),
   album_id INTEGER REFERENCES albums(id) ON DELETE SET NULL,
   musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL
 );
