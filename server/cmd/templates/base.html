@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="dark light">
   <title>{{block "title" .}}Igloo Media Center{{end}}</title>
   <link rel="stylesheet" href="/assets/css/styles.css">
+  <script src="/assets/js/shared.js"></script>
 </head>
 
 <body
@@ -50,9 +51,76 @@
     </div>
   </header>
 
-  <main id="main" class="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-    {{block "content" .}}{{end}}
-  </main>
+  <!-- Layout: aside + main content -->
+  <div class="flex-1">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid md:grid-cols-[14rem_1fr] gap-6">
+      <aside class="md:sticky md:top-16">
+        <nav aria-labelledby="primary-nav" class="md:pr-4">
+          <h2 id="primary-nav" class="sr-only">Primary navigation</h2>
+          <ul class="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible">
+            <li>
+              <a href="/" data-route="/" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-house text-slate-400"></i>
+                <span>Home</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="/movies" data-route="/movies" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-film text-slate-400"></i>
+                <span>Movies</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="/tv-shows" data-route="/tv-shows" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-tv text-slate-400"></i>
+                <span>TV Shows</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="/music" data-route="/music" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-music text-slate-400"></i>
+                <span>Music</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="/photos" data-route="/photos" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-image text-slate-400"></i>
+                <span>Photos</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="/other" data-route="/other" class="flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
+                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
+                        md:border-l-2 md:border-transparent">
+                <i class="fa-solid fa-ellipsis text-slate-400"></i>
+                <span>Other</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </aside>
+
+      <main id="main" class="min-w-0">
+        {{block "content" .}}
+        {{end}}
+      </main>
+    </div>
+  </div>
 
   <footer class="border-t border-slate-800 bg-slate-900 text-slate-400">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
