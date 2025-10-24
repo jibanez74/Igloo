@@ -3,15 +3,85 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{block "title" .}}Default Title{{end}}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta name="color-scheme" content="dark light">
+  <title>{{block "title" .}}Igloo Media Center{{end}}</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
 </head>
 
-<body class="bg-slate-900 text-slate-100 min-h-screen antialiased selection:bg-amber-400 selection:text-slate-900">
-  <main>
+<body
+  class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
+  <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3
+         focus:bg-amber-400 focus:text-slate-900 focus:px-3 focus:py-2 focus:rounded-md">
+    Skip to content
+  </a>
+
+  <!-- Header / Top bar -->
+  <header class="sticky top-0 z-50 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
+      <!-- Brand -->
+      <a href="/" class="flex items-center gap-2 font-semibold tracking-wide">
+        <i class="fa-solid fa-igloo text-amber-400 text-xl" aria-hidden="true"></i>
+        <span class="text-lg">Igloo</span>
+      </a>
+
+      <!-- Search (collapsible on small screens later, but simple for now) -->
+      <form class="ml-auto flex-1 max-w-xl" role="search" aria-label="Search library">
+        <label class="sr-only" for="q">Search</label>
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"></i>
+          <input id="q" name="q" type="search" placeholder="Search..." class="w-full rounded-lg bg-slate-800/80 pl-10 pr-3 py-2 text-sm placeholder-slate-400
+                   focus:outline-none focus:ring-2 focus:ring-amber-400" />
+        </div>
+      </form>
+
+      <!-- Quick actions -->
+      <nav class="flex items-center gap-2 ml-2">
+        <button class="p-2 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Notifications">
+          <i class="fa-regular fa-bell" aria-hidden="true"></i>
+        </button>
+
+        <button class="p-2 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Settings">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
     {{block "content" .}}{{end}}
   </main>
+
+  <footer class="border-t border-slate-800 bg-slate-900 text-slate-400">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between">
+      <div class="text-center sm:text-left">
+        <p class="text-sm font-medium text-slate-200">&copy; 2025 Igloo Media Center</p>
+        <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">
+          An open-source project by
+          <a href="https://blindpenguincoder.com" target="_blank" rel="noopener noreferrer"
+            class="text-amber-400 hover:underline font-medium">Blind Penguin Coder</a>.
+          Released under the
+          <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html" target="_blank" rel="noopener noreferrer"
+            class="text-amber-400 hover:underline font-medium">GNU General Public License v2</a>
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 mt-3 sm:mt-0">
+        <a href="#" class="hover:text-amber-400 transition-colors" aria-label="GitHub"><i
+            class="fa-brands fa-github text-lg" aria-hidden="true"></i></a>
+        <a href="#" class="hover:text-amber-400 transition-colors" aria-label="Twitter / X"><i
+            class="fa-brands fa-x-twitter text-lg" aria-hidden="true"></i></a>
+        <a href="#" class="hover:text-amber-400 transition-colors" aria-label="LinkedIn"><i
+            class="fa-brands fa-linkedin text-lg" aria-hidden="true"></i></a>
+        <a href="#" class="hover:text-amber-400 transition-colors" aria-label="Instagram"><i
+            class="fa-brands fa-instagram text-lg" aria-hidden="true"></i></a>
+        <a href="mailto:contact@blindpenguin.dev" class="hover:text-amber-400 transition-colors" aria-label="Email"><i
+            class="fa-solid fa-envelope text-lg" aria-hidden="true"></i></a>
+      </div>
+    </div>
+  </footer>
 </body>
 
 </html>
