@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
 	CheckAlbumGenreExist(ctx context.Context, arg CheckAlbumGenreExistParams) (bool, error)
+	CheckAlbumMusicianExists(ctx context.Context, arg CheckAlbumMusicianExistsParams) (bool, error)
 	CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error)
 	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
 	CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error)
@@ -20,6 +21,7 @@ type Querier interface {
 	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
+	CreateAlbumMusician(ctx context.Context, arg CreateAlbumMusicianParams) (AlbumMusician, error)
 	CreateAudioStream(ctx context.Context, arg CreateAudioStreamParams) (AudioStream, error)
 	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)
 	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
@@ -40,7 +42,7 @@ type Querier interface {
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error)
 	GetAlbumByTitle(ctx context.Context, title string) (Album, error)
 	GetAlbumCount(ctx context.Context) (int64, error)
-	GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error)
+	GetAlbumDetails(ctx context.Context, id int32) (Album, error)
 	GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginatedParams) ([]GetAlbumsPaginatedRow, error)
 	GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
@@ -63,7 +65,6 @@ type Querier interface {
 	GetTrackByID(ctx context.Context, id int32) (Track, error)
 	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
 	GetTrackCount(ctx context.Context) (int64, error)
-	GetTrackGenresByAlbumID(ctx context.Context, albumID pgtype.Int4) ([]TrackGenre, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)

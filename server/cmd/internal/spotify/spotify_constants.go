@@ -1,3 +1,3 @@
 package spotify
 
-const maxCacheSize = 50
+const maxCacheSize = 100

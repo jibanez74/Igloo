@@ -411,5 +411,14 @@ func (app *Application) InitRouter() *chi.Mux {
 		})
 	})
 
+	router.Route("/assets", func(r chi.Router) {
+		r.Handle("/*", http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join("cmd", "assets")))))
+	})
+
+	router.Route("/", func(r chi.Router) {
+		r.Get("/login", app.RouteGetLoginPage)
+		r.Get("/", app.RouteGetIndexPage)
+	})
+
 	return router
 }

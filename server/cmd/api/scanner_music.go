@@ -176,6 +176,13 @@ func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries
 		createTrack.AlbumID = pgtype.Int4{Int32: album.ID, Valid: true}
 	}
 
+	if createTrack.MusicianID.Int32 > 0 && createTrack.AlbumID.Int32 > 0 {
+		err = app.CreateAlbumMusicianRelation(ctx, qtx, createTrack.MusicianID.Int32, createTrack.AlbumID.Int32)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, s := range info.Streams {
 		if s.CodecType == CODEC_TYPE_AUDIO {
 			createTrack.Codec = s.CodecName
@@ -276,10 +283,6 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 					SortTitle: sortTitle,
 				}
 
-				if musicianID > 0 {
-					createAlbum.MusicianID = pgtype.Int4{Int32: musicianID, Valid: true}
-				}
-
 				album, err = qtx.CreateAlbum(ctx, createAlbum)
 				if err != nil {
 					return nil, err
@@ -307,10 +310,6 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				Year:              pgtype.Int4{Int32: int32(albumDetails.ReleaseDateTime().Year()), Valid: true},
 			}
 
-			if musicianID > 0 {
-				createAlbum.MusicianID = pgtype.Int4{Int32: musicianID, Valid: true}
-			}
-
 			if len(albumDetails.Images) > 0 {
 				createAlbum.Cover = pgtype.Text{String: albumDetails.Images[0].URL, Valid: true}
 			}
@@ -328,4 +327,30 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 	}
 
 	return &album, nil
+}
+
+func (app *Application) CreateAlbumMusicianRelation(ctx context.Context, qtx *database.Queries, musicianID, albumID int32) error {
+	exists, err := qtx.CheckAlbumMusicianExists(ctx, database.CheckAlbumMusicianExistsParams{
+		AlbumID:    albumID,
+		MusicianID: musicianID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to check if album-musician relationship exists: %w", err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	_, err = qtx.CreateAlbumMusician(ctx, database.CreateAlbumMusicianParams{
+		AlbumID:    albumID,
+		MusicianID: musicianID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create album-musician relationship: %w", err)
+	}
+
+	return nil
 }

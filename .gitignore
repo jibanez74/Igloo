@@ -3,6 +3,7 @@
 /server/.env*
 /server/pg_data/*
 /server/redis_data/*
+/tailwind/node_modules/*
 .DS_Store
 .vscode
 .idea

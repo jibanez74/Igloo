@@ -108,8 +108,7 @@ CREATE TABLE albums (
   year INTEGER,
   spotify_popularity INTEGER CHECK (spotify_popularity >= 0),
   total_tracks INTEGER NOT NULL DEFAULT 0 CHECK (total_tracks >= 0),
-  cover TEXT UNIQUE,
-  musician_id INTEGER REFERENCES musicians(id) ON DELETE SET NULL
+  cover TEXT UNIQUE
 );
 
 CREATE TABLE tracks (
@@ -281,6 +280,12 @@ CREATE TABLE track_genres (
   PRIMARY KEY (track_id, genre_id)
 );
 
+CREATE TABLE album_musicians (
+  album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE,
+  musician_id INTEGER REFERENCES musicians(id) ON DELETE CASCADE,
+  PRIMARY KEY (album_id, musician_id)
+);
+
 -- Indexes
 
 -- Core lookups
@@ -322,6 +327,8 @@ CREATE INDEX idx_musician_genres_musician_id ON musician_genres (musician_id);
 CREATE INDEX idx_musician_genres_genre_id ON musician_genres (genre_id);
 CREATE INDEX idx_track_genres_track_id ON track_genres (track_id);
 CREATE INDEX idx_track_genres_genre_id ON track_genres (genre_id);
+CREATE INDEX idx_album_musicians_album_id ON album_musicians (album_id);
+CREATE INDEX idx_album_musicians_musician_id ON album_musicians (musician_id);
 
 -- Additional performance indexes
 
@@ -352,7 +359,6 @@ CREATE INDEX idx_movies_year_rating ON movies (year, audience_rating);
 CREATE INDEX idx_movies_genre_type ON movies (content_rating, adult);
 CREATE INDEX idx_tracks_album_year ON tracks (album_id, year);
 CREATE INDEX idx_tracks_musician_year ON tracks (musician_id, year);
-CREATE INDEX idx_albums_musician_year ON albums (musician_id, year);
 CREATE INDEX idx_cast_list_movie_character ON cast_list (movie_id, character);
 CREATE INDEX idx_crew_list_movie_job ON crew_list (movie_id, job);
 

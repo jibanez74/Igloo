@@ -20,7 +20,11 @@ type Album struct {
 	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
 	TotalTracks       int32              `json:"total_tracks"`
 	Cover             pgtype.Text        `json:"cover"`
-	MusicianID        pgtype.Int4        `json:"musician_id"`
+}
+
+type AlbumMusician struct {
+	AlbumID    int32 `json:"album_id"`
+	MusicianID int32 `json:"musician_id"`
 }
 
 type AudioStream struct {
@@ -202,11 +206,6 @@ type Track struct {
 	Profile       pgtype.Text        `json:"profile"`
 	AlbumID       pgtype.Int4        `json:"album_id"`
 	MusicianID    pgtype.Int4        `json:"musician_id"`
-}
-
-type TrackGenre struct {
-	TrackID int32 `json:"track_id"`
-	GenreID int32 `json:"genre_id"`
 }
 
 type User struct {
