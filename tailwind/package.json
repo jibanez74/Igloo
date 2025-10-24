@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@fortawesome/fontawesome-free": "^7.1.0",
-    "@tailwindcss/cli": "^4.1.16",
-    "tailwindcss": "^4.1.16"
-  }
-}

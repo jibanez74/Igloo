@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="author" content="BlindPenguin" />
+  <meta name="description"
+    content="Create the perfect ambient soundscape with our immersive sound mixer. Mix rain, ocean, fireplace, birds, and more to create relaxing, focus-enhancing, or sleep-inducing audio environments. Customizable presets and real-time mixing for productivity and wellness." />
+  <meta name="keywords"
+    content="ambient sounds, sound mixer, relaxation, focus music, sleep sounds, rain sounds, ocean waves, fireplace, birds chirping, thunder, wind, cafe sounds, night sounds, productivity, meditation, white noise, nature sounds, background music, soundscape, audio mixer" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#667eea" />
+  <title>Ambient Sound Mixer - Create Perfect Soundscapes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body id="body"
+  class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white transition-all duration-500">
+  <!-- Skip Link -->
+  <a href="#main-content"
+    class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-purple-600 text-white px-4 py-2 rounded-lg z-50">
+    Skip to main content
+  </a>
+
+  <!-- Header -->
+  <header class="container mx-auto px-4 py-6">
+    <nav class="flex justify-between items-center" role="navigation" aria-label="Main navigation">
+      <div class="flex items-center space-x-2">
+        <i class="fas fa-music text-2xl text-purple-400" aria-hidden="true"></i>
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+          Ambient Mixer
+        </h1>
+      </div>
+
+      <!-- Theme Toggle -->
+      <button type="button" onclick="" id="themeToggle"
+        class="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-300 touch-friendly"
+        aria-label="Toggle theme between light and dark mode" aria-pressed="false">
+        <i class="fas fa-sun text-yellow-300" aria-hidden="true"></i>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main id="main-content" class="container mx-auto px-4 py-8">
+    <!-- Controls Section -->
+    <section class="mb-8">
+      <div class="flex flex-wrap gap-4 justify-center items-center">
+        <!-- Master Volume -->
+        <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 flex items-center space-x-3" role="group"
+          aria-labelledby="master-volume-label">
+          <i class="fas fa-volume-high text-xl" aria-hidden="true"></i>
+          <label for="masterVolume" id="master-volume-label" class="text-sm">Master Volume</label>
+          <input type="range" id="masterVolume" min="0" max="100" value="50" class="w-24 accent-purple-500"
+            aria-label="Master volume control" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+            aria-valuetext="50 percent" />
+          <span id="masterVolumeValue" class="text-sm w-8" aria-live="polite">50</span>
+        </div>
+
+        <!-- Timer -->
+        <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 flex items-center space-x-3" role="group"
+          aria-labelledby="timer-label">
+          <i class="fas fa-clock text-xl" aria-hidden="true"></i>
+          <label for="timerSelect" id="timer-label" class="text-sm">Timer</label>
+          <select id="timerSelect" class="bg-transparent border border-white/30 rounded-lg px-3 py-1 text-sm"
+            aria-label="Select timer duration">
+            <option value="0">No Timer</option>
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">60 minutes</option>
+          </select>
+          <span id="timerDisplay" class="text-sm hidden" aria-live="polite"></span>
+        </div>
+
+        <!-- Play/Pause All -->
+        <button type="button" id="playPauseAll"
+          class="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 touch-friendly"
+          aria-label="Play or pause all ambient sounds" aria-pressed="false">
+          <i class="fas fa-play mr-2" aria-hidden="true"></i>
+          <span>Play All</span>
+        </button>
+
+        <!-- Reset -->
+        <button type="button" id="resetAll"
+          class="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-xl font-semibold transition-all duration-300 touch-friendly"
+          aria-label="Reset all sounds to default settings">
+          <i class="fas fa-undo mr-2" aria-hidden="true"></i>
+          Reset
+        </button>
+      </div>
+    </section>
+
+    <!-- Sound Cards Grid -->
+    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8"
+      aria-label="Ambient sound controls" role="region">
+      <!-- Sound cards will be dynamically generated here -->
+    </section>
+
+    <!-- Presets Section -->
+    <section class="bg-white/10 backdrop-blur-md rounded-2xl p-6" aria-labelledby="presets-heading">
+      <h2 id="presets-heading" class="text-xl font-bold mb-4 flex items-center">
+        <i class="fas fa-bookmark mr-2 text-purple-400" aria-hidden="true"></i>
+        Presets
+      </h2>
+
+      <div class="flex flex-wrap gap-3 mb-4" role="group" aria-label="Preset controls">
+        <!-- Preset buttons will be dynamically generated here -->
+        <div id="presetButtons" class="flex flex-wrap gap-3">
+          <!-- Default presets -->
+          <button type="button"
+            class="preset-btn bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+            data-preset="focus" aria-label="Load focus preset - rain and thunder sounds">
+            <i class="fas fa-brain mr-2" aria-hidden="true"></i>Focus
+          </button>
+          <button type="button"
+            class="preset-btn bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+            data-preset="relax" aria-label="Load relax preset - ocean and wind sounds">
+            <i class="fas fa-spa mr-2" aria-hidden="true"></i>Relax
+          </button>
+          <button type="button"
+            class="preset-btn bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+            data-preset="sleep" aria-label="Load sleep preset - fireplace and night sounds">
+            <i class="fas fa-bed mr-2" aria-hidden="true"></i>Sleep
+          </button>
+        </div>
+
+        <!-- Save Current Mix -->
+        <button type="button" id="savePreset"
+          class="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+          aria-label="Save current sound mix as a new preset">
+          <i class="fas fa-save mr-2" aria-hidden="true"></i>Save Mix
+        </button>
+      </div>
+
+      <!-- Custom Presets -->
+      <div id="customPresets" class="flex flex-wrap gap-3" role="group" aria-label="Custom saved presets">
+        <!-- Custom saved presets will appear here -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Save Preset Modal -->
+  <div id="savePresetModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50"
+    role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-description"
+    aria-hidden="true">
+    <div
+      class="bg-gradient-to-br from-purple-900 to-indigo-900 p-6 rounded-2xl max-w-md w-full mx-4 border border-white/20">
+      <h3 id="modal-title" class="text-xl font-bold mb-4">Save Your Mix</h3>
+      <p id="modal-description" class="sr-only">Enter a name for your custom sound mix preset</p>
+      <label for="presetName" class="sr-only">Preset name</label>
+      <input type="text" id="presetName" placeholder="Enter preset name..."
+        class="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-lg mb-4 placeholder-white/50"
+        aria-describedby="modal-description" aria-required="true" />
+      <div class="flex gap-3">
+        <button type="button" id="confirmSave"
+          class="flex-1 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+          aria-label="Save the preset with the entered name">
+          Save
+        </button>
+        <button type="button" id="cancelSave"
+          class="flex-1 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-all duration-300 touch-friendly"
+          aria-label="Cancel saving preset and close dialog">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/app.js" type="module"></script>
+</body>
+
+</html>

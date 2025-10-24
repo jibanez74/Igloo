@@ -19,14 +19,12 @@ ORDER BY a.sort_title ASC
 LIMIT $1 OFFSET $2;
 
 -- name: GetLatestAlbums :many
-SELECT DISTINCT ON (a.title)
-    a.title,
-    a.cover,
-    m.name as musician_name,
-    a.year
-FROM albums a
-LEFT JOIN musicians m ON m.id = a.musician_id
-ORDER BY a.title, a.created_at DESC
+SELECT 
+    id,
+    title,
+    cover
+FROM albums
+ORDER BY created_at DESC
 LIMIT 12;
 
 -- name: GetAlbumDetails :one

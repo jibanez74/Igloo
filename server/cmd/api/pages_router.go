@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/tmdb"
 	"net/http"
 	"path/filepath"
 	"text/template"
@@ -21,10 +24,32 @@ func (app *Application) RouteGetIndexPage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	albums, err := app.Queries.GetLatestAlbums(context.Background())
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("fail to get latest albums"), http.StatusInternalServerError)
+		return
+	}
+
+	var moviesInTheaters []*tmdb.TmdbMovie
+
+	if app.Tmdb != nil {
+		movies, err := app.Tmdb.GetMoviesInTheaters()
+		if err != nil {
+			// Log error but don't fail the page - movies are optional
+			// You might want to add logging here
+		} else {
+			moviesInTheaters = movies
+		}
+	}
+
 	data := struct {
-		Name string
+		Name             string
+		Albums           []database.GetLatestAlbumsRow
+		MoviesInTheaters []*tmdb.TmdbMovie
 	}{
-		Name: "User",
+		Name:             "User",
+		Albums:           albums,
+		MoviesInTheaters: moviesInTheaters,
 	}
 
 	tmpl.Execute(w, data)

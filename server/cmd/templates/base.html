@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
   <title>{{block "title" .}}Igloo Media Center{{end}}</title>
-  <link rel="stylesheet" href="/assets/css/styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="/assets/js/shared.js"></script>
 </head>
 
@@ -52,9 +53,10 @@
   </header>
 
   <!-- Layout: aside + main content -->
-  <div class="flex-1">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid md:grid-cols-[14rem_1fr] gap-6">
-      <aside class="md:sticky md:top-16">
+  <div class="flex-1 flex overflow-hidden">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid md:grid-cols-[14rem_1fr] gap-6 flex-1">
+      <!-- Fixed Sidebar -->
+      <aside class="md:sticky md:top-16 md:h-[calc(100vh-8rem)] md:overflow-y-auto">
         <nav aria-labelledby="primary-nav" class="md:pr-4">
           <h2 id="primary-nav" class="sr-only">Primary navigation</h2>
           <ul class="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible">
@@ -115,7 +117,8 @@
         </nav>
       </aside>
 
-      <main id="main" class="min-w-0">
+      <!-- Scrollable Main Content -->
+      <main id="main" class="min-w-0 md:h-[calc(100vh-8rem)] md:overflow-y-auto">
         {{block "content" .}}
         {{end}}
       </main>
