@@ -5,7 +5,6 @@ import (
 	"errors"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/tmdb"
 	"net/http"
 	"path/filepath"
 	"text/template"
@@ -30,26 +29,10 @@ func (app *Application) RouteGetIndexPage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var moviesInTheaters []*tmdb.TmdbMovie
-
-	if app.Tmdb != nil {
-		movies, err := app.Tmdb.GetMoviesInTheaters()
-		if err != nil {
-			// Log error but don't fail the page - movies are optional
-			// You might want to add logging here
-		} else {
-			moviesInTheaters = movies
-		}
-	}
-
 	data := struct {
-		Name             string
-		Albums           []database.GetLatestAlbumsRow
-		MoviesInTheaters []*tmdb.TmdbMovie
+		Albums []database.GetLatestAlbumsRow
 	}{
-		Name:             "User",
-		Albums:           albums,
-		MoviesInTheaters: moviesInTheaters,
+		Albums: albums,
 	}
 
 	tmpl.Execute(w, data)
@@ -57,7 +40,6 @@ func (app *Application) RouteGetIndexPage(w http.ResponseWriter, r *http.Request
 
 func (app *Application) RouteGetLoginPage(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles(
-		filepath.Join(TEMPLATES_BASE_PATH, "base.html"),
 		filepath.Join(TEMPLATES_BASE_PATH, "login.html"),
 	)
 

@@ -20,11 +20,12 @@ INSERT INTO albums (
     year,
     spotify_popularity,
     total_tracks,
+    musician,
     cover
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover
+RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover
 `
 
 type CreateAlbumParams struct {
@@ -35,6 +36,7 @@ type CreateAlbumParams struct {
 	Year              pgtype.Int4 `json:"year"`
 	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
 	TotalTracks       int32       `json:"total_tracks"`
+	Musician          pgtype.Text `json:"musician"`
 	Cover             pgtype.Text `json:"cover"`
 }
 
@@ -47,6 +49,7 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		arg.Year,
 		arg.SpotifyPopularity,
 		arg.TotalTracks,
+		arg.Musician,
 		arg.Cover,
 	)
 	var i Album
@@ -61,13 +64,14 @@ func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
+		&i.Musician,
 		&i.Cover,
 	)
 	return i, err
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover FROM albums WHERE spotify_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error) {
@@ -84,13 +88,14 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
+		&i.Musician,
 		&i.Cover,
 	)
 	return i, err
 }
 
 const getAlbumByTitle = `-- name: GetAlbumByTitle :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover FROM albums Where title = $1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover FROM albums Where title = $1
 `
 
 func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, error) {
@@ -107,6 +112,7 @@ func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, err
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
+		&i.Musician,
 		&i.Cover,
 	)
 	return i, err
@@ -124,7 +130,7 @@ func (q *Queries) GetAlbumCount(ctx context.Context) (int64, error) {
 }
 
 const getAlbumDetails = `-- name: GetAlbumDetails :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, cover FROM albums WHERE id = $1
+SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover FROM albums WHERE id = $1
 `
 
 func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (Album, error) {
@@ -141,64 +147,17 @@ func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (Album, error) 
 		&i.Year,
 		&i.SpotifyPopularity,
 		&i.TotalTracks,
+		&i.Musician,
 		&i.Cover,
 	)
 	return i, err
-}
-
-const getAlbumsPaginated = `-- name: GetAlbumsPaginated :many
-SELECT 
-    a.id,
-    a.title,
-    a.cover,
-    m.name as musician_name
-FROM albums a
-LEFT JOIN musicians m ON m.id = a.musician_id
-ORDER BY a.sort_title ASC
-LIMIT $1 OFFSET $2
-`
-
-type GetAlbumsPaginatedParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-type GetAlbumsPaginatedRow struct {
-	ID           int32       `json:"id"`
-	Title        string      `json:"title"`
-	Cover        pgtype.Text `json:"cover"`
-	MusicianName pgtype.Text `json:"musician_name"`
-}
-
-func (q *Queries) GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginatedParams) ([]GetAlbumsPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getAlbumsPaginated, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAlbumsPaginatedRow{}
-	for rows.Next() {
-		var i GetAlbumsPaginatedRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Cover,
-			&i.MusicianName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT 
     id,
     title,
+    musician,
     cover
 FROM albums
 ORDER BY created_at DESC
@@ -206,9 +165,10 @@ LIMIT 12
 `
 
 type GetLatestAlbumsRow struct {
-	ID    int32       `json:"id"`
-	Title string      `json:"title"`
-	Cover pgtype.Text `json:"cover"`
+	ID       int32       `json:"id"`
+	Title    string      `json:"title"`
+	Musician pgtype.Text `json:"musician"`
+	Cover    pgtype.Text `json:"cover"`
 }
 
 func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error) {
@@ -220,7 +180,12 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	items := []GetLatestAlbumsRow{}
 	for rows.Next() {
 		var i GetLatestAlbumsRow
-		if err := rows.Scan(&i.ID, &i.Title, &i.Cover); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Musician,
+			&i.Cover,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

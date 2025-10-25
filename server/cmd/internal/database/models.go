@@ -19,6 +19,7 @@ type Album struct {
 	Year              pgtype.Int4        `json:"year"`
 	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
 	TotalTracks       int32              `json:"total_tracks"`
+	Musician          pgtype.Text        `json:"musician"`
 	Cover             pgtype.Text        `json:"cover"`
 }
 

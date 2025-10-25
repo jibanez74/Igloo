@@ -43,7 +43,6 @@ type Querier interface {
 	GetAlbumByTitle(ctx context.Context, title string) (Album, error)
 	GetAlbumCount(ctx context.Context) (int64, error)
 	GetAlbumDetails(ctx context.Context, id int32) (Album, error)
-	GetAlbumsPaginated(ctx context.Context, arg GetAlbumsPaginatedParams) ([]GetAlbumsPaginatedRow, error)
 	GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)

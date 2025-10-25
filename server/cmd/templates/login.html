@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Igloo — Sign in</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="/assets/js/login.js"></script>
+</head>
+
+<body class="h-full bg-slate-900 text-slate-100 antialiased">
+  <!-- Background image from Unsplash -->
+  <div class="relative min-h-screen">
+    <div class="absolute inset-0 bg-cover bg-center bg-no-repeat
+             bg-[url('/assets/images/login-bg.jpg')]">
+    </div>
+    <div class="absolute inset-0 bg-slate-950/70"></div>
+
+    <!-- Centered login card -->
+    <main class="relative z-10 min-h-screen flex items-center justify-center px-4">
+      <section id="login-card"
+        class="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur shadow-xl p-6 sm:p-8
+               opacity-0 translate-y-2 transition-opacity transition-transform duration-500 ease-out will-change-transform">
+        <!-- Brand + welcome -->
+        <div class="mb-6 text-center">
+          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800">
+            <i class="fa-solid fa-igloo text-amber-400 text-xl" aria-hidden="true"></i>
+          </div>
+          <h1 class="text-2xl font-semibold tracking-tight">Welcome to Igloo</h1>
+          <p class="mt-1 text-slate-400 text-sm">Sign in to access your private media library.</p>
+        </div>
+
+        <!-- Form -->
+        <form action="/login" method="post" class="space-y-4">
+          <div>
+            <label for="email" class="block text-sm mb-1">Email</label>
+            <div class="relative">
+              <i class="fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"></i>
+              <input autofocus type="email" id="email" name="email" inputmode="email" autocomplete="username" required
+                class="w-full rounded-lg bg-slate-800/80 pl-10 pr-3 py-2 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm mb-1">Password</label>
+            <div class="relative">
+              <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"></i>
+              <input type="password" required minlength="9" maxlength="128" id="password" name="password"
+                autocomplete="current-password" required class="w-full rounded-lg bg-slate-800/80 pl-10 pr-10 py-2 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              <!-- Show/Hide toggle -->
+              <button type="button" id="togglePassword" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md
+                             text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                aria-label="Toggle password visibility">
+                <i class="fa-regular fa-eye" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="pt-2">
+            <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2
+                     text-sm font-semibold text-white hover:bg-blue-500
+                     focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
+              <span>Sign in</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+</body>
+
+</html>

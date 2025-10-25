@@ -108,6 +108,7 @@ CREATE TABLE albums (
   year INTEGER,
   spotify_popularity INTEGER CHECK (spotify_popularity >= 0),
   total_tracks INTEGER NOT NULL DEFAULT 0 CHECK (total_tracks >= 0),
+  musician VARCHAR(100),
   cover TEXT UNIQUE
 );
 

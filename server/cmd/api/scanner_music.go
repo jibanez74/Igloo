@@ -168,7 +168,7 @@ func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries
 	}
 
 	if info.Format.Tags.Album != "" {
-		album, err := app.GetOrCreateAlbum(ctx, qtx, createTrack.MusicianID.Int32, info.Format.Tags.Album, info.Format.Tags.SortAlbum)
+		album, err := app.GetOrCreateAlbum(ctx, qtx, createTrack.MusicianID.Int32, info.Format.Tags.Album, info.Format.Tags.SortAlbum, info.Format.Tags.AlbumArtist)
 		if err != nil {
 			return err
 		}
@@ -272,7 +272,7 @@ func (app *Application) GetOrCreateMusician(ctx context.Context, qtx *database.Q
 	return &musician, nil
 }
 
-func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Queries, musicianID int32, title, sortTitle string) (*database.Album, error) {
+func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Queries, musicianID int32, title, sortTitle, albumArtist string) (*database.Album, error) {
 	albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(title)
 	if err != nil {
 		album, err := qtx.GetAlbumByTitle(ctx, title)
@@ -281,6 +281,10 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				createAlbum := database.CreateAlbumParams{
 					Title:     title,
 					SortTitle: sortTitle,
+				}
+
+				if albumArtist != "" {
+					createAlbum.Musician = pgtype.Text{String: albumArtist, Valid: true}
 				}
 
 				album, err = qtx.CreateAlbum(ctx, createAlbum)
@@ -308,6 +312,10 @@ func (app *Application) GetOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				TotalTracks:       int32(albumDetails.TotalTracks),
 				ReleaseDate:       pgtype.Date{Time: albumDetails.ReleaseDateTime(), Valid: true},
 				Year:              pgtype.Int4{Int32: int32(albumDetails.ReleaseDateTime().Year()), Valid: true},
+			}
+
+			if albumArtist != "" {
+				createAlbum.Musician = pgtype.Text{String: albumArtist, Valid: true}
 			}
 
 			if len(albumDetails.Images) > 0 {
