@@ -11,47 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const checkUserExists = `-- name: CheckUserExists :one
-SELECT EXISTS (
-    SELECT 1 FROM users
-    WHERE email = $1 OR username = $2
-)
-`
-
-type CheckUserExistsParams struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-}
-
-func (q *Queries) CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, checkUserExists, arg.Email, arg.Username)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     name,
     email,
-    username,
     password,
-    is_active,
     is_admin,
+    is_active,
     avatar
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-)
-RETURNING id, created_at, updated_at, name, email, username, password, is_active, is_admin, avatar
+    $1, $2, $3, $4, $5, $6
+) RETURNING id, created_at, updated_at, name, email, password, is_active, is_admin, avatar
 `
 
 type CreateUserParams struct {
 	Name     string      `json:"name"`
 	Email    string      `json:"email"`
-	Username string      `json:"username"`
 	Password string      `json:"password"`
-	IsActive bool        `json:"is_active"`
 	IsAdmin  bool        `json:"is_admin"`
+	IsActive bool        `json:"is_active"`
 	Avatar   pgtype.Text `json:"avatar"`
 }
 
@@ -59,10 +37,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Name,
 		arg.Email,
-		arg.Username,
 		arg.Password,
-		arg.IsActive,
 		arg.IsAdmin,
+		arg.IsActive,
 		arg.Avatar,
 	)
 	var i User
@@ -72,30 +49,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Name,
 		&i.Email,
-		&i.Username,
 		&i.Password,
 		&i.IsActive,
 		&i.IsAdmin,
 		&i.Avatar,
 	)
 	return i, err
-}
-
-const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users 
-WHERE users.id = $1 
-AND users.id != (
-    -- Prevent deletion of the last admin user
-    SELECT users.id FROM users 
-    WHERE users.is_admin = true 
-    ORDER BY users.created_at ASC 
-    LIMIT 1
-)
-`
-
-func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteUser, id)
-	return err
 }
 
 const getTotalUsersCount = `-- name: GetTotalUsersCount :one
@@ -109,60 +68,27 @@ func (q *Queries) GetTotalUsersCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, username, is_active, is_admin, avatar FROM users
-WHERE id = $1
+const getUserForLogin = `-- name: GetUserForLogin :one
+SELECT id, name, email, password, is_admin, avatar FROM users WHERE email = $1 AND is_active = true
 `
 
-type GetUserByIDRow struct {
+type GetUserForLoginRow struct {
 	ID       int32       `json:"id"`
 	Name     string      `json:"name"`
 	Email    string      `json:"email"`
-	Username string      `json:"username"`
-	IsActive bool        `json:"is_active"`
+	Password string      `json:"password"`
 	IsAdmin  bool        `json:"is_admin"`
 	Avatar   pgtype.Text `json:"avatar"`
 }
 
-func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
-	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i GetUserByIDRow
+func (q *Queries) GetUserForLogin(ctx context.Context, email string) (GetUserForLoginRow, error) {
+	row := q.db.QueryRow(ctx, getUserForLogin, email)
+	var i GetUserForLoginRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Username,
-		&i.IsActive,
-		&i.IsAdmin,
-		&i.Avatar,
-	)
-	return i, err
-}
-
-const getUserForLogin = `-- name: GetUserForLogin :one
-SELECT id, created_at, updated_at, name, email, username, password, is_active, is_admin, avatar FROM users
-WHERE email = $1 
-AND username = $2
-AND is_active = true
-`
-
-type GetUserForLoginParams struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-}
-
-func (q *Queries) GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error) {
-	row := q.db.QueryRow(ctx, getUserForLogin, arg.Email, arg.Username)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.Email,
-		&i.Username,
 		&i.Password,
-		&i.IsActive,
 		&i.IsAdmin,
 		&i.Avatar,
 	)
@@ -174,7 +100,6 @@ SELECT
     id,
     name,
     email,
-    username,
     is_active,
     is_admin
 FROM users
@@ -191,7 +116,6 @@ type GetUsersPaginatedRow struct {
 	ID       int32  `json:"id"`
 	Name     string `json:"name"`
 	Email    string `json:"email"`
-	Username string `json:"username"`
 	IsActive bool   `json:"is_active"`
 	IsAdmin  bool   `json:"is_admin"`
 }
@@ -209,7 +133,6 @@ func (q *Queries) GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedPa
 			&i.ID,
 			&i.Name,
 			&i.Email,
-			&i.Username,
 			&i.IsActive,
 			&i.IsAdmin,
 		); err != nil {
@@ -221,99 +144,4 @@ func (q *Queries) GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedPa
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateUser = `-- name: UpdateUser :one
-UPDATE users
-SET 
-    name = $1,
-    email = $2,
-    username = $3,
-    password = $4,
-    is_active = $5,
-    is_admin = $6,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $7
-RETURNING id, name, email, username, is_active, is_admin, avatar
-`
-
-type UpdateUserParams struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	IsActive bool   `json:"is_active"`
-	IsAdmin  bool   `json:"is_admin"`
-	ID       int32  `json:"id"`
-}
-
-type UpdateUserRow struct {
-	ID       int32       `json:"id"`
-	Name     string      `json:"name"`
-	Email    string      `json:"email"`
-	Username string      `json:"username"`
-	IsActive bool        `json:"is_active"`
-	IsAdmin  bool        `json:"is_admin"`
-	Avatar   pgtype.Text `json:"avatar"`
-}
-
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
-	row := q.db.QueryRow(ctx, updateUser,
-		arg.Name,
-		arg.Email,
-		arg.Username,
-		arg.Password,
-		arg.IsActive,
-		arg.IsAdmin,
-		arg.ID,
-	)
-	var i UpdateUserRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Email,
-		&i.Username,
-		&i.IsActive,
-		&i.IsAdmin,
-		&i.Avatar,
-	)
-	return i, err
-}
-
-const updateUserAvatar = `-- name: UpdateUserAvatar :one
-UPDATE users
-SET avatar = $1,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $2
-RETURNING id, name, email, username, is_active, is_admin, avatar
-`
-
-type UpdateUserAvatarParams struct {
-	Avatar pgtype.Text `json:"avatar"`
-	ID     int32       `json:"id"`
-}
-
-type UpdateUserAvatarRow struct {
-	ID       int32       `json:"id"`
-	Name     string      `json:"name"`
-	Email    string      `json:"email"`
-	Username string      `json:"username"`
-	IsActive bool        `json:"is_active"`
-	IsAdmin  bool        `json:"is_admin"`
-	Avatar   pgtype.Text `json:"avatar"`
-}
-
-func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error) {
-	row := q.db.QueryRow(ctx, updateUserAvatar, arg.Avatar, arg.ID)
-	var i UpdateUserAvatarRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Email,
-		&i.Username,
-		&i.IsActive,
-		&i.IsAdmin,
-		&i.Avatar,
-	)
-	return i, err
 }

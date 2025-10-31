@@ -18,7 +18,6 @@ type Querier interface {
 	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
 	CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error)
 	CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error)
-	CheckUserExists(ctx context.Context, arg CheckUserExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
 	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
 	CreateAlbumMusician(ctx context.Context, arg CreateAlbumMusicianParams) (AlbumMusician, error)
@@ -38,11 +37,10 @@ type Querier interface {
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
-	DeleteUser(ctx context.Context, id int32) error
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error)
 	GetAlbumByTitle(ctx context.Context, title string) (Album, error)
 	GetAlbumCount(ctx context.Context) (int64, error)
-	GetAlbumDetails(ctx context.Context, id int32) (Album, error)
+	GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error)
 	GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
@@ -64,12 +62,9 @@ type Querier interface {
 	GetTrackByID(ctx context.Context, id int32) (Track, error)
 	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
 	GetTrackCount(ctx context.Context) (int64, error)
-	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
-	GetUserForLogin(ctx context.Context, arg GetUserForLoginParams) (User, error)
+	GetUserForLogin(ctx context.Context, email string) (GetUserForLoginRow, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
-	UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error)
-	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (UpdateUserAvatarRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

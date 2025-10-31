@@ -215,7 +215,6 @@ type User struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	Name      string             `json:"name"`
 	Email     string             `json:"email"`
-	Username  string             `json:"username"`
 	Password  string             `json:"password"`
 	IsActive  bool               `json:"is_active"`
 	IsAdmin   bool               `json:"is_admin"`

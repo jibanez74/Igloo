@@ -1,0 +1,134 @@
+{{define "title"}}Album Details{{end}}
+
+{{define "content"}}
+
+<!-- Album Details -->
+<header class="mb-6 flex items-center justify-between">
+  <a href="/music" class="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-slate-100
+            hover:bg-slate-700 hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400
+            transition-all duration-200 ease-out">
+    <i class="fa-solid fa-arrow-left"></i>
+    <span>Back to Albums</span>
+  </a>
+</header>
+
+<section class="grid gap-6 md:grid-cols-[280px_1fr]">
+  <!-- Cover -->
+  <div>
+    <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow">
+      <img src="/covers/album-1.jpg" alt="Album Title — Artist Name" width="800" height="800"
+        class="w-full h-auto object-cover" loading="eager" decoding="async" sizes="(min-width:1024px) 280px, 50vw" />
+    </div>
+  </div>
+
+  <!-- Meta + actions -->
+  <div class="min-w-0">
+    <!-- Title / artist -->
+    <h2 id="album-title" class="text-2xl md:text-3xl font-semibold tracking-tight text-white">
+      Album Title
+    </h2>
+    <p class="mt-1 text-slate-300">
+      by <a href="/artists/artist-1" class="text-amber-400 hover:underline">Artist Name</a>
+    </p>
+
+    <!-- Genres -->
+    <div class="mt-3 flex flex-wrap gap-2">
+      <span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200">Pop</span>
+      <span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-200">Dance</span>
+    </div>
+
+    <!-- Release date + popularity -->
+    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="text-sm">
+        <p class="text-slate-400">Release date</p>
+        <time datetime="2024-03-15" class="text-slate-200">March 15, 2024</time>
+      </div>
+      <div class="text-sm">
+        <p class="text-slate-400">Popularity (Spotify)</p>
+        <div class="mt-1 flex items-center gap-3">
+          <div class="relative h-2 w-full rounded bg-slate-800">
+            <div class="absolute inset-y-0 left-0 rounded bg-amber-400" style="width:65%"></div>
+          </div>
+          <span class="text-slate-200 tabular-nums">65</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mt-5 flex flex-wrap items-center gap-2">
+      <button type="button" id="albumPlay" class="inline-flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 text-slate-900 font-semibold
+                     hover:bg-amber-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400
+                     transition-transform duration-200 ease-out" aria-pressed="false" aria-label="Play album">
+        <i class="fa-solid fa-circle-play"></i><span>Play</span>
+      </button>
+
+      <button type="button" class="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-slate-100
+                     hover:bg-slate-700 hover:text-amber-400 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400
+                     transition-transform duration-200 ease-out" aria-label="Like album">
+        <i class="fa-regular fa-heart"></i><span class="hidden sm:inline">Like</span>
+      </button>
+
+      <button type="button" class="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-slate-100
+                     hover:bg-slate-700 hover:text-amber-400 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400
+                     transition-transform duration-200 ease-out" aria-label="Shuffle">
+        <i class="fa-solid fa-shuffle"></i><span class="hidden sm:inline">Shuffle</span>
+      </button>
+
+      <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-slate-100
+                     hover:bg-slate-700 hover:text-amber-400 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400
+                     transition-transform duration-200 ease-out" aria-label="More options">
+        <i class="fa-solid fa-ellipsis"></i><span class="hidden sm:inline">More</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Track list -->
+<section class="mt-8">
+  <h3 class="text-lg md:text-xl font-semibold tracking-tight mb-3">Tracks</h3>
+  <ol class="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-900 overflow-hidden">
+    <li class="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 hover:bg-slate-800/40">
+      <span class="w-6 text-right text-slate-400 tabular-nums">1</span>
+      <div class="min-w-0">
+        <p class="text-sm text-slate-200 truncate">Track Title One</p>
+      </div>
+      <button type="button" class="p-2 rounded-md text-slate-200 hover:bg-slate-800 hover:text-amber-400 hover:scale-110
+                     focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 ease-out"
+        aria-label="Play Track Title One" data-track-btn>
+        <i class="fa-solid fa-circle-play"></i>
+      </button>
+    </li>
+    <!-- Repeat for more tracks -->
+  </ol>
+</section>
+
+<script>
+  (function () {
+    const albumPlay = document.getElementById('albumPlay');
+    if (albumPlay) {
+      albumPlay.addEventListener('click', () => {
+        const pressed = albumPlay.getAttribute('aria-pressed') === 'true';
+        albumPlay.setAttribute('aria-pressed', String(!pressed));
+        const icon = albumPlay.querySelector('i');
+        const label = albumPlay.querySelector('span');
+        if (icon && label) {
+          icon.classList.toggle('fa-circle-play', pressed);
+          icon.classList.toggle('fa-circle-pause', !pressed);
+          label.textContent = pressed ? 'Play' : 'Pause';
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-track-btn]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const icon = btn.querySelector('i');
+        if (!icon) return;
+        const isPlay = icon.classList.contains('fa-circle-play');
+        icon.classList.toggle('fa-circle-play', !isPlay);
+        icon.classList.toggle('fa-circle-pause', isPlay);
+      });
+    });
+  })();
+</script>
+
+{{end}}

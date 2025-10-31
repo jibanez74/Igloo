@@ -10,13 +10,18 @@ import (
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 	"log"
+	"time"
+
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"github.com/alexedwards/scs/redisstore"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -54,6 +59,8 @@ func InitApp() (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	app.InitSession()
 
 	if app.Settings.EnableLogger {
 		l, err := logger.New(app.Settings.Debug, app.Settings.LogsDir)
@@ -320,7 +327,6 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 		_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
 			Name:     "Admin User",
 			Email:    "admin@example.com",
-			Username: "admin",
 			Password: hashPassword,
 			IsActive: true,
 			IsAdmin:  true,
@@ -385,6 +391,52 @@ func (app *Application) InitDirs(s *database.CreateSettingsParams) error {
 	return nil
 }
 
+func (app *Application) InitSession() {
+	cookieName := os.Getenv("COOKIE_NAME")
+	if cookieName == "" {
+		cookieName = "igloo_cookie"
+	}
+
+	cookieDomain := os.Getenv("COOKIE_DOAMIN")
+	if cookieDomain == "" {
+		cookieDomain = "localhost"
+	}
+
+	secure := true
+	if app.Settings.Debug {
+		secure = false
+	}
+
+	if cookieName == "" {
+		cookieName = "igloo_cookie"
+	}
+
+	if cookieDomain == "" {
+		cookieDomain = "localhost"
+	}
+
+	pool := &redis.Pool{
+		MaxIdle: 10,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", "host:6379")
+		},
+	}
+
+	sessionManager := scs.New()
+	sessionManager.Lifetime = 30 * 24 * time.Hour
+	sessionManager.IdleTimeout = 7 * 24 * time.Hour
+	sessionManager.Cookie.HttpOnly = true
+	sessionManager.Cookie.Persist = true
+	sessionManager.Cookie.Path = "/"
+	sessionManager.Store = redisstore.New(pool)
+	sessionManager.Cookie.Name = cookieName
+	sessionManager.Cookie.Domain = cookieDomain
+	sessionManager.Cookie.Secure = secure
+	sessionManager.Cookie.SameSite = http.SameSiteStrictMode
+
+	app.Session = sessionManager
+}
+
 func (app *Application) InitRouter() *chi.Mux {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
@@ -393,6 +445,9 @@ func (app *Application) InitRouter() *chi.Mux {
 	router.Use(app.enableCORS)
 
 	router.Route("/api/v1", func(r chi.Router) {
+		// add the login route
+		r.Post("/login", app.RouteLogin)
+
 		r.Route("/albums", func(r chi.Router) {
 			r.Get("/count", app.RouteGetAlbumCount)
 			r.Get("/details/{id}", app.RouteGetAlbumDetails)
@@ -411,12 +466,13 @@ func (app *Application) InitRouter() *chi.Mux {
 		})
 	})
 
-	router.Route("/assets", func(r chi.Router) {
-		r.Handle("/*", http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join("cmd", "assets")))))
+	router.Route("/public", func(r chi.Router) {
+		r.Handle("/*", http.StripPrefix("/public/", http.FileServer(http.Dir(filepath.Join("cmd", "public")))))
 	})
 
 	router.Route("/", func(r chi.Router) {
 		r.Get("/login", app.RouteGetLoginPage)
+		r.Get("/music/albums/{id}", app.RouteGetAlbumDetailsPage)
 		r.Get("/", app.RouteGetIndexPage)
 	})
 

@@ -8,7 +8,6 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   name VARCHAR(60) NOT NULL,
   email CITEXT NOT NULL UNIQUE CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
-  username CITEXT NOT NULL UNIQUE,
   password VARCHAR(128) NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT false,
   is_admin  BOOLEAN NOT NULL DEFAULT false,
