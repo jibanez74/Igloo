@@ -439,41 +439,39 @@ func (app *Application) InitSession() {
 
 func (app *Application) InitRouter() *chi.Mux {
 	router := chi.NewRouter()
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
 	router.Use(middleware.RequestID)
+	router.Use(middleware.RealIP)
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.Logger)
+	router.Use(app.Session.LoadAndSave)
 	router.Use(app.enableCORS)
 
-	router.Route("/api/v1", func(r chi.Router) {
-		// add the login route
-		r.Post("/login", app.RouteLogin)
+	router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	}))
 
-		r.Route("/albums", func(r chi.Router) {
-			r.Get("/count", app.RouteGetAlbumCount)
-			r.Get("/details/{id}", app.RouteGetAlbumDetails)
-			r.Get("/latest", app.RouteGetLatestAlbums)
-		})
-
-		r.Route("/musicians", func(r chi.Router) {
-			r.Get("/count", app.RouteGetMusicianCount)
-			r.Get("/list", app.RouteGetMusicianList)
-			r.Post("/create", app.RouteCreateMusician)
-		})
-
-		r.Route("/tracks", func(r chi.Router) {
-			r.Get("/count", app.RouteGetTrackCount)
-			r.Handle("/play/*", http.StripPrefix("/api/v1/tracks/play/", http.FileServer(http.Dir(app.Settings.MusicDir.String))))
-		})
-	})
+	router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	}))
 
 	router.Route("/public", func(r chi.Router) {
 		r.Handle("/*", http.StripPrefix("/public/", http.FileServer(http.Dir(filepath.Join("cmd", "public")))))
 	})
 
-	router.Route("/", func(r chi.Router) {
-		r.Get("/login", app.RouteGetLoginPage)
-		r.Get("/music/albums/{id}", app.RouteGetAlbumDetailsPage)
-		r.Get("/", app.RouteGetIndexPage)
+	router.Get("/login", app.RouteGetLoginPage)
+
+	router.Route("/api/v1", func(r chi.Router) {
+		r.Post("/login", app.RouteLogin)
+
+		r.Group(func(r chi.Router) {
+			r.Use(app.IsAuth)
+		})
+	})
+
+	router.Group(func(r chi.Router) {
+		r.Use(app.IsAuth)
+
+		r.Get("/", app.RouteGetHomePage)
 	})
 
 	return router

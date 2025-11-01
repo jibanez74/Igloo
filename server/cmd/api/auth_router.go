@@ -16,12 +16,12 @@ func (app *Application) RouteLogin(w http.ResponseWriter, r *http.Request) {
 	err := helpers.ReadJSON(w, r, &request, 0)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("fail to parse request body in login process\n%s", err.Error()))
-		helpers.ErrorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(INVALID_REQUEST_BODY), http.StatusBadRequest)
 		return
 	}
 
 	if request.Email == "" || request.Password == "" {
-		helpers.ErrorJSON(w, errors.New("email and password are required"), http.StatusBadRequest)
+		helpers.ErrorJSON(w, errors.New(INVALID_CREDENTIALS))
 		return
 	}
 
@@ -30,9 +30,9 @@ func (app *Application) RouteLogin(w http.ResponseWriter, r *http.Request) {
 		app.Logger.Error(fmt.Sprintf("fail to fetch user from data base for login process\n%s", err.Error()))
 
 		if err == pgx.ErrNoRows {
-			helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(INVALID_CREDENTIALS), http.StatusUnauthorized)
 		} else {
-			helpers.ErrorJSON(w, errors.New("internal server error"))
+			helpers.ErrorJSON(w, errors.New(INTERNAL_SERVER_ERROR))
 		}
 
 		return
@@ -41,27 +41,26 @@ func (app *Application) RouteLogin(w http.ResponseWriter, r *http.Request) {
 	match, err := helpers.PasswordMatches(request.Password, user.Password)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("fail to compare hash with plain string  password in login process for user %s\n%s", request.Email, err.Error()))
-		helpers.ErrorJSON(w, errors.New("internal server error"))
+		helpers.ErrorJSON(w, errors.New(INTERNAL_SERVER_ERROR))
 		return
 	}
 
 	if !match {
 		app.Logger.Error((fmt.Sprintf("incorrect password entered for user %s", user.Name)))
-		helpers.ErrorJSON(w, errors.New("not authorized"), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(INVALID_CREDENTIALS), http.StatusUnauthorized)
 		return
 	}
 
-	// Renew session token for security
 	err = app.Session.RenewToken(r.Context())
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("fail to renew session token for user %s\n%s", user.Name, err.Error()))
-		helpers.ErrorJSON(w, errors.New("internal server error"))
+		helpers.ErrorJSON(w, errors.New(INTERNAL_SERVER_ERROR))
 		return
 	}
 
-	app.Session.Put(r.Context(), "user_id", user.ID)
-	app.Session.Put(r.Context(), "is_admin", user.IsAdmin)
-	app.Session.Put(r.Context(), "email", user.Email)
+	app.Session.Put(r.Context(), COOKIE_USER_ID, user.ID)
+	app.Session.Put(r.Context(), COOKIE_IS_ADMIN, user.IsAdmin)
+	app.Session.Put(r.Context(), COOKIE_EMAIL, user.Email)
 
 	res := helpers.JSONResponse{
 		Error: false,
@@ -75,6 +74,8 @@ func (app *Application) RouteLogin(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	app.Logger.Info(fmt.Sprintf(SUCCESS_LOGIN, user.Name, user.ID))
+
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
@@ -82,13 +83,13 @@ func (app *Application) RouteLogout(w http.ResponseWriter, r *http.Request) {
 	err := app.Session.Destroy(r.Context())
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("fail to destroy session during logout\n%s", err.Error()))
-		helpers.ErrorJSON(w, errors.New("internal server error"))
+		helpers.ErrorJSON(w, errors.New(INTERNAL_SERVER_ERROR))
 		return
 	}
 
 	res := helpers.JSONResponse{
 		Error:   false,
-		Message: "logout successful",
+		Message: SUCCESS_LOGOUT,
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)

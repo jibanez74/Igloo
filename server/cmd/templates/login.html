@@ -8,7 +8,7 @@
   <title>Igloo — Sign in</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <script src="/assets/js/login.js"></script>
+  <script src="/public/js/login.js"></script>
 </head>
 
 <body class="h-full bg-slate-900 text-slate-100 antialiased">
@@ -34,7 +34,7 @@
         </div>
 
         <!-- Form -->
-        <form action="/login" method="post" class="space-y-4">
+        <form id="login-form" class="space-y-4">
           <div>
             <label for="email" class="block text-sm mb-1">Email</label>
             <div class="relative">
