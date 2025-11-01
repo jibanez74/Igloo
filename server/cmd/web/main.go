@@ -10,6 +10,8 @@ import (
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 	"log"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"net/http"
@@ -38,6 +40,8 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to create app", err)
 	}
+
+	go app.ListenForShutdown()
 
 	err = http.ListenAndServe(fmt.Sprintf(":%d", app.Settings.Port), app.InitRouter())
 	if err != nil {
@@ -435,6 +439,7 @@ func (app *Application) InitSession() {
 	sessionManager.Cookie.SameSite = http.SameSiteStrictMode
 
 	app.Session = sessionManager
+	app.RedisPool = pool
 }
 
 func (app *Application) InitRouter() *chi.Mux {
@@ -443,8 +448,7 @@ func (app *Application) InitRouter() *chi.Mux {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Logger)
-	router.Use(app.Session.LoadAndSave)
-	router.Use(app.enableCORS)
+	router.Use(app.LoadAndSaveSession)
 
 	router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -475,4 +479,24 @@ func (app *Application) InitRouter() *chi.Mux {
 	})
 
 	return router
+}
+
+func (app *Application) ListenForShutdown() {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	app.Logger.Info("will run clean up task before Shutting down...")
+	app.Wait.Wait()
+
+	if app.Db != nil {
+		app.Db.Close()
+		app.Logger.Info("Database connection closed")
+	}
+
+	if app.RedisPool != nil {
+		app.RedisPool.Close()
+		app.Logger.Info("Redis connection pool closed")
+	}
+
+	os.Exit(0)
 }
