@@ -15,6 +15,11 @@ import (
 )
 
 func (app *Application) ScanMusicLibrary() {
+	if app.Wait != nil {
+		app.Wait.Add(1)
+		defer app.Wait.Done()
+	}
+
 	if app.Settings.MusicDir.String == "" {
 		app.Logger.Error("got an empty string in ScanMusicLibrary")
 		return

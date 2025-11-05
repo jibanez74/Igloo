@@ -25,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -241,16 +242,18 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		if err != nil {
 			log.Println("Fail to get ENABLE_TRANSCODING value from environment variables.  Media transcoding will be disabled.")
 			enableTranscoding = false
-		} else {
-			s.EnableHardwareAcceleration = enableTranscoding
+		}
+		s.EnableHardwareAcceleration = enableTranscoding
 
-			if enableTranscoding {
-				s.HardwareAccelerationMethod = os.Getenv("HARDWARE_ACCELERATION_METHOD")
-				if s.HardwareAccelerationMethod == "" {
-					log.Println("Fail to get HARDWARE_ACCELERATION_METHOD from environment variables.  Defaulting to CPU transcoding.")
-					s.HardwareAccelerationMethod = "cpu"
-				}
+		if enableTranscoding {
+			s.HardwareAccelerationMethod = os.Getenv("HARDWARE_ACCELERATION_METHOD")
+			if s.HardwareAccelerationMethod == "" {
+				log.Println("Fail to get HARDWARE_ACCELERATION_METHOD from environment variables.  Defaulting to CPU transcoding.")
+				s.HardwareAccelerationMethod = "cpu"
 			}
+		} else {
+			// Set default method even when transcoding is disabled
+			s.HardwareAccelerationMethod = "cpu"
 		}
 
 		s.LogsDir = os.Getenv("LOGS_DIR")
@@ -265,11 +268,12 @@ func (app *Application) InitSettings(ctx context.Context) error {
 			s.StaticDir = "static"
 		}
 
-		s.TranscodeDir.String = os.Getenv("TRANSCODE_DIR")
-		if s.TranscodeDir.String == "" {
+		transcodeDir := os.Getenv("TRANSCODE_DIR")
+		if transcodeDir == "" {
 			log.Println("Fail to get TRANSCODE_DIR from environment variables.  Transcoding directory will be placed on the current working directory.")
-			s.TranscodeDir.String = "transcode"
+			transcodeDir = "transcode"
 		}
+		s.TranscodeDir = pgtype.Text{String: transcodeDir, Valid: true}
 
 		s.BaseUrl = os.Getenv("BASE_URL")
 		if s.BaseUrl == "" {
@@ -277,20 +281,78 @@ func (app *Application) InitSettings(ctx context.Context) error {
 			s.BaseUrl = "localhost"
 		}
 
-		s.FfmpegPath.String = os.Getenv("FFMPEG_PATH")
-		s.FfprobePath.String = os.Getenv("FFPROBE_PATH")
-		s.TmdbApiKey.String = os.Getenv("TMDB_API_KEY")
-		s.JellyfinToken.String = os.Getenv("JELLYFIN_TOKEN")
-		s.MoviesDir.String = os.Getenv("MOVIES_DIR")
-		s.MusicDir.String = os.Getenv("MUSIC_DIR")
-		s.TvshowsDir.String = os.Getenv("TVSHOWS_DIR")
-		s.MoviesImgDir = os.Getenv("MOVIES_IMG_DIR")
-		s.StudiosImgDir = os.Getenv("STUDIOS_IMG_DIR")
-		s.ArtistsImgDir = os.Getenv("ARTISTS_IMG_DIR")
-		s.AvatarImgDir = os.Getenv("AVATAR_IMG_DIR")
-		s.PlexToken.String = os.Getenv("PLEX_TOKEN")
-		s.SpotifyClientID.String = os.Getenv("SPOTIFY_CLIENT_ID")
-		s.SpotifyClientSecret.String = os.Getenv("SPOTIFY_CLIENT_SECRET")
+		// Set pgtype.Text fields with proper Valid flag
+		ffmpegPath := os.Getenv("FFMPEG_PATH")
+		if ffmpegPath != "" {
+			s.FfmpegPath = pgtype.Text{String: ffmpegPath, Valid: true}
+		}
+
+		ffprobePath := os.Getenv("FFPROBE_PATH")
+		if ffprobePath != "" {
+			s.FfprobePath = pgtype.Text{String: ffprobePath, Valid: true}
+		}
+
+		tmdbApiKey := os.Getenv("TMDB_API_KEY")
+		if tmdbApiKey != "" {
+			s.TmdbApiKey = pgtype.Text{String: tmdbApiKey, Valid: true}
+		}
+
+		jellyfinToken := os.Getenv("JELLYFIN_TOKEN")
+		if jellyfinToken != "" {
+			s.JellyfinToken = pgtype.Text{String: jellyfinToken, Valid: true}
+		}
+
+		moviesDir := os.Getenv("MOVIES_DIR")
+		if moviesDir != "" {
+			s.MoviesDir = pgtype.Text{String: moviesDir, Valid: true}
+		}
+
+		musicDir := os.Getenv("MUSIC_DIR")
+		if musicDir != "" {
+			s.MusicDir = pgtype.Text{String: musicDir, Valid: true}
+		}
+
+		tvshowsDir := os.Getenv("TVSHOWS_DIR")
+		if tvshowsDir != "" {
+			s.TvshowsDir = pgtype.Text{String: tvshowsDir, Valid: true}
+		}
+
+		plexToken := os.Getenv("PLEX_TOKEN")
+		if plexToken != "" {
+			s.PlexToken = pgtype.Text{String: plexToken, Valid: true}
+		}
+
+		spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
+		if spotifyClientID != "" {
+			s.SpotifyClientID = pgtype.Text{String: spotifyClientID, Valid: true}
+		}
+
+		spotifyClientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+		if spotifyClientSecret != "" {
+			s.SpotifyClientSecret = pgtype.Text{String: spotifyClientSecret, Valid: true}
+		}
+
+		// Image directories - these will be overridden by InitDirs if env vars are not set
+		// Only use env vars if they are explicitly provided
+		moviesImgDir := os.Getenv("MOVIES_IMG_DIR")
+		if moviesImgDir != "" {
+			s.MoviesImgDir = moviesImgDir
+		}
+
+		studiosImgDir := os.Getenv("STUDIOS_IMG_DIR")
+		if studiosImgDir != "" {
+			s.StudiosImgDir = studiosImgDir
+		}
+
+		artistsImgDir := os.Getenv("ARTISTS_IMG_DIR")
+		if artistsImgDir != "" {
+			s.ArtistsImgDir = artistsImgDir
+		}
+
+		avatarImgDir := os.Getenv("AVATAR_IMG_DIR")
+		if avatarImgDir != "" {
+			s.AvatarImgDir = avatarImgDir
+		}
 
 		err = app.InitDirs(&s)
 		if err != nil {
@@ -390,7 +452,7 @@ func (app *Application) InitDirs(s *database.CreateSettingsParams) error {
 func (app *Application) InitSession() {
 	cookieName := os.Getenv("COOKIE_NAME")
 	if cookieName == "" {
-		log.Println("Fail to get COOKIE_NAME from envireonemnt variables.  Cookie name will be set to igloo_cokkie.")
+		log.Println("Fail to get COOKIE_NAME from environment variables.  Cookie name will be set to igloo_cookie.")
 		cookieName = "igloo_cookie"
 	}
 
