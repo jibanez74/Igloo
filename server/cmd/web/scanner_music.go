@@ -14,22 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// formatDuration formats a duration into a human-readable string with hours, minutes, and seconds
-func formatDuration(d time.Duration) string {
-	totalSeconds := int(d.Seconds())
-	hours := totalSeconds / 3600
-	minutes := (totalSeconds % 3600) / 60
-	seconds := totalSeconds % 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
-	} else if minutes > 0 {
-		return fmt.Sprintf("%dm %ds", minutes, seconds)
-	} else {
-		return fmt.Sprintf("%ds", seconds)
-	}
-}
-
 func (app *Application) ScanMusicLibrary() {
 	if app.Settings.MusicDir.String == "" {
 		app.Logger.Error("got an empty string in ScanMusicLibrary")
@@ -95,7 +79,7 @@ func (app *Application) ScanMusicLibrary() {
 		return
 	}
 
-	app.Logger.Info(fmt.Sprintf("scanned %d tracks with %d errors in %s", tracksScanned, errorCount, formatDuration(time.Since(startTime))))
+	app.Logger.Info(fmt.Sprintf("scanned %d tracks with %d errors in %s", tracksScanned, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
 func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) error {

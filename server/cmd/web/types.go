@@ -15,17 +15,17 @@ import (
 )
 
 type Application struct {
-	Logger     logger.LoggerInterface
-	Db         *pgxpool.Pool
-	Queries    *database.Queries
-	Settings   *database.GlobalSetting
-	Session    *scs.SessionManager
-	RedisPool  *redis.Pool
-	Wait       *sync.WaitGroup
-	Tmdb       tmdb.TmdbInterface
-	Spotify    spotify.SpotifyInterface
-	Ffprobe    ffprobe.FfprobeInterface
-	Watcher    *fsnotify.Watcher
+	Logger    logger.LoggerInterface
+	Db        *pgxpool.Pool
+	Queries   *database.Queries
+	Settings  *database.GlobalSetting
+	Session   *scs.SessionManager
+	RedisPool *redis.Pool
+	Wait      *sync.WaitGroup
+	Tmdb      tmdb.TmdbInterface
+	Spotify   spotify.SpotifyInterface
+	Ffprobe   ffprobe.FfprobeInterface
+	Watcher   *fsnotify.Watcher
 }
 
 type AuthRequest struct {

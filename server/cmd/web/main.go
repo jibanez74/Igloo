@@ -25,7 +25,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -51,13 +50,12 @@ func main() {
 
 func InitApp() (*Application, error) {
 	var app Application
+	ctx := context.Background()
 
-	err := app.InitDB()
+	err := app.InitDB(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := context.Background()
 
 	err = app.InitSettings(ctx)
 	if err != nil {
@@ -125,7 +123,7 @@ func InitApp() (*Application, error) {
 	return &app, nil
 }
 
-func (app *Application) InitDB() error {
+func (app *Application) InitDB(ctx context.Context) error {
 	host := os.Getenv("POSTGRES_HOST")
 	if host == "" {
 		host = "localhost"
@@ -177,12 +175,12 @@ func (app *Application) InitDB() error {
 
 	dbConfig.MaxConns = int32(maxCon)
 
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	dbpool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		return err
 	}
 
-	err = dbpool.Ping(context.Background())
+	err = dbpool.Ping(ctx)
 	if err != nil {
 		return err
 	}
@@ -214,7 +212,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		debug, err := strconv.ParseBool(os.Getenv("DEBUG"))
 		if err != nil {
 			log.Println("Fail to get DEBUG value from environment variables.  Debug mode will be turned off.")
-			debug = true
+			debug = false
 		}
 		s.Debug = debug
 
@@ -267,38 +265,32 @@ func (app *Application) InitSettings(ctx context.Context) error {
 			s.StaticDir = "static"
 		}
 
-		transcodeDir := os.Getenv("TRANSCODE_DIR")
-		if transcodeDir == "" {
+		s.TranscodeDir.String = os.Getenv("TRANSCODE_DIR")
+		if s.TranscodeDir.String == "" {
 			log.Println("Fail to get TRANSCODE_DIR from environment variables.  Transcoding directory will be placed on the current working directory.")
-			transcodeDir = "transcode"
+			s.TranscodeDir.String = "transcode"
 		}
-		s.TranscodeDir = pgtype.Text{String: transcodeDir, Valid: true}
 
 		s.BaseUrl = os.Getenv("BASE_URL")
 		if s.BaseUrl == "" {
+			log.Println("fail to get BASE_URL from environment variables.  Will default to localhost.")
 			s.BaseUrl = "localhost"
 		}
 
-		// Helper function to create pgtype.Text from environment variable
-		createTextFromEnv := func(envVar string) pgtype.Text {
-			value := os.Getenv(envVar)
-			return pgtype.Text{String: value, Valid: value != ""}
-		}
-
-		s.FfmpegPath = createTextFromEnv("FFMPEG_PATH")
-		s.FfprobePath = createTextFromEnv("FFPROBE_PATH")
-		s.TmdbApiKey = createTextFromEnv("TMDB_API_KEY")
-		s.JellyfinToken = createTextFromEnv("JELLYFIN_TOKEN")
-		s.MoviesDir = createTextFromEnv("MOVIES_DIR")
-		s.MusicDir = createTextFromEnv("MUSIC_DIR")
-		s.TvshowsDir = createTextFromEnv("TVSHOWS_DIR")
+		s.FfmpegPath.String = os.Getenv("FFMPEG_PATH")
+		s.FfprobePath.String = os.Getenv("FFPROBE_PATH")
+		s.TmdbApiKey.String = os.Getenv("TMDB_API_KEY")
+		s.JellyfinToken.String = os.Getenv("JELLYFIN_TOKEN")
+		s.MoviesDir.String = os.Getenv("MOVIES_DIR")
+		s.MusicDir.String = os.Getenv("MUSIC_DIR")
+		s.TvshowsDir.String = os.Getenv("TVSHOWS_DIR")
 		s.MoviesImgDir = os.Getenv("MOVIES_IMG_DIR")
 		s.StudiosImgDir = os.Getenv("STUDIOS_IMG_DIR")
 		s.ArtistsImgDir = os.Getenv("ARTISTS_IMG_DIR")
 		s.AvatarImgDir = os.Getenv("AVATAR_IMG_DIR")
-		s.PlexToken = createTextFromEnv("PLEX_TOKEN")
-		s.SpotifyClientID = createTextFromEnv("SPOTIFY_CLIENT_ID")
-		s.SpotifyClientSecret = createTextFromEnv("SPOTIFY_CLIENT_SECRET")
+		s.PlexToken.String = os.Getenv("PLEX_TOKEN")
+		s.SpotifyClientID.String = os.Getenv("SPOTIFY_CLIENT_ID")
+		s.SpotifyClientSecret.String = os.Getenv("SPOTIFY_CLIENT_SECRET")
 
 		err = app.InitDirs(&s)
 		if err != nil {
@@ -398,25 +390,19 @@ func (app *Application) InitDirs(s *database.CreateSettingsParams) error {
 func (app *Application) InitSession() {
 	cookieName := os.Getenv("COOKIE_NAME")
 	if cookieName == "" {
+		log.Println("Fail to get COOKIE_NAME from envireonemnt variables.  Cookie name will be set to igloo_cokkie.")
 		cookieName = "igloo_cookie"
 	}
 
 	cookieDomain := os.Getenv("COOKIE_DOAMIN")
 	if cookieDomain == "" {
+		log.Println("Fail to get COOKIE_DOMAIN from environment variables.  Will set cookie domain to localhost. ")
 		cookieDomain = "localhost"
 	}
 
 	secure := true
 	if app.Settings.Debug {
 		secure = false
-	}
-
-	if cookieName == "" {
-		cookieName = "igloo_cookie"
-	}
-
-	if cookieDomain == "" {
-		cookieDomain = "localhost"
 	}
 
 	pool := &redis.Pool{
@@ -485,17 +471,41 @@ func (app *Application) ListenForShutdown() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	app.Logger.Info("will run clean up task before Shutting down...")
-	app.Wait.Wait()
 
-	if app.Db != nil {
-		app.Db.Close()
-		app.Logger.Info("Database connection closed")
+	// Stop listening for signals to prevent resource leaks
+	signal.Stop(quit)
+
+	if app.Logger != nil {
+		app.Logger.Info("will run clean up task before Shutting down...")
 	}
 
+	// Wait for all goroutines to finish if WaitGroup is initialized
+	if app.Wait != nil {
+		app.Wait.Wait()
+	}
+
+	// Close file watcher if initialized
+	if app.Watcher != nil {
+		app.Watcher.Close()
+		if app.Logger != nil {
+			app.Logger.Info("File watcher closed")
+		}
+	}
+
+	// Close database connection
+	if app.Db != nil {
+		app.Db.Close()
+		if app.Logger != nil {
+			app.Logger.Info("Database connection closed")
+		}
+	}
+
+	// Close Redis connection pool
 	if app.RedisPool != nil {
 		app.RedisPool.Close()
-		app.Logger.Info("Redis connection pool closed")
+		if app.Logger != nil {
+			app.Logger.Info("Redis connection pool closed")
+		}
 	}
 
 	os.Exit(0)
