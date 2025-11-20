@@ -127,6 +127,7 @@ CREATE TABLE tracks (
   channels INTEGER NOT NULL,
   channel_layout VARCHAR(20) NOT NULL,
   size BIGINT NOT NULL CHECK (size >= 0),
+  file_hash VARCHAR(64) UNIQUE,
   composer VARCHAR(255),
   release_date DATE,
   year INTEGER,
