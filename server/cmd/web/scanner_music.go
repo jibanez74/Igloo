@@ -29,11 +29,14 @@ func (app *Application) ScanMusicLibrary() {
 
 	tx, err := app.Db.Begin(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to start data base transaction to scan music library\n%s", err.Error()))
+		app.Logger.Error(fmt.Sprintf("fail to start transaction for track file %s\n%s", path, err.Error()))
+		errorCount++
+		return nil
 	}
 	defer tx.Rollback(ctx)
 
 	qtx := app.Queries.WithTx(tx)
+
 	errorCount := 0
 	tracksScanned := 0
 	startTime := time.Now()
@@ -73,14 +76,14 @@ func (app *Application) ScanMusicLibrary() {
 		return nil
 	})
 
+	err = tx.Commit(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("an unexpected error occurred while scanning the music library\n%s", err.Error()))
+		app.Logger.Error(fmt.Sprintf("fail to commit transaction for music library scan\n", err.Error()))
 		return
 	}
 
-	err = tx.Commit(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to commit transaction in ScanMusicLibrary function\n%s", err.Error()))
+		app.Logger.Error(fmt.Sprintf("an unexpected error occurred while scanning the music library\n%s", err.Error()))
 		return
 	}
 
@@ -95,6 +98,7 @@ func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries
 
 	createTrack := database.CreateTrackParams{
 		Title:     info.Format.Tags.Title,
+		SortTitle: info.Format.Tags.SortName,
 		FilePath:  path,
 		FileName:  info.Format.FileName,
 		Container: ext,
