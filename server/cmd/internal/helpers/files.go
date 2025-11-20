@@ -1,7 +1,10 @@
 package helpers
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -63,4 +66,20 @@ func GetFileExtension(path string) string {
 	}
 
 	return ext[1:]
+}
+
+// CalculateFileHash calculates the SHA256 hash of a file
+func CalculateFileHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file for hashing: %w", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("failed to read file for hashing: %w", err)
+	}
+
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }

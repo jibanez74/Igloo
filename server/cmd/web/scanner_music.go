@@ -14,6 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const (
+	// BATCH_SIZE is the number of tracks to process before committing a batch
+	BATCH_SIZE = 100
+)
+
 func (app *Application) ScanMusicLibrary() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
@@ -26,71 +31,175 @@ func (app *Application) ScanMusicLibrary() {
 	}
 
 	ctx := context.Background()
-
-	tx, err := app.Db.Begin(ctx)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to start transaction for track file %s\n%s", path, err.Error()))
-		errorCount++
-		return nil
-	}
-	defer tx.Rollback(ctx)
-
-	qtx := app.Queries.WithTx(tx)
-
 	errorCount := 0
 	tracksScanned := 0
 	startTime := time.Now()
 
-	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
+	// Batch buffer to collect tracks before processing
+	batch := make([]string, 0, BATCH_SIZE)
+
+	err := filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			app.Logger.Error(err.Error())
+			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
 			errorCount++
 			return nil
 		}
 
 		ext := helpers.GetFileExtension(path)
-
 		if !helpers.ValidAudioExtensions[ext] {
 			return nil
 		}
 
-		exists, err := qtx.CheckTrackExistByPath(ctx, path)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("fail to check if track at %s exists\n%s", path, err.Error()))
-			errorCount++
-			return nil
+		// Add to current batch
+		batch = append(batch, path)
+
+		// Process batch when it reaches BATCH_SIZE
+		if len(batch) >= BATCH_SIZE {
+			batchScanned, batchErrors := app.processBatch(ctx, batch)
+			tracksScanned += batchScanned
+			errorCount += batchErrors
+
+			// Reset batch buffer (reuse underlying array)
+			batch = batch[:0]
 		}
 
-		if exists {
-			return nil
-		}
-
-		err = app.ScanTrackFile(ctx, qtx, path, ext)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("ffprobe faile to scan track file %s\n%s", path, err.Error()))
-			errorCount++
-			return nil
-		}
-
-		tracksScanned++
 		return nil
 	})
 
-	err = tx.Commit(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("fail to commit transaction for music library scan\n", err.Error()))
+		app.Logger.Error(fmt.Sprintf("an unexpected error occurred while walking music directory: %s", err.Error()))
 		return
 	}
 
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("an unexpected error occurred while scanning the music library\n%s", err.Error()))
-		return
+	// Process remaining tracks in the final batch
+	if len(batch) > 0 {
+		batchScanned, batchErrors := app.processBatch(ctx, batch)
+		tracksScanned += batchScanned
+		errorCount += batchErrors
 	}
 
 	app.Logger.Info(fmt.Sprintf("scanned %d tracks with %d errors in %s", tracksScanned, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) error {
+// processBatch processes a batch of tracks in a single transaction with savepoints
+func (app *Application) processBatch(ctx context.Context, trackPaths []string) (scanned int, errors int) {
+	// Start batch transaction
+	tx, err := app.Db.Begin(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to start batch transaction: %s", err.Error()))
+		return 0, len(trackPaths)
+	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			app.Logger.Error(fmt.Sprintf("failed to rollback batch transaction: %s", err.Error()))
+		}
+	}()
+
+	qtx := app.Queries.WithTx(tx)
+	savepointCounter := 0
+
+	for _, path := range trackPaths {
+		// Create savepoint for this track
+		savepointName := fmt.Sprintf("sp_track_%d", savepointCounter)
+		savepointCounter++
+
+		_, err := tx.Exec(ctx, fmt.Sprintf("SAVEPOINT %s", savepointName))
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to create savepoint %s for track %s: %s", savepointName, path, err.Error()))
+			errors++
+			continue
+		}
+
+		// Check if track already exists by path
+		existsByPath, err := qtx.CheckTrackExistByPath(ctx, path)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to check if track at %s exists: %s", path, err.Error()))
+			// Rollback to savepoint and release it
+			_, _ = tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			errors++
+			continue
+		}
+
+		if existsByPath {
+			// Release savepoint since we're skipping this track
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			continue
+		}
+
+		// Calculate file hash for duplicate detection
+		fileHash, err := helpers.CalculateFileHash(path)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to calculate hash for track %s: %s", path, err.Error()))
+			// Rollback to savepoint and release it
+			_, _ = tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			errors++
+			continue
+		}
+
+		// Check if track already exists by hash
+		existsByHash, err := qtx.CheckTrackExistByHash(ctx, pgtype.Text{String: fileHash, Valid: true})
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to check if track with hash %s exists: %s", fileHash, err.Error()))
+			// Rollback to savepoint and release it
+			_, _ = tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			errors++
+			continue
+		}
+
+		if existsByHash {
+			// Release savepoint since we're skipping this duplicate track
+			app.Logger.Info(fmt.Sprintf("skipping duplicate track (same hash) at %s", path))
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			continue
+		}
+
+		ext := helpers.GetFileExtension(path)
+
+		// Process the track
+		err = app.ScanTrackFile(ctx, qtx, path, ext, fileHash)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to scan track file %s: %s", path, err.Error()))
+			// Rollback to savepoint to undo this track's changes, then release it
+			_, rollbackErr := tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
+			if rollbackErr != nil {
+				app.Logger.Error(fmt.Sprintf("failed to rollback to savepoint %s: %s", savepointName, rollbackErr.Error()))
+			} else {
+				// Release the savepoint after rollback
+				_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			}
+			errors++
+			continue
+		}
+
+		// Release savepoint since track was processed successfully
+		_, err = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to release savepoint %s: %s", savepointName, err.Error()))
+			// Rollback to savepoint and release it, then mark as error
+			_, _ = tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
+			_, _ = tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
+			errors++
+			continue
+		}
+
+		scanned++
+	}
+
+	// Commit the batch
+	err = tx.Commit(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to commit batch transaction: %s", err.Error()))
+		// All tracks in this batch failed
+		return 0, len(trackPaths)
+	}
+
+	return scanned, errors
+}
+
+func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries, path, ext, fileHash string) error {
 	info, err := app.Ffprobe.GetTrackMetadata(path)
 	if err != nil {
 		return err
@@ -193,6 +302,9 @@ func (app *Application) ScanTrackFile(ctx context.Context, qtx *database.Queries
 			break
 		}
 	}
+
+	// Set file hash
+	createTrack.FileHash = pgtype.Text{String: fileHash, Valid: true}
 
 	track, err := qtx.CreateTrack(ctx, createTrack)
 	if err != nil {

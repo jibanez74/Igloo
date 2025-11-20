@@ -16,6 +16,7 @@ type Querier interface {
 	CheckAlbumMusicianExists(ctx context.Context, arg CheckAlbumMusicianExistsParams) (bool, error)
 	CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error)
 	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
+	CheckTrackExistByHash(ctx context.Context, fileHash pgtype.Text) (bool, error)
 	CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error)
 	CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error)
 	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)

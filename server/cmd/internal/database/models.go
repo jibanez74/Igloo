@@ -198,6 +198,7 @@ type Track struct {
 	Channels      int32              `json:"channels"`
 	ChannelLayout string             `json:"channel_layout"`
 	Size          int64              `json:"size"`
+	FileHash      pgtype.Text        `json:"file_hash"`
 	Composer      pgtype.Text        `json:"composer"`
 	ReleaseDate   pgtype.Date        `json:"release_date"`
 	Year          pgtype.Int4        `json:"year"`

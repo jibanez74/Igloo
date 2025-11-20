@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkTrackExistByHash = `-- name: CheckTrackExistByHash :one
+SELECT EXISTS(
+    SELECT 1 FROM tracks WHERE file_hash = $1
+) as exists
+`
+
+func (q *Queries) CheckTrackExistByHash(ctx context.Context, fileHash pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, checkTrackExistByHash, fileHash)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const checkTrackExistByPath = `-- name: CheckTrackExistByPath :one
 SELECT EXISTS(
     SELECT 1 FROM tracks WHERE file_path = $1
@@ -26,10 +39,10 @@ func (q *Queries) CheckTrackExistByPath(ctx context.Context, filePath string) (b
 
 const createTrack = `-- name: CreateTrack :one
 INSERT INTO tracks (
-    title, year, sort_title, track_index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, channels, copyright, size, file_name, disc, album_id, language, profile, musician_id
+    title, year, sort_title, track_index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, channels, copyright, size, file_name, disc, album_id, language, profile, musician_id, file_hash
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
-) RETURNING id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+) RETURNING id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id
 `
 
 type CreateTrackParams struct {
@@ -54,6 +67,7 @@ type CreateTrackParams struct {
 	Language      pgtype.Text    `json:"language"`
 	Profile       pgtype.Text    `json:"profile"`
 	MusicianID    pgtype.Int4    `json:"musician_id"`
+	FileHash      pgtype.Text    `json:"file_hash"`
 }
 
 func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
@@ -79,6 +93,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		arg.Language,
 		arg.Profile,
 		arg.MusicianID,
+		arg.FileHash,
 	)
 	var i Track
 	err := row.Scan(
@@ -97,6 +112,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 		&i.Channels,
 		&i.ChannelLayout,
 		&i.Size,
+		&i.FileHash,
 		&i.Composer,
 		&i.ReleaseDate,
 		&i.Year,
@@ -111,7 +127,7 @@ func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track
 }
 
 const getTrackByID = `-- name: GetTrackByID :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE id = $1
+SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE id = $1
 `
 
 func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
@@ -133,6 +149,7 @@ func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
 		&i.Channels,
 		&i.ChannelLayout,
 		&i.Size,
+		&i.FileHash,
 		&i.Composer,
 		&i.ReleaseDate,
 		&i.Year,
@@ -147,7 +164,7 @@ func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
 }
 
 const getTrackByPath = `-- name: GetTrackByPath :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE file_path = $1
+SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE file_path = $1
 `
 
 func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, error) {
@@ -169,6 +186,7 @@ func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, e
 		&i.Channels,
 		&i.ChannelLayout,
 		&i.Size,
+		&i.FileHash,
 		&i.Composer,
 		&i.ReleaseDate,
 		&i.Year,
