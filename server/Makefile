@@ -5,7 +5,7 @@ DEBUG=true
 ## build: Build binary
 build:
 	@echo "Building..."
-	env CGO_ENABLED=0  go build -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/web
+	env CGO_ENABLED=0  go build -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/api
 	@echo "Built!"
 
 ## run: builds and runs the application
