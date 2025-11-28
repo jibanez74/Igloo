@@ -20,8 +20,36 @@ export async function login(email: string, password: string) {
       return ERROR_NOTFOUND;
     }
 
-    return res.json();
+    // Try to parse JSON, but handle cases where response might be empty or invalid
+    let data;
+    try {
+      const text = await res.text();
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // If JSON parsing fails, return error based on HTTP status
+      return {
+        error: true,
+        message: `HTTP ${res.status}: ${res.statusText}`,
+      };
+    }
+
+    // The API always returns { error: boolean, message?: string, data?: any }
+    // If error field is not present but status is not ok, treat as error
+    if (data.error === undefined && !res.ok) {
+      return {
+        error: true,
+        message: data.message || `HTTP ${res.status}: ${res.statusText}`,
+        data: data.data,
+      };
+    }
+
+    return {
+      error: data.error ?? false,
+      message: data.message || "",
+      data: data.data,
+    };
   } catch (err) {
+    // Only catch actual network errors (fetch failures, not HTTP errors)
     console.error(err);
     return NETWORK_ERROR;
   }

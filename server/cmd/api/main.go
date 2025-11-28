@@ -467,10 +467,24 @@ func (app *Application) InitSession() {
 		secure = false
 	}
 
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		log.Println("Fail to get REDIS_HOST from environment variables. Will default to localhost.")
+		redisHost = "localhost"
+	}
+
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		log.Println("Fail to get REDIS_PORT from environment variables. Will default to 6379.")
+		redisPort = "6379"
+	}
+
+	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+
 	pool := &redis.Pool{
 		MaxIdle: 10,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", "host:6379")
+			return redis.Dial("tcp", redisAddr)
 		},
 	}
 
@@ -504,14 +518,13 @@ func (app *Application) InitRouter() *chi.Mux {
 
 	router.Route("/api", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Get("/user", app.RouteGetCurrentUser)
-			r.Get("/logout", app.RouteLogout)
 			r.Post("/login", app.RouteLogin)
-		})
 
-		r.Group(func(r chi.Router) {
-			r.Use(app.IsAuth)
-			r.Get("/auth/me", app.RouteGetCurrentUser)
+			r.Group(func(r chi.Router) {
+				r.Use(app.IsAuth)
+				r.Get("/user", app.RouteGetCurrentUser)
+				r.Get("/logout", app.RouteLogout)
+			})
 		})
 	})
 
