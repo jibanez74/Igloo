@@ -518,12 +518,16 @@ func (app *Application) InitRouter() *chi.Mux {
 
 	router.Route("/api", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Post("/login", app.RouteLogin)
+			r.Use(app.IsAuth)
+			r.Get("/user", app.RouteGetCurrentUser)
+			r.Get("/logout", app.RouteLogout)
+		})
 
-			r.Group(func(r chi.Router) {
-				r.Use(app.IsAuth)
-				r.Get("/user", app.RouteGetCurrentUser)
-				r.Get("/logout", app.RouteLogout)
+		r.Group(func(r chi.Router) {
+			r.Use(app.IsAuth)
+
+			r.Route("/albums", func(r chi.Router) {
+				r.Get("/latest", app.RouteGetLatestAlbums)
 			})
 		})
 	})
