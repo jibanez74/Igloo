@@ -502,19 +502,16 @@ func (app *Application) InitRouter() *chi.Mux {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	}))
 
-	router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-	}))
-
-	router.Route("/public", func(r chi.Router) {
-		r.Handle("/*", http.StripPrefix("/public/", http.FileServer(http.Dir(filepath.Join("cmd", "public")))))
-	})
-
-	router.Route("/api/v1", func(r chi.Router) {
-		r.Post("/login", app.RouteLogin)
+	router.Route("/api", func(r chi.Router) {
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/user", app.RouteGetCurrentUser)
+			r.Get("/logout", app.RouteLogout)
+			r.Post("/login", app.RouteLogin)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(app.IsAuth)
+			r.Get("/auth/me", app.RouteGetCurrentUser)
 		})
 	})
 

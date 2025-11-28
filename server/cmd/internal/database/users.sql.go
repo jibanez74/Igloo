@@ -68,6 +68,39 @@ func (q *Queries) GetTotalUsersCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, created_at, updated_at, name, email, is_active, is_admin, avatar 
+FROM users 
+WHERE id = $1
+`
+
+type GetUserByIDRow struct {
+	ID        int32              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	IsActive  bool               `json:"is_active"`
+	IsAdmin   bool               `json:"is_admin"`
+	Avatar    pgtype.Text        `json:"avatar"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Email,
+		&i.IsActive,
+		&i.IsAdmin,
+		&i.Avatar,
+	)
+	return i, err
+}
+
 const getUserForLogin = `-- name: GetUserForLogin :one
 SELECT id, name, email, password, is_admin, avatar FROM users WHERE email = $1 AND is_active = true
 `

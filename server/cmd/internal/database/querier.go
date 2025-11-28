@@ -63,6 +63,7 @@ type Querier interface {
 	GetTrackByID(ctx context.Context, id int32) (Track, error)
 	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
 	GetTrackCount(ctx context.Context) (int64, error)
+	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserForLogin(ctx context.Context, email string) (GetUserForLoginRow, error)
 	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
