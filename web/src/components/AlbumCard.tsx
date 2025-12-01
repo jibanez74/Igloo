@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import type { SimpleAlbumType } from "@/types";
 
 type AlbumCardProps = {
@@ -5,19 +6,22 @@ type AlbumCardProps = {
 };
 
 export default function AlbumCard({ album }: AlbumCardProps) {
-  const { title, cover } = album;
+  const { id, title, cover } = album;
 
   return (
-    <article className="group rounded-xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-amber-400/20 hover:border-amber-400/50 hover:-translate-y-1">
-      <a
-        href="/music/albums/{{.ID}}"
+    <div className="group rounded-xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-amber-400/20 hover:border-amber-400/50 hover:-translate-y-1">
+      <Link
+        to={`/music/album/$id`}
+        params={{
+          id: id.toString(),
+        }}
         className="block focus:outline-none focus:ring-2 focus:ring-amber-400"
       >
         <div className="aspect-square bg-slate-800">
           {cover ? (
             <img
               src={cover}
-              alt={`${title} cover`}
+              alt=""
               width="640"
               height="640"
               loading="lazy"
@@ -36,7 +40,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         <div className="p-3">
           <h3 className="text-sm font-semibold truncate">{title}</h3>
         </div>
-      </a>
-    </article>
+      </Link>
+    </div>
   );
 }

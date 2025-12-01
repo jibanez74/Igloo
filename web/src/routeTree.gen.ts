@@ -13,6 +13,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteRouteImport } from './routes/login/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
+import { Route as AuthMusicIndexRouteImport } from './routes/_auth/music/index'
+import { Route as AuthMusicAlbumIdRouteImport } from './routes/_auth/music/album.$id'
 
 const LoginIndexLazyRouteImport = createFileRoute('/login/')()
 const AuthIndexLazyRouteImport = createFileRoute('/_auth/')()
@@ -36,15 +38,29 @@ const AuthIndexLazyRoute = AuthIndexLazyRouteImport.update({
   path: '/',
   getParentRoute: () => AuthRouteRoute,
 } as any).lazy(() => import('./routes/_auth/index.lazy').then((d) => d.Route))
+const AuthMusicIndexRoute = AuthMusicIndexRouteImport.update({
+  id: '/music/',
+  path: '/music/',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthMusicAlbumIdRoute = AuthMusicAlbumIdRouteImport.update({
+  id: '/music/album/$id',
+  path: '/music/album/$id',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRouteRouteWithChildren
   '/': typeof AuthIndexLazyRoute
   '/login/': typeof LoginIndexLazyRoute
+  '/music': typeof AuthMusicIndexRoute
+  '/music/album/$id': typeof AuthMusicAlbumIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthIndexLazyRoute
   '/login': typeof LoginIndexLazyRoute
+  '/music': typeof AuthMusicIndexRoute
+  '/music/album/$id': typeof AuthMusicAlbumIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -52,13 +68,22 @@ export interface FileRoutesById {
   '/login': typeof LoginRouteRouteWithChildren
   '/_auth/': typeof AuthIndexLazyRoute
   '/login/': typeof LoginIndexLazyRoute
+  '/_auth/music/': typeof AuthMusicIndexRoute
+  '/_auth/music/album/$id': typeof AuthMusicAlbumIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/login' | '/' | '/login/'
+  fullPaths: '/login' | '/' | '/login/' | '/music' | '/music/album/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login'
-  id: '__root__' | '/_auth' | '/login' | '/_auth/' | '/login/'
+  to: '/' | '/login' | '/music' | '/music/album/$id'
+  id:
+    | '__root__'
+    | '/_auth'
+    | '/login'
+    | '/_auth/'
+    | '/login/'
+    | '/_auth/music/'
+    | '/_auth/music/album/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -96,15 +121,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthIndexLazyRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/_auth/music/': {
+      id: '/_auth/music/'
+      path: '/music'
+      fullPath: '/music'
+      preLoaderRoute: typeof AuthMusicIndexRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/music/album/$id': {
+      id: '/_auth/music/album/$id'
+      path: '/music/album/$id'
+      fullPath: '/music/album/$id'
+      preLoaderRoute: typeof AuthMusicAlbumIdRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
   }
 }
 
 interface AuthRouteRouteChildren {
   AuthIndexLazyRoute: typeof AuthIndexLazyRoute
+  AuthMusicIndexRoute: typeof AuthMusicIndexRoute
+  AuthMusicAlbumIdRoute: typeof AuthMusicAlbumIdRoute
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthIndexLazyRoute: AuthIndexLazyRoute,
+  AuthMusicIndexRoute: AuthMusicIndexRoute,
+  AuthMusicAlbumIdRoute: AuthMusicAlbumIdRoute,
 }
 
 const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
