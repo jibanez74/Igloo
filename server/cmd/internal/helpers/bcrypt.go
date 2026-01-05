@@ -15,16 +15,13 @@ func HashPassword(password string) (string, error) {
 	return string(hashedPassword), nil
 }
 
-func PasswordMatches(plainText string, password string) (bool, error) {
+func PasswordMatches(plainText, password string) (bool, error) {
 	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(plainText))
 	if err != nil {
-		switch {
-		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
-			// invalid password
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return false, nil
-		default:
-			return false, err
 		}
+		return false, err
 	}
 
 	return true, nil

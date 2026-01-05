@@ -6,67 +6,33 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 type Querier interface {
-	AddMovieStudio(ctx context.Context, arg AddMovieStudioParams) error
-	CheckAlbumGenreExist(ctx context.Context, arg CheckAlbumGenreExistParams) (bool, error)
-	CheckAlbumMusicianExists(ctx context.Context, arg CheckAlbumMusicianExistsParams) (bool, error)
-	CheckMovieGenreExists(ctx context.Context, arg CheckMovieGenreExistsParams) (bool, error)
-	CheckMusicianGenreExist(ctx context.Context, arg CheckMusicianGenreExistParams) (bool, error)
-	CheckTrackExistByHash(ctx context.Context, fileHash pgtype.Text) (bool, error)
-	CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error)
-	CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error)
-	CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error)
-	CreateAlbumGenre(ctx context.Context, arg CreateAlbumGenreParams) error
-	CreateAlbumMusician(ctx context.Context, arg CreateAlbumMusicianParams) (AlbumMusician, error)
-	CreateAudioStream(ctx context.Context, arg CreateAudioStreamParams) (AudioStream, error)
-	CreateCastMember(ctx context.Context, arg CreateCastMemberParams) (CastList, error)
-	CreateChapter(ctx context.Context, arg CreateChapterParams) (Chapter, error)
-	CreateCrewMember(ctx context.Context, arg CreateCrewMemberParams) (CrewList, error)
-	CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error)
-	CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie, error)
-	CreateMovieExtra(ctx context.Context, arg CreateMovieExtraParams) (MovieExtra, error)
-	CreateMovieGenre(ctx context.Context, arg CreateMovieGenreParams) error
-	CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error)
-	CreateMusicianGenre(ctx context.Context, arg CreateMusicianGenreParams) error
-	CreateSettings(ctx context.Context, arg CreateSettingsParams) (GlobalSetting, error)
-	CreateSubtitle(ctx context.Context, arg CreateSubtitleParams) (Subtitle, error)
-	CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error)
+	// Quick check if track exists with same path and size (likely unchanged)
+	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error)
+	CreateMusicianAlbum(ctx context.Context, arg CreateMusicianAlbumParams) error
+	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	CreateVideoStream(ctx context.Context, arg CreateVideoStreamParams) (VideoStream, error)
-	GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error)
-	GetAlbumByTitle(ctx context.Context, title string) (Album, error)
-	GetAlbumCount(ctx context.Context) (int64, error)
-	GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error)
-	GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error)
+	DeleteTrackGenres(ctx context.Context, trackID int64) error
+	GetAdminUser(ctx context.Context) (User, error)
+	GetAlbumByID(ctx context.Context, id int64) (Album, error)
+	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
-	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
-	GetMovieByTmdbID(ctx context.Context, tmdbID pgtype.Text) (GetMovieByTmdbIDRow, error)
-	GetMovieCount(ctx context.Context) (int64, error)
-	GetMovieDetails(ctx context.Context, id int32) (GetMovieDetailsRow, error)
-	GetMovieForStreaming(ctx context.Context, id int32) (GetMovieForStreamingRow, error)
-	GetMovieStudios(ctx context.Context, movieID int32) ([]Studio, error)
-	GetMovieVideoStreams(ctx context.Context, movieID pgtype.Int4) ([]VideoStream, error)
-	GetMusicianByID(ctx context.Context, id int32) (Musician, error)
-	GetMusicianByName(ctx context.Context, name string) (Musician, error)
-	GetMusicianBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Musician, error)
-	GetMusicianCount(ctx context.Context) (int64, error)
-	GetMusicianList(ctx context.Context) ([]GetMusicianListRow, error)
-	GetOrCreateArtist(ctx context.Context, arg GetOrCreateArtistParams) (GetOrCreateArtistRow, error)
-	GetOrCreateStudio(ctx context.Context, arg GetOrCreateStudioParams) (GetOrCreateStudioRow, error)
-	GetSettings(ctx context.Context) (GlobalSetting, error)
-	GetTotalUsersCount(ctx context.Context) (int64, error)
-	GetTrackByID(ctx context.Context, id int32) (Track, error)
-	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
-	GetTrackCount(ctx context.Context) (int64, error)
-	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
-	GetUserForLogin(ctx context.Context, email string) (GetUserForLoginRow, error)
-	GetUsersPaginated(ctx context.Context, arg GetUsersPaginatedParams) ([]GetUsersPaginatedRow, error)
-	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (GlobalSetting, error)
+	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
+	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
+	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
+	GetSettings(ctx context.Context) (Setting, error)
+	GetTrack(ctx context.Context, id int64) (Track, error)
+	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
+	GetUser(ctx context.Context, id int64) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
+	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
+	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 }
 
 var _ Querier = (*Queries)(nil)

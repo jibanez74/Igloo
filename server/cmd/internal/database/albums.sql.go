@@ -7,256 +7,96 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
-const createAlbum = `-- name: CreateAlbum :one
-INSERT INTO albums (
-    title,
-    sort_title,
-    spotify_id,
-    release_date,
-    year,
-    spotify_popularity,
-    total_tracks,
-    musician,
-    cover
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
-)
-RETURNING id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover
+const getAlbumByID = `-- name: GetAlbumByID :one
+SELECT
+  id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+FROM
+  albums
+WHERE
+  id = ?
+LIMIT
+  1
 `
 
-type CreateAlbumParams struct {
-	Title             string      `json:"title"`
-	SortTitle         string      `json:"sort_title"`
-	SpotifyID         pgtype.Text `json:"spotify_id"`
-	ReleaseDate       pgtype.Date `json:"release_date"`
-	Year              pgtype.Int4 `json:"year"`
-	SpotifyPopularity pgtype.Int4 `json:"spotify_popularity"`
-	TotalTracks       int32       `json:"total_tracks"`
-	Musician          pgtype.Text `json:"musician"`
-	Cover             pgtype.Text `json:"cover"`
-}
-
-func (q *Queries) CreateAlbum(ctx context.Context, arg CreateAlbumParams) (Album, error) {
-	row := q.db.QueryRow(ctx, createAlbum,
-		arg.Title,
-		arg.SortTitle,
-		arg.SpotifyID,
-		arg.ReleaseDate,
-		arg.Year,
-		arg.SpotifyPopularity,
-		arg.TotalTracks,
-		arg.Musician,
-		arg.Cover,
-	)
+func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
+	row := q.queryRow(ctx, q.getAlbumByIDStmt, getAlbumByID, id)
 	var i Album
 	err := row.Scan(
 		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.Musician,
 		&i.SpotifyID,
+		&i.SpotifyPopularity,
 		&i.ReleaseDate,
 		&i.Year,
-		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.Musician,
 		&i.Cover,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover FROM albums WHERE spotify_id = $1 LIMIT 1
+SELECT
+  id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+FROM
+  albums
+WHERE
+  spotify_id = ?
+LIMIT
+  1
 `
 
-func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Album, error) {
-	row := q.db.QueryRow(ctx, getAlbumBySpotifyID, spotifyID)
+func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error) {
+	row := q.queryRow(ctx, q.getAlbumBySpotifyIDStmt, getAlbumBySpotifyID, spotifyID)
 	var i Album
 	err := row.Scan(
 		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
+		&i.Musician,
 		&i.SpotifyID,
+		&i.SpotifyPopularity,
 		&i.ReleaseDate,
 		&i.Year,
-		&i.SpotifyPopularity,
 		&i.TotalTracks,
-		&i.Musician,
 		&i.Cover,
-	)
-	return i, err
-}
-
-const getAlbumByTitle = `-- name: GetAlbumByTitle :one
-SELECT id, created_at, updated_at, title, sort_title, spotify_id, release_date, year, spotify_popularity, total_tracks, musician, cover FROM albums Where title = $1
-`
-
-func (q *Queries) GetAlbumByTitle(ctx context.Context, title string) (Album, error) {
-	row := q.db.QueryRow(ctx, getAlbumByTitle, title)
-	var i Album
-	err := row.Scan(
-		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.SpotifyPopularity,
-		&i.TotalTracks,
-		&i.Musician,
-		&i.Cover,
-	)
-	return i, err
-}
-
-const getAlbumCount = `-- name: GetAlbumCount :one
-SELECT COUNT(*) FROM albums
-`
-
-func (q *Queries) GetAlbumCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getAlbumCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const getAlbumDetails = `-- name: GetAlbumDetails :one
-WITH album_base AS (
-    SELECT a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.musician, a.cover
-    FROM albums a
-    WHERE a.id = $1
-),
-album_genres_cte AS (
-    SELECT COALESCE(
-        json_agg(DISTINCT jsonb_build_object(
-            'id', g.id,
-            'tag', g.tag
-        )) FILTER (WHERE g.id IS NOT NULL), '[]'
-    ) as genres
-    FROM album_base a
-    LEFT JOIN album_genres ag ON ag.album_id = a.id
-    LEFT JOIN genres g ON g.id = ag.genre_id
-),
-album_musicians_cte AS (
-    SELECT COALESCE(
-        json_agg(DISTINCT jsonb_build_object(
-            'id', m.id,
-            'name', m.name,
-            'sort_name', m.sort_name,
-            'thumb', m.thumb,
-            'spotify_id', m.spotify_id
-        )) FILTER (WHERE m.id IS NOT NULL), '[]'
-    ) as musicians
-    FROM album_base a
-    LEFT JOIN album_musicians am ON am.album_id = a.id
-    LEFT JOIN musicians m ON m.id = am.musician_id
-),
-album_tracks AS (
-    SELECT COALESCE(
-        json_agg(
-            jsonb_build_object(
-                'id', t.id,
-                'title', t.title,
-                'sort_title', t.sort_title,
-                'disc', t.disc,
-                'track_index', t.track_index,
-                'duration', t.duration,
-                'file_path', t.file_path,
-                'file_name', t.file_name,
-                'container', t.container,
-                'codec', t.codec,
-                'channels', t.channels,
-                'channel_layout', t.channel_layout,
-                'size', t.size,
-                'bit_rate', t.bit_rate
-            )
-            ORDER BY t.disc, t.track_index
-        ) FILTER (WHERE t.id IS NOT NULL), '[]'
-    ) as tracks
-    FROM album_base a
-    LEFT JOIN tracks t ON t.album_id = a.id
-)
-SELECT 
-    a.id, a.created_at, a.updated_at, a.title, a.sort_title, a.spotify_id, a.release_date, a.year, a.spotify_popularity, a.total_tracks, a.musician, a.cover,
-    g.genres,
-    m.musicians,
-    t.tracks
-FROM album_base a
-CROSS JOIN album_genres_cte g
-CROSS JOIN album_musicians_cte m
-CROSS JOIN album_tracks t
-`
-
-type GetAlbumDetailsRow struct {
-	ID                int32              `json:"id"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	Title             string             `json:"title"`
-	SortTitle         string             `json:"sort_title"`
-	SpotifyID         pgtype.Text        `json:"spotify_id"`
-	ReleaseDate       pgtype.Date        `json:"release_date"`
-	Year              pgtype.Int4        `json:"year"`
-	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
-	TotalTracks       int32              `json:"total_tracks"`
-	Musician          pgtype.Text        `json:"musician"`
-	Cover             pgtype.Text        `json:"cover"`
-	Genres            interface{}        `json:"genres"`
-	Musicians         interface{}        `json:"musicians"`
-	Tracks            interface{}        `json:"tracks"`
-}
-
-func (q *Queries) GetAlbumDetails(ctx context.Context, id int32) (GetAlbumDetailsRow, error) {
-	row := q.db.QueryRow(ctx, getAlbumDetails, id)
-	var i GetAlbumDetailsRow
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.SpotifyPopularity,
-		&i.TotalTracks,
-		&i.Musician,
-		&i.Cover,
-		&i.Genres,
-		&i.Musicians,
-		&i.Tracks,
 	)
 	return i, err
 }
 
 const getLatestAlbums = `-- name: GetLatestAlbums :many
-SELECT 
-    id,
-    title,
-    musician,
-    cover
-FROM albums
-ORDER BY created_at DESC
-LIMIT 12
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
+FROM
+  albums
+ORDER BY
+  created_at DESC
+LIMIT
+  12
 `
 
 type GetLatestAlbumsRow struct {
-	ID       int32       `json:"id"`
-	Title    string      `json:"title"`
-	Musician pgtype.Text `json:"musician"`
-	Cover    pgtype.Text `json:"cover"`
+	ID       int64          `json:"id"`
+	Title    string         `json:"title"`
+	Cover    sql.NullString `json:"cover"`
+	Musician sql.NullString `json:"musician"`
+	Year     sql.NullInt64  `json:"year"`
 }
 
 func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error) {
-	rows, err := q.db.Query(ctx, getLatestAlbums)
+	rows, err := q.query(ctx, q.getLatestAlbumsStmt, getLatestAlbums)
 	if err != nil {
 		return nil, err
 	}
@@ -267,15 +107,91 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.Musician,
 			&i.Cover,
+			&i.Musician,
+			&i.Year,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertAlbum = `-- name: UpsertAlbum :one
+INSERT INTO
+  albums (
+    title,
+    sort_title,
+    musician,
+    spotify_id,
+    spotify_popularity,
+    release_date,
+    year,
+    total_tracks,
+    cover
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
+UPDATE
+SET
+  sort_title = excluded.sort_title,
+  spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
+  spotify_popularity = COALESCE(
+    excluded.spotify_popularity,
+    albums.spotify_popularity
+  ),
+  release_date = COALESCE(excluded.release_date, albums.release_date),
+  year = COALESCE(excluded.year, albums.year),
+  total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
+  cover = COALESCE(excluded.cover, albums.cover),
+  updated_at = CURRENT_TIMESTAMP RETURNING id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+`
+
+type UpsertAlbumParams struct {
+	Title             string          `json:"title"`
+	SortTitle         string          `json:"sort_title"`
+	Musician          sql.NullString  `json:"musician"`
+	SpotifyID         sql.NullString  `json:"spotify_id"`
+	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
+	ReleaseDate       sql.NullString  `json:"release_date"`
+	Year              sql.NullInt64   `json:"year"`
+	TotalTracks       sql.NullInt64   `json:"total_tracks"`
+	Cover             sql.NullString  `json:"cover"`
+}
+
+func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error) {
+	row := q.queryRow(ctx, q.upsertAlbumStmt, upsertAlbum,
+		arg.Title,
+		arg.SortTitle,
+		arg.Musician,
+		arg.SpotifyID,
+		arg.SpotifyPopularity,
+		arg.ReleaseDate,
+		arg.Year,
+		arg.TotalTracks,
+		arg.Cover,
+	)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.SortTitle,
+		&i.Musician,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.TotalTracks,
+		&i.Cover,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

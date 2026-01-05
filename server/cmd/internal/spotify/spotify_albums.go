@@ -7,16 +7,14 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-func (s *SpotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error) {
+func (s *spotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error) {
 	if query == "" {
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
 
-	normalizedKey := normalizeCacheKey(query)
-
-	cachedAlbum, exists := s.albumCache[normalizedKey]
-	if exists {
-		return cachedAlbum, nil
+	// Check cache first
+	if cached, exists := s.getAlbum(query); exists {
+		return cached, nil
 	}
 
 	ctx := context.Background()
@@ -37,8 +35,8 @@ func (s *SpotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlb
 		return nil, fmt.Errorf("failed to get album details for ID %s: %w", albumID, err)
 	}
 
-	s.cleanAlbumCache()
-	s.albumCache[normalizedKey] = album
+	// Store in cache
+	s.setAlbum(query, album)
 
 	return album, nil
 }

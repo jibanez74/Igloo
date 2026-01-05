@@ -7,40 +7,75 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
-
-const checkTrackGenreExists = `-- name: CheckTrackGenreExists :one
-SELECT EXISTS(
-    SELECT 1 FROM track_genres WHERE track_id = $1 AND genre_id = $2
-) as exists
-`
-
-type CheckTrackGenreExistsParams struct {
-	TrackID int32 `json:"track_id"`
-	GenreID int32 `json:"genre_id"`
-}
-
-func (q *Queries) CheckTrackGenreExists(ctx context.Context, arg CheckTrackGenreExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, checkTrackGenreExists, arg.TrackID, arg.GenreID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
 
 const createTrackGenre = `-- name: CreateTrackGenre :exec
-INSERT INTO track_genres (
-    track_id, genre_id
-) VALUES (
-    $1, $2
-)
+INSERT INTO track_genres (track_id, genre_id)
+VALUES (?, ?)
+ON CONFLICT (track_id, genre_id) DO NOTHING
 `
 
 type CreateTrackGenreParams struct {
-	TrackID int32 `json:"track_id"`
-	GenreID int32 `json:"genre_id"`
+	TrackID int64 `json:"track_id"`
+	GenreID int64 `json:"genre_id"`
 }
 
 func (q *Queries) CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error {
-	_, err := q.db.Exec(ctx, createTrackGenre, arg.TrackID, arg.GenreID)
+	_, err := q.exec(ctx, q.createTrackGenreStmt, createTrackGenre, arg.TrackID, arg.GenreID)
 	return err
+}
+
+const deleteTrackGenres = `-- name: DeleteTrackGenres :exec
+DELETE FROM track_genres WHERE track_id = ?
+`
+
+func (q *Queries) DeleteTrackGenres(ctx context.Context, trackID int64) error {
+	_, err := q.exec(ctx, q.deleteTrackGenresStmt, deleteTrackGenres, trackID)
+	return err
+}
+
+const getGenresByAlbumID = `-- name: GetGenresByAlbumID :many
+SELECT
+  tg.track_id,
+  g.id AS genre_id,
+  g.tag
+FROM
+  track_genres tg
+  INNER JOIN genres g ON tg.genre_id = g.id
+  INNER JOIN tracks t ON tg.track_id = t.id
+WHERE
+  t.album_id = ?
+ORDER BY
+  tg.track_id,
+  g.tag
+`
+
+type GetGenresByAlbumIDRow struct {
+	TrackID int64  `json:"track_id"`
+	GenreID int64  `json:"genre_id"`
+	Tag     string `json:"tag"`
+}
+
+func (q *Queries) GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error) {
+	rows, err := q.query(ctx, q.getGenresByAlbumIDStmt, getGenresByAlbumID, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetGenresByAlbumIDRow{}
+	for rows.Next() {
+		var i GetGenresByAlbumIDRow
+		if err := rows.Scan(&i.TrackID, &i.GenreID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

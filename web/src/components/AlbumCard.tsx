@@ -6,7 +6,7 @@ type AlbumCardProps = {
 };
 
 export default function AlbumCard({ album }: AlbumCardProps) {
-  const { id, title, cover } = album;
+  const { id, title, cover, musician } = album;
 
   return (
     <div className="group rounded-xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-amber-400/20 hover:border-amber-400/50 hover:-translate-y-1">
@@ -18,9 +18,9 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         className="block focus:outline-none focus:ring-2 focus:ring-amber-400"
       >
         <div className="aspect-square bg-slate-800">
-          {cover ? (
+          {cover.Valid ? (
             <img
-              src={cover}
+              src={cover.String}
               alt=""
               width="640"
               height="640"
@@ -38,7 +38,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         </div>
 
         <div className="p-3">
-          <h3 className="text-sm font-semibold truncate">{title}</h3>
+          <h3 className="text-sm font-semibold truncate text-white">{title}</h3>
+          {musician.Valid && (
+            <p className="text-xs text-slate-400 truncate mt-0.5">{musician.String}</p>
+          )}
         </div>
       </Link>
     </div>

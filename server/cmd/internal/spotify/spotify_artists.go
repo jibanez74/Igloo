@@ -7,16 +7,14 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
+func (s *spotifyClient) SearchArtistByName(artistName string) (*spotify.FullArtist, error) {
 	if artistName == "" {
 		return nil, fmt.Errorf("artist name cannot be empty")
 	}
 
-	normalizedKey := normalizeCacheKey(artistName)
-
-	cachedArtist, exists := s.artistCache[normalizedKey]
-	if exists {
-		return cachedArtist, nil
+	// Check cache first
+	if cached, exists := s.getArtist(artistName); exists {
+		return cached, nil
 	}
 
 	ctx := context.Background()
@@ -31,8 +29,9 @@ func (s *SpotifyClient) SearchArtistByName(artistName string) (*spotify.FullArti
 	}
 
 	artist := &results.Artists.Artists[0]
-	s.cleanArtistCache()
-	s.artistCache[normalizedKey] = artist
+
+	// Store in cache
+	s.setArtist(artistName, artist)
 
 	return artist, nil
 }

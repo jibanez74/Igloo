@@ -31,12 +31,12 @@ function AuthLayout() {
       <Header />
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid md:grid-cols-[14rem_1fr] gap-6 flex-1">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-6 grid md:grid-cols-[14rem_1fr] gap-6 lg:gap-8 flex-1">
           <SideNav />
 
           <main
             id="main"
-            className="min-w-0 md:h-[calc(100vh-8rem)] md:overflow-y-auto"
+            className="min-w-0 flex-1 overflow-y-auto pb-8"
           >
             <Outlet />
           </main>

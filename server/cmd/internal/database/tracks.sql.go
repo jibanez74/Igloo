@@ -7,206 +7,233 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
-const checkTrackExistByHash = `-- name: CheckTrackExistByHash :one
-SELECT EXISTS(
-    SELECT 1 FROM tracks WHERE file_hash = $1
-) as exists
+const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
+SELECT 1 FROM tracks WHERE file_path = ? AND size = ? LIMIT 1
 `
 
-func (q *Queries) CheckTrackExistByHash(ctx context.Context, fileHash pgtype.Text) (bool, error) {
-	row := q.db.QueryRow(ctx, checkTrackExistByHash, fileHash)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+type CheckTrackUnchangedParams struct {
+	FilePath string `json:"file_path"`
+	Size     int64  `json:"size"`
 }
 
-const checkTrackExistByPath = `-- name: CheckTrackExistByPath :one
-SELECT EXISTS(
-    SELECT 1 FROM tracks WHERE file_path = $1
-) as exists
+// Quick check if track exists with same path and size (likely unchanged)
+func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error) {
+	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getTrack = `-- name: GetTrack :one
+SELECT id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at FROM tracks WHERE id = ? LIMIT 1
 `
 
-func (q *Queries) CheckTrackExistByPath(ctx context.Context, filePath string) (bool, error) {
-	row := q.db.QueryRow(ctx, checkTrackExistByPath, filePath)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
+	row := q.queryRow(ctx, q.getTrackStmt, getTrack, id)
+	var i Track
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.SortTitle,
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.MimeType,
+		&i.Codec,
+		&i.Size,
+		&i.TrackIndex,
+		&i.Duration,
+		&i.Disc,
+		&i.Channels,
+		&i.ChannelLayout,
+		&i.BitRate,
+		&i.Profile,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.Composer,
+		&i.Copyright,
+		&i.Language,
+		&i.AlbumID,
+		&i.MusicianID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
-const createTrack = `-- name: CreateTrack :one
+const getTracksByAlbumID = `-- name: GetTracksByAlbumID :many
+SELECT
+  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+FROM
+  tracks
+WHERE
+  album_id = ?
+ORDER BY
+  disc ASC,
+  track_index ASC
+`
+
+func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error) {
+	rows, err := q.query(ctx, q.getTracksByAlbumIDStmt, getTracksByAlbumID, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Track{}
+	for rows.Next() {
+		var i Track
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.SortTitle,
+			&i.FilePath,
+			&i.FileName,
+			&i.Container,
+			&i.MimeType,
+			&i.Codec,
+			&i.Size,
+			&i.TrackIndex,
+			&i.Duration,
+			&i.Disc,
+			&i.Channels,
+			&i.ChannelLayout,
+			&i.BitRate,
+			&i.Profile,
+			&i.ReleaseDate,
+			&i.Year,
+			&i.Composer,
+			&i.Copyright,
+			&i.Language,
+			&i.AlbumID,
+			&i.MusicianID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const upsertTrack = `-- name: UpsertTrack :one
 INSERT INTO tracks (
-    title, year, sort_title, track_index, duration, composer, release_date, file_path, container, codec, bit_rate, channel_layout, channels, copyright, size, file_name, disc, album_id, language, profile, musician_id, file_hash
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
-) RETURNING id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id
+  title, sort_title, file_path, file_name, container, mime_type, codec, size,
+  track_index, duration, disc, channels, channel_layout, bit_rate, profile,
+  release_date, year, composer, copyright, language, album_id, musician_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (file_path) DO UPDATE SET
+  title = excluded.title,
+  sort_title = excluded.sort_title,
+  file_name = excluded.file_name,
+  container = excluded.container,
+  mime_type = excluded.mime_type,
+  codec = excluded.codec,
+  size = excluded.size,
+  track_index = excluded.track_index,
+  duration = excluded.duration,
+  disc = excluded.disc,
+  channels = excluded.channels,
+  channel_layout = excluded.channel_layout,
+  bit_rate = excluded.bit_rate,
+  profile = excluded.profile,
+  release_date = COALESCE(excluded.release_date, tracks.release_date),
+  year = COALESCE(excluded.year, tracks.year),
+  composer = COALESCE(excluded.composer, tracks.composer),
+  copyright = COALESCE(excluded.copyright, tracks.copyright),
+  language = COALESCE(excluded.language, tracks.language),
+  album_id = COALESCE(excluded.album_id, tracks.album_id),
+  musician_id = COALESCE(excluded.musician_id, tracks.musician_id),
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
 `
 
-type CreateTrackParams struct {
+type UpsertTrackParams struct {
 	Title         string         `json:"title"`
-	Year          pgtype.Int4    `json:"year"`
 	SortTitle     string         `json:"sort_title"`
-	TrackIndex    int32          `json:"track_index"`
-	Duration      pgtype.Numeric `json:"duration"`
-	Composer      pgtype.Text    `json:"composer"`
-	ReleaseDate   pgtype.Date    `json:"release_date"`
 	FilePath      string         `json:"file_path"`
-	Container     string         `json:"container"`
-	Codec         string         `json:"codec"`
-	BitRate       int32          `json:"bit_rate"`
-	ChannelLayout string         `json:"channel_layout"`
-	Channels      int32          `json:"channels"`
-	Copyright     pgtype.Text    `json:"copyright"`
-	Size          int64          `json:"size"`
 	FileName      string         `json:"file_name"`
-	Disc          int32          `json:"disc"`
-	AlbumID       pgtype.Int4    `json:"album_id"`
-	Language      pgtype.Text    `json:"language"`
-	Profile       pgtype.Text    `json:"profile"`
-	MusicianID    pgtype.Int4    `json:"musician_id"`
-	FileHash      pgtype.Text    `json:"file_hash"`
+	Container     string         `json:"container"`
+	MimeType      string         `json:"mime_type"`
+	Codec         string         `json:"codec"`
+	Size          int64          `json:"size"`
+	TrackIndex    int64          `json:"track_index"`
+	Duration      int64          `json:"duration"`
+	Disc          int64          `json:"disc"`
+	Channels      string         `json:"channels"`
+	ChannelLayout string         `json:"channel_layout"`
+	BitRate       int64          `json:"bit_rate"`
+	Profile       string         `json:"profile"`
+	ReleaseDate   sql.NullString `json:"release_date"`
+	Year          sql.NullInt64  `json:"year"`
+	Composer      sql.NullString `json:"composer"`
+	Copyright     sql.NullString `json:"copyright"`
+	Language      sql.NullString `json:"language"`
+	AlbumID       sql.NullInt64  `json:"album_id"`
+	MusicianID    sql.NullInt64  `json:"musician_id"`
 }
 
-func (q *Queries) CreateTrack(ctx context.Context, arg CreateTrackParams) (Track, error) {
-	row := q.db.QueryRow(ctx, createTrack,
+func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error) {
+	row := q.queryRow(ctx, q.upsertTrackStmt, upsertTrack,
 		arg.Title,
-		arg.Year,
 		arg.SortTitle,
+		arg.FilePath,
+		arg.FileName,
+		arg.Container,
+		arg.MimeType,
+		arg.Codec,
+		arg.Size,
 		arg.TrackIndex,
 		arg.Duration,
-		arg.Composer,
-		arg.ReleaseDate,
-		arg.FilePath,
-		arg.Container,
-		arg.Codec,
-		arg.BitRate,
-		arg.ChannelLayout,
-		arg.Channels,
-		arg.Copyright,
-		arg.Size,
-		arg.FileName,
 		arg.Disc,
-		arg.AlbumID,
-		arg.Language,
+		arg.Channels,
+		arg.ChannelLayout,
+		arg.BitRate,
 		arg.Profile,
+		arg.ReleaseDate,
+		arg.Year,
+		arg.Composer,
+		arg.Copyright,
+		arg.Language,
+		arg.AlbumID,
 		arg.MusicianID,
-		arg.FileHash,
 	)
 	var i Track
 	err := row.Scan(
 		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.Title,
 		&i.SortTitle,
-		&i.Disc,
-		&i.TrackIndex,
-		&i.Duration,
 		&i.FilePath,
 		&i.FileName,
 		&i.Container,
+		&i.MimeType,
 		&i.Codec,
-		&i.Channels,
-		&i.ChannelLayout,
 		&i.Size,
-		&i.FileHash,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.BitRate,
-		&i.Copyright,
-		&i.Language,
-		&i.Profile,
-		&i.AlbumID,
-		&i.MusicianID,
-	)
-	return i, err
-}
-
-const getTrackByID = `-- name: GetTrackByID :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE id = $1
-`
-
-func (q *Queries) GetTrackByID(ctx context.Context, id int32) (Track, error) {
-	row := q.db.QueryRow(ctx, getTrackByID, id)
-	var i Track
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Title,
-		&i.SortTitle,
-		&i.Disc,
 		&i.TrackIndex,
 		&i.Duration,
-		&i.FilePath,
-		&i.FileName,
-		&i.Container,
-		&i.Codec,
+		&i.Disc,
 		&i.Channels,
 		&i.ChannelLayout,
-		&i.Size,
-		&i.FileHash,
-		&i.Composer,
+		&i.BitRate,
+		&i.Profile,
 		&i.ReleaseDate,
 		&i.Year,
-		&i.BitRate,
+		&i.Composer,
 		&i.Copyright,
 		&i.Language,
-		&i.Profile,
 		&i.AlbumID,
 		&i.MusicianID,
-	)
-	return i, err
-}
-
-const getTrackByPath = `-- name: GetTrackByPath :one
-SELECT id, created_at, updated_at, title, sort_title, disc, track_index, duration, file_path, file_name, container, codec, channels, channel_layout, size, file_hash, composer, release_date, year, bit_rate, copyright, language, profile, album_id, musician_id FROM tracks WHERE file_path = $1
-`
-
-func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, error) {
-	row := q.db.QueryRow(ctx, getTrackByPath, filePath)
-	var i Track
-	err := row.Scan(
-		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Title,
-		&i.SortTitle,
-		&i.Disc,
-		&i.TrackIndex,
-		&i.Duration,
-		&i.FilePath,
-		&i.FileName,
-		&i.Container,
-		&i.Codec,
-		&i.Channels,
-		&i.ChannelLayout,
-		&i.Size,
-		&i.FileHash,
-		&i.Composer,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.BitRate,
-		&i.Copyright,
-		&i.Language,
-		&i.Profile,
-		&i.AlbumID,
-		&i.MusicianID,
 	)
 	return i, err
-}
-
-const getTrackCount = `-- name: GetTrackCount :one
-SELECT COUNT(*) FROM tracks
-`
-
-func (q *Queries) GetTrackCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getTrackCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }

@@ -5,17 +5,14 @@ import (
 	"time"
 )
 
+// FormatDuration returns a human-readable duration string.
+// Examples: "1.5s", "2m 30s", "1h 15m"
 func FormatDuration(d time.Duration) string {
-	totalSeconds := int(d.Seconds())
-	hours := totalSeconds / 3600
-	minutes := (totalSeconds % 3600) / 60
-	seconds := totalSeconds % 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
-	} else if minutes > 0 {
-		return fmt.Sprintf("%dm %ds", minutes, seconds)
-	} else {
-		return fmt.Sprintf("%ds", seconds)
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
 }

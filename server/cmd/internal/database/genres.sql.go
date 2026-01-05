@@ -9,52 +9,30 @@ import (
 	"context"
 )
 
-const createGenre = `-- name: CreateGenre :one
-INSERT INTO genres (
-  tag,
-  genre_type
-) VALUES (
-  $1, $2
-)
-RETURNING id, created_at, updated_at, tag, genre_type
+const getOrCreateGenre = `-- name: GetOrCreateGenre :one
+INSERT INTO
+  genres (tag, genre_type)
+VALUES
+  (?, ?) ON CONFLICT (tag, genre_type) DO
+UPDATE
+SET
+  updated_at = CURRENT_TIMESTAMP RETURNING id, tag, genre_type, created_at, updated_at
 `
 
-type CreateGenreParams struct {
+type GetOrCreateGenreParams struct {
 	Tag       string `json:"tag"`
 	GenreType string `json:"genre_type"`
 }
 
-func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (Genre, error) {
-	row := q.db.QueryRow(ctx, createGenre, arg.Tag, arg.GenreType)
+func (q *Queries) GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error) {
+	row := q.queryRow(ctx, q.getOrCreateGenreStmt, getOrCreateGenre, arg.Tag, arg.GenreType)
 	var i Genre
 	err := row.Scan(
 		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.Tag,
 		&i.GenreType,
-	)
-	return i, err
-}
-
-const getGenreByTagAndType = `-- name: GetGenreByTagAndType :one
-SELECT id, created_at, updated_at, tag, genre_type FROM genres WHERE tag = $1 AND genre_type = $2
-`
-
-type GetGenreByTagAndTypeParams struct {
-	Tag       string `json:"tag"`
-	GenreType string `json:"genre_type"`
-}
-
-func (q *Queries) GetGenreByTagAndType(ctx context.Context, arg GetGenreByTagAndTypeParams) (Genre, error) {
-	row := q.db.QueryRow(ctx, getGenreByTagAndType, arg.Tag, arg.GenreType)
-	var i Genre
-	err := row.Scan(
-		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Tag,
-		&i.GenreType,
 	)
 	return i, err
 }

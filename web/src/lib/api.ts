@@ -1,4 +1,11 @@
-import type { ApiFailureType, ApiResponseType, SimpleAlbumType } from "@/types";
+import type {
+  AlbumDetailsResponseType,
+  ApiFailureType,
+  ApiResponseType,
+  MovieDetailsType,
+  SimpleAlbumType,
+  TheaterMovieType,
+} from "@/types";
 
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
@@ -49,11 +56,12 @@ export async function getAuthUser() {
   }
 }
 
+// functions for home page
 export async function getLatestAlbums(): Promise<
   ApiResponseType<{ albums: SimpleAlbumType[] }>
 > {
   try {
-    const res = await fetch("/api/albums/latest", {
+    const res = await fetch("/api/music/albums/latest", {
       credentials: "include",
     });
 
@@ -63,6 +71,70 @@ export async function getLatestAlbums(): Promise<
 
     const data: ApiResponseType<{ albums: SimpleAlbumType[] }> =
       await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getMoviesInTheaters(): Promise<
+  ApiResponseType<{ movies: TheaterMovieType[] }>
+> {
+  try {
+    const res = await fetch("/api/tmdb/movies/in-theaters", {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<{ movies: TheaterMovieType[] }> =
+      await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getMovieInTheaterDetails(
+  id: number
+): Promise<ApiResponseType<{ movie: MovieDetailsType }>> {
+  try {
+    const res = await fetch(`/api/tmdb/movies/${id}`, {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<{ movie: MovieDetailsType }> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getAlbumDetails(
+  id: number
+): Promise<ApiResponseType<AlbumDetailsResponseType>> {
+  try {
+    const res = await fetch(`/api/music/albums/details/${id}`, {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<AlbumDetailsResponseType> = await res.json();
 
     return data;
   } catch (err) {

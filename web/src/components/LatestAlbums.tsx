@@ -1,21 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
-import { getLatestAlbums } from "@/lib/api";
-import { LATEST_ALBUMS_KEY } from "@/lib/constants";
+import { latestAlbumsQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import AlbumCard from "@/components/AlbumCard";
 
 export default function LatestAlbums() {
-  const { data, isPending } = useQuery({
-    queryKey: [LATEST_ALBUMS_KEY],
-    queryFn: getLatestAlbums,
-  });
+  const { data, isPending } = useQuery(latestAlbumsQueryOpts());
 
   const albums = data && !data.error ? data.data.albums : [];
   const hasError = data && data.error;
 
   return (
-    <section aria-labelledby='recent-albums' className='mt-8'>
+    <section
+      role='region'
+      aria-labelledby='recent-albums'
+      aria-label='Recently Added Albums'
+      className='mt-8'
+    >
       <h2
         id='recent-albums'
         className='text-xl md:text-2xl font-semibold tracking-tight mb-4'
@@ -44,11 +45,20 @@ export default function LatestAlbums() {
           </AlertDescription>
         </Alert>
       ) : albums.length > 0 ? (
+        <>
+          <span
+            tabIndex={0}
+            className='sr-only focus:not-sr-only focus:absolute focus:bg-slate-800 focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:z-50'
+            aria-label={`Recently Added Albums section, ${albums.length} albums`}
+          >
+            Recently Added Albums - {albums.length} albums
+          </span>
         <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
           {albums.map(album => (
             <AlbumCard key={album.id} album={album} />
           ))}
         </div>
+        </>
       ) : (
         <div className='text-center py-12'>
           <div className='mx-auto w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4'>

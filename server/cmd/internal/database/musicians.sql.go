@@ -7,164 +7,127 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
-
-const createMusician = `-- name: CreateMusician :one
-INSERT INTO musicians (
-    name,
-    sort_name,
-    spotify_id,
-    spotify_popularity,
-    spotify_followers,
-    summary,
-    thumb
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-)
-RETURNING id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb
-`
-
-type CreateMusicianParams struct {
-	Name              string      `json:"name"`
-	SortName          string      `json:"sort_name"`
-	SpotifyID         pgtype.Text `json:"spotify_id"`
-	SpotifyPopularity int32       `json:"spotify_popularity"`
-	SpotifyFollowers  int32       `json:"spotify_followers"`
-	Summary           pgtype.Text `json:"summary"`
-	Thumb             pgtype.Text `json:"thumb"`
-}
-
-func (q *Queries) CreateMusician(ctx context.Context, arg CreateMusicianParams) (Musician, error) {
-	row := q.db.QueryRow(ctx, createMusician,
-		arg.Name,
-		arg.SortName,
-		arg.SpotifyID,
-		arg.SpotifyPopularity,
-		arg.SpotifyFollowers,
-		arg.Summary,
-		arg.Thumb,
-	)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-	)
-	return i, err
-}
-
-const getMusicianByID = `-- name: GetMusicianByID :one
-SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE id = $1 ORDER BY sort_name
-`
-
-func (q *Queries) GetMusicianByID(ctx context.Context, id int32) (Musician, error) {
-	row := q.db.QueryRow(ctx, getMusicianByID, id)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-	)
-	return i, err
-}
-
-const getMusicianByName = `-- name: GetMusicianByName :one
-SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE name = $1
-`
-
-func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
-	row := q.db.QueryRow(ctx, getMusicianByName, name)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-	)
-	return i, err
-}
 
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, created_at, updated_at, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb FROM musicians WHERE spotify_id = $1
+SELECT id, name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb, created_at, updated_at FROM musicians WHERE spotify_id = ? LIMIT 1
 `
 
-func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID pgtype.Text) (Musician, error) {
-	row := q.db.QueryRow(ctx, getMusicianBySpotifyID, spotifyID)
+func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error) {
+	row := q.queryRow(ctx, q.getMusicianBySpotifyIDStmt, getMusicianBySpotifyID, spotifyID)
 	var i Musician
 	err := row.Scan(
 		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.Name,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyID,
 		&i.SpotifyPopularity,
 		&i.SpotifyFollowers,
+		&i.SpotifyID,
 		&i.Thumb,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getMusicianCount = `-- name: GetMusicianCount :one
-SELECT COUNT(*) FROM musicians
+const getMusiciansByAlbumID = `-- name: GetMusiciansByAlbumID :many
+SELECT
+  m.id,
+  m.name,
+  m.thumb,
+  m.spotify_id
+FROM
+  musicians m
+  INNER JOIN musician_albums ma ON m.id = ma.musician_id
+WHERE
+  ma.album_id = ?
+ORDER BY
+  m.name ASC
 `
 
-func (q *Queries) GetMusicianCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, getMusicianCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type GetMusiciansByAlbumIDRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Thumb     sql.NullString `json:"thumb"`
+	SpotifyID sql.NullString `json:"spotify_id"`
 }
 
-const getMusicianList = `-- name: GetMusicianList :many
-SELECT id, name, sort_name FROM musicians ORDER BY sort_name ASC
-`
-
-type GetMusicianListRow struct {
-	ID       int32  `json:"id"`
-	Name     string `json:"name"`
-	SortName string `json:"sort_name"`
-}
-
-func (q *Queries) GetMusicianList(ctx context.Context) ([]GetMusicianListRow, error) {
-	rows, err := q.db.Query(ctx, getMusicianList)
+func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error) {
+	rows, err := q.query(ctx, q.getMusiciansByAlbumIDStmt, getMusiciansByAlbumID, albumID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetMusicianListRow{}
+	items := []GetMusiciansByAlbumIDRow{}
 	for rows.Next() {
-		var i GetMusicianListRow
-		if err := rows.Scan(&i.ID, &i.Name, &i.SortName); err != nil {
+		var i GetMusiciansByAlbumIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Thumb,
+			&i.SpotifyID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertMusician = `-- name: UpsertMusician :one
+INSERT INTO musicians (name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (name) DO UPDATE SET
+  sort_name = excluded.sort_name,
+  summary = COALESCE(excluded.summary, musicians.summary),
+  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
+  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
+  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
+  thumb = COALESCE(excluded.thumb, musicians.thumb),
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb, created_at, updated_at
+`
+
+type UpsertMusicianParams struct {
+	Name              string          `json:"name"`
+	SortName          string          `json:"sort_name"`
+	Summary           sql.NullString  `json:"summary"`
+	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
+	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
+	SpotifyID         sql.NullString  `json:"spotify_id"`
+	Thumb             sql.NullString  `json:"thumb"`
+}
+
+func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error) {
+	row := q.queryRow(ctx, q.upsertMusicianStmt, upsertMusician,
+		arg.Name,
+		arg.SortName,
+		arg.Summary,
+		arg.SpotifyPopularity,
+		arg.SpotifyFollowers,
+		arg.SpotifyID,
+		arg.Thumb,
+	)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SortName,
+		&i.Summary,
+		&i.SpotifyPopularity,
+		&i.SpotifyFollowers,
+		&i.SpotifyID,
+		&i.Thumb,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

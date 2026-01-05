@@ -5,245 +5,99 @@
 package database
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 type Album struct {
-	ID                int32              `json:"id"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	Title             string             `json:"title"`
-	SortTitle         string             `json:"sort_title"`
-	SpotifyID         pgtype.Text        `json:"spotify_id"`
-	ReleaseDate       pgtype.Date        `json:"release_date"`
-	Year              pgtype.Int4        `json:"year"`
-	SpotifyPopularity pgtype.Int4        `json:"spotify_popularity"`
-	TotalTracks       int32              `json:"total_tracks"`
-	Musician          pgtype.Text        `json:"musician"`
-	Cover             pgtype.Text        `json:"cover"`
-}
-
-type AlbumMusician struct {
-	AlbumID    int32 `json:"album_id"`
-	MusicianID int32 `json:"musician_id"`
-}
-
-type AudioStream struct {
-	ID            int32              `json:"id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	Title         string             `json:"title"`
-	AudioIndex    int32              `json:"audio_index"`
-	Codec         string             `json:"codec"`
-	Channels      int32              `json:"channels"`
-	ChannelLayout string             `json:"channel_layout"`
-	Language      string             `json:"language"`
-	MovieID       pgtype.Int4        `json:"movie_id"`
-}
-
-type CastList struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	ArtistID  pgtype.Int4        `json:"artist_id"`
-	MovieID   pgtype.Int4        `json:"movie_id"`
-	Character string             `json:"character"`
-	SortOrder int32              `json:"sort_order"`
-}
-
-type Chapter struct {
-	ID          int32              `json:"id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Title       string             `json:"title"`
-	StartTimeMs int32              `json:"start_time_ms"`
-	Thumb       string             `json:"thumb"`
-	MovieID     pgtype.Int4        `json:"movie_id"`
-}
-
-type CrewList struct {
-	ID         int32              `json:"id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	ArtistID   pgtype.Int4        `json:"artist_id"`
-	MovieID    pgtype.Int4        `json:"movie_id"`
-	Job        string             `json:"job"`
-	Department string             `json:"department"`
+	ID                int64           `json:"id"`
+	Title             string          `json:"title"`
+	SortTitle         string          `json:"sort_title"`
+	Musician          sql.NullString  `json:"musician"`
+	SpotifyID         sql.NullString  `json:"spotify_id"`
+	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
+	ReleaseDate       sql.NullString  `json:"release_date"`
+	Year              sql.NullInt64   `json:"year"`
+	TotalTracks       sql.NullInt64   `json:"total_tracks"`
+	Cover             sql.NullString  `json:"cover"`
+	CreatedAt         string          `json:"created_at"`
+	UpdatedAt         string          `json:"updated_at"`
 }
 
 type Genre struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Tag       string             `json:"tag"`
-	GenreType string             `json:"genre_type"`
-}
-
-type GlobalSetting struct {
-	ID                         int32              `json:"id"`
-	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
-	Port                       int32              `json:"port"`
-	Debug                      bool               `json:"debug"`
-	EnableLogger               bool               `json:"enable_logger"`
-	BaseUrl                    string             `json:"base_url"`
-	LogsDir                    string             `json:"logs_dir"`
-	EnableWatcher              bool               `json:"enable_watcher"`
-	MoviesDir                  pgtype.Text        `json:"movies_dir"`
-	MusicDir                   pgtype.Text        `json:"music_dir"`
-	TvshowsDir                 pgtype.Text        `json:"tvshows_dir"`
-	TranscodeDir               pgtype.Text        `json:"transcode_dir"`
-	MoviesImgDir               string             `json:"movies_img_dir"`
-	StudiosImgDir              string             `json:"studios_img_dir"`
-	ArtistsImgDir              string             `json:"artists_img_dir"`
-	AvatarImgDir               string             `json:"avatar_img_dir"`
-	StaticDir                  string             `json:"static_dir"`
-	DownloadImages             bool               `json:"download_images"`
-	TmdbApiKey                 pgtype.Text        `json:"tmdb_api_key"`
-	FfmpegPath                 pgtype.Text        `json:"ffmpeg_path"`
-	FfprobePath                pgtype.Text        `json:"ffprobe_path"`
-	EnableHardwareAcceleration bool               `json:"enable_hardware_acceleration"`
-	HardwareAccelerationMethod string             `json:"hardware_acceleration_method"`
-	JellyfinToken              pgtype.Text        `json:"jellyfin_token"`
-	PlexToken                  pgtype.Text        `json:"plex_token"`
-	SpotifyClientID            pgtype.Text        `json:"spotify_client_id"`
-	SpotifyClientSecret        pgtype.Text        `json:"spotify_client_secret"`
-}
-
-type Movie struct {
-	ID              int32              `json:"id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	Title           string             `json:"title"`
-	FilePath        string             `json:"file_path"`
-	FileName        string             `json:"file_name"`
-	Container       string             `json:"container"`
-	Size            int64              `json:"size"`
-	ContentType     pgtype.Text        `json:"content_type"`
-	RunTime         pgtype.Int4        `json:"run_time"`
-	Adult           bool               `json:"adult"`
-	TagLine         pgtype.Text        `json:"tag_line"`
-	Summary         pgtype.Text        `json:"summary"`
-	Art             pgtype.Text        `json:"art"`
-	Thumb           pgtype.Text        `json:"thumb"`
-	TmdbID          pgtype.Text        `json:"tmdb_id"`
-	ImdbID          pgtype.Text        `json:"imdb_id"`
-	ReleaseDate     pgtype.Date        `json:"release_date"`
-	Year            pgtype.Int4        `json:"year"`
-	Budget          pgtype.Int8        `json:"budget"`
-	Revenue         pgtype.Int8        `json:"revenue"`
-	ContentRating   pgtype.Text        `json:"content_rating"`
-	AudienceRating  pgtype.Numeric     `json:"audience_rating"`
-	CriticRating    pgtype.Numeric     `json:"critic_rating"`
-	SpokenLanguages pgtype.Text        `json:"spoken_languages"`
-}
-
-type MovieExtra struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Title     string             `json:"title"`
-	Url       string             `json:"url"`
-	Kind      string             `json:"kind"`
-	MovieID   pgtype.Int4        `json:"movie_id"`
+	ID        int64  `json:"id"`
+	Tag       string `json:"tag"`
+	GenreType string `json:"genre_type"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type Musician struct {
-	ID                int32              `json:"id"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	Name              string             `json:"name"`
-	SortName          string             `json:"sort_name"`
-	Summary           pgtype.Text        `json:"summary"`
-	SpotifyID         pgtype.Text        `json:"spotify_id"`
-	SpotifyPopularity int32              `json:"spotify_popularity"`
-	SpotifyFollowers  int32              `json:"spotify_followers"`
-	Thumb             pgtype.Text        `json:"thumb"`
+	ID                int64           `json:"id"`
+	Name              string          `json:"name"`
+	SortName          string          `json:"sort_name"`
+	Summary           sql.NullString  `json:"summary"`
+	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
+	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
+	SpotifyID         sql.NullString  `json:"spotify_id"`
+	Thumb             sql.NullString  `json:"thumb"`
+	CreatedAt         string          `json:"created_at"`
+	UpdatedAt         string          `json:"updated_at"`
 }
 
-type Studio struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Name      string             `json:"name"`
-	Country   pgtype.Text        `json:"country"`
-	Logo      pgtype.Text        `json:"logo"`
-	TmdbID    int32              `json:"tmdb_id"`
-}
-
-type Subtitle struct {
-	ID            int32              `json:"id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	Title         string             `json:"title"`
-	SubtitleIndex int32              `json:"subtitle_index"`
-	Codec         string             `json:"codec"`
-	Language      string             `json:"language"`
-	MovieID       pgtype.Int4        `json:"movie_id"`
+type Setting struct {
+	ID                         int64          `json:"id"`
+	TmdbKey                    sql.NullString `json:"tmdb_key"`
+	JellyfinToken              sql.NullString `json:"jellyfin_token"`
+	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
+	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
+	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
+	EnableLogger               bool           `json:"enable_logger"`
+	EnableWatcher              bool           `json:"enable_watcher"`
+	DownloadImages             bool           `json:"download_images"`
+	MoviesDir                  sql.NullString `json:"movies_dir"`
+	ShowsDir                   sql.NullString `json:"shows_dir"`
+	MusicDir                   sql.NullString `json:"music_dir"`
+	StaticDir                  string         `json:"static_dir"`
+	LogsDir                    string         `json:"logs_dir"`
+	CreatedAt                  string         `json:"created_at"`
+	UpdatedAt                  string         `json:"updated_at"`
 }
 
 type Track struct {
-	ID            int32              `json:"id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	Title         string             `json:"title"`
-	SortTitle     string             `json:"sort_title"`
-	Disc          int32              `json:"disc"`
-	TrackIndex    int32              `json:"track_index"`
-	Duration      pgtype.Numeric     `json:"duration"`
-	FilePath      string             `json:"file_path"`
-	FileName      string             `json:"file_name"`
-	Container     string             `json:"container"`
-	Codec         string             `json:"codec"`
-	Channels      int32              `json:"channels"`
-	ChannelLayout string             `json:"channel_layout"`
-	Size          int64              `json:"size"`
-	FileHash      pgtype.Text        `json:"file_hash"`
-	Composer      pgtype.Text        `json:"composer"`
-	ReleaseDate   pgtype.Date        `json:"release_date"`
-	Year          pgtype.Int4        `json:"year"`
-	BitRate       int32              `json:"bit_rate"`
-	Copyright     pgtype.Text        `json:"copyright"`
-	Language      pgtype.Text        `json:"language"`
-	Profile       pgtype.Text        `json:"profile"`
-	AlbumID       pgtype.Int4        `json:"album_id"`
-	MusicianID    pgtype.Int4        `json:"musician_id"`
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	SortTitle     string         `json:"sort_title"`
+	FilePath      string         `json:"file_path"`
+	FileName      string         `json:"file_name"`
+	Container     string         `json:"container"`
+	MimeType      string         `json:"mime_type"`
+	Codec         string         `json:"codec"`
+	Size          int64          `json:"size"`
+	TrackIndex    int64          `json:"track_index"`
+	Duration      int64          `json:"duration"`
+	Disc          int64          `json:"disc"`
+	Channels      string         `json:"channels"`
+	ChannelLayout string         `json:"channel_layout"`
+	BitRate       int64          `json:"bit_rate"`
+	Profile       string         `json:"profile"`
+	ReleaseDate   sql.NullString `json:"release_date"`
+	Year          sql.NullInt64  `json:"year"`
+	Composer      sql.NullString `json:"composer"`
+	Copyright     sql.NullString `json:"copyright"`
+	Language      sql.NullString `json:"language"`
+	AlbumID       sql.NullInt64  `json:"album_id"`
+	MusicianID    sql.NullInt64  `json:"musician_id"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
 }
 
 type User struct {
-	ID        int32              `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Name      string             `json:"name"`
-	Email     string             `json:"email"`
-	Password  string             `json:"password"`
-	IsActive  bool               `json:"is_active"`
-	IsAdmin   bool               `json:"is_admin"`
-	Avatar    pgtype.Text        `json:"avatar"`
-}
-
-type VideoStream struct {
-	ID             int32              `json:"id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	Title          string             `json:"title"`
-	VideoIndex     int32              `json:"video_index"`
-	Duration       int32              `json:"duration"`
-	Profile        string             `json:"profile"`
-	AspectRatio    string             `json:"aspect_ratio"`
-	BitRate        string             `json:"bit_rate"`
-	BitDepth       string             `json:"bit_depth"`
-	Codec          string             `json:"codec"`
-	Width          int32              `json:"width"`
-	Height         int32              `json:"height"`
-	CodedWidth     int32              `json:"coded_width"`
-	CodedHeight    int32              `json:"coded_height"`
-	ColorTransfer  string             `json:"color_transfer"`
-	ColorPrimaries string             `json:"color_primaries"`
-	ColorSpace     string             `json:"color_space"`
-	ColorRange     string             `json:"color_range"`
-	FrameRate      string             `json:"frame_rate"`
-	AvgFrameRate   string             `json:"avg_frame_rate"`
-	Level          int32              `json:"level"`
-	MovieID        pgtype.Int4        `json:"movie_id"`
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	Password  string         `json:"password"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
 }
