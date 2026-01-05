@@ -1,8 +1,18 @@
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { login } from "@/lib/api";
 import loginBg from "@/assets/images/login-bg.jpg";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export const Route = createLazyFileRoute("/login/")({
   component: LoginPage,
@@ -11,9 +21,31 @@ export const Route = createLazyFileRoute("/login/")({
 function LoginPage() {
   const [isPending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
+
+  // Entrance animation
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    // Check for reduced motion preference
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    if (prefersReduced) {
+      card.classList.remove("opacity-0", "translate-y-2");
+      return;
+    }
+
+    // Trigger animation on next frame
+    requestAnimationFrame(() => {
+      card.classList.remove("opacity-0", "translate-y-2");
+    });
+  }, []);
 
   const loginHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,121 +78,118 @@ function LoginPage() {
   };
 
   return (
-    <div className="h-full bg-slate-900 text-slate-100 antialiased">
-      <div className="relative min-h-screen">
+    <div className='h-full bg-slate-900 text-slate-100 antialiased'>
+      <div className='relative min-h-screen'>
+        {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          className='absolute inset-0 bg-cover bg-center bg-no-repeat'
           style={{ backgroundImage: `url(${loginBg})` }}
-        ></div>
-        <div className="absolute inset-0 bg-slate-950/70"></div>
+        />
+        {/* Dark overlay */}
+        <div className='absolute inset-0 bg-slate-950/70' />
 
-        <main className="relative z-10 min-h-screen flex items-center justify-center px-4">
-          <section
-            id="login-card"
-            className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur shadow-xl p-6 sm:p-8
-               opacity-0 translate-y-2 transition-transform duration-500 ease-out will-change-transform"
+        <main className='relative z-10 min-h-screen flex items-center justify-center px-4'>
+          <Card
+            ref={cardRef}
+            className='w-full max-w-md border-slate-800 bg-slate-900/80 backdrop-blur shadow-xl
+               opacity-0 translate-y-2 transition-all duration-500 ease-out will-change-transform'
           >
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800">
+            <CardHeader className='text-center pb-2'>
+              <div className='mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800'>
                 <i
-                  className="fa-solid fa-igloo text-amber-400 text-xl"
-                  aria-hidden="true"
-                ></i>
+                  className='fa-solid fa-igloo text-amber-400 text-xl'
+                  aria-hidden='true'
+                />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <CardTitle className='text-2xl font-semibold tracking-tight text-slate-100'>
                 Welcome to Igloo
-              </h1>
-              <p className="mt-1 text-slate-400 text-sm">
+              </CardTitle>
+              <CardDescription className='text-slate-400'>
                 Sign in to access your private media library.
-              </p>
-            </div>
+              </CardDescription>
+            </CardHeader>
 
-            <form onSubmit={loginHandler} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm mb-1">
-                  Email
-                </label>
-                <div className="relative">
-                  <i
-                    className="fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    aria-hidden="true"
-                  ></i>
-                  <input
-                    autoFocus
-                    type="email"
-                    id="email"
-                    name="email"
-                    inputMode="email"
-                    autoComplete="username"
-                    required
-                    className="w-full rounded-lg bg-slate-800/80 pl-10 pr-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    disabled={isPending}
-                  />
+            <CardContent>
+              <form onSubmit={loginHandler} className='space-y-4'>
+                {/* Email field */}
+                <div className='space-y-1'>
+                  <Label htmlFor='email'>Email</Label>
+                  <div className='relative'>
+                    <i
+                      className='fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10'
+                      aria-hidden='true'
+                    />
+                    <Input
+                      autoFocus
+                      type='email'
+                      id='email'
+                      name='email'
+                      inputMode='email'
+                      autoComplete='username'
+                      required
+                      className='pl-10'
+                      disabled={isPending}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <i
-                    className="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    aria-hidden="true"
-                  ></i>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    minLength={9}
-                    maxLength={128}
-                    id="password"
-                    name="password"
-                    required
-                    className="w-full rounded-lg bg-slate-800/80 pl-10 pr-10 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    disabled={isPending}
-                  />
+                {/* Password field */}
+                <div className='space-y-1'>
+                  <Label htmlFor='password'>Password</Label>
+                  <div className='relative'>
+                    <i
+                      className='fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10'
+                      aria-hidden='true'
+                    />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      minLength={9}
+                      maxLength={128}
+                      id='password'
+                      name='password'
+                      required
+                      className='pl-10 pr-10'
+                      disabled={isPending}
+                    />
+                    <button
+                      type='button'
+                      className='absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md
+                               text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isPending}
+                    >
+                      <i
+                        className={
+                          showPassword
+                            ? "fa-regular fa-eye-slash"
+                            : "fa-regular fa-eye"
+                        }
+                        aria-hidden='true'
+                      />
+                    </button>
+                  </div>
+                </div>
 
-                  <button
-                    type="button"
-                    id="togglePassword"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md
-                             text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                    onClick={() => setShowPassword(!showPassword)}
+                {/* Submit button */}
+                <div className='pt-2'>
+                  <Button
+                    type='submit'
+                    className='w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold'
                     disabled={isPending}
                   >
                     <i
-                      className={
-                        showPassword
-                          ? "fa-regular fa-eye-slash"
-                          : "fa-regular fa-eye"
-                      }
-                      aria-hidden="true"
-                    ></i>
-                  </button>
+                      className='fa-solid fa-right-to-bracket'
+                      aria-hidden='true'
+                    />
+                    <span>{isPending ? "Signing in..." : "Sign in"}</span>
+                  </Button>
                 </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2
-                     text-sm font-semibold text-white hover:bg-blue-500
-                     focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  disabled={isPending}
-                >
-                  <i
-                    className="fa-solid fa-right-to-bracket"
-                    aria-hidden="true"
-                  ></i>
-                  <span>{isPending ? "Signing in..." : "Sign in"}</span>
-                </button>
-              </div>
-            </form>
-          </section>
+              </form>
+            </CardContent>
+          </Card>
         </main>
       </div>
     </div>
