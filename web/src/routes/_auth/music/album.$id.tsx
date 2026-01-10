@@ -2,9 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAudioPlayer } from "@/context/AudioPlayerContext";
+import {
+  formatDate,
+  formatDuration,
+  formatTrackDuration,
+  formatBitRate,
+} from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
-  ApiResponseType,
   ArtistType,
   TrackGenreType,
   TrackType,
@@ -23,8 +28,7 @@ export const Route = createFileRoute("/_auth/music/album/$id")({
 });
 
 function AlbumDetailsPage() {
-  const data =
-    Route.useLoaderData() as ApiResponseType<AlbumDetailsResponseType>;
+  const data = Route.useLoaderData();
 
   if (data.error) {
     return (
@@ -181,7 +185,7 @@ function AlbumDetailsContent({
             className='flex flex-wrap items-center gap-4 mt-4 text-slate-400'
             aria-label='Album details'
           >
-            {releaseYear && (
+            {(album.release_date.Valid || releaseYear) && (
               <li className='flex items-center gap-1.5'>
                 <i
                   className='fa-regular fa-calendar text-slate-500'
@@ -190,7 +194,9 @@ function AlbumDetailsContent({
                 <time
                   dateTime={album.release_date.String || String(releaseYear)}
                 >
-                  {releaseYear}
+                  {album.release_date.Valid
+                    ? formatDate(album.release_date.String)
+                    : releaseYear}
                 </time>
               </li>
             )}
@@ -213,13 +219,18 @@ function AlbumDetailsContent({
             {album.spotify_popularity.Valid && (
               <li
                 className='flex items-center gap-1.5'
-                title='Spotify Popularity'
+                aria-label='Spotify Popularity'
               >
                 <i
                   className='fa-brands fa-spotify text-green-500'
                   aria-hidden='true'
                 />
-                <span>{Math.round(album.spotify_popularity.Float64)}</span>
+                <span>
+                  <span className='text-slate-500'>Popularity:</span>{" "}
+                  <span className='text-green-400 font-medium'>
+                    {Math.round(album.spotify_popularity.Float64)}
+                  </span>
+                </span>
               </li>
             )}
           </ul>
@@ -359,28 +370,6 @@ function AlbumDetailsContent({
               {formatDuration(total_duration)}
             </dd>
           </div>
-          {album.spotify_id.Valid && (
-            <div>
-              <dt className='font-semibold text-amber-300/70 uppercase tracking-wide'>
-                Spotify
-              </dt>
-              <dd className='text-white mt-1'>
-                <a
-                  href={`https://open.spotify.com/album/${album.spotify_id.String}`}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='text-green-400 hover:text-green-300 inline-flex items-center gap-1'
-                >
-                  <i className='fa-brands fa-spotify' aria-hidden='true' />
-                  Open in Spotify
-                  <i
-                    className='fa-solid fa-arrow-up-right-from-square text-xs'
-                    aria-hidden='true'
-                  />
-                </a>
-              </dd>
-            </div>
-          )}
         </dl>
       </section>
 
@@ -416,17 +405,6 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
         </div>
       )}
       <span className='text-sm text-white font-medium'>{artist.name}</span>
-      {artist.spotify_id.Valid && (
-        <a
-          href={`https://open.spotify.com/artist/${artist.spotify_id.String}`}
-          target='_blank'
-          rel='noopener noreferrer'
-          className='text-green-500 hover:text-green-400'
-          title='View on Spotify'
-        >
-          <i className='fa-brands fa-spotify text-sm' aria-hidden='true' />
-        </a>
-      )}
     </div>
   );
 }
@@ -520,41 +498,4 @@ function TrackRow({
       </button>
     </li>
   );
-}
-
-// Helper functions
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m ${seconds}s`;
-}
-
-function formatTrackDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
-
-function formatBitRate(bitRate: number): string {
-  return `${Math.round(bitRate / 1000)} kbps`;
-}
-
-function formatDate(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  } catch {
-    return dateString;
-  }
 }
