@@ -177,7 +177,7 @@ function LoginPage() {
                 <div className='pt-2'>
                   <Button
                     type='submit'
-                    className='w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold'
+                    className='w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold'
                     disabled={isPending}
                   >
                     <i

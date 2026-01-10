@@ -113,7 +113,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     ? `${TMDB_IMAGE_BASE}/${TMDB_BACKDROP_SIZE}${movie.backdrop_path}`
     : null;
 
-    const posterUrl = movie.poster_path
+  const posterUrl = movie.poster_path
     ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${movie.poster_path}`
     : null;
 
@@ -135,9 +135,9 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   );
 
   const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-teal-500 text-white"; // Northern lights green-blue
-    if (score >= 5) return "bg-sky-500 text-white"; // Glacier blue
-    return "bg-slate-500 text-white"; // Frozen gray
+    if (score >= 7) return "bg-amber-500 text-slate-900"; // High rating - gold
+    if (score >= 5) return "bg-amber-600/70 text-white"; // Medium rating - darker gold
+    return "bg-slate-500 text-white"; // Low rating - gray
   };
 
   const formatCurrency = (amount: number) => {
@@ -160,7 +160,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           <li>
             <a
               href='#movie-title'
-              className='text-cyan-400 underline focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1'
+              className='text-amber-400 underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1'
             >
               Skip to movie info
             </a>
@@ -168,7 +168,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           <li>
             <a
               href='#overview-heading'
-              className='text-cyan-400 underline focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1'
+              className='text-amber-400 underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1'
             >
               Skip to overview
             </a>
@@ -177,7 +177,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
             <li>
               <a
                 href='#cast-heading'
-                className='text-cyan-400 underline focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1'
+                className='text-amber-400 underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1'
               >
                 Skip to cast
               </a>
@@ -186,7 +186,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           <li>
             <a
               href='#details-heading'
-              className='text-cyan-400 underline focus:outline-none focus:ring-2 focus:ring-cyan-400 rounded px-2 py-1'
+              className='text-amber-400 underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1'
             >
               Skip to details
             </a>
@@ -217,7 +217,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
         <div className='flex flex-col md:flex-row gap-6 lg:gap-8'>
           {/* Poster */}
           <figure className='shrink-0 mx-auto md:mx-0'>
-            <div className='w-48 md:w-64 lg:w-72 rounded-xl overflow-hidden shadow-2xl shadow-cyan-500/10 border border-cyan-500/20'>
+            <div className='w-48 md:w-64 lg:w-72 rounded-xl overflow-hidden shadow-2xl shadow-amber-500/10 border border-amber-500/20'>
               {posterUrl ? (
                 <img
                   src={posterUrl}
@@ -327,7 +327,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                     role='listitem'
                     aria-posinset={index + 1}
                     aria-setsize={movie.genres!.length}
-                    className='px-3 py-1 bg-slate-800/80 text-cyan-200 text-sm rounded-full border border-cyan-500/30 backdrop-blur-sm outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:border-cyan-400'
+                    className='px-3 py-1 bg-slate-800/80 text-amber-200 text-sm rounded-full border border-amber-500/30 backdrop-blur-sm outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:border-amber-400'
                   >
                     {genre.name}
                   </li>
@@ -381,7 +381,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                   {director && (
                     <div
                       tabIndex={0}
-                      className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+                      className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
                       role='group'
                       aria-label={`Director: ${director.name}`}
                     >
@@ -395,7 +395,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                     <div
                       key={writer.id}
                       tabIndex={0}
-                      className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+                      className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
                       role='group'
                       aria-label={`${writer.job}: ${writer.name}`}
                     >
@@ -416,7 +416,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
         {/* Additional details */}
         <section
-          className='mt-10 p-4 bg-slate-800/30 rounded-xl border border-cyan-500/10'
+          className='mt-10 p-4 bg-slate-800/30 rounded-xl border border-amber-500/10'
           aria-labelledby='details-heading'
         >
           <h2
@@ -429,22 +429,22 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
           <dl className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
             <div
               tabIndex={0}
-              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
               role='group'
               aria-label={`Status: ${movie.status || "Unknown"}`}
             >
-              <dt className='text-sm font-semibold text-cyan-300/70 uppercase tracking-wide'>
+              <dt className='text-sm font-semibold text-amber-300/70 uppercase tracking-wide'>
                 Status
               </dt>
               <dd className='text-white mt-1'>{movie.status || "-"}</dd>
             </div>
             <div
               tabIndex={0}
-              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
               role='group'
               aria-label={`Original Language: ${movie.original_language?.toUpperCase() || "Unknown"}`}
             >
-              <dt className='text-sm font-semibold text-cyan-300/70 uppercase tracking-wide'>
+              <dt className='text-sm font-semibold text-amber-300/70 uppercase tracking-wide'>
                 Original Language
               </dt>
               <dd className='text-white mt-1 uppercase'>
@@ -453,11 +453,11 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
             </div>
             <div
               tabIndex={0}
-              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
               role='group'
               aria-label={`Budget: ${formatCurrency(movie.budget)}`}
             >
-              <dt className='text-sm font-semibold text-cyan-300/70 uppercase tracking-wide'>
+              <dt className='text-sm font-semibold text-amber-300/70 uppercase tracking-wide'>
                 Budget
               </dt>
               <dd className='text-white mt-1'>
@@ -466,11 +466,11 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
             </div>
             <div
               tabIndex={0}
-              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+              className='p-2 -m-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
               role='group'
               aria-label={`Revenue: ${formatCurrency(movie.revenue)}`}
             >
-              <dt className='text-sm font-semibold text-cyan-300/70 uppercase tracking-wide'>
+              <dt className='text-sm font-semibold text-amber-300/70 uppercase tracking-wide'>
                 Revenue
               </dt>
               <dd className='text-white mt-1'>
