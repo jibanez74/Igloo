@@ -27,6 +27,28 @@ func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchang
 	return column_1, err
 }
 
+const getAlbumsCount = `-- name: GetAlbumsCount :one
+SELECT COUNT(*) FROM albums
+`
+
+func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getAlbumsCountStmt, getAlbumsCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getMusiciansCount = `-- name: GetMusiciansCount :one
+SELECT COUNT(*) FROM musicians
+`
+
+func (q *Queries) GetMusiciansCount(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getMusiciansCountStmt, getMusiciansCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getTrack = `-- name: GetTrack :one
 SELECT id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at FROM tracks WHERE id = ? LIMIT 1
 `
@@ -62,6 +84,83 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getTracksAlphabetical = `-- name: GetTracksAlphabetical :many
+SELECT
+  t.id,
+  t.title,
+  t.duration,
+  t.codec,
+  t.bit_rate,
+  t.file_path,
+  a.id as album_id,
+  a.title as album_title,
+  m.id as musician_id,
+  m.name as musician_name
+FROM tracks t
+LEFT JOIN albums a ON t.album_id = a.id
+LEFT JOIN musicians m ON t.musician_id = m.id
+ORDER BY
+  CASE
+    WHEN UPPER(SUBSTR(t.title, 1, 1)) BETWEEN 'A' AND 'Z'
+    THEN UPPER(SUBSTR(t.title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(t.title)
+LIMIT ? OFFSET ?
+`
+
+type GetTracksAlphabeticalParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetTracksAlphabeticalRow struct {
+	ID           int64          `json:"id"`
+	Title        string         `json:"title"`
+	Duration     int64          `json:"duration"`
+	Codec        string         `json:"codec"`
+	BitRate      int64          `json:"bit_rate"`
+	FilePath     string         `json:"file_path"`
+	AlbumID      sql.NullInt64  `json:"album_id"`
+	AlbumTitle   sql.NullString `json:"album_title"`
+	MusicianID   sql.NullInt64  `json:"musician_id"`
+	MusicianName sql.NullString `json:"musician_name"`
+}
+
+func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error) {
+	rows, err := q.query(ctx, q.getTracksAlphabeticalStmt, getTracksAlphabetical, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTracksAlphabeticalRow{}
+	for rows.Next() {
+		var i GetTracksAlphabeticalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Duration,
+			&i.Codec,
+			&i.BitRate,
+			&i.FilePath,
+			&i.AlbumID,
+			&i.AlbumTitle,
+			&i.MusicianID,
+			&i.MusicianName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTracksByAlbumID = `-- name: GetTracksByAlbumID :many
@@ -123,6 +222,17 @@ func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64)
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTracksCount = `-- name: GetTracksCount :one
+SELECT COUNT(*) FROM tracks
+`
+
+func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getTracksCountStmt, getTracksCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const upsertTrack = `-- name: UpsertTrack :one

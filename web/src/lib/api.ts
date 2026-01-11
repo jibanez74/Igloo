@@ -3,8 +3,10 @@ import type {
   ApiFailureType,
   ApiResponseType,
   MovieDetailsType,
+  MusicStatsType,
   SimpleAlbumType,
   TheaterMovieType,
+  TracksListResponseType,
 } from "@/types";
 
 const ERROR_NOTFOUND: ApiFailureType = {
@@ -135,6 +137,47 @@ export async function getAlbumDetails(
     }
 
     const data: ApiResponseType<AlbumDetailsResponseType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getTracksPaginated(
+  limit: number,
+  offset: number
+): Promise<ApiResponseType<TracksListResponseType>> {
+  try {
+    const res = await fetch(`/api/music/tracks?limit=${limit}&offset=${offset}`, {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<TracksListResponseType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getMusicStats(): Promise<ApiResponseType<MusicStatsType>> {
+  try {
+    const res = await fetch("/api/music/stats", {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<MusicStatsType> = await res.json();
 
     return data;
   } catch (err) {

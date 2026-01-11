@@ -1,10 +1,12 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
   getAlbumDetails,
   getAuthUser,
   getLatestAlbums,
   getMovieInTheaterDetails,
   getMoviesInTheaters,
+  getMusicStats,
+  getTracksPaginated,
 } from "@/lib/api";
 import {
   ALBUM_DETAILS_KEY,
@@ -12,6 +14,8 @@ import {
   LATEST_ALBUMS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
+  MUSIC_STATS_KEY,
+  TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 
 export function authUserQueryOpts() {
@@ -47,5 +51,24 @@ export function albumDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [ALBUM_DETAILS_KEY, id],
     queryFn: () => getAlbumDetails(id),
+  });
+}
+
+export function tracksInfiniteQueryOpts(pageSize = 50) {
+  return infiniteQueryOptions({
+    queryKey: [TRACKS_INFINITE_KEY],
+    queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.error || !lastPage.data?.has_more) return undefined;
+      return lastPage.data.offset + lastPage.data.limit;
+    },
+  });
+}
+
+export function musicStatsQueryOpts() {
+  return queryOptions({
+    queryKey: [MUSIC_STATS_KEY],
+    queryFn: getMusicStats,
   });
 }

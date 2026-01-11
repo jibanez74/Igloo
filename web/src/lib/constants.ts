@@ -10,6 +10,8 @@ export const ALBUMS_KEY = "albums";
 export const ALBUM_DETAILS_KEY = "album-details";
 export const MUSICIANS_KEY = "musicians";
 export const TRACKS_KEY = "tracks";
+export const TRACKS_INFINITE_KEY = "tracks-infinite";
+export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
 
 // tmdb

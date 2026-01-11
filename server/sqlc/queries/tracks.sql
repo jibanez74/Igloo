@@ -46,3 +46,36 @@ WHERE
 ORDER BY
   disc ASC,
   track_index ASC;
+
+-- name: GetTracksAlphabetical :many
+SELECT
+  t.id,
+  t.title,
+  t.duration,
+  t.codec,
+  t.bit_rate,
+  t.file_path,
+  a.id as album_id,
+  a.title as album_title,
+  m.id as musician_id,
+  m.name as musician_name
+FROM tracks t
+LEFT JOIN albums a ON t.album_id = a.id
+LEFT JOIN musicians m ON t.musician_id = m.id
+ORDER BY
+  CASE
+    WHEN UPPER(SUBSTR(t.title, 1, 1)) BETWEEN 'A' AND 'Z'
+    THEN UPPER(SUBSTR(t.title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(t.title)
+LIMIT ? OFFSET ?;
+
+-- name: GetTracksCount :one
+SELECT COUNT(*) FROM tracks;
+
+-- name: GetAlbumsCount :one
+SELECT COUNT(*) FROM albums;
+
+-- name: GetMusiciansCount :one
+SELECT COUNT(*) FROM musicians;

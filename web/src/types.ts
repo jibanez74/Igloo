@@ -189,6 +189,36 @@ export type AlbumDetailsResponseType = {
   total_duration: number;
 };
 
+// Track list item for paginated tracks list
+export type TrackListItemType = {
+  id: number;
+  title: string;
+  duration: number;
+  codec: string;
+  bit_rate: number;
+  file_path: string;
+  album_id: NullableInt64;
+  album_title: NullableString;
+  musician_id: NullableInt64;
+  musician_name: NullableString;
+};
+
+// Response type for paginated tracks
+export type TracksListResponseType = {
+  tracks: TrackListItemType[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+};
+
+// Music library stats
+export type MusicStatsType = {
+  total_albums: number;
+  total_tracks: number;
+  total_musicians: number;
+};
+
 export type MovieDetailsType = {
   id: number;
   title: string;

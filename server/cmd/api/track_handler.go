@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
@@ -92,4 +93,100 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", track.MimeType)
 
 	http.ServeContent(w, r, track.FileName, stat.ModTime(), file)
+}
+
+// GetTracksAlphabetical returns a paginated list of tracks sorted alphabetically.
+// Supports query parameters: limit (default 50, max 100), offset (default 0)
+func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Request) {
+	// Parse limit with default of 50 and max of 100
+	limit := int64(50)
+	if l := r.URL.Query().Get("limit"); l != "" {
+		parsed, err := strconv.ParseInt(l, 10, 64)
+		if err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Parse offset with default of 0
+	offset := int64(0)
+	if o := r.URL.Query().Get("offset"); o != "" {
+		parsed, err := strconv.ParseInt(o, 10, 64)
+		if err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	// Get total count for pagination
+	total, err := app.Queries.GetTracksCount(r.Context())
+	if err != nil {
+		app.Logger.Error("failed to get tracks count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch tracks count"))
+		return
+	}
+
+	// Get paginated tracks
+	tracks, err := app.Queries.GetTracksAlphabetical(r.Context(), database.GetTracksAlphabeticalParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		app.Logger.Error("failed to get tracks", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch tracks"))
+		return
+	}
+
+	hasMore := offset+limit < total
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"tracks":   tracks,
+			"total":    total,
+			"offset":   offset,
+			"limit":    limit,
+			"has_more": hasMore,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetMusicStats returns the total counts of albums, tracks, and musicians.
+func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	albumsCount, err := app.Queries.GetAlbumsCount(ctx)
+	if err != nil {
+		app.Logger.Error("failed to get albums count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
+		return
+	}
+
+	tracksCount, err := app.Queries.GetTracksCount(ctx)
+	if err != nil {
+		app.Logger.Error("failed to get tracks count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
+		return
+	}
+
+	musiciansCount, err := app.Queries.GetMusiciansCount(ctx)
+	if err != nil {
+		app.Logger.Error("failed to get musicians count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch music stats"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"total_albums":    albumsCount,
+			"total_tracks":    tracksCount,
+			"total_musicians": musiciansCount,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
 }

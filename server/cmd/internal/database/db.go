@@ -51,6 +51,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
 	}
+	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
+	}
 	if q.getGenresByAlbumIDStmt, err = db.PrepareContext(ctx, getGenresByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByAlbumID: %w", err)
 	}
@@ -63,6 +66,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMusiciansByAlbumIDStmt, err = db.PrepareContext(ctx, getMusiciansByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansByAlbumID: %w", err)
 	}
+	if q.getMusiciansCountStmt, err = db.PrepareContext(ctx, getMusiciansCount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusiciansCount: %w", err)
+	}
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
 	}
@@ -72,8 +78,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getTrackStmt, err = db.PrepareContext(ctx, getTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTrack: %w", err)
 	}
+	if q.getTracksAlphabeticalStmt, err = db.PrepareContext(ctx, getTracksAlphabetical); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTracksAlphabetical: %w", err)
+	}
 	if q.getTracksByAlbumIDStmt, err = db.PrepareContext(ctx, getTracksByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTracksByAlbumID: %w", err)
+	}
+	if q.getTracksCountStmt, err = db.PrepareContext(ctx, getTracksCount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTracksCount: %w", err)
 	}
 	if q.getUserStmt, err = db.PrepareContext(ctx, getUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUser: %w", err)
@@ -140,6 +152,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumsCountStmt != nil {
+		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
+		}
+	}
 	if q.getGenresByAlbumIDStmt != nil {
 		if cerr := q.getGenresByAlbumIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getGenresByAlbumIDStmt: %w", cerr)
@@ -160,6 +177,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMusiciansByAlbumIDStmt: %w", cerr)
 		}
 	}
+	if q.getMusiciansCountStmt != nil {
+		if cerr := q.getMusiciansCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusiciansCountStmt: %w", cerr)
+		}
+	}
 	if q.getOrCreateGenreStmt != nil {
 		if cerr := q.getOrCreateGenreStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getOrCreateGenreStmt: %w", cerr)
@@ -175,9 +197,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getTrackStmt: %w", cerr)
 		}
 	}
+	if q.getTracksAlphabeticalStmt != nil {
+		if cerr := q.getTracksAlphabeticalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTracksAlphabeticalStmt: %w", cerr)
+		}
+	}
 	if q.getTracksByAlbumIDStmt != nil {
 		if cerr := q.getTracksByAlbumIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTracksByAlbumIDStmt: %w", cerr)
+		}
+	}
+	if q.getTracksCountStmt != nil {
+		if cerr := q.getTracksCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTracksCountStmt: %w", cerr)
 		}
 	}
 	if q.getUserStmt != nil {
@@ -253,14 +285,18 @@ type Queries struct {
 	getAdminUserStmt           *sql.Stmt
 	getAlbumByIDStmt           *sql.Stmt
 	getAlbumBySpotifyIDStmt    *sql.Stmt
+	getAlbumsCountStmt         *sql.Stmt
 	getGenresByAlbumIDStmt     *sql.Stmt
 	getLatestAlbumsStmt        *sql.Stmt
 	getMusicianBySpotifyIDStmt *sql.Stmt
 	getMusiciansByAlbumIDStmt  *sql.Stmt
+	getMusiciansCountStmt      *sql.Stmt
 	getOrCreateGenreStmt       *sql.Stmt
 	getSettingsStmt            *sql.Stmt
 	getTrackStmt               *sql.Stmt
+	getTracksAlphabeticalStmt  *sql.Stmt
 	getTracksByAlbumIDStmt     *sql.Stmt
+	getTracksCountStmt         *sql.Stmt
 	getUserStmt                *sql.Stmt
 	getUserByEmailStmt         *sql.Stmt
 	upsertAlbumStmt            *sql.Stmt
@@ -281,14 +317,18 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAdminUserStmt:           q.getAdminUserStmt,
 		getAlbumByIDStmt:           q.getAlbumByIDStmt,
 		getAlbumBySpotifyIDStmt:    q.getAlbumBySpotifyIDStmt,
+		getAlbumsCountStmt:         q.getAlbumsCountStmt,
 		getGenresByAlbumIDStmt:     q.getGenresByAlbumIDStmt,
 		getLatestAlbumsStmt:        q.getLatestAlbumsStmt,
 		getMusicianBySpotifyIDStmt: q.getMusicianBySpotifyIDStmt,
 		getMusiciansByAlbumIDStmt:  q.getMusiciansByAlbumIDStmt,
+		getMusiciansCountStmt:      q.getMusiciansCountStmt,
 		getOrCreateGenreStmt:       q.getOrCreateGenreStmt,
 		getSettingsStmt:            q.getSettingsStmt,
 		getTrackStmt:               q.getTrackStmt,
+		getTracksAlphabeticalStmt:  q.getTracksAlphabeticalStmt,
 		getTracksByAlbumIDStmt:     q.getTracksByAlbumIDStmt,
+		getTracksCountStmt:         q.getTracksCountStmt,
 		getUserStmt:                q.getUserStmt,
 		getUserByEmailStmt:         q.getUserByEmailStmt,
 		upsertAlbumStmt:            q.upsertAlbumStmt,
