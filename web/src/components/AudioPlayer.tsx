@@ -1,10 +1,10 @@
 import { useRef, useState, useEffect } from "react";
-import type { TrackType, NullableString } from "@/types";
+import type { TrackType } from "@/types";
 
 type AudioPlayerProps = {
   track: TrackType | null;
   tracks: TrackType[];
-  albumCover: NullableString | null;
+  albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
   onTrackChange: (track: TrackType) => void;
@@ -32,7 +32,6 @@ export default function AudioPlayer({
   onMinimize,
   onExpand,
 }: AudioPlayerProps) {
-  const progressRef = useRef<HTMLDivElement>(null);
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
   const expandedContainerRef = useRef<HTMLDivElement>(null);
 
@@ -128,11 +127,12 @@ export default function AudioPlayer({
     }
   };
 
-  // Handle seeking via progress bar click
+  // Handle seeking via progress bar click - uses the event target directly
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !progressRef.current || !duration) return;
+    if (!audioRef.current || !duration) return;
 
-    const rect = progressRef.current.getBoundingClientRect();
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = clickX / rect.width;
     const newTime = percentage * duration;
@@ -285,7 +285,7 @@ export default function AudioPlayer({
   // Don't render if no track
   if (!track) return null;
 
-  const coverUrl = albumCover?.Valid ? albumCover.String : null;
+  const coverUrl = albumCover;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -301,7 +301,7 @@ export default function AudioPlayer({
           ref={expandedContainerRef}
           role='dialog'
           aria-modal='true'
-          aria-label={`Now playing: ${track.title} by ${musicianName || albumTitle}`}
+          aria-label={`Now playing: ${track.title} by ${artist}`}
           onKeyDown={handleKeyDown}
           className='fixed inset-0 z-50 bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col
             animate-expand-in'
@@ -374,9 +374,7 @@ export default function AudioPlayer({
               >
                 {track.title}
               </h1>
-              <p className='text-lg text-amber-400 mt-1 truncate'>
-                {musicianName || albumTitle}
-              </p>
+              <p className='text-lg text-amber-400 mt-1 truncate'>{artist}</p>
             </div>
 
             {/* Progress bar */}
@@ -386,7 +384,6 @@ export default function AudioPlayer({
               aria-label='Playback progress'
             >
               <div
-                ref={progressRef}
                 onClick={handleProgressClick}
                 onKeyDown={e => {
                   if (!audioRef.current || !duration) return;
@@ -526,7 +523,7 @@ export default function AudioPlayer({
             <button
               onClick={onExpand}
               className='flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 rounded-lg'
-              aria-label={`Expand player. Now playing: ${track.title} by ${musicianName || albumTitle}`}
+              aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
             >
               {/* Album cover */}
               <div className='w-12 h-12 rounded-lg overflow-hidden bg-slate-800 shrink-0 shadow-lg'>
@@ -551,9 +548,7 @@ export default function AudioPlayer({
                 <p className='text-white font-medium truncate text-sm'>
                   {track.title}
                 </p>
-                <p className='text-slate-400 text-xs truncate'>
-                  {musicianName || albumTitle}
-                </p>
+                <p className='text-slate-400 text-xs truncate'>{artist}</p>
               </div>
             </button>
 
@@ -633,7 +628,6 @@ export default function AudioPlayer({
 
               {/* Progress bar */}
               <div
-                ref={progressRef}
                 onClick={handleProgressClick}
                 onKeyDown={e => {
                   if (!audioRef.current || !duration) return;

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -14,6 +15,15 @@ import { formatTrackDuration } from "@/lib/format";
 import { useAudioPlayer } from "@/context/AudioPlayerContext";
 import type { TrackListItemType } from "@/types";
 
+// Virtual item types for the virtualized list
+type VirtualItemLetter = { type: "letter"; letter: string };
+type VirtualItemTrack = { type: "track"; track: TrackListItemType };
+type VirtualItem = VirtualItemLetter | VirtualItemTrack;
+
+// Height constants for virtual items
+const LETTER_HEIGHT = 52;
+const TRACK_HEIGHT = 60;
+
 export const Route = createLazyFileRoute("/_auth/music/")({
   component: MusicPage,
 });
@@ -22,15 +32,22 @@ function MusicPage() {
   return (
     <div>
       {/* Page header */}
-      <header className='mb-8'>
-        <h1 className='text-3xl md:text-4xl font-semibold tracking-tight text-white flex items-center gap-3'>
-          <i
-            className='fa-solid fa-music text-amber-400 text-2xl'
-            aria-hidden='true'
-          />
+      <header
+        className='mb-8 rounded-lg p-3 -m-3 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-slate-800/30'
+        tabIndex={0}
+        aria-label='Music Library. Browse your collection of musicians, albums, and tracks.'
+      >
+        <h1
+          className='text-3xl md:text-4xl font-semibold tracking-tight text-white flex items-center gap-3'
+          aria-hidden='true'
+        >
+          <i className='fa-solid fa-music text-amber-400 text-2xl' />
           <span>Music Library</span>
         </h1>
-        <p className='mt-2 text-slate-400 max-w-2xl text-sm md:text-base'>
+        <p
+          className='mt-2 text-slate-400 max-w-2xl text-sm md:text-base'
+          aria-hidden='true'
+        >
           Browse your collection of musicians, albums, and tracks
         </p>
       </header>
@@ -119,7 +136,20 @@ function TracksTabContent() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery(tracksInfiniteQueryOpts());
 
-  const observerRef = useRef<HTMLDivElement>(null);
+  // Ref to measure offset from top of page for scrollMargin
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Measure scroll margin after mount
+  useEffect(() => {
+    if (listRef.current) {
+      setScrollMargin(listRef.current.offsetTop);
+    }
+  }, []);
+
+  // Get total tracks count from first page
+  const totalTracks =
+    data?.pages[0]?.error === false ? (data.pages[0].data?.total ?? 0) : 0;
 
   // Flatten all pages into a single array
   const allTracks =
@@ -127,26 +157,43 @@ function TracksTabContent() {
       page.error === false ? (page.data?.tracks ?? []) : []
     ) ?? [];
 
-  // Group tracks by first letter
-  const groupedTracks = groupTracksByLetter(allTracks);
+  // Convert to virtual items (tracks + letter headers)
+  const virtualItems = flattenToVirtualItems(allTracks);
 
-  // Intersection Observer for infinite scroll
+  // Window virtualizer for efficient rendering
+  const virtualizer = useWindowVirtualizer({
+    count: virtualItems.length,
+    estimateSize: index => {
+      const item = virtualItems[index];
+      return item?.type === "letter" ? LETTER_HEIGHT : TRACK_HEIGHT;
+    },
+    overscan: 5,
+    scrollMargin,
+  });
+
+  // Get virtual items for dependency tracking
+  const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  // Trigger infinite scroll when near the end
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { threshold: 0.1 }
-    );
+    if (renderedVirtualItems.length === 0) return;
 
-    if (observerRef.current) {
-      observer.observe(observerRef.current);
+    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
+    if (
+      lastItem &&
+      lastItem.index >= virtualItems.length - 10 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage();
     }
-
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [
+    renderedVirtualItems,
+    virtualItems.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
 
   if (isLoading) {
     return (
@@ -166,25 +213,123 @@ function TracksTabContent() {
   }
 
   return (
-    <div className='rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden'>
-      {Object.entries(groupedTracks).map(([letter, tracks]) => (
-        <div key={letter}>
-          <LetterHeader letter={letter} />
-          {tracks.map(track => (
-            <TrackListItem key={track.id} track={track} />
-          ))}
+    <div>
+      {/* Header with track count and play/shuffle buttons */}
+      <div className='flex items-center justify-between mb-4'>
+        <span className='text-slate-400 text-sm'>
+          {totalTracks.toLocaleString()} tracks
+        </span>
+        <div className='flex items-center gap-2'>
+          <PlayAllButton />
+          <ShuffleButton />
         </div>
-      ))}
+      </div>
 
-      {/* Sentinel element for infinite scroll */}
-      <div ref={observerRef} className='h-10' />
+      {/* Virtualized tracks list */}
+      <div
+        ref={listRef}
+        className='rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden'
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {renderedVirtualItems.map(virtualRow => {
+            const item = virtualItems[virtualRow.index];
+            if (!item) return null;
 
-      {isFetchingNextPage && (
-        <div className='flex justify-center py-4'>
-          <Spinner className='h-6 w-6 text-amber-400' />
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                }}
+              >
+                {item.type === "letter" ? (
+                  <LetterHeader letter={item.letter} />
+                ) : (
+                  <TrackListItem track={item.track} />
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
+
+        {isFetchingNextPage && (
+          <div className='flex justify-center py-4'>
+            <Spinner className='h-6 w-6 text-amber-400' />
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function PlayAllButton() {
+  const [isLoading, setIsLoading] = useState(false);
+  const audioPlayer = useAudioPlayer();
+
+  const handlePlayAll = async () => {
+    setIsLoading(true);
+    try {
+      await audioPlayer.startPlayAllPlayback();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handlePlayAll}
+      disabled={isLoading}
+      className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-700 hover:bg-slate-600 text-white font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+      aria-label='Play all tracks'
+    >
+      {isLoading ? (
+        <Spinner className='h-4 w-4' />
+      ) : (
+        <i className='fa-solid fa-play' aria-hidden='true' />
+      )}
+      <span>Play All</span>
+    </button>
+  );
+}
+
+function ShuffleButton() {
+  const [isLoading, setIsLoading] = useState(false);
+  const audioPlayer = useAudioPlayer();
+
+  const handleShuffle = async () => {
+    setIsLoading(true);
+    try {
+      await audioPlayer.startShufflePlayback();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShuffle}
+      disabled={isLoading}
+      className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-medium transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+      aria-label='Shuffle all tracks'
+    >
+      {isLoading ? (
+        <Spinner className='h-4 w-4' />
+      ) : (
+        <i className='fa-solid fa-shuffle' aria-hidden='true' />
+      )}
+      <span>Shuffle All</span>
+    </button>
   );
 }
 
@@ -230,7 +375,7 @@ function TrackListItem({ track }: { track: TrackListItemType }) {
     };
 
     audioPlayer.playTrack(audioTrack, [audioTrack], {
-      cover: null,
+      cover: track.album_cover?.Valid ? track.album_cover.String : null,
       title: track.album_title.Valid
         ? track.album_title.String
         : "Unknown Album",
@@ -309,20 +454,23 @@ function TrackActionsMenu({ track }: { track: TrackListItemType }) {
   );
 }
 
-function groupTracksByLetter(
-  tracks: TrackListItemType[]
-): Record<string, TrackListItemType[]> {
-  const grouped: Record<string, TrackListItemType[]> = {};
+// Flatten tracks into virtual items with letter headers inserted
+function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
+  const items: VirtualItem[] = [];
+  let currentLetter: string | null = null;
 
   for (const track of tracks) {
     const firstChar = track.title.charAt(0).toUpperCase();
     const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
 
-    if (!grouped[letter]) {
-      grouped[letter] = [];
+    // Insert letter header when we encounter a new letter
+    if (letter !== currentLetter) {
+      items.push({ type: "letter", letter });
+      currentLetter = letter;
     }
-    grouped[letter].push(track);
+
+    items.push({ type: "track", track });
   }
 
-  return grouped;
+  return items;
 }

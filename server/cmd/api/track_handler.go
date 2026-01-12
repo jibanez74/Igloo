@@ -154,6 +154,39 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// GetShuffleTracks returns a batch of random tracks for shuffle playback.
+// Supports query parameter: limit (default 50, max 200)
+func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request) {
+	// Parse limit with default of 50 and max of 200
+	limit := int64(50)
+	if l := r.URL.Query().Get("limit"); l != "" {
+		parsed, err := strconv.ParseInt(l, 10, 64)
+		if err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	// Get random tracks
+	tracks, err := app.Queries.GetRandomTracks(r.Context(), limit)
+	if err != nil {
+		app.Logger.Error("failed to get random tracks", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch random tracks"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"tracks": tracks,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 // GetMusicStats returns the total counts of albums, tracks, and musicians.
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

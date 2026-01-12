@@ -72,6 +72,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
 	}
+	if q.getRandomTracksStmt, err = db.PrepareContext(ctx, getRandomTracks); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRandomTracks: %w", err)
+	}
 	if q.getSettingsStmt, err = db.PrepareContext(ctx, getSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSettings: %w", err)
 	}
@@ -187,6 +190,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getOrCreateGenreStmt: %w", cerr)
 		}
 	}
+	if q.getRandomTracksStmt != nil {
+		if cerr := q.getRandomTracksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRandomTracksStmt: %w", cerr)
+		}
+	}
 	if q.getSettingsStmt != nil {
 		if cerr := q.getSettingsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getSettingsStmt: %w", cerr)
@@ -292,6 +300,7 @@ type Queries struct {
 	getMusiciansByAlbumIDStmt  *sql.Stmt
 	getMusiciansCountStmt      *sql.Stmt
 	getOrCreateGenreStmt       *sql.Stmt
+	getRandomTracksStmt        *sql.Stmt
 	getSettingsStmt            *sql.Stmt
 	getTrackStmt               *sql.Stmt
 	getTracksAlphabeticalStmt  *sql.Stmt
@@ -324,6 +333,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansByAlbumIDStmt:  q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:      q.getMusiciansCountStmt,
 		getOrCreateGenreStmt:       q.getOrCreateGenreStmt,
+		getRandomTracksStmt:        q.getRandomTracksStmt,
 		getSettingsStmt:            q.getSettingsStmt,
 		getTrackStmt:               q.getTrackStmt,
 		getTracksAlphabeticalStmt:  q.getTracksAlphabeticalStmt,

@@ -57,6 +57,7 @@ SELECT
   t.file_path,
   a.id as album_id,
   a.title as album_title,
+  a.cover as album_cover,
   m.id as musician_id,
   m.name as musician_name
 FROM tracks t
@@ -79,3 +80,22 @@ SELECT COUNT(*) FROM albums;
 
 -- name: GetMusiciansCount :one
 SELECT COUNT(*) FROM musicians;
+
+-- name: GetRandomTracks :many
+SELECT
+  t.id,
+  t.title,
+  t.file_path,
+  t.duration,
+  t.codec,
+  t.bit_rate,
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.id AS musician_id,
+  m.name AS musician_name
+FROM tracks t
+LEFT JOIN albums a ON t.album_id = a.id
+LEFT JOIN musicians m ON t.musician_id = m.id
+ORDER BY RANDOM()
+LIMIT ?;

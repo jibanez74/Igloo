@@ -4,9 +4,12 @@ import type { QueryClient } from "@tanstack/react-query";
 export type AudioPlayerState = {
   currentTrack: TrackType | null;
   tracks: TrackType[];
-  albumCover: NullableString | null;
+  albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
+  isShuffleMode: boolean;
+  isPlayAllMode: boolean;
+  shufflePlayedIds: Set<number>;
 };
 
 // Types for the audio player controls
@@ -15,7 +18,7 @@ export type AudioPlayerControls = {
     track: TrackType,
     playlist: TrackType[],
     albumInfo: {
-      cover: NullableString | null;
+      cover: string | null;
       title: string;
       musician: string | null;
     }
@@ -23,7 +26,7 @@ export type AudioPlayerControls = {
   playAlbum: (
     tracks: TrackType[],
     albumInfo: {
-      cover: NullableString | null;
+      cover: string | null;
       title: string;
       musician: string | null;
     }
@@ -31,11 +34,13 @@ export type AudioPlayerControls = {
   shuffleAlbum: (
     tracks: TrackType[],
     albumInfo: {
-      cover: NullableString | null;
+      cover: string | null;
       title: string;
       musician: string | null;
     }
   ) => void;
+  startShufflePlayback: () => Promise<void>;
+  startPlayAllPlayback: () => Promise<void>;
   setTrack: (track: TrackType) => void;
   stop: () => void;
   togglePlay: () => void;
@@ -199,6 +204,7 @@ export type TrackListItemType = {
   file_path: string;
   album_id: NullableInt64;
   album_title: NullableString;
+  album_cover: NullableString;
   musician_id: NullableInt64;
   musician_name: NullableString;
 };
@@ -217,6 +223,11 @@ export type MusicStatsType = {
   total_albums: number;
   total_tracks: number;
   total_musicians: number;
+};
+
+// Shuffle tracks response
+export type ShuffleTracksResponseType = {
+  tracks: TrackListItemType[];
 };
 
 export type MovieDetailsType = {

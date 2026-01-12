@@ -27,6 +27,7 @@ type Querier interface {
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
+	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
 	GetTrack(ctx context.Context, id int64) (Track, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)

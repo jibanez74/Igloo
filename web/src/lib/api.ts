@@ -4,6 +4,7 @@ import type {
   ApiResponseType,
   MovieDetailsType,
   MusicStatsType,
+  ShuffleTracksResponseType,
   SimpleAlbumType,
   TheaterMovieType,
   TracksListResponseType,
@@ -178,6 +179,27 @@ export async function getMusicStats(): Promise<ApiResponseType<MusicStatsType>> 
     }
 
     const data: ApiResponseType<MusicStatsType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getShuffleTracks(
+  limit: number = 50
+): Promise<ApiResponseType<ShuffleTracksResponseType>> {
+  try {
+    const res = await fetch(`/api/music/tracks/shuffle?limit=${limit}`, {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<ShuffleTracksResponseType> = await res.json();
 
     return data;
   } catch (err) {

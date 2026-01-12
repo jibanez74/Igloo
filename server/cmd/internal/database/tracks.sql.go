@@ -49,6 +49,75 @@ func (q *Queries) GetMusiciansCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getRandomTracks = `-- name: GetRandomTracks :many
+SELECT
+  t.id,
+  t.title,
+  t.file_path,
+  t.duration,
+  t.codec,
+  t.bit_rate,
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.id AS musician_id,
+  m.name AS musician_name
+FROM tracks t
+LEFT JOIN albums a ON t.album_id = a.id
+LEFT JOIN musicians m ON t.musician_id = m.id
+ORDER BY RANDOM()
+LIMIT ?
+`
+
+type GetRandomTracksRow struct {
+	ID           int64          `json:"id"`
+	Title        string         `json:"title"`
+	FilePath     string         `json:"file_path"`
+	Duration     int64          `json:"duration"`
+	Codec        string         `json:"codec"`
+	BitRate      int64          `json:"bit_rate"`
+	AlbumID      sql.NullInt64  `json:"album_id"`
+	AlbumTitle   sql.NullString `json:"album_title"`
+	AlbumCover   sql.NullString `json:"album_cover"`
+	MusicianID   sql.NullInt64  `json:"musician_id"`
+	MusicianName sql.NullString `json:"musician_name"`
+}
+
+func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error) {
+	rows, err := q.query(ctx, q.getRandomTracksStmt, getRandomTracks, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRandomTracksRow{}
+	for rows.Next() {
+		var i GetRandomTracksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.FilePath,
+			&i.Duration,
+			&i.Codec,
+			&i.BitRate,
+			&i.AlbumID,
+			&i.AlbumTitle,
+			&i.AlbumCover,
+			&i.MusicianID,
+			&i.MusicianName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTrack = `-- name: GetTrack :one
 SELECT id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at FROM tracks WHERE id = ? LIMIT 1
 `
@@ -96,6 +165,7 @@ SELECT
   t.file_path,
   a.id as album_id,
   a.title as album_title,
+  a.cover as album_cover,
   m.id as musician_id,
   m.name as musician_name
 FROM tracks t
@@ -125,6 +195,7 @@ type GetTracksAlphabeticalRow struct {
 	FilePath     string         `json:"file_path"`
 	AlbumID      sql.NullInt64  `json:"album_id"`
 	AlbumTitle   sql.NullString `json:"album_title"`
+	AlbumCover   sql.NullString `json:"album_cover"`
 	MusicianID   sql.NullInt64  `json:"musician_id"`
 	MusicianName sql.NullString `json:"musician_name"`
 }
@@ -147,6 +218,7 @@ func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphab
 			&i.FilePath,
 			&i.AlbumID,
 			&i.AlbumTitle,
+			&i.AlbumCover,
 			&i.MusicianID,
 			&i.MusicianName,
 		); err != nil {

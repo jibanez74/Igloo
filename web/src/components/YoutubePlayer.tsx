@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import ReactPlayer from "react-player";
 import {
   Dialog,
@@ -39,22 +39,22 @@ export default function YoutubePlayer({
 
   // Prevent Space and Enter from bubbling up and closing the dialog
   // when focus is on the container (not the iframe)
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     // Only allow Escape to bubble up for closing the dialog
     if (e.key !== "Escape") {
       e.stopPropagation();
     }
-  }, []);
+  };
 
   // Prevent dialog from closing when clicking inside the player
-  const handleInteractOutside = useCallback((e: Event) => {
+  const handleInteractOutside = (e: Event) => {
     e.preventDefault();
-  }, []);
+  };
 
   // Close the dialog when the video ends
-  const handleEnded = useCallback(() => {
+  const handleEnded = () => {
     onOpenChange(false);
-  }, [onOpenChange]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

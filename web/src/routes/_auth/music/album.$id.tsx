@@ -110,7 +110,7 @@ function AlbumDetailsContent({
     } else {
       // Play a new track
       audioPlayer.playTrack(track, tracks, {
-        cover: album.cover,
+        cover: album.cover?.Valid ? album.cover.String : null,
         title: album.title,
         musician: musicianName,
       });
@@ -120,7 +120,7 @@ function AlbumDetailsContent({
   // Handle playing the album from the beginning
   const handlePlayAlbum = () => {
     audioPlayer.playAlbum(tracks, {
-      cover: album.cover,
+      cover: album.cover?.Valid ? album.cover.String : null,
       title: album.title,
       musician: musicianName,
     });
@@ -129,7 +129,7 @@ function AlbumDetailsContent({
   // Handle shuffle play
   const handleShufflePlay = () => {
     audioPlayer.shuffleAlbum(tracks, {
-      cover: album.cover,
+      cover: album.cover?.Valid ? album.cover.String : null,
       title: album.title,
       musician: musicianName,
     });
