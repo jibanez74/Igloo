@@ -157,6 +157,7 @@ export default function AudioPlayer({
     const handleDurationChange = () => setDuration(audio.duration || 0);
     const handleLoadStart = () => setIsLoading(true);
     const handleCanPlay = () => setIsLoading(false);
+    const handleError = () => setIsLoading(false);
     const handleEnded = () => {
       // Play next track if available
       if (hasNext) {
@@ -173,6 +174,7 @@ export default function AudioPlayer({
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("loadstart", handleLoadStart);
     audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("error", handleError);
     audio.addEventListener("ended", handleEnded);
 
     return () => {
@@ -182,6 +184,7 @@ export default function AudioPlayer({
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("loadstart", handleLoadStart);
       audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("error", handleError);
       audio.removeEventListener("ended", handleEnded);
     };
   }, [
@@ -259,6 +262,11 @@ export default function AudioPlayer({
           e.preventDefault();
           audioRef.current.currentTime = 0;
           break;
+        case "m":
+        case "M":
+          e.preventDefault();
+          audioRef.current.muted = !audioRef.current.muted;
+          break;
       }
     };
 
@@ -279,8 +287,6 @@ export default function AudioPlayer({
 
   // Don't render if no track
   if (!track) return null;
-
-  const coverUrl = albumCover;
 
   return (
     <>
@@ -340,9 +346,9 @@ export default function AudioPlayer({
           <main className='flex flex-1 flex-col items-center justify-center px-8 pb-8'>
             {/* Album cover */}
             <figure className='mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96'>
-              {coverUrl ? (
+              {albumCover ? (
                 <img
-                  src={coverUrl}
+                  src={albumCover}
                   alt={`Album cover for ${albumTitle}`}
                   className='size-full object-cover'
                 />
@@ -479,9 +485,9 @@ export default function AudioPlayer({
             >
               {/* Album cover */}
               <div className='h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg'>
-                {coverUrl ? (
+                {albumCover ? (
                   <img
-                    src={coverUrl}
+                    src={albumCover}
                     alt={albumTitle}
                     className='h-full w-full object-cover'
                   />
