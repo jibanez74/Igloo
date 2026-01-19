@@ -13,6 +13,7 @@ import type {
   TracksListResponseType,
 } from "@/types";
 
+// constants for error handling
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
@@ -23,6 +24,7 @@ const NETWORK_ERROR: ApiFailureType = {
   message: "500 - A network error occurred while processing your request.",
 };
 
+// api calls for authentication purposes
 export async function login(email: string, password: string) {
   try {
     const res = await fetch("/api/auth/login", {
@@ -128,6 +130,7 @@ export async function getMovieInTheaterDetails(
   }
 }
 
+// api calls for music
 export async function getAlbumDetails(
   id: number
 ): Promise<ApiResponseType<AlbumDetailsResponseType>> {

@@ -1,7 +1,4 @@
-// Audio player utility functions
-// Shared conversion logic for preparing tracks for the audio player
-
-import type { TrackType, NullableInt64, NullableString } from "@/types";
+import type { NullableInt64, NullableString } from "@/types";
 
 // Minimal track data needed for audio playback
 // This is the common shape that different track types can be converted from
@@ -20,7 +17,7 @@ export type PlayableTrackData = {
 
 // Convert minimal track data to a full TrackType for the audio player
 // Fills in default values for fields not needed for playback
-export function convertToAudioTrack(track: PlayableTrackData): TrackType {
+export function convertToAudioTrack(track: PlayableTrackData) {
   return {
     id: track.id,
     title: track.title,
@@ -61,13 +58,14 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   };
 }
 
-// Fisher-Yates shuffle algorithm
-// Creates a new shuffled array without mutating the original
-export function shuffleArray<T>(array: T[]): T[] {
+// Shuffle an array using the Fisher-Yates algorithm
+export function shuffleArray<T>(array: T[]) {
   const shuffled = [...array];
+
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+
   return shuffled;
 }

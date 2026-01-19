@@ -41,7 +41,6 @@ export default function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Screen reader announcement - React Compiler will optimize this automatically
   const artist = musicianName || albumTitle;
   const announcement = track
     ? `${isPlaying ? "Now playing" : "Paused"}: ${track.title} by ${artist}`
@@ -54,6 +53,7 @@ export default function AudioPlayer({
       const timer = setTimeout(() => {
         playPauseButtonRef.current?.focus();
       }, 50);
+
       return () => clearTimeout(timer);
     }
   }, [isExpanded]);
@@ -70,10 +70,10 @@ export default function AudioPlayer({
     };
 
     window.addEventListener("keydown", handleEscape);
+
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isExpanded, onMinimize]);
 
-  // Trap focus within the expanded player - React Compiler handles memoization
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isExpanded || !expandedContainerRef.current) return;
 
@@ -96,15 +96,12 @@ export default function AudioPlayer({
     }
   };
 
-  // Get current track index
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
 
-  // Stream URL for current track
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
-  // Handle play/pause toggle
   const handleTogglePlay = () => {
     if (!audioRef.current) return;
 
@@ -115,21 +112,18 @@ export default function AudioPlayer({
     }
   };
 
-  // Handle previous track
   const playPrevious = () => {
     if (hasPrevious) {
       onTrackChange(tracks[currentIndex - 1]);
     }
   };
 
-  // Handle next track
   const playNext = () => {
     if (hasNext) {
       onTrackChange(tracks[currentIndex + 1]);
     }
   };
 
-  // Handle seeking to a specific time (used by ProgressBar component)
   const handleSeek = (newTime: number) => {
     if (!audioRef.current) return;
     audioRef.current.currentTime = newTime;
@@ -142,6 +136,7 @@ export default function AudioPlayer({
       audioRef.current.load();
       audioRef.current.play().catch(() => {
         // Autoplay might be blocked, that's okay
+        console.error("Autoplay blocked");
       });
     }
   }, [audioRef, streamUrl]);
@@ -149,6 +144,7 @@ export default function AudioPlayer({
   // Audio event handlers
   useEffect(() => {
     const audio = audioRef.current;
+
     if (!audio) return;
 
     const handlePlay = () => onPlayStateChange(true);
@@ -158,6 +154,7 @@ export default function AudioPlayer({
     const handleLoadStart = () => setIsLoading(true);
     const handleCanPlay = () => setIsLoading(false);
     const handleError = () => setIsLoading(false);
+
     const handleEnded = () => {
       // Play next track if available
       if (hasNext) {
@@ -199,10 +196,12 @@ export default function AudioPlayer({
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+
       if (!track || !audioRef.current) return;
 
       // Skip keyboard shortcuts when user is typing in an input field
       const target = e.target as HTMLElement;
+
       if (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
@@ -239,7 +238,8 @@ export default function AudioPlayer({
           e.preventDefault();
           audioRef.current.volume = Math.max(0, audioRef.current.volume - 0.1);
           break;
-        // Track navigation shortcuts for accessibility
+
+          // Track navigation shortcuts for accessibility
         case "n":
         case "N":
         case "MediaTrackNext":
@@ -271,6 +271,7 @@ export default function AudioPlayer({
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     audioRef,
@@ -285,7 +286,6 @@ export default function AudioPlayer({
     onTrackChange,
   ]);
 
-  // Don't render if no track
   if (!track) return null;
 
   return (

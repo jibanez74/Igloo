@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { z } from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -10,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
 import {
   albumsPaginatedQueryOpts,
   musiciansPaginatedQueryOpts,
@@ -29,32 +32,35 @@ import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
 import LibraryPagination from "@/components/LibraryPagination";
 import type { TrackListItemType, VirtualItem } from "@/types";
-import type { MusicSearchParams } from "./route";
+
+const musicSearchSchema = z.object({
+  tab: fallback(z.enum(["musicians", "albums", "tracks"]), "albums").default(
+    "albums"
+  ),
+  albumsPage: fallback(z.number().int().positive(), 1).default(1),
+  musiciansPage: fallback(z.number().int().positive(), 1).default(1),
+});
+
+type MusicSearchParams = z.infer<typeof musicSearchSchema>;
 
 export const Route = createFileRoute("/_auth/music/")({
-  // Specify which search params the loader depends on
-  // This ensures the loader re-runs when these values change
+  validateSearch: zodSearchValidator(musicSearchSchema),
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
     albumsPage,
     musiciansPage,
   }),
-  // Prefetch data based on current search params
   loader: async ({ context, deps: { albumsPage, musiciansPage } }) => {
     const { queryClient } = context;
 
-    // Prefetch music stats, albums, and musicians data in parallel
-    // This improves perceived performance by loading data before component renders
     await Promise.all([
       queryClient.ensureQueryData(musicStatsQueryOpts()),
       queryClient.ensureQueryData(
-        albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE),
+        albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE)
       ),
       queryClient.ensureQueryData(
-        musiciansPaginatedQueryOpts(musiciansPage, MUSICIANS_PER_PAGE),
+        musiciansPaginatedQueryOpts(musiciansPage, MUSICIANS_PER_PAGE)
       ),
     ]);
-
-    // Note: Tracks use infinite query which doesn't support prefetching this way
   },
   component: MusicPage,
 });
@@ -64,7 +70,7 @@ function MusicPage() {
   const { tab, albumsPage, musiciansPage } = Route.useSearch();
 
   // Handle tab change - update URL while preserving other params
-  const handleTabChange = (newTab: string) => {
+  const handleTabChange = (newTab: string) => 
     navigate({
       to: "/music",
       search: (prev: MusicSearchParams) => ({
@@ -73,7 +79,6 @@ function MusicPage() {
       }),
       replace: true,
     });
-  };
 
   return (
     <div>
@@ -232,10 +237,10 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
       }),
       replace: true,
     });
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Use skeleton loader to prevent layout shift during loading
   if (isLoading) {
     return <MusiciansTabSkeleton />;
   }
@@ -308,7 +313,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
       }),
       replace: true,
     });
-    // Scroll to top of page
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -391,12 +396,15 @@ function TracksTabContent() {
   // Window virtualizer for efficient rendering
   const virtualizer = useWindowVirtualizer({
     count: virtualItems.length,
+
     estimateSize: index => {
       const item = virtualItems[index];
+
       return item?.type === "letter"
         ? VIRTUAL_LIST_LETTER_HEIGHT
         : VIRTUAL_LIST_TRACK_HEIGHT;
     },
+
     overscan: 5,
     scrollMargin,
   });
@@ -409,6 +417,7 @@ function TracksTabContent() {
     if (renderedVirtualItems.length === 0) return;
 
     const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
+
     if (
       lastItem &&
       lastItem.index >= virtualItems.length - 10 &&
@@ -469,6 +478,7 @@ function TracksTabContent() {
         >
           {renderedVirtualItems.map(virtualRow => {
             const item = virtualItems[virtualRow.index];
+
             if (!item) return null;
 
             return (
@@ -509,8 +519,14 @@ function PlayAllButton() {
 
   const handlePlayAll = async () => {
     setIsLoading(true);
+
     try {
       await audioPlayer.startPlayAllPlayback();
+    } catch (error) {
+      console.error("Failed to start playback:", error);
+      toast.error("Playback failed", {
+        description: "Unable to start playing all tracks. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -539,8 +555,14 @@ function ShuffleButton() {
 
   const handleShuffle = async () => {
     setIsLoading(true);
+
     try {
       await audioPlayer.startShufflePlayback();
+    } catch (error) {
+      console.error("Failed to start shuffle playback:", error);
+      toast.error("Shuffle failed", {
+        description: "Unable to start shuffle playback. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
