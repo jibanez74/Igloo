@@ -2,7 +2,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import RouterPending from "./components/RouterPending";
-import { useAudioPlayer } from "./context/AudioPlayerContext";
+import { useAudioPlayer } from "./hooks/useAudioPlayer";
 
 const router = createRouter({
   routeTree,
@@ -31,10 +31,6 @@ export default function App({ queryClient }: AppProps) {
   const audioPlayer = useAudioPlayer();
 
   return (
-    <RouterProvider
-      router={router}
-      context={{ queryClient, audioPlayer }}
-    />
+    <RouterProvider router={router} context={{ queryClient, audioPlayer }} />
   );
 }
-

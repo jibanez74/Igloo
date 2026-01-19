@@ -491,16 +491,22 @@ func (app *Application) InitRouter() {
 			r.Get("/stats", app.GetMusicStats)
 
 			r.Route("/albums", func(r chi.Router) {
+				r.Get("/", app.GetAlbumsAlphabetical)
 				r.Get("/details/{id}", app.GetAlbumDetails)
 				r.Get("/latest", app.GetLatestAlbums)
 			})
 
-		r.Route("/tracks", func(r chi.Router) {
-			r.Get("/", app.GetTracksAlphabetical)
-			r.Get("/shuffle", app.GetShuffleTracks)
-			r.Get("/details/{id}", app.GetTrackByID)
-			r.Get("/{id}/stream", app.StreamTrack)
-		})
+			r.Route("/musicians", func(r chi.Router) {
+				r.Get("/", app.GetMusiciansAlphabetical)
+				r.Get("/{id}", app.GetMusicianDetails)
+			})
+
+			r.Route("/tracks", func(r chi.Router) {
+				r.Get("/", app.GetTracksAlphabetical)
+				r.Get("/shuffle", app.GetShuffleTracks)
+				r.Get("/details/{id}", app.GetTrackByID)
+				r.Get("/{id}/stream", app.StreamTrack)
+			})
 		})
 	})
 

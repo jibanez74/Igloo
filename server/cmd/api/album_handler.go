@@ -3,12 +3,79 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// GetAlbumsAlphabetical returns a paginated list of albums sorted alphabetically.
+// Supports query parameters: page (default 1), per_page (default 24, max 48)
+func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
+	// Parse page with default of 1
+	page := int64(1)
+	if p := r.URL.Query().Get("page"); p != "" {
+		parsed, err := strconv.ParseInt(p, 10, 64)
+		if err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	// Parse per_page with default of 24 and max of 48
+	perPage := int64(24)
+	if pp := r.URL.Query().Get("per_page"); pp != "" {
+		parsed, err := strconv.ParseInt(pp, 10, 64)
+		if err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+	if perPage > 48 {
+		perPage = 48
+	}
+
+	// Calculate offset from page number
+	offset := (page - 1) * perPage
+
+	// Get total count for pagination
+	total, err := app.Queries.GetAlbumsCount(r.Context())
+	if err != nil {
+		app.Logger.Error("failed to get albums count", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch albums count"))
+		return
+	}
+
+	// Get paginated albums
+	albums, err := app.Queries.GetAlbumsAlphabetical(r.Context(), database.GetAlbumsAlphabeticalParams{
+		Limit:  perPage,
+		Offset: offset,
+	})
+	if err != nil {
+		app.Logger.Error("failed to get albums", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch albums"))
+		return
+	}
+
+	// Calculate total pages
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"albums":      albums,
+			"total":       total,
+			"page":        page,
+			"per_page":    perPage,
+			"total_pages": totalPages,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
 
 // GetLatestAlbums returns the 12 most recently added albums.
 func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) {

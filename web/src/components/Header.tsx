@@ -1,59 +1,55 @@
 import { Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur border-b border-slate-800">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
         <Link
           to="/"
           className="flex items-center gap-2 font-semibold tracking-wide"
         >
           <i
-            className="fa-solid fa-igloo text-amber-400 text-xl"
+            className="fa-solid fa-igloo text-xl text-amber-400"
             aria-hidden="true"
-          ></i>
+          />
           <span className="text-lg">Igloo</span>
         </Link>
 
         <form
-          className="ml-auto flex-1 max-w-xl"
+          className="ml-auto max-w-xl flex-1"
           role="search"
           aria-label="Search library"
         >
-          <label className="sr-only" htmlFor="q">
+          <Label htmlFor="q" className="sr-only">
             Search
-          </label>
+          </Label>
           <div className="relative">
             <i
-              className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              className="fa-solid fa-magnifying-glass absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400"
               aria-hidden="true"
-            ></i>
-            <input
+            />
+            <Input
               id="q"
               name="q"
               type="search"
               placeholder="Search..."
-              className="w-full rounded-lg bg-slate-800/80 pl-10 pr-3 py-2 text-sm placeholder-slate-400
-                   focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="pl-10"
             />
           </div>
         </form>
 
-        <nav className="flex items-center gap-2 ml-2">
-          <button
-            className="p-2 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            aria-label="Notifications"
-          >
-            <i className="fa-regular fa-bell" aria-hidden="true"></i>
-          </button>
+        <nav className="ml-2 flex items-center gap-1">
+          <Button variant="ghost" size="icon" aria-label="Notifications">
+            <i className="fa-regular fa-bell" aria-hidden="true" />
+          </Button>
 
-          <button
-            className="p-2 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            aria-label="Settings"
-          >
-            <i className="fa-solid fa-gear" aria-hidden="true"></i>
-          </button>
-        </nav>
+          <Button variant="ghost" size="icon" aria-label="Settings">
+            <i className="fa-solid fa-gear" aria-hidden="true" />
+          </Button>
+                  </nav>
       </div>
     </header>
   );

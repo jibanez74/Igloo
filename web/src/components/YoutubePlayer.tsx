@@ -1,11 +1,11 @@
-import { useRef, useEffect } from "react";
-import ReactPlayer from "react-player";
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 
 type YoutubePlayerProps = {
   videoKey: string;
@@ -20,27 +20,29 @@ export default function YoutubePlayer({
   open,
   onOpenChange,
 }: YoutubePlayerProps) {
-  const videoUrl = `https://www.youtube.com/watch?v=${videoKey}`;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { containerRef, isReady, error } = useYouTubePlayer({
+    videoId: open ? videoKey : null,
+    autoplay: true,
+    controls: true,
+    onEnd: () => onOpenChange(false),
+  });
 
-  // Focus the YouTube iframe when dialog opens so native keyboard controls work
   useEffect(() => {
-    if (open && containerRef.current) {
-      // Small delay to ensure the iframe is rendered
+    if (open && isReady && containerRef.current) {
       const timer = setTimeout(() => {
         const iframe = containerRef.current?.querySelector("iframe");
+
         if (iframe) {
           iframe.focus();
         }
       }, 300);
+
       return () => clearTimeout(timer);
     }
-  }, [open]);
+  }, [open, isReady, containerRef]);
 
   // Prevent Space and Enter from bubbling up and closing the dialog
-  // when focus is on the container (not the iframe)
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Only allow Escape to bubble up for closing the dialog
     if (e.key !== "Escape") {
       e.stopPropagation();
     }
@@ -51,15 +53,10 @@ export default function YoutubePlayer({
     e.preventDefault();
   };
 
-  // Close the dialog when the video ends
-  const handleEnded = () => {
-    onOpenChange(false);
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className='max-w-4xl w-full bg-slate-950 border-cyan-500/30 p-0 overflow-hidden shadow-2xl shadow-cyan-500/10'
+        className='w-full max-w-4xl overflow-hidden border-cyan-500/30 bg-slate-950 p-0 shadow-2xl shadow-cyan-500/10'
         showCloseButton={true}
         onInteractOutside={handleInteractOutside}
       >
@@ -72,19 +69,25 @@ export default function YoutubePlayer({
           dialog.
         </DialogDescription>
 
-        <div
-          ref={containerRef}
-          className='aspect-video w-full'
-          onKeyDown={handleKeyDown}
-        >
-          <ReactPlayer
-            src={videoUrl}
-            playing={open}
-            controls
-            width='100%'
-            height='100%'
-            onEnded={handleEnded}
-          />
+        <div className='relative aspect-video w-full' onKeyDown={handleKeyDown}>
+          {error ? (
+            <div className='flex h-full w-full items-center justify-center bg-slate-900'>
+              <p className='text-slate-400'>{error}</p>
+            </div>
+          ) : (
+            <>
+              <div ref={containerRef} className='h-full w-full' />
+              {/* Loading overlay while player initializes */}
+              {!isReady && (
+                <div className='absolute inset-0 flex items-center justify-center bg-slate-900'>
+                  <i
+                    className='fa-solid fa-spinner fa-spin text-4xl text-amber-400'
+                    aria-hidden='true'
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

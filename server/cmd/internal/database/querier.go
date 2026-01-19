@@ -17,13 +17,34 @@ type Querier interface {
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
+	// Deletes all genre relationships for a track except the specified genre.
+	// Used to efficiently update genres: only removes stale relationships.
+	DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	// Returns albums sorted alphabetically by title with pagination.
+	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
+	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
+	// Returns all albums associated with a musician via the musician_albums join table
+	// Sorted by release date (newest first), then by title
+	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	// Returns all track file paths and sizes for efficient batch skip-checking during scans.
+	// Used to pre-load existing tracks into memory, replacing N individual queries with 1.
+	GetAllTrackPathsAndSizes(ctx context.Context) ([]GetAllTrackPathsAndSizesRow, error)
 	GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error)
+	// Returns genres directly associated with an album via album_genres table
+	GetGenresByAlbumIDDirect(ctx context.Context, albumID int64) ([]GetGenresByAlbumIDDirectRow, error)
+	// Returns all genres associated with a musician
+	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
+	// Returns a single musician by ID with full details
+	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
+	// Returns musicians sorted alphabetically by sort_name with pagination.
+	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
+	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
@@ -32,11 +53,17 @@ type Querier interface {
 	GetTrack(ctx context.Context, id int64) (Track, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
+	// Returns all tracks by a musician, sorted alphabetically by sort_title
+	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
 	GetTracksCount(ctx context.Context) (int64, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
+	// Creates a relationship between an album and a genre (idempotent)
+	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
+	// Creates a relationship between a musician and a genre (idempotent)
+	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
 }
 

@@ -88,16 +88,16 @@ function LoginPage() {
         {/* Dark overlay */}
         <div className='absolute inset-0 bg-slate-950/70' />
 
-        <main className='relative z-10 min-h-screen flex items-center justify-center px-4'>
+        <main className='relative z-10 flex min-h-screen items-center justify-center px-4'>
           <Card
             ref={cardRef}
-            className='w-full max-w-md border-slate-800 bg-slate-900/80 backdrop-blur shadow-xl
-               opacity-0 translate-y-2 transition-all duration-500 ease-out will-change-transform'
+            className='w-full max-w-md translate-y-2 border-slate-800 bg-slate-900/80 opacity-0
+               shadow-xl backdrop-blur-sm transition-all duration-500 ease-out will-change-transform'
           >
-            <CardHeader className='text-center pb-2'>
+            <CardHeader className='pb-2 text-center'>
               <div className='mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800'>
                 <i
-                  className='fa-solid fa-igloo text-amber-400 text-xl'
+                  className='fa-solid fa-igloo text-xl text-amber-400'
                   aria-hidden='true'
                 />
               </div>
@@ -116,7 +116,7 @@ function LoginPage() {
                   <Label htmlFor='email'>Email</Label>
                   <div className='relative'>
                     <i
-                      className='fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10'
+                      className='fa-regular fa-envelope absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400'
                       aria-hidden='true'
                     />
                     <Input
@@ -138,7 +138,7 @@ function LoginPage() {
                   <Label htmlFor='password'>Password</Label>
                   <div className='relative'>
                     <i
-                      className='fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10'
+                      className='fa-solid fa-lock absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400'
                       aria-hidden='true'
                     />
                     <Input
@@ -148,13 +148,13 @@ function LoginPage() {
                       id='password'
                       name='password'
                       required
-                      className='pl-10 pr-10'
+                      className='px-10'
                       disabled={isPending}
                     />
                     <button
                       type='button'
-                      className='absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md
-                               text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-400'
+                      className='absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
+                               text-slate-400 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }
@@ -177,7 +177,7 @@ function LoginPage() {
                 <div className='pt-2'>
                   <Button
                     type='submit'
-                    className='w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold'
+                    className='w-full bg-amber-500 font-semibold text-slate-900 hover:bg-amber-400'
                     disabled={isPending}
                   >
                     <i

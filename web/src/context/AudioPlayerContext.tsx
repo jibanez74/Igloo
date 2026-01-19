@@ -1,13 +1,17 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useRef, useEffect } from "react";
+import { createContext, useState, useRef, useEffect } from "react";
 import type {
   AudioPlayerState,
   AudioPlayerControls,
   AudioPlayerContextType,
-  TrackType,
 } from "@/types";
 import AudioPlayer from "@/components/AudioPlayer";
 import { getShuffleTracks, getTracksPaginated } from "@/lib/api";
+import {
+  convertToAudioTrack,
+  extractTrackMetadata,
+  shuffleArray,
+  type PlayableTrackData,
+} from "@/lib/audio-utils";
 
 // Initial state - used for both default context and useState
 const initialState: AudioPlayerState = {
@@ -40,62 +44,6 @@ const defaultContext: AudioPlayerContextType = {
 const AudioPlayerContext =
   createContext<AudioPlayerContextType>(defaultContext);
 
-// Type for raw track data from API (used in shuffle/play all modes)
-type RawTrackData = {
-  id: number;
-  title: string;
-  file_path: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: { Int64: number; Valid: boolean };
-  musician_id: { Int64: number; Valid: boolean };
-  album_cover?: { String: string; Valid: boolean };
-  musician_name?: { String: string; Valid: boolean };
-};
-
-// Helper to convert raw track data to TrackType for the audio player
-function convertToAudioTrack(track: RawTrackData): TrackType {
-  return {
-    id: track.id,
-    title: track.title,
-    sort_title: track.title,
-    file_path: track.file_path,
-    file_name: "",
-    container: "",
-    mime_type: "",
-    codec: track.codec,
-    size: 0,
-    track_index: 0,
-    duration: track.duration,
-    disc: 1,
-    channels: "",
-    channel_layout: "",
-    bit_rate: track.bit_rate,
-    profile: "",
-    release_date: { String: "", Valid: false },
-    year: { Int64: 0, Valid: false },
-    composer: { String: "", Valid: false },
-    copyright: { String: "", Valid: false },
-    language: { String: "", Valid: false },
-    album_id: track.album_id,
-    musician_id: track.musician_id,
-    created_at: "",
-    updated_at: "",
-  };
-}
-
-// Helper to extract cover/musician from nullable fields
-function extractTrackMetadata(track: RawTrackData): {
-  cover: string | null;
-  musician: string | null;
-} {
-  return {
-    cover: track.album_cover?.Valid ? track.album_cover.String : null,
-    musician: track.musician_name?.Valid ? track.musician_name.String : null,
-  };
-}
-
 export function AudioPlayerProvider({
   children,
 }: {
@@ -116,7 +64,7 @@ export function AudioPlayerProvider({
   const playAllTotalRef = useRef<number>(0);
 
   // Helper to populate track metadata maps
-  const populateTrackMetadata = (tracks: RawTrackData[]) => {
+  const populateTrackMetadata = (tracks: PlayableTrackData[]) => {
     for (const track of tracks) {
       const { cover, musician } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
@@ -258,12 +206,7 @@ export function AudioPlayerProvider({
   ) => {
     if (tracks.length === 0) return;
 
-    // Fisher-Yates shuffle algorithm
-    const shuffled = [...tracks];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
+    const shuffled = shuffleArray(tracks);
 
     clearMetadataRefs();
     setState({
@@ -441,16 +384,5 @@ export function AudioPlayerProvider({
   );
 }
 
-// Hook to access the audio player context
-export function useAudioPlayer() {
-  const context = useContext(AudioPlayerContext);
-  if (!context) {
-    throw new Error(
-      "useAudioPlayer must be used within an AudioPlayerProvider"
-    );
-  }
-  return context;
-}
-
-// Export the context for use in router
+// Export the context for use in router and hooks
 export { AudioPlayerContext };

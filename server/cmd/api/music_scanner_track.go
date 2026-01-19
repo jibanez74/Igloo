@@ -39,41 +39,48 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 
 	// Container (file extension) and MIME type
 	params.Container = ext
-	if mimeType, ok := helpers.AudioMimeTypes[ext]; ok {
+
+	mimeType, ok := helpers.AudioMimeTypes[ext]
+	if ok {
 		params.MimeType = mimeType
 	}
 
 	// Parse size
 	if info.Format.Size != "" {
-		if size, err := strconv.ParseInt(info.Format.Size, 10, 64); err == nil {
+		size, err := strconv.ParseInt(info.Format.Size, 10, 64)
+		if err == nil {
 			params.Size = size
 		}
 	}
 
 	// Parse duration (convert seconds to milliseconds)
 	if info.Format.Duration != "" {
-		if duration, err := helpers.ParseDurationMs(info.Format.Duration); err == nil {
+		duration, err := helpers.ParseDurationMs(info.Format.Duration)
+		if err == nil {
 			params.Duration = duration
 		}
 	}
 
 	// Parse track index from "1/12" format
 	if info.Format.Tags.Track != "" {
-		if index, err := helpers.ParseSlashNumber(info.Format.Tags.Track); err == nil {
+		index, err := helpers.ParseSlashNumber(info.Format.Tags.Track)
+		if err == nil {
 			params.TrackIndex = index
 		}
 	}
 
 	// Parse bit rate
 	if info.Format.BitRate != "" {
-		if bitRate, err := strconv.ParseInt(info.Format.BitRate, 10, 64); err == nil {
+		bitRate, err := strconv.ParseInt(info.Format.BitRate, 10, 64)
+		if err == nil {
 			params.BitRate = bitRate
 		}
 	}
 
 	// Parse disc number from "1/2" format
 	if info.Format.Tags.Disc != "" {
-		if disc, err := helpers.ParseSlashNumber(info.Format.Tags.Disc); err == nil {
+		disc, err := helpers.ParseSlashNumber(info.Format.Tags.Disc)
+		if err == nil {
 			params.Disc = disc
 		}
 	}
@@ -84,7 +91,8 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 
 	// Parse release date
 	if info.Format.Tags.Date != "" {
-		if date, err := helpers.ParseDate(info.Format.Tags.Date); err == nil {
+		date, err := helpers.ParseDate(info.Format.Tags.Date)
+		if err == nil {
 			params.ReleaseDate = sql.NullString{String: date.Format("2006-01-02"), Valid: true}
 			params.Year = sql.NullInt64{Int64: int64(date.Year()), Valid: true}
 		}
@@ -92,6 +100,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 
 	// Get or create musician if artist tag exists
 	var musicianID sql.NullInt64
+
 	if info.Format.Tags.Artist != "" {
 		sortArtist := info.Format.Tags.SortArtist
 		if sortArtist == "" {
@@ -102,12 +111,14 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		if err != nil {
 			return fmt.Errorf("musician failed: %w", err)
 		}
+
 		musicianID = sql.NullInt64{Int64: musician.ID, Valid: true}
 	}
 	params.MusicianID = musicianID
 
 	// Get or create album if album tag exists
 	var albumID sql.NullInt64
+
 	if info.Format.Tags.Album != "" {
 		sortAlbum := info.Format.Tags.SortAlbum
 		if sortAlbum == "" {
@@ -118,6 +129,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		if err != nil {
 			return fmt.Errorf("album failed: %w", err)
 		}
+
 		albumID = sql.NullInt64{Int64: album.ID, Valid: true}
 	}
 	params.AlbumID = albumID
@@ -128,6 +140,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 			MusicianID: musicianID.Int64,
 			AlbumID:    albumID.Int64,
 		})
+
 		if err != nil {
 			return fmt.Errorf("musician-album relationship failed: %w", err)
 		}
@@ -157,36 +170,72 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	// Upsert the track
 	track, err := qtx.UpsertTrack(ctx, params)
 	if err != nil {
 		return fmt.Errorf("upsert track failed: %w", err)
 	}
 
-	// Handle genre (clear existing, add new from metadata)
+	// Handle genre (optimized: only delete stale genres, skip if unchanged)
 	if info.Format.Tags.Genre != "" {
-		// Delete existing track-genre relationships (for metadata updates)
-		err = qtx.DeleteTrackGenres(ctx, track.ID)
-		if err != nil {
-			return fmt.Errorf("delete genres failed: %w", err)
-		}
-
-		// Get or create genre
 		genre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
 			Tag:       info.Format.Tags.Genre,
 			GenreType: "music",
 		})
+
 		if err != nil {
 			return fmt.Errorf("genre failed: %w", err)
 		}
 
-		// Create track-genre relationship
+		// Delete only stale genres (those that don't match the new one)
+		err = qtx.DeleteTrackGenresExcept(ctx, database.DeleteTrackGenresExceptParams{
+			TrackID: track.ID,
+			GenreID: genre.ID,
+		})
+
+		if err != nil {
+			return fmt.Errorf("delete stale genres failed: %w", err)
+		}
+
+		// Create track-genre relationship (ON CONFLICT DO NOTHING handles duplicates)
 		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
 			TrackID: track.ID,
 			GenreID: genre.ID,
 		})
+
 		if err != nil {
 			return fmt.Errorf("track-genre relationship failed: %w", err)
+		}
+
+		// Create musician-genre relationship (if musician exists)
+		if musicianID.Valid {
+			err = qtx.UpsertMusicianGenre(ctx, database.UpsertMusicianGenreParams{
+				MusicianID: musicianID.Int64,
+				GenreID:    genre.ID,
+			})
+			if err != nil {
+				// Log but don't fail - genre association is enhancement, not critical
+				app.Logger.Warn("failed to create musician-genre relationship",
+					"error", err,
+					"musician_id", musicianID.Int64,
+					"genre_id", genre.ID,
+				)
+			}
+		}
+
+		// Create album-genre relationship (if album exists)
+		if albumID.Valid {
+			err = qtx.UpsertAlbumGenre(ctx, database.UpsertAlbumGenreParams{
+				AlbumID: albumID.Int64,
+				GenreID: genre.ID,
+			})
+			if err != nil {
+				// Log but don't fail - genre association is enhancement, not critical
+				app.Logger.Warn("failed to create album-genre relationship",
+					"error", err,
+					"album_id", albumID.Int64,
+					"genre_id", genre.ID,
+				)
+			}
 		}
 	}
 

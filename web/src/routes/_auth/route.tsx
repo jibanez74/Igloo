@@ -23,15 +23,15 @@ function AuthLayout() {
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3
-         focus:bg-amber-400 focus:text-slate-900 focus:px-3 focus:py-2 focus:rounded-md"
+         focus:rounded-md focus:bg-amber-400 focus:px-3 focus:py-2 focus:text-slate-900"
       >
         Skip to content
       </a>
 
       <Header />
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-6 grid md:grid-cols-[14rem_1fr] gap-6 lg:gap-8 flex-1">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="grid w-full flex-1 gap-6 px-4 py-6 sm:px-6 md:grid-cols-[14rem_1fr] lg:gap-8 lg:px-8 xl:px-12">
           <SideNav />
 
           <main

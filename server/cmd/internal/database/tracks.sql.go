@@ -38,6 +38,40 @@ func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getAllTrackPathsAndSizes = `-- name: GetAllTrackPathsAndSizes :many
+SELECT file_path, size FROM tracks
+`
+
+type GetAllTrackPathsAndSizesRow struct {
+	FilePath string `json:"file_path"`
+	Size     int64  `json:"size"`
+}
+
+// Returns all track file paths and sizes for efficient batch skip-checking during scans.
+// Used to pre-load existing tracks into memory, replacing N individual queries with 1.
+func (q *Queries) GetAllTrackPathsAndSizes(ctx context.Context) ([]GetAllTrackPathsAndSizesRow, error) {
+	rows, err := q.query(ctx, q.getAllTrackPathsAndSizesStmt, getAllTrackPathsAndSizes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllTrackPathsAndSizesRow{}
+	for rows.Next() {
+		var i GetAllTrackPathsAndSizesRow
+		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMusiciansCount = `-- name: GetMusiciansCount :one
 SELECT COUNT(*) FROM musicians
 `

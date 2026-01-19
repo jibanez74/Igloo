@@ -1,9 +1,12 @@
 import type {
   AlbumDetailsResponseType,
+  AlbumsListResponseType,
   ApiFailureType,
   ApiResponseType,
   MovieDetailsType,
+  MusicianDetailsResponseType,
   MusicStatsType,
+  MusiciansListResponseType,
   ShuffleTracksResponseType,
   SimpleAlbumType,
   TheaterMovieType,
@@ -146,6 +149,31 @@ export async function getAlbumDetails(
   }
 }
 
+export async function getAlbumsPaginated(
+  page: number,
+  perPage: number = 24
+): Promise<ApiResponseType<AlbumsListResponseType>> {
+  try {
+    const res = await fetch(
+      `/api/music/albums?page=${page}&per_page=${perPage}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<AlbumsListResponseType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
 export async function getTracksPaginated(
   limit: number,
   offset: number
@@ -200,6 +228,52 @@ export async function getShuffleTracks(
     }
 
     const data: ApiResponseType<ShuffleTracksResponseType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getMusiciansPaginated(
+  page: number,
+  perPage: number = 24
+): Promise<ApiResponseType<MusiciansListResponseType>> {
+  try {
+    const res = await fetch(
+      `/api/music/musicians?page=${page}&per_page=${perPage}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<MusiciansListResponseType> = await res.json();
+
+    return data;
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
+export async function getMusicianDetails(
+  id: number
+): Promise<ApiResponseType<MusicianDetailsResponseType>> {
+  try {
+    const res = await fetch(`/api/music/musicians/${id}`, {
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    const data: ApiResponseType<MusicianDetailsResponseType> = await res.json();
 
     return data;
   } catch (err) {

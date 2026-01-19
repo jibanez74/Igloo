@@ -19,15 +19,15 @@ export default function SideNav() {
         <h2 id='primary-nav' className='sr-only'>
           Primary navigation
         </h2>
-        <ul className='flex md:flex-col gap-2 overflow-x-auto md:overflow-visible'>
+        <ul className='flex gap-2 overflow-x-auto md:flex-col md:overflow-visible'>
           {navItems.map(item => (
             <li key={String(item.to)}>
               <Link
                 to={item.to}
                 activeOptions={{ exact: item.exact }}
                 className='flex items-center gap-3 rounded-lg px-3 py-2 text-slate-300
-                        hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400
-                          md:border-l-2 md:border-transparent transition-colors'
+                        transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400
+                          focus:outline-none md:border-l-2 md:border-transparent'
                 activeProps={{
                   className:
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-white bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-amber-400 md:border-l-2 md:border-amber-400 transition-colors",

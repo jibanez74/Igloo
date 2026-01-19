@@ -29,14 +29,14 @@ export default function MoviesInTheaters() {
     >
       <h2
         id='movies-in-theaters'
-        className='text-xl md:text-2xl font-semibold tracking-tight mb-4'
+        className='mb-4 text-xl font-semibold tracking-tight md:text-2xl'
       >
         Now Playing in Theaters
       </h2>
 
       {isPending ? (
         <div
-          className='py-12 flex items-center justify-center'
+          className='flex items-center justify-center py-12'
           role='status'
           aria-label='Loading movies...'
         >
@@ -46,7 +46,7 @@ export default function MoviesInTheaters() {
       ) : hasError ? (
         <Alert
           variant='destructive'
-          className='bg-red-500/10 border-red-500/20 text-red-400'
+          className='border-red-500/20 bg-red-500/10 text-red-400'
         >
           <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
           <AlertTitle>Error</AlertTitle>
@@ -58,26 +58,26 @@ export default function MoviesInTheaters() {
         <>
           <span
             tabIndex={0}
-            className='sr-only focus:not-sr-only focus:absolute focus:bg-slate-800 focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:z-50'
+            className='sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white'
             aria-label={`Now Playing in Theaters section, ${movies.length} movies`}
           >
             Now Playing in Theaters - {movies.length} movies
           </span>
-          <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
+          <div className='grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'>
             {movies.map((movie: TheaterMovieType) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </div>
+              <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
         </>
       ) : (
-        <div className='text-center py-12'>
-          <div className='mx-auto w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-cyan-500/20'>
-            <i className='fa-solid fa-film text-cyan-600 text-2xl'></i>
+        <div className='py-12 text-center'>
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-slate-800'>
+            <i className='fa-solid fa-film text-2xl text-cyan-600'></i>
           </div>
-          <h3 className='text-lg font-semibold text-slate-300 mb-2'>
+          <h3 className='mb-2 text-lg font-semibold text-slate-300'>
             No Movies Available
           </h3>
-          <p className='text-slate-400 max-w-md mx-auto'>
+          <p className='mx-auto max-w-md text-slate-400'>
             Unable to fetch movies currently playing in theaters. Check back
             later.
           </p>

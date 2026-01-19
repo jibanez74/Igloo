@@ -35,6 +35,22 @@ func (q *Queries) DeleteTrackGenres(ctx context.Context, trackID int64) error {
 	return err
 }
 
+const deleteTrackGenresExcept = `-- name: DeleteTrackGenresExcept :exec
+DELETE FROM track_genres WHERE track_id = ? AND genre_id != ?
+`
+
+type DeleteTrackGenresExceptParams struct {
+	TrackID int64 `json:"track_id"`
+	GenreID int64 `json:"genre_id"`
+}
+
+// Deletes all genre relationships for a track except the specified genre.
+// Used to efficiently update genres: only removes stale relationships.
+func (q *Queries) DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error {
+	_, err := q.exec(ctx, q.deleteTrackGenresExceptStmt, deleteTrackGenresExcept, arg.TrackID, arg.GenreID)
+	return err
+}
+
 const getGenresByAlbumID = `-- name: GetGenresByAlbumID :many
 SELECT
   tg.track_id,

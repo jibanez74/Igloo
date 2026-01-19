@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import type { TrackType } from "@/types";
+import ProgressBar from "@/components/ProgressBar";
+import VolumeControl from "@/components/VolumeControl";
 
 type AudioPlayerProps = {
   track: TrackType | null;
@@ -102,8 +104,8 @@ export default function AudioPlayer({
   // Stream URL for current track
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
-  // Handle play/pause
-  const togglePlay = () => {
+  // Handle play/pause toggle
+  const handleTogglePlay = () => {
     if (!audioRef.current) return;
 
     if (isPlaying) {
@@ -127,16 +129,9 @@ export default function AudioPlayer({
     }
   };
 
-  // Handle seeking via progress bar click - uses the event target directly
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration) return;
-
-    const target = e.currentTarget;
-    const rect = target.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
-
+  // Handle seeking to a specific time (used by ProgressBar component)
+  const handleSeek = (newTime: number) => {
+    if (!audioRef.current) return;
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
   };
@@ -286,7 +281,6 @@ export default function AudioPlayer({
   if (!track) return null;
 
   const coverUrl = albumCover;
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <>
@@ -303,8 +297,8 @@ export default function AudioPlayer({
           aria-modal='true'
           aria-label={`Now playing: ${track.title} by ${artist}`}
           onKeyDown={handleKeyDown}
-          className='fixed inset-0 z-50 bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col
-            animate-expand-in'
+          className='fixed inset-0 z-50 flex animate-in flex-col bg-linear-to-b from-slate-900 via-slate-800
+            to-slate-900 duration-300 zoom-in-95 fade-in slide-in-from-bottom-2'
         >
           {/* Screen reader live region for playback status - only announces on meaningful changes */}
           <div className='sr-only' aria-live='polite' aria-atomic='true'>
@@ -315,7 +309,7 @@ export default function AudioPlayer({
           <header className='flex items-center justify-between px-6 py-4'>
             <button
               onClick={onMinimize}
-              className='w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+              className='flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
               aria-label='Minimize player (Escape)'
             >
               <i
@@ -324,42 +318,42 @@ export default function AudioPlayer({
               />
             </button>
             <div className='text-center' id='player-header'>
-              <p className='text-xs text-slate-500 uppercase tracking-widest'>
+              <p className='text-xs tracking-widest text-slate-500 uppercase'>
                 Now Playing
               </p>
-              <p className='text-sm text-slate-400 mt-0.5'>{albumTitle}</p>
+              <p className='mt-0.5 text-sm text-slate-400'>{albumTitle}</p>
             </div>
             {onClose ? (
               <button
                 onClick={onClose}
-                className='w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
                 <i className='fa-solid fa-xmark text-lg' aria-hidden='true' />
               </button>
             ) : (
-              <div className='w-10 h-10' aria-hidden='true' />
+              <div className='h-10 w-10' aria-hidden='true' />
             )}
           </header>
 
           {/* Main content */}
-          <main className='flex-1 flex flex-col items-center justify-center px-8 pb-8'>
+          <main className='flex flex-1 flex-col items-center justify-center px-8 pb-8'>
             {/* Album cover */}
-            <figure className='w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 mb-8'>
+            <figure className='mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96'>
               {coverUrl ? (
                 <img
                   src={coverUrl}
                   alt={`Album cover for ${albumTitle}`}
-                  className='w-full h-full object-cover'
+                  className='size-full object-cover'
                 />
               ) : (
                 <div
-                  className='w-full h-full bg-slate-800 flex items-center justify-center'
+                  className='flex h-full w-full items-center justify-center bg-slate-800'
                   role='img'
                   aria-label='No album cover available'
                 >
                   <i
-                    className='fa-solid fa-compact-disc text-slate-600 text-8xl'
+                    className='fa-solid fa-compact-disc text-8xl text-slate-600'
                     aria-hidden='true'
                   />
                 </div>
@@ -367,70 +361,23 @@ export default function AudioPlayer({
             </figure>
 
             {/* Track info */}
-            <div className='text-center max-w-md mb-8'>
+            <div className='mb-8 max-w-md text-center'>
               <h1
                 id='track-title'
-                className='text-2xl sm:text-3xl font-bold text-white truncate'
+                className='truncate text-2xl font-bold text-white sm:text-3xl'
               >
                 {track.title}
               </h1>
-              <p className='text-lg text-amber-400 mt-1 truncate'>{artist}</p>
+              <p className='mt-1 truncate text-lg text-amber-400'>{artist}</p>
             </div>
 
             {/* Progress bar */}
-            <div
-              className='w-full max-w-md mb-6'
-              role='group'
-              aria-label='Playback progress'
-            >
-              <div
-                onClick={handleProgressClick}
-                onKeyDown={e => {
-                  if (!audioRef.current || !duration) return;
-                  if (e.key === "ArrowLeft") {
-                    e.preventDefault();
-                    audioRef.current.currentTime = Math.max(0, currentTime - 5);
-                  } else if (e.key === "ArrowRight") {
-                    e.preventDefault();
-                    audioRef.current.currentTime = Math.min(
-                      duration,
-                      currentTime + 5
-                    );
-                  }
-                }}
-                tabIndex={0}
-                className='h-2 bg-slate-700 rounded-full cursor-pointer group relative focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
-                role='slider'
-                aria-label='Seek through track'
-                aria-valuenow={Math.round(currentTime)}
-                aria-valuemin={0}
-                aria-valuemax={Math.round(duration)}
-                aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-              >
-                <div
-                  className='absolute inset-y-0 left-0 bg-amber-400 rounded-full transition-all'
-                  style={{ width: `${progress}%` }}
-                />
-                <div
-                  className='absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity'
-                  style={{ left: `calc(${progress}% - 8px)` }}
-                />
-              </div>
-              <div className='flex justify-between mt-2'>
-                <span
-                  className='text-sm text-slate-500 tabular-nums'
-                  aria-hidden='true'
-                >
-                  {formatTime(currentTime)}
-                </span>
-                <span
-                  className='text-sm text-slate-500 tabular-nums'
-                  aria-hidden='true'
-                >
-                  {formatTime(duration)}
-                </span>
-              </div>
-            </div>
+            <ProgressBar
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={handleSeek}
+              variant="expanded"
+            />
 
             {/* Playback controls */}
             <div
@@ -441,7 +388,7 @@ export default function AudioPlayer({
               <button
                 onClick={playPrevious}
                 disabled={!hasPrevious}
-                className='w-14 h-14 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-800/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+                className='flex h-14 w-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasPrevious
                     ? `Previous track: ${tracks[currentIndex - 1]?.title}`
@@ -456,9 +403,9 @@ export default function AudioPlayer({
 
               <button
                 ref={playPauseButtonRef}
-                onClick={togglePlay}
+                onClick={handleTogglePlay}
                 disabled={isLoading}
-                className='w-20 h-20 flex items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 transition-colors shadow-xl shadow-amber-500/30 focus:outline-none focus:ring-4 focus:ring-amber-400/50'
+                className='flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50'
                 aria-label={
                   isLoading
                     ? "Loading track"
@@ -479,7 +426,7 @@ export default function AudioPlayer({
                   />
                 ) : (
                   <i
-                    className='fa-solid fa-play text-3xl ml-1'
+                    className='fa-solid fa-play ml-1 text-3xl'
                     aria-hidden='true'
                   />
                 )}
@@ -488,7 +435,7 @@ export default function AudioPlayer({
               <button
                 onClick={playNext}
                 disabled={!hasNext}
-                className='w-14 h-14 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-800/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+                className='flex h-14 w-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasNext
                     ? `Next track: ${tracks[currentIndex + 1]?.title}`
@@ -502,8 +449,13 @@ export default function AudioPlayer({
               </button>
             </div>
 
+            {/* Volume control */}
+            <div className='mt-6'>
+              <VolumeControl audioRef={audioRef} variant='expanded' />
+            </div>
+
             {/* Track number indicator */}
-            <p className='text-sm text-slate-500 mt-6'>
+            <p className='mt-4 text-sm text-slate-500'>
               Track {currentIndex + 1} of {tracks.length}
             </p>
           </main>
@@ -514,29 +466,29 @@ export default function AudioPlayer({
       <div
         role='region'
         aria-label='Audio player'
-        className='fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-700/50 shadow-2xl shadow-black/50
-          animate-slide-up'
+        className='fixed right-0 bottom-0 left-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
+          backdrop-blur-lg duration-300 fade-in slide-in-from-bottom'
       >
-        <div className='max-w-7xl mx-auto px-4 py-3'>
+        <div className='mx-auto max-w-7xl px-4 py-3'>
           <div className='flex items-center gap-4'>
             {/* Album cover and track info - clickable to expand */}
             <button
               onClick={onExpand}
-              className='flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 rounded-lg'
+              className='flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
               aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
             >
               {/* Album cover */}
-              <div className='w-12 h-12 rounded-lg overflow-hidden bg-slate-800 shrink-0 shadow-lg'>
+              <div className='h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg'>
                 {coverUrl ? (
                   <img
                     src={coverUrl}
                     alt={albumTitle}
-                    className='w-full h-full object-cover'
+                    className='h-full w-full object-cover'
                   />
                 ) : (
-                  <div className='w-full h-full flex items-center justify-center'>
+                  <div className='flex h-full w-full items-center justify-center'>
                     <i
-                      className='fa-solid fa-compact-disc text-slate-600 text-lg'
+                      className='fa-solid fa-compact-disc text-lg text-slate-600'
                       aria-hidden='true'
                     />
                   </div>
@@ -545,10 +497,10 @@ export default function AudioPlayer({
 
               {/* Track info */}
               <div className='min-w-0 flex-1'>
-                <p className='text-white font-medium truncate text-sm'>
+                <p className='truncate text-sm font-medium text-white'>
                   {track.title}
                 </p>
-                <p className='text-slate-400 text-xs truncate'>{artist}</p>
+                <p className='truncate text-xs text-slate-400'>{artist}</p>
               </div>
             </button>
 
@@ -562,7 +514,7 @@ export default function AudioPlayer({
               <button
                 onClick={playPrevious}
                 disabled={!hasPrevious}
-                className='w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400'
+                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasPrevious
                     ? `Previous track: ${tracks[currentIndex - 1]?.title}`
@@ -574,9 +526,9 @@ export default function AudioPlayer({
 
               {/* Play/Pause button */}
               <button
-                onClick={togglePlay}
+                onClick={handleTogglePlay}
                 disabled={isLoading}
-                className='w-12 h-12 flex items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400 disabled:opacity-50 transition-colors shadow-lg shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900'
+                className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50'
                 aria-label={
                   isLoading
                     ? "Loading track"
@@ -601,7 +553,7 @@ export default function AudioPlayer({
               <button
                 onClick={playNext}
                 disabled={!hasNext}
-                className='w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400'
+                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasNext
                     ? `Next track: ${tracks[currentIndex + 1]?.title}`
@@ -613,69 +565,22 @@ export default function AudioPlayer({
             </div>
 
             {/* Progress bar and time */}
-            <div
-              className='hidden sm:flex items-center gap-3 flex-1 max-w-md'
-              role='group'
-              aria-label='Playback progress'
-            >
-              {/* Current time */}
-              <span
-                className='text-xs text-slate-400 w-10 text-right tabular-nums'
-                aria-hidden='true'
-              >
-                {formatTime(currentTime)}
-              </span>
+            <ProgressBar
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={handleSeek}
+              variant="minimized"
+            />
 
-              {/* Progress bar */}
-              <div
-                onClick={handleProgressClick}
-                onKeyDown={e => {
-                  if (!audioRef.current || !duration) return;
-                  if (e.key === "ArrowLeft") {
-                    e.preventDefault();
-                    audioRef.current.currentTime = Math.max(0, currentTime - 5);
-                  } else if (e.key === "ArrowRight") {
-                    e.preventDefault();
-                    audioRef.current.currentTime = Math.min(
-                      duration,
-                      currentTime + 5
-                    );
-                  }
-                }}
-                tabIndex={0}
-                className='flex-1 h-1.5 bg-slate-700 rounded-full cursor-pointer group relative focus:outline-none focus:ring-2 focus:ring-amber-400'
-                role='slider'
-                aria-label='Seek through track'
-                aria-valuenow={Math.round(currentTime)}
-                aria-valuemin={0}
-                aria-valuemax={Math.round(duration)}
-                aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-              >
-                {/* Progress fill */}
-                <div
-                  className='absolute inset-y-0 left-0 bg-amber-400 rounded-full transition-all'
-                  style={{ width: `${progress}%` }}
-                />
-                {/* Hover indicator */}
-                <div
-                  className='absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity'
-                  style={{ left: `calc(${progress}% - 6px)` }}
-                />
-              </div>
-
-              {/* Duration */}
-              <span
-                className='text-xs text-slate-400 w-10 tabular-nums'
-                aria-hidden='true'
-              >
-                {formatTime(duration)}
-              </span>
+            {/* Volume control */}
+            <div className='hidden sm:block'>
+              <VolumeControl audioRef={audioRef} variant='minimized' />
             </div>
 
             {/* Expand button */}
             <button
               onClick={onExpand}
-              className='hidden sm:flex w-8 h-8 items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400'
+              className='hidden h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex'
               aria-label='Expand to fullscreen player'
             >
               <i className='fa-solid fa-chevron-up' aria-hidden='true' />
@@ -685,7 +590,7 @@ export default function AudioPlayer({
             {onClose && (
               <button
                 onClick={onClose}
-                className='w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400'
+                className='flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
                 <i className='fa-solid fa-xmark' aria-hidden='true' />
@@ -694,65 +599,14 @@ export default function AudioPlayer({
           </div>
 
           {/* Mobile progress bar */}
-          <div
-            className='sm:hidden mt-2'
-            role='group'
-            aria-label='Playback progress'
-          >
-            <div
-              onClick={handleProgressClick}
-              onKeyDown={e => {
-                if (!audioRef.current || !duration) return;
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  audioRef.current.currentTime = Math.max(0, currentTime - 5);
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  audioRef.current.currentTime = Math.min(
-                    duration,
-                    currentTime + 5
-                  );
-                }
-              }}
-              tabIndex={0}
-              className='h-1 bg-slate-700 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400'
-              role='slider'
-              aria-label='Seek through track'
-              aria-valuenow={Math.round(currentTime)}
-              aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
-              aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-            >
-              <div
-                className='h-full bg-amber-400 rounded-full transition-all'
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className='flex justify-between mt-1'>
-              <span
-                className='text-xs text-slate-500 tabular-nums'
-                aria-hidden='true'
-              >
-                {formatTime(currentTime)}
-              </span>
-              <span
-                className='text-xs text-slate-500 tabular-nums'
-                aria-hidden='true'
-              >
-                {formatTime(duration)}
-              </span>
-            </div>
-          </div>
+          <ProgressBar
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={handleSeek}
+            variant="mobile"
+          />
         </div>
       </div>
     </>
   );
-}
-
-// Helper function to format time in mm:ss
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || isNaN(seconds)) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useAudioPlayer } from "@/context/AudioPlayerContext";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import {
   formatDate,
   formatDuration,
@@ -34,7 +34,7 @@ function AlbumDetailsPage() {
     return (
       <Alert
         variant='destructive'
-        className='bg-red-500/10 border-red-500/20 text-red-400'
+        className='border-red-500/20 bg-red-500/10 text-red-400'
       >
         <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
         <AlertTitle>Error</AlertTitle>
@@ -48,7 +48,7 @@ function AlbumDetailsPage() {
 
   if (!data.data?.album) {
     return (
-      <div className='text-center py-12'>
+      <div className='py-12 text-center'>
         <h2 className='text-xl font-semibold text-slate-300'>
           Album not found
         </h2>
@@ -138,24 +138,24 @@ function AlbumDetailsContent({
   return (
     <article aria-labelledby='album-title'>
       {/* Header section with cover and album info */}
-      <header className='flex flex-col md:flex-row gap-8 mb-10'>
+      <header className='mb-10 flex flex-col gap-8 md:flex-row'>
         {/* Album cover */}
-        <figure className='shrink-0 mx-auto md:mx-0'>
-          <div className='w-64 md:w-72 lg:w-80 rounded-xl overflow-hidden shadow-2xl shadow-amber-500/10 border border-amber-500/20'>
+        <figure className='mx-auto shrink-0 md:mx-0'>
+          <div className='w-64 overflow-hidden rounded-xl border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-72 lg:w-80'>
             {coverUrl ? (
               <img
                 src={coverUrl}
                 alt={`Album cover for ${album.title}`}
-                className='w-full aspect-square object-cover'
+                className='aspect-square w-full object-cover'
               />
             ) : (
               <div
-                className='w-full aspect-square bg-slate-800 flex items-center justify-center'
+                className='flex aspect-square w-full items-center justify-center bg-slate-800'
                 role='img'
                 aria-label='No cover available'
               >
                 <i
-                  className='fa-solid fa-compact-disc text-slate-600 text-6xl'
+                  className='fa-solid fa-compact-disc text-6xl text-slate-600'
                   aria-hidden='true'
                 />
               </div>
@@ -164,25 +164,25 @@ function AlbumDetailsContent({
         </figure>
 
         {/* Album info */}
-        <div className='flex-1 flex flex-col'>
+        <div className='flex flex-1 flex-col'>
           {/* Title */}
           <h1
             id='album-title'
-            className='text-3xl md:text-4xl lg:text-5xl font-bold text-white'
+            className='text-3xl font-bold text-white md:text-4xl lg:text-5xl'
           >
             {album.title}
           </h1>
 
           {/* Artist name */}
           {musicianName && (
-            <p className='text-xl text-amber-400 mt-2 font-medium'>
+            <p className='mt-2 text-xl font-medium text-amber-400'>
               {musicianName}
             </p>
           )}
 
           {/* Meta info row */}
           <ul
-            className='flex flex-wrap items-center gap-4 mt-4 text-slate-400'
+            className='mt-4 flex flex-wrap items-center gap-4 text-slate-400'
             aria-label='Album details'
           >
             {(album.release_date.Valid || releaseYear) && (
@@ -227,7 +227,7 @@ function AlbumDetailsContent({
                 />
                 <span>
                   <span className='text-slate-500'>Popularity:</span>{" "}
-                  <span className='text-green-400 font-medium'>
+                  <span className='font-medium text-green-400'>
                     {Math.round(album.spotify_popularity.Float64)}
                   </span>
                 </span>
@@ -238,13 +238,13 @@ function AlbumDetailsContent({
           {/* Genre tags */}
           {album_genres.length > 0 && (
             <ul
-              className='flex flex-wrap gap-2 mt-4'
+              className='mt-4 flex flex-wrap gap-2'
               aria-label={`Genres: ${album_genres.join(", ")}`}
             >
               {album_genres.map(genre => (
                 <li
                   key={genre}
-                  className='px-3 py-1 bg-slate-800/80 text-amber-200 text-sm rounded-full border border-amber-500/30 backdrop-blur-sm'
+                  className='rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm'
                 >
                   {genre}
                 </li>
@@ -256,14 +256,14 @@ function AlbumDetailsContent({
           <div className='mt-6 flex flex-wrap gap-3'>
             <button
               onClick={handlePlayAlbum}
-              className='inline-flex items-center gap-2 px-6 py-3 bg-amber-500 text-slate-900 font-semibold rounded-full hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/20'
+              className='inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400'
             >
               <i className='fa-solid fa-play' aria-hidden='true' />
               Play Album
             </button>
             <button
               onClick={handleShufflePlay}
-              className='inline-flex items-center gap-2 px-6 py-3 bg-slate-700 text-white font-semibold rounded-full hover:bg-slate-600 transition-colors border border-slate-600'
+              className='inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600'
               aria-label='Shuffle play album'
             >
               <i className='fa-solid fa-shuffle' aria-hidden='true' />
@@ -276,7 +276,7 @@ function AlbumDetailsContent({
             <section className='mt-6' aria-labelledby='artists-heading'>
               <h2
                 id='artists-heading'
-                className='text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3'
+                className='mb-3 text-sm font-semibold tracking-wide text-slate-400 uppercase'
               >
                 {artists.length === 1 ? "Artist" : "Artists"}
               </h2>
@@ -294,7 +294,7 @@ function AlbumDetailsContent({
       <section aria-labelledby='tracklist-heading'>
         <h2
           id='tracklist-heading'
-          className='text-xl font-semibold text-white mb-4 flex items-center gap-2'
+          className='mb-4 flex items-center gap-2 text-xl font-semibold text-white'
         >
           <i
             className='fa-solid fa-list-ol text-amber-400'
@@ -303,11 +303,11 @@ function AlbumDetailsContent({
           Track List
         </h2>
 
-        <div className='bg-slate-800/30 rounded-xl border border-amber-500/10 overflow-hidden'>
+        <div className='overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30'>
           {discNumbers.map(discNum => (
             <div key={discNum}>
               {hasMultipleDiscs && (
-                <div className='px-4 py-2 bg-slate-800/50 border-b border-slate-700/50'>
+                <div className='border-b border-slate-700/50 bg-slate-800/50 px-4 py-2'>
                   <span className='text-sm font-medium text-slate-400'>
                     <i
                       className='fa-solid fa-compact-disc mr-2 text-amber-400/70'
@@ -336,37 +336,37 @@ function AlbumDetailsContent({
 
       {/* Album metadata */}
       <section
-        className='mt-10 p-4 bg-slate-800/30 rounded-xl border border-amber-500/10'
+        className='mt-10 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4'
         aria-labelledby='details-heading'
       >
         <h2
           id='details-heading'
-          className='text-lg font-semibold text-white mb-4'
+          className='mb-4 text-lg font-semibold text-white'
         >
           Album Details
         </h2>
-        <dl className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 text-sm'>
+        <dl className='grid grid-cols-2 gap-6 text-sm sm:grid-cols-3 lg:grid-cols-4'>
           {album.release_date.Valid && (
             <div>
-              <dt className='font-semibold text-amber-300/70 uppercase tracking-wide'>
+              <dt className='font-semibold tracking-wide text-amber-300/70 uppercase'>
                 Release Date
               </dt>
-              <dd className='text-white mt-1'>
+              <dd className='mt-1 text-white'>
                 {formatDate(album.release_date.String)}
               </dd>
             </div>
           )}
           <div>
-            <dt className='font-semibold text-amber-300/70 uppercase tracking-wide'>
+            <dt className='font-semibold tracking-wide text-amber-300/70 uppercase'>
               Total Tracks
             </dt>
-            <dd className='text-white mt-1'>{tracks.length}</dd>
+            <dd className='mt-1 text-white'>{tracks.length}</dd>
           </div>
           <div>
-            <dt className='font-semibold text-amber-300/70 uppercase tracking-wide'>
+            <dt className='font-semibold tracking-wide text-amber-300/70 uppercase'>
               Total Duration
             </dt>
-            <dd className='text-white mt-1'>
+            <dd className='mt-1 text-white'>
               {formatDuration(total_duration)}
             </dd>
           </div>
@@ -377,7 +377,7 @@ function AlbumDetailsContent({
       <div className='mt-8'>
         <Link
           to='/'
-          className='inline-flex items-center gap-2 text-slate-400 hover:text-amber-400 transition-colors'
+          className='inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-amber-400'
         >
           <i className='fa-solid fa-arrow-left' aria-hidden='true' />
           Back to Home
@@ -389,22 +389,22 @@ function AlbumDetailsContent({
 
 function ArtistBadge({ artist }: { artist: ArtistType }) {
   return (
-    <div className='flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-full border border-slate-700/50 hover:border-amber-500/30 transition-colors'>
+    <div className='flex items-center gap-2 rounded-full border border-slate-700/50 bg-slate-800/60 px-3 py-1.5 transition-colors hover:border-amber-500/30'>
       {artist.thumb.Valid ? (
         <img
           src={artist.thumb.String}
           alt=''
-          className='w-6 h-6 rounded-full object-cover'
+          className='h-6 w-6 rounded-full object-cover'
         />
       ) : (
-        <div className='w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center'>
+        <div className='flex h-6 w-6 items-center justify-center rounded-full bg-slate-700'>
           <i
-            className='fa-solid fa-user text-slate-500 text-xs'
+            className='fa-solid fa-user text-xs text-slate-500'
             aria-hidden='true'
           />
         </div>
       )}
-      <span className='text-sm text-white font-medium'>{artist.name}</span>
+      <span className='text-sm font-medium text-white'>{artist.name}</span>
     </div>
   );
 }
@@ -426,7 +426,7 @@ function TrackRow({
 }: TrackRowProps) {
   return (
     <li
-      className={`group flex items-center gap-4 px-4 py-3 hover:bg-slate-800/50 transition-colors ${
+      className={`group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-slate-800/50 ${
         isCurrentTrack ? "bg-slate-800/40" : ""
       }`}
     >
@@ -434,7 +434,7 @@ function TrackRow({
       <span className='w-8 text-center font-mono text-sm'>
         {isPlaying ? (
           <i
-            className='fa-solid fa-volume-high text-amber-400 animate-pulse'
+            className='fa-solid fa-volume-high animate-pulse text-amber-400'
             aria-hidden='true'
           />
         ) : (
@@ -447,13 +447,13 @@ function TrackRow({
       </span>
 
       {/* Track info */}
-      <div className='flex-1 min-w-0'>
+      <div className='min-w-0 flex-1'>
         <p
-          className={`font-medium truncate ${isCurrentTrack ? "text-amber-400" : "text-white"}`}
+          className={`truncate font-medium ${isCurrentTrack ? "text-amber-400" : "text-white"}`}
         >
           {track.title}
         </p>
-        <div className='flex items-center gap-2 text-xs text-slate-500 mt-0.5'>
+        <div className='mt-0.5 flex items-center gap-2 text-xs text-slate-500'>
           {track.composer.Valid && (
             <span className='truncate'>
               <i className='fa-solid fa-pen-nib mr-1' aria-hidden='true' />
@@ -484,7 +484,7 @@ function TrackRow({
       {/* Play/Pause button */}
       <button
         onClick={onToggle}
-        className={`w-8 h-8 flex items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400 transition-all ${
+        className={`flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400 ${
           isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
         title={isPlaying ? "Pause track" : "Play track"}
@@ -493,7 +493,7 @@ function TrackRow({
         {isPlaying ? (
           <i className='fa-solid fa-pause text-xs' aria-hidden='true' />
         ) : (
-          <i className='fa-solid fa-play text-xs ml-0.5' aria-hidden='true' />
+          <i className='fa-solid fa-play ml-0.5 text-xs' aria-hidden='true' />
         )}
       </button>
     </li>

@@ -32,6 +32,26 @@ ORDER BY
 LIMIT
   12;
 
+-- name: GetAlbumsAlphabetical :many
+-- Returns albums sorted alphabetically by title with pagination.
+-- Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
+FROM
+  albums
+ORDER BY
+  CASE
+    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z'
+    THEN UPPER(SUBSTR(title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(title)
+LIMIT ? OFFSET ?;
+
 -- name: UpsertAlbum :one
 INSERT INTO
   albums (

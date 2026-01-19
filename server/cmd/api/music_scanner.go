@@ -6,27 +6,26 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"time"
 )
 
-// trackFile holds path and pre-computed extension to avoid redundant lookups
+// trackFile holds path, extension, and size collected during directory walk.
+// Size is captured during walk to avoid blocking the transaction with file I/O.
 type trackFile struct {
 	path string
 	ext  string
+	size int64
 }
 
 // ScanMusicLibrary walks through the configured music directory, extracts metadata
 // from audio files using ffprobe, and stores track information in the database.
 func (app *Application) ScanMusicLibrary() {
-	// Add to WaitGroup for graceful shutdown
 	if app.Wait != nil {
 		app.Wait.Add(1)
 		defer app.Wait.Done()
 	}
 
-	// Validate music directory is configured
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
 		app.Logger.Error("music directory not configured")
 		return
@@ -50,7 +49,6 @@ func (app *Application) ScanMusicLibrary() {
 			return nil
 		}
 
-		// Skip directories
 		if entry.IsDir() {
 			return nil
 		}
@@ -60,10 +58,16 @@ func (app *Application) ScanMusicLibrary() {
 			return nil
 		}
 
-		// Add to current batch with pre-computed extension
-		batch = append(batch, trackFile{path: path, ext: ext})
+		info, err := entry.Info()
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to get file info for %s: %s", path, err.Error()))
+			errorCount++
+			return nil
+		}
 
-		// Process batch when it reaches the batch size
+		batch = append(batch, trackFile{path: path, ext: ext, size: info.Size()})
+
+		// Process batch when full
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
 			scanned, skipped, errors := app.processMusicBatch(ctx, batch)
 			tracksScanned += scanned
@@ -96,7 +100,6 @@ func (app *Application) ScanMusicLibrary() {
 
 // processMusicBatch processes a batch of audio files within a single transaction.
 // Uses skip-on-error strategy: failed tracks don't rollback successful ones.
-// Optimization: checks path + size first (fast stat), skips unchanged files.
 func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -108,23 +111,12 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 	qtx := app.Queries.WithTx(tx)
 
 	for _, file := range files {
-		// Get file info (size) - fast filesystem stat, no file read
-		fileInfo, err := os.Stat(file.path)
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("failed to stat %s: %s", file.path, err.Error()))
-			errCount++
-			continue
-		}
-		fileSize := fileInfo.Size()
-
-		// Quick check: if track exists with same path AND size, skip (file unchanged)
+		// Check if track exists with same path and size (file unchanged)
 		_, err = qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
 			FilePath: file.path,
-			Size:     fileSize,
+			Size:     file.size,
 		})
-
 		if err == nil {
-			// Track exists with same path and size - skip
 			skipped++
 			continue
 		}
@@ -140,8 +132,7 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 		scanned++
 	}
 
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", err.Error()))
 		return 0, 0, len(files)
 	}

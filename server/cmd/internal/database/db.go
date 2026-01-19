@@ -42,6 +42,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteTrackGenresStmt, err = db.PrepareContext(ctx, deleteTrackGenres); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteTrackGenres: %w", err)
 	}
+	if q.deleteTrackGenresExceptStmt, err = db.PrepareContext(ctx, deleteTrackGenresExcept); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteTrackGenresExcept: %w", err)
+	}
 	if q.getAdminUserStmt, err = db.PrepareContext(ctx, getAdminUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAdminUser: %w", err)
 	}
@@ -51,17 +54,38 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
 	}
+	if q.getAlbumsAlphabeticalStmt, err = db.PrepareContext(ctx, getAlbumsAlphabetical); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsAlphabetical: %w", err)
+	}
+	if q.getAlbumsByMusicianIDStmt, err = db.PrepareContext(ctx, getAlbumsByMusicianID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsByMusicianID: %w", err)
+	}
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
+	}
+	if q.getAllTrackPathsAndSizesStmt, err = db.PrepareContext(ctx, getAllTrackPathsAndSizes); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAllTrackPathsAndSizes: %w", err)
 	}
 	if q.getGenresByAlbumIDStmt, err = db.PrepareContext(ctx, getGenresByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByAlbumID: %w", err)
 	}
+	if q.getGenresByAlbumIDDirectStmt, err = db.PrepareContext(ctx, getGenresByAlbumIDDirect); err != nil {
+		return nil, fmt.Errorf("error preparing query GetGenresByAlbumIDDirect: %w", err)
+	}
+	if q.getGenresByMusicianIDStmt, err = db.PrepareContext(ctx, getGenresByMusicianID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetGenresByMusicianID: %w", err)
+	}
 	if q.getLatestAlbumsStmt, err = db.PrepareContext(ctx, getLatestAlbums); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestAlbums: %w", err)
 	}
+	if q.getMusicianByIDStmt, err = db.PrepareContext(ctx, getMusicianByID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicianByID: %w", err)
+	}
 	if q.getMusicianBySpotifyIDStmt, err = db.PrepareContext(ctx, getMusicianBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianBySpotifyID: %w", err)
+	}
+	if q.getMusiciansAlphabeticalStmt, err = db.PrepareContext(ctx, getMusiciansAlphabetical); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusiciansAlphabetical: %w", err)
 	}
 	if q.getMusiciansByAlbumIDStmt, err = db.PrepareContext(ctx, getMusiciansByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansByAlbumID: %w", err)
@@ -87,6 +111,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getTracksByAlbumIDStmt, err = db.PrepareContext(ctx, getTracksByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTracksByAlbumID: %w", err)
 	}
+	if q.getTracksByMusicianIDStmt, err = db.PrepareContext(ctx, getTracksByMusicianID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTracksByMusicianID: %w", err)
+	}
 	if q.getTracksCountStmt, err = db.PrepareContext(ctx, getTracksCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTracksCount: %w", err)
 	}
@@ -99,8 +126,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertAlbumStmt, err = db.PrepareContext(ctx, upsertAlbum); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertAlbum: %w", err)
 	}
+	if q.upsertAlbumGenreStmt, err = db.PrepareContext(ctx, upsertAlbumGenre); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertAlbumGenre: %w", err)
+	}
 	if q.upsertMusicianStmt, err = db.PrepareContext(ctx, upsertMusician); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMusician: %w", err)
+	}
+	if q.upsertMusicianGenreStmt, err = db.PrepareContext(ctx, upsertMusicianGenre); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertMusicianGenre: %w", err)
 	}
 	if q.upsertTrackStmt, err = db.PrepareContext(ctx, upsertTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertTrack: %w", err)
@@ -140,6 +173,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteTrackGenresStmt: %w", cerr)
 		}
 	}
+	if q.deleteTrackGenresExceptStmt != nil {
+		if cerr := q.deleteTrackGenresExceptStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTrackGenresExceptStmt: %w", cerr)
+		}
+	}
 	if q.getAdminUserStmt != nil {
 		if cerr := q.getAdminUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAdminUserStmt: %w", cerr)
@@ -155,9 +193,24 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumsAlphabeticalStmt != nil {
+		if cerr := q.getAlbumsAlphabeticalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsAlphabeticalStmt: %w", cerr)
+		}
+	}
+	if q.getAlbumsByMusicianIDStmt != nil {
+		if cerr := q.getAlbumsByMusicianIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsByMusicianIDStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
+		}
+	}
+	if q.getAllTrackPathsAndSizesStmt != nil {
+		if cerr := q.getAllTrackPathsAndSizesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAllTrackPathsAndSizesStmt: %w", cerr)
 		}
 	}
 	if q.getGenresByAlbumIDStmt != nil {
@@ -165,14 +218,34 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getGenresByAlbumIDStmt: %w", cerr)
 		}
 	}
+	if q.getGenresByAlbumIDDirectStmt != nil {
+		if cerr := q.getGenresByAlbumIDDirectStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getGenresByAlbumIDDirectStmt: %w", cerr)
+		}
+	}
+	if q.getGenresByMusicianIDStmt != nil {
+		if cerr := q.getGenresByMusicianIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getGenresByMusicianIDStmt: %w", cerr)
+		}
+	}
 	if q.getLatestAlbumsStmt != nil {
 		if cerr := q.getLatestAlbumsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLatestAlbumsStmt: %w", cerr)
 		}
 	}
+	if q.getMusicianByIDStmt != nil {
+		if cerr := q.getMusicianByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicianByIDStmt: %w", cerr)
+		}
+	}
 	if q.getMusicianBySpotifyIDStmt != nil {
 		if cerr := q.getMusicianBySpotifyIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicianBySpotifyIDStmt: %w", cerr)
+		}
+	}
+	if q.getMusiciansAlphabeticalStmt != nil {
+		if cerr := q.getMusiciansAlphabeticalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusiciansAlphabeticalStmt: %w", cerr)
 		}
 	}
 	if q.getMusiciansByAlbumIDStmt != nil {
@@ -215,6 +288,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getTracksByAlbumIDStmt: %w", cerr)
 		}
 	}
+	if q.getTracksByMusicianIDStmt != nil {
+		if cerr := q.getTracksByMusicianIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTracksByMusicianIDStmt: %w", cerr)
+		}
+	}
 	if q.getTracksCountStmt != nil {
 		if cerr := q.getTracksCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTracksCountStmt: %w", cerr)
@@ -235,9 +313,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertAlbumStmt: %w", cerr)
 		}
 	}
+	if q.upsertAlbumGenreStmt != nil {
+		if cerr := q.upsertAlbumGenreStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertAlbumGenreStmt: %w", cerr)
+		}
+	}
 	if q.upsertMusicianStmt != nil {
 		if cerr := q.upsertMusicianStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertMusicianStmt: %w", cerr)
+		}
+	}
+	if q.upsertMusicianGenreStmt != nil {
+		if cerr := q.upsertMusicianGenreStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertMusicianGenreStmt: %w", cerr)
 		}
 	}
 	if q.upsertTrackStmt != nil {
@@ -282,67 +370,89 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                         DBTX
-	tx                         *sql.Tx
-	checkTrackUnchangedStmt    *sql.Stmt
-	createMusicianAlbumStmt    *sql.Stmt
-	createSettingsStmt         *sql.Stmt
-	createTrackGenreStmt       *sql.Stmt
-	createUserStmt             *sql.Stmt
-	deleteTrackGenresStmt      *sql.Stmt
-	getAdminUserStmt           *sql.Stmt
-	getAlbumByIDStmt           *sql.Stmt
-	getAlbumBySpotifyIDStmt    *sql.Stmt
-	getAlbumsCountStmt         *sql.Stmt
-	getGenresByAlbumIDStmt     *sql.Stmt
-	getLatestAlbumsStmt        *sql.Stmt
-	getMusicianBySpotifyIDStmt *sql.Stmt
-	getMusiciansByAlbumIDStmt  *sql.Stmt
-	getMusiciansCountStmt      *sql.Stmt
-	getOrCreateGenreStmt       *sql.Stmt
-	getRandomTracksStmt        *sql.Stmt
-	getSettingsStmt            *sql.Stmt
-	getTrackStmt               *sql.Stmt
-	getTracksAlphabeticalStmt  *sql.Stmt
-	getTracksByAlbumIDStmt     *sql.Stmt
-	getTracksCountStmt         *sql.Stmt
-	getUserStmt                *sql.Stmt
-	getUserByEmailStmt         *sql.Stmt
-	upsertAlbumStmt            *sql.Stmt
-	upsertMusicianStmt         *sql.Stmt
-	upsertTrackStmt            *sql.Stmt
+	db                           DBTX
+	tx                           *sql.Tx
+	checkTrackUnchangedStmt      *sql.Stmt
+	createMusicianAlbumStmt      *sql.Stmt
+	createSettingsStmt           *sql.Stmt
+	createTrackGenreStmt         *sql.Stmt
+	createUserStmt               *sql.Stmt
+	deleteTrackGenresStmt        *sql.Stmt
+	deleteTrackGenresExceptStmt  *sql.Stmt
+	getAdminUserStmt             *sql.Stmt
+	getAlbumByIDStmt             *sql.Stmt
+	getAlbumBySpotifyIDStmt      *sql.Stmt
+	getAlbumsAlphabeticalStmt    *sql.Stmt
+	getAlbumsByMusicianIDStmt    *sql.Stmt
+	getAlbumsCountStmt           *sql.Stmt
+	getAllTrackPathsAndSizesStmt *sql.Stmt
+	getGenresByAlbumIDStmt       *sql.Stmt
+	getGenresByAlbumIDDirectStmt *sql.Stmt
+	getGenresByMusicianIDStmt    *sql.Stmt
+	getLatestAlbumsStmt          *sql.Stmt
+	getMusicianByIDStmt          *sql.Stmt
+	getMusicianBySpotifyIDStmt   *sql.Stmt
+	getMusiciansAlphabeticalStmt *sql.Stmt
+	getMusiciansByAlbumIDStmt    *sql.Stmt
+	getMusiciansCountStmt        *sql.Stmt
+	getOrCreateGenreStmt         *sql.Stmt
+	getRandomTracksStmt          *sql.Stmt
+	getSettingsStmt              *sql.Stmt
+	getTrackStmt                 *sql.Stmt
+	getTracksAlphabeticalStmt    *sql.Stmt
+	getTracksByAlbumIDStmt       *sql.Stmt
+	getTracksByMusicianIDStmt    *sql.Stmt
+	getTracksCountStmt           *sql.Stmt
+	getUserStmt                  *sql.Stmt
+	getUserByEmailStmt           *sql.Stmt
+	upsertAlbumStmt              *sql.Stmt
+	upsertAlbumGenreStmt         *sql.Stmt
+	upsertMusicianStmt           *sql.Stmt
+	upsertMusicianGenreStmt      *sql.Stmt
+	upsertTrackStmt              *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                         tx,
-		tx:                         tx,
-		checkTrackUnchangedStmt:    q.checkTrackUnchangedStmt,
-		createMusicianAlbumStmt:    q.createMusicianAlbumStmt,
-		createSettingsStmt:         q.createSettingsStmt,
-		createTrackGenreStmt:       q.createTrackGenreStmt,
-		createUserStmt:             q.createUserStmt,
-		deleteTrackGenresStmt:      q.deleteTrackGenresStmt,
-		getAdminUserStmt:           q.getAdminUserStmt,
-		getAlbumByIDStmt:           q.getAlbumByIDStmt,
-		getAlbumBySpotifyIDStmt:    q.getAlbumBySpotifyIDStmt,
-		getAlbumsCountStmt:         q.getAlbumsCountStmt,
-		getGenresByAlbumIDStmt:     q.getGenresByAlbumIDStmt,
-		getLatestAlbumsStmt:        q.getLatestAlbumsStmt,
-		getMusicianBySpotifyIDStmt: q.getMusicianBySpotifyIDStmt,
-		getMusiciansByAlbumIDStmt:  q.getMusiciansByAlbumIDStmt,
-		getMusiciansCountStmt:      q.getMusiciansCountStmt,
-		getOrCreateGenreStmt:       q.getOrCreateGenreStmt,
-		getRandomTracksStmt:        q.getRandomTracksStmt,
-		getSettingsStmt:            q.getSettingsStmt,
-		getTrackStmt:               q.getTrackStmt,
-		getTracksAlphabeticalStmt:  q.getTracksAlphabeticalStmt,
-		getTracksByAlbumIDStmt:     q.getTracksByAlbumIDStmt,
-		getTracksCountStmt:         q.getTracksCountStmt,
-		getUserStmt:                q.getUserStmt,
-		getUserByEmailStmt:         q.getUserByEmailStmt,
-		upsertAlbumStmt:            q.upsertAlbumStmt,
-		upsertMusicianStmt:         q.upsertMusicianStmt,
-		upsertTrackStmt:            q.upsertTrackStmt,
+		db:                           tx,
+		tx:                           tx,
+		checkTrackUnchangedStmt:      q.checkTrackUnchangedStmt,
+		createMusicianAlbumStmt:      q.createMusicianAlbumStmt,
+		createSettingsStmt:           q.createSettingsStmt,
+		createTrackGenreStmt:         q.createTrackGenreStmt,
+		createUserStmt:               q.createUserStmt,
+		deleteTrackGenresStmt:        q.deleteTrackGenresStmt,
+		deleteTrackGenresExceptStmt:  q.deleteTrackGenresExceptStmt,
+		getAdminUserStmt:             q.getAdminUserStmt,
+		getAlbumByIDStmt:             q.getAlbumByIDStmt,
+		getAlbumBySpotifyIDStmt:      q.getAlbumBySpotifyIDStmt,
+		getAlbumsAlphabeticalStmt:    q.getAlbumsAlphabeticalStmt,
+		getAlbumsByMusicianIDStmt:    q.getAlbumsByMusicianIDStmt,
+		getAlbumsCountStmt:           q.getAlbumsCountStmt,
+		getAllTrackPathsAndSizesStmt: q.getAllTrackPathsAndSizesStmt,
+		getGenresByAlbumIDStmt:       q.getGenresByAlbumIDStmt,
+		getGenresByAlbumIDDirectStmt: q.getGenresByAlbumIDDirectStmt,
+		getGenresByMusicianIDStmt:    q.getGenresByMusicianIDStmt,
+		getLatestAlbumsStmt:          q.getLatestAlbumsStmt,
+		getMusicianByIDStmt:          q.getMusicianByIDStmt,
+		getMusicianBySpotifyIDStmt:   q.getMusicianBySpotifyIDStmt,
+		getMusiciansAlphabeticalStmt: q.getMusiciansAlphabeticalStmt,
+		getMusiciansByAlbumIDStmt:    q.getMusiciansByAlbumIDStmt,
+		getMusiciansCountStmt:        q.getMusiciansCountStmt,
+		getOrCreateGenreStmt:         q.getOrCreateGenreStmt,
+		getRandomTracksStmt:          q.getRandomTracksStmt,
+		getSettingsStmt:              q.getSettingsStmt,
+		getTrackStmt:                 q.getTrackStmt,
+		getTracksAlphabeticalStmt:    q.getTracksAlphabeticalStmt,
+		getTracksByAlbumIDStmt:       q.getTracksByAlbumIDStmt,
+		getTracksByMusicianIDStmt:    q.getTracksByMusicianIDStmt,
+		getTracksCountStmt:           q.getTracksCountStmt,
+		getUserStmt:                  q.getUserStmt,
+		getUserByEmailStmt:           q.getUserByEmailStmt,
+		upsertAlbumStmt:              q.upsertAlbumStmt,
+		upsertAlbumGenreStmt:         q.upsertAlbumGenreStmt,
+		upsertMusicianStmt:           q.upsertMusicianStmt,
+		upsertMusicianGenreStmt:      q.upsertMusicianGenreStmt,
+		upsertTrackStmt:              q.upsertTrackStmt,
 	}
 }

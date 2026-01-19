@@ -174,6 +174,22 @@ CREATE INDEX IF NOT EXISTS idx_track_genres_track ON track_genres (track_id);
 
 CREATE INDEX IF NOT EXISTS idx_track_genres_genre ON track_genres (genre_id);
 
+-- many-to-many: albums <-> genres
+CREATE TABLE
+  IF NOT EXISTS album_genres (
+    album_id INTEGER NOT NULL,
+    genre_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (album_id, genre_id),
+    FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_album_genres_album ON album_genres (album_id);
+
+CREATE INDEX IF NOT EXISTS idx_album_genres_genre ON album_genres (genre_id);
+
 -- sessions table for scs session management
 CREATE TABLE
   IF NOT EXISTS sessions (

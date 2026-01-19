@@ -21,15 +21,15 @@ export default function MovieCard({ movie }: MovieCardProps) {
   };
 
   return (
-    <article className='group relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/20 hover:border-cyan-500/50 hover:-translate-y-1'>
+    <article className='group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20'>
       <Link
         to='/movies/in-theaters/$id'
         params={{ id: id.toString() }}
-        className='block focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 rounded-xl'
+        className='block rounded-xl focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
       {/* Poster with 2:3 aspect ratio (standard movie poster) */}
-        <div className='aspect-2/3 bg-slate-800 relative'>
+        <div className='relative aspect-2/3 bg-slate-800'>
         {posterUrl ? (
           <img
             src={posterUrl}
@@ -39,12 +39,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
               loading='lazy'
               decoding='async'
               fetchPriority='low'
-              className='h-full w-full object-cover transition-transform duration-300 group-hover:scale-105'
+              className='size-full object-cover transition-transform duration-300 group-hover:scale-105'
           />
         ) : (
-            <div className='h-full w-full flex items-center justify-center'>
+            <div className='flex size-full items-center justify-center'>
               <i
-                className='fa-solid fa-film text-slate-600 text-4xl'
+                className='fa-solid fa-film text-4xl text-slate-600'
                 aria-hidden='true'
               ></i>
           </div>
@@ -53,10 +53,10 @@ export default function MovieCard({ movie }: MovieCardProps) {
         {/* Rating badge */}
         {rating && (
           <div
-            className={`absolute top-2 right-2 px-2 py-0.5 rounded-md text-xs font-bold shadow-lg ${getRatingColor(vote_average)}`}
+            className={`absolute top-2 right-2 rounded-md px-2 py-0.5 text-xs font-bold shadow-lg ${getRatingColor(vote_average)}`}
               aria-hidden='true'
           >
-              <i className='fa-solid fa-star text-[10px] mr-1'></i>
+              <i className='fa-solid fa-star mr-1 text-[10px]'></i>
             {rating}
           </div>
         )}
@@ -66,12 +66,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
       </div>
 
       {/* Movie info */}
-        <div className='absolute bottom-0 inset-x-0 p-3'>
-          <h3 className='text-sm font-semibold truncate text-white drop-shadow-lg'>
+        <div className='absolute inset-x-0 bottom-0 p-3'>
+          <h3 className='truncate text-sm font-semibold text-white drop-shadow-lg'>
           {title}
         </h3>
         {year && (
-            <p className='text-xs text-slate-300 mt-0.5 drop-shadow-lg'>
+            <p className='mt-0.5 text-xs text-slate-300 drop-shadow-lg'>
               {year}
             </p>
         )}

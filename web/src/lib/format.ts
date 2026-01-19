@@ -40,3 +40,12 @@ export function formatTrackDuration(ms: number): string {
 export function formatBitRate(bitRate: number): string {
   return `${Math.round(bitRate / 1000)} kbps`;
 }
+
+// Format seconds into mm:ss format (for audio player progress)
+// Handles edge cases like NaN and Infinity
+export function formatTimeSeconds(seconds: number): string {
+  if (!isFinite(seconds) || isNaN(seconds)) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}

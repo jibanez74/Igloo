@@ -5,6 +5,11 @@ SELECT * FROM tracks WHERE id = ? LIMIT 1;
 -- Quick check if track exists with same path and size (likely unchanged)
 SELECT 1 FROM tracks WHERE file_path = ? AND size = ? LIMIT 1;
 
+-- name: GetAllTrackPathsAndSizes :many
+-- Returns all track file paths and sizes for efficient batch skip-checking during scans.
+-- Used to pre-load existing tracks into memory, replacing N individual queries with 1.
+SELECT file_path, size FROM tracks;
+
 -- name: UpsertTrack :one
 INSERT INTO tracks (
   title, sort_title, file_path, file_name, container, mime_type, codec, size,

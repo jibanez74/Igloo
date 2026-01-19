@@ -72,6 +72,69 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullStr
 	return i, err
 }
 
+const getAlbumsAlphabetical = `-- name: GetAlbumsAlphabetical :many
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
+FROM
+  albums
+ORDER BY
+  CASE
+    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z'
+    THEN UPPER(SUBSTR(title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(title)
+LIMIT ? OFFSET ?
+`
+
+type GetAlbumsAlphabeticalParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetAlbumsAlphabeticalRow struct {
+	ID       int64          `json:"id"`
+	Title    string         `json:"title"`
+	Cover    sql.NullString `json:"cover"`
+	Musician sql.NullString `json:"musician"`
+	Year     sql.NullInt64  `json:"year"`
+}
+
+// Returns albums sorted alphabetically by title with pagination.
+// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
+func (q *Queries) GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error) {
+	rows, err := q.query(ctx, q.getAlbumsAlphabeticalStmt, getAlbumsAlphabetical, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAlbumsAlphabeticalRow{}
+	for rows.Next() {
+		var i GetAlbumsAlphabeticalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Cover,
+			&i.Musician,
+			&i.Year,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,

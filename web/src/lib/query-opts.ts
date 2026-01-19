@@ -1,19 +1,25 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
   getAlbumDetails,
+  getAlbumsPaginated,
   getAuthUser,
   getLatestAlbums,
   getMovieInTheaterDetails,
   getMoviesInTheaters,
+  getMusicianDetails,
+  getMusiciansPaginated,
   getMusicStats,
   getTracksPaginated,
 } from "@/lib/api";
 import {
   ALBUM_DETAILS_KEY,
+  ALBUMS_PAGINATED_KEY,
   AUTH_USER_KEY,
   LATEST_ALBUMS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
+  MUSICIAN_DETAILS_KEY,
+  MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
@@ -70,5 +76,29 @@ export function musicStatsQueryOpts() {
   return queryOptions({
     queryKey: [MUSIC_STATS_KEY],
     queryFn: getMusicStats,
+  });
+}
+
+export function albumsPaginatedQueryOpts(page: number, perPage: number = 24) {
+  return queryOptions({
+    queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
+    queryFn: () => getAlbumsPaginated(page, perPage),
+  });
+}
+
+export function musiciansPaginatedQueryOpts(
+  page: number,
+  perPage: number = 24
+) {
+  return queryOptions({
+    queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
+    queryFn: () => getMusiciansPaginated(page, perPage),
+  });
+}
+
+export function musicianDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MUSICIAN_DETAILS_KEY, id],
+    queryFn: () => getMusicianDetails(id),
   });
 }
