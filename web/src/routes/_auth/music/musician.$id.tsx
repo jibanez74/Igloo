@@ -412,15 +412,15 @@ function TrackRow({ track, isPlaying, isCurrentTrack, onPlay }: TrackRowProps) {
 
   return (
     <li
-      className={`group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-slate-800/50 ${
+      className={`group flex items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
         isCurrentTrack ? "bg-slate-800/40" : ""
       }`}
     >
-      {/* Play button */}
+      {/* Play button - always visible on mobile, hover-reveal on desktop */}
       <button
         onClick={onPlay}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400 ${
-          isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        className={`flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400 ${
+          isCurrentTrack ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
         }`}
         title={isPlaying ? "Pause track" : "Play track"}
         aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
@@ -443,7 +443,7 @@ function TrackRow({ track, isPlaying, isCurrentTrack, onPlay }: TrackRowProps) {
       </div>
 
       {/* Duration */}
-      <span className="text-sm text-slate-500 tabular-nums">
+      <span className="shrink-0 text-sm text-slate-500 tabular-nums">
         {formatTrackDuration(track.duration)}
       </span>
     </li>
