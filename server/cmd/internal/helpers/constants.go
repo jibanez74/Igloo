@@ -29,4 +29,5 @@ const (
 	TMDB_BASE_API_URL   = "https://api.themoviedb.org/3"
 	TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
 	TMDB_IMAGE_SIZE     = "original"
+	TMDB_MAX_ITEMS      = 12
 )

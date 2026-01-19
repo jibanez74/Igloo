@@ -7,10 +7,12 @@ import (
 	"strings"
 )
 
+// simple middleware to make the scs session work correctly
 func (app *Application) LoadAndSaveSession(next http.Handler) http.Handler {
 	return app.SessionManager.LoadAndSave(next)
 }
 
+// a simple middleware to determine if the user is authenticated
 func (app *Application) IsAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.SessionManager.Exists(r.Context(), helpers.COOKIE_USER_ID) {

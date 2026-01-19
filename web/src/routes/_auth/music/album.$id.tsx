@@ -20,12 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
-import {
-  formatDate,
-  formatDuration,
-  formatTrackDuration,
-  formatBitRate,
-} from "@/lib/format";
+import TrackItem from "@/components/TrackItem";
+import { formatDate, formatDuration } from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
   ArtistType,
@@ -447,18 +443,22 @@ function AlbumDetailsContent({
                   </span>
                 </div>
               )}
-              <ul className='divide-y divide-slate-700/30'>
+              <div className='divide-y divide-slate-700/30'>
                 {tracksByDisc[discNum].map((track: TrackType) => (
-                  <TrackRow
+                  <TrackItem
                     key={track.id}
-                    track={track}
+                    id={track.id}
+                    title={track.title}
+                    duration={track.duration}
+                    trackIndex={track.track_index}
                     genres={trackGenreMap.get(track.id) || []}
+                    variant='album'
                     isPlaying={isTrackPlaying(track)}
                     isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
-                    onToggle={() => handleToggleTrack(track)}
+                    onPlay={() => handleToggleTrack(track)}
                   />
                 ))}
-              </ul>
+              </div>
             </div>
           ))}
         </div>
@@ -539,93 +539,3 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
   );
 }
 
-type TrackRowProps = {
-  track: TrackType;
-  genres: string[];
-  isPlaying: boolean;
-  isCurrentTrack: boolean;
-  onToggle: () => void;
-};
-
-function TrackRow({
-  track,
-  genres,
-  isPlaying,
-  isCurrentTrack,
-  onToggle,
-}: TrackRowProps) {
-  return (
-    <li
-      className={`group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-slate-800/50 ${
-        isCurrentTrack ? "bg-slate-800/40" : ""
-      }`}
-    >
-      {/* Track number / Playing indicator */}
-      <span className='w-8 text-center font-mono text-sm'>
-        {isPlaying ? (
-          <i
-            className='fa-solid fa-volume-high animate-pulse text-amber-400'
-            aria-hidden='true'
-          />
-        ) : (
-          <span
-            className={`${isCurrentTrack ? "text-amber-400" : "text-slate-500"} group-hover:text-amber-400`}
-          >
-            {track.track_index}
-          </span>
-        )}
-      </span>
-
-      {/* Track info */}
-      <div className='min-w-0 flex-1'>
-        <p
-          className={`truncate font-medium ${isCurrentTrack ? "text-amber-400" : "text-white"}`}
-        >
-          {track.title}
-        </p>
-        <div className='mt-0.5 flex items-center gap-2 text-xs text-slate-500'>
-          {track.composer.Valid && (
-            <span className='truncate'>
-              <i className='fa-solid fa-pen-nib mr-1' aria-hidden='true' />
-              {track.composer.String}
-            </span>
-          )}
-          {genres.length > 0 && (
-            <span className='truncate text-amber-400/60'>
-              {genres.join(", ")}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Track metadata */}
-      <div className='flex items-center gap-4 text-xs text-slate-500'>
-        <span
-          className='hidden sm:block'
-          title={`${track.codec} • ${formatBitRate(track.bit_rate)}`}
-        >
-          {track.codec.toUpperCase()}
-        </span>
-        <span className='w-12 text-right'>
-          {formatTrackDuration(track.duration)}
-        </span>
-      </div>
-
-      {/* Play/Pause button */}
-      <button
-        onClick={onToggle}
-        className={`flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400 ${
-          isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
-        title={isPlaying ? "Pause track" : "Play track"}
-        aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-      >
-        {isPlaying ? (
-          <i className='fa-solid fa-pause text-xs' aria-hidden='true' />
-        ) : (
-          <i className='fa-solid fa-play ml-0.5 text-xs' aria-hidden='true' />
-        )}
-      </button>
-    </li>
-  );
-}

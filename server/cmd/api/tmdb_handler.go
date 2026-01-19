@@ -20,9 +20,8 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	const maxMovies = 12
-	if len(movies) > maxMovies {
-		movies = movies[:maxMovies]
+	if len(movies) > helpers.TMDB_MAX_ITEMS {
+		movies = movies[:helpers.TMDB_MAX_ITEMS]
 	}
 
 	res := helpers.JSONResponse{

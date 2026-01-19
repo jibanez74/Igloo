@@ -1,16 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { z } from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import {
@@ -19,7 +13,6 @@ import {
   musicStatsQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
-import { formatTrackDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import {
@@ -31,6 +24,7 @@ import {
 import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
 import LibraryPagination from "@/components/LibraryPagination";
+import TrackItem from "@/components/TrackItem";
 import type { TrackListItemType, VirtualItem } from "@/types";
 
 const musicSearchSchema = z.object({
@@ -597,7 +591,6 @@ function TrackListItem({ track }: { track: TrackListItemType }) {
   const audioPlayer = useAudioPlayer();
 
   const handlePlay = () => {
-    // Convert to TrackType using the shared utility (DRY)
     const audioTrack = convertToAudioTrack({
       id: track.id,
       title: track.title,
@@ -621,73 +614,25 @@ function TrackListItem({ track }: { track: TrackListItemType }) {
   };
 
   return (
-    <div className="group flex animate-in items-center gap-4 border-b border-slate-800 px-4 py-3 duration-300 fade-in last:border-b-0 hover:bg-slate-800/50">
-      {/* Play button - always visible */}
-      <button
-        onClick={handlePlay}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-colors hover:bg-amber-400"
-        aria-label={`Play ${track.title}`}
-      >
-        <i className="fa-solid fa-play ml-0.5 text-sm" aria-hidden="true" />
-      </button>
-
-      {/* Track info */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-white">{track.title}</p>
-        <p className="truncate text-sm text-slate-400">
-          {track.musician_name.Valid
-            ? track.musician_name.String
-            : "Unknown Artist"}
-        </p>
-      </div>
-
-      {/* Duration */}
-      <span className="hidden text-sm text-slate-400 tabular-nums sm:block">
-        {formatTrackDuration(track.duration)}
-      </span>
-
-      {/* More menu - dropdown */}
-      <TrackActionsMenu track={track} />
-    </div>
-  );
-}
-
-function TrackActionsMenu({ track }: { track: TrackListItemType }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-          aria-label="More actions"
-        >
-          <i className="fa-solid fa-ellipsis-vertical" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="border-slate-700 bg-slate-800 text-white"
-      >
-        {track.album_id.Valid && (
-          <DropdownMenuItem
-            asChild
-            className="cursor-pointer hover:bg-slate-700"
-          >
-            <Link
-              to="/music/album/$id"
-              params={{ id: track.album_id.Int64.toString() }}
-            >
-              <i
-                className="fa-solid fa-compact-disc mr-2 text-amber-400"
-                aria-hidden="true"
-              />
-              Go to Album
-            </Link>
-          </DropdownMenuItem>
-        )}
-        {/* TODO: Add to queue when audio player supports it */}
-        {/* TODO: Go to Artist when artist pages are implemented */}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <TrackItem
+      id={track.id}
+      title={track.title}
+      duration={track.duration}
+      subtitle={
+        track.musician_name.Valid
+          ? track.musician_name.String
+          : "Unknown Artist"
+      }
+      albumId={track.album_id.Valid ? Number(track.album_id.Int64) : null}
+      albumTitle={track.album_title.Valid ? track.album_title.String : undefined}
+      musicianId={track.musician_id?.Valid ? Number(track.musician_id.Int64) : null}
+      musicianName={track.musician_name.Valid ? track.musician_name.String : undefined}
+      variant="library"
+      isPlaying={audioPlayer.currentTrack?.id === track.id && audioPlayer.isPlaying}
+      isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
+      onPlay={handlePlay}
+      showActionsMenu
+    />
   );
 }
 

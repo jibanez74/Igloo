@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
-import { formatDuration, formatTrackDuration } from "@/lib/format";
+import TrackItem from "@/components/TrackItem";
+import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import type {
   MusicianAlbumType,
@@ -324,17 +325,26 @@ function MusicianDetailsContent({
           </h2>
 
           <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
-            <ul className="divide-y divide-slate-700/30">
+            <div className="divide-y divide-slate-700/30">
               {tracks.map((track) => (
-                <TrackRow
+                <TrackItem
                   key={track.id}
-                  track={track}
+                  id={track.id}
+                  title={track.title}
+                  duration={track.duration}
+                  subtitle={
+                    track.album_title?.Valid
+                      ? track.album_title.String
+                      : "Unknown Album"
+                  }
+                  albumId={track.album_id?.Valid ? Number(track.album_id.Int64) : null}
+                  variant="musician"
                   isPlaying={isTrackPlaying(track)}
                   isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
                   onPlay={() => handlePlayTrack(track)}
                 />
               ))}
-            </ul>
+            </div>
           </div>
         </section>
       )}
@@ -398,54 +408,3 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
   );
 }
 
-type TrackRowProps = {
-  track: MusicianTrackType;
-  isPlaying: boolean;
-  isCurrentTrack: boolean;
-  onPlay: () => void;
-};
-
-function TrackRow({ track, isPlaying, isCurrentTrack, onPlay }: TrackRowProps) {
-  const albumTitle = track.album_title?.Valid
-    ? track.album_title.String
-    : "Unknown Album";
-
-  return (
-    <li
-      className={`group flex items-center gap-3 px-3 py-3 transition-colors hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
-        isCurrentTrack ? "bg-slate-800/40" : ""
-      }`}
-    >
-      {/* Play button - always visible on mobile, hover-reveal on desktop */}
-      <button
-        onClick={onPlay}
-        className={`flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400 ${
-          isCurrentTrack ? "opacity-100" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-        }`}
-        title={isPlaying ? "Pause track" : "Play track"}
-        aria-label={isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-      >
-        {isPlaying ? (
-          <i className="fa-solid fa-pause text-xs" aria-hidden="true" />
-        ) : (
-          <i className="fa-solid fa-play ml-0.5 text-xs" aria-hidden="true" />
-        )}
-      </button>
-
-      {/* Track info */}
-      <div className="min-w-0 flex-1">
-        <p
-          className={`truncate font-medium ${isCurrentTrack ? "text-amber-400" : "text-white"}`}
-        >
-          {track.title}
-        </p>
-        <p className="truncate text-sm text-slate-400">{albumTitle}</p>
-      </div>
-
-      {/* Duration */}
-      <span className="shrink-0 text-sm text-slate-500 tabular-nums">
-        {formatTrackDuration(track.duration)}
-      </span>
-    </li>
-  );
-}

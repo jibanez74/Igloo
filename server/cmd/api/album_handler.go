@@ -14,7 +14,6 @@ import (
 // GetAlbumsAlphabetical returns a paginated list of albums sorted alphabetically.
 // Supports query parameters: page (default 1), per_page (default 24, max 48)
 func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
-	// Parse page with default of 1
 	page := int64(1)
 	if p := r.URL.Query().Get("page"); p != "" {
 		parsed, err := strconv.ParseInt(p, 10, 64)
@@ -23,7 +22,6 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Parse per_page with default of 24 and max of 48
 	perPage := int64(24)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
@@ -31,14 +29,13 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 			perPage = parsed
 		}
 	}
+
 	if perPage > 48 {
 		perPage = 48
 	}
 
-	// Calculate offset from page number
 	offset := (page - 1) * perPage
 
-	// Get total count for pagination
 	total, err := app.Queries.GetAlbumsCount(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to get albums count", "error", err)
@@ -46,18 +43,17 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get paginated albums
 	albums, err := app.Queries.GetAlbumsAlphabetical(r.Context(), database.GetAlbumsAlphabeticalParams{
 		Limit:  perPage,
 		Offset: offset,
 	})
+
 	if err != nil {
 		app.Logger.Error("failed to get albums", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch albums"))
 		return
 	}
 
-	// Calculate total pages
 	totalPages := total / perPage
 	if total%perPage > 0 {
 		totalPages++
@@ -114,6 +110,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 			helpers.ErrorJSON(w, errors.New("album not found"), http.StatusNotFound)
 			return
 		}
+
 		app.Logger.Error("failed to get album", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch album from server"))
 		return
@@ -145,6 +142,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	// Calculate total duration
 	var totalDuration int64
+
 	for _, track := range tracks {
 		totalDuration += track.Duration
 	}
@@ -155,6 +153,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 		genreSet[g.Tag] = struct{}{}
 	}
 	albumGenres := make([]string, 0, len(genreSet))
+
 	for tag := range genreSet {
 		albumGenres = append(albumGenres, tag)
 	}
@@ -192,6 +191,7 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New("album not found"), http.StatusNotFound)
 			return
 		}
+
 		app.Logger.Error("failed to get album for deletion", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to verify album exists"))
 		return
