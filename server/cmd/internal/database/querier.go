@@ -16,6 +16,8 @@ type Querier interface {
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Deleting an album will cascade delete all associated tracks
+	DeleteAlbum(ctx context.Context, id int64) error
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
 	// Deletes all genre relationships for a track except the specified genre.
 	// Used to efficiently update genres: only removes stale relationships.

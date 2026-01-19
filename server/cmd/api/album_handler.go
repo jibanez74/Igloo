@@ -173,3 +173,44 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
+
+// DeleteAlbum deletes an album. Associated tracks are cascade deleted by the database.
+func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid album id"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Verify the album exists and get title for logging
+	album, err := app.Queries.GetAlbumByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("album not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get album for deletion", "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New("failed to verify album exists"))
+		return
+	}
+
+	// Delete the album (cascade will delete tracks, musician_albums, and album_genres)
+	err = app.Queries.DeleteAlbum(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to delete album", "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New("failed to delete album"))
+		return
+	}
+
+	app.Logger.Info("album deleted successfully", "id", id, "title", album.Title)
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Album deleted successfully",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}

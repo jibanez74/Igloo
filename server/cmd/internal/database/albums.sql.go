@@ -10,6 +10,16 @@ import (
 	"database/sql"
 )
 
+const deleteAlbum = `-- name: DeleteAlbum :exec
+DELETE FROM albums WHERE id = ?
+`
+
+// Deleting an album will cascade delete all associated tracks
+func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.deleteAlbumStmt, deleteAlbum, id)
+	return err
+}
+
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
   id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at

@@ -80,3 +80,7 @@ SET
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP RETURNING *;
+
+-- name: DeleteAlbum :exec
+-- Deleting an album will cascade delete all associated tracks
+DELETE FROM albums WHERE id = ?;

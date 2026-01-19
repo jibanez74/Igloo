@@ -1,6 +1,24 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
+import { deleteAlbum } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import {
   formatDate,
@@ -68,10 +86,49 @@ function AlbumDetailsContent({
   total_duration,
 }: AlbumDetailsResponseType) {
   const audioPlayer = useAudioPlayer();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const coverUrl = album.cover.Valid ? album.cover.String : null;
   const releaseYear = album.year.Valid ? album.year.Int64 : null;
   const musicianName = album.musician.Valid ? album.musician.String : null;
+
+  const handleDeleteAlbum = async () => {
+    setIsDeleting(true);
+
+    try {
+      const result = await deleteAlbum(album.id);
+
+      if (result.error) {
+        toast.error("Delete failed", {
+          description: result.message || "Unable to delete album. Please try again.",
+        });
+        return;
+      }
+
+      toast.success("Album deleted", {
+        description: `"${album.title}" has been removed from your library.`,
+      });
+
+      // Invalidate album queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["albums"] });
+      queryClient.invalidateQueries({ queryKey: ["music-stats"] });
+
+      // Navigate back to music page
+      navigate({ to: "/music", search: { tab: "albums" } });
+    } catch (error) {
+      console.error("Failed to delete album:", error);
+      toast.error("Delete failed", {
+        description: "An unexpected error occurred. Please try again.",
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
 
   // Build a map of track_id -> genre tags for easy lookup
   const trackGenreMap = new Map<number, string[]>();
@@ -252,7 +309,7 @@ function AlbumDetailsContent({
             </ul>
           )}
 
-          {/* Play Album and Shuffle buttons */}
+          {/* Play Album, Shuffle, and More buttons */}
           <div className='mt-6 flex flex-wrap gap-3'>
             <button
               onClick={handlePlayAlbum}
@@ -269,7 +326,80 @@ function AlbumDetailsContent({
               <i className='fa-solid fa-shuffle' aria-hidden='true' />
               Shuffle
             </button>
+
+            {/* More options dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className='inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-600'
+                  aria-label='More options'
+                >
+                  <i className='fa-solid fa-ellipsis' aria-hidden='true' />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align='end'
+                className='border-slate-700 bg-slate-800'
+              >
+                <DropdownMenuItem
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  className='cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-400'
+                >
+                  <i className='fa-solid fa-trash mr-2' aria-hidden='true' />
+                  Delete Album
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+
+          {/* Delete confirmation dialog */}
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent className='border-slate-700 bg-slate-900 text-white'>
+              <DialogHeader>
+                <DialogTitle className='text-white'>Delete Album</DialogTitle>
+                <DialogDescription className='text-slate-400'>
+                  Are you sure you want to delete "{album.title}"? This action
+                  cannot be undone and will permanently remove:
+                </DialogDescription>
+              </DialogHeader>
+
+              <ul className='ml-4 list-disc space-y-1 text-sm text-slate-300'>
+                <li>The album and all its metadata</li>
+                <li>
+                  All {tracks.length} {tracks.length === 1 ? "track" : "tracks"}{" "}
+                  associated with this album
+                </li>
+                <li>All genre and artist associations</li>
+              </ul>
+
+              <DialogFooter className='gap-2 sm:gap-0'>
+                <button
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={isDeleting}
+                  className='rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-600 disabled:opacity-50'
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAlbum}
+                  disabled={isDeleting}
+                  className='rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50'
+                >
+                  {isDeleting ? (
+                    <>
+                      <i
+                        className='fa-solid fa-spinner fa-spin mr-2'
+                        aria-hidden='true'
+                      />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Album"
+                  )}
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Artists section */}
           {artists.length > 0 && (

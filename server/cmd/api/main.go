@@ -490,11 +490,12 @@ func (app *Application) InitRouter() {
 		r.Route("/music", func(r chi.Router) {
 			r.Get("/stats", app.GetMusicStats)
 
-			r.Route("/albums", func(r chi.Router) {
-				r.Get("/", app.GetAlbumsAlphabetical)
-				r.Get("/details/{id}", app.GetAlbumDetails)
-				r.Get("/latest", app.GetLatestAlbums)
-			})
+		r.Route("/albums", func(r chi.Router) {
+			r.Get("/", app.GetAlbumsAlphabetical)
+			r.Get("/details/{id}", app.GetAlbumDetails)
+			r.Get("/latest", app.GetLatestAlbums)
+			r.Delete("/{id}", app.DeleteAlbum)
+		})
 
 			r.Route("/musicians", func(r chi.Router) {
 				r.Get("/", app.GetMusiciansAlphabetical)

@@ -39,6 +39,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createUserStmt, err = db.PrepareContext(ctx, createUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUser: %w", err)
 	}
+	if q.deleteAlbumStmt, err = db.PrepareContext(ctx, deleteAlbum); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteAlbum: %w", err)
+	}
 	if q.deleteTrackGenresStmt, err = db.PrepareContext(ctx, deleteTrackGenres); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteTrackGenres: %w", err)
 	}
@@ -166,6 +169,11 @@ func (q *Queries) Close() error {
 	if q.createUserStmt != nil {
 		if cerr := q.createUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createUserStmt: %w", cerr)
+		}
+	}
+	if q.deleteAlbumStmt != nil {
+		if cerr := q.deleteAlbumStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteAlbumStmt: %w", cerr)
 		}
 	}
 	if q.deleteTrackGenresStmt != nil {
@@ -377,6 +385,7 @@ type Queries struct {
 	createSettingsStmt           *sql.Stmt
 	createTrackGenreStmt         *sql.Stmt
 	createUserStmt               *sql.Stmt
+	deleteAlbumStmt              *sql.Stmt
 	deleteTrackGenresStmt        *sql.Stmt
 	deleteTrackGenresExceptStmt  *sql.Stmt
 	getAdminUserStmt             *sql.Stmt
@@ -421,6 +430,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createSettingsStmt:           q.createSettingsStmt,
 		createTrackGenreStmt:         q.createTrackGenreStmt,
 		createUserStmt:               q.createUserStmt,
+		deleteAlbumStmt:              q.deleteAlbumStmt,
 		deleteTrackGenresStmt:        q.deleteTrackGenresStmt,
 		deleteTrackGenresExceptStmt:  q.deleteTrackGenresExceptStmt,
 		getAdminUserStmt:             q.getAdminUserStmt,

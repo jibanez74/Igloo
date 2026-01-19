@@ -152,6 +152,26 @@ export async function getAlbumDetails(
   }
 }
 
+export async function deleteAlbum(
+  id: number
+): Promise<ApiResponseType<Record<string, never>> | ApiFailureType> {
+  try {
+    const res = await fetch(`/api/music/albums/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (res.status === 404) {
+      return ERROR_NOTFOUND;
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error(err);
+    return NETWORK_ERROR;
+  }
+}
+
 export async function getAlbumsPaginated(
   page: number,
   perPage: number = 24
