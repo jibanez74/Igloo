@@ -21,10 +21,8 @@ import { defineConfig, globalIgnores } from "eslint/config";
  * React Compiler Strict Mode:
  * All React Compiler rules are set to 'error' to enforce best practices.
  * Use eslint-disable comments sparingly for legitimate exceptions.
- *
- * Note: CSS file linting is handled by Tailwind IntelliSense in VS Code,
- * as @eslint/css with tailwind-csstree has parsing issues with some v4 syntax.
  */
+
 export default defineConfig([
   globalIgnores(["dist"]),
 

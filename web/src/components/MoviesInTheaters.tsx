@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Film } from "lucide-react";
 import { inTheatersQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
@@ -48,7 +49,7 @@ export default function MoviesInTheaters() {
           variant='destructive'
           className='border-red-500/20 bg-red-500/10 text-red-400'
         >
-          <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
+          <AlertCircle className="size-4" aria-hidden="true" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             {data.message || "Failed to load movies. Please try again later."}
@@ -72,7 +73,7 @@ export default function MoviesInTheaters() {
       ) : (
         <div className='py-12 text-center'>
           <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-slate-800'>
-            <i className='fa-solid fa-film text-2xl text-cyan-600'></i>
+            <Film className="size-6 text-cyan-600" aria-hidden="true" />
           </div>
           <h3 className='mb-2 text-lg font-semibold text-slate-300'>
             No Movies Available

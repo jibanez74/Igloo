@@ -7,13 +7,20 @@ import type {
   MusicianDetailsResponseType,
   MusicStatsType,
   MusiciansListResponseType,
+  PlaylistDetailResponseType,
+  PlaylistsListResponseType,
+  PlaylistSummaryType,
+  PlaylistTracksResponseType,
   ShuffleTracksResponseType,
   SimpleAlbumType,
   TheaterMovieType,
   TracksListResponseType,
 } from "@/types";
 
-// constants for error handling
+// ============================================================================
+// API Client - Generic request handler
+// ============================================================================
+
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
@@ -24,141 +31,29 @@ const NETWORK_ERROR: ApiFailureType = {
   message: "500 - A network error occurred while processing your request.",
 };
 
-// api calls for authentication purposes
-export async function login(email: string, password: string) {
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+type ApiRequestOptions = {
+  method?: HttpMethod;
+  body?: unknown;
+};
+
+/**
+ * Generic API request handler that consolidates error handling and fetch configuration.
+ * All API functions should use this to avoid repetition.
+ */
+async function apiRequest<T>(
+  endpoint: string,
+  options: ApiRequestOptions = {}
+): Promise<ApiResponseType<T>> {
+  const { method = "GET", body } = options;
+
   try {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+    const res = await fetch(endpoint, {
+      method,
       credentials: "include",
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    return res.json();
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getAuthUser() {
-  try {
-    const res = await fetch("/api/auth/user", {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    return res.json();
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-// functions for home page
-export async function getLatestAlbums(): Promise<
-  ApiResponseType<{ albums: SimpleAlbumType[] }>
-> {
-  try {
-    const res = await fetch("/api/music/albums/latest", {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<{ albums: SimpleAlbumType[] }> =
-      await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getMoviesInTheaters(): Promise<
-  ApiResponseType<{ movies: TheaterMovieType[] }>
-> {
-  try {
-    const res = await fetch("/api/tmdb/movies/in-theaters", {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<{ movies: TheaterMovieType[] }> =
-      await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getMovieInTheaterDetails(
-  id: number
-): Promise<ApiResponseType<{ movie: MovieDetailsType }>> {
-  try {
-    const res = await fetch(`/api/tmdb/movies/${id}`, {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<{ movie: MovieDetailsType }> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-// api calls for music
-export async function getAlbumDetails(
-  id: number
-): Promise<ApiResponseType<AlbumDetailsResponseType>> {
-  try {
-    const res = await fetch(`/api/music/albums/details/${id}`, {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<AlbumDetailsResponseType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function deleteAlbum(
-  id: number
-): Promise<ApiResponseType<Record<string, never>> | ApiFailureType> {
-  try {
-    const res = await fetch(`/api/music/albums/${id}`, {
-      method: "DELETE",
-      credentials: "include",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
     });
 
     if (res.status === 404) {
@@ -172,135 +67,149 @@ export async function deleteAlbum(
   }
 }
 
-export async function getAlbumsPaginated(
-  page: number,
-  perPage: number = 24
-): Promise<ApiResponseType<AlbumsListResponseType>> {
-  try {
-    const res = await fetch(
-      `/api/music/albums?page=${page}&per_page=${perPage}`,
-      {
-        credentials: "include",
-      }
-    );
+// ============================================================================
+// Authentication API
+// ============================================================================
 
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
+export const login = (email: string, password: string) =>
+  apiRequest("/api/auth/login", {
+    method: "POST",
+    body: { email, password },
+  });
+
+export const getAuthUser = () => apiRequest("/api/auth/user");
+
+// ============================================================================
+// Home Page API
+// ============================================================================
+
+export const getLatestAlbums = () =>
+  apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
+
+export const getMoviesInTheaters = () =>
+  apiRequest<{ movies: TheaterMovieType[] }>("/api/tmdb/movies/in-theaters");
+
+export const getMovieInTheaterDetails = (id: number) =>
+  apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`);
+
+// ============================================================================
+// Music API - Albums
+// ============================================================================
+
+export const getAlbumDetails = (id: number) =>
+  apiRequest<AlbumDetailsResponseType>(`/api/music/albums/details/${id}`);
+
+export const deleteAlbum = (id: number) =>
+  apiRequest<Record<string, never>>(`/api/music/albums/${id}`, {
+    method: "DELETE",
+  });
+
+export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
+  apiRequest<AlbumsListResponseType>(
+    `/api/music/albums?page=${page}&per_page=${perPage}`
+  );
+
+// ============================================================================
+// Music API - Tracks
+// ============================================================================
+
+export const getTracksPaginated = (limit: number, offset: number) =>
+  apiRequest<TracksListResponseType>(
+    `/api/music/tracks?limit=${limit}&offset=${offset}`
+  );
+
+export const getShuffleTracks = (limit: number = 50) =>
+  apiRequest<ShuffleTracksResponseType>(
+    `/api/music/tracks/shuffle?limit=${limit}`
+  );
+
+export const toggleLikeTrack = (trackId: number) =>
+  apiRequest<{ track_id: number; is_liked: boolean }>(
+    `/api/music/tracks/${trackId}/like`,
+    { method: "POST" }
+  );
+
+export const getLikedTrackIds = () =>
+  apiRequest<{ liked_track_ids: number[] }>("/api/music/tracks/liked");
+
+// ============================================================================
+// Music API - Musicians
+// ============================================================================
+
+export const getMusiciansPaginated = (page: number, perPage: number = 24) =>
+  apiRequest<MusiciansListResponseType>(
+    `/api/music/musicians?page=${page}&per_page=${perPage}`
+  );
+
+export const getMusicianDetails = (id: number) =>
+  apiRequest<MusicianDetailsResponseType>(`/api/music/musicians/${id}`);
+
+// ============================================================================
+// Music API - Stats
+// ============================================================================
+
+export const getMusicStats = () =>
+  apiRequest<MusicStatsType>("/api/music/stats");
+
+// ============================================================================
+// Playlist API
+// ============================================================================
+
+export const getPlaylists = () =>
+  apiRequest<PlaylistsListResponseType>("/api/music/playlists");
+
+export const getPlaylistDetails = (id: number) =>
+  apiRequest<PlaylistDetailResponseType>(`/api/music/playlists/${id}`);
+
+export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
+  apiRequest<PlaylistTracksResponseType>(
+    `/api/music/playlists/${id}/tracks?limit=${limit}&offset=${offset}`
+  );
+
+export const createPlaylist = (data: {
+  name: string;
+  description?: string;
+  is_public?: boolean;
+}) =>
+  apiRequest<{ playlist: PlaylistSummaryType }>("/api/music/playlists", {
+    method: "POST",
+    body: data,
+  });
+
+export const updatePlaylist = (
+  id: number,
+  data: { name: string; description?: string; is_public?: boolean }
+) =>
+  apiRequest<{ playlist: PlaylistSummaryType }>(`/api/music/playlists/${id}`, {
+    method: "PUT",
+    body: data,
+  });
+
+export const deletePlaylist = (id: number) =>
+  apiRequest<Record<string, never>>(`/api/music/playlists/${id}`, {
+    method: "DELETE",
+  });
+
+export const addTracksToPlaylist = (playlistId: number, trackIds: number[]) =>
+  apiRequest<{ added: number; skipped: number }>(
+    `/api/music/playlists/${playlistId}/tracks`,
+    {
+      method: "POST",
+      body: { track_ids: trackIds },
     }
+  );
 
-    const data: ApiResponseType<AlbumsListResponseType> = await res.json();
+export const removeTrackFromPlaylist = (playlistId: number, trackId: number) =>
+  apiRequest<Record<string, never>>(
+    `/api/music/playlists/${playlistId}/tracks/${trackId}`,
+    { method: "DELETE" }
+  );
 
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getTracksPaginated(
-  limit: number,
-  offset: number
-): Promise<ApiResponseType<TracksListResponseType>> {
-  try {
-    const res = await fetch(`/api/music/tracks?limit=${limit}&offset=${offset}`, {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
+export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
+  apiRequest<Record<string, never>>(
+    `/api/music/playlists/${playlistId}/tracks/reorder`,
+    {
+      method: "PUT",
+      body: { track_ids: trackIds },
     }
-
-    const data: ApiResponseType<TracksListResponseType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getMusicStats(): Promise<ApiResponseType<MusicStatsType>> {
-  try {
-    const res = await fetch("/api/music/stats", {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<MusicStatsType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getShuffleTracks(
-  limit: number = 50
-): Promise<ApiResponseType<ShuffleTracksResponseType>> {
-  try {
-    const res = await fetch(`/api/music/tracks/shuffle?limit=${limit}`, {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<ShuffleTracksResponseType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getMusiciansPaginated(
-  page: number,
-  perPage: number = 24
-): Promise<ApiResponseType<MusiciansListResponseType>> {
-  try {
-    const res = await fetch(
-      `/api/music/musicians?page=${page}&per_page=${perPage}`,
-      {
-        credentials: "include",
-      }
-    );
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<MusiciansListResponseType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
-
-export async function getMusicianDetails(
-  id: number
-): Promise<ApiResponseType<MusicianDetailsResponseType>> {
-  try {
-    const res = await fetch(`/api/music/musicians/${id}`, {
-      credentials: "include",
-    });
-
-    if (res.status === 404) {
-      return ERROR_NOTFOUND;
-    }
-
-    const data: ApiResponseType<MusicianDetailsResponseType> = await res.json();
-
-    return data;
-  } catch (err) {
-    console.error(err);
-    return NETWORK_ERROR;
-  }
-}
+  );

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -80,10 +81,7 @@ export default function YoutubePlayer({
               {/* Loading overlay while player initializes */}
               {!isReady && (
                 <div className='absolute inset-0 flex items-center justify-center bg-slate-900'>
-                  <i
-                    className='fa-solid fa-spinner fa-spin text-4xl text-amber-400'
-                    aria-hidden='true'
-                  />
+                  <Loader2 className="size-10 animate-spin text-amber-400" aria-hidden="true" />
                 </div>
               )}
             </>

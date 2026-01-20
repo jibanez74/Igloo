@@ -9,6 +9,9 @@ import {
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
+  getPlaylistDetails,
+  getPlaylists,
+  getPlaylistTracks,
   getTracksPaginated,
 } from "@/lib/api";
 import {
@@ -21,6 +24,9 @@ import {
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
+  PLAYLIST_DETAILS_KEY,
+  PLAYLIST_TRACKS_KEY,
+  PLAYLISTS_KEY,
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 
@@ -100,5 +106,38 @@ export function musicianDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MUSICIAN_DETAILS_KEY, id],
     queryFn: () => getMusicianDetails(id),
+  });
+}
+
+// Playlist query options
+export function playlistsQueryOpts() {
+  return queryOptions({
+    queryKey: [PLAYLISTS_KEY],
+    queryFn: getPlaylists,
+  });
+}
+
+export function playlistDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [PLAYLIST_DETAILS_KEY, id],
+    queryFn: () => getPlaylistDetails(id),
+    enabled: id > 0,
+  });
+}
+
+export function playlistTracksInfiniteQueryOpts(
+  playlistId: number,
+  pageSize = 50
+) {
+  return infiniteQueryOptions({
+    queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+    queryFn: ({ pageParam = 0 }) =>
+      getPlaylistTracks(playlistId, pageSize, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      if (lastPage.error || !lastPage.data?.has_more) return undefined;
+      return lastPage.data.next_offset;
+    },
+    enabled: playlistId > 0,
   });
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
 
 type VolumeControlProps = {
   audioRef: React.RefObject<HTMLAudioElement | null>;
@@ -53,14 +54,15 @@ export default function VolumeControl({
     }
   };
 
-  const getVolumeIcon = () => {
-    if (isMuted || volume === 0) return "fa-volume-xmark";
-    if (volume < 0.3) return "fa-volume-off";
-    if (volume < 0.7) return "fa-volume-low";
-    return "fa-volume-high";
-  };
-
   const isExpanded = variant === "expanded";
+  const iconClassName = isExpanded ? "size-5" : "size-4";
+
+  const getVolumeIcon = () => {
+    if (isMuted || volume === 0) return <VolumeX className={iconClassName} />;
+    if (volume < 0.3) return <Volume className={iconClassName} />;
+    if (volume < 0.7) return <Volume1 className={iconClassName} />;
+    return <Volume2 className={iconClassName} />;
+  };
 
   return (
     <div
@@ -75,10 +77,7 @@ export default function VolumeControl({
         }`}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
-        <i
-          className={`fa-solid ${getVolumeIcon()} ${isExpanded ? "text-lg" : ""}`}
-          aria-hidden="true"
-        />
+        {getVolumeIcon()}
       </button>
 
       {/* Volume slider - always visible in expanded, hover in minimized */}

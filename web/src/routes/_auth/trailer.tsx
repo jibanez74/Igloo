@@ -2,6 +2,21 @@ import { useRef, useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Film,
+  Loader2,
+  X,
+  Rewind,
+  FastForward,
+  Pause,
+  Play,
+  VolumeX,
+  Volume1,
+  Volume2,
+  Maximize,
+} from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 
@@ -231,10 +246,7 @@ function TrailerPage() {
       >
         <div className='max-w-md px-4 text-center'>
           <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10'>
-            <i
-              className='fa-solid fa-circle-exclamation text-4xl text-red-400'
-              aria-hidden='true'
-            />
+            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
           </div>
           <h2 className='mb-2 text-xl font-semibold text-white'>
             Unable to Play Trailer
@@ -245,7 +257,7 @@ function TrailerPage() {
             onClick={handleClose}
             className='rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
           >
-            <i className='fa-solid fa-arrow-left mr-2' aria-hidden='true' />
+            <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
           </button>
         </div>
@@ -265,10 +277,7 @@ function TrailerPage() {
       >
         <div className='max-w-md px-4 text-center'>
           <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-800'>
-            <i
-              className='fa-solid fa-film text-4xl text-slate-500'
-              aria-hidden='true'
-            />
+            <Film className="size-10 text-slate-500" aria-hidden="true" />
           </div>
           <h2 className='mb-2 text-xl font-semibold text-white'>
             No Trailer Available
@@ -281,7 +290,7 @@ function TrailerPage() {
             onClick={handleClose}
             className='rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
           >
-            <i className='fa-solid fa-arrow-left mr-2' aria-hidden='true' />
+            <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
           </button>
         </div>
@@ -300,10 +309,7 @@ function TrailerPage() {
       >
         <div className='text-center'>
           <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10'>
-            <i
-              className='fa-solid fa-spinner fa-spin text-4xl text-amber-400'
-              aria-hidden='true'
-            />
+            <Loader2 className="size-10 animate-spin text-amber-400" aria-hidden="true" />
           </div>
           <p className='text-lg font-medium text-white'>Loading trailer...</p>
           <p className='mt-2 text-sm text-slate-400'>Please wait</p>
@@ -339,7 +345,7 @@ function TrailerPage() {
       {/* Header with close button */}
       <header className='flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg'>
         <div className='flex items-center gap-3'>
-          <i className='fa-solid fa-film text-amber-400' aria-hidden='true' />
+          <Film className="size-5 text-amber-400" aria-hidden="true" />
           <div>
             <h1 className='truncate text-base font-semibold text-white'>
               {title}
@@ -353,7 +359,7 @@ function TrailerPage() {
           className='flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
           aria-label='Close trailer (Escape)'
         >
-          <i className='fa-solid fa-xmark text-lg' aria-hidden='true' />
+          <X className="size-5" aria-hidden="true" />
         </button>
       </header>
 
@@ -368,10 +374,7 @@ function TrailerPage() {
           <div className='absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm'>
             <div className='text-center'>
               <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10'>
-                <i
-                  className='fa-solid fa-spinner fa-spin text-3xl text-amber-400'
-                  aria-hidden='true'
-                />
+                <Loader2 className="size-8 animate-spin text-amber-400" aria-hidden="true" />
               </div>
               <p className='font-medium text-white'>Loading trailer...</p>
             </div>
@@ -432,7 +435,7 @@ function TrailerPage() {
                 className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Rewind 10 seconds (J or Left Arrow)'
               >
-                <i className='fa-solid fa-backward' aria-hidden='true' />
+                <Rewind className="size-5" aria-hidden="true" />
               </button>
 
               {/* Play/Pause */}
@@ -444,12 +447,9 @@ function TrailerPage() {
                 }
               >
                 {isPlaying ? (
-                  <i className='fa-solid fa-pause text-xl' aria-hidden='true' />
+                  <Pause className="size-6 fill-current" aria-hidden="true" />
                 ) : (
-                  <i
-                    className='fa-solid fa-play ml-1 text-xl'
-                    aria-hidden='true'
-                  />
+                  <Play className="size-6 fill-current" aria-hidden="true" />
                 )}
               </button>
 
@@ -459,7 +459,7 @@ function TrailerPage() {
                 className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Forward 10 seconds (L or Right Arrow)'
               >
-                <i className='fa-solid fa-forward' aria-hidden='true' />
+                <FastForward className="size-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -472,11 +472,11 @@ function TrailerPage() {
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
                 {isMuted || volume === 0 ? (
-                  <i className='fa-solid fa-volume-xmark' aria-hidden='true' />
+                  <VolumeX className="size-5" aria-hidden="true" />
                 ) : volume < 50 ? (
-                  <i className='fa-solid fa-volume-low' aria-hidden='true' />
+                  <Volume1 className="size-5" aria-hidden="true" />
                 ) : (
-                  <i className='fa-solid fa-volume-high' aria-hidden='true' />
+                  <Volume2 className="size-5" aria-hidden="true" />
                 )}
               </button>
 
@@ -486,7 +486,7 @@ function TrailerPage() {
                 className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Toggle fullscreen (F)'
               >
-                <i className='fa-solid fa-expand' aria-hidden='true' />
+                <Maximize className="size-5" aria-hidden="true" />
               </button>
             </div>
           </div>

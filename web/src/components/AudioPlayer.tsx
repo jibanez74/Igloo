@@ -1,4 +1,15 @@
 import { useRef, useState, useEffect } from "react";
+import {
+  ChevronDown,
+  ChevronUp,
+  X,
+  Disc3,
+  SkipBack,
+  SkipForward,
+  Pause,
+  Play,
+  Loader2,
+} from "lucide-react";
 import type { TrackType } from "@/types";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
@@ -318,10 +329,7 @@ export default function AudioPlayer({
               className='flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
               aria-label='Minimize player (Escape)'
             >
-              <i
-                className='fa-solid fa-chevron-down text-lg'
-                aria-hidden='true'
-              />
+              <ChevronDown className="size-5" aria-hidden="true" />
             </button>
             <div className='text-center' id='player-header'>
               <p className='text-xs tracking-widest text-slate-500 uppercase'>
@@ -335,7 +343,7 @@ export default function AudioPlayer({
                 className='flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
-                <i className='fa-solid fa-xmark text-lg' aria-hidden='true' />
+                <X className="size-5" aria-hidden="true" />
               </button>
             ) : (
               <div className='h-10 w-10' aria-hidden='true' />
@@ -358,10 +366,7 @@ export default function AudioPlayer({
                   role='img'
                   aria-label='No album cover available'
                 >
-                  <i
-                    className='fa-solid fa-compact-disc text-8xl text-slate-600'
-                    aria-hidden='true'
-                  />
+                  <Disc3 className="size-24 text-slate-600" aria-hidden="true" />
                 </div>
               )}
             </figure>
@@ -401,10 +406,7 @@ export default function AudioPlayer({
                     : "No previous track"
                 }
               >
-                <i
-                  className='fa-solid fa-backward-step text-2xl'
-                  aria-hidden='true'
-                />
+                <SkipBack className="size-6" aria-hidden="true" />
               </button>
 
               <button
@@ -421,20 +423,11 @@ export default function AudioPlayer({
                 }
               >
                 {isLoading ? (
-                  <i
-                    className='fa-solid fa-spinner fa-spin text-3xl'
-                    aria-hidden='true'
-                  />
+                  <Loader2 className="size-8 animate-spin" aria-hidden="true" />
                 ) : isPlaying ? (
-                  <i
-                    className='fa-solid fa-pause text-3xl'
-                    aria-hidden='true'
-                  />
+                  <Pause className="size-8 fill-current" aria-hidden="true" />
                 ) : (
-                  <i
-                    className='fa-solid fa-play ml-1 text-3xl'
-                    aria-hidden='true'
-                  />
+                  <Play className="size-8 fill-current" aria-hidden="true" />
                 )}
               </button>
 
@@ -448,10 +441,7 @@ export default function AudioPlayer({
                     : "No next track"
                 }
               >
-                <i
-                  className='fa-solid fa-forward-step text-2xl'
-                  aria-hidden='true'
-                />
+                <SkipForward className="size-6" aria-hidden="true" />
               </button>
             </div>
 
@@ -472,7 +462,7 @@ export default function AudioPlayer({
       <div
         role='region'
         aria-label='Audio player'
-        className='fixed right-0 bottom-0 left-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
+        className='fixed inset-x-0 bottom-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
           backdrop-blur-lg duration-300 fade-in slide-in-from-bottom'
       >
         <div className='mx-auto max-w-7xl px-4 py-3'>
@@ -493,10 +483,7 @@ export default function AudioPlayer({
                   />
                 ) : (
                   <div className='flex h-full w-full items-center justify-center'>
-                    <i
-                      className='fa-solid fa-compact-disc text-lg text-slate-600'
-                      aria-hidden='true'
-                    />
+                    <Disc3 className="size-5 text-slate-600" aria-hidden="true" />
                   </div>
                 )}
               </div>
@@ -527,7 +514,7 @@ export default function AudioPlayer({
                     : "No previous track"
                 }
               >
-                <i className='fa-solid fa-backward-step' aria-hidden='true' />
+                <SkipBack className="size-4" aria-hidden="true" />
               </button>
 
               {/* Play/Pause button */}
@@ -544,14 +531,11 @@ export default function AudioPlayer({
                 }
               >
                 {isLoading ? (
-                  <i
-                    className='fa-solid fa-spinner fa-spin'
-                    aria-hidden='true'
-                  />
+                  <Loader2 className="size-5 animate-spin" aria-hidden="true" />
                 ) : isPlaying ? (
-                  <i className='fa-solid fa-pause' aria-hidden='true' />
+                  <Pause className="size-5 fill-current" aria-hidden="true" />
                 ) : (
-                  <i className='fa-solid fa-play ml-0.5' aria-hidden='true' />
+                  <Play className="size-5 fill-current" aria-hidden="true" />
                 )}
               </button>
 
@@ -566,7 +550,7 @@ export default function AudioPlayer({
                     : "No next track"
                 }
               >
-                <i className='fa-solid fa-forward-step' aria-hidden='true' />
+                <SkipForward className="size-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -589,7 +573,7 @@ export default function AudioPlayer({
               className='hidden h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex'
               aria-label='Expand to fullscreen player'
             >
-              <i className='fa-solid fa-chevron-up' aria-hidden='true' />
+              <ChevronUp className="size-4" aria-hidden="true" />
             </button>
 
             {/* Close button */}
@@ -599,7 +583,7 @@ export default function AudioPlayer({
                 className='flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
-                <i className='fa-solid fa-xmark' aria-hidden='true' />
+                <X className="size-4" aria-hidden="true" />
               </button>
             )}
           </div>

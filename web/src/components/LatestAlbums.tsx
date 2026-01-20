@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Music } from "lucide-react";
 import { latestAlbumsQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
@@ -38,7 +39,7 @@ export default function LatestAlbums() {
           variant='destructive'
           className='border-red-500/20 bg-red-500/10 text-red-400'
         >
-          <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
+          <AlertCircle className="size-4" aria-hidden="true" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             {data.message || "Failed to load albums. Please try again later."}
@@ -62,7 +63,7 @@ export default function LatestAlbums() {
       ) : (
         <div className='py-12 text-center'>
           <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800'>
-            <i className='fa-solid fa-music text-2xl text-slate-600'></i>
+            <Music className="size-6 text-slate-600" aria-hidden="true" />
           </div>
           <h3 className='mb-2 text-lg font-semibold text-slate-300'>
             No Albums Yet

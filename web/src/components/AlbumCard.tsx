@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Music, Play } from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { Spinner } from "@/components/ui/spinner";
@@ -81,10 +82,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <i
-                className="fa-solid fa-music text-4xl text-slate-600"
-                aria-hidden="true"
-              />
+              <Music className="size-10 text-slate-600" aria-hidden="true" />
             </div>
           )}
 
@@ -116,7 +114,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         {isLoading ? (
           <Spinner className="size-5" />
         ) : (
-          <i className="fa-solid fa-play ml-0.5 text-lg" aria-hidden="true" />
+          <Play className="size-5 fill-current" aria-hidden="true" />
         )}
       </button>
     </article>

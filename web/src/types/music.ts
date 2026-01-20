@@ -224,3 +224,89 @@ export type MusicianDetailsResponseType = {
   genres: string[];
   total_duration: number;
 };
+
+// PLAYLIST TYPES
+
+// Playlist summary for list views
+export type PlaylistSummaryType = {
+  id: number;
+  user_id: number;
+  name: string;
+  description: NullableString;
+  cover_image: NullableString;
+  is_public: boolean;
+  folder_id: NullableInt64;
+  created_at: string;
+  updated_at: string;
+  track_count: number;
+  total_duration: number;
+  is_owner: boolean;
+  can_edit: boolean;
+};
+
+// Playlist list response
+export type PlaylistsListResponseType = {
+  playlists: PlaylistSummaryType[];
+};
+
+// Track in a playlist (includes position and added_at)
+export type PlaylistTrackType = {
+  playlist_track_id: number;
+  position: number;
+  added_at: string;
+  added_by: NullableInt64;
+  id: number;
+  title: string;
+  duration: number;
+  file_path: string;
+  codec: string;
+  bit_rate: number;
+  album_id: NullableInt64;
+  musician_id: NullableInt64;
+  album_title: NullableString;
+  album_cover: NullableString;
+  musician_name: NullableString;
+};
+
+// Playlist tracks response (paginated)
+export type PlaylistTracksResponseType = {
+  tracks: PlaylistTrackType[];
+  total: number;
+  has_more: boolean;
+  next_offset: number;
+};
+
+// Collaborator info
+export type PlaylistCollaboratorType = {
+  id: number;
+  playlist_id: number;
+  user_id: number;
+  can_edit: boolean;
+  created_at: string;
+  updated_at: string;
+  username: string;
+  email: string;
+};
+
+// Playlist base type (from database)
+export type PlaylistType = {
+  id: number;
+  user_id: number;
+  name: string;
+  description: NullableString;
+  cover_image: NullableString;
+  is_public: boolean;
+  folder_id: NullableInt64;
+  created_at: string;
+  updated_at: string;
+};
+
+// Playlist detail response
+export type PlaylistDetailResponseType = {
+  playlist: PlaylistType;
+  track_count: number;
+  duration: number;
+  is_owner: boolean;
+  can_edit: boolean;
+  collaborators: PlaylistCollaboratorType[] | null;
+};

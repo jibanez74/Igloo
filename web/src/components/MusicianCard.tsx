@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { User } from "lucide-react";
 import type { SimpleMusicianType } from "@/types";
 
 type MusicianCardProps = {
@@ -27,10 +28,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <i
-                className="fa-solid fa-user text-4xl text-slate-600"
-                aria-hidden="true"
-              />
+              <User className="size-10 text-slate-600" aria-hidden="true" />
             </div>
           )}
         </div>

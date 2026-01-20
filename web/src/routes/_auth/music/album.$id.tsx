@@ -2,6 +2,21 @@ import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  AlertCircle,
+  Disc3,
+  Calendar,
+  Music,
+  Clock,
+  Play,
+  Shuffle,
+  MoreHorizontal,
+  Trash2,
+  Loader2,
+  ListOrdered,
+  ArrowLeft,
+  User,
+} from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -50,7 +65,7 @@ function AlbumDetailsPage() {
         variant='destructive'
         className='border-red-500/20 bg-red-500/10 text-red-400'
       >
-        <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
+        <AlertCircle className="size-4" aria-hidden="true" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
           {data.message ||
@@ -207,10 +222,7 @@ function AlbumDetailsContent({
                 role='img'
                 aria-label='No cover available'
               >
-                <i
-                  className='fa-solid fa-compact-disc text-6xl text-slate-600'
-                  aria-hidden='true'
-                />
+                <Disc3 className="size-16 text-slate-600" aria-hidden="true" />
               </div>
             )}
           </div>
@@ -240,10 +252,7 @@ function AlbumDetailsContent({
           >
             {(album.release_date.Valid || releaseYear) && (
               <li className='flex items-center gap-1.5'>
-                <i
-                  className='fa-regular fa-calendar text-slate-500'
-                  aria-hidden='true'
-                />
+                <Calendar className="size-4 text-slate-500" aria-hidden="true" />
                 <time
                   dateTime={album.release_date.String || String(releaseYear)}
                 >
@@ -254,19 +263,13 @@ function AlbumDetailsContent({
               </li>
             )}
             <li className='flex items-center gap-1.5'>
-              <i
-                className='fa-solid fa-music text-slate-500'
-                aria-hidden='true'
-              />
+              <Music className="size-4 text-slate-500" aria-hidden="true" />
               <span>
                 {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
               </span>
             </li>
             <li className='flex items-center gap-1.5'>
-              <i
-                className='fa-regular fa-clock text-slate-500'
-                aria-hidden='true'
-              />
+              <Clock className="size-4 text-slate-500" aria-hidden="true" />
               <span>{formatDuration(total_duration)}</span>
             </li>
             {album.spotify_popularity.Valid && (
@@ -274,10 +277,9 @@ function AlbumDetailsContent({
                 className='flex items-center gap-1.5'
                 aria-label='Spotify Popularity'
               >
-                <i
-                  className='fa-brands fa-spotify text-green-500'
-                  aria-hidden='true'
-                />
+                <svg className="size-4 text-green-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                </svg>
                 <span>
                   <span className='text-slate-500'>Popularity:</span>{" "}
                   <span className='font-medium text-green-400'>
@@ -311,7 +313,7 @@ function AlbumDetailsContent({
               onClick={handlePlayAlbum}
               className='inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400'
             >
-              <i className='fa-solid fa-play' aria-hidden='true' />
+              <Play className="size-4 fill-current" aria-hidden="true" />
               Play Album
             </button>
             <button
@@ -319,7 +321,7 @@ function AlbumDetailsContent({
               className='inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600'
               aria-label='Shuffle play album'
             >
-              <i className='fa-solid fa-shuffle' aria-hidden='true' />
+              <Shuffle className="size-4" aria-hidden="true" />
               Shuffle
             </button>
 
@@ -330,7 +332,7 @@ function AlbumDetailsContent({
                   className='inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-600'
                   aria-label='More options'
                 >
-                  <i className='fa-solid fa-ellipsis' aria-hidden='true' />
+                  <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -341,7 +343,7 @@ function AlbumDetailsContent({
                   onClick={() => setIsDeleteDialogOpen(true)}
                   className='cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-400'
                 >
-                  <i className='fa-solid fa-trash mr-2' aria-hidden='true' />
+                  <Trash2 className="mr-2 size-4" aria-hidden="true" />
                   Delete Album
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -383,10 +385,7 @@ function AlbumDetailsContent({
                 >
                   {isDeleting ? (
                     <>
-                      <i
-                        className='fa-solid fa-spinner fa-spin mr-2'
-                        aria-hidden='true'
-                      />
+                      <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
                       Deleting...
                     </>
                   ) : (
@@ -422,10 +421,7 @@ function AlbumDetailsContent({
           id='tracklist-heading'
           className='mb-4 flex items-center gap-2 text-xl font-semibold text-white'
         >
-          <i
-            className='fa-solid fa-list-ol text-amber-400'
-            aria-hidden='true'
-          />
+          <ListOrdered className="size-5 text-amber-400" aria-hidden="true" />
           Track List
         </h2>
 
@@ -434,11 +430,8 @@ function AlbumDetailsContent({
             <div key={discNum}>
               {hasMultipleDiscs && (
                 <div className='border-b border-slate-700/50 bg-slate-800/50 px-4 py-2'>
-                  <span className='text-sm font-medium text-slate-400'>
-                    <i
-                      className='fa-solid fa-compact-disc mr-2 text-amber-400/70'
-                      aria-hidden='true'
-                    />
+                  <span className='flex items-center gap-2 text-sm font-medium text-slate-400'>
+                    <Disc3 className="size-4 text-amber-400/70" aria-hidden="true" />
                     Disc {discNum}
                   </span>
                 </div>
@@ -509,7 +502,7 @@ function AlbumDetailsContent({
           to='/'
           className='inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-amber-400'
         >
-          <i className='fa-solid fa-arrow-left' aria-hidden='true' />
+          <ArrowLeft className="size-4" aria-hidden="true" />
           Back to Home
         </Link>
       </div>
@@ -528,10 +521,7 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
         />
       ) : (
         <div className='flex h-6 w-6 items-center justify-center rounded-full bg-slate-700'>
-          <i
-            className='fa-solid fa-user text-xs text-slate-500'
-            aria-hidden='true'
-          />
+          <User className="size-3 text-slate-500" aria-hidden="true" />
         </div>
       )}
       <span className='text-sm font-medium text-white'>{artist.name}</span>

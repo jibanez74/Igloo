@@ -26,6 +26,14 @@ export type {
   MusicianAlbumType,
   MusicianTrackType,
   MusicianDetailsResponseType,
+  // Playlist types
+  PlaylistSummaryType,
+  PlaylistsListResponseType,
+  PlaylistTrackType,
+  PlaylistTracksResponseType,
+  PlaylistCollaboratorType,
+  PlaylistType,
+  PlaylistDetailResponseType,
 } from "./music";
 
 // Movie types

@@ -1,7 +1,9 @@
 import { useState, useTransition, useEffect, useRef } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
+import { authUserQueryOpts } from "@/lib/query-opts";
 import loginBg from "@/assets/images/login-bg.jpg";
 import {
   Card,
@@ -66,6 +68,11 @@ function LoginPage() {
           description: res.message || "Login successful",
         });
 
+        // Fetch fresh auth data to update cache with new session
+        // This ensures the _auth route's beforeLoad sees the authenticated state
+        await queryClient.fetchQuery(authUserQueryOpts());
+
+        // Invalidate other queries so they refetch with the new session
         await queryClient.invalidateQueries();
 
         navigate({
@@ -96,10 +103,7 @@ function LoginPage() {
           >
             <CardHeader className='pb-2 text-center'>
               <div className='mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-800'>
-                <i
-                  className='fa-solid fa-igloo text-xl text-amber-400'
-                  aria-hidden='true'
-                />
+                <Snowflake className="size-5 text-amber-400" aria-hidden="true" />
               </div>
               <CardTitle className='text-2xl font-semibold tracking-tight text-slate-100'>
                 Welcome to Igloo
@@ -115,9 +119,9 @@ function LoginPage() {
                 <div className='space-y-1'>
                   <Label htmlFor='email'>Email</Label>
                   <div className='relative'>
-                    <i
-                      className='fa-regular fa-envelope absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400'
-                      aria-hidden='true'
+                    <Mail
+                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      aria-hidden="true"
                     />
                     <Input
                       autoFocus
@@ -137,9 +141,9 @@ function LoginPage() {
                 <div className='space-y-1'>
                   <Label htmlFor='password'>Password</Label>
                   <div className='relative'>
-                    <i
-                      className='fa-solid fa-lock absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400'
-                      aria-hidden='true'
+                    <Lock
+                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      aria-hidden="true"
                     />
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -161,14 +165,11 @@ function LoginPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       disabled={isPending}
                     >
-                      <i
-                        className={
-                          showPassword
-                            ? "fa-regular fa-eye-slash"
-                            : "fa-regular fa-eye"
-                        }
-                        aria-hidden='true'
-                      />
+                      {showPassword ? (
+                        <EyeOff className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-4" aria-hidden="true" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -180,10 +181,7 @@ function LoginPage() {
                     className='w-full bg-amber-500 font-semibold text-slate-900 hover:bg-amber-400'
                     disabled={isPending}
                   >
-                    <i
-                      className='fa-solid fa-right-to-bracket'
-                      aria-hidden='true'
-                    />
+                    <LogIn className="size-4" aria-hidden="true" />
                     <span>{isPending ? "Signing in..." : "Sign in"}</span>
                   </Button>
                 </div>

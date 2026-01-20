@@ -1,4 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
+import { Home } from "lucide-react";
 import LatestAlbums from "@/components/LatestAlbums";
 import MoviesInTheaters from "@/components/MoviesInTheaters";
 
@@ -11,7 +12,7 @@ function HomePage() {
     <>
       <header className='mb-8'>
         <h1 className='flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl'>
-          <i className='fa-solid fa-house text-2xl text-amber-400'></i>
+          <Home className="size-6 text-amber-400" aria-hidden="true" />
           <span>Welcome to Igloo</span>
         </h1>
 

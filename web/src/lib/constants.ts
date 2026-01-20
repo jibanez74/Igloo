@@ -26,7 +26,13 @@ export const TMDB_PROFILE_SIZE = "w185";
 // pagination for music page
 export const ALBUMS_PER_PAGE = 24;
 export const MUSICIANS_PER_PAGE = 24;
+export const PLAYLISTS_PER_PAGE = 24;
 
 // virtual list item heights (in pixels)
 export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
 export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
+
+// playlist query keys
+export const PLAYLISTS_KEY = "playlists";
+export const PLAYLIST_DETAILS_KEY = "playlist-details";
+export const PLAYLIST_TRACKS_KEY = "playlist-tracks";

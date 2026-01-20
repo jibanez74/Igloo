@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Film, Star } from "lucide-react";
 import { TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
 import type { TheaterMovieType } from "@/types";
 
@@ -43,10 +44,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           />
         ) : (
             <div className='flex size-full items-center justify-center'>
-              <i
-                className='fa-solid fa-film text-4xl text-slate-600'
-                aria-hidden='true'
-              ></i>
+              <Film className="size-10 text-slate-600" aria-hidden="true" />
           </div>
         )}
 
@@ -56,7 +54,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
             className={`absolute top-2 right-2 rounded-md px-2 py-0.5 text-xs font-bold shadow-lg ${getRatingColor(vote_average)}`}
               aria-hidden='true'
           >
-              <i className='fa-solid fa-star mr-1 text-[10px]'></i>
+              <Star className="mr-1 size-2.5 fill-current" aria-hidden="true" />
             {rating}
           </div>
         )}

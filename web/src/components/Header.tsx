@@ -1,56 +1,55 @@
-import { Link } from "@tanstack/react-router";
+import { Search, Bell, Cast } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-semibold tracking-wide"
-        >
-          <i
-            className="fa-solid fa-igloo text-xl text-amber-400"
+    <>
+      {/* Search */}
+      <form
+        className="max-w-xl flex-1"
+        role="search"
+        aria-label="Search library"
+      >
+        <Label htmlFor="q" className="sr-only">
+          Search
+        </Label>
+        <div className="relative">
+          <Search
+            className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
             aria-hidden="true"
           />
-          <span className="text-lg">Igloo</span>
-        </Link>
+          <Input
+            id="q"
+            name="q"
+            type="search"
+            placeholder="Search..."
+            className="border-slate-700 bg-slate-800/50 pl-10 text-white placeholder:text-slate-400 focus:border-amber-500/50 focus:ring-amber-500/20"
+          />
+        </div>
+      </form>
 
-        <form
-          className="ml-auto max-w-xl flex-1"
-          role="search"
-          aria-label="Search library"
+      {/* Utility buttons */}
+      <nav className="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Notifications"
+          className="text-slate-300 hover:bg-slate-800 hover:text-white"
         >
-          <Label htmlFor="q" className="sr-only">
-            Search
-          </Label>
-          <div className="relative">
-            <i
-              className="fa-solid fa-magnifying-glass absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <Input
-              id="q"
-              name="q"
-              type="search"
-              placeholder="Search..."
-              className="pl-10"
-            />
-          </div>
-        </form>
+          <Bell aria-hidden="true" />
+        </Button>
 
-        <nav className="ml-2 flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Notifications">
-            <i className="fa-regular fa-bell" aria-hidden="true" />
-          </Button>
-
-          <Button variant="ghost" size="icon" aria-label="Settings">
-            <i className="fa-solid fa-gear" aria-hidden="true" />
-          </Button>
-                  </nav>
-      </div>
-    </header>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Cast"
+          className="text-slate-300 hover:bg-slate-800 hover:text-white"
+        >
+          <Cast aria-hidden="true" />
+        </Button>
+      </nav>
+    </>
   );
 }

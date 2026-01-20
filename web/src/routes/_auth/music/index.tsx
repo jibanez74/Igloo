@@ -4,6 +4,17 @@ import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { z } from "zod";
+import {
+  Music,
+  Users,
+  Disc3,
+  List,
+  ListMusic,
+  User,
+  Play,
+  Shuffle,
+  Plus,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
@@ -11,6 +22,7 @@ import {
   albumsPaginatedQueryOpts,
   musiciansPaginatedQueryOpts,
   musicStatsQueryOpts,
+  playlistsQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -25,12 +37,15 @@ import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
 import LibraryPagination from "@/components/LibraryPagination";
 import TrackItem from "@/components/TrackItem";
+import PlaylistCard from "@/components/PlaylistCard";
+import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 
 const musicSearchSchema = z.object({
-  tab: fallback(z.enum(["musicians", "albums", "tracks"]), "albums").default(
+  tab: fallback(
+    z.enum(["musicians", "albums", "tracks", "playlists"]),
     "albums"
-  ),
+  ).default("albums"),
   albumsPage: fallback(z.number().int().positive(), 1).default(1),
   musiciansPage: fallback(z.number().int().positive(), 1).default(1),
 });
@@ -86,7 +101,7 @@ function MusicPage() {
           className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl"
           aria-hidden="true"
         >
-          <i className="fa-solid fa-music text-2xl text-amber-400" />
+          <Music className="size-6 text-amber-400" aria-hidden="true" />
           <span>Music Library</span>
         </h1>
         <p
@@ -107,22 +122,29 @@ function MusicPage() {
             value="musicians"
             className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
           >
-            <i className="fa-solid fa-user-group mr-2" aria-hidden="true" />
+            <Users className="mr-2 size-4" aria-hidden="true" />
             Musicians
           </TabsTrigger>
           <TabsTrigger
             value="albums"
             className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
           >
-            <i className="fa-solid fa-compact-disc mr-2" aria-hidden="true" />
+            <Disc3 className="mr-2 size-4" aria-hidden="true" />
             Albums
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
             className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
           >
-            <i className="fa-solid fa-list mr-2" aria-hidden="true" />
+            <List className="mr-2 size-4" aria-hidden="true" />
             Tracks
+          </TabsTrigger>
+          <TabsTrigger
+            value="playlists"
+            className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <ListMusic className="mr-2 size-4" aria-hidden="true" />
+            Playlists
           </TabsTrigger>
         </TabsList>
 
@@ -139,6 +161,10 @@ function MusicPage() {
 
         <TabsContent value="tracks" className="mt-6">
           <TracksTabContent />
+        </TabsContent>
+
+        <TabsContent value="playlists" className="mt-6">
+          <PlaylistsTabContent />
         </TabsContent>
       </Tabs>
     </div>
@@ -162,17 +188,17 @@ function LibraryStats() {
       tabIndex={0}
     >
       <div className="flex items-center gap-2" aria-hidden="true">
-        <i className="fa-solid fa-compact-disc text-amber-400" />
+        <Disc3 className="size-4 text-amber-400" />
         <span className="font-medium text-white">{albumCount}</span>
         <span className="text-slate-400">Albums</span>
       </div>
       <div className="flex items-center gap-2" aria-hidden="true">
-        <i className="fa-solid fa-music text-amber-400" />
+        <Music className="size-4 text-amber-400" />
         <span className="font-medium text-white">{trackCount}</span>
         <span className="text-slate-400">Tracks</span>
       </div>
       <div className="flex items-center gap-2" aria-hidden="true">
-        <i className="fa-solid fa-user text-amber-400" />
+        <User className="size-4 text-amber-400" />
         <span className="font-medium text-white">{musicianCount}</span>
         <span className="text-slate-400">Musicians</span>
       </div>
@@ -242,10 +268,7 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
   if (musicians.length === 0) {
     return (
       <div className="py-12 text-center text-slate-400">
-        <i
-          className="fa-solid fa-user-group mb-4 block text-4xl opacity-50"
-          aria-hidden="true"
-        />
+        <Users className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No musicians found in your library.</p>
       </div>
     );
@@ -322,7 +345,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   if (albums.length === 0) {
     return (
       <div className="py-12 text-center text-slate-400">
-        <i className="fa-solid fa-compact-disc mb-4 block text-4xl opacity-50" />
+        <Disc3 className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No albums found in your library.</p>
       </div>
     );
@@ -439,7 +462,7 @@ function TracksTabContent() {
   if (allTracks.length === 0) {
     return (
       <div className="py-12 text-center text-slate-400">
-        <i className="fa-solid fa-music mb-4 block text-4xl opacity-50" />
+        <Music className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No tracks found in your library.</p>
       </div>
     );
@@ -536,7 +559,7 @@ function PlayAllButton() {
       {isLoading ? (
         <Spinner className="size-4" />
       ) : (
-        <i className="fa-solid fa-play" aria-hidden="true" />
+        <Play className="size-4 fill-current" aria-hidden="true" />
       )}
       <span>Play All</span>
     </button>
@@ -572,7 +595,7 @@ function ShuffleButton() {
       {isLoading ? (
         <Spinner className="size-4" />
       ) : (
-        <i className="fa-solid fa-shuffle" aria-hidden="true" />
+        <Shuffle className="size-4" aria-hidden="true" />
       )}
       <span>Shuffle All</span>
     </button>
@@ -655,4 +678,101 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
   }
 
   return items;
+}
+
+// Playlists tab content
+function PlaylistsTabContent() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const { data, isLoading } = useQuery(playlistsQueryOpts());
+
+  const playlists = data?.error === false ? data.data.playlists : [];
+
+  if (isLoading) {
+    return <PlaylistsTabSkeleton />;
+  }
+
+  return (
+    <div>
+      {/* Header with count and create button */}
+      <div className="mb-6 flex items-center justify-between">
+        <span className="text-sm text-slate-400">
+          {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
+        </span>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          aria-label="Create new playlist"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          New Playlist
+        </button>
+      </div>
+
+      {/* Playlists grid or empty state */}
+      {playlists.length === 0 ? (
+        <EmptyPlaylistsState onCreateClick={() => setShowCreateDialog(true)} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {playlists.map((playlist) => (
+            <PlaylistCard key={playlist.id} playlist={playlist} />
+          ))}
+        </div>
+      )}
+
+      <CreatePlaylistDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+    </div>
+  );
+}
+
+function PlaylistsTabSkeleton() {
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
+        <div className="h-10 w-32 animate-pulse rounded-full bg-slate-800" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div
+            key={i}
+            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
+            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
+            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type EmptyPlaylistsStateProps = {
+  onCreateClick: () => void;
+};
+
+function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-6 flex size-24 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40 shadow-lg shadow-cyan-500/5">
+        <ListMusic className="size-10 text-cyan-200/40" aria-hidden="true" />
+      </div>
+      <h3 className="mb-2 text-xl font-semibold text-white">
+        No playlists yet
+      </h3>
+      <p className="mb-6 max-w-sm text-slate-400">
+        Create your first playlist to start organizing your favorite tracks.
+      </p>
+      <button
+        onClick={onCreateClick}
+        className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Create Your First Playlist
+      </button>
+    </div>
+  );
 }

@@ -1,3 +1,4 @@
+import { User } from "lucide-react";
 import { TMDB_IMAGE_BASE, TMDB_PROFILE_SIZE } from "@/lib/constants";
 import type { CastMemberType } from "@/types";
 
@@ -60,10 +61,7 @@ export default function CastSection({
                   role='img'
                   aria-label={`No photo available for ${actor.name}`}
                 >
-                  <i
-                    className='fa-solid fa-user text-2xl text-slate-500'
-                    aria-hidden='true'
-                  />
+                  <User className="size-6 text-slate-500" aria-hidden="true" />
                 </div>
               )}
               <div className='p-2'>

@@ -1,5 +1,6 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Film, Star, Clock, Calendar, Play } from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import {
   TMDB_IMAGE_BASE,
@@ -27,7 +28,7 @@ function MovieDetailsPage() {
         variant='destructive'
         className='border-red-500/20 bg-red-500/10 text-red-400'
       >
-        <i className='fa-solid fa-circle-exclamation' aria-hidden='true'></i>
+        <AlertCircle className="size-4" aria-hidden="true" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
           {data?.message ||
@@ -226,10 +227,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                   role='img'
                   aria-label='No poster available'
                 >
-                  <i
-                    className='fa-solid fa-film text-5xl text-slate-600'
-                    aria-hidden='true'
-                  />
+                  <Film className="size-12 text-slate-600" aria-hidden="true" />
                 </div>
               )}
             </div>
@@ -273,7 +271,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                     1
                   )} out of 10`}
                 >
-                  <i className='fa-solid fa-star text-sm' aria-hidden='true' />
+                  <Star className="size-3.5 fill-current" aria-hidden="true" />
                   <span aria-hidden='true'>
                     {movie.vote_average.toFixed(1)}
                   </span>
@@ -283,10 +281,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
               {/* Runtime */}
               {runtime && (
                 <li className='flex items-center gap-1.5 text-slate-300'>
-                  <i
-                    className='fa-regular fa-clock text-slate-500'
-                    aria-hidden='true'
-                  />
+                  <Clock className="size-4 text-slate-500" aria-hidden="true" />
                   <time
                     dateTime={`PT${movie.runtime}M`}
                     aria-label={`Duration: ${runtime}`}
@@ -299,10 +294,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
               {/* Release date */}
               {movie.release_date && (
                 <li className='flex items-center gap-1.5 text-slate-300'>
-                  <i
-                    className='fa-regular fa-calendar text-slate-500'
-                    aria-hidden='true'
-                  />
+                  <Calendar className="size-4 text-slate-500" aria-hidden="true" />
                   <time dateTime={movie.release_date}>
                     {new Date(movie.release_date).toLocaleDateString("en-US", {
                       year: "numeric",
@@ -354,7 +346,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
                   buttonVariants({ variant: "accent", size: "lg" }) + " mt-6"
                 }
               >
-                <i className='fa-solid fa-play' aria-hidden='true' />
+                <Play className="size-4 fill-current" aria-hidden="true" />
                 Play Trailer
               </Link>
             )}
