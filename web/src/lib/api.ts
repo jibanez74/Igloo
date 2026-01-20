@@ -42,7 +42,7 @@ type ApiRequestOptions = {
  * Generic API request handler that consolidates error handling and fetch configuration.
  * All API functions should use this to avoid repetition.
  */
-async function apiRequest<T>(
+async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<ApiResponseType<T>> {

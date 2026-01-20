@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
@@ -19,8 +19,11 @@ import {
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/TrackItem";
-import DraggableTrackList from "@/components/DraggableTrackList";
 import EditPlaylistDialog from "@/components/EditPlaylistDialog";
+
+// Lazy load DraggableTrackList to reduce initial bundle size
+// This component includes the heavy @dnd-kit packages
+const DraggableTrackList = lazy(() => import("@/components/DraggableTrackList"));
 import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,
@@ -578,18 +581,26 @@ function PlaylistTracksList({
   if (useDraggableList) {
     return (
       <>
-        <DraggableTrackList
-          tracks={orderedTracks}
-          playlistId={playlistId}
-          playlistName={playlistName}
-          coverUrl={coverUrl}
-          canEdit={canEdit}
-          onReorder={handleReorder}
-          onPlayTrack={handlePlayTrack}
-          onRemoveTrack={onRemoveTrack}
-          currentTrackId={audioPlayer.currentTrack?.id}
-          isPlaying={audioPlayer.isPlaying}
-        />
+        <Suspense
+          fallback={
+            <div className="flex justify-center rounded-xl border border-amber-500/10 bg-slate-800/30 py-12">
+              <Spinner className="size-8 text-amber-400" />
+            </div>
+          }
+        >
+          <DraggableTrackList
+            tracks={orderedTracks}
+            playlistId={playlistId}
+            playlistName={playlistName}
+            coverUrl={coverUrl}
+            canEdit={canEdit}
+            onReorder={handleReorder}
+            onPlayTrack={handlePlayTrack}
+            onRemoveTrack={onRemoveTrack}
+            currentTrackId={audioPlayer.currentTrack?.id}
+            isPlaying={audioPlayer.isPlaying}
+          />
+        </Suspense>
         {isFetchingNextPage && (
           <div className="flex justify-center py-4">
             <Spinner className="size-6 text-amber-400" />

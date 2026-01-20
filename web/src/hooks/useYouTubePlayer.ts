@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect, useId, useLayoutEffect } from "react";
-import "@/types/youtube.d.ts";
 
 // Singleton to track API loading state
 let apiLoaded = false;

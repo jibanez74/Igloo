@@ -3,14 +3,6 @@
  * @see https://developers.google.com/youtube/iframe_api_reference
  */
 
-declare global {
-  interface Window {
-    YT: typeof YT;
-    onYouTubeIframeAPIReady: () => void;
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 declare namespace YT {
   /** Player state constants */
   enum PlayerState {
@@ -154,4 +146,7 @@ declare namespace YT {
   }
 }
 
-export {};
+interface Window {
+  YT: typeof YT;
+  onYouTubeIframeAPIReady: () => void;
+}
