@@ -1,0 +1,69 @@
+# Binaries
+igloo-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# FFprobe binaries (large files, distribute separately)
+cmd/internal/ffprobe/ffprobe_darwin_arm64
+cmd/internal/ffprobe/ffprobe_linux_amd64
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+*.log
+
+# Static files (user uploads like avatars)
+static/
+
+# Embedded frontend assets (generated during build)
+# These are copied from web/dist by the root Makefile
+# A placeholder index.html exists for backend-only builds
+cmd/api/web/dist/*.html
+cmd/api/web/dist/assets/
+cmd/api/web/dist/vite.svg
+
+# Symlink/copy of web/dist for embedding into Go binary
+cmd/api/webdist
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug
+__debug_bin*
+
+# testing media files directory
+media/*

@@ -15,3 +15,8 @@ error.txt
 /web/.env
 /web/dist
 /web/.tanstack/*
+
+# Docker runtime directories
+/data/
+/logs/
+/static/
