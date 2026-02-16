@@ -1,22 +1,48 @@
-.DS_Store
-.vscode
-.idea
-.cursor
-todo.txt
-error.txt
+# Binaries
+/server/igloo-server
+/server/api
 
-/server/static/*
+# ffprobe and ffmpeg binaries (large files, distribute separately)
+/server/cmd/internal/ffprobe/ffprobe_darwin_arm64
+/server/cmd/internal/ffprobe/ffprobe_linux_amd64
+/server/cmd/internal/ffmpeg/ffmpeg_mac_arm
+/server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
+
+# IDE and editor
+.idea/
+.vscode/
+
+
+# Environment files
+.env
+.env.local
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Directories created by the server at startup
 /server/logs/*
-/server/.env*
-/server/pg_data/*
-/server/redis_data/*
+/server/static/*
 
+# Embedded frontend assets (generated during build)
+# These are copied from web/dist by the root Makefile
+# A placeholder index.html exists for backend-only builds
+/server/cmd/api/web/dist/*.html
+/server/cmd/api/web/dist/assets/
+/server/cmd/api/web/dist/vite.svg
+
+# Symlink/copy of web/dist for embedding into Go binary
+/server/cmd/api/webdist
+
+# Frontend (web)
 /web/node_modules/*
-/web/.env
 /web/dist
-/web/.tanstack/*
 
-# Docker runtime directories
-/data/
-/logs/
-/static/
+# OS files
+.DS_Store
+
+# Testing media files directory
+/media/*

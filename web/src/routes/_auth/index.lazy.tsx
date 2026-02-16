@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+ iimport { createLazyFileRoute } from "@tanstack/react-router";
 import { Home } from "lucide-react";
 import LatestAlbums from "@/components/LatestAlbums";
 import LatestMovies from "@/components/LatestMovies";
@@ -30,7 +30,6 @@ function HomePage() {
           music, and more.
         </p>
       </header>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2"></div>
       <LatestMovies />
       <LatestAlbums />
       <MoviesInTheaters />

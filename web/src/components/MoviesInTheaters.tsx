@@ -23,31 +23,31 @@ export default function MoviesInTheaters() {
 
   return (
     <section
-      role='region'
-      aria-labelledby='movies-in-theaters'
-      aria-label='Now Playing in Theaters'
-      className='mt-10'
+      role="region"
+      aria-labelledby="movies-in-theaters"
+      aria-label="Now Playing in Theaters"
+      className="mt-8 md:mt-10"
     >
       <h2
-        id='movies-in-theaters'
-        className='mb-4 text-xl font-semibold tracking-tight md:text-2xl'
+        id="movies-in-theaters"
+        className="mb-4 text-xl font-semibold tracking-tight text-white md:text-2xl"
       >
         Now Playing in Theaters
       </h2>
 
       {isPending ? (
         <div
-          className='flex items-center justify-center py-12'
-          role='status'
-          aria-label='Loading movies...'
+          className="flex min-h-[200px] items-center justify-center py-12 sm:min-h-[280px]"
+          role="status"
+          aria-label="Loading movies..."
         >
-          <Spinner className='size-8 text-cyan-400' />
-          <span className='sr-only'>Loading movies...</span>
+          <Spinner className="size-8 text-cyan-400" />
+          <span className="sr-only">Loading movies...</span>
         </div>
       ) : hasError ? (
         <Alert
-          variant='destructive'
-          className='border-red-500/20 bg-red-500/10 text-red-400'
+          variant="destructive"
+          className="border-red-500/20 bg-red-500/10 text-red-400"
         >
           <AlertCircle className="size-4" aria-hidden="true" />
           <AlertTitle>Error</AlertTitle>
@@ -59,26 +59,26 @@ export default function MoviesInTheaters() {
         <>
           <span
             tabIndex={0}
-            className='sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white'
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white"
             aria-label={`Now Playing in Theaters section, ${movies.length} movies`}
           >
             Now Playing in Theaters - {movies.length} movies
           </span>
-          <div className='grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
             {movies.map((movie: TheaterMovieType) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
-          </div>
+            </div>
         </>
       ) : (
-        <div className='py-12 text-center'>
-          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-slate-800'>
+        <div className="py-12 text-center sm:py-16">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-slate-800">
             <Film className="size-6 text-cyan-600" aria-hidden="true" />
           </div>
-          <h3 className='mb-2 text-lg font-semibold text-slate-300'>
+          <h3 className="mb-2 text-lg font-semibold text-slate-300">
             No Movies Available
           </h3>
-          <p className='mx-auto max-w-md text-slate-400'>
+          <p className="mx-auto max-w-md px-4 text-slate-400 sm:px-0">
             Unable to fetch movies currently playing in theaters. Check back
             later.
           </p>
