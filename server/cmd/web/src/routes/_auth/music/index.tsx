@@ -1,0 +1,818 @@
+import { useEffect, useRef, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { z } from "zod";
+import {
+  Music,
+  Users,
+  Disc3,
+  List,
+  ListMusic,
+  User,
+  Play,
+  Shuffle,
+  Plus,
+} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Spinner } from "@/components/ui/spinner";
+import { showActionFailed } from "@/lib/toast-helpers";
+import LiveAnnouncer from "@/components/LiveAnnouncer";
+import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import {
+  albumsPaginatedQueryOpts,
+  musiciansPaginatedQueryOpts,
+  musicStatsQueryOpts,
+  playlistsQueryOpts,
+  tracksInfiniteQueryOpts,
+} from "@/lib/query-opts";
+import { convertToAudioTrack } from "@/lib/audio-utils";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import {
+  ALBUMS_PER_PAGE,
+  MUSICIANS_PER_PAGE,
+  VIRTUAL_LIST_LETTER_HEIGHT,
+  VIRTUAL_LIST_TRACK_HEIGHT,
+} from "@/lib/constants";
+import AlbumCard from "@/components/AlbumCard";
+import MusicianCard from "@/components/MusicianCard";
+import LibraryPagination from "@/components/LibraryPagination";
+import TrackItem from "@/components/TrackItem";
+import PlaylistCard from "@/components/PlaylistCard";
+import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
+import type { TrackListItemType, VirtualItem } from "@/types";
+
+const musicSearchSchema = z.object({
+  tab: fallback(
+    z.enum(["musicians", "albums", "tracks", "playlists"]),
+    "albums"
+  ).default("albums"),
+  albumsPage: fallback(z.number().int().positive(), 1).default(1),
+  musiciansPage: fallback(z.number().int().positive(), 1).default(1),
+});
+
+type MusicSearchParams = z.infer<typeof musicSearchSchema>;
+
+export const Route = createFileRoute("/_auth/music/")({
+  validateSearch: zodSearchValidator(musicSearchSchema),
+  loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
+    albumsPage,
+    musiciansPage,
+  }),
+  loader: async ({ context, deps: { albumsPage, musiciansPage } }) => {
+    const { queryClient } = context;
+
+    await Promise.all([
+      queryClient.ensureQueryData(musicStatsQueryOpts()),
+      queryClient.ensureQueryData(
+        albumsPaginatedQueryOpts(albumsPage, ALBUMS_PER_PAGE)
+      ),
+      queryClient.ensureQueryData(
+        musiciansPaginatedQueryOpts(musiciansPage, MUSICIANS_PER_PAGE)
+      ),
+    ]);
+  },
+  component: MusicPage,
+});
+
+function MusicPage() {
+  const navigate = Route.useNavigate();
+  const { tab, albumsPage, musiciansPage } = Route.useSearch();
+
+  // React 19 document metadata
+  const pageTitle = "Music Library - Igloo";
+  const pageDescription = "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+
+  // Handle tab change - update URL while preserving other params
+  const handleTabChange = (newTab: string) => 
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        tab: newTab as MusicSearchParams["tab"],
+      }),
+      replace: true,
+    });
+
+  return (
+    <div>
+      {/* React 19 Document Metadata */}
+      <title>{pageTitle}</title>
+      <meta name="description" content={pageDescription} />
+
+      {/* Page header */}
+      <header
+        className="-m-3 mb-8 rounded-lg p-3 focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        tabIndex={0}
+        aria-label="Music Library. Browse your collection of musicians, albums, and tracks."
+      >
+        <h1
+          className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl"
+          aria-hidden="true"
+        >
+          <Music className="size-6 text-amber-400" aria-hidden="true" />
+          <span>Music Library</span>
+        </h1>
+        <p
+          className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base"
+          aria-hidden="true"
+        >
+          Browse your collection of musicians, albums, and tracks
+        </p>
+      </header>
+
+      {/* Library Stats */}
+      <LibraryStats />
+
+      {/* Tabs - controlled by URL search param */}
+      <Tabs value={tab} onValueChange={handleTabChange}>
+        <TabsList className="h-auto border border-slate-700/50 bg-slate-800/50 p-1">
+          <TabsTrigger
+            value="musicians"
+            className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <Users className="mr-2 size-4" aria-hidden="true" />
+            Musicians
+          </TabsTrigger>
+          <TabsTrigger
+            value="albums"
+            className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <Disc3 className="mr-2 size-4" aria-hidden="true" />
+            Albums
+          </TabsTrigger>
+          <TabsTrigger
+            value="tracks"
+            className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <List className="mr-2 size-4" aria-hidden="true" />
+            Tracks
+          </TabsTrigger>
+          <TabsTrigger
+            value="playlists"
+            className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <ListMusic className="mr-2 size-4" aria-hidden="true" />
+            Playlists
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="musicians" className="mt-6">
+          <MusiciansTabContent currentPage={musiciansPage} />
+        </TabsContent>
+
+        <TabsContent value="albums" className="mt-6">
+          <AlbumsTabContent
+            currentPage={albumsPage}
+            perPage={ALBUMS_PER_PAGE}
+          />
+        </TabsContent>
+
+        <TabsContent value="tracks" className="mt-6">
+          <TracksTabContent />
+        </TabsContent>
+
+        <TabsContent value="playlists" className="mt-6">
+          <PlaylistsTabContent />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function LibraryStats() {
+  const { data } = useQuery(musicStatsQueryOpts());
+  const stats = data?.error === false ? data.data : null;
+
+  const albumCount = stats?.total_albums ?? 0;
+  const trackCount = stats?.total_tracks ?? 0;
+  const musicianCount = stats?.total_musicians ?? 0;
+
+  const statsLabel = `Library statistics: ${albumCount} albums, ${trackCount} tracks, ${musicianCount} musicians`;
+
+  return (
+    <section
+      className="-m-3 mb-6 flex flex-wrap gap-6 rounded-lg p-3 focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+      aria-label={statsLabel}
+      tabIndex={0}
+    >
+      <div className="flex items-center gap-2" aria-hidden="true">
+        <Disc3 className="size-4 text-amber-400" />
+        <span className="font-medium text-white">{albumCount}</span>
+        <span className="text-slate-400">Albums</span>
+      </div>
+      <div className="flex items-center gap-2" aria-hidden="true">
+        <Music className="size-4 text-amber-400" />
+        <span className="font-medium text-white">{trackCount}</span>
+        <span className="text-slate-400">Tracks</span>
+      </div>
+      <div className="flex items-center gap-2" aria-hidden="true">
+        <User className="size-4 text-amber-400" />
+        <span className="font-medium text-white">{musicianCount}</span>
+        <span className="text-slate-400">Musicians</span>
+      </div>
+    </section>
+  );
+}
+
+type MusiciansTabContentProps = {
+  currentPage: number;
+};
+
+// Skeleton loader that matches grid layout to prevent CLS
+function MusiciansTabSkeleton() {
+  return (
+    <div>
+      {/* Skeleton header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
+        <div className="h-4 w-20 animate-pulse rounded-sm bg-slate-800" />
+      </div>
+
+      {/* Skeleton grid - matches actual grid dimensions */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: MUSICIANS_PER_PAGE }).map((_, i) => (
+          <div
+            key={i}
+            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
+            <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-slate-800" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
+            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
+  const navigate = Route.useNavigate();
+
+  const { data, isLoading } = useQuery(
+    musiciansPaginatedQueryOpts(currentPage, MUSICIANS_PER_PAGE),
+  );
+
+  const musicians = data?.error === false ? data.data.musicians : [];
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
+  const total = data?.error === false ? data.data.total : 0;
+
+  // Generate announcement for screen readers
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (musicians.length === 0) return "No musicians found";
+    return `Showing ${musicians.length} musicians, page ${currentPage} of ${totalPages}`;
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        musiciansPage: newPage,
+      }),
+      replace: true,
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (isLoading) {
+    return <MusiciansTabSkeleton />;
+  }
+
+  if (musicians.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Users className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
+        <p>No musicians found in your library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Announce content changes to screen readers */}
+      <LiveAnnouncer message={getAnnouncement()} />
+      {/* Header with count */}
+      <div className="mb-6 flex items-center justify-between">
+        <span className="text-sm text-slate-400">
+          {total.toLocaleString()} musicians
+        </span>
+        <span className="text-sm text-slate-400">
+          Page {currentPage} of {totalPages}
+        </span>
+      </div>
+
+      {/* Musicians grid - 5 columns on large screens for circular thumbnails */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {musicians.map(musician => (
+          <MusicianCard key={musician.id} musician={musician} />
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <LibraryPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </div>
+  );
+}
+
+type AlbumsTabContentProps = {
+  currentPage: number;
+  perPage: number;
+};
+
+function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
+  const navigate = Route.useNavigate();
+
+  const { data, isLoading } = useQuery(
+    albumsPaginatedQueryOpts(currentPage, perPage),
+  );
+
+  const albums = data?.error === false ? data.data.albums : [];
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
+  const total = data?.error === false ? data.data.total : 0;
+
+  // Generate announcement for screen readers
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (albums.length === 0) return "No albums found";
+    return `Showing ${albums.length} albums, page ${currentPage} of ${totalPages}`;
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        albumsPage: newPage,
+      }),
+      replace: true,
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12" role="status" aria-label="Loading albums">
+        <Spinner className="h-8 w-8 text-amber-400" />
+        <span className="sr-only">Loading albums...</span>
+      </div>
+    );
+  }
+
+  if (albums.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Disc3 className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
+        <p>No albums found in your library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Announce content changes to screen readers */}
+      <LiveAnnouncer message={getAnnouncement()} />
+      {/* Header with album count */}
+      <div className="mb-6 flex items-center justify-between">
+        <span className="text-sm text-slate-400">
+          {total.toLocaleString()} albums
+        </span>
+        <span className="text-sm text-slate-400">
+          Page {currentPage} of {totalPages}
+        </span>
+      </div>
+
+      {/* Albums grid */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {albums.map(album => (
+          <AlbumCard key={album.id} album={album} />
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <LibraryPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function TracksTabContent() {
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery(tracksInfiniteQueryOpts());
+
+  // Ref to measure offset from top of page for scrollMargin
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // Measure scroll margin after mount
+  useEffect(() => {
+    if (listRef.current) {
+      setScrollMargin(listRef.current.offsetTop);
+    }
+  }, []);
+
+  // Get total tracks count from first page
+  const totalTracks =
+    data?.pages[0]?.error === false ? (data.pages[0].data?.total ?? 0) : 0;
+
+  // Flatten all pages into a single array
+  const allTracks =
+    data?.pages.flatMap(page =>
+      page.error === false ? (page.data?.tracks ?? []) : [],
+    ) ?? [];
+
+  // Convert to virtual items (tracks + letter headers)
+  const virtualItems = flattenToVirtualItems(allTracks);
+
+  // Window virtualizer for efficient rendering
+  const virtualizer = useWindowVirtualizer({
+    count: virtualItems.length,
+
+    estimateSize: index => {
+      const item = virtualItems[index];
+
+      return item?.type === "letter"
+        ? VIRTUAL_LIST_LETTER_HEIGHT
+        : VIRTUAL_LIST_TRACK_HEIGHT;
+    },
+
+    overscan: 5,
+    scrollMargin,
+  });
+
+  // Get virtual items for dependency tracking
+  const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  // Trigger infinite scroll when near the end
+  useEffect(() => {
+    if (renderedVirtualItems.length === 0) return;
+
+    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
+
+    if (
+      lastItem &&
+      lastItem.index >= virtualItems.length - 10 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage();
+    }
+  }, [
+    renderedVirtualItems,
+    virtualItems.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
+
+  // Generate announcement for screen readers
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (allTracks.length === 0) return "No tracks found";
+    if (isFetchingNextPage) return undefined;
+    return `${allTracks.length} of ${totalTracks} tracks loaded`;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12" role="status" aria-label="Loading tracks">
+        <Spinner className="h-8 w-8 text-amber-400" />
+        <span className="sr-only">Loading tracks...</span>
+      </div>
+    );
+  }
+
+  if (allTracks.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Music className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
+        <p>No tracks found in your library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Announce content changes to screen readers */}
+      <LiveAnnouncer message={getAnnouncement()} />
+
+      {/* Header with track count and play/shuffle buttons */}
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-sm text-slate-400">
+          {totalTracks.toLocaleString()} tracks
+        </span>
+        <div className="flex items-center gap-2">
+          <PlayAllButton />
+          <ShuffleButton />
+        </div>
+      </div>
+
+      {/* Virtualized tracks list */}
+      <div
+        ref={listRef}
+        className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {renderedVirtualItems.map(virtualRow => {
+            const item = virtualItems[virtualRow.index];
+
+            if (!item) return null;
+
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                }}
+              >
+                {item.type === "letter" ? (
+                  <LetterHeader letter={item.letter} />
+                ) : (
+                  <TrackListItem track={item.track} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-4">
+            <Spinner className="h-6 w-6 text-amber-400" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlayAllButton() {
+  const [isLoading, setIsLoading] = useState(false);
+  const audioPlayer = useAudioPlayer();
+
+  const handlePlayAll = async () => {
+    setIsLoading(true);
+
+    try {
+      await audioPlayer.startPlayAllPlayback();
+    } catch (error) {
+      console.error("Failed to start playback:", error);
+      showActionFailed("start playback", "Unable to start playing all tracks. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handlePlayAll}
+      disabled={isLoading}
+      className="inline-flex items-center gap-2 rounded-full bg-slate-700 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50"
+      aria-label="Play all tracks"
+    >
+      {isLoading ? (
+        <Spinner className="size-4" />
+      ) : (
+        <Play className="size-4 fill-current" aria-hidden="true" />
+      )}
+      <span>Play All</span>
+    </button>
+  );
+}
+
+function ShuffleButton() {
+  const [isLoading, setIsLoading] = useState(false);
+  const audioPlayer = useAudioPlayer();
+
+  const handleShuffle = async () => {
+    setIsLoading(true);
+
+    try {
+      await audioPlayer.startShufflePlayback();
+    } catch (error) {
+      console.error("Failed to start shuffle playback:", error);
+      showActionFailed("start shuffle", "Unable to start shuffle playback. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShuffle}
+      disabled={isLoading}
+      className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50"
+      aria-label="Shuffle all tracks"
+    >
+      {isLoading ? (
+        <Spinner className="size-4" />
+      ) : (
+        <Shuffle className="size-4" aria-hidden="true" />
+      )}
+      <span>Shuffle All</span>
+    </button>
+  );
+}
+
+function LetterHeader({ letter }: { letter: string }) {
+  return (
+    <div className="animate-in border-b border-amber-500/20 bg-slate-800/50 px-4 py-3 duration-300 fade-in">
+      <span className="text-2xl font-bold text-amber-400">{letter}</span>
+    </div>
+  );
+}
+
+function TrackListItem({ track }: { track: TrackListItemType }) {
+  const audioPlayer = useAudioPlayer();
+
+  const handlePlay = () => {
+    const audioTrack = convertToAudioTrack({
+      id: track.id,
+      title: track.title,
+      file_path: track.file_path,
+      duration: track.duration,
+      codec: track.codec,
+      bit_rate: track.bit_rate,
+      album_id: track.album_id,
+      musician_id: track.musician_id,
+      album_cover: track.album_cover,
+      musician_name: track.musician_name,
+    });
+
+    audioPlayer.playTrack(audioTrack, [audioTrack], {
+      cover: unwrapString(track.album_cover),
+      title: unwrapString(track.album_title) ?? "Unknown Album",
+      musician: unwrapString(track.musician_name),
+    });
+  };
+
+  return (
+    <TrackItem
+      id={track.id}
+      title={track.title}
+      duration={track.duration}
+      subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
+      albumId={unwrapInt(track.album_id)}
+      albumTitle={unwrapStringOrUndefined(track.album_title)}
+      musicianId={unwrapInt(track.musician_id)}
+      musicianName={unwrapStringOrUndefined(track.musician_name)}
+      variant="library"
+      isPlaying={audioPlayer.currentTrack?.id === track.id && audioPlayer.isPlaying}
+      isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
+      onPlay={handlePlay}
+      showActionsMenu
+    />
+  );
+}
+
+// Flatten tracks into virtual items with letter headers inserted
+function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
+  const items: VirtualItem[] = [];
+  let currentLetter: string | null = null;
+
+  for (const track of tracks) {
+    const firstChar = track.title.charAt(0).toUpperCase();
+    const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
+
+    // Insert letter header when we encounter a new letter
+    if (letter !== currentLetter) {
+      items.push({ type: "letter", letter });
+      currentLetter = letter;
+    }
+
+    items.push({ type: "track", track });
+  }
+
+  return items;
+}
+
+// Playlists tab content
+function PlaylistsTabContent() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const { data, isLoading } = useQuery(playlistsQueryOpts());
+
+  const playlists = data?.error === false ? data.data.playlists : [];
+
+  // Generate announcement for screen readers
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (playlists.length === 0) return "No playlists yet";
+    return `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} loaded`;
+  };
+
+  if (isLoading) {
+    return <PlaylistsTabSkeleton />;
+  }
+
+  return (
+    <div>
+      {/* Announce content changes to screen readers */}
+      <LiveAnnouncer message={getAnnouncement()} />
+      {/* Header with count and create button */}
+      <div className="mb-6 flex items-center justify-between">
+        <span className="text-sm text-slate-400">
+          {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
+        </span>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          aria-label="Create new playlist"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          New Playlist
+        </button>
+      </div>
+
+      {/* Playlists grid or empty state */}
+      {playlists.length === 0 ? (
+        <EmptyPlaylistsState onCreateClick={() => setShowCreateDialog(true)} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {playlists.map((playlist) => (
+            <PlaylistCard key={playlist.id} playlist={playlist} />
+          ))}
+        </div>
+      )}
+
+      <CreatePlaylistDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+    </div>
+  );
+}
+
+function PlaylistsTabSkeleton() {
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
+        <div className="h-10 w-32 animate-pulse rounded-full bg-slate-800" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div
+            key={i}
+            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
+            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
+            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type EmptyPlaylistsStateProps = {
+  onCreateClick: () => void;
+};
+
+function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-6 flex size-24 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40 shadow-lg shadow-cyan-500/5">
+        <ListMusic className="size-10 text-cyan-200/40" aria-hidden="true" />
+      </div>
+      <h3 className="mb-2 text-xl font-semibold text-white">
+        No playlists yet
+      </h3>
+      <p className="mb-6 max-w-sm text-slate-400">
+        Create your first playlist to start organizing your favorite tracks.
+      </p>
+      <button
+        onClick={onCreateClick}
+        className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Create Your First Playlist
+      </button>
+    </div>
+  );
+}
