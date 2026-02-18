@@ -1,23 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Film } from "lucide-react";
 import { inTheatersQueryOpts } from "@/lib/query-opts";
+import { AlertCircle, Film } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import MovieCard from "@/components/MovieCard";
+import MovieCard from "@/components/InTheatersCard";
 import type { TheaterMovieType } from "@/types";
 
 export default function MoviesInTheaters() {
   const { data, isPending } = useQuery(inTheatersQueryOpts());
 
-  // Sort movies from newest to oldest by release date
-  const movies =
-    data && !data.error
-      ? [...data.data.movies].sort((a, b) => {
-          const dateA = new Date(a.release_date).getTime();
-          const dateB = new Date(b.release_date).getTime();
-          return dateB - dateA;
-        })
-      : [];
+  let movies: TheaterMovieType[] = [];
+  if (data && !data.error) {
+    movies = [...data.data.movies].sort((a, b) => {
+      const dateA = new Date(a.release_date).getTime();
+      const dateB = new Date(b.release_date).getTime();
+
+      return dateB - dateA;
+    });
+  }
 
   const hasError = data && data.error;
 
@@ -37,7 +37,7 @@ export default function MoviesInTheaters() {
 
       {isPending ? (
         <div
-          className="flex min-h-[200px] items-center justify-center py-12 sm:min-h-[280px]"
+          className="flex min-h-50 items-center justify-center py-12 sm:min-h-70"
           role="status"
           aria-label="Loading movies..."
         >
@@ -68,7 +68,7 @@ export default function MoviesInTheaters() {
             {movies.map((movie: TheaterMovieType) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
-            </div>
+          </div>
         </>
       ) : (
         <div className="py-12 text-center sm:py-16">

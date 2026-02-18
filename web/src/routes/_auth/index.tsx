@@ -1,4 +1,7 @@
- iimport { createLazyFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { latestMoviesQueryOpts } from "@/lib/query-opts";
+import { latestAlbumsQueryOpts } from "@/lib/query-opts";
+import { inTheatersQueryOpts } from "@/lib/query-opts";
 import { Home } from "lucide-react";
 import LatestAlbums from "@/components/LatestAlbums";
 import LatestMovies from "@/components/LatestMovies";
@@ -8,7 +11,16 @@ const pageTitle = "Home - Igloo";
 const pageDescription =
   "Welcome to Igloo - explore your personal media library with recently added movies, TV shows, music, and more.";
 
-export const Route = createLazyFileRoute("/_auth/")({
+export const Route = createFileRoute("/_auth/")({
+  loader: async ({ context }) => {
+    const { queryClient } = context;
+
+    await Promise.all([
+      queryClient.ensureQueryData(latestMoviesQueryOpts()),
+      queryClient.ensureQueryData(latestAlbumsQueryOpts()),
+      queryClient.ensureQueryData(inTheatersQueryOpts()),
+    ]);
+  },
   component: HomePage,
 });
 

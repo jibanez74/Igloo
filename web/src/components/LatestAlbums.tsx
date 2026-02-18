@@ -39,7 +39,7 @@ export default function LatestAlbums() {
 
       {isPending ? (
         <div
-          className="flex min-h-[200px] items-center justify-center py-12 sm:min-h-[280px]"
+          className="flex min-h-50 items-center justify-center py-12 sm:min-h-70"
           role="status"
           aria-label="Loading albums..."
         >

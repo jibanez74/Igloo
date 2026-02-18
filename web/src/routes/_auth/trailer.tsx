@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
@@ -20,7 +20,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 
-// Search params schema with Zod validation
 const trailerSearchSchema = z.object({
   mediaType: z.enum(["movie", "tv"]),
   mediaId: z.coerce.number().int().positive(),
@@ -29,12 +28,24 @@ const trailerSearchSchema = z.object({
 
 export const Route = createFileRoute("/_auth/trailer")({
   validateSearch: trailerSearchSchema,
+  loaderDeps: ({ search }) => ({
+    mediaType: search.mediaType,
+    mediaId: search.mediaId,
+  }),
+  loader: async ({ context, deps }) => {
+    if (deps.mediaId > 0) {
+      await context.queryClient.ensureQueryData(
+        movieDetailsQueryOpts(deps.mediaId),
+      );
+    }
+  },
   component: TrailerPage,
 });
 
 function TrailerPage() {
   const { mediaType, mediaId, returnTo } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -51,15 +62,15 @@ function TrailerPage() {
   // TODO: Handle TV shows when implemented
   const media = data?.data?.movie;
   const trailer = media?.videos?.results?.find(
-    v => v.type === "Trailer" && v.site === "YouTube"
+    v => v.type === "Trailer" && v.site === "YouTube",
   );
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
-  // Navigate back to origin page
+  // Navigate back to origin page (use router.navigate for dynamic path to avoid /trailer search typing)
   const handleClose = () => {
     if (returnTo) {
-      navigate({ to: returnTo, params: { id: String(mediaId) } });
+      router.navigate({ to: returnTo, params: { id: String(mediaId) } });
     } else {
       navigate({ to: "/" });
     }
@@ -218,7 +229,7 @@ function TrailerPage() {
     if (e.key === "Tab" && containerRef.current) {
       const focusableElements =
         containerRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
         );
 
       const firstElement = focusableElements[0];
@@ -239,23 +250,23 @@ function TrailerPage() {
     return (
       <div
         ref={containerRef}
-        role='dialog'
-        aria-modal='true'
-        aria-label='Error playing trailer'
-        className='fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900'
+        role="dialog"
+        aria-modal="true"
+        aria-label="Error playing trailer"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
-        <div className='max-w-md px-4 text-center'>
-          <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10'>
+        <div className="max-w-md px-4 text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
           </div>
-          <h2 className='mb-2 text-xl font-semibold text-white'>
+          <h2 className="mb-2 text-xl font-semibold text-white">
             Unable to Play Trailer
           </h2>
-          <p className='mb-6 text-slate-400'>{error}</p>
+          <p className="mb-6 text-slate-400">{error}</p>
           <button
             ref={closeButtonRef}
             onClick={handleClose}
-            className='rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className="rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
           >
             <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
@@ -270,25 +281,25 @@ function TrailerPage() {
     return (
       <div
         ref={containerRef}
-        role='dialog'
-        aria-modal='true'
-        aria-label='No trailer available'
-        className='fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900'
+        role="dialog"
+        aria-modal="true"
+        aria-label="No trailer available"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
-        <div className='max-w-md px-4 text-center'>
-          <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-800'>
+        <div className="max-w-md px-4 text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-800">
             <Film className="size-10 text-slate-400" aria-hidden="true" />
           </div>
-          <h2 className='mb-2 text-xl font-semibold text-white'>
+          <h2 className="mb-2 text-xl font-semibold text-white">
             No Trailer Available
           </h2>
-          <p className='mb-6 text-slate-400'>
+          <p className="mb-6 text-slate-400">
             This movie doesn't have a trailer yet.
           </p>
           <button
             ref={closeButtonRef}
             onClick={handleClose}
-            className='rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className="rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
           >
             <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
@@ -302,17 +313,17 @@ function TrailerPage() {
   if (!data) {
     return (
       <div
-        role='dialog'
-        aria-modal='true'
-        aria-label='Loading trailer'
-        className='fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900'
+        role="dialog"
+        aria-modal="true"
+        aria-label="Loading trailer"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
-        <div className='text-center'>
-          <div className='mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10'>
+        <div className="text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10">
             <Spinner className="size-10 text-amber-400" />
           </div>
-          <p className='text-lg font-medium text-white'>Loading trailer...</p>
-          <p className='mt-2 text-sm text-slate-400'>Please wait</p>
+          <p className="text-lg font-medium text-white">Loading trailer...</p>
+          <p className="mt-2 text-sm text-slate-400">Please wait</p>
         </div>
       </div>
     );
@@ -324,116 +335,116 @@ function TrailerPage() {
   return (
     <div
       ref={containerRef}
-      role='dialog'
-      aria-modal='true'
+      role="dialog"
+      aria-modal="true"
       aria-label={title}
       onKeyDown={handleContainerKeyDown}
-      className='fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900'
+      className="fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
     >
       {/* Screen reader live region for playback status */}
-      <div className='sr-only' aria-live='polite' aria-atomic='true'>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
 
       {/* Screen reader instructions */}
-      <p className='sr-only'>
+      <p className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or left arrow to rewind
         10 seconds, L or right arrow to forward 10 seconds, up/down arrows for
         volume, M to mute, F for fullscreen, Escape to close.
       </p>
 
       {/* Header with close button */}
-      <header className='flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg'>
-        <div className='flex items-center gap-3'>
+      <header className="flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg">
+        <div className="flex items-center gap-3">
           <Film className="size-5 text-amber-400" aria-hidden="true" />
           <div>
-            <h1 className='truncate text-base font-semibold text-white'>
+            <h1 className="truncate text-base font-semibold text-white">
               {title}
             </h1>
-            <p className='text-xs text-slate-400'>Now Playing</p>
+            <p className="text-xs text-slate-400">Now Playing</p>
           </div>
         </div>
         <button
           ref={closeButtonRef}
           onClick={handleClose}
-          className='flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
-          aria-label='Close trailer (Escape)'
+          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          aria-label="Close trailer (Escape)"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
       </header>
 
       {/* Video container */}
-      <div className='relative flex flex-1 items-center justify-center p-4'>
-        <div className='aspect-video w-full max-w-6xl'>
-          <div ref={playerContainerRef} className='h-full w-full' />
+      <div className="relative flex flex-1 items-center justify-center p-4">
+        <div className="aspect-video w-full max-w-6xl">
+          <div ref={playerContainerRef} className="size-full" />
         </div>
 
         {/* Loading overlay while player initializes */}
         {isLoading && (
-          <div className='absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm'>
-            <div className='text-center'>
-              <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10'>
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
                 <Spinner className="size-8 text-amber-400" />
               </div>
-              <p className='font-medium text-white'>Loading trailer...</p>
+              <p className="font-medium text-white">Loading trailer...</p>
             </div>
           </div>
         )}
       </div>
 
       {/* Control bar */}
-      <footer className='border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg'>
-        <div className='mx-auto max-w-4xl'>
+      <footer className="border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg">
+        <div className="mx-auto max-w-4xl">
           {/* Progress bar */}
-          <div className='mb-4' role='group' aria-label='Playback progress'>
+          <div className="mb-4" role="group" aria-label="Playback progress">
             <div
               onClick={handleProgressClick}
               onKeyDown={handleProgressKeyDown}
               tabIndex={0}
-              className='group relative h-1.5 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none'
-              role='slider'
-              aria-label='Seek through trailer'
+              className="group relative h-1.5 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              role="slider"
+              aria-label="Seek through trailer"
               aria-valuenow={Math.round(currentTime)}
               aria-valuemin={0}
               aria-valuemax={Math.round(duration)}
               aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
             >
               <div
-                className='absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-all'
+                className="absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-all"
                 style={{ width: `${progress}%` }}
               />
               <div
-                className='absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100'
+                className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100"
                 style={{ left: `calc(${progress}% - 6px)` }}
               />
             </div>
           </div>
 
           {/* Controls row */}
-          <div className='flex items-center justify-between'>
+          <div className="flex items-center justify-between">
             {/* Time display */}
-            <div className='flex min-w-[100px] items-center gap-2'>
-              <span className='text-sm text-slate-400 tabular-nums'>
+            <div className="flex min-w-[100px] items-center gap-2">
+              <span className="text-sm text-slate-400 tabular-nums">
                 {formatTime(currentTime)}
               </span>
-              <span className='text-slate-600'>/</span>
-              <span className='text-sm text-slate-400 tabular-nums'>
+              <span className="text-slate-600">/</span>
+              <span className="text-sm text-slate-400 tabular-nums">
                 {formatTime(duration)}
               </span>
             </div>
 
             {/* Playback controls */}
             <div
-              className='flex items-center gap-2'
-              role='group'
-              aria-label='Playback controls'
+              className="flex items-center gap-2"
+              role="group"
+              aria-label="Playback controls"
             >
               {/* Rewind 10s */}
               <button
                 onClick={() => seekBackward(10)}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
-                aria-label='Rewind 10 seconds (J or Left Arrow)'
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                aria-label="Rewind 10 seconds (J or Left Arrow)"
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </button>
@@ -441,7 +452,7 @@ function TrailerPage() {
               {/* Play/Pause */}
               <button
                 onClick={togglePlay}
-                className='flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
                 aria-label={
                   isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
                 }
@@ -456,19 +467,19 @@ function TrailerPage() {
               {/* Forward 10s */}
               <button
                 onClick={() => seekForward(10)}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
-                aria-label='Forward 10 seconds (L or Right Arrow)'
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                aria-label="Forward 10 seconds (L or Right Arrow)"
               >
                 <FastForward className="size-5" aria-hidden="true" />
               </button>
             </div>
 
             {/* Volume and fullscreen controls */}
-            <div className='flex min-w-[100px] items-center justify-end gap-2'>
+            <div className="flex min-w-[100px] items-center justify-end gap-2">
               {/* Volume button */}
               <button
                 onClick={toggleMute}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
                 {isMuted || volume === 0 ? (
@@ -483,8 +494,8 @@ function TrailerPage() {
               {/* Fullscreen button */}
               <button
                 onClick={toggleFullscreen}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
-                aria-label='Toggle fullscreen (F)'
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                aria-label="Toggle fullscreen (F)"
               >
                 <Maximize className="size-5" aria-hidden="true" />
               </button>

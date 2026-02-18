@@ -122,7 +122,7 @@ export function albumsPaginatedQueryOpts(page: number, perPage: number = 24) {
 
 export function musiciansPaginatedQueryOpts(
   page: number,
-  perPage: number = 24
+  perPage: number = 24,
 ) {
   return queryOptions({
     queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
@@ -155,7 +155,7 @@ export function playlistDetailsQueryOpts(id: number) {
 
 export function playlistTracksInfiniteQueryOpts(
   playlistId: number,
-  pageSize = 50
+  pageSize = 50,
 ) {
   return infiniteQueryOptions({
     queryKey: [PLAYLIST_TRACKS_KEY, playlistId],

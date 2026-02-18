@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import {
   createFileRoute,
-  useNavigate,
   useRouter,
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -24,7 +23,7 @@ import MovieVideo from "@/components/VideoPlayer";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { formatTimeSeconds } from "@/lib/format";
 
-export const Route = createFileRoute("/_auth/movies/play/$id")({
+export const Route = createFileRoute("/_auth/movies/$id/play")({
   component: PlayMoviePage,
 });
 
@@ -35,7 +34,7 @@ const CONTROLS_IDLE_MS = 3000;
 function PlayMoviePage() {
   const { id } = Route.useParams();
   const movieId = parseInt(id, 10);
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const router = useRouter();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -466,7 +465,7 @@ function PlayMoviePage() {
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex min-w-[100px] items-center gap-2">
+            <div className="flex min-w-25 items-center gap-2">
               <span className="text-sm text-slate-400 tabular-nums">
                 {formatTimeSeconds(currentTime)}
               </span>
@@ -508,7 +507,7 @@ function PlayMoviePage() {
               </button>
             </div>
 
-            <div className="flex min-w-[100px] items-center justify-end gap-2">
+            <div className="flex min-w-25 items-center justify-end gap-2">
               <VolumeControl
                 mediaRef={videoRef}
                 variant="minimized"

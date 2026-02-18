@@ -1,65 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { AlertCircle, Film, Play } from "lucide-react";
+import { AlertCircle, Film } from "lucide-react";
 import { latestMoviesQueryOpts } from "@/lib/query-opts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
-import type { LatestMovieType } from "@/types";
+import MovieCard from "@/components/MovieCard";
 
-function LatestMovieCard({ movie }: { movie: LatestMovieType }) {
-  const { id, title, poster, year } = movie;
-
-  return (
-    <article className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in focus-within:ring-2 focus-within:ring-cyan-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20">
-      <Link
-        to="/movies/play/$id"
-        params={{ id: String(id) }}
-        className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        aria-label={`Play ${title}${year ? `, ${year}` : ""}`}
-      >
-        {/* Poster with 2:3 aspect ratio (standard movie poster) */}
-        <div className="relative aspect-2/3 bg-slate-800">
-          {poster ? (
-            <img
-              src={poster}
-              alt=""
-              width={500}
-              height={750}
-              loading="lazy"
-              decoding="async"
-              fetchPriority="low"
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center">
-              <Film className="size-10 text-slate-600" aria-hidden="true" />
-            </div>
-          )}
-          {/* Play icon overlay on hover */}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500/90 text-slate-900 shadow-lg">
-              <Play className="size-7 fill-current" aria-hidden="true" />
-            </span>
-          </div>
-          {/* Gradient overlay for text readability */}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
-        </div>
-        {/* Movie info */}
-        <div className="absolute inset-x-0 bottom-0 p-3">
-          <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
-            {title}
-          </h3>
-          {year != null && (
-            <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
-              {year}
-            </p>
-          )}
-        </div>
-      </Link>
-    </article>
-  );
-}
 
 export default function LatestMovies() {
   const { data, isPending } = useQuery(latestMoviesQueryOpts());
@@ -92,7 +38,7 @@ export default function LatestMovies() {
 
       {isPending ? (
         <div
-          className="flex min-h-[200px] items-center justify-center py-12 sm:min-h-[280px]"
+          className="flex min-h-50 items-center justify-center py-12 sm:min-h-70"
           role="status"
           aria-label="Loading movies..."
         >
@@ -121,7 +67,7 @@ export default function LatestMovies() {
           </span>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-6">
             {movies.map(movie => (
-              <LatestMovieCard key={movie.id} movie={movie} />
+              <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
         </>

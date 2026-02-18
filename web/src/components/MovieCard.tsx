@@ -1,79 +1,75 @@
 import { Link } from "@tanstack/react-router";
-import { Film, Star } from "lucide-react";
-import { TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
-import type { TheaterMovieType } from "@/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { Film, Play } from "lucide-react";
+import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import type { LatestMovieType } from "@/types";
 
-type MovieCardProps = {
-  movie: TheaterMovieType;
-};
+export default function MovieCard({ movie }: { movie: LatestMovieType }) {
+  const { id, title, poster, year } = movie;
+  const queryClient = useQueryClient();
 
-export default function MovieCard({ movie }: MovieCardProps) {
-  const { id, title, poster_path, vote_average, release_date } = movie;
-
-  const posterUrl = poster_path ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${poster_path}` : null;
-  const rating = vote_average ? vote_average.toFixed(1) : null;
-  const year = release_date ? new Date(release_date).getFullYear() : null;
-
-  // Alaska-themed rating colors (aurora borealis inspired)
-  const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-teal-500 text-white"; // Northern lights green-blue
-    if (score >= 5) return "bg-sky-500 text-white"; // Glacier blue
-    return "bg-slate-500 text-white"; // Frozen gray
-  };
+  const handlePrefetch = () =>
+    queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
 
   return (
-    <article className='group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20'>
+    <article
+      className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in focus-within:ring-2 focus-within:ring-cyan-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20"
+      onMouseEnter={handlePrefetch}
+      onFocus={handlePrefetch}
+    >
       <Link
-        to='/movies/in-theaters/$id'
-        params={{ id: id.toString() }}
-        className='block rounded-xl focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
-        aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
+        to="/movies/$id"
+        params={{ id: String(id) }}
+        className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        aria-label={`${title}${year ? `, ${year}` : ""}`}
       >
-      {/* Poster with 2:3 aspect ratio (standard movie poster) */}
-        <div className='relative aspect-2/3 bg-slate-800'>
-        {posterUrl ? (
-          <img
-            src={posterUrl}
-              alt=''
-              width='500'
-              height='750'
-              loading='lazy'
-              decoding='async'
-              fetchPriority='low'
-              className='size-full object-cover transition-transform duration-300 group-hover:scale-105'
-          />
-        ) : (
-            <div className='flex size-full items-center justify-center'>
+        {/* Poster with 2:3 aspect ratio (standard movie poster) */}
+        <div className="relative aspect-2/3 bg-slate-800">
+          {poster ? (
+            <img
+              src={poster}
+              alt=""
+              width={500}
+              height={750}
+              loading="lazy"
+              decoding="async"
+              fetchPriority="low"
+              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center">
               <Film className="size-10 text-slate-600" aria-hidden="true" />
-          </div>
-        )}
-
-        {/* Rating badge */}
-        {rating && (
+            </div>
+          )}
+          {/* Overlay - appears on hover/focus */}
           <div
-            className={`absolute top-2 right-2 rounded-md px-2 py-0.5 text-xs font-bold shadow-lg ${getRatingColor(vote_average)}`}
-              aria-hidden='true'
-          >
-              <Star className="mr-1 size-2.5 fill-current" aria-hidden="true" />
-            {rating}
-          </div>
-        )}
-
-        {/* Gradient overlay for text readability */}
-          <div className='absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent' />
-      </div>
-
-      {/* Movie info */}
-        <div className='absolute inset-x-0 bottom-0 p-3'>
-          <h3 className='truncate text-sm font-semibold text-white drop-shadow-lg'>
-          {title}
-        </h3>
-        {year && (
-            <p className='mt-0.5 text-xs text-slate-300 drop-shadow-lg'>
+            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100"
+            aria-hidden="true"
+          />
+          {/* Gradient overlay for text readability */}
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+        </div>
+        {/* Movie info */}
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
+            {title}
+          </h3>
+          {year != null && (
+            <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
               {year}
             </p>
-        )}
-      </div>
+          )}
+        </div>
+      </Link>
+
+      {/* Play button - goes to play page without opening details */}
+      <Link
+        to="/movies/$id/play"
+        params={{ id: String(id) }}
+        className="absolute top-1/2 left-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 scale-90 items-center justify-center rounded-full bg-cyan-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-cyan-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        aria-label={`Play ${title}${year ? `, ${year}` : ""}`}
+      >
+        <Play className="size-7 fill-current" aria-hidden="true" />
       </Link>
     </article>
   );
