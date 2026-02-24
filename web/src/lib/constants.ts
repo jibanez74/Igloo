@@ -18,11 +18,12 @@ export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
 
-// tmdb
+// tmdb (all TMDB image constants live here; frontend builds full URLs from paths)
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
+export const TMDB_LOGO_SIZE = "w92";
 
 // pagination for music page
 export const ALBUMS_PER_PAGE = 24;

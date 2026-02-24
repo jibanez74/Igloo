@@ -2,22 +2,31 @@ package tmdb
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/joho/godotenv"
 )
 
-// loadEnv loads the .env file from the project root.
-// Returns the TMDB API key or skips the test if not available.
+// loadEnv loads .env from the server directory (same as main.go) so tests use the same TMDB_API_KEY.
+// Path is resolved from the test file location so it works regardless of current working directory.
+// Returns the TMDB API key or skips the test if not set.
 func loadEnv(t *testing.T) string {
 	t.Helper()
 
-	// Try to load .env from project root (3 levels up from this test file)
-	_ = godotenv.Load("../../../.env")
+	_, currentFile, _, _ := runtime.Caller(0)
+	// From server/cmd/internal/tmdb/ go up 4 levels to server/
+	serverDir := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
+	envPath := filepath.Join(serverDir, ".env")
+	if err := godotenv.Load(envPath); err != nil {
+		// Also try .env in cwd (e.g. when running from server/)
+		_ = godotenv.Load()
+	}
 
 	apiKey := os.Getenv("TMDB_API_KEY")
 	if apiKey == "" {
-		t.Skip("TMDB_API_KEY not set, skipping integration test")
+		t.Skip("TMDB_API_KEY not set (add it to server/.env to run TMDB integration tests)")
 	}
 
 	return apiKey

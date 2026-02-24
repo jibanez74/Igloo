@@ -58,6 +58,11 @@ export type {
   TheaterMovieType,
   MovieDetailsType,
   LibraryMovieDetailsMovieType,
+  LibraryCastMemberType,
+  LibraryCrewMemberType,
+  LibraryGenreType,
+  LibraryExtraVideoType,
+  LibraryMovieDetailsResponse,
 } from "./movies";
 
 // Audio player types

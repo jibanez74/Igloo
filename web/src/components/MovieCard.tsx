@@ -2,10 +2,13 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Film, Play } from "lucide-react";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import { buildTmdbImageUrl } from "@/lib/movie-details-view";
+import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import type { LatestMovieType } from "@/types";
 
 export default function MovieCard({ movie }: { movie: LatestMovieType }) {
-  const { id, title, poster, year } = movie;
+  const { id, title, poster_path, year } = movie;
+  const posterUrl = buildTmdbImageUrl(poster_path ?? null, TMDB_POSTER_SIZE);
   const queryClient = useQueryClient();
 
   const handlePrefetch = () =>
@@ -25,9 +28,9 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}
         <div className="relative aspect-2/3 bg-slate-800">
-          {poster ? (
+          {posterUrl ? (
             <img
-              src={poster}
+              src={posterUrl}
               alt=""
               width={500}
               height={750}

@@ -3,16 +3,24 @@ package ffmpeg
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 )
 
-type FFmpeg struct {
+// FFmpeg is the interface for running FFmpeg (e.g. HLS transcoding).
+// The concrete implementation is private.
+type FFmpeg interface {
+	RunHLS(cfg *RunHLSConfig) (*exec.Cmd, error)
+}
+
+// ffmpeg is the private implementation of FFmpeg.
+type ffmpeg struct {
 	bin string
 }
 
 var (
-	instance     *FFmpeg
+	instance     FFmpeg
 	instanceMu   sync.Mutex
 	extractedDir string
 )
@@ -20,7 +28,7 @@ var (
 // New returns a singleton FFmpeg instance.
 // The embedded binary is extracted to a temp directory on first call.
 // Subsequent calls return the same instance without re-extracting.
-func New() (*FFmpeg, error) {
+func New() (FFmpeg, error) {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
 
@@ -33,7 +41,7 @@ func New() (*FFmpeg, error) {
 		return nil, err
 	}
 
-	instance = &FFmpeg{bin: binPath}
+	instance = &ffmpeg{bin: binPath}
 
 	return instance, nil
 }
@@ -60,7 +68,6 @@ func Cleanup() error {
 
 // extractBinary writes the embedded ffmpeg binary to a temporary directory
 // and returns the path to the executable.
-//
 // embeddedBinary is defined in platform-specific files (ffmpeg_darwin_arm64.go,
 // ffmpeg_linux_amd64.go) and is populated at compile time via //go:embed.
 func extractBinary() (string, error) {

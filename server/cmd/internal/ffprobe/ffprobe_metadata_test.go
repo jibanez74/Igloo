@@ -1,27 +1,37 @@
 package ffprobe
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 )
 
-// getTestMediaPath returns the absolute path to a test media file.
+// getTestMediaPath returns the absolute path to a test media file under server/media/.
+// From server/cmd/internal/ffprobe/ we go up 4 levels to server/.
 func getTestMediaPath(filename string) string {
 	_, currentFile, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..")
-
+	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
 	return filepath.Join(projectRoot, "media", filename)
 }
 
+// requireTestMedia skips the test if the given path does not exist (e.g. server/media/track.m4a not checked in).
+func requireTestMedia(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Skipf("test media not found (add server/media/track.m4a to run): %v", err)
+	}
+}
+
 func TestGetMetadata_AudioFile(t *testing.T) {
+	trackPath := getTestMediaPath("track.m4a")
+	requireTestMedia(t, trackPath)
+
 	probe, err := New()
 	if err != nil {
 		t.Fatalf("Failed to create ffprobe instance: %v", err)
 	}
 	defer Cleanup()
-
-	trackPath := getTestMediaPath("track.m4a")
 
 	result, err := probe.GetMetadata(trackPath)
 	if err != nil {
@@ -52,13 +62,14 @@ func TestGetMetadata_AudioFile(t *testing.T) {
 }
 
 func TestGetMetadata_AudioStream(t *testing.T) {
+	trackPath := getTestMediaPath("track.m4a")
+	requireTestMedia(t, trackPath)
+
 	probe, err := New()
 	if err != nil {
 		t.Fatalf("Failed to create ffprobe instance: %v", err)
 	}
 	defer Cleanup()
-
-	trackPath := getTestMediaPath("track.m4a")
 
 	result, err := probe.GetMetadata(trackPath)
 	if err != nil {
@@ -116,13 +127,14 @@ func TestGetMetadata_EmptyPath(t *testing.T) {
 }
 
 func TestGetMetadata_FormatTags(t *testing.T) {
+	trackPath := getTestMediaPath("track.m4a")
+	requireTestMedia(t, trackPath)
+
 	probe, err := New()
 	if err != nil {
 		t.Fatalf("Failed to create ffprobe instance: %v", err)
 	}
 	defer Cleanup()
-
-	trackPath := getTestMediaPath("track.m4a")
 
 	result, err := probe.GetMetadata(trackPath)
 	if err != nil {
@@ -145,6 +157,9 @@ func TestGetMetadata_FormatTags(t *testing.T) {
 }
 
 func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
+	trackPath := getTestMediaPath("track.m4a")
+	requireTestMedia(t, trackPath)
+
 	probe1, err := New()
 	if err != nil {
 		t.Fatalf("Failed to create first ffprobe instance: %v", err)
@@ -160,8 +175,6 @@ func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
 	if probe1 != probe2 {
 		t.Error("Expected New() to return the same singleton instance")
 	}
-
-	trackPath := getTestMediaPath("track.m4a")
 
 	// Both instances should work
 	result1, err := probe1.GetMetadata(trackPath)

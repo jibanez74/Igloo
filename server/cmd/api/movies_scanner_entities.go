@@ -34,14 +34,14 @@ func (app *Application) processProductionCompanies(
 		if ok {
 			dbCompany = cached
 		} else {
-			// Build logo URL if available
-			logoURL := buildTmdbImageURL(company.LogoPath)
+			// Store logo path only; frontend builds the image URL
+			logo := helpers.NullString(company.LogoPath)
 
 			// Upsert production company
 			upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
 				Name:    company.Name,
 				TmdbID:  int64(company.ID),
-				Logo:    logoURL,
+				Logo:    logo,
 				Country: helpers.NullString(company.OriginCountry),
 			})
 			if err != nil {

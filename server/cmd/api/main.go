@@ -1,51 +1,56 @@
 package main
 
 import (
-	"context"
-	"database/sql"
-	"embed"
-	"errors"
-	"fmt"
-	"log"
-	"log/slog"
-	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"sync"
-	"syscall"
-	"time"
+  "context"
+  "database/sql"
+  "embed"
+  "errors"
+  "fmt"
+  "log"
+  "log/slog"
+  "net/http"
+  "os"
+  "os/signal"
+  "strconv"
+  "sync"
+  "syscall"
+  "time"
 
-	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/ffmpeg"
-	"igloo/cmd/internal/ffprobe"
-	"igloo/cmd/internal/helpers"
-	applogger "igloo/cmd/internal/logger"
-	"igloo/cmd/internal/spotify"
-	"igloo/cmd/internal/tmdb"
+  "igloo/cmd/internal/database"
+  "igloo/cmd/internal/ffmpeg"
+  "igloo/cmd/internal/ffprobe"
+  "igloo/cmd/internal/helpers"
+  applogger "igloo/cmd/internal/logger"
+  "igloo/cmd/internal/spotify"
+  "igloo/cmd/internal/tmdb"
 
-	"github.com/alexedwards/scs/sqlite3store"
-	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/joho/godotenv"
-	_ "github.com/mattn/go-sqlite3" // SQLite driver for database/sql
+  "github.com/alexedwards/scs/sqlite3store"
+  "github.com/alexedwards/scs/v2"
+  "github.com/go-chi/chi/v5"
+  "github.com/go-chi/chi/v5/middleware"
+  "github.com/joho/godotenv"
+  _ "github.com/mattn/go-sqlite3"
+  "github.com/patrickmn/go-cache"
+  "golang.org/x/sync/singleflight"
 )
 
 type Application struct {
-	DB             *sql.DB
-	Queries        *database.Queries
-	Settings       *database.Setting
-	Logger         *slog.Logger
-	LoggerCloser   func() error
-	Ffprobe        ffprobe.FfprobeInterface
-	Spotify        spotify.SpotifyInterface
-	Tmdb           tmdb.TmdbInterface
-	SessionManager *scs.SessionManager
-	Wait           *sync.WaitGroup
-	Router         *chi.Mux
-	Server         *http.Server
-	ScannerDBMu    sync.Mutex
+  DB              *sql.DB
+  Queries         *database.Queries
+  Settings        *database.Setting
+  Logger          *slog.Logger
+  LoggerCloser    func() error
+  Ffprobe         ffprobe.FfprobeInterface
+  FFmpeg          ffmpeg.FFmpeg
+  Spotify         spotify.SpotifyInterface
+  Tmdb            tmdb.TmdbInterface
+  SessionManager  *scs.SessionManager
+  Wait            *sync.WaitGroup
+  Router          *chi.Mux
+  Server          *http.Server
+  ScannerDBMu     sync.Mutex
+  HLSSessionCache *cache.Cache
+  HLSSessionGroup singleflight.Group
 }
 
 // SQL contains the database schema, embedded at compile time.
@@ -61,332 +66,351 @@ var SQL string
 var FrontendFS embed.FS
 
 func main() {
-	log.Println("igloo server starting up...")
+  log.Println("igloo server starting up...")
 
-	// Load environment variables from .env file.
-	// This allows local development without setting system env vars.
-	// In production, env vars can come from Docker, systemd, or other sources.
-	// I am still not sure if I will keep it like this, but for the time being will use this package for env vars and grab them like this.
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal(err)
-	}
+  // Load environment variables from .env file.
+  // This allows local development without setting system env vars.
+  // In production, env vars can come from Docker, systemd, or other sources.
+  // I am still not sure if I will keep it like this, but for the time being will use this package for env vars and grab them like this.
+  err := godotenv.Load()
+  if err != nil {
+    log.Fatal(err)
+  }
 
-	app, err := InitApp()
-	if err != nil {
-		log.Fatal(err)
-	}
+  app, err := InitApp()
+  if err != nil {
+    log.Fatal(err)
+  }
 
-	port, err := strconv.Atoi(os.Getenv("PORT"))
-	if err != nil {
-		port = 8080
-	}
+  port, err := strconv.Atoi(os.Getenv("PORT"))
+  if err != nil {
+    port = 8080
+  }
 
-	app.Server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: app.Router,
-	}
+  app.Server = &http.Server{
+    Addr:    fmt.Sprintf(":%d", port),
+    Handler: app.Router,
+  }
 
-	go app.ListenForShutdown()
+  go app.ListenForShutdown()
 
-	log.Printf("server listening on port %d", port)
+  log.Printf("server listening on port %d", port)
 
-	err = app.Server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
-	}
+  err = app.Server.ListenAndServe()
+  if err != nil && !errors.Is(err, http.ErrServerClosed) {
+    log.Fatal(err)
+  }
 }
 
 // InitApp creates and initializes all application components in the correct order.
 // The initialization sequence is critical - each step depends on the previous:
 func InitApp() (*Application, error) {
-	app := Application{
-		Wait: &sync.WaitGroup{},
-	}
+  app := Application{
+    Wait: &sync.WaitGroup{},
+  }
 
-	// Create a background context for database operations during startup.
-	ctx := context.Background()
+  // Create a background context for database operations during startup.
+  ctx := context.Background()
 
-	// Initialize the logger first so all other init functions can log errors.
-	// Uses environment variables directly since settings aren't loaded yet.
-	// In debug mode logs to stdout, otherwise logs to file with rotation.
-	err := app.InitLogger()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logger: %v", err)
-	}
+  // Initialize the logger first so all other init functions can log errors.
+  // Uses environment variables directly since settings aren't loaded yet.
+  // In debug mode logs to stdout, otherwise logs to file with rotation.
+  err := app.InitLogger()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize logger: %v", err)
+  }
 
-	// Initialize database connection and create the database file if it doesn't exist.
-	err = app.InitDB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
-	}
+  // Initialize database connection and create the database file if it doesn't exist.
+  err = app.InitDB()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize database: %v", err)
+  }
 
-	// Create database tables if they don't exist.
-	// Uses the embedded schema.sql with CREATE TABLE IF NOT EXISTS.
-	err = app.InitTables()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
-	}
+  // Create database tables if they don't exist.
+  // Uses the embedded schema.sql with CREATE TABLE IF NOT EXISTS.
+  err = app.InitTables()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize database tables: %v", err)
+  }
 
-	// Get the prepared queries from the database package.
-	// The base queries are stored in sqlc/queries and sqlc generates the prepared queries.
-	app.Queries, err = database.Prepare(ctx, app.DB)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
-	}
+  // Get the prepared queries from the database package.
+  // The base queries are stored in sqlc/queries and sqlc generates the prepared queries.
+  app.Queries, err = database.Prepare(ctx, app.DB)
+  if err != nil {
+    return nil, fmt.Errorf("failed to prepare database queries: %v", err)
+  }
 
-	// Load or create application settings.
-	// Reads existing settings from DB, or creates defaults from env vars.
-	err = app.InitSettings(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize settings: %v", err)
-	}
+  // Load or create application settings.
+  // Reads existing settings from DB, or creates defaults from env vars.
+  err = app.InitSettings(ctx)
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize settings: %v", err)
+  }
 
-	// Create required directories (static, logs) and optional media directories.
-	// Must run after InitSettings since directory paths come from settings.
-	err = app.InitDirs()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize directories: %v", err)
-	}
+  // Create required directories (static, logs) and optional media directories.
+  // Must run after InitSettings since directory paths come from settings.
+  err = app.InitDirs()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize directories: %v", err)
+  }
 
-	// Ensure a default admin user exists.
-	// Creates admin@sample.com with password "AdminPassword" if no admin found.
-	err = app.InitDefaultUser(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize default user: %v", err)
-	}
+  // Ensure a default admin user exists.
+  // Creates admin@sample.com with password "AdminPassword" if no admin found.
+  err = app.InitDefaultUser(ctx)
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize default user: %v", err)
+  }
 
-	// Initialize session manager for authentication.
-	// Uses SQLite as the session store, sharing the same database connection.
-	app.InitSession()
+  // Initialize session manager for authentication.
+  // Uses SQLite as the session store, sharing the same database connection.
+  app.InitSession()
 
-	// Initialize ffprobe for media metadata extraction.
-	// Extracts the platform-specific binary from embedded data to a temp directory.
-	ffprobeApp, err := ffprobe.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ffprobe: %v", err)
-	}
-	app.Ffprobe = ffprobeApp
+  // Initialize ffprobe for media metadata extraction.
+  // Extracts the platform-specific binary from embedded data to a temp directory.
+  ffprobeApp, err := ffprobe.New()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize ffprobe: %v", err)
+  }
+  app.Ffprobe = ffprobeApp
 
-	// Initialize Spotify client if credentials are configured.
-	// This is optional - the app works without Spotify integration.
-	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientSecret.Valid {
-		s, err := spotify.New(app.Settings.SpotifyClientID.String, app.Settings.SpotifyClientSecret.String)
-		if err != nil {
-			app.Logger.Warn("failed to initialize spotify client", "error", err)
-		} else {
-			app.Spotify = s
-			app.Logger.Info("spotify client initialized successfully")
-		}
-	}
+  // Initialize FFmpeg for HLS transcoding.
+  // Extracts the platform-specific binary from embedded data to a temp directory.
+  ffmpegApp, err := ffmpeg.New()
+  if err != nil {
+    return nil, fmt.Errorf("failed to initialize ffmpeg: %v", err)
+  }
+  app.FFmpeg = ffmpegApp
 
-	// Initialize TMDB client if TMDB key is configured.
-	// This is optional - the app works without TMDB integration.
-	if app.Settings.TmdbKey.Valid {
-		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
-		if err != nil {
-			app.Logger.Warn("failed to initialize tmdb client", "error", err)
-		} else {
-			app.Tmdb = tmdb
-			app.Logger.Info("tmdb client initialized successfully")
-		}
-	}
+  // HLS session cache: 30 min TTL, 10 min cleanup interval.
+  // OnEvicted kills FFmpeg and deletes the session temp dir when a session expires.
+  hlsCache := cache.New(30*time.Minute, 10*time.Minute)
+  hlsCache.OnEvicted(func(key string, value any) {
+    if session, ok := value.(*HLSSession); ok {
+      CleanupHLSSession(session, app.Logger)
+    }
+  })
+  app.HLSSessionCache = hlsCache
+  // HLSSessionGroup is zero-value initialized; no constructor needed.
 
-	// Start movies library scanner in background if TMDB key is set and movies directory is configured.
-	if app.Settings.TmdbKey.Valid && app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
-		go app.ScanMoviesLibrary()
-	}
+  // Initialize Spotify client if credentials are configured.
+  // This is optional - the app works without Spotify integration.
+  if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientSecret.Valid {
+    s, err := spotify.New(app.Settings.SpotifyClientID.String, app.Settings.SpotifyClientSecret.String)
+    if err != nil {
+      app.Logger.Warn("failed to initialize spotify client", "error", err)
+    } else {
+      app.Spotify = s
+      app.Logger.Info("spotify client initialized successfully")
+    }
+  }
 
-	// Start music library scanner in background if music directory is configured.
-	if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
-		go app.ScanMusicLibrary()
-	}
+  // Initialize TMDB client if TMDB key is configured.
+  // This is optional - the app works without TMDB integration.
+  if app.Settings.TmdbKey.Valid {
+    tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
+    if err != nil {
+      app.Logger.Warn("failed to initialize tmdb client", "error", err)
+    } else {
+      app.Tmdb = tmdb
+      app.Logger.Info("tmdb client initialized successfully")
+    }
+  }
 
-	app.InitRouter()
+  // Start movies library scanner in background if TMDB key is set and movies directory is configured.
+  if app.Settings.TmdbKey.Valid && app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
+    go app.ScanMoviesLibrary()
+  }
 
-	return &app, nil
+  // Start music library scanner in background if music directory is configured.
+  if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
+    go app.ScanMusicLibrary()
+  }
+
+  app.InitRouter()
+
+  return &app, nil
 }
 
 func (app *Application) InitDB() error {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "igloo.db"
-	}
+  dbPath := os.Getenv("DB_PATH")
+  if dbPath == "" {
+    dbPath = "igloo.db"
+  }
 
-	_, err := os.Stat(dbPath)
-	if err == nil {
-		app.Logger.Info("opening existing database", "path", dbPath)
-	} else if os.IsNotExist(err) {
-		app.Logger.Info("creating new database", "path", dbPath)
-	} else {
-		return err
-	}
+  _, err := os.Stat(dbPath)
+  if err == nil {
+    app.Logger.Info("opening existing database", "path", dbPath)
+  } else if os.IsNotExist(err) {
+    app.Logger.Info("creating new database", "path", dbPath)
+  } else {
+    return err
+  }
 
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on")
-	if err != nil {
-		return err
-	}
+  db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on")
+  if err != nil {
+    return err
+  }
 
-	err = db.Ping()
-	if err != nil {
-		return err
-	}
+  err = db.Ping()
+  if err != nil {
+    return err
+  }
 
-	_, err = db.Exec("PRAGMA journal_mode=WAL;")
-	if err != nil {
-		return err
-	}
+  _, err = db.Exec("PRAGMA journal_mode=WAL;")
+  if err != nil {
+    return err
+  }
 
-	app.DB = db
+  app.DB = db
 
-	return nil
+  return nil
 }
 
 // InitTables executes the embedded schema.sql to create all database tables.
 // Uses CREATE TABLE IF NOT EXISTS so it's safe to run on every startup.
 // This ensures the database schema is always up to date with the application.
 func (app *Application) InitTables() error {
-	_, err := app.DB.Exec(SQL)
-	if err != nil {
-		return err
-	}
+  _, err := app.DB.Exec(SQL)
+  if err != nil {
+    return err
+  }
 
-	// One-off migration: add poster_path to movies if missing (e.g. existing DBs created before this column).
-	_, _ = app.DB.Exec("ALTER TABLE movies ADD COLUMN poster_path TEXT")
+  // One-off migration: add poster_path to movies if missing (e.g. existing DBs created before this column).
+  _, _ = app.DB.Exec("ALTER TABLE movies ADD COLUMN poster_path TEXT")
 
-	app.Logger.Info("database tables initialized successfully")
+  app.Logger.Info("database tables initialized successfully")
 
-	return nil
+  return nil
 }
 
 // InitSettings loads application settings from the database.
 // If no settings exist (first run), creates a new settings record
 // populated from environment variables with sensible defaults.
 func (app *Application) InitSettings(ctx context.Context) error {
-	settings, err := app.Queries.GetSettings(ctx)
-	if err == nil {
-		// Settings exist - use them.
-		app.Logger.Info("loaded existing settings from database")
-		app.Settings = &settings
-		return nil
-	}
+  settings, err := app.Queries.GetSettings(ctx)
+  if err == nil {
+    // Settings exist - use them.
+    app.Logger.Info("loaded existing settings from database")
+    app.Settings = &settings
+    return nil
+  }
 
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
+  if !errors.Is(err, sql.ErrNoRows) {
+    return err
+  }
 
-	app.Logger.Info("no settings found, creating default settings...")
+  app.Logger.Info("no settings found, creating default settings...")
 
-	downloadImages, _ := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
-	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
-	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
+  downloadImages, _ := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
+  enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
+  enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	logsDir := os.Getenv("LOGS_DIR")
-	if logsDir == "" {
-		logsDir = "logs"
-	}
+  logsDir := os.Getenv("LOGS_DIR")
+  if logsDir == "" {
+    logsDir = "logs"
+  }
 
-	staticDir := os.Getenv("STATIC_DIR")
-	if staticDir == "" {
-		staticDir = "static"
-	}
+  staticDir := os.Getenv("STATIC_DIR")
+  if staticDir == "" {
+    staticDir = "static"
+  }
 
-	// Hardware acceleration defaults to CPU (no acceleration).
-	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
-	if hardwareAccelerationDevice == "" {
-		hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
-	}
+  // Hardware acceleration defaults to CPU (no acceleration).
+  hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
+  if hardwareAccelerationDevice == "" {
+    hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
+  }
 
-	// Build the settings record from environment variables.
-	// NullString handles empty strings by setting Valid=false.
-	params := database.CreateSettingsParams{
-		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
-		JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
-		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
-		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
-		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
-		EnableLogger:               enableLogger,
-		EnableWatcher:              enableWatcher,
-		DownloadImages:             downloadImages,
-		MoviesDir:                  helpers.NullString(os.Getenv("MOVIES_DIR")),
-		ShowsDir:                   helpers.NullString(os.Getenv("SHOWS_DIR")),
-		MusicDir:                   helpers.NullString(os.Getenv("MUSIC_DIR")),
-		StaticDir:                  staticDir,
-		LogsDir:                    logsDir,
-	}
+  // Build the settings record from environment variables.
+  // NullString handles empty strings by setting Valid=false.
+  params := database.CreateSettingsParams{
+    TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
+    JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
+    SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
+    SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
+    HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
+    EnableLogger:               enableLogger,
+    EnableWatcher:              enableWatcher,
+    DownloadImages:             downloadImages,
+    MoviesDir:                  helpers.NullString(os.Getenv("MOVIES_DIR")),
+    ShowsDir:                   helpers.NullString(os.Getenv("SHOWS_DIR")),
+    MusicDir:                   helpers.NullString(os.Getenv("MUSIC_DIR")),
+    StaticDir:                  staticDir,
+    LogsDir:                    logsDir,
+  }
 
-	settings, err = app.Queries.CreateSettings(ctx, params)
-	if err != nil {
-		return err
-	}
+  settings, err = app.Queries.CreateSettings(ctx, params)
+  if err != nil {
+    return err
+  }
 
-	app.Logger.Info("default settings created successfully")
+  app.Logger.Info("default settings created successfully")
 
-	app.Settings = &settings
+  app.Settings = &settings
 
-	return nil
+  return nil
 }
 
 // InitDirs ensures all required directories exist, creating them if necessary.
 // Required directories (static, logs) are always created.
 // Optional media directories (movies, shows, music) are only created if configured.
 func (app *Application) InitDirs() error {
-	// Create required directories - these are needed for the app to function.
-	created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
-	if err != nil {
-		return fmt.Errorf("failed to initialize static directory: %w", err)
-	}
+  // Create required directories - these are needed for the app to function.
+  created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
+  if err != nil {
+    return fmt.Errorf("failed to initialize static directory: %w", err)
+  }
 
-	if created {
-		app.Logger.Info("created static directory", "path", app.Settings.StaticDir)
-	}
+  if created {
+    app.Logger.Info("created static directory", "path", app.Settings.StaticDir)
+  }
 
-	created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)
-	if err != nil {
-		return fmt.Errorf("failed to initialize logs directory: %w", err)
-	}
+  created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)
+  if err != nil {
+    return fmt.Errorf("failed to initialize logs directory: %w", err)
+  }
 
-	if created {
-		app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
-	}
+  if created {
+    app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
+  }
 
-	// Create optional media directories only if they are configured.
-	if app.Settings.MoviesDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.MoviesDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize movies directory", "error", err)
-		}
+  // Create optional media directories only if they are configured.
+  if app.Settings.MoviesDir.Valid {
+    created, err = helpers.GetOrCreateDir(app.Settings.MoviesDir.String)
+    if err != nil {
+      app.Logger.Error("failed to initialize movies directory", "error", err)
+    }
 
-		if created {
-			app.Logger.Info("created movies directory", "path", app.Settings.MoviesDir.String)
-		}
-	}
+    if created {
+      app.Logger.Info("created movies directory", "path", app.Settings.MoviesDir.String)
+    }
+  }
 
-	if app.Settings.ShowsDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.ShowsDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize shows directory", "error", err)
-		}
+  if app.Settings.ShowsDir.Valid {
+    created, err = helpers.GetOrCreateDir(app.Settings.ShowsDir.String)
+    if err != nil {
+      app.Logger.Error("failed to initialize shows directory", "error", err)
+    }
 
-		if created {
-			app.Logger.Info("created shows directory", "path", app.Settings.ShowsDir.String)
-		}
-	}
+    if created {
+      app.Logger.Info("created shows directory", "path", app.Settings.ShowsDir.String)
+    }
+  }
 
-	if app.Settings.MusicDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.MusicDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize music directory", "error", err)
-		}
+  if app.Settings.MusicDir.Valid {
+    created, err = helpers.GetOrCreateDir(app.Settings.MusicDir.String)
+    if err != nil {
+      app.Logger.Error("failed to initialize music directory", "error", err)
+    }
 
-		if created {
-			app.Logger.Info("created music directory", "path", app.Settings.MusicDir.String)
-		}
-	}
+    if created {
+      app.Logger.Info("created music directory", "path", app.Settings.MusicDir.String)
+    }
+  }
 
-	app.Logger.Info("directories initialized successfully")
+  app.Logger.Info("directories initialized successfully")
 
-	return nil
+  return nil
 }
 
 // InitLogger initializes the application logger.
@@ -394,36 +418,36 @@ func (app *Application) InitDirs() error {
 // In production mode, logs are written to a file with JSON format and rotation.
 // Uses LOGS_DIR environment variable (defaults to "logs").
 func (app *Application) InitLogger() error {
-	debug := os.Getenv("DEBUG") == "true"
+  debug := os.Getenv("DEBUG") == "true"
 
-	logsDir := os.Getenv("LOGS_DIR")
-	if logsDir == "" {
-		logsDir = "logs"
-	}
+  logsDir := os.Getenv("LOGS_DIR")
+  if logsDir == "" {
+    logsDir = "logs"
+  }
 
-	// Create logs directory if not in debug mode (file logging requires it).
-	if !debug {
-		_, err := helpers.GetOrCreateDir(logsDir)
-		if err != nil {
-			return fmt.Errorf("failed to create logs directory: %w", err)
-		}
-	}
+  // Create logs directory if not in debug mode (file logging requires it).
+  if !debug {
+    _, err := helpers.GetOrCreateDir(logsDir)
+    if err != nil {
+      return fmt.Errorf("failed to create logs directory: %w", err)
+    }
+  }
 
-	logger, closer, err := applogger.New(&applogger.LoggerConfig{
-		Debug:   debug,
-		LogDir:  logsDir,
-		LogFile: "igloo.log",
-	})
-	if err != nil {
-		return err
-	}
+  logger, closer, err := applogger.New(&applogger.LoggerConfig{
+    Debug:   debug,
+    LogDir:  logsDir,
+    LogFile: "igloo.log",
+  })
+  if err != nil {
+    return err
+  }
 
-	app.Logger = logger
-	app.LoggerCloser = closer
+  app.Logger = logger
+  app.LoggerCloser = closer
 
-	app.Logger.Info("logger initialized successfully")
+  app.Logger.Info("logger initialized successfully")
 
-	return nil
+  return nil
 }
 
 // InitDefaultUser ensures an admin user exists in the database.
@@ -432,228 +456,244 @@ func (app *Application) InitLogger() error {
 // Credentials: admin@sample.com / AdminPassword
 // The password should be changed after first login.
 func (app *Application) InitDefaultUser(ctx context.Context) error {
-	_, err := app.Queries.GetAdminUser(ctx)
-	if err == nil {
-		// An admin exists - nothing to do.
-		return nil
-	}
+  _, err := app.Queries.GetAdminUser(ctx)
+  if err == nil {
+    // An admin exists - nothing to do.
+    return nil
+  }
 
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
+  if !errors.Is(err, sql.ErrNoRows) {
+    return err
+  }
 
-	app.Logger.Info("no admin user found, creating default admin user...")
+  app.Logger.Info("no admin user found, creating default admin user...")
 
-	hashedPassword, err := helpers.HashPassword("AdminPassword")
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %v", err)
-	}
+  hashedPassword, err := helpers.HashPassword("AdminPassword")
+  if err != nil {
+    return fmt.Errorf("failed to hash password: %v", err)
+  }
 
-	params := database.CreateUserParams{
-		Name:     "Admin",
-		Email:    "admin@sample.com",
-		Password: hashedPassword,
-		IsAdmin:  true,
-		Avatar:   sql.NullString{Valid: false},
-	}
+  params := database.CreateUserParams{
+    Name:     "Admin",
+    Email:    "admin@sample.com",
+    Password: hashedPassword,
+    IsAdmin:  true,
+    Avatar:   sql.NullString{Valid: false},
+  }
 
-	_, err = app.Queries.CreateUser(ctx, params)
-	if err != nil {
-		return fmt.Errorf("failed to create default admin user: %v", err)
-	}
+  _, err = app.Queries.CreateUser(ctx, params)
+  if err != nil {
+    return fmt.Errorf("failed to create default admin user: %v", err)
+  }
 
-	app.Logger.Info("default admin user created successfully")
+  app.Logger.Info("default admin user created successfully")
 
-	return nil
+  return nil
 }
 
 // InitSession initializes the session manager with SQLite as the session store.
 // Sessions are used for authentication and maintaining user state across requests.
 // The sessions table is created by InitTables via schema.sql.
 func (app *Application) InitSession() {
-	sessionManager := scs.New()
-	sessionManager.Store = sqlite3store.New(app.DB)
-	sessionManager.Lifetime = 30 * 24 * time.Hour
-	sessionManager.Cookie.HttpOnly = true
-	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = os.Getenv("DEBUG") != "true"
+  sessionManager := scs.New()
+  sessionManager.Store = sqlite3store.New(app.DB)
+  sessionManager.Lifetime = 30 * 24 * time.Hour
+  sessionManager.Cookie.HttpOnly = true
+  sessionManager.Cookie.SameSite = http.SameSiteLaxMode
+  sessionManager.Cookie.Secure = os.Getenv("DEBUG") != "true"
 
-	app.SessionManager = sessionManager
+  app.SessionManager = sessionManager
 
-	app.Logger.Info("session manager initialized successfully")
+  app.Logger.Info("session manager initialized successfully")
 }
 
 func (app *Application) InitRouter() {
-	router := chi.NewRouter()
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.Logger)
-	router.Use(app.LoadAndSaveSession)
+  router := chi.NewRouter()
+  router.Use(middleware.RequestID)
+  router.Use(middleware.RealIP)
+  router.Use(middleware.Recoverer)
+  router.Use(middleware.Logger)
+  router.Use(app.LoadAndSaveSession)
 
-	router.Route("/api", func(r chi.Router) {
-		r.Get("/health", app.HealthCheck)
+  router.Route("/api", func(r chi.Router) {
+    r.Get("/health", app.HealthCheck)
 
-		r.Route("/auth", func(r chi.Router) {
-			r.Get("/user", app.GetCurrentAuthUser)
-			r.Post("/login", app.AuthenticateUser)
-			r.Delete("/logout", app.DestroySession)
-		})
+    r.Route("/auth", func(r chi.Router) {
+      r.Get("/user", app.GetCurrentAuthUser)
+      r.Post("/login", app.AuthenticateUser)
+      r.Delete("/logout", app.DestroySession)
+    })
 
-		r.Route("/user", func(r chi.Router) {
-			r.Put("/name", app.UpdateUserName)
-			r.Put("/password", app.UpdateUserPassword)
-			r.Put("/avatar", app.UpdateUserAvatar)
-			r.Post("/avatar/upload", app.UploadUserAvatar)
-			r.Delete("/", app.DeleteUserAccount)
-		})
+    r.Route("/user", func(r chi.Router) {
+      r.Put("/name", app.UpdateUserName)
+      r.Put("/password", app.UpdateUserPassword)
+      r.Put("/avatar", app.UpdateUserAvatar)
+      r.Post("/avatar/upload", app.UploadUserAvatar)
+      r.Delete("/", app.DeleteUserAccount)
+    })
 
-		// Static file serving (avatars, etc.)
-		r.Get("/static/*", app.ServeStaticFiles)
+    // Static file serving (avatars, etc.)
+    r.Get("/static/*", app.ServeStaticFiles)
 
-		r.Route("/tmdb", func(r chi.Router) {
-			r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
-			r.Get("/movies/{id}", app.GetMovieByTmdbID)
-		})
+    r.Route("/tmdb", func(r chi.Router) {
+      r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
+      r.Get("/movies/{id}", app.GetMovieByTmdbID)
+    })
 
-		r.Route("/movies", func(r chi.Router) {
-			r.Get("/latest", app.GetLatestMovies)
-			r.Get("/details/{id}", app.GetMovieDetails)
-			r.Get("/{id}/stream", app.StreamMovie)
-		})
+    r.Route("/movies", func(r chi.Router) {
+      r.Get("/latest", app.GetLatestMovies)
+      r.Get("/details/{id}", app.GetMovieDetails)
+      r.Get("/{id}/stream", app.StreamMovie)
+      // HLS: require auth via middleware; profile and audio_track validated in handlers.
+      r.Group(func(r chi.Router) {
+        r.Use(app.IsAuth)
+        r.Get("/{id}/hls/{profile}/playlist.m3u8", app.ServeHLSPlaylist)
+        r.Get("/{id}/hls/{profile}/{filename}", app.ServeHLSSegment)
+      })
+    })
 
-		r.Route("/settings", func(r chi.Router) {
-			r.Get("/", app.GetSettings)
-			r.Post("/scan/music", app.TriggerMusicScan)
-			r.Post("/scan/movies", app.TriggerMovieScan)
-		})
+    r.Route("/settings", func(r chi.Router) {
+      r.Get("/", app.GetSettings)
+      r.Post("/scan/music", app.TriggerMusicScan)
+      r.Post("/scan/movies", app.TriggerMovieScan)
+    })
 
-		r.Route("/music", func(r chi.Router) {
-			r.Get("/stats", app.GetMusicStats)
+    r.Route("/music", func(r chi.Router) {
+      r.Get("/stats", app.GetMusicStats)
 
-			r.Route("/albums", func(r chi.Router) {
-				r.Get("/", app.GetAlbumsAlphabetical)
-				r.Get("/details/{id}", app.GetAlbumDetails)
-				r.Get("/latest", app.GetLatestAlbums)
-				r.Delete("/{id}", app.DeleteAlbum)
-			})
+      r.Route("/albums", func(r chi.Router) {
+        r.Get("/", app.GetAlbumsAlphabetical)
+        r.Get("/details/{id}", app.GetAlbumDetails)
+        r.Get("/latest", app.GetLatestAlbums)
+        r.Delete("/{id}", app.DeleteAlbum)
+      })
 
-			r.Route("/musicians", func(r chi.Router) {
-				r.Get("/", app.GetMusiciansAlphabetical)
-				r.Get("/{id}", app.GetMusicianDetails)
-			})
+      r.Route("/musicians", func(r chi.Router) {
+        r.Get("/", app.GetMusiciansAlphabetical)
+        r.Get("/{id}", app.GetMusicianDetails)
+      })
 
-			r.Route("/tracks", func(r chi.Router) {
-				r.Get("/", app.GetTracksAlphabetical)
-				r.Get("/shuffle", app.GetShuffleTracks)
-				r.Get("/details/{id}", app.GetTrackByID)
-				r.Get("/{id}/stream", app.StreamTrack)
-				r.Post("/{id}/like", app.ToggleLikeTrack)
-				r.Get("/liked", app.GetLikedTrackIDs)
-			})
+      r.Route("/tracks", func(r chi.Router) {
+        r.Get("/", app.GetTracksAlphabetical)
+        r.Get("/shuffle", app.GetShuffleTracks)
+        r.Get("/details/{id}", app.GetTrackByID)
+        r.Get("/{id}/stream", app.StreamTrack)
+        r.Post("/{id}/like", app.ToggleLikeTrack)
+        r.Get("/liked", app.GetLikedTrackIDs)
+      })
 
-			r.Route("/playlists", func(r chi.Router) {
-				r.Get("/", app.GetPlaylists)
-				r.Post("/", app.CreatePlaylist)
-				r.Get("/{id}", app.GetPlaylist)
-				r.Put("/{id}", app.UpdatePlaylist)
-				r.Delete("/{id}", app.DeletePlaylist)
-				r.Get("/{id}/tracks", app.GetPlaylistTracks)
-				r.Post("/{id}/tracks", app.AddTracksToPlaylist)
-				r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
-				r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
-				r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
-				r.Post("/{id}/collaborators", app.AddCollaborator)
-				r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
-			})
+      r.Route("/playlists", func(r chi.Router) {
+        r.Get("/", app.GetPlaylists)
+        r.Post("/", app.CreatePlaylist)
+        r.Get("/{id}", app.GetPlaylist)
+        r.Put("/{id}", app.UpdatePlaylist)
+        r.Delete("/{id}", app.DeletePlaylist)
+        r.Get("/{id}/tracks", app.GetPlaylistTracks)
+        r.Post("/{id}/tracks", app.AddTracksToPlaylist)
+        r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
+        r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
+        r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
+        r.Post("/{id}/collaborators", app.AddCollaborator)
+        r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
+      })
 
-			r.Route("/user-stats", func(r chi.Router) {
-				r.Post("/play", app.RecordPlayEvent)
-				r.Get("/overview", app.GetUserListeningStats)
-				r.Get("/top-tracks", app.GetUserTopTracks)
-				r.Get("/top-musicians", app.GetUserTopMusicians)
-				r.Get("/top-genres", app.GetUserTopGenres)
-				r.Get("/top-albums", app.GetUserTopAlbums)
-				r.Get("/recently-played", app.GetUserRecentlyPlayed)
-			})
-		})
-	})
+      r.Route("/user-stats", func(r chi.Router) {
+        r.Post("/play", app.RecordPlayEvent)
+        r.Get("/overview", app.GetUserListeningStats)
+        r.Get("/top-tracks", app.GetUserTopTracks)
+        r.Get("/top-musicians", app.GetUserTopMusicians)
+        r.Get("/top-genres", app.GetUserTopGenres)
+        r.Get("/top-albums", app.GetUserTopAlbums)
+        r.Get("/recently-played", app.GetUserRecentlyPlayed)
+      })
+    })
+  })
 
-	// Frontend routes - serve the React SPA
-	// This must be registered after /api routes to avoid conflicts
-	// All non-API routes fall through to the SPA (client-side routing)
-	router.Get("/*", app.ServeFrontend)
+  // Frontend routes - serve the React SPA
+  // This must be registered after /api routes to avoid conflicts
+  // All non-API routes fall through to the SPA (client-side routing)
+  router.Get("/*", app.ServeFrontend)
 
-	app.Router = router
+  app.Router = router
 }
 
 // ListenForShutdown handles graceful shutdown when SIGINT or SIGTERM is received.
 // This is typically triggered by Ctrl+C, `kill`, or container orchestrators.
 func (app *Application) ListenForShutdown() {
-	// Create a channel to receive OS signals.
-	quit := make(chan os.Signal, 1)
+  // Create a channel to receive OS signals.
+  quit := make(chan os.Signal, 1)
 
-	// Register for interrupt (Ctrl+C) and terminate signals.
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+  // Register for interrupt (Ctrl+C) and terminate signals.
+  signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Block until a signal is received.
-	<-quit
+  // Block until a signal is received.
+  <-quit
 
-	// Stop receiving further signals.
-	signal.Stop(quit)
+  // Stop receiving further signals.
+  signal.Stop(quit)
 
-	app.Logger.Info("shutting down server...")
+  app.Logger.Info("shutting down server...")
 
-	// Create a context with timeout for graceful shutdown.
-	// Gives in-flight requests 10 seconds to complete.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+  // Create a context with timeout for graceful shutdown.
+  // Gives in-flight requests 10 seconds to complete.
+  ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+  defer cancel()
 
-	// Gracefully shutdown the HTTP server.
-	// This stops accepting new requests and waits for in-flight requests to complete.
-	if app.Server != nil {
-		err := app.Server.Shutdown(ctx)
-		if err != nil {
-			app.Logger.Error("failed to shutdown server", "error", err)
-		}
-	}
+  // Gracefully shutdown the HTTP server.
+  // This stops accepting new requests and waits for in-flight requests to complete.
+  if app.Server != nil {
+    err := app.Server.Shutdown(ctx)
+    if err != nil {
+      app.Logger.Error("failed to shutdown server", "error", err)
+    }
+  }
 
-	app.Logger.Info("running clean up tasks...")
+  app.Logger.Info("running clean up tasks...")
 
-	// Wait for any in-flight background tasks to complete.
-	// These may still need database and logger access.
-	app.Wait.Wait()
+  // Wait for any in-flight background tasks to complete.
+  // These may still need database and logger access.
+  app.Wait.Wait()
 
-	// Clean up ffprobe temp directory and extracted binary.
-	err := ffprobe.Cleanup()
-	if err != nil {
-		app.Logger.Error("failed to cleanup ffprobe", "error", err)
-	}
+  // Clean up all HLS sessions (kill FFmpeg processes, delete temp dirs) before ffmpeg.Cleanup().
+  if app.HLSSessionCache != nil {
+    for key, item := range app.HLSSessionCache.Items() {
+      if session, ok := item.Object.(*HLSSession); ok {
+        CleanupHLSSession(session, app.Logger)
+      }
+      _ = key
+    }
+  }
 
-	// Clean up ffmpeg temp directory and extracted binary.
-	err = ffmpeg.Cleanup()
-	if err != nil {
-		app.Logger.Error("failed to cleanup ffmpeg", "error", err)
-	}
+  // Clean up ffprobe temp directory and extracted binary.
+  err := ffprobe.Cleanup()
+  if err != nil {
+    app.Logger.Error("failed to cleanup ffprobe", "error", err)
+  }
 
-	// Close database connection to ensure all writes are flushed.
-	// Done after HTTP and background tasks are complete.
-	if app.DB != nil {
-		err = app.DB.Close()
-		if err != nil {
-			app.Logger.Error("failed to close database", "error", err)
-		}
-	}
+  // Clean up ffmpeg temp directory and extracted binary.
+  err = ffmpeg.Cleanup()
+  if err != nil {
+    app.Logger.Error("failed to cleanup ffmpeg", "error", err)
+  }
 
-	// Close the logger last to flush any remaining buffered logs.
-	// This ensures we can log errors from all previous cleanup steps.
-	// Use standard log here since app.Logger is being closed.
-	if app.LoggerCloser != nil {
-		err = app.LoggerCloser()
-		if err != nil {
-			log.Printf("failed to close logger: %v", err)
-		}
-	}
+  // Close database connection to ensure all writes are flushed.
+  // Done after HTTP and background tasks are complete.
+  if app.DB != nil {
+    err = app.DB.Close()
+    if err != nil {
+      app.Logger.Error("failed to close database", "error", err)
+    }
+  }
 
-	os.Exit(0)
+  // Close the logger last to flush any remaining buffered logs.
+  // This ensures we can log errors from all previous cleanup steps.
+  // Use standard log here since app.Logger is being closed.
+  if app.LoggerCloser != nil {
+    err = app.LoggerCloser()
+    if err != nil {
+      log.Printf("failed to close logger: %v", err)
+    }
+  }
+
+  os.Exit(0)
 }

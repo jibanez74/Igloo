@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showDeleted, showActionFailed } from "@/lib/toast-helpers";
 import {
   Disc3,
@@ -47,30 +47,46 @@ import MediaNotFound from "@/components/MediaNotFound";
 export const Route = createFileRoute("/_auth/music/album/$id")({
   loader: async ({ context, params }) => {
     const albumId = parseInt(params.id, 10);
-    const data = await context.queryClient.ensureQueryData(
-      albumDetailsQueryOpts(albumId),
-    );
 
-    return data;
+    if (!Number.isNaN(albumId) && albumId > 0) {
+      await context.queryClient.ensureQueryData(albumDetailsQueryOpts(albumId));
+    }
   },
   component: AlbumDetailsPage,
 });
 
 function AlbumDetailsPage() {
-  const data = Route.useLoaderData();
+  const { id } = Route.useParams();
+  const albumId = parseInt(id, 10);
 
-  if (data.error) {
+  const { data, isPending, isError } = useQuery(albumDetailsQueryOpts(albumId));
+
+  if (Number.isNaN(albumId) || albumId <= 0) {
+    return (
+      <div className="py-12 text-center">
+        <h2 className="text-xl font-semibold text-slate-300">
+          Album not found
+        </h2>
+      </div>
+    );
+  }
+
+  if (isPending) {
+    return <AlbumDetailsSkeleton />;
+  }
+
+  if (isError || data?.error) {
     return (
       <MediaNotFound
         message={
-          data.message ||
+          data?.message ||
           "Failed to load album details. Please try again later."
         }
       />
     );
   }
 
-  if (!data.data?.album) {
+  if (!data?.data?.album) {
     return (
       <div className="py-12 text-center">
         <h2 className="text-xl font-semibold text-slate-300">
@@ -81,6 +97,49 @@ function AlbumDetailsPage() {
   }
 
   return <AlbumDetailsContent {...data.data} />;
+}
+
+function AlbumDetailsSkeleton() {
+  return (
+    <div
+      className="animate-pulse"
+      role="status"
+      aria-label="Loading album details"
+    >
+      <span className="sr-only">Loading album details...</span>
+      <header className="mb-10 flex flex-col gap-8 md:flex-row">
+        <div className="mx-auto shrink-0 md:mx-0">
+          <div className="aspect-square w-64 rounded-xl border border-slate-800 bg-slate-800 md:w-72 lg:w-80" />
+        </div>
+        <div className="flex flex-1 flex-col space-y-4">
+          <div className="h-10 w-3/4 rounded-md bg-slate-800" />
+          <div className="h-6 w-1/2 rounded-md bg-slate-800" />
+          <div className="flex flex-wrap gap-4">
+            <div className="h-5 w-24 rounded-md bg-slate-800" />
+            <div className="h-5 w-20 rounded-md bg-slate-800" />
+            <div className="h-5 w-16 rounded-md bg-slate-800" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <div className="h-12 w-32 rounded-full bg-slate-800" />
+            <div className="h-12 w-24 rounded-full bg-slate-800" />
+            <div className="h-12 w-12 rounded-full bg-slate-800" />
+          </div>
+        </div>
+      </header>
+      <div className="space-y-2">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex h-14 items-center gap-4 rounded-lg bg-slate-800/50"
+          >
+            <div className="ml-4 h-4 w-6 rounded-sm bg-slate-700" />
+            <div className="h-4 max-w-xs flex-1 rounded-sm bg-slate-700" />
+            <div className="mr-4 h-4 w-16 rounded-sm bg-slate-700" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function AlbumDetailsContent({

@@ -16,35 +16,42 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// testMediaFiles contains paths to actual audio files in the media directory.
-// These are used to test real file streaming.
+// testMediaFiles contains filenames used for streaming tests.
+// getProjectRoot creates a temp dir with a media/ subdir and these files so tests don't depend on repo layout.
 var testMediaFiles = []string{
 	"track2.m4a",
 	"track.m4a",
 }
 
-// getProjectRoot returns the root directory of the project.
-// Works by walking up from the test file location.
+// getProjectRoot returns a temp directory that contains a media/ subdir with dummy test files
+// (track.m4a, track2.m4a) so handler tests can stream without requiring a real project media folder.
 func getProjectRoot(t *testing.T) string {
 	t.Helper()
 
-	// Start from current working directory
-	wd, err := os.Getwd()
+	root, err := os.MkdirTemp("", "igloo-track-test-*")
 	if err != nil {
-		t.Fatalf("Failed to get working directory: %v", err)
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+
+	mediaDir := filepath.Join(root, "media")
+	if err := os.Mkdir(mediaDir, 0755); err != nil {
+		t.Fatalf("Failed to create media dir: %v", err)
 	}
 
-	// Walk up until we find the media directory
-	for {
-		if _, err := os.Stat(filepath.Join(wd, "media")); err == nil {
-			return wd
-		}
-		parent := filepath.Dir(wd)
-		if parent == wd {
-			t.Fatal("Could not find project root with media directory")
-		}
-		wd = parent
+	// Dummy content at least 1024 bytes so range requests (e.g. bytes=512-1023) in tests are valid
+	dummyContent := make([]byte, 1024)
+	for i := range dummyContent {
+		dummyContent[i] = byte('a' + (i % 26))
 	}
+	for _, name := range testMediaFiles {
+		p := filepath.Join(mediaDir, name)
+		if err := os.WriteFile(p, dummyContent, 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", name, err)
+		}
+	}
+
+	return root
 }
 
 // setupTestAppWithLogger creates a test Application with an initialized database,

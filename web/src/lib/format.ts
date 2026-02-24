@@ -45,6 +45,7 @@ export function formatTrackDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+// takes in a bit rate in bits per second and returns a formatted bit rate string
 export function formatBitRate(bitRate: number) {
   return `${Math.round(bitRate / 1000)} kbps`;
 }
@@ -58,4 +59,14 @@ export function formatTimeSeconds(seconds: number) {
   const secs = Math.floor(seconds % 60);
 
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+// takes in an amount in dollars and returns a formatted currency string
+export function formatCurrency(amount: number) {
+  if (!amount) return "-";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }

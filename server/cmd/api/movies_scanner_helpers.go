@@ -23,18 +23,8 @@ func extractYearFromReleaseDate(releaseDate string) int {
 	return parsed.Year()
 }
 
-// buildTmdbImageURL builds a full TMDB image URL from a relative path (using TMDB_IMAGE_SIZE).
-// Returns a sql.NullString with the full URL if path is not empty, otherwise invalid NullString.
-func buildTmdbImageURL(path string) sql.NullString {
-	url := helpers.TmdbImageURL(path, helpers.TMDB_IMAGE_SIZE)
-	if url == "" {
-		return sql.NullString{Valid: false}
-	}
-	return sql.NullString{String: url, Valid: true}
-}
-
 // getOrCreateArtistFromCache gets an artist from cache or creates/upserts it in the database.
-// Returns the database artist and an error.
+// Returns the database artist and an error. Stores only the TMDB profile path (no URL building).
 func (app *Application) getOrCreateArtistFromCache(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -48,14 +38,14 @@ func (app *Application) getOrCreateArtistFromCache(
 		return cached, nil
 	}
 
-	// Build profile URL if available
-	profileURL := buildTmdbImageURL(profilePath)
+	// Store profile path only; frontend builds the image URL
+	profile := helpers.NullString(profilePath)
 
 	// Upsert artist
 	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
 		Name:    name,
 		TmdbID:  int64(tmdbID),
-		Profile: profileURL,
+		Profile: profile,
 	})
 
 	if err != nil {

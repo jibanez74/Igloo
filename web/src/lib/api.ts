@@ -4,7 +4,7 @@ import type {
   ApiFailureType,
   ApiResponseType,
   LatestMovieType,
-  LibraryMovieDetailsMovieType,
+  LibraryMovieDetailsResponse,
   MovieDetailsType,
   MusicianDetailsResponseType,
   MusicStatsType,
@@ -163,9 +163,7 @@ export const getMovieInTheaterDetails = (id: number) =>
   apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`);
 
 export const getMovieDetails = (id: number) =>
-  apiRequest<{ movie: LibraryMovieDetailsMovieType }>(
-    `/api/movies/details/${id}`
-  );
+  apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
 
 // ============================================================================
 // Music API - Albums

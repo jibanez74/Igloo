@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
-import { TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/movie-details-view";
+import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import type { TheaterMovieType } from "@/types";
 
 type MovieCardProps = {
@@ -10,9 +11,7 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
-  const posterUrl = poster_path
-    ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${poster_path}`
-    : null;
+  const posterUrl = buildTmdbImageUrl(poster_path ?? null, TMDB_POSTER_SIZE);
 
     const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date ? new Date(release_date).getFullYear() : null;

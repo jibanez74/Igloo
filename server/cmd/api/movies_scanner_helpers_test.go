@@ -79,64 +79,8 @@ func TestExtractYearFromReleaseDate(t *testing.T) {
 	}
 }
 
-func TestBuildTmdbImageURL(t *testing.T) {
-	tests := []struct {
-		name           string
-		input          string
-		expectedValid  bool
-		expectedPrefix string
-	}{
-		{
-			name:           "valid path with leading slash",
-			input:          "/path/to/image.jpg",
-			expectedValid:  true,
-			expectedPrefix: helpers.TMDB_IMAGE_BASE_URL + "/" + helpers.TMDB_IMAGE_SIZE + "/",
-		},
-		{
-			name:           "valid path without leading slash",
-			input:          "poster.jpg",
-			expectedValid:  true,
-			expectedPrefix: helpers.TMDB_IMAGE_BASE_URL + "/" + helpers.TMDB_IMAGE_SIZE + "/",
-		},
-		{
-			name:          "empty string",
-			input:         "",
-			expectedValid: false,
-		},
-		{
-			name:           "path with special characters",
-			input:          "/path/to/image with spaces.jpg",
-			expectedValid:  true,
-			expectedPrefix: helpers.TMDB_IMAGE_BASE_URL + "/" + helpers.TMDB_IMAGE_SIZE + "/",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := buildTmdbImageURL(tt.input)
-			if result.Valid != tt.expectedValid {
-				t.Errorf("buildTmdbImageURL(%q).Valid = %v, want %v", tt.input, result.Valid, tt.expectedValid)
-			}
-			if tt.expectedValid {
-				if !result.Valid {
-					t.Errorf("buildTmdbImageURL(%q) should be valid", tt.input)
-				}
-				if result.String == "" {
-					t.Errorf("buildTmdbImageURL(%q).String should not be empty", tt.input)
-				}
-				// Verify URL format
-				expectedURL := tt.expectedPrefix + tt.input
-				if result.String != expectedURL {
-					t.Errorf("buildTmdbImageURL(%q).String = %q, want %q", tt.input, result.String, expectedURL)
-				}
-			} else {
-				if result.String != "" {
-					t.Errorf("buildTmdbImageURL(%q).String should be empty when Valid=false, got %q", tt.input, result.String)
-				}
-			}
-		})
-	}
-}
+// buildTmdbImageURL was removed; TMDB image URLs are built on the frontend only.
+// Scanner and API now store/return paths only.
 
 func TestParseBitRate(t *testing.T) {
 	tests := []struct {
