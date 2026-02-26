@@ -1,8 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import {
-  createFileRoute,
-  useRouter,
-} from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -19,7 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
-import MovieVideo from "@/components/VideoPlayer";
+import VideoPlayer from "@/components/VideoPlayer";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { formatTimeSeconds } from "@/lib/format";
 
@@ -30,6 +27,21 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
 const SEEK_STEP_SEC = 10;
 const VOLUME_STEP = 0.1;
 const CONTROLS_IDLE_MS = 3000;
+
+// Hardcoded stream modes for testing — select via the dropdown in the player controls.
+const STREAM_MODES = [
+  { id: "direct", label: "Direct stream" },
+  { id: "1080p_8mbps", label: "HLS 1080p 8 Mbps" },
+  { id: "1080p_4mbps", label: "HLS 1080p 4 Mbps" },
+  { id: "720p_3mbps", label: "HLS 720p 3 Mbps" },
+] as const;
+
+type StreamModeId = (typeof STREAM_MODES)[number]["id"];
+
+function buildStreamUrl(movieId: number, mode: StreamModeId): string {
+  if (mode === "direct") return `/api/movies/${movieId}/stream`;
+  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?audio_track=0`;
+}
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
@@ -48,6 +60,9 @@ function PlayMoviePage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [streamMode, setStreamMode] = useState<StreamModeId>("1080p_4mbps");
+
+  const streamUrl = buildStreamUrl(movieId, streamMode);
 
   const scheduleHideControls = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -61,8 +76,6 @@ function PlayMoviePage() {
     setControlsVisible(true);
     scheduleHideControls();
   };
-
-  const streamUrl = `/api/movies/${movieId}/stream`;
 
   const { data, isPending, isError } = useQuery(
     libraryMovieDetailsQueryOpts(movieId),
@@ -97,33 +110,39 @@ function PlayMoviePage() {
     setCurrentTime(t);
   };
 
-  const seekForward = () => {
-    seek(currentTime + SEEK_STEP_SEC);
-  };
-
-  const seekBackward = () => {
-    seek(currentTime - SEEK_STEP_SEC);
-  };
+  const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
+  const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
 
   const toggleFullscreen = () => {
     const el = containerRef.current;
     if (!el) return;
     const isCurrentlyFullscreen = !!(
-      document.fullscreenElement ?? (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+      document.fullscreenElement ??
+      (document as Document & { webkitFullscreenElement?: Element })
+        .webkitFullscreenElement
     );
     if (isCurrentlyFullscreen) {
       const exitFs =
         document.exitFullscreen ??
-        (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen;
+        (
+          document as Document & {
+            webkitExitFullscreen?: () => Promise<void>;
+          }
+        ).webkitExitFullscreen;
       exitFs?.call(document);
     } else {
       const requestFs =
         el.requestFullscreen ??
-        (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
+        (
+          el as HTMLElement & {
+            webkitRequestFullscreen?: () => Promise<void>;
+          }
+        ).webkitRequestFullscreen;
       requestFs?.call(el);
     }
   };
 
+  // Video element event listeners (single source of truth — VideoPlayer renders a bare <video>)
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -150,7 +169,8 @@ function PlayMoviePage() {
     const onFullscreenChange = () => {
       const fullscreenEl =
         document.fullscreenElement ??
-        (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement;
+        (document as Document & { webkitFullscreenElement?: Element })
+          .webkitFullscreenElement;
       const entering = !!fullscreenEl;
       setIsFullscreen(entering);
       if (entering) setControlsVisible(true);
@@ -181,7 +201,7 @@ function PlayMoviePage() {
         idleTimerRef.current = null;
       }
     };
-  }, [isFullscreen]);
+  }, [isFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timer = setTimeout(() => backButtonRef.current?.focus(), 50);
@@ -194,6 +214,7 @@ function PlayMoviePage() {
       if (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
         target.isContentEditable
       ) {
         return;
@@ -202,7 +223,8 @@ function PlayMoviePage() {
 
       const fullscreenEl =
         document.fullscreenElement ??
-        (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement;
+        (document as Document & { webkitFullscreenElement?: Element })
+          .webkitFullscreenElement;
       if (fullscreenEl) showControlsAndResetIdle();
 
       switch (e.key) {
@@ -260,14 +282,19 @@ function PlayMoviePage() {
           seek(0);
           break;
         case "Escape": {
-          const fullscreenEl =
+          const fse =
             document.fullscreenElement ??
-            (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement;
-          if (fullscreenEl) {
+            (document as Document & { webkitFullscreenElement?: Element })
+              .webkitFullscreenElement;
+          if (fse) {
             e.preventDefault();
             const exitFs =
               document.exitFullscreen ??
-              (document as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen;
+              (
+                document as Document & {
+                  webkitExitFullscreen?: () => Promise<void>;
+                }
+              ).webkitExitFullscreen;
             exitFs?.call(document);
           }
           break;
@@ -281,7 +308,7 @@ function PlayMoviePage() {
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Tab" && containerRef.current) {
       const focusable = containerRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -295,20 +322,25 @@ function PlayMoviePage() {
     }
   };
 
+  const handleStreamModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPlaybackError(null);
+    setStreamMode(e.target.value as StreamModeId);
+  };
+
   const announcement = playing ? `Playing: ${title}` : `Paused: ${title}`;
 
   if (movieNotFound) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
         <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
           </div>
           <h1 className="mb-2 text-xl font-semibold text-white">
             Movie not found
           </h1>
           <p className="mb-6 text-slate-400">
-            The movie could not be found or you don't have access to it.
+            The movie could not be found or you don&apos;t have access to it.
           </p>
           <button
             ref={backButtonRef}
@@ -342,7 +374,7 @@ function PlayMoviePage() {
         className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4"
       >
         <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
           </div>
           <h1 className="mb-2 text-xl font-semibold text-white">
@@ -405,7 +437,7 @@ function PlayMoviePage() {
         <button
           ref={backButtonRef}
           onClick={handleBack}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+          className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
           aria-label="Back to previous page"
         >
           <ArrowLeft className="size-5" aria-hidden="true" />
@@ -430,17 +462,13 @@ function PlayMoviePage() {
         }
         aria-label={isFullscreen ? "Play or pause" : undefined}
       >
-        <MovieVideo
-        videoRef={videoRef}
-        src={streamUrl}
-        title={title}
-        isFullscreen={isFullscreen}
-        onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
-        onDurationChange={() => setDuration(videoRef.current?.duration ?? 0)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onError={() => setPlaybackError("Playback failed")}
-      />
+        <VideoPlayer
+          videoRef={videoRef}
+          src={streamUrl}
+          title={title}
+          isFullscreen={isFullscreen}
+          onError={() => setPlaybackError("Playback failed")}
+        />
       </div>
 
       <footer
@@ -482,14 +510,14 @@ function PlayMoviePage() {
             >
               <button
                 onClick={seekBackward}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
                 aria-label="Seek backward 10 seconds"
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </button>
               <button
                 onClick={togglePlay}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
                 aria-label={playing ? "Pause" : "Play"}
               >
                 {playing ? (
@@ -500,7 +528,7 @@ function PlayMoviePage() {
               </button>
               <button
                 onClick={seekForward}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
                 aria-label="Seek forward 10 seconds"
               >
                 <FastForward className="size-5" aria-hidden="true" />
@@ -508,6 +536,18 @@ function PlayMoviePage() {
             </div>
 
             <div className="flex min-w-25 items-center justify-end gap-2">
+              <select
+                value={streamMode}
+                onChange={handleStreamModeChange}
+                className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300 focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+                aria-label="Stream quality"
+              >
+                {STREAM_MODES.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
               <VolumeControl
                 mediaRef={videoRef}
                 variant="minimized"
@@ -515,7 +555,7 @@ function PlayMoviePage() {
               />
               <button
                 onClick={toggleFullscreen}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
                 aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
                 aria-pressed={isFullscreen}
               >

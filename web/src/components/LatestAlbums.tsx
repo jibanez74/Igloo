@@ -61,7 +61,7 @@ export default function LatestAlbums() {
         <>
           <span
             tabIndex={0}
-            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-4 focus:py-2 focus:text-slate-900"
             aria-label={`Recently Added Albums section, ${albums.length} albums`}
           >
             Recently Added Albums - {albums.length} albums
@@ -74,7 +74,7 @@ export default function LatestAlbums() {
         </>
       ) : (
         <div className="py-12 text-center sm:py-16">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-amber-500/20 bg-slate-800">
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-amber-500/20 bg-slate-800">
             <Music className="size-6 text-amber-600" aria-hidden="true" />
           </div>
           <h3 className="mb-2 text-lg font-semibold text-slate-300">

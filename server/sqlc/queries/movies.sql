@@ -1,3 +1,7 @@
+-- name: GetMovieForDirectStream :one
+SELECT file_path, file_name, mime_type FROM movies WHERE id = ? LIMIT 1;
+
+
 -- name: CheckMovieUnchanged :one
 -- Quick check if movie exists with same path and size (likely unchanged)
 SELECT
@@ -424,3 +428,4 @@ WHERE
 ORDER BY
   extra_videos.type,
   extra_videos.title;
+

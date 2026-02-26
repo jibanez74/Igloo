@@ -159,6 +159,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
   for _, g := range trackGenres {
     genreSet[g.Tag] = struct{}{}
   }
+
   albumGenres := make([]string, 0, len(genreSet))
 
   for tag := range genreSet {

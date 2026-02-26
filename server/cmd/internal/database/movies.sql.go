@@ -578,6 +578,23 @@ func (q *Queries) GetMovieExtraVideos(ctx context.Context, movieID int64) ([]Ext
 	return items, nil
 }
 
+const getMovieForDirectStream = `-- name: GetMovieForDirectStream :one
+SELECT file_path, file_name, mime_type FROM movies WHERE id = ? LIMIT 1
+`
+
+type GetMovieForDirectStreamRow struct {
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	MimeType string `json:"mime_type"`
+}
+
+func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error) {
+	row := q.queryRow(ctx, q.getMovieForDirectStreamStmt, getMovieForDirectStream, id)
+	var i GetMovieForDirectStreamRow
+	err := row.Scan(&i.FilePath, &i.FileName, &i.MimeType)
+	return i, err
+}
+
 const getProductionCompaniesByMovieID = `-- name: GetProductionCompaniesByMovieID :many
 SELECT
   pc.id,

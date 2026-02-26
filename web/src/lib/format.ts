@@ -59,3 +59,13 @@ export function formatTimeSeconds(seconds: number) {
 
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
+
+// Format currency for budget/revenue (movie details)
+export function formatCurrency(amount: number): string {
+  if (!amount) return "-";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}

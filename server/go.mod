@@ -13,4 +13,8 @@ require (
 	golang.org/x/oauth2 v0.34.0
 )
 
-require github.com/stretchr/testify v1.8.1 // indirect
+require (
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
+	github.com/stretchr/testify v1.8.1 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+)

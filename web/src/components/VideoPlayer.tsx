@@ -1,28 +1,76 @@
+import { useEffect, useCallback, useMemo, useRef } from "react";
+import Hls from "hls.js";
 import type { RefObject } from "react";
 
-type MovieVideoProps = {
+type VideoPlayerProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
   title: string;
   isFullscreen?: boolean;
-  onTimeUpdate: () => void;
-  onDurationChange: () => void;
-  onPlay: () => void;
-  onPause: () => void;
   onError: () => void;
 };
+
+function isHLSUrl(url: string): boolean {
+  return url.endsWith(".m3u8") || url.includes(".m3u8?");
+}
+
+const supportsNativeHLS = (() => {
+  if (typeof document === "undefined") return false;
+  const v = document.createElement("video");
+  return (
+    v.canPlayType("application/vnd.apple.mpegurl") !== "" ||
+    v.canPlayType("application/x-mpegURL") !== ""
+  );
+})();
 
 export default function VideoPlayer({
   videoRef,
   src,
   title,
   isFullscreen = false,
-  onTimeUpdate,
-  onDurationChange,
-  onPlay,
-  onPause,
   onError,
-}: MovieVideoProps) {
+}: VideoPlayerProps) {
+  const hlsRef = useRef<Hls | null>(null);
+
+  const stableOnError = useCallback(onError, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (isHLSUrl(src) && Hls.isSupported() && !supportsNativeHLS) {
+      const hls = new Hls({
+        xhrSetup(xhr) {
+          xhr.withCredentials = true;
+        },
+        manifestLoadingTimeOut: 120_000,
+        levelLoadingTimeOut: 120_000,
+        fragLoadingTimeOut: 120_000,
+      });
+      hlsRef.current = hls;
+
+      hls.loadSource(src);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        console.error("[hls.js]", data.type, data.details, data.fatal, data);
+        if (data.fatal) stableOnError();
+      });
+
+      return () => {
+        hls.destroy();
+        hlsRef.current = null;
+      };
+    }
+
+    // Native HLS (Safari) or direct stream
+    video.src = src;
+    return () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [src, videoRef, stableOnError]);
+
   return (
     <div
       className={
@@ -40,16 +88,9 @@ export default function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={src}
           className={`size-full bg-black object-contain ${isFullscreen ? "rounded-none" : "rounded-lg"}`}
           playsInline
           aria-label={`Video player for ${title}`}
-          onTimeUpdate={onTimeUpdate}
-          onDurationChange={onDurationChange}
-          onPlay={onPlay}
-          onPause={onPause}
-          onWaiting={() => {}}
-          onError={onError}
         />
       </div>
     </div>

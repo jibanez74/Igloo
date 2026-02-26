@@ -127,6 +127,7 @@ CREATE TABLE
     tmdb_id INTEGER,
     imdb_id TEXT,
     poster_path TEXT,
+    backdrop_path TEXT,
     language TEXT,
     year INTEGER,
     release_date TEXT,

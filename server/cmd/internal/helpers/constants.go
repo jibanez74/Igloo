@@ -36,4 +36,9 @@ const (
 	// TMDB_YEAR_MATCH_SCORE is the score bonus for exact year matches in TMDB search results.
 	// This ensures exact year matches are prioritized over popularity/vote average.
 	TMDB_YEAR_MATCH_SCORE = 10000.0
+
+	// HLS encoding profile IDs (allowed list in hls_profiles.go; used in URLs and validation).
+	HLS_PROFILE_1080P_8MBPS = "1080p_8mbps"
+	HLS_PROFILE_1080P_4MBPS = "1080p_4mbps"
+	HLS_PROFILE_720P_3MBPS = "720p_3mbps"
 )

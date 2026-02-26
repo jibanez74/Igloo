@@ -1,12 +1,9 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Film, Star, Clock, Calendar, Play } from "lucide-react";
+import { formatCurrency } from "@/lib/format";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
-import {
-  TMDB_IMAGE_BASE,
-  TMDB_BACKDROP_SIZE,
-  TMDB_POSTER_SIZE,
-} from "@/lib/constants";
+import { TMDB_BACKDROP_SIZE, TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
 import CastSection from "@/components/CastSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
@@ -59,12 +56,11 @@ function MovieDetailsPage() {
 
 function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const backdropUrl = movie.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/${TMDB_BACKDROP_SIZE}${movie.backdrop_path}`
-    : null;
-
+    ? `${TMDB_IMAGE_BASE}/${TMDB_BACKDROP_SIZE}${movie.backdrop_path.startsWith("/") ? movie.backdrop_path : `/${movie.backdrop_path}`}`
+    : "";
   const posterUrl = movie.poster_path
-    ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${movie.poster_path}`
-    : null;
+    ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${movie.poster_path.startsWith("/") ? movie.poster_path : `/${movie.poster_path}`}`
+    : "";
 
   const releaseYear = movie.release_date
     ? new Date(movie.release_date).getFullYear()
@@ -95,15 +91,6 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     if (score >= 7) return "bg-amber-500 text-slate-900"; // High rating - gold
     if (score >= 5) return "bg-amber-600/70 text-white"; // Medium rating - darker gold
     return "bg-slate-500 text-white"; // Low rating - gray
-  };
-
-  const formatCurrency = (amount: number) => {
-    if (!amount) return "-";
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   return (

@@ -21,8 +21,9 @@ import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 
 const trailerSearchSchema = z.object({
-  mediaType: z.enum(["movie", "tv"]),
-  mediaId: z.coerce.number().int().positive(),
+  mediaType: z.enum(["movie", "tv"]).optional(),
+  mediaId: z.coerce.number().int().positive().optional(),
+  videoKey: z.string().optional(),
   returnTo: z.string().optional(),
 });
 
@@ -31,9 +32,10 @@ export const Route = createFileRoute("/_auth/trailer")({
   loaderDeps: ({ search }) => ({
     mediaType: search.mediaType,
     mediaId: search.mediaId,
+    videoKey: search.videoKey,
   }),
   loader: async ({ context, deps }) => {
-    if (deps.mediaId > 0) {
+    if (deps.mediaId && deps.mediaId > 0 && !deps.videoKey) {
       await context.queryClient.ensureQueryData(
         movieDetailsQueryOpts(deps.mediaId),
       );
@@ -43,34 +45,38 @@ export const Route = createFileRoute("/_auth/trailer")({
 });
 
 function TrailerPage() {
-  const { mediaType, mediaId, returnTo } = Route.useSearch();
+  const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Fetch media details based on type
-  // TODO: Add tvDetailsQueryOpts when TV shows are implemented
-  const query =
-    mediaType === "movie"
-      ? movieDetailsQueryOpts(mediaId)
-      : movieDetailsQueryOpts(mediaId);
-
-  const { data } = useQuery(query);
+  // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
+  const shouldFetchMovie =
+    mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
+  const { data } = useQuery({
+    ...movieDetailsQueryOpts(mediaId ?? 0),
+    enabled: shouldFetchMovie,
+  });
 
   // TODO: Handle TV shows when implemented
   const media = data?.data?.movie;
-  const trailer = media?.videos?.results?.find(
+  const trailerFromApi = media?.videos?.results?.find(
     v => v.type === "Trailer" && v.site === "YouTube",
   );
+  const trailerKey = videoKey ?? trailerFromApi?.key ?? null;
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
   // Navigate back to origin page (use router.navigate for dynamic path to avoid /trailer search typing)
   const handleClose = () => {
     if (returnTo) {
-      router.navigate({ to: returnTo, params: { id: String(mediaId) } });
+      try {
+        router.navigate({ to: returnTo });
+      } catch {
+        navigate({ to: returnTo });
+      }
     } else {
       navigate({ to: "/" });
     }
@@ -92,7 +98,7 @@ function TrailerPage() {
     setVolume,
     toggleMute,
   } = useYouTubePlayer({
-    videoId: trailer?.key ?? null,
+    videoId: trailerKey,
     autoplay: true,
     controls: true,
     onEnd: handleClose,
@@ -277,7 +283,7 @@ function TrailerPage() {
   }
 
   // No trailer available
-  if (!trailer && data) {
+  if (!trailerKey && data) {
     return (
       <div
         ref={containerRef}
@@ -310,7 +316,7 @@ function TrailerPage() {
   }
 
   // Show loading while fetching movie data (before we know if there's a trailer)
-  if (!data) {
+  if (!trailerKey && !data) {
     return (
       <div
         role="dialog"
@@ -330,7 +336,7 @@ function TrailerPage() {
   }
 
   // Loading state for player - render container but show overlay
-  const isLoading = trailer && !isReady;
+  const isLoading = trailerKey && !isReady;
 
   return (
     <div

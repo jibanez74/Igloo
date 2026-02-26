@@ -30,22 +30,27 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver for database/sql
+	"github.com/patrickmn/go-cache"
+	"golang.org/x/sync/singleflight"
 )
 
 type Application struct {
-	DB             *sql.DB
-	Queries        *database.Queries
-	Settings       *database.Setting
-	Logger         *slog.Logger
-	LoggerCloser   func() error
-	Ffprobe        ffprobe.FfprobeInterface
-	Spotify        spotify.SpotifyInterface
-	Tmdb           tmdb.TmdbInterface
-	SessionManager *scs.SessionManager
-	Wait           *sync.WaitGroup
-	Router         *chi.Mux
-	Server         *http.Server
-	ScannerDBMu    sync.Mutex
+	DB                *sql.DB
+	Queries           *database.Queries
+	Settings          *database.Setting
+	Logger            *slog.Logger
+	LoggerCloser      func() error
+	Ffprobe           ffprobe.FfprobeInterface
+	FFmpeg            *ffmpeg.FFmpeg
+	Spotify           spotify.SpotifyInterface
+	Tmdb              tmdb.TmdbInterface
+	SessionManager    *scs.SessionManager
+	Wait              *sync.WaitGroup
+	Router            *chi.Mux
+	Server            *http.Server
+	ScannerDBMu       sync.Mutex
+	HLSSessionCache   *cache.Cache
+	HLSSessionGroup   singleflight.Group
 }
 
 // SQL contains the database schema, embedded at compile time.
@@ -167,6 +172,22 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize ffprobe: %v", err)
 	}
 	app.Ffprobe = ffprobeApp
+
+	// Initialize FFmpeg for HLS transcoding (embedded binary extracted to temp dir).
+	ffmpegApp, err := ffmpeg.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ffmpeg: %v", err)
+	}
+	app.FFmpeg = ffmpegApp
+
+	// HLS session cache: 30 min default TTL, 10 min cleanup. OnEvicted kills FFmpeg and deletes temp dir.
+	hlsCache := cache.New(30*time.Minute, 10*time.Minute)
+	hlsCache.OnEvicted(func(key string, val interface{}) {
+		if session, ok := val.(*HLSSession); ok {
+			cleanupHLSSession(session)
+		}
+	})
+	app.HLSSessionCache = hlsCache
 
 	// Initialize Spotify client if credentials are configured.
 	// This is optional - the app works without Spotify integration.
@@ -519,6 +540,8 @@ func (app *Application) InitRouter() {
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/details/{id}", app.GetMovieDetails)
+			r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+			r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 			r.Get("/{id}/stream", app.StreamMovie)
 		})
 
@@ -619,6 +642,16 @@ func (app *Application) ListenForShutdown() {
 	}
 
 	app.Logger.Info("running clean up tasks...")
+
+	// Clean up all HLS sessions (kill FFmpeg, delete temp dirs) before FFmpeg binary cleanup.
+	if app.HLSSessionCache != nil {
+		for _, item := range app.HLSSessionCache.Items() {
+			if session, ok := item.Object.(*HLSSession); ok {
+				cleanupHLSSession(session)
+			}
+		}
+		app.HLSSessionCache.Flush()
+	}
 
 	// Wait for any in-flight background tasks to complete.
 	// These may still need database and logger access.

@@ -177,6 +177,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
 	}
+	if q.getMovieForDirectStreamStmt, err = db.PrepareContext(ctx, getMovieForDirectStream); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMovieForDirectStream: %w", err)
+	}
 	if q.getMusicianByIDStmt, err = db.PrepareContext(ctx, getMusicianByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianByID: %w", err)
 	}
@@ -626,6 +629,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMovieExtraVideosStmt: %w", cerr)
 		}
 	}
+	if q.getMovieForDirectStreamStmt != nil {
+		if cerr := q.getMovieForDirectStreamStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMovieForDirectStreamStmt: %w", cerr)
+		}
+	}
 	if q.getMusicianByIDStmt != nil {
 		if cerr := q.getMusicianByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicianByIDStmt: %w", cerr)
@@ -1031,6 +1039,7 @@ type Queries struct {
 	getMovieByIDStmt                       *sql.Stmt
 	getMovieByTmdbIDStmt                   *sql.Stmt
 	getMovieExtraVideosStmt                *sql.Stmt
+	getMovieForDirectStreamStmt            *sql.Stmt
 	getMusicianByIDStmt                    *sql.Stmt
 	getMusicianBySpotifyIDStmt             *sql.Stmt
 	getMusiciansAlphabeticalStmt           *sql.Stmt
@@ -1151,6 +1160,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMovieByIDStmt:                       q.getMovieByIDStmt,
 		getMovieByTmdbIDStmt:                   q.getMovieByTmdbIDStmt,
 		getMovieExtraVideosStmt:                q.getMovieExtraVideosStmt,
+		getMovieForDirectStreamStmt:            q.getMovieForDirectStreamStmt,
 		getMusicianByIDStmt:                    q.getMusicianByIDStmt,
 		getMusicianBySpotifyIDStmt:             q.getMusicianBySpotifyIDStmt,
 		getMusiciansAlphabeticalStmt:           q.getMusiciansAlphabeticalStmt,

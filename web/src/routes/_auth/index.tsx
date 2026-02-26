@@ -31,6 +31,7 @@ function HomePage() {
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
+{/* main application header */}
       <header className="mb-8">
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
           <Home className="size-6 text-amber-400" aria-hidden="true" />

@@ -33,14 +33,14 @@ export default function CastSection({
       </p>
 
       <ul
-        className="scrollbar-thin scrollbar-thumb-cyan-700/50 -mx-4 flex list-none gap-4 overflow-x-auto px-4 pb-4"
+        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-4 overflow-x-auto px-4 pb-4"
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >
         {displayedCast.map((actor, index) => (
           <li
             key={actor.id}
-            className="w-32 shrink-0 overflow-hidden rounded-lg border border-cyan-500/20 bg-slate-800/50 transition-colors focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/50 hover:border-cyan-500/40"
+            className="w-32 shrink-0 overflow-hidden rounded-lg border border-amber-500/20 bg-slate-800/50 transition-colors focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/50 hover:border-amber-500/40"
           >
             <article
               tabIndex={0}
@@ -52,7 +52,7 @@ export default function CastSection({
             >
               {actor.profile_path ? (
                 <img
-                  src={`${TMDB_IMAGE_BASE}/${TMDB_PROFILE_SIZE}${actor.profile_path}`}
+                  src={`${TMDB_IMAGE_BASE}/${TMDB_PROFILE_SIZE}${actor.profile_path.startsWith("/") ? actor.profile_path : `/${actor.profile_path}`}`}
                   alt={`Photo of ${actor.name}`}
                   className="aspect-2/3 w-full object-cover"
                   loading="lazy"

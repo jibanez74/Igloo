@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// movieFile holds path, extension, and size collected during directory walk.
-// Size is captured during walk to avoid blocking the transaction with file I/O.
 type movieFile struct {
 	path string
 	ext  string
