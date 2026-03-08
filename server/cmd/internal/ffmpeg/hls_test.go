@@ -25,6 +25,8 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		"libx264", "-preset", "veryfast",
 		"-c:a aac", "-b:a", "128k",
 		"scale=-2:1080",
+		"-avoid_negative_ts", "make_zero",
+		"-fflags", "+genpts",
 	} {
 		if !strings.Contains(argStr, want) {
 			t.Errorf("expected %q in args: %s", want, argStr)

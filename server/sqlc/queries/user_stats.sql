@@ -110,12 +110,6 @@ WHERE uph.user_id = ?
 ORDER BY uph.played_at DESC
 LIMIT ? OFFSET ?;
 
--- name: GetUserTrackPlayCount :one
--- Returns the play count for a specific track
-SELECT play_count
-FROM user_track_stats
-WHERE user_id = ? AND track_id = ?;
-
 -- name: GetUserTopAlbums :many
 -- Returns the user's most listened albums
 SELECT
@@ -134,16 +128,3 @@ WHERE uts.user_id = ?
 GROUP BY a.id, a.title, a.cover, a.musician, a.year
 ORDER BY total_play_count DESC
 LIMIT ? OFFSET ?;
-
--- name: GetUserListeningHistoryByPeriod :many
--- Returns listening stats grouped by date for charts
-SELECT
-    DATE(uph.played_at) AS play_date,
-    COUNT(*) AS play_count,
-    SUM(uph.duration_played) AS total_duration
-FROM user_play_history uph
-WHERE uph.user_id = ?
-  AND uph.played_at >= ?
-  AND uph.played_at <= ?
-GROUP BY DATE(uph.played_at)
-ORDER BY play_date ASC;

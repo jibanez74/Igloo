@@ -9,19 +9,32 @@ import (
 	"path/filepath"
 )
 
+type LoggerInterface interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+type logger struct {
+	*slog.Logger
+}
+
+var _ LoggerInterface = (*logger)(nil)
+
 type LoggerConfig struct {
 	Debug   bool
 	LogDir  string
 	LogFile string
 }
 
-// New creates a new slog.Logger based on the provided configuration.
+// New creates a new logger based on the provided configuration.
 // In debug mode (Debug=true), logs are written to stdout with text format at debug level.
 // In production mode (Debug=false), logs are written to a file with JSON format at info level.
 // The log file is automatically rotated to never exceed maxLines.
 // Returns the logger, a cleanup function to close the log file, and any error.
 // The log directory must exist - this function will not create it.
-func New(cfg *LoggerConfig) (*slog.Logger, func() error, error) {
+func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	var w io.Writer
 	var closer func() error = func() error { return nil }
 
@@ -31,7 +44,7 @@ func New(cfg *LoggerConfig) (*slog.Logger, func() error, error) {
 			Level: slog.LevelDebug,
 		})
 
-		return slog.New(handler), closer, nil
+		return &logger{Logger: slog.New(handler)}, closer, nil
 	}
 
 	if cfg.LogFile == "" {
@@ -69,5 +82,5 @@ func New(cfg *LoggerConfig) (*slog.Logger, func() error, error) {
 		Level: slog.LevelInfo,
 	})
 
-	return slog.New(handler), closer, nil
+	return &logger{Logger: slog.New(handler)}, closer, nil
 }

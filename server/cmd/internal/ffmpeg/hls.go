@@ -14,6 +14,7 @@ import (
 const HLSSegmentTimeSec = 4
 
 // BuildHLSArgs builds FFmpeg arguments for HLS fMP4 output.
+//
 // Arg ordering follows FFmpeg requirements:
 //
 //	[global] [-hwaccel …] [-i source] [-map …] [-c:v … -c:a …] [-f hls …] output
@@ -31,13 +32,14 @@ func BuildHLSArgs(
 	if !helpers.IsAllowedHLSProfile(profile) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", profile)
 	}
-
 	cfg, ok := helpers.HLSProfileConfigs[profile]
 	if !ok {
 		return nil, fmt.Errorf("unknown HLS profile: %s", profile)
 	}
 
-	args := []string{"-y", "-analyzeduration", "20000000", "-probesize", "20000000"}
+	// --- global + input ---
+	// genpts: generate PTS when missing (helps DTS and other sources with irregular timestamps)
+	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "20000000", "-probesize", "20000000"}
 
 	// -hwaccel MUST come before -i
 	if !copyVideo {
@@ -57,7 +59,7 @@ func BuildHLSArgs(
 		"-map", fmt.Sprintf("0:a:%d", audioStreamIndex),
 	)
 
-	// video encoding
+	// --- video encoding ---
 	if copyVideo {
 		args = append(args, "-c:v", "copy")
 	} else {
@@ -71,7 +73,6 @@ func BuildHLSArgs(
 		default:
 			args = append(args, "-c:v", "libx264", "-preset", "veryfast")
 		}
-
 		args = append(args,
 			"-b:v", cfg.VideoBitrate,
 			"-maxrate", cfg.VideoBitrate,
@@ -80,24 +81,17 @@ func BuildHLSArgs(
 		)
 	}
 
-	// audio encoding
+	// --- audio encoding ---
 	if copyAudio {
 		args = append(args, "-c:a", "copy")
 	} else {
-		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "320k")
+		args = append(args, "-c:a", "aac", "-b:a", "128k")
 	}
 
-	// Jellyfin-style timestamp handling: -start_at_zero shifts output to PTS 0
-	// while -copyts preserves relative timing within the source. Required when
-	// copying video (B-frames produce negative DTS without the shift).
-	args = append(args,
-		"-start_at_zero",
-		"-copyts",
-		"-avoid_negative_ts", "disabled",
-		"-max_muxing_queue_size", "1024",
-	)
+	// ensure first DTS is >= 0 so browser MSE can append buffers (no negative timestamps)
+	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
 
-	// HLS output ---
+	// --- HLS output ---
 	segmentPattern := filepath.Join(outDir, "segment_%d.m4s")
 	args = append(args,
 		"-f", "hls",
@@ -139,7 +133,6 @@ func (f *FFmpeg) RunHLS(
 		if err != nil {
 			return nil, err
 		}
-
 		go func() {
 			scanner := bufio.NewScanner(stderrPipe)
 			for scanner.Scan() {
@@ -148,8 +141,7 @@ func (f *FFmpeg) RunHLS(
 		}()
 	}
 
-	err = cmd.Start()
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 

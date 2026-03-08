@@ -44,6 +44,7 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 			app.Logger.Error("failed to stat static file", "error", err, "path", fullPath)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
+
 		return
 	}
 
@@ -53,7 +54,6 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Open the file
 	file, err := os.Open(fullPath)
 	if err != nil {
 		app.Logger.Error("failed to open static file", "error", err, "path", fullPath)
@@ -69,12 +69,10 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 		contentType = "application/octet-stream"
 	}
 
-	// Set headers
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	// Serve the file
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 

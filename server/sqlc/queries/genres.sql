@@ -31,16 +31,3 @@ WHERE
   mg.musician_id = ?
 ORDER BY
   g.tag ASC;
-
--- name: GetGenresByAlbumIDDirect :many
--- Returns genres directly associated with an album via album_genres table
-SELECT
-  g.id,
-  g.tag
-FROM
-  genres g
-  INNER JOIN album_genres ag ON g.id = ag.genre_id
-WHERE
-  ag.album_id = ?
-ORDER BY
-  g.tag ASC;

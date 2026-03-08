@@ -56,99 +56,6 @@ func (q *Queries) CountPlaylistTracks(ctx context.Context, playlistID int64) (in
 	return count, err
 }
 
-const getAllPlaylistTracks = `-- name: GetAllPlaylistTracks :many
-SELECT 
-    pt.id as playlist_track_id,
-    pt.position,
-    pt.added_at,
-    pt.added_by,
-    t.id,
-    t.title,
-    t.duration,
-    t.file_path,
-    t.codec,
-    t.bit_rate,
-    t.album_id,
-    t.musician_id,
-    a.title as album_title,
-    a.cover as album_cover,
-    m.name as musician_name
-FROM playlist_tracks pt
-JOIN tracks t ON pt.track_id = t.id
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
-WHERE pt.playlist_id = ?
-ORDER BY pt.position ASC
-`
-
-type GetAllPlaylistTracksRow struct {
-	PlaylistTrackID int64          `json:"playlist_track_id"`
-	Position        int64          `json:"position"`
-	AddedAt         string         `json:"added_at"`
-	AddedBy         sql.NullInt64  `json:"added_by"`
-	ID              int64          `json:"id"`
-	Title           string         `json:"title"`
-	Duration        int64          `json:"duration"`
-	FilePath        string         `json:"file_path"`
-	Codec           string         `json:"codec"`
-	BitRate         int64          `json:"bit_rate"`
-	AlbumID         sql.NullInt64  `json:"album_id"`
-	MusicianID      sql.NullInt64  `json:"musician_id"`
-	AlbumTitle      sql.NullString `json:"album_title"`
-	AlbumCover      sql.NullString `json:"album_cover"`
-	MusicianName    sql.NullString `json:"musician_name"`
-}
-
-func (q *Queries) GetAllPlaylistTracks(ctx context.Context, playlistID int64) ([]GetAllPlaylistTracksRow, error) {
-	rows, err := q.query(ctx, q.getAllPlaylistTracksStmt, getAllPlaylistTracks, playlistID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAllPlaylistTracksRow{}
-	for rows.Next() {
-		var i GetAllPlaylistTracksRow
-		if err := rows.Scan(
-			&i.PlaylistTrackID,
-			&i.Position,
-			&i.AddedAt,
-			&i.AddedBy,
-			&i.ID,
-			&i.Title,
-			&i.Duration,
-			&i.FilePath,
-			&i.Codec,
-			&i.BitRate,
-			&i.AlbumID,
-			&i.MusicianID,
-			&i.AlbumTitle,
-			&i.AlbumCover,
-			&i.MusicianName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getMaxPosition = `-- name: GetMaxPosition :one
-SELECT COALESCE(MAX(position), -1) as max_position FROM playlist_tracks WHERE playlist_id = ?
-`
-
-func (q *Queries) GetMaxPosition(ctx context.Context, playlistID int64) (interface{}, error) {
-	row := q.queryRow(ctx, q.getMaxPositionStmt, getMaxPosition, playlistID)
-	var max_position interface{}
-	err := row.Scan(&max_position)
-	return max_position, err
-}
-
 const getPlaylistDuration = `-- name: GetPlaylistDuration :one
 SELECT COALESCE(SUM(t.duration), 0) as total_duration
 FROM playlist_tracks pt
@@ -279,38 +186,6 @@ type RemoveTrackFromPlaylistParams struct {
 
 func (q *Queries) RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error {
 	_, err := q.exec(ctx, q.removeTrackFromPlaylistStmt, removeTrackFromPlaylist, arg.PlaylistID, arg.TrackID)
-	return err
-}
-
-const shiftPositionsDown = `-- name: ShiftPositionsDown :exec
-UPDATE playlist_tracks 
-SET position = position + 1 
-WHERE playlist_id = ? AND position >= ?
-`
-
-type ShiftPositionsDownParams struct {
-	PlaylistID int64 `json:"playlist_id"`
-	Position   int64 `json:"position"`
-}
-
-func (q *Queries) ShiftPositionsDown(ctx context.Context, arg ShiftPositionsDownParams) error {
-	_, err := q.exec(ctx, q.shiftPositionsDownStmt, shiftPositionsDown, arg.PlaylistID, arg.Position)
-	return err
-}
-
-const shiftPositionsUp = `-- name: ShiftPositionsUp :exec
-UPDATE playlist_tracks 
-SET position = position - 1 
-WHERE playlist_id = ? AND position > ?
-`
-
-type ShiftPositionsUpParams struct {
-	PlaylistID int64 `json:"playlist_id"`
-	Position   int64 `json:"position"`
-}
-
-func (q *Queries) ShiftPositionsUp(ctx context.Context, arg ShiftPositionsUpParams) error {
-	_, err := q.exec(ctx, q.shiftPositionsUpStmt, shiftPositionsUp, arg.PlaylistID, arg.Position)
 	return err
 }
 

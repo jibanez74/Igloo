@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +20,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
-	"igloo/cmd/internal/spotify"
+	"igloo/cmd/internal/musicbrainz"
 	"igloo/cmd/internal/tmdb"
 
 	"github.com/alexedwards/scs/sqlite3store"
@@ -35,22 +34,22 @@ import (
 )
 
 type Application struct {
-	DB                *sql.DB
-	Queries           *database.Queries
-	Settings          *database.Setting
-	Logger            *slog.Logger
-	LoggerCloser      func() error
-	Ffprobe           ffprobe.FfprobeInterface
-	FFmpeg            *ffmpeg.FFmpeg
-	Spotify           spotify.SpotifyInterface
-	Tmdb              tmdb.TmdbInterface
-	SessionManager    *scs.SessionManager
-	Wait              *sync.WaitGroup
-	Router            *chi.Mux
-	Server            *http.Server
-	ScannerDBMu       sync.Mutex
-	HLSSessionCache   *cache.Cache
-	HLSSessionGroup   singleflight.Group
+	DB              *sql.DB
+	Queries         *database.Queries
+	Settings        *database.Setting
+	Logger          applogger.LoggerInterface
+	LoggerCloser    func() error
+	Ffprobe         ffprobe.FfprobeInterface
+	FFmpeg          *ffmpeg.FFmpeg
+	MusicBrainz     musicbrainz.MusicBrainzInterface
+	Tmdb            tmdb.TmdbInterface
+	SessionManager  *scs.SessionManager
+	Wait            *sync.WaitGroup
+	Router          *chi.Mux
+	Server          *http.Server
+	ScannerDBMu     sync.Mutex
+	HLSSessionCache *cache.Cache
+	HLSSessionGroup singleflight.Group
 }
 
 // SQL contains the database schema, embedded at compile time.
@@ -189,17 +188,16 @@ func InitApp() (*Application, error) {
 	})
 	app.HLSSessionCache = hlsCache
 
-	// Initialize Spotify client if credentials are configured.
-	// This is optional - the app works without Spotify integration.
-	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientSecret.Valid {
-		s, err := spotify.New(app.Settings.SpotifyClientID.String, app.Settings.SpotifyClientSecret.String)
-		if err != nil {
-			app.Logger.Warn("failed to initialize spotify client", "error", err)
-		} else {
-			app.Spotify = s
-			app.Logger.Info("spotify client initialized successfully")
-		}
+	// Initialize MusicBrainz client for music metadata and cover art lookups.
+	cacheDir := os.Getenv("MUSIC_METADATA_CACHE_DIR")
+	if cacheDir == "" {
+		cacheDir = "music-metadata-cache"
 	}
+	if _, err := helpers.GetOrCreateDir(cacheDir); err != nil {
+		app.Logger.Warn("failed to create music metadata cache dir", "error", err)
+		cacheDir = ""
+	}
+	app.MusicBrainz = musicbrainz.New(cacheDir)
 
 	// Initialize TMDB client if TMDB key is configured.
 	// This is optional - the app works without TMDB integration.
@@ -243,7 +241,7 @@ func (app *Application) InitDB() error {
 		return err
 	}
 
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on")
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
 		return err
 	}
@@ -323,8 +321,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
 		JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
-		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
-		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
 		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
 		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,
@@ -656,6 +652,13 @@ func (app *Application) ListenForShutdown() {
 	// Wait for any in-flight background tasks to complete.
 	// These may still need database and logger access.
 	app.Wait.Wait()
+
+	// Close the MusicBrainz disk cache.
+	if app.MusicBrainz != nil {
+		if err := app.MusicBrainz.Close(); err != nil {
+			app.Logger.Error("failed to close musicbrainz cache", "error", err)
+		}
+	}
 
 	// Clean up ffprobe temp directory and extracted binary.
 	err := ffprobe.Cleanup()

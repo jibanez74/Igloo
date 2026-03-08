@@ -14,7 +14,6 @@ const deleteAlbum = `-- name: DeleteAlbum :exec
 DELETE FROM albums WHERE id = ?
 `
 
-// Deleting an album will cascade delete all associated tracks
 func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
 	_, err := q.exec(ctx, q.deleteAlbumStmt, deleteAlbum, id)
 	return err
@@ -22,7 +21,7 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
 
 const getAlbumByID = `-- name: GetAlbumByID :one
 SELECT
-  id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at
 FROM
   albums
 WHERE
@@ -39,8 +38,7 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 		&i.Title,
 		&i.SortTitle,
 		&i.Musician,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.MusicbrainzID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,
@@ -51,27 +49,54 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 	return i, err
 }
 
-const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
+const getAlbumByMusicBrainzID = `-- name: GetAlbumByMusicBrainzID :one
 SELECT
-  id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+  id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at
 FROM
   albums
 WHERE
-  spotify_id = ?
+  musicbrainz_id = ?
 LIMIT
   1
 `
 
-func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error) {
-	row := q.queryRow(ctx, q.getAlbumBySpotifyIDStmt, getAlbumBySpotifyID, spotifyID)
+func (q *Queries) GetAlbumByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Album, error) {
+	row := q.queryRow(ctx, q.getAlbumByMusicBrainzIDStmt, getAlbumByMusicBrainzID, musicbrainzID)
 	var i Album
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.SortTitle,
 		&i.Musician,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.MusicbrainzID,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.TotalTracks,
+		&i.Cover,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAlbumByTitleAndMusician = `-- name: GetAlbumByTitleAndMusician :one
+SELECT id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at FROM albums WHERE title = ? AND musician = ? LIMIT 1
+`
+
+type GetAlbumByTitleAndMusicianParams struct {
+	Title    string         `json:"title"`
+	Musician sql.NullString `json:"musician"`
+}
+
+func (q *Queries) GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error) {
+	row := q.queryRow(ctx, q.getAlbumByTitleAndMusicianStmt, getAlbumByTitleAndMusician, arg.Title, arg.Musician)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.SortTitle,
+		&i.Musician,
+		&i.MusicbrainzID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,
@@ -145,6 +170,47 @@ func (q *Queries) GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphab
 	return items, nil
 }
 
+const getAlbumsWithMissingCovers = `-- name: GetAlbumsWithMissingCovers :many
+SELECT id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at FROM albums
+WHERE musicbrainz_id IS NOT NULL AND musicbrainz_id != ''
+  AND (cover IS NULL OR cover = '')
+`
+
+func (q *Queries) GetAlbumsWithMissingCovers(ctx context.Context) ([]Album, error) {
+	rows, err := q.query(ctx, q.getAlbumsWithMissingCoversStmt, getAlbumsWithMissingCovers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Album{}
+	for rows.Next() {
+		var i Album
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.SortTitle,
+			&i.Musician,
+			&i.MusicbrainzID,
+			&i.ReleaseDate,
+			&i.Year,
+			&i.TotalTracks,
+			&i.Cover,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,
@@ -197,46 +263,54 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	return items, nil
 }
 
+const updateAlbumCover = `-- name: UpdateAlbumCover :exec
+UPDATE albums SET cover = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+`
+
+type UpdateAlbumCoverParams struct {
+	Cover sql.NullString `json:"cover"`
+	ID    int64          `json:"id"`
+}
+
+func (q *Queries) UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error {
+	_, err := q.exec(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.Cover, arg.ID)
+	return err
+}
+
 const upsertAlbum = `-- name: UpsertAlbum :one
 INSERT INTO
   albums (
     title,
     sort_title,
     musician,
-    spotify_id,
-    spotify_popularity,
+    musicbrainz_id,
     release_date,
     year,
     total_tracks,
     cover
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
+  (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
 UPDATE
 SET
   sort_title = excluded.sort_title,
-  spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(
-    excluded.spotify_popularity,
-    albums.spotify_popularity
-  ),
+  musicbrainz_id = COALESCE(excluded.musicbrainz_id, albums.musicbrainz_id),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
-  updated_at = CURRENT_TIMESTAMP RETURNING id, title, sort_title, musician, spotify_id, spotify_popularity, release_date, year, total_tracks, cover, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP RETURNING id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at
 `
 
 type UpsertAlbumParams struct {
-	Title             string          `json:"title"`
-	SortTitle         string          `json:"sort_title"`
-	Musician          sql.NullString  `json:"musician"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	ReleaseDate       sql.NullString  `json:"release_date"`
-	Year              sql.NullInt64   `json:"year"`
-	TotalTracks       sql.NullInt64   `json:"total_tracks"`
-	Cover             sql.NullString  `json:"cover"`
+	Title         string         `json:"title"`
+	SortTitle     string         `json:"sort_title"`
+	Musician      sql.NullString `json:"musician"`
+	MusicbrainzID sql.NullString `json:"musicbrainz_id"`
+	ReleaseDate   sql.NullString `json:"release_date"`
+	Year          sql.NullInt64  `json:"year"`
+	TotalTracks   sql.NullInt64  `json:"total_tracks"`
+	Cover         sql.NullString `json:"cover"`
 }
 
 func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error) {
@@ -244,8 +318,7 @@ func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album
 		arg.Title,
 		arg.SortTitle,
 		arg.Musician,
-		arg.SpotifyID,
-		arg.SpotifyPopularity,
+		arg.MusicbrainzID,
 		arg.ReleaseDate,
 		arg.Year,
 		arg.TotalTracks,
@@ -257,8 +330,7 @@ func (q *Queries) UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album
 		&i.Title,
 		&i.SortTitle,
 		&i.Musician,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
+		&i.MusicbrainzID,
 		&i.ReleaseDate,
 		&i.Year,
 		&i.TotalTracks,

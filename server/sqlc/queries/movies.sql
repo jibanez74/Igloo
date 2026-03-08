@@ -14,16 +14,6 @@ WHERE
 LIMIT
   1;
 
--- name: GetMovieByFilePath :one
-SELECT
-  *
-FROM
-  movies
-WHERE
-  file_path = ?
-LIMIT
-  1;
-
 -- name: GetMovieByID :one
 SELECT
   *

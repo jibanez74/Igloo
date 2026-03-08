@@ -13,9 +13,9 @@ const (
 	// media scanner
 	SCANNER_BATCH_SIZE = 54
 
-	// spotify
-	SPOTIFY_ARTIST_MAX_CACHE = 100
-	SPOTIFY_ALBUM_MAX_CACHE  = 200
+	// musicbrainz
+	MUSICBRAINZ_ARTIST_MAX_CACHE = 100
+	MUSICBRAINZ_ALBUM_MAX_CACHE  = 200
 
 	// auth keys
 	COOKIE_USER_ID              = "user_id"

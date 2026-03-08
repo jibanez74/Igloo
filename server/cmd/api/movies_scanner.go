@@ -16,8 +16,6 @@ type movieFile struct {
 	size int64
 }
 
-// ScanMoviesLibrary walks through the configured movies directory, extracts metadata
-// from video files using ffprobe and TMDB API, and stores movie information in the database.
 func (app *Application) ScanMoviesLibrary() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
@@ -28,6 +26,8 @@ func (app *Application) ScanMoviesLibrary() {
 		app.Logger.Error("movies directory not configured")
 		return
 	}
+
+	app.Logger.Info(fmt.Sprintf("scanning movies directory: %s", app.Settings.MoviesDir.String))
 
 	ctx := context.Background()
 	errorCount := 0

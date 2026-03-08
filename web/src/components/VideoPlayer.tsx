@@ -53,7 +53,6 @@ export default function VideoPlayer({
       hls.attachMedia(video);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
-        console.error("[hls.js]", data.type, data.details, data.fatal, data);
         if (data.fatal) stableOnError();
       });
 

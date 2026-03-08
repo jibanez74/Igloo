@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { showActionFailed } from "@/lib/toast-helpers";
@@ -13,11 +13,26 @@ type AlbumCardProps = {
   album: SimpleAlbumType;
 };
 
+/**
+ * Resolves the album cover URL for display.
+ * Backend may return a same-origin path (/api/static/albums/...) or an absolute URL (e.g. Cover Art Archive).
+ */
+function resolveAlbumCoverUrl(cover: string | null): string | null {
+  if (!cover?.trim()) return null;
+  return cover.trim();
+}
+
 export default function AlbumCard({ album }: AlbumCardProps) {
   const { id, title, cover, musician } = album;
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayer();
   const [isLoading, setIsLoading] = useState(false);
+  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
+
+  const coverUrl = resolveAlbumCoverUrl(unwrapString(cover));
+  useEffect(() => {
+    setCoverLoadFailed(false);
+  }, [id, coverUrl]);
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(albumDetailsQueryOpts(id));
@@ -46,8 +61,8 @@ export default function AlbumCard({ album }: AlbumCardProps) {
     }
   };
 
-  const coverUrl = unwrapString(cover);
   const musicianName = unwrapString(musician);
+  const showCover = coverUrl && !coverLoadFailed;
 
   return (
     <article
@@ -61,19 +76,20 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         className="block focus:ring-2 focus:ring-amber-400 focus:outline-none focus:ring-inset"
         aria-label={`${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >
-        {/* Album cover */}
+        {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
         <div className="relative aspect-square bg-slate-800">
-          {coverUrl ? (
+          {showCover ? (
             <img
               src={coverUrl}
-              alt=""
-              width="640"
-              height="640"
+              alt={`Album cover for ${title}`}
+              width={640}
+              height={640}
               loading="lazy"
               decoding="async"
               fetchPriority="low"
               sizes="(min-width: 1024px) 16.66vw, (min-width: 768px) 25vw, (min-width: 640px) 33.33vw, 50vw"
               className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={() => setCoverLoadFailed(true)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

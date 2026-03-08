@@ -8,13 +8,16 @@ WHERE
 LIMIT
   1;
 
--- name: GetAlbumBySpotifyID :one
+-- name: GetAlbumByTitleAndMusician :one
+SELECT * FROM albums WHERE title = ? AND musician = ? LIMIT 1;
+
+-- name: GetAlbumByMusicBrainzID :one
 SELECT
   *
 FROM
   albums
 WHERE
-  spotify_id = ?
+  musicbrainz_id = ?
 LIMIT
   1;
 
@@ -58,29 +61,31 @@ INSERT INTO
     title,
     sort_title,
     musician,
-    spotify_id,
-    spotify_popularity,
+    musicbrainz_id,
     release_date,
     year,
     total_tracks,
     cover
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
+  (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (title, musician) DO
 UPDATE
 SET
   sort_title = excluded.sort_title,
-  spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
-  spotify_popularity = COALESCE(
-    excluded.spotify_popularity,
-    albums.spotify_popularity
-  ),
+  musicbrainz_id = COALESCE(excluded.musicbrainz_id, albums.musicbrainz_id),
   release_date = COALESCE(excluded.release_date, albums.release_date),
   year = COALESCE(excluded.year, albums.year),
   total_tracks = COALESCE(excluded.total_tracks, albums.total_tracks),
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP RETURNING *;
 
+-- name: UpdateAlbumCover :exec
+UPDATE albums SET cover = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+
+-- name: GetAlbumsWithMissingCovers :many
+SELECT * FROM albums
+WHERE musicbrainz_id IS NOT NULL AND musicbrainz_id != ''
+  AND (cover IS NULL OR cover = '');
+
 -- name: DeleteAlbum :exec
--- Deleting an album will cascade delete all associated tracks
 DELETE FROM albums WHERE id = ?;

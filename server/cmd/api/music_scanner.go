@@ -3,23 +3,39 @@ package main
 import (
 	"context"
 	"fmt"
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
 	"path/filepath"
 	"time"
 )
 
-// trackFile holds path, extension, and size collected during directory walk.
-// Size is captured during walk to avoid blocking the transaction with file I/O.
 type trackFile struct {
 	path string
 	ext  string
 	size int64
 }
 
-// ScanMusicLibrary walks through the configured music directory, extracts metadata
-// from audio files using ffprobe, and stores track information in the database.
+// unchangedTrackPathsAndSizes returns a map of file_path -> size for tracks that exist in the DB (batch query).
+// Callers use it to skip files where unchanged[path] == file.size.
+func (app *Application) unchangedTrackPathsAndSizes(ctx context.Context, files []trackFile) map[string]int64 {
+	if len(files) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(files))
+	for _, f := range files {
+		paths = append(paths, f.path)
+	}
+	rows, err := app.Queries.GetTrackPathsAndSizesByPaths(ctx, paths)
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		out[r.FilePath] = r.Size
+	}
+	return out
+}
+
 func (app *Application) ScanMusicLibrary() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
@@ -92,55 +108,102 @@ func (app *Application) ScanMusicLibrary() {
 		errorCount += errors
 	}
 
-	app.Spotify.ClearAllCaches()
+	if app.Settings.DownloadImages {
+		app.retryMissingAlbumCovers(ctx)
+	}
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// processMusicBatch processes a batch of audio files within a single transaction.
-// Uses skip-on-error strategy: failed tracks don't rollback successful ones.
-// Holds ScannerDBMu so only one scanner (music or movie) writes to the DB at a time.
+// processMusicBatch processes a batch of audio files in three phases to minimize
+// how long the database write lock is held:
+//   - Phase 1: Extract metadata (ffprobe, MusicBrainz) — no transaction, no lock.
+//   - Phase 2: Write to DB in a short transaction — lock held only for fast DB ops.
+//   - Phase 3: Download images — no transaction, individual autocommit updates.
 func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
-	app.ScannerDBMu.Lock()
-	defer app.ScannerDBMu.Unlock()
-
-	tx, err := app.DB.BeginTx(ctx, nil)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to start transaction: %s", err.Error()))
-		return 0, 0, len(files)
+	type pendingTrack struct {
+		prepared *preparedTrack
+		file     trackFile
 	}
-	defer tx.Rollback()
+	var pending []pendingTrack
 
-	qtx := app.Queries.WithTx(tx)
-
+	unchanged := app.unchangedTrackPathsAndSizes(ctx, files)
 	for _, file := range files {
-		// Check if track exists with same path and size (file unchanged)
-		_, err = qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
-			FilePath: file.path,
-			Size:     file.size,
-		})
-
-		if err == nil {
+		if size, ok := unchanged[file.path]; ok && size == file.size {
 			skipped++
 			continue
 		}
-
-		// File is new or size changed - process it
-		err = app.processTrackFile(ctx, qtx, file.path, file.ext)
+		prepared, err := app.extractTrackMetadata(ctx, file.path, file.ext)
 		if err != nil {
-			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
+			app.Logger.Error(fmt.Sprintf("failed to extract metadata %s: %s", file.path, err.Error()))
 			errCount++
 			continue
 		}
-
-		scanned++
+		pending = append(pending, pendingTrack{prepared: prepared, file: file})
 	}
 
-	err = tx.Commit()
+	if len(pending) == 0 {
+		return scanned, skipped, errCount
+	}
+
+	// --- Phase 2: DB writes (short transaction) ---
+	var images []imageWork
+
+	app.ScannerDBMu.Lock()
+
+	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", err.Error()))
-		return 0, 0, len(files)
+		app.ScannerDBMu.Unlock()
+		app.Logger.Error(fmt.Sprintf("failed to start transaction: %s", err.Error()))
+		return 0, skipped, len(pending) + errCount
+	}
+
+	qtx := app.Queries.WithTx(tx)
+
+	for _, p := range pending {
+		iw, err := app.writeTrackToDB(ctx, qtx, p.prepared)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to write %s: %s", p.file.path, err.Error()))
+			errCount++
+			continue
+		}
+		scanned++
+		if iw != nil {
+			images = append(images, *iw)
+		}
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", commitErr.Error()))
+		app.ScannerDBMu.Unlock()
+		return 0, skipped, len(pending) + errCount
+	}
+
+	app.ScannerDBMu.Unlock()
+
+	// --- Phase 3: Image acquisition (no lock, individual autocommit writes) ---
+	if app.Settings.DownloadImages {
+		albumByID := make(map[int64]imageWork)
+		musicianByID := make(map[int64]imageWork)
+		for _, iw := range images {
+			if iw.album != nil {
+				if _, seen := albumByID[iw.album.ID]; !seen {
+					albumByID[iw.album.ID] = iw
+				}
+			}
+			if iw.musician != nil {
+				if _, seen := musicianByID[iw.musician.ID]; !seen {
+					musicianByID[iw.musician.ID] = iw
+				}
+			}
+		}
+		for _, iw := range albumByID {
+			app.acquireAlbumCover(ctx, app.Queries, iw.album, iw.coverURL, iw.audioPath)
+		}
+		for _, iw := range musicianByID {
+			app.acquireMusicianThumb(ctx, app.Queries, iw.musician)
+		}
 	}
 
 	return scanned, skipped, errCount

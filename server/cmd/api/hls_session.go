@@ -129,8 +129,12 @@ func (app *Application) createHLSSession(
 	videoStreamIndex := 0
 	audioStreamIndex := audioTrack
 
-	copyVideo := strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
-	copyAudio := strings.EqualFold(meta.Streams[audioStreams[audioTrack]].CodecName, "aac")
+	// When audio must be transcoded (e.g. DTS), transcode video too so both streams
+	// get clean timestamps from one pipeline. Copying H.264 video while transcoding
+	// DTS→AAC can leave negative DTS in fMP4 segments, which browser MSE rejects.
+	audioCodec := strings.ToLower(meta.Streams[audioStreams[audioTrack]].CodecName)
+	copyAudio := audioCodec == "aac"
+	copyVideo := copyAudio && strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
 
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {

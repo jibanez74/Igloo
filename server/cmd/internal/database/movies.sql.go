@@ -388,50 +388,6 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 	return items, nil
 }
 
-const getMovieByFilePath = `-- name: GetMovieByFilePath :one
-SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
-FROM
-  movies
-WHERE
-  file_path = ?
-LIMIT
-  1
-`
-
-func (q *Queries) GetMovieByFilePath(ctx context.Context, filePath string) (Movie, error) {
-	row := q.queryRow(ctx, q.getMovieByFilePathStmt, getMovieByFilePath, filePath)
-	var i Movie
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.FilePath,
-		&i.FileName,
-		&i.Size,
-		&i.Container,
-		&i.MimeType,
-		&i.Adult,
-		&i.TmdbID,
-		&i.ImdbID,
-		&i.PosterPath,
-		&i.BackdropPath,
-		&i.Language,
-		&i.Year,
-		&i.ReleaseDate,
-		&i.Overview,
-		&i.TagLine,
-		&i.Certification,
-		&i.CriticRating,
-		&i.AudienceRating,
-		&i.Revenue,
-		&i.Budget,
-		&i.RunTime,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getMovieByID = `-- name: GetMovieByID :one
 SELECT
   id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at

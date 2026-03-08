@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"igloo/cmd/internal/helpers"
-
 	"github.com/go-chi/chi/v5"
+	"igloo/cmd/internal/helpers"
 )
 
 const (
@@ -25,6 +24,7 @@ const (
 var segmentFilenameRe = regexp.MustCompile(`^segment_\d+\.m4s$`)
 
 // HLSManifest serves GET /api/movies/:id/hls/:profile/playlist.m3u8
+//
 // Returns a complete VOD M3U8 immediately (generated from known duration).
 // All segments are listed upfront with #EXT-X-ENDLIST, so hls.js treats it
 // as on-demand: starts from 0, shows full duration bar, allows seeking.
@@ -43,7 +43,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
-	playlist := app.generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+	playlist := generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
 
@@ -54,6 +54,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 // HLSSegment serves GET /api/movies/:id/hls/:profile/:filename
+//
 // Waits for the requested segment file to appear on disk (FFmpeg produces
 // them sequentially in the background), then serves it.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +75,6 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
-
 	session := raw.(*HLSSession)
 	app.RefreshHLSSessionTTL(key, session)
 
@@ -108,23 +108,19 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, prof
 		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
 		return 0, "", 0, false
 	}
-
 	profile = chi.URLParam(r, "profile")
 	if !helpers.IsAllowedHLSProfile(profile) {
 		helpers.ErrorJSON(w, errors.New("invalid quality profile"), http.StatusBadRequest)
 		return 0, "", 0, false
 	}
-
 	if q := r.URL.Query().Get("audio_track"); q != "" {
 		at, err := strconv.Atoi(q)
 		if err != nil || at < 0 {
 			helpers.ErrorJSON(w, errors.New("invalid audio_track"), http.StatusBadRequest)
 			return 0, "", 0, false
 		}
-
 		audioTrack = at
 	}
-
 	return id, profile, audioTrack, true
 }
 
@@ -134,6 +130,5 @@ func fileReady(path string) bool {
 	if err != nil {
 		return false
 	}
-
 	return info.Size() > 0
 }

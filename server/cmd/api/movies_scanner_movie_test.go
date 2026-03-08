@@ -101,30 +101,26 @@ func TestSelectBestTmdbMatch(t *testing.T) {
 				Title:       "Movie 2020",
 				ReleaseDate: "2020-01-01",
 				Popularity:  10.0,
-				VoteAverage: 5.0, // Score: 10 + 50 = 60
+				VoteAverage: 5.0,
 			},
 			{
 				TmdbID:      2,
 				Title:       "Movie 2021",
 				ReleaseDate: "2021-01-01",
 				Popularity:  20.0,
-				VoteAverage: 7.0, // Score: 20 + 70 = 90
+				VoteAverage: 7.0,
 			},
 			{
 				TmdbID:      3,
 				Title:       "Movie 2022",
 				ReleaseDate: "2022-01-01",
 				Popularity:  15.0,
-				VoteAverage: 8.0, // Score: 15 + 80 = 95
+				VoteAverage: 8.0,
 			},
 		}
 		result := selectBestTmdbMatch(results, 2023) // Target year doesn't match any
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Movie 3 has highest combined score (95)
-		if result.TmdbID != 3 {
-			t.Errorf("Expected TMDB ID 3 (highest score), got %d", result.TmdbID)
+		if result != nil {
+			t.Errorf("Expected nil when no year match (caller falls back to first result with title match), got TMDB ID %d", result.TmdbID)
 		}
 	})
 

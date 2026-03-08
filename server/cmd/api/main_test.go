@@ -73,6 +73,17 @@ func TestInitDB(t *testing.T) {
 	if foreignKeys != 1 {
 		t.Errorf("Expected foreign_keys to be 1, got %d", foreignKeys)
 	}
+
+	// Verify busy timeout is set
+	var busyTimeout int
+	err = app.DB.QueryRow("PRAGMA busy_timeout;").Scan(&busyTimeout)
+	if err != nil {
+		t.Errorf("Failed to query busy_timeout: %v", err)
+	}
+
+	if busyTimeout != 5000 {
+		t.Errorf("Expected busy_timeout 5000, got %d", busyTimeout)
+	}
 }
 
 func TestInitDB_DefaultPath(t *testing.T) {
@@ -365,7 +376,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	// These match the env vars read by InitSettings in main.go.
 	envVars := []string{
 		"TMDB_API_KEY", "JELLYFIN_TOKEN",
-		"SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET",
 		"HARDWARE_ACCELERATION_DEVICE",
 		"ENABLE_LOGGER", "ENABLE_WATCHER", "DOWNLOAD_IMAGES",
 		"MOVIES_DIR", "SHOWS_DIR", "MUSIC_DIR",
@@ -419,12 +429,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.JellyfinToken.Valid {
 		t.Error("Expected JellyfinToken to be invalid when not set")
 	}
-	if app.Settings.SpotifyClientID.Valid {
-		t.Error("Expected SpotifyClientID to be invalid when not set")
-	}
-	if app.Settings.SpotifyClientSecret.Valid {
-		t.Error("Expected SpotifyClientSecret to be invalid when not set")
-	}
 	if app.Settings.MoviesDir.Valid {
 		t.Error("Expected MoviesDir to be invalid when not set")
 	}
@@ -443,8 +447,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	// Set all environment variables that InitSettings reads
 	os.Setenv("TMDB_API_KEY", "test-tmdb-key")
 	os.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
-	os.Setenv("SPOTIFY_CLIENT_ID", "test-spotify-id")
-	os.Setenv("SPOTIFY_CLIENT_SECRET", "test-spotify-secret")
 	os.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
 	os.Setenv("ENABLE_LOGGER", "true")
 	os.Setenv("ENABLE_WATCHER", "true")
@@ -458,8 +460,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	defer func() {
 		os.Unsetenv("TMDB_API_KEY")
 		os.Unsetenv("JELLYFIN_TOKEN")
-		os.Unsetenv("SPOTIFY_CLIENT_ID")
-		os.Unsetenv("SPOTIFY_CLIENT_SECRET")
 		os.Unsetenv("HARDWARE_ACCELERATION_DEVICE")
 		os.Unsetenv("ENABLE_LOGGER")
 		os.Unsetenv("ENABLE_WATCHER")
@@ -483,12 +483,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	}
 	if app.Settings.JellyfinToken.String != "test-jellyfin-token" || !app.Settings.JellyfinToken.Valid {
 		t.Errorf("Expected JellyfinToken 'test-jellyfin-token' (valid), got '%s' (valid=%v)", app.Settings.JellyfinToken.String, app.Settings.JellyfinToken.Valid)
-	}
-	if app.Settings.SpotifyClientID.String != "test-spotify-id" || !app.Settings.SpotifyClientID.Valid {
-		t.Errorf("Expected SpotifyClientID 'test-spotify-id' (valid), got '%s' (valid=%v)", app.Settings.SpotifyClientID.String, app.Settings.SpotifyClientID.Valid)
-	}
-	if app.Settings.SpotifyClientSecret.String != "test-spotify-secret" || !app.Settings.SpotifyClientSecret.Valid {
-		t.Errorf("Expected SpotifyClientSecret 'test-spotify-secret' (valid), got '%s' (valid=%v)", app.Settings.SpotifyClientSecret.String, app.Settings.SpotifyClientSecret.Valid)
 	}
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
@@ -527,13 +521,18 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	// Create settings directly in the database
 	params := database.CreateSettingsParams{
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
-		StaticDir:                  "existing-static",
-		LogsDir:                    "existing-logs",
+		JellyfinToken:              sql.NullString{Valid: false},
 		HardwareAccelerationDevice: sql.NullString{String: "nvidia", Valid: true},
 		EnableLogger:               true,
+		EnableWatcher:              false,
+		DownloadImages:             false,
+		MoviesDir:                  sql.NullString{Valid: false},
+		ShowsDir:                   sql.NullString{Valid: false},
+		MusicDir:                   sql.NullString{Valid: false},
+		StaticDir:                  "existing-static",
+		LogsDir:                    "existing-logs",
 	}
 	_, err := app.Queries.CreateSettings(context.Background(), params)
 	if err != nil {
@@ -583,6 +582,33 @@ func TestInitSettings_Idempotent(t *testing.T) {
 	// Should load the same settings, not create a new one
 	if app.Settings.ID != firstSettingsID {
 		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.Settings.ID)
+	}
+}
+
+func TestInitDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Settings = &database.Setting{
+		StaticDir: filepath.Join(tmpDir, "static"),
+		LogsDir:   filepath.Join(tmpDir, "logs"),
+	}
+
+	err := app.InitDirs()
+	if err != nil {
+		t.Fatalf("InitDirs failed: %v", err)
+	}
+
+	for _, dir := range []string{app.Settings.StaticDir, app.Settings.LogsDir} {
+		info, err := os.Stat(dir)
+		if err != nil {
+			t.Errorf("expected directory %s to exist: %v", dir, err)
+			continue
+		}
+		if !info.IsDir() {
+			t.Errorf("expected %s to be a directory", dir)
+		}
 	}
 }
 
