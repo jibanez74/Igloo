@@ -112,6 +112,8 @@ func (app *Application) ScanMusicLibrary() {
     app.retryMissingAlbumCovers(ctx)
   }
 
+  app.MusicBrainz.ClearAllCaches()
+
   app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
     tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }

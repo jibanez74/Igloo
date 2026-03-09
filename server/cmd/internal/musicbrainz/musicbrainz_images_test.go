@@ -14,7 +14,7 @@ func setupAudioDBMockServer(t *testing.T, handler http.HandlerFunc) *musicBrainz
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 	return client
@@ -155,7 +155,7 @@ func TestGetArtistImageURL_BuildsCorrectEndpoint(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -182,7 +182,7 @@ func TestAudioDBRateLimiterIndependent(t *testing.T) {
 	}))
 	t.Cleanup(audioDBServer.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = mbServer.URL
 	client.audioDBBaseURL = audioDBServer.URL
 	client.lastRequest = time.Time{}
@@ -204,7 +204,7 @@ func TestAudioDBRateLimiterIndependent(t *testing.T) {
 }
 
 func TestImageCacheEviction(t *testing.T) {
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 
 	for i := 0; i < 105; i++ {
 		client.setImage(
@@ -228,7 +228,7 @@ func TestGetAlbumImageURL_Success(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -244,7 +244,7 @@ func TestGetAlbumImageURL_Success(t *testing.T) {
 }
 
 func TestGetAlbumImageURL_EmptyID(t *testing.T) {
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	_, err := client.GetAlbumImageURL("")
 	if err == nil {
 		t.Fatal("expected error for empty release group ID")
@@ -257,7 +257,7 @@ func TestGetAlbumImageURL_NoResults(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -277,7 +277,7 @@ func TestGetAlbumImageURL_Cache(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -308,7 +308,7 @@ func TestGetAlbumImageURL_NegativeResultCached(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -337,7 +337,7 @@ func TestGetAlbumImageURL_BuildsCorrectEndpoint(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.audioDBBaseURL = server.URL
 	client.audioDBLastReq = time.Time{}
 
@@ -350,7 +350,7 @@ func TestGetAlbumImageURL_BuildsCorrectEndpoint(t *testing.T) {
 }
 
 func TestClearAllCaches_IncludesImageCache(t *testing.T) {
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.setImage("test-key", "https://example.com/thumb.jpg")
 
 	if _, exists := client.getImage("test-key"); !exists {

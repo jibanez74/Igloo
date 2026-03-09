@@ -17,17 +17,11 @@ func (c *musicBrainzClient) getArtist(key string) (*ArtistResult, bool) {
 		delete(c.artistCache, key)
 		c.artistKeys = removeKey(c.artistKeys, key)
 	}
-	if c.disk != nil {
-		if r, ok := c.disk.getArtist(key); ok {
-			c.setArtistMemory(key, r)
-			return r, true
-		}
-	}
 	return nil, false
 }
 
 func (c *musicBrainzClient) setArtistMemory(key string, artist *ArtistResult) {
-	expiresAt := time.Now().Add(musicBrainzCacheTTL)
+	expiresAt := time.Now().Add(helpers.MUSICBRAINZ_CACHE_TTL)
 	if _, exists := c.artistCache[key]; exists {
 		c.artistCache[key] = &artistCacheEntry{result: artist, expiresAt: expiresAt}
 		return
@@ -45,9 +39,6 @@ func (c *musicBrainzClient) setArtist(key string, artist *ArtistResult) {
 	c.artistMu.Lock()
 	defer c.artistMu.Unlock()
 	c.setArtistMemory(key, artist)
-	if c.disk != nil {
-		c.disk.setArtist(key, artist)
-	}
 }
 
 func (c *musicBrainzClient) getAlbum(key string) (*AlbumResult, bool) {
@@ -61,17 +52,11 @@ func (c *musicBrainzClient) getAlbum(key string) (*AlbumResult, bool) {
 		delete(c.albumCache, key)
 		c.albumKeys = removeKey(c.albumKeys, key)
 	}
-	if c.disk != nil {
-		if r, ok := c.disk.getAlbum(key); ok {
-			c.setAlbumMemory(key, r)
-			return r, true
-		}
-	}
 	return nil, false
 }
 
 func (c *musicBrainzClient) setAlbumMemory(key string, album *AlbumResult) {
-	expiresAt := time.Now().Add(musicBrainzCacheTTL)
+	expiresAt := time.Now().Add(helpers.MUSICBRAINZ_CACHE_TTL)
 	if _, exists := c.albumCache[key]; exists {
 		c.albumCache[key] = &albumCacheEntry{result: album, expiresAt: expiresAt}
 		return
@@ -89,9 +74,6 @@ func (c *musicBrainzClient) setAlbum(key string, album *AlbumResult) {
 	c.albumMu.Lock()
 	defer c.albumMu.Unlock()
 	c.setAlbumMemory(key, album)
-	if c.disk != nil {
-		c.disk.setAlbum(key, album)
-	}
 }
 
 func (c *musicBrainzClient) getImage(key string) (string, bool) {
@@ -105,17 +87,11 @@ func (c *musicBrainzClient) getImage(key string) (string, bool) {
 		delete(c.imageCache, key)
 		c.imageKeys = removeKey(c.imageKeys, key)
 	}
-	if c.disk != nil {
-		if url, ok := c.disk.getImage(key); ok {
-			c.setImageMemory(key, url)
-			return url, true
-		}
-	}
 	return "", false
 }
 
 func (c *musicBrainzClient) setImageMemory(key, url string) {
-	expiresAt := time.Now().Add(musicBrainzCacheTTL)
+	expiresAt := time.Now().Add(helpers.MUSICBRAINZ_CACHE_TTL)
 	if _, exists := c.imageCache[key]; exists {
 		c.imageCache[key] = &imageCacheEntry{url: url, expiresAt: expiresAt}
 		return
@@ -133,9 +109,6 @@ func (c *musicBrainzClient) setImage(key, url string) {
 	c.imageMu.Lock()
 	defer c.imageMu.Unlock()
 	c.setImageMemory(key, url)
-	if c.disk != nil {
-		c.disk.setImage(key, url)
-	}
 }
 
 func removeKey(keys []string, k string) []string {
@@ -148,9 +121,6 @@ func removeKey(keys []string, k string) []string {
 }
 
 func (c *musicBrainzClient) Close() error {
-	if c.disk != nil {
-		return c.disk.close()
-	}
 	return nil
 }
 

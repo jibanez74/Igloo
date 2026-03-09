@@ -1,5 +1,8 @@
 package musicbrainz
 
+import "time"
+
+// Public API result types
 type ArtistResult struct {
 	MusicBrainzID  string
 	Name           string
@@ -19,6 +22,7 @@ type AlbumResult struct {
 	ArtistName    string
 }
 
+// MusicBrainz API JSON response types (internal)
 // JSON response structs for MusicBrainz API deserialization.
 // Only the fields we need are included; encoding/json ignores unknown fields.
 
@@ -62,4 +66,42 @@ type releaseJSON struct {
 	ID     string `json:"id"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
+}
+
+// In-memory cache entry types (internal)
+// ---------------------------------------------------------------------------
+
+type artistCacheEntry struct {
+	result    *ArtistResult
+	expiresAt time.Time
+}
+
+type albumCacheEntry struct {
+	result    *AlbumResult
+	expiresAt time.Time
+}
+
+type imageCacheEntry struct {
+	url       string
+	expiresAt time.Time
+}
+
+// ---------------------------------------------------------------------------
+// TheAudioDB API JSON response types (internal)
+// ---------------------------------------------------------------------------
+
+type audioDBResponse struct {
+	Artists []audioDBArtist `json:"artists"`
+}
+
+type audioDBArtist struct {
+	ArtistThumb string `json:"strArtistThumb"`
+}
+
+type audioDBAlbumResponse struct {
+	Albums []audioDBAlbum `json:"album"`
+}
+
+type audioDBAlbum struct {
+	AlbumThumb string `json:"strAlbumThumb"`
 }

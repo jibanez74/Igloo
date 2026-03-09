@@ -15,7 +15,7 @@ func setupMockServer(t *testing.T, handler http.HandlerFunc) *musicBrainzClient 
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 	return client
@@ -238,7 +238,7 @@ func TestSearchArtistByName_FallbackPrimaryArtist(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -486,7 +486,7 @@ func TestClearAllCaches(t *testing.T) {
 }
 
 func TestArtistCacheEviction(t *testing.T) {
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 
 	for i := 0; i < 105; i++ {
 		client.setArtist(
@@ -693,7 +693,7 @@ func TestSearchAlbumByName_FallbackFeaturing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -728,7 +728,7 @@ func TestSearchAlbumByName_FallbackNoArtist(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -763,7 +763,7 @@ func TestSearchAlbumByName_FallbackColonStrip(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -800,7 +800,7 @@ func TestSearchAlbumByName_FallbackCleanTitle(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -840,7 +840,7 @@ func TestSearchAlbumByName_FallbackPrimaryArtist(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 	client.baseURL = server.URL
 	client.lastRequest = time.Time{}
 
@@ -860,7 +860,7 @@ func TestSearchAlbumByName_FallbackPrimaryArtist(t *testing.T) {
 }
 
 func TestAlbumCacheEviction(t *testing.T) {
-	client := New("").(*musicBrainzClient)
+	client := New().(*musicBrainzClient)
 
 	for i := 0; i < 205; i++ {
 		client.setAlbum(

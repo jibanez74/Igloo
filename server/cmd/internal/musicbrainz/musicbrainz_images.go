@@ -2,36 +2,21 @@ package musicbrainz
 
 import "fmt"
 
-const audioDBBaseURL = "https://www.theaudiodb.com/api/v1/json"
-
-type audioDBResponse struct {
-	Artists []audioDBArtist `json:"artists"`
-}
-
-type audioDBArtist struct {
-	ArtistThumb string `json:"strArtistThumb"`
-}
-
-type audioDBAlbumResponse struct {
-	Albums []audioDBAlbum `json:"album"`
-}
-
-type audioDBAlbum struct {
-	AlbumThumb string `json:"strAlbumThumb"`
-}
-
 func (c *musicBrainzClient) GetArtistImageURL(musicBrainzID string) (string, error) {
 	if musicBrainzID == "" {
 		return "", fmt.Errorf("musicbrainz ID cannot be empty")
 	}
 
-	if cached, exists := c.getImage(musicBrainzID); exists {
+	cached, exists := c.getImage(musicBrainzID)
+	if exists {
 		if cached == "" {
 			return "", fmt.Errorf("no artist image found for '%s' (cached)", musicBrainzID)
 		}
-		return cached, nil
+
+    return cached, nil
 	}
-	key := "image:" + musicBrainzID
+
+  key := "image:" + musicBrainzID
 	v, err, _ := c.sfGroup.Do(key, func() (interface{}, error) {
 		if cached, exists := c.getImage(musicBrainzID); exists {
 			if cached == "" {

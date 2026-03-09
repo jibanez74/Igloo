@@ -191,15 +191,8 @@ func InitApp() (*Application, error) {
 	app.HLSSessionCache = hlsCache
 
 	// Initialize MusicBrainz client for music metadata and cover art lookups.
-	cacheDir := os.Getenv("MUSIC_METADATA_CACHE_DIR")
-	if cacheDir == "" {
-		cacheDir = "music-metadata-cache"
-	}
-	if _, err := helpers.GetOrCreateDir(cacheDir); err != nil {
-		app.Logger.Warn("failed to create music metadata cache dir", "error", err)
-		cacheDir = ""
-	}
-	app.MusicBrainz = musicbrainz.New(cacheDir)
+	// In-memory cache only; cleared when the music scan completes.
+	app.MusicBrainz = musicbrainz.New()
 
 	// Initialize TMDB client if TMDB key is configured.
 	// This is optional - the app works without TMDB integration.
@@ -654,13 +647,6 @@ func (app *Application) ListenForShutdown() {
 	// Wait for any in-flight background tasks to complete.
 	// These may still need database and logger access.
 	app.Wait.Wait()
-
-	// Close the MusicBrainz disk cache.
-	if app.MusicBrainz != nil {
-		if err := app.MusicBrainz.Close(); err != nil {
-			app.Logger.Error("failed to close musicbrainz cache", "error", err)
-		}
-	}
 
 	// Clean up ffprobe temp directory and extracted binary.
 	err := ffprobe.Cleanup()
