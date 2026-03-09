@@ -126,6 +126,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
 	}
+	if q.getAlbumsNeedingCoverDownloadStmt, err = db.PrepareContext(ctx, getAlbumsNeedingCoverDownload); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsNeedingCoverDownload: %w", err)
+	}
 	if q.getAlbumsWithMissingCoversStmt, err = db.PrepareContext(ctx, getAlbumsWithMissingCovers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsWithMissingCovers: %w", err)
 	}
@@ -185,6 +188,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMusiciansCountStmt, err = db.PrepareContext(ctx, getMusiciansCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansCount: %w", err)
+	}
+	if q.getMusiciansNeedingThumbDownloadStmt, err = db.PrepareContext(ctx, getMusiciansNeedingThumbDownload); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusiciansNeedingThumbDownload: %w", err)
 	}
 	if q.getOrCreateGenreStmt, err = db.PrepareContext(ctx, getOrCreateGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrCreateGenre: %w", err)
@@ -526,6 +532,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumsNeedingCoverDownloadStmt != nil {
+		if cerr := q.getAlbumsNeedingCoverDownloadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsNeedingCoverDownloadStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumsWithMissingCoversStmt != nil {
 		if cerr := q.getAlbumsWithMissingCoversStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsWithMissingCoversStmt: %w", cerr)
@@ -624,6 +635,11 @@ func (q *Queries) Close() error {
 	if q.getMusiciansCountStmt != nil {
 		if cerr := q.getMusiciansCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusiciansCountStmt: %w", cerr)
+		}
+	}
+	if q.getMusiciansNeedingThumbDownloadStmt != nil {
+		if cerr := q.getMusiciansNeedingThumbDownloadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusiciansNeedingThumbDownloadStmt: %w", cerr)
 		}
 	}
 	if q.getOrCreateGenreStmt != nil {
@@ -974,6 +990,7 @@ type Queries struct {
 	getAlbumsAlphabeticalStmt              *sql.Stmt
 	getAlbumsByMusicianIDStmt              *sql.Stmt
 	getAlbumsCountStmt                     *sql.Stmt
+	getAlbumsNeedingCoverDownloadStmt      *sql.Stmt
 	getAlbumsWithMissingCoversStmt         *sql.Stmt
 	getCastByMovieIDStmt                   *sql.Stmt
 	getCrewByMovieIDStmt                   *sql.Stmt
@@ -994,6 +1011,7 @@ type Queries struct {
 	getMusiciansAlphabeticalStmt           *sql.Stmt
 	getMusiciansByAlbumIDStmt              *sql.Stmt
 	getMusiciansCountStmt                  *sql.Stmt
+	getMusiciansNeedingThumbDownloadStmt   *sql.Stmt
 	getOrCreateGenreStmt                   *sql.Stmt
 	getPlaylistByIdStmt                    *sql.Stmt
 	getPlaylistCollaboratorsStmt           *sql.Stmt
@@ -1089,6 +1107,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsAlphabeticalStmt:              q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:              q.getAlbumsByMusicianIDStmt,
 		getAlbumsCountStmt:                     q.getAlbumsCountStmt,
+		getAlbumsNeedingCoverDownloadStmt:      q.getAlbumsNeedingCoverDownloadStmt,
 		getAlbumsWithMissingCoversStmt:         q.getAlbumsWithMissingCoversStmt,
 		getCastByMovieIDStmt:                   q.getCastByMovieIDStmt,
 		getCrewByMovieIDStmt:                   q.getCrewByMovieIDStmt,
@@ -1109,6 +1128,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusiciansAlphabeticalStmt:           q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:              q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                  q.getMusiciansCountStmt,
+		getMusiciansNeedingThumbDownloadStmt:   q.getMusiciansNeedingThumbDownloadStmt,
 		getOrCreateGenreStmt:                   q.getOrCreateGenreStmt,
 		getPlaylistByIdStmt:                    q.getPlaylistByIdStmt,
 		getPlaylistCollaboratorsStmt:           q.getPlaylistCollaboratorsStmt,

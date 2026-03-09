@@ -61,6 +61,7 @@ type Querier interface {
 	// Sorted by release date (newest first), then by title
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, error)
 	GetAlbumsWithMissingCovers(ctx context.Context) ([]Album, error)
 	// Cast for a movie with artist name and profile (for details view).
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
@@ -89,6 +90,7 @@ type Querier interface {
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
+	GetMusiciansNeedingThumbDownload(ctx context.Context) ([]Musician, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)

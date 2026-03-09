@@ -19,8 +19,7 @@ type preparedTrack struct {
 	sortAlbum   string
 	albumArtist string
 	genre       string
-	coverURL string
-	mbArtist *musicbrainz.ArtistResult
+	mbArtist    *musicbrainz.ArtistResult
 	mbAlbum     *musicbrainz.AlbumResult
 }
 
@@ -144,9 +143,6 @@ func (app *Application) extractTrackMetadata(ctx context.Context, path, ext stri
 
 		if needsLookup {
 			pt.mbAlbum, _ = app.MusicBrainz.SearchAlbumByName(pt.albumTitle, pt.albumArtist)
-			if pt.mbAlbum != nil {
-				pt.coverURL = pt.mbAlbum.CoverURL
-			}
 		}
 	}
 
@@ -155,39 +151,26 @@ func (app *Application) extractTrackMetadata(ctx context.Context, path, ext stri
 	return pt, nil
 }
 
-type imageWork struct {
-	album    *database.Album
-	musician *database.Musician
-	coverURL string
-}
-
-func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Queries, pt *preparedTrack) (*imageWork, error) {
+func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Queries, pt *preparedTrack) error {
 	var musicianID sql.NullInt64
-	var iw imageWork
-	iw.coverURL = pt.coverURL
 
 	if pt.artistName != "" {
 		musician, err := app.getOrCreateMusicianWithResult(ctx, qtx, pt.artistName, pt.sortArtist, pt.mbArtist)
 		if err != nil {
-			return nil, fmt.Errorf("musician failed: %w", err)
+			return fmt.Errorf("musician failed: %w", err)
 		}
 		musicianID = sql.NullInt64{Int64: musician.ID, Valid: true}
-		iw.musician = musician
 	}
 	pt.params.MusicianID = musicianID
 
 	var albumID sql.NullInt64
 
 	if pt.albumTitle != "" {
-		album, coverURL, err := app.getOrCreateAlbumWithResult(ctx, qtx, pt.albumTitle, pt.sortAlbum, pt.albumArtist, pt.mbAlbum)
+		album, _, err := app.getOrCreateAlbumWithResult(ctx, qtx, pt.albumTitle, pt.sortAlbum, pt.albumArtist, pt.mbAlbum)
 		if err != nil {
-			return nil, fmt.Errorf("album failed: %w", err)
+			return fmt.Errorf("album failed: %w", err)
 		}
 		albumID = sql.NullInt64{Int64: album.ID, Valid: true}
-		iw.album = album
-		if coverURL != "" {
-			iw.coverURL = coverURL
-		}
 	}
 	pt.params.AlbumID = albumID
 
@@ -197,13 +180,13 @@ func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Querie
 			AlbumID:    albumID.Int64,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("musician-album relationship failed: %w", err)
+			return fmt.Errorf("musician-album relationship failed: %w", err)
 		}
 	}
 
 	track, err := qtx.UpsertTrack(ctx, pt.params)
 	if err != nil {
-		return nil, fmt.Errorf("upsert track failed: %w", err)
+		return fmt.Errorf("upsert track failed: %w", err)
 	}
 
 	if pt.genre != "" {
@@ -212,7 +195,7 @@ func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Querie
 			GenreType: "music",
 		})
 		if err != nil {
-			return nil, fmt.Errorf("genre failed: %w", err)
+			return fmt.Errorf("genre failed: %w", err)
 		}
 
 		err = qtx.DeleteTrackGenresExcept(ctx, database.DeleteTrackGenresExceptParams{
@@ -220,7 +203,7 @@ func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Querie
 			GenreID: genre.ID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("delete stale genres failed: %w", err)
+			return fmt.Errorf("delete stale genres failed: %w", err)
 		}
 
 		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
@@ -228,7 +211,7 @@ func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Querie
 			GenreID: genre.ID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("track-genre relationship failed: %w", err)
+			return fmt.Errorf("track-genre relationship failed: %w", err)
 		}
 
 		if musicianID.Valid {
@@ -260,5 +243,5 @@ func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Querie
 		}
 	}
 
-	return &iw, nil
+	return nil
 }

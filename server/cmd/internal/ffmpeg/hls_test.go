@@ -23,7 +23,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		sourcePath, outDir, "fmp4", "event", "playlist.m3u8",
 		"0:v:0", "0:a:0",
 		"libx264", "-preset", "veryfast",
-		"-c:a aac", "-b:a", "128k",
+		"-c:a aac", "-ac", "2", "-b:a", "192k",
 		"scale=-2:1080",
 		"-avoid_negative_ts", "make_zero",
 		"-fflags", "+genpts",

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -351,6 +352,14 @@ func (app *Application) InitDirs() error {
 
 	if created {
 		app.Logger.Info("created static directory", "path", app.Settings.StaticDir)
+	}
+
+	// Subdirs for scanner-downloaded images (album covers, musician thumbs).
+	if _, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "albums")); err != nil {
+		return fmt.Errorf("failed to initialize static/albums: %w", err)
+	}
+	if _, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "musicians")); err != nil {
+		return fmt.Errorf("failed to initialize static/musicians: %w", err)
 	}
 
 	created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)

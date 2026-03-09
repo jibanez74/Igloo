@@ -245,6 +245,44 @@ func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]G
 	return items, nil
 }
 
+const getMusiciansNeedingThumbDownload = `-- name: GetMusiciansNeedingThumbDownload :many
+SELECT id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at FROM musicians
+WHERE (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
+  AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''))
+`
+
+func (q *Queries) GetMusiciansNeedingThumbDownload(ctx context.Context) ([]Musician, error) {
+	rows, err := q.query(ctx, q.getMusiciansNeedingThumbDownloadStmt, getMusiciansNeedingThumbDownload)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Musician{}
+	for rows.Next() {
+		var i Musician
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SortName,
+			&i.Summary,
+			&i.MusicbrainzID,
+			&i.Thumb,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTracksByMusicianID = `-- name: GetTracksByMusicianID :many
 SELECT
   t.id,

@@ -10,9 +10,14 @@ import (
 )
 
 type trackFile struct {
-  path string
-  ext  string
-  size int64
+	path string
+	ext  string
+	size int64
+}
+
+type pendingTrack struct {
+	prepared *preparedTrack
+	file     trackFile
 }
 
 // unchangedTrackPathsAndSizes returns a map of file_path -> size for tracks that exist in the DB (batch query).
@@ -109,7 +114,7 @@ func (app *Application) ScanMusicLibrary() {
   }
 
   if app.Settings.DownloadImages {
-    app.retryMissingAlbumCovers(ctx)
+    app.downloadAlbumAndMusicianImages(ctx)
   }
 
   app.MusicBrainz.ClearAllCaches()
@@ -118,95 +123,56 @@ func (app *Application) ScanMusicLibrary() {
     tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// processMusicBatch processes a batch of audio files in three phases to minimize
-// how long the database write lock is held:
-//   - Phase 1: Extract metadata (ffprobe, MusicBrainz) — no transaction, no lock.
-//   - Phase 2: Write to DB in a short transaction — lock held only for fast DB ops.
-//   - Phase 3: Download images — no transaction, individual autocommit updates.
 func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
-  type pendingTrack struct {
-    prepared *preparedTrack
-    file     trackFile
-  }
-  var pending []pendingTrack
+	var pending []pendingTrack
 
-  unchanged := app.unchangedTrackPathsAndSizes(ctx, files)
-  for _, file := range files {
-    if size, ok := unchanged[file.path]; ok && size == file.size {
-      skipped++
-      continue
-    }
-    prepared, err := app.extractTrackMetadata(ctx, file.path, file.ext)
-    if err != nil {
-      app.Logger.Error(fmt.Sprintf("failed to extract metadata %s: %s", file.path, err.Error()))
-      errCount++
-      continue
-    }
-    pending = append(pending, pendingTrack{prepared: prepared, file: file})
-  }
+	unchanged := app.unchangedTrackPathsAndSizes(ctx, files)
+	for _, file := range files {
+		if size, ok := unchanged[file.path]; ok && size == file.size {
+			skipped++
+			continue
+		}
+		prepared, err := app.extractTrackMetadata(ctx, file.path, file.ext)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to extract metadata %s: %s", file.path, err.Error()))
+			errCount++
+			continue
+		}
+		pending = append(pending, pendingTrack{prepared: prepared, file: file})
+	}
 
-  if len(pending) == 0 {
-    return scanned, skipped, errCount
-  }
+	if len(pending) == 0 {
+		return scanned, skipped, errCount
+	}
 
-  // --- Phase 2: DB writes (short transaction) ---
-  var images []imageWork
+	app.ScannerDBMu.Lock()
 
-  app.ScannerDBMu.Lock()
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		app.ScannerDBMu.Unlock()
+		app.Logger.Error(fmt.Sprintf("failed to start transaction: %s", err.Error()))
+		return 0, skipped, len(pending) + errCount
+	}
 
-  tx, err := app.DB.BeginTx(ctx, nil)
-  if err != nil {
-    app.ScannerDBMu.Unlock()
-    app.Logger.Error(fmt.Sprintf("failed to start transaction: %s", err.Error()))
-    return 0, skipped, len(pending) + errCount
-  }
+	qtx := app.Queries.WithTx(tx)
 
-  qtx := app.Queries.WithTx(tx)
+	for _, p := range pending {
+		err := app.writeTrackToDB(ctx, qtx, p.prepared)
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to write %s: %s", p.file.path, err.Error()))
+			errCount++
+			continue
+		}
+		scanned++
+	}
 
-  for _, p := range pending {
-    iw, err := app.writeTrackToDB(ctx, qtx, p.prepared)
-    if err != nil {
-      app.Logger.Error(fmt.Sprintf("failed to write %s: %s", p.file.path, err.Error()))
-      errCount++
-      continue
-    }
-    scanned++
-    if iw != nil {
-      images = append(images, *iw)
-    }
-  }
+	if commitErr := tx.Commit(); commitErr != nil {
+		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", commitErr.Error()))
+		app.ScannerDBMu.Unlock()
+		return 0, skipped, len(pending) + errCount
+	}
 
-  if commitErr := tx.Commit(); commitErr != nil {
-    app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", commitErr.Error()))
-    app.ScannerDBMu.Unlock()
-    return 0, skipped, len(pending) + errCount
-  }
+	app.ScannerDBMu.Unlock()
 
-  app.ScannerDBMu.Unlock()
-
-  // --- Phase 3: Image acquisition (no lock, individual autocommit writes) ---
-  if app.Settings.DownloadImages {
-    albumByID := make(map[int64]imageWork)
-    musicianByID := make(map[int64]imageWork)
-    for _, iw := range images {
-      if iw.album != nil {
-        if _, seen := albumByID[iw.album.ID]; !seen {
-          albumByID[iw.album.ID] = iw
-        }
-      }
-      if iw.musician != nil {
-        if _, seen := musicianByID[iw.musician.ID]; !seen {
-          musicianByID[iw.musician.ID] = iw
-        }
-      }
-    }
-    for _, iw := range albumByID {
-      app.acquireAlbumCover(ctx, app.Queries, iw.album, iw.coverURL)
-    }
-    for _, iw := range musicianByID {
-      app.acquireMusicianThumb(ctx, app.Queries, iw.musician)
-    }
-  }
-
-  return scanned, skipped, errCount
+	return scanned, skipped, errCount
 }

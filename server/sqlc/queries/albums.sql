@@ -87,5 +87,10 @@ SELECT * FROM albums
 WHERE musicbrainz_id IS NOT NULL AND musicbrainz_id != ''
   AND (cover IS NULL OR cover = '');
 
+-- name: GetAlbumsNeedingCoverDownload :many
+SELECT * FROM albums
+WHERE (cover IS NULL OR cover = '' OR cover LIKE 'http%')
+  AND (cover LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''));
+
 -- name: DeleteAlbum :exec
 DELETE FROM albums WHERE id = ?;

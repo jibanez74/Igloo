@@ -10,91 +10,104 @@ import (
 	"time"
 )
 
-// coverArtMinInterval is the minimum time between cover-art image downloads.
-// Cover Art Archive asks for max 1 request/sec for anonymous use; we use 1.2s to be safe.
-const coverArtMinInterval = 1200 * time.Millisecond
-
-// throttleCoverArtDownload sleeps if needed so we don't exceed coverArtMinInterval between
-// downloads. Call before each external image download (CAA, etc.) to avoid rate limits.
 func (app *Application) throttleCoverArtDownload() {
 	app.coverArtThrottleMu.Lock()
 	defer app.coverArtThrottleMu.Unlock()
-	if elapsed := time.Since(app.lastCoverArtDownload); elapsed < coverArtMinInterval {
-		time.Sleep(coverArtMinInterval - elapsed)
+	if elapsed := time.Since(app.lastCoverArtDownload); elapsed < helpers.COVER_ART_MIN_INTERVAL {
+		time.Sleep(helpers.COVER_ART_MIN_INTERVAL - elapsed)
 	}
 	app.lastCoverArtDownload = time.Now()
-}
-
-func (app *Application) acquireAlbumCover(ctx context.Context, qtx *database.Queries, album *database.Album, coverURL string) {
-	if album.Cover.Valid && !isExternalURL(album.Cover.String) {
-		return
-	}
-
-	destPath := filepath.Join(app.Settings.StaticDir, "albums", fmt.Sprintf("%d.jpg", album.ID))
-	localPath := fmt.Sprintf("/api/static/albums/%d.jpg", album.ID)
-
-	if coverURL == "" && album.MusicbrainzID.Valid {
-		coverURL = fmt.Sprintf("https://coverartarchive.org/release-group/%s/front-500", album.MusicbrainzID.String)
-	}
-
-	if coverURL != "" {
-		app.throttleCoverArtDownload()
-		if err := helpers.DownloadImage(coverURL, destPath); err == nil {
-			qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
-				Cover: sql.NullString{String: localPath, Valid: true},
-				ID:    album.ID,
-			})
-			return
-		}
-	}
-
-	if album.MusicbrainzID.Valid {
-		if audioDBURL, err := app.MusicBrainz.GetAlbumImageURL(album.MusicbrainzID.String); err == nil {
-			app.throttleCoverArtDownload()
-			if err := helpers.DownloadImage(audioDBURL, destPath); err == nil {
-				qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
-					Cover: sql.NullString{String: localPath, Valid: true},
-					ID:    album.ID,
-				})
-			}
-		}
-	}
 }
 
 func isExternalURL(s string) bool {
 	return len(s) >= 4 && (s[:4] == "http")
 }
 
-func (app *Application) retryMissingAlbumCovers(ctx context.Context) {
-	albums, err := app.Queries.GetAlbumsWithMissingCovers(ctx)
-	if err != nil || len(albums) == 0 {
+func (app *Application) downloadAlbumCover(ctx context.Context, album *database.Album, imageURL string) {
+	if imageURL == "" {
 		return
 	}
-	app.Logger.Info(fmt.Sprintf("fetching cover art for %d albums (MusicBrainz IDs present; throttled to respect API limits)", len(albums)))
-	for i := range albums {
-		app.acquireAlbumCover(ctx, app.Queries, &albums[i], "")
+	destPath := filepath.Join(app.Settings.StaticDir, "albums", fmt.Sprintf("%d.jpg", album.ID))
+	localPath := fmt.Sprintf("/api/static/albums/%d.jpg", album.ID)
+	app.throttleCoverArtDownload()
+	if err := helpers.DownloadImage(imageURL, destPath); err == nil {
+		_ = app.Queries.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
+			Cover: sql.NullString{String: localPath, Valid: true},
+			ID:    album.ID,
+		})
+	} else if app.Logger != nil {
+		app.Logger.Debug("album cover download failed", "album_id", album.ID, "title", album.Title, "error", err.Error())
 	}
 }
 
-func (app *Application) acquireMusicianThumb(ctx context.Context, qtx *database.Queries, musician *database.Musician) {
-	if musician.Thumb.Valid || !musician.MusicbrainzID.Valid {
+func (app *Application) downloadMusicianThumb(ctx context.Context, musician *database.Musician, imageURL string) {
+	if imageURL == "" {
 		return
 	}
-
-	imageURL, err := app.MusicBrainz.GetArtistImageURL(musician.MusicbrainzID.String)
-	if err != nil {
-		return
-	}
-
 	destPath := filepath.Join(app.Settings.StaticDir, "musicians", fmt.Sprintf("%d.jpg", musician.ID))
 	localPath := fmt.Sprintf("/api/static/musicians/%d.jpg", musician.ID)
-
 	app.throttleCoverArtDownload()
-	err = helpers.DownloadImage(imageURL, destPath)
-	if err == nil {
-		qtx.UpdateMusicianThumb(ctx, database.UpdateMusicianThumbParams{
+	if err := helpers.DownloadImage(imageURL, destPath); err == nil {
+		_ = app.Queries.UpdateMusicianThumb(ctx, database.UpdateMusicianThumbParams{
 			Thumb: sql.NullString{String: localPath, Valid: true},
 			ID:    musician.ID,
 		})
+	} else if app.Logger != nil {
+		app.Logger.Debug("musician thumb download failed", "musician_id", musician.ID, "name", musician.Name, "error", err.Error())
+	}
+}
+
+func (app *Application) downloadAlbumAndMusicianImages(ctx context.Context) {
+	albums, err := app.Queries.GetAlbumsNeedingCoverDownload(ctx)
+	if err == nil && len(albums) > 0 {
+		app.Logger.Info(fmt.Sprintf("downloading cover art for %d albums", len(albums)))
+		for i := range albums {
+			a := &albums[i]
+			var url string
+			if a.Cover.Valid && isExternalURL(a.Cover.String) {
+				url = a.Cover.String
+			}
+			if url == "" && a.MusicbrainzID.Valid {
+				url = fmt.Sprintf("%s/%s/front-500", helpers.COVER_ART_ARCHIVE_BASE_URL, a.MusicbrainzID.String)
+			}
+			if url == "" && a.MusicbrainzID.Valid {
+				app.throttleCoverArtDownload()
+				if u, e := app.MusicBrainz.GetAlbumImageURL(a.MusicbrainzID.String); e == nil {
+					url = u
+				}
+			}
+			if url != "" {
+				app.downloadAlbumCover(ctx, a, url)
+			}
+		}
+	}
+
+	musicians, err := app.Queries.GetMusiciansNeedingThumbDownload(ctx)
+	if err == nil && len(musicians) > 0 {
+		app.Logger.Info(fmt.Sprintf("downloading thumb art for %d musicians", len(musicians)))
+		for i := range musicians {
+			m := &musicians[i]
+			var url string
+			if m.Thumb.Valid && isExternalURL(m.Thumb.String) {
+				url = m.Thumb.String
+			}
+			if url == "" && m.MusicbrainzID.Valid {
+				app.throttleCoverArtDownload()
+				if u, e := app.MusicBrainz.GetArtistImageURL(m.MusicbrainzID.String); e == nil {
+					url = u
+				}
+			}
+			if url != "" {
+				app.downloadMusicianThumb(ctx, m, url)
+			}
+		}
+	}
+
+	// Log how many still have no local image (no image at source, or download failed e.g. 404)
+	if stillAlbums, _ := app.Queries.GetAlbumsNeedingCoverDownload(ctx); len(stillAlbums) > 0 {
+		app.Logger.Info(fmt.Sprintf("cover art: %d album(s) still have no local image (Cover Art Archive/AudioDB may have no image for that release)", len(stillAlbums)))
+	}
+	if stillMusicians, _ := app.Queries.GetMusiciansNeedingThumbDownload(ctx); len(stillMusicians) > 0 {
+		app.Logger.Info(fmt.Sprintf("thumb art: %d musician(s) still have no local image (AudioDB may have no image for that artist)", len(stillMusicians)))
 	}
 }

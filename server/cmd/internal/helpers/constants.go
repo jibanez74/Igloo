@@ -15,6 +15,9 @@ const (
 	// media scanner
 	SCANNER_BATCH_SIZE = 10
 
+	// cover art download throttle (CAA asks max 1 req/sec for anonymous use)
+	COVER_ART_MIN_INTERVAL = 1200 * time.Millisecond
+
 	// musicbrainz
 	MUSICBRAINZ_ARTIST_MAX_CACHE = 200
 	MUSICBRAINZ_ALBUM_MAX_CACHE  = 200
@@ -51,4 +54,9 @@ const (
 	HLS_PROFILE_1080P_6MBPS  = "1080p_6mbps"
 	HLS_PROFILE_1080P_4MBPS  = "1080p_4mbps"
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
+
+	// HLS transcoding
+	HLS_SEGMENT_TIME_SEC  = 4                    // segment duration in seconds for fMP4 HLS
+	HLS_STDERR_TAIL_LINES = 20                   // lines of FFmpeg stderr kept for error reporting
+	HLS_SESSION_TTL       = 30 * time.Minute     // TTL for cached HLS session (eviction + cleanup)
 )

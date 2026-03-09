@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/musicbrainz"
 	"strings"
 )
@@ -42,12 +43,18 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
     }
 
     summary := generateMusicianSummary(artist.Name, artist.Country, artist.Type, artist.Disambiguation)
+    var thumb sql.NullString
+    app.throttleCoverArtDownload()
+    if thumbURL, thumbErr := app.MusicBrainz.GetArtistImageURL(artist.MusicBrainzID); thumbErr == nil && thumbURL != "" {
+      thumb = sql.NullString{String: thumbURL, Valid: true}
+    }
 
     musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
       Name:          name,
       SortName:      sortName,
       Summary:       sql.NullString{String: summary, Valid: true},
       MusicbrainzID: sql.NullString{String: artist.MusicBrainzID, Valid: true},
+      Thumb:         thumb,
     })
 
     if err != nil {
@@ -80,11 +87,17 @@ func (app *Application) getOrCreateMusicianWithResult(ctx context.Context, qtx *
 			return &existing, nil
 		}
 		summary := generateMusicianSummary(mbArtist.Name, mbArtist.Country, mbArtist.Type, mbArtist.Disambiguation)
+		var thumb sql.NullString
+		app.throttleCoverArtDownload()
+		if thumbURL, thumbErr := app.MusicBrainz.GetArtistImageURL(mbArtist.MusicBrainzID); thumbErr == nil && thumbURL != "" {
+			thumb = sql.NullString{String: thumbURL, Valid: true}
+		}
 		musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
 			Name:          name,
 			SortName:      sortName,
 			Summary:       sql.NullString{String: summary, Valid: true},
 			MusicbrainzID: sql.NullString{String: mbArtist.MusicBrainzID, Valid: true},
+			Thumb:         thumb,
 		})
 		if err != nil {
 			return nil, err
@@ -131,8 +144,10 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
       params.Musician = sql.NullString{String: albumArtist, Valid: true}
     }
 
-    if albumDetails.CoverURL != "" && !app.Settings.DownloadImages {
+    if albumDetails.CoverURL != "" {
       params.Cover = sql.NullString{String: albumDetails.CoverURL, Valid: true}
+    } else if albumDetails.MusicBrainzID != "" {
+      params.Cover = sql.NullString{String: fmt.Sprintf("%s/%s/front-500", helpers.COVER_ART_ARCHIVE_BASE_URL, albumDetails.MusicBrainzID), Valid: true}
     }
 
     album, err := qtx.UpsertAlbum(ctx, params)
@@ -189,8 +204,10 @@ func (app *Application) getOrCreateAlbumWithResult(ctx context.Context, qtx *dat
 		if albumArtist != "" {
 			params.Musician = sql.NullString{String: albumArtist, Valid: true}
 		}
-		if mbAlbum.CoverURL != "" && !app.Settings.DownloadImages {
+		if mbAlbum.CoverURL != "" {
 			params.Cover = sql.NullString{String: mbAlbum.CoverURL, Valid: true}
+		} else if mbAlbum.MusicBrainzID != "" {
+			params.Cover = sql.NullString{String: fmt.Sprintf("%s/%s/front-500", helpers.COVER_ART_ARCHIVE_BASE_URL, mbAlbum.MusicBrainzID), Valid: true}
 		}
 		album, err := qtx.UpsertAlbum(ctx, params)
 		if err != nil {

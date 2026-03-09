@@ -11,8 +11,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const HLSSegmentTimeSec = 4
-
 // BuildHLSArgs builds FFmpeg arguments for HLS fMP4 output.
 //
 // Arg ordering follows FFmpeg requirements:
@@ -38,7 +36,6 @@ func BuildHLSArgs(
 	}
 
 	// --- global + input ---
-	// genpts: generate PTS when missing (helps DTS and other sources with irregular timestamps)
 	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "20000000", "-probesize", "20000000"}
 
 	// -hwaccel MUST come before -i
@@ -85,10 +82,12 @@ func BuildHLSArgs(
 	if copyAudio {
 		args = append(args, "-c:a", "copy")
 	} else {
-		args = append(args, "-c:a", "aac", "-b:a", "128k")
+		// Downmix to stereo: browser MSE decoders generally don't support
+		// multichannel AAC (PCE-encoded 5.1/7.1). Stereo at 192k is
+		// universally supported and sounds good for web playback.
+		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "192k")
 	}
 
-	// ensure first DTS is >= 0 so browser MSE can append buffers (no negative timestamps)
 	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
 
 	// --- HLS output ---
@@ -98,7 +97,7 @@ func BuildHLSArgs(
 		"-hls_segment_type", "fmp4",
 		"-hls_playlist_type", "event",
 		"-hls_list_size", "0",
-		"-hls_time", fmt.Sprintf("%d", HLSSegmentTimeSec),
+		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,
 		"-hls_fmp4_init_filename", "init.mp4",
 		filepath.Join(outDir, "playlist.m3u8"),
@@ -109,15 +108,15 @@ func BuildHLSArgs(
 
 // RunHLS starts FFmpeg in the background for HLS transcoding.
 // It does not block on process exit. onExit is called asynchronously when
-// the process exits. Returns the Cmd so the caller can kill it on cleanup.
+// the process finishes; stderrTail contains the last HLS_STDERR_TAIL_LINES
+// of FFmpeg's stderr output for error diagnostics.
 func (f *FFmpeg) RunHLS(
 	ctx context.Context,
 	sourcePath, outDir, profile string,
 	videoStreamIndex, audioStreamIndex int,
 	hwDevice string,
 	copyVideo, copyAudio bool,
-	onExit func(exitErr error),
-	logStderr func(line string),
+	onExit func(exitErr error, stderrTail []string),
 ) (*exec.Cmd, error) {
 	args, err := BuildHLSArgs(sourcePath, outDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio)
 	if err != nil {
@@ -128,18 +127,24 @@ func (f *FFmpeg) RunHLS(
 	cmd.Dir = outDir
 	cmd.Stdout = nil
 
-	if logStderr != nil {
-		stderrPipe, err := cmd.StderrPipe()
-		if err != nil {
-			return nil, err
-		}
-		go func() {
-			scanner := bufio.NewScanner(stderrPipe)
-			for scanner.Scan() {
-				logStderr(scanner.Text())
-			}
-		}()
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
 	}
+
+	// Ring buffer: keep only the last HLS_STDERR_TAIL_LINES for error reporting.
+	ring := make([]string, helpers.HLS_STDERR_TAIL_LINES)
+	var ringIdx int
+	var ringCount int
+
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = scanner.Text()
+			ringIdx++
+			ringCount++
+		}
+	}()
 
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -148,7 +153,19 @@ func (f *FFmpeg) RunHLS(
 	go func() {
 		exitErr := cmd.Wait()
 		if onExit != nil {
-			onExit(exitErr)
+			n := helpers.HLS_STDERR_TAIL_LINES
+			if ringCount < n {
+				n = ringCount
+			}
+			tail := make([]string, 0, n)
+			start := ringIdx - n
+			if start < 0 {
+				start = 0
+			}
+			for i := start; i < ringIdx; i++ {
+				tail = append(tail, ring[i%helpers.HLS_STDERR_TAIL_LINES])
+			}
+			onExit(exitErr, tail)
 		}
 	}()
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,15 +14,15 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const hlsSessionTTL = 30 * time.Minute
-
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
-	TempDir    string
-	Cmd        *exec.Cmd
-	DurationSec float64
-	ExitErr    error
-	ExitMu     sync.Mutex
+	TempDir       string
+	Cmd           *exec.Cmd
+	DurationSec   float64
+	Exited        bool
+	ExitErr       error
+	FinalPlaylist string
+	ExitMu        sync.Mutex
 }
 
 func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
@@ -29,7 +30,7 @@ func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
 }
 
 func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
-	app.HLSSessionCache.Set(key, session, hlsSessionTTL)
+	app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
 }
 
 func cleanupHLSSession(session *HLSSession) {
@@ -70,7 +71,7 @@ func (app *Application) GetOrCreateHLSSession(
 			return nil, createErr
 		}
 
-		app.HLSSessionCache.Set(key, session, hlsSessionTTL)
+		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
 		return session, nil
 	})
 
@@ -129,12 +130,9 @@ func (app *Application) createHLSSession(
 	videoStreamIndex := 0
 	audioStreamIndex := audioTrack
 
-	// When audio must be transcoded (e.g. DTS), transcode video too so both streams
-	// get clean timestamps from one pipeline. Copying H.264 video while transcoding
-	// DTS→AAC can leave negative DTS in fMP4 segments, which browser MSE rejects.
 	audioCodec := strings.ToLower(meta.Streams[audioStreams[audioTrack]].CodecName)
 	copyAudio := audioCodec == "aac"
-	copyVideo := copyAudio && strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
+	copyVideo := strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
 
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {
@@ -148,17 +146,53 @@ func (app *Application) createHLSSession(
 
 	session := &HLSSession{TempDir: tempDir, DurationSec: durationSec}
 
-	onExit := func(exitErr error) {
+	videoCodec := meta.Streams[videoStreams[0]].CodecName
+	app.Logger.Info("hls session starting",
+		"movie_id", movieID,
+		"profile", profile,
+		"audio_track", audioTrack,
+		"video_codec", videoCodec,
+		"audio_codec", audioCodec,
+		"copy_video", copyVideo,
+		"copy_audio", copyAudio,
+	)
+
+	startTime := time.Now()
+	onExit := func(exitErr error, stderrTail []string) {
+		if exitErr == nil {
+			raw, readErr := os.ReadFile(filepath.Join(tempDir, "playlist.m3u8"))
+			if readErr == nil {
+				session.ExitMu.Lock()
+				session.FinalPlaylist = finalizeEventPlaylist(string(raw))
+				session.ExitMu.Unlock()
+			}
+		}
+
 		session.ExitMu.Lock()
+		session.Exited = true
 		session.ExitErr = exitErr
 		session.ExitMu.Unlock()
+
+		elapsed := time.Since(startTime).Round(time.Second)
+
+		if exitErr != nil {
+			app.Logger.Error("hls session failed",
+				"movie_id", movieID,
+				"profile", profile,
+				"elapsed", elapsed.String(),
+				"error", exitErr.Error(),
+				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
+			)
+		} else {
+			app.Logger.Info("hls session finished",
+				"movie_id", movieID,
+				"profile", profile,
+				"elapsed", elapsed.String(),
+			)
+		}
 	}
 
-	logStderr := func(line string) {
-		app.Logger.Debug("hls ffmpeg", "movie_id", movieID, "line", line)
-	}
-
-	cmd, err := app.FFmpeg.RunHLS(context.Background(), movie.FilePath, tempDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, onExit, logStderr)
+	cmd, err := app.FFmpeg.RunHLS(context.Background(), movie.FilePath, tempDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, onExit)
 	if err != nil {
 		cleanupHLSSession(session)
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)

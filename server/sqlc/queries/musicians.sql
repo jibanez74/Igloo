@@ -53,6 +53,11 @@ LIMIT ? OFFSET ?;
 -- name: UpdateMusicianThumb :exec
 UPDATE musicians SET thumb = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
+-- name: GetMusiciansNeedingThumbDownload :many
+SELECT * FROM musicians
+WHERE (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
+  AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''));
+
 -- name: GetMusicianByID :one
 SELECT * FROM musicians WHERE id = ? LIMIT 1;
 

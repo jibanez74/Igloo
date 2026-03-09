@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,7 +44,17 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
-	playlist := generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+
+	session.ExitMu.Lock()
+	finalPlaylist := session.FinalPlaylist
+	session.ExitMu.Unlock()
+
+	var playlist string
+	if finalPlaylist != "" {
+		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
+	} else {
+		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+	}
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
 
@@ -81,21 +92,29 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	filePath := filepath.Join(session.TempDir, filename)
 
 	deadline := time.Now().Add(hlsSegmentWait)
+	pollCount := 0
 	for time.Now().Before(deadline) {
-		if fileReady(filePath) {
+		if segmentComplete(session, filename) {
 			w.Header().Set("Content-Type", segmentContentType)
 			http.ServeFile(w, r, filePath)
 			return
 		}
 
 		session.ExitMu.Lock()
+		exited := session.Exited
 		exitErr := session.ExitErr
 		session.ExitMu.Unlock()
-		if exitErr != nil {
-			helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
+
+		if exited && !fileReady(filePath) {
+			if exitErr != nil {
+				helpers.ErrorJSON(w, errors.New("transcoding stopped"), http.StatusInternalServerError)
+			} else {
+				helpers.ErrorJSON(w, errors.New("segment does not exist"), http.StatusNotFound)
+			}
 			return
 		}
 
+		pollCount++
 		time.Sleep(hlsSegmentPoll)
 	}
 
@@ -131,4 +150,33 @@ func fileReady(path string) bool {
 		return false
 	}
 	return info.Size() > 0
+}
+
+// segmentComplete returns true when FFmpeg has finished writing the segment.
+//
+// A segment is complete when the next segment file exists (meaning FFmpeg
+// has moved on) or when FFmpeg has exited (all remaining files are final).
+// This prevents serving partially-written files that would cause hls.js
+// decode errors and infinite retries.
+func segmentComplete(session *HLSSession, filename string) bool {
+	dir := session.TempDir
+
+	if filename == "init.mp4" {
+		return fileReady(filepath.Join(dir, "segment_0.m4s"))
+	}
+
+	var n int
+	if _, err := fmt.Sscanf(filename, "segment_%d.m4s", &n); err != nil {
+		return false
+	}
+
+	if fileReady(filepath.Join(dir, fmt.Sprintf("segment_%d.m4s", n+1))) {
+		return true
+	}
+
+	session.ExitMu.Lock()
+	exited := session.Exited
+	session.ExitMu.Unlock()
+
+	return exited && fileReady(filepath.Join(dir, filename))
 }
