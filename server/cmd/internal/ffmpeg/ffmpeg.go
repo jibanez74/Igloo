@@ -3,7 +3,6 @@ package ffmpeg
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 )
@@ -41,24 +40,6 @@ func New() (*FFmpeg, error) {
 
 func (f *FFmpeg) BinPath() string {
 	return f.bin
-}
-
-// ExtractEmbeddedArt extracts embedded cover art from an audio file to destPath.
-// Returns an error if ffmpeg fails or no image data is produced.
-func (f *FFmpeg) ExtractEmbeddedArt(audioFile, destPath string) error {
-	cmd := exec.Command(f.bin, "-i", audioFile, "-an", "-vcodec", "copy", "-y", destPath)
-	if err := cmd.Run(); err != nil {
-		os.Remove(destPath)
-		return fmt.Errorf("ffmpeg embedded art extraction failed: %w", err)
-	}
-
-	info, err := os.Stat(destPath)
-	if err != nil || info.Size() == 0 {
-		os.Remove(destPath)
-		return fmt.Errorf("no embedded art found in %s", audioFile)
-	}
-
-	return nil
 }
 
 // Cleanup removes the extracted binary and its temp directory.

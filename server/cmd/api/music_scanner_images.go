@@ -7,9 +7,25 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"path/filepath"
+	"time"
 )
 
-func (app *Application) acquireAlbumCover(ctx context.Context, qtx *database.Queries, album *database.Album, coverURL, audioFilePath string) {
+// coverArtMinInterval is the minimum time between cover-art image downloads.
+// Cover Art Archive asks for max 1 request/sec for anonymous use; we use 1.2s to be safe.
+const coverArtMinInterval = 1200 * time.Millisecond
+
+// throttleCoverArtDownload sleeps if needed so we don't exceed coverArtMinInterval between
+// downloads. Call before each external image download (CAA, etc.) to avoid rate limits.
+func (app *Application) throttleCoverArtDownload() {
+	app.coverArtThrottleMu.Lock()
+	defer app.coverArtThrottleMu.Unlock()
+	if elapsed := time.Since(app.lastCoverArtDownload); elapsed < coverArtMinInterval {
+		time.Sleep(coverArtMinInterval - elapsed)
+	}
+	app.lastCoverArtDownload = time.Now()
+}
+
+func (app *Application) acquireAlbumCover(ctx context.Context, qtx *database.Queries, album *database.Album, coverURL string) {
 	if album.Cover.Valid && !isExternalURL(album.Cover.String) {
 		return
 	}
@@ -22,6 +38,7 @@ func (app *Application) acquireAlbumCover(ctx context.Context, qtx *database.Que
 	}
 
 	if coverURL != "" {
+		app.throttleCoverArtDownload()
 		if err := helpers.DownloadImage(coverURL, destPath); err == nil {
 			qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
 				Cover: sql.NullString{String: localPath, Valid: true},
@@ -33,22 +50,13 @@ func (app *Application) acquireAlbumCover(ctx context.Context, qtx *database.Que
 
 	if album.MusicbrainzID.Valid {
 		if audioDBURL, err := app.MusicBrainz.GetAlbumImageURL(album.MusicbrainzID.String); err == nil {
+			app.throttleCoverArtDownload()
 			if err := helpers.DownloadImage(audioDBURL, destPath); err == nil {
 				qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
 					Cover: sql.NullString{String: localPath, Valid: true},
 					ID:    album.ID,
 				})
-				return
 			}
-		}
-	}
-
-	if app.FFmpeg != nil && audioFilePath != "" {
-		if err := app.FFmpeg.ExtractEmbeddedArt(audioFilePath, destPath); err == nil {
-			qtx.UpdateAlbumCover(ctx, database.UpdateAlbumCoverParams{
-				Cover: sql.NullString{String: localPath, Valid: true},
-				ID:    album.ID,
-			})
 		}
 	}
 }
@@ -62,9 +70,9 @@ func (app *Application) retryMissingAlbumCovers(ctx context.Context) {
 	if err != nil || len(albums) == 0 {
 		return
 	}
-	app.Logger.Info(fmt.Sprintf("retrying covers for %d albums with MusicBrainz IDs", len(albums)))
+	app.Logger.Info(fmt.Sprintf("fetching cover art for %d albums (MusicBrainz IDs present; throttled to respect API limits)", len(albums)))
 	for i := range albums {
-		app.acquireAlbumCover(ctx, app.Queries, &albums[i], "", "")
+		app.acquireAlbumCover(ctx, app.Queries, &albums[i], "")
 	}
 }
 
@@ -81,6 +89,7 @@ func (app *Application) acquireMusicianThumb(ctx context.Context, qtx *database.
 	destPath := filepath.Join(app.Settings.StaticDir, "musicians", fmt.Sprintf("%d.jpg", musician.ID))
 	localPath := fmt.Sprintf("/api/static/musicians/%d.jpg", musician.ID)
 
+	app.throttleCoverArtDownload()
 	err = helpers.DownloadImage(imageURL, destPath)
 	if err == nil {
 		qtx.UpdateMusicianThumb(ctx, database.UpdateMusicianThumbParams{

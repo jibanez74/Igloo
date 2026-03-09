@@ -7,20 +7,12 @@ import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { Spinner } from "@/components/ui/spinner";
 import { unwrapString } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import type { SimpleAlbumType } from "@/types";
 
 type AlbumCardProps = {
   album: SimpleAlbumType;
 };
-
-/**
- * Resolves the album cover URL for display.
- * Backend may return a same-origin path (/api/static/albums/...) or an absolute URL (e.g. Cover Art Archive).
- */
-function resolveAlbumCoverUrl(cover: string | null): string | null {
-  if (!cover?.trim()) return null;
-  return cover.trim();
-}
 
 export default function AlbumCard({ album }: AlbumCardProps) {
   const { id, title, cover, musician } = album;
@@ -29,7 +21,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [coverLoadFailed, setCoverLoadFailed] = useState(false);
 
-  const coverUrl = resolveAlbumCoverUrl(unwrapString(cover));
+  const coverUrl = getMediaImageUrl(unwrapString(cover));
   useEffect(() => {
     setCoverLoadFailed(false);
   }, [id, coverUrl]);

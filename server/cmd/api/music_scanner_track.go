@@ -19,9 +19,8 @@ type preparedTrack struct {
 	sortAlbum   string
 	albumArtist string
 	genre       string
-	coverURL    string
-	audioPath   string
-	mbArtist    *musicbrainz.ArtistResult
+	coverURL string
+	mbArtist *musicbrainz.ArtistResult
 	mbAlbum     *musicbrainz.AlbumResult
 }
 
@@ -31,7 +30,7 @@ func (app *Application) extractTrackMetadata(ctx context.Context, path, ext stri
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
 
-	pt := &preparedTrack{audioPath: path}
+	pt := &preparedTrack{}
 	pt.params.FilePath = path
 	pt.params.FileName = filepath.Base(path)
 
@@ -157,16 +156,14 @@ func (app *Application) extractTrackMetadata(ctx context.Context, path, ext stri
 }
 
 type imageWork struct {
-	album     *database.Album
-	musician  *database.Musician
-	coverURL  string
-	audioPath string
+	album    *database.Album
+	musician *database.Musician
+	coverURL string
 }
 
 func (app *Application) writeTrackToDB(ctx context.Context, qtx *database.Queries, pt *preparedTrack) (*imageWork, error) {
 	var musicianID sql.NullInt64
 	var iw imageWork
-	iw.audioPath = pt.audioPath
 	iw.coverURL = pt.coverURL
 
 	if pt.artistName != "" {

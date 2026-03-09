@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,7 +99,7 @@ function AlbumDetailsContent({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const coverUrl = unwrapString(album.cover);
+  const coverUrl = getMediaImageUrl(unwrapString(album.cover));
   const releaseYear = unwrapInt(album.year);
   const musicianName = unwrapString(album.musician);
 
@@ -533,11 +534,14 @@ function AlbumDetailsContent({
 }
 
 function ArtistBadge({ artist }: { artist: ArtistType }) {
+  const thumbUrl = getMediaImageUrl(
+    artist.thumb.Valid ? artist.thumb.String : null
+  );
   return (
     <div className="flex items-center gap-2 rounded-full border border-slate-700/50 bg-slate-800/60 px-3 py-1.5 transition-colors hover:border-amber-500/30">
-      {artist.thumb.Valid ? (
+      {thumbUrl ? (
         <img
-          src={artist.thumb.String}
+          src={thumbUrl}
           alt=""
           className="h-6 w-6 rounded-full object-cover"
         />

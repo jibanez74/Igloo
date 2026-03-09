@@ -47,9 +47,11 @@ type Application struct {
 	Wait            *sync.WaitGroup
 	Router          *chi.Mux
 	Server          *http.Server
-	ScannerDBMu     sync.Mutex
-	HLSSessionCache *cache.Cache
-	HLSSessionGroup singleflight.Group
+	ScannerDBMu           sync.Mutex
+	HLSSessionCache       *cache.Cache
+	HLSSessionGroup       singleflight.Group
+	coverArtThrottleMu    sync.Mutex
+	lastCoverArtDownload  time.Time
 }
 
 // SQL contains the database schema, embedded at compile time.

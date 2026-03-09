@@ -2,20 +2,16 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
 import { unwrapString } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import type { SimpleMusicianType } from "@/types";
 
 type MusicianCardProps = {
   musician: SimpleMusicianType;
 };
 
-function resolveMusicianThumbUrl(thumb: string | null): string | null {
-  if (!thumb?.trim()) return null;
-  return thumb.trim();
-}
-
 export default function MusicianCard({ musician }: MusicianCardProps) {
   const { id, name, thumb, album_count, track_count } = musician;
-  const thumbUrl = resolveMusicianThumbUrl(unwrapString(thumb));
+  const thumbUrl = getMediaImageUrl(unwrapString(thumb));
   const [thumbLoadFailed, setThumbLoadFailed] = useState(false);
 
   useEffect(() => {

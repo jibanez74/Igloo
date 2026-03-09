@@ -12,7 +12,6 @@
 .idea/
 .vscode/
 
-
 # Environment files
 .env
 .env.local
@@ -45,4 +44,4 @@
 .DS_Store
 
 # Testing media files directory
-/media/*
+/server/media/*
