@@ -173,6 +173,55 @@ func (q *Queries) DeleteMovieVideoStreams(ctx context.Context, movieID int64) er
 	return err
 }
 
+const getAudioStreamsByMovieID = `-- name: GetAudioStreamsByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+FROM
+  audio_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Audio streams for a movie (for technical details and playback settings).
+func (q *Queries) GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error) {
+	rows, err := q.query(ctx, q.getAudioStreamsByMovieIDStmt, getAudioStreamsByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AudioStream{}
+	for rows.Next() {
+		var i AudioStream
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.BitRate,
+			&i.SampleRate,
+			&i.Channels,
+			&i.ChannelLayout,
+			&i.Language,
+			&i.Title,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCastByMovieID = `-- name: GetCastByMovieID :many
 SELECT
   c.id,
@@ -219,6 +268,47 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 			&i.CastOrder,
 			&i.ArtistName,
 			&i.ArtistProfile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getChaptersByMovieID = `-- name: GetChaptersByMovieID :many
+SELECT
+  id, title, start_time, thumb, movie_id
+FROM
+  chapters
+WHERE
+  movie_id = ?
+ORDER BY
+  start_time
+`
+
+// Chapters for a movie (for technical details display).
+func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error) {
+	rows, err := q.query(ctx, q.getChaptersByMovieIDStmt, getChaptersByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chapter{}
+	for rows.Next() {
+		var i Chapter
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.StartTime,
+			&i.Thumb,
+			&i.MovieID,
 		); err != nil {
 			return nil, err
 		}
@@ -591,6 +681,111 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 			&i.TmdbID,
 			&i.Logo,
 			&i.Country,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSubtitlesByMovieID = `-- name: GetSubtitlesByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
+FROM
+  subtitles
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Subtitle tracks for a movie (for technical details display).
+func (q *Queries) GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error) {
+	rows, err := q.query(ctx, q.getSubtitlesByMovieIDStmt, getSubtitlesByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Subtitle{}
+	for rows.Next() {
+		var i Subtitle
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.Language,
+			&i.Title,
+			&i.IsForced,
+			&i.IsDefault,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getVideoStreamsByMovieID = `-- name: GetVideoStreamsByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+FROM
+  video_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Video streams for a movie (for technical details display).
+func (q *Queries) GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error) {
+	rows, err := q.query(ctx, q.getVideoStreamsByMovieIDStmt, getVideoStreamsByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []VideoStream{}
+	for rows.Next() {
+		var i VideoStream
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.CodecLevel,
+			&i.BitRate,
+			&i.Width,
+			&i.Height,
+			&i.CodedWidth,
+			&i.CodedHeight,
+			&i.AspectRatio,
+			&i.FrameRate,
+			&i.AvgFrameRate,
+			&i.BitDepth,
+			&i.ColorRange,
+			&i.ColorSpace,
+			&i.ColorPrimaries,
+			&i.ColorTransfer,
+			&i.Language,
+			&i.Title,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

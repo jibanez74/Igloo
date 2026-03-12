@@ -6,6 +6,7 @@ import type {
   LatestMovieType,
   LibraryMovieDetailsResponse,
   MovieDetailsType,
+  MovieTechnicalDetailsResponse,
   MusicianDetailsResponseType,
   MusicStatsType,
   MusiciansListResponseType,
@@ -164,6 +165,9 @@ export const getMovieInTheaterDetails = (id: number) =>
 
 export const getMovieDetails = (id: number) =>
   apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
+
+export const getMovieTechnicalDetails = (id: number) =>
+  apiRequest<MovieTechnicalDetailsResponse>(`/api/movies/${id}/technical-details`);
 
 // ============================================================================
 // Music API - Albums

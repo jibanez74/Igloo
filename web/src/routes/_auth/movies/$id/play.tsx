@@ -17,10 +17,27 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
-import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import {
+  libraryMovieDetailsQueryOpts,
+  movieTechnicalDetailsQueryOpts,
+} from "@/lib/query-opts";
 import { formatTimeSeconds } from "@/lib/format";
 
+import { getAvailableModes, type StreamModeId } from "@/lib/playback";
+
+type PlaySearchParams = {
+  mode?: StreamModeId;
+  audio_track?: number;
+};
+
 export const Route = createFileRoute("/_auth/movies/$id/play")({
+  validateSearch: (search: Record<string, unknown>): PlaySearchParams => ({
+    mode: (typeof search.mode === "string" ? search.mode : undefined) as
+      | StreamModeId
+      | undefined,
+    audio_track:
+      typeof search.audio_track === "number" ? search.audio_track : undefined,
+  }),
   component: PlayMoviePage,
 });
 
@@ -28,23 +45,19 @@ const SEEK_STEP_SEC = 10;
 const VOLUME_STEP = 0.1;
 const CONTROLS_IDLE_MS = 3000;
 
-// Hardcoded stream modes for testing — select via the dropdown in the player controls.
-const STREAM_MODES = [
-  { id: "direct", label: "Direct stream" },
-  { id: "1080p_8mbps", label: "HLS 1080p 8 Mbps" },
-  { id: "1080p_4mbps", label: "HLS 1080p 4 Mbps" },
-  { id: "720p_3mbps", label: "HLS 720p 3 Mbps" },
-] as const;
-
-type StreamModeId = (typeof STREAM_MODES)[number]["id"];
-
-function buildStreamUrl(movieId: number, mode: StreamModeId): string {
+function buildStreamUrl(
+  movieId: number,
+  mode: StreamModeId,
+  audioTrack: number,
+): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
-  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?audio_track=0`;
+  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?audio_track=${audioTrack}`;
 }
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
+  const { mode: searchMode, audio_track: searchAudioTrack } =
+    Route.useSearch();
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -60,9 +73,12 @@ function PlayMoviePage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [streamMode, setStreamMode] = useState<StreamModeId>("1080p_4mbps");
+  const [streamMode, setStreamMode] = useState<StreamModeId>(
+    searchMode ?? "1080p_4mbps",
+  );
+  const audioTrack = searchAudioTrack ?? 0;
 
-  const streamUrl = buildStreamUrl(movieId, streamMode);
+  const streamUrl = buildStreamUrl(movieId, streamMode, audioTrack);
 
   const scheduleHideControls = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -83,6 +99,10 @@ function PlayMoviePage() {
   const movie = data && !data.error ? data.data?.movie : null;
   const title = movie?.title ?? "Movie";
   const movieNotFound = isError || (data && data.error);
+
+  const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const sourceHeight = techData?.data?.video_streams?.[0]?.height ?? 0;
+  const availableModes = getAvailableModes(sourceHeight);
 
   const handleBack = () => {
     if (router.history.length > 1) {
@@ -201,7 +221,7 @@ function PlayMoviePage() {
         idleTimerRef.current = null;
       }
     };
-  }, [isFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFullscreen]);
 
   useEffect(() => {
     const timer = setTimeout(() => backButtonRef.current?.focus(), 50);
@@ -420,7 +440,7 @@ function PlayMoviePage() {
       <header
         className={
           isFullscreen
-            ? `absolute top-0 right-0 left-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg transition-all duration-300 ease-out ${
+            ? `absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg transition-all duration-300 ease-out ${
                 controlsVisible
                   ? "translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-full opacity-0"
@@ -474,7 +494,7 @@ function PlayMoviePage() {
       <footer
         className={
           isFullscreen
-            ? `absolute right-0 bottom-0 left-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-all duration-300 ease-out ${
+            ? `absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-all duration-300 ease-out ${
                 controlsVisible
                   ? "translate-y-0 opacity-100"
                   : "pointer-events-none translate-y-full opacity-0"
@@ -539,10 +559,10 @@ function PlayMoviePage() {
               <select
                 value={streamMode}
                 onChange={handleStreamModeChange}
-                className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300 focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+                className="rounded-sm bg-slate-800 px-2 py-1 text-xs text-slate-300 focus:ring-2 focus:ring-cyan-400 focus:outline-none"
                 aria-label="Stream quality"
               >
-                {STREAM_MODES.map((m) => (
+                {availableModes.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>

@@ -63,8 +63,12 @@ type Querier interface {
 	GetAlbumsCount(ctx context.Context) (int64, error)
 	GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, error)
 	GetAlbumsWithMissingCovers(ctx context.Context) ([]Album, error)
+	// Audio streams for a movie (for technical details and playback settings).
+	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
+	// Chapters for a movie (for technical details display).
+	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
 	// Crew for a movie with artist name and profile (for details view).
 	GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCrewByMovieIDRow, error)
 	GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error)
@@ -101,6 +105,8 @@ type Querier interface {
 	GetProductionCompaniesByMovieID(ctx context.Context, movieID int64) ([]GetProductionCompaniesByMovieIDRow, error)
 	GetRandomTracks(ctx context.Context, limit int64) ([]GetRandomTracksRow, error)
 	GetSettings(ctx context.Context) (Setting, error)
+	// Subtitle tracks for a movie (for technical details display).
+	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (Track, error)
 	// Returns file_path and size for tracks whose file_path is in the given list (for batch unchanged check).
 	GetTrackPathsAndSizesByPaths(ctx context.Context, paths []string) ([]GetTrackPathsAndSizesByPathsRow, error)
@@ -125,6 +131,8 @@ type Querier interface {
 	// ============================================================================
 	// Returns the user's most played tracks
 	GetUserTopTracks(ctx context.Context, arg GetUserTopTracksParams) ([]GetUserTopTracksRow, error)
+	// Video streams for a movie (for technical details display).
+	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) (AudioStream, error)
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)

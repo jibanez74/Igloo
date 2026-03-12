@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -9,8 +10,15 @@ import {
   Heart,
   MoreVertical,
   Users,
+  Info,
+  Radio,
+  Settings2,
 } from "lucide-react";
-import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
+import { toast } from "sonner";
+import {
+  libraryMovieDetailsQueryOpts,
+  movieTechnicalDetailsQueryOpts,
+} from "@/lib/query-opts";
 import {
   TMDB_BACKDROP_SIZE,
   TMDB_IMAGE_BASE,
@@ -22,6 +30,12 @@ import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
 import CastSection from "@/components/CastSection";
+import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
+import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
+import {
+  DEFAULT_PLAYBACK_SETTINGS,
+  type PlaybackSettings,
+} from "@/lib/playback";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -38,9 +52,14 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
   loader: async ({ context, params }) => {
     const movieId = parseInt(params.id, 10);
     if (!Number.isNaN(movieId) && movieId > 0) {
-      await context.queryClient.ensureQueryData(
-        libraryMovieDetailsQueryOpts(movieId),
-      );
+      await Promise.all([
+        context.queryClient.ensureQueryData(
+          libraryMovieDetailsQueryOpts(movieId),
+        ),
+        context.queryClient.ensureQueryData(
+          movieTechnicalDetailsQueryOpts(movieId),
+        ),
+      ]);
     }
   },
   component: MovieDetailsPage,
@@ -112,6 +131,12 @@ function LibraryMovieDetailsContent({
   movieId: number;
   payload: LibraryMovieDetailsResponse;
 }) {
+  const [technicalDetailsOpen, setTechnicalDetailsOpen] = useState(false);
+  const [playbackSettingsOpen, setPlaybackSettingsOpen] = useState(false);
+  const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(
+    DEFAULT_PLAYBACK_SETTINGS,
+  );
+
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;
 
@@ -346,6 +371,10 @@ function LibraryMovieDetailsContent({
               <Link
                 to="/movies/$id/play"
                 params={{ id: String(movieId) }}
+                search={{
+                  mode: playbackSettings.mode,
+                  audio_track: playbackSettings.audioTrack,
+                }}
                 className={buttonVariants({ variant: "accent", size: "lg" })}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />
@@ -367,10 +396,34 @@ function LibraryMovieDetailsContent({
                   <MoreVertical className="size-4" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem disabled>Add to list</DropdownMenuItem>
-                  <DropdownMenuItem disabled>Share</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setPlaybackSettingsOpen(true)}>
+                    <Settings2 className="size-4" aria-hidden="true" />
+                    Playback Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => toast.info("Coming soon")}>
+                    <Radio className="size-4" aria-hidden="true" />
+                    Watch Together
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setTechnicalDetailsOpen(true)}>
+                    <Info className="size-4" aria-hidden="true" />
+                    Technical Details
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <PlaybackSettingsDialog
+                movieId={movieId}
+                open={playbackSettingsOpen}
+                onOpenChange={setPlaybackSettingsOpen}
+                settings={playbackSettings}
+                onSave={setPlaybackSettings}
+              />
+
+              <TechnicalDetailsDialog
+                movieId={movieId}
+                open={technicalDetailsOpen}
+                onOpenChange={setTechnicalDetailsOpen}
+              />
             </div>
 
             {extra_videos.length > 0 && (

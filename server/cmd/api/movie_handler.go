@@ -115,6 +115,88 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// GetMovieTechnicalDetails returns video/audio streams, subtitles, and chapters
+// for a movie. All data comes from the database (populated by the scanner via ffprobe).
+func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		app.Logger.Error("failed to begin transaction", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		return
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	movie, err := qtx.GetMovieByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get movie", "error", err, "id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+		return
+	}
+
+	videoStreams, err := qtx.GetVideoStreamsByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get video streams", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+		return
+	}
+
+	audioStreams, err := qtx.GetAudioStreamsByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get audio streams", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+		return
+	}
+
+	subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
+	if err != nil {
+		app.Logger.Error("failed to get subtitles", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+		return
+	}
+
+	chapters, err := qtx.GetChaptersByMovieID(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
+		helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"movie": map[string]any{
+				"file_name": movie.FileName,
+				"file_path": movie.FilePath,
+				"size":      movie.Size,
+				"container": movie.Container,
+				"mime_type": movie.MimeType,
+				"run_time":  movie.RunTime,
+			},
+			"video_streams": videoStreams,
+			"audio_streams": audioStreams,
+			"subtitles":     subtitles,
+			"chapters":      chapters,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 // StreamMovie streams the movie file for playback (direct stream, no transcoding).
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")

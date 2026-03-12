@@ -132,8 +132,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsWithMissingCoversStmt, err = db.PrepareContext(ctx, getAlbumsWithMissingCovers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsWithMissingCovers: %w", err)
 	}
+	if q.getAudioStreamsByMovieIDStmt, err = db.PrepareContext(ctx, getAudioStreamsByMovieID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAudioStreamsByMovieID: %w", err)
+	}
 	if q.getCastByMovieIDStmt, err = db.PrepareContext(ctx, getCastByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCastByMovieID: %w", err)
+	}
+	if q.getChaptersByMovieIDStmt, err = db.PrepareContext(ctx, getChaptersByMovieID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetChaptersByMovieID: %w", err)
 	}
 	if q.getCrewByMovieIDStmt, err = db.PrepareContext(ctx, getCrewByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCrewByMovieID: %w", err)
@@ -219,6 +225,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getSettingsStmt, err = db.PrepareContext(ctx, getSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query GetSettings: %w", err)
 	}
+	if q.getSubtitlesByMovieIDStmt, err = db.PrepareContext(ctx, getSubtitlesByMovieID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSubtitlesByMovieID: %w", err)
+	}
 	if q.getTrackStmt, err = db.PrepareContext(ctx, getTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTrack: %w", err)
 	}
@@ -260,6 +269,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getUserTopTracksStmt, err = db.PrepareContext(ctx, getUserTopTracks); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserTopTracks: %w", err)
+	}
+	if q.getVideoStreamsByMovieIDStmt, err = db.PrepareContext(ctx, getVideoStreamsByMovieID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetVideoStreamsByMovieID: %w", err)
 	}
 	if q.insertAudioStreamStmt, err = db.PrepareContext(ctx, insertAudioStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertAudioStream: %w", err)
@@ -542,9 +554,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumsWithMissingCoversStmt: %w", cerr)
 		}
 	}
+	if q.getAudioStreamsByMovieIDStmt != nil {
+		if cerr := q.getAudioStreamsByMovieIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAudioStreamsByMovieIDStmt: %w", cerr)
+		}
+	}
 	if q.getCastByMovieIDStmt != nil {
 		if cerr := q.getCastByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getCastByMovieIDStmt: %w", cerr)
+		}
+	}
+	if q.getChaptersByMovieIDStmt != nil {
+		if cerr := q.getChaptersByMovieIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getChaptersByMovieIDStmt: %w", cerr)
 		}
 	}
 	if q.getCrewByMovieIDStmt != nil {
@@ -687,6 +709,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getSettingsStmt: %w", cerr)
 		}
 	}
+	if q.getSubtitlesByMovieIDStmt != nil {
+		if cerr := q.getSubtitlesByMovieIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSubtitlesByMovieIDStmt: %w", cerr)
+		}
+	}
 	if q.getTrackStmt != nil {
 		if cerr := q.getTrackStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTrackStmt: %w", cerr)
@@ -755,6 +782,11 @@ func (q *Queries) Close() error {
 	if q.getUserTopTracksStmt != nil {
 		if cerr := q.getUserTopTracksStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserTopTracksStmt: %w", cerr)
+		}
+	}
+	if q.getVideoStreamsByMovieIDStmt != nil {
+		if cerr := q.getVideoStreamsByMovieIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getVideoStreamsByMovieIDStmt: %w", cerr)
 		}
 	}
 	if q.insertAudioStreamStmt != nil {
@@ -992,7 +1024,9 @@ type Queries struct {
 	getAlbumsCountStmt                     *sql.Stmt
 	getAlbumsNeedingCoverDownloadStmt      *sql.Stmt
 	getAlbumsWithMissingCoversStmt         *sql.Stmt
+	getAudioStreamsByMovieIDStmt           *sql.Stmt
 	getCastByMovieIDStmt                   *sql.Stmt
+	getChaptersByMovieIDStmt               *sql.Stmt
 	getCrewByMovieIDStmt                   *sql.Stmt
 	getGenresByAlbumIDStmt                 *sql.Stmt
 	getGenresByMovieIDStmt                 *sql.Stmt
@@ -1021,6 +1055,7 @@ type Queries struct {
 	getProductionCompaniesByMovieIDStmt    *sql.Stmt
 	getRandomTracksStmt                    *sql.Stmt
 	getSettingsStmt                        *sql.Stmt
+	getSubtitlesByMovieIDStmt              *sql.Stmt
 	getTrackStmt                           *sql.Stmt
 	getTrackPathsAndSizesByPathsStmt       *sql.Stmt
 	getTracksAlphabeticalStmt              *sql.Stmt
@@ -1035,6 +1070,7 @@ type Queries struct {
 	getUserTopGenresStmt                   *sql.Stmt
 	getUserTopMusiciansStmt                *sql.Stmt
 	getUserTopTracksStmt                   *sql.Stmt
+	getVideoStreamsByMovieIDStmt           *sql.Stmt
 	insertAudioStreamStmt                  *sql.Stmt
 	insertChapterStmt                      *sql.Stmt
 	insertSubtitleStmt                     *sql.Stmt
@@ -1109,7 +1145,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsCountStmt:                     q.getAlbumsCountStmt,
 		getAlbumsNeedingCoverDownloadStmt:      q.getAlbumsNeedingCoverDownloadStmt,
 		getAlbumsWithMissingCoversStmt:         q.getAlbumsWithMissingCoversStmt,
+		getAudioStreamsByMovieIDStmt:           q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                   q.getCastByMovieIDStmt,
+		getChaptersByMovieIDStmt:               q.getChaptersByMovieIDStmt,
 		getCrewByMovieIDStmt:                   q.getCrewByMovieIDStmt,
 		getGenresByAlbumIDStmt:                 q.getGenresByAlbumIDStmt,
 		getGenresByMovieIDStmt:                 q.getGenresByMovieIDStmt,
@@ -1138,6 +1176,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getProductionCompaniesByMovieIDStmt:    q.getProductionCompaniesByMovieIDStmt,
 		getRandomTracksStmt:                    q.getRandomTracksStmt,
 		getSettingsStmt:                        q.getSettingsStmt,
+		getSubtitlesByMovieIDStmt:              q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                           q.getTrackStmt,
 		getTrackPathsAndSizesByPathsStmt:       q.getTrackPathsAndSizesByPathsStmt,
 		getTracksAlphabeticalStmt:              q.getTracksAlphabeticalStmt,
@@ -1152,6 +1191,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserTopGenresStmt:                   q.getUserTopGenresStmt,
 		getUserTopMusiciansStmt:                q.getUserTopMusiciansStmt,
 		getUserTopTracksStmt:                   q.getUserTopTracksStmt,
+		getVideoStreamsByMovieIDStmt:           q.getVideoStreamsByMovieIDStmt,
 		insertAudioStreamStmt:                  q.insertAudioStreamStmt,
 		insertChapterStmt:                      q.insertChapterStmt,
 		insertSubtitleStmt:                     q.insertSubtitleStmt,

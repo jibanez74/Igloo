@@ -7,6 +7,7 @@ export const LATEST_ALBUMS_KEY = "latest-albums";
 export const MOVIES_KEY = "movies";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
+export const MOVIE_TECHNICAL_DETAILS_KEY = "movie-technical-details";
 export const ALBUMS_KEY = "albums";
 export const ALBUM_DETAILS_KEY = "album-details";
 export const MUSICIANS_KEY = "musicians";

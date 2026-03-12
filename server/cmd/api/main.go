@@ -540,6 +540,7 @@ func (app *Application) InitRouter() {
 		r.Route("/movies", func(r chi.Router) {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/details/{id}", app.GetMovieDetails)
+			r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
 			r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
 			r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 			r.Get("/{id}/stream", app.StreamMovie)

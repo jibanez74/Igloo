@@ -419,3 +419,47 @@ ORDER BY
   extra_videos.type,
   extra_videos.title;
 
+-- name: GetVideoStreamsByMovieID :many
+-- Video streams for a movie (for technical details display).
+SELECT
+  *
+FROM
+  video_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index;
+
+-- name: GetAudioStreamsByMovieID :many
+-- Audio streams for a movie (for technical details and playback settings).
+SELECT
+  *
+FROM
+  audio_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index;
+
+-- name: GetSubtitlesByMovieID :many
+-- Subtitle tracks for a movie (for technical details display).
+SELECT
+  *
+FROM
+  subtitles
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index;
+
+-- name: GetChaptersByMovieID :many
+-- Chapters for a movie (for technical details display).
+SELECT
+  *
+FROM
+  chapters
+WHERE
+  movie_id = ?
+ORDER BY
+  start_time;
+

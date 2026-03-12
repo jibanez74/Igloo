@@ -8,6 +8,7 @@ import {
   getMovieDetails,
   getMovieInTheaterDetails,
   getMoviesInTheaters,
+  getMovieTechnicalDetails,
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
@@ -24,6 +25,7 @@ import {
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
+  MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
   MUSICIAN_DETAILS_KEY,
@@ -76,6 +78,14 @@ export function libraryMovieDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
     queryFn: () => getMovieDetails(id),
+    enabled: id > 0,
+  });
+}
+
+export function movieTechnicalDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
+    queryFn: () => getMovieTechnicalDetails(id),
     enabled: id > 0,
   });
 }

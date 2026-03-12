@@ -64,6 +64,11 @@ export type {
   LibraryMovieGenreType,
   LibraryMovieProductionCompanyType,
   LibraryMovieExtraVideoType,
+  MovieTechnicalDetailsResponse,
+  VideoStreamType,
+  AudioStreamType,
+  SubtitleType,
+  ChapterType,
 } from "./movies";
 
 // Audio player types

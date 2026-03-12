@@ -140,6 +140,79 @@ export type LibraryMovieDetailsResponse = {
   extra_videos: LibraryMovieExtraVideoType[];
 };
 
+// Technical details response (GET /api/movies/:id/technical-details)
+export type MovieTechnicalDetailsResponse = {
+  movie: {
+    file_name: string;
+    file_path: string;
+    size: number;
+    container: string;
+    mime_type: string;
+    run_time: Int64Type;
+  };
+  video_streams: VideoStreamType[];
+  audio_streams: AudioStreamType[];
+  subtitles: SubtitleType[];
+  chapters: ChapterType[];
+};
+
+export type VideoStreamType = {
+  id: number;
+  movie_id: number;
+  stream_index: number;
+  codec: string;
+  codec_profile: StringType;
+  codec_level: Int64Type;
+  bit_rate: number;
+  width: number;
+  height: number;
+  coded_width: Int64Type;
+  coded_height: Int64Type;
+  aspect_ratio: StringType;
+  frame_rate: number;
+  avg_frame_rate: StringType;
+  bit_depth: Int64Type;
+  color_range: StringType;
+  color_space: StringType;
+  color_primaries: StringType;
+  color_transfer: StringType;
+  language: StringType;
+  title: StringType;
+};
+
+export type AudioStreamType = {
+  id: number;
+  movie_id: number;
+  stream_index: number;
+  codec: string;
+  codec_profile: StringType;
+  bit_rate: number;
+  sample_rate: Int64Type;
+  channels: number;
+  channel_layout: StringType;
+  language: StringType;
+  title: StringType;
+};
+
+export type SubtitleType = {
+  id: number;
+  movie_id: number;
+  stream_index: number;
+  codec: string;
+  language: StringType;
+  title: StringType;
+  is_forced: boolean;
+  is_default: boolean;
+};
+
+export type ChapterType = {
+  id: number;
+  title: string;
+  start_time: number;
+  thumb: StringType;
+  movie_id: Int64Type;
+};
+
 // Full movie details including credits and videos (from TMDB API)
 export type MovieDetailsType = {
   id: number;
