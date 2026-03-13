@@ -340,13 +340,13 @@ export default function AudioPlayer({
             {onClose ? (
               <button
                 onClick={onClose}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+                className='flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
             ) : (
-              <div className='h-10 w-10' aria-hidden='true' />
+              <div className='size-10' aria-hidden='true' />
             )}
           </header>
 
@@ -362,7 +362,7 @@ export default function AudioPlayer({
                 />
               ) : (
                 <div
-                  className='flex h-full w-full items-center justify-center bg-slate-800'
+                  className='flex size-full items-center justify-center bg-slate-800'
                   role='img'
                   aria-label='No album cover available'
                 >
@@ -399,7 +399,7 @@ export default function AudioPlayer({
               <button
                 onClick={playPrevious}
                 disabled={!hasPrevious}
-                className='flex h-14 w-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
+                className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasPrevious
                     ? `Previous track: ${tracks[currentIndex - 1]?.title}`
@@ -413,7 +413,7 @@ export default function AudioPlayer({
                 ref={playPauseButtonRef}
                 onClick={handleTogglePlay}
                 disabled={isLoading}
-                className='flex h-20 w-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50'
+                className='flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50'
                 aria-label={
                   isLoading
                     ? "Loading track"
@@ -434,7 +434,7 @@ export default function AudioPlayer({
               <button
                 onClick={playNext}
                 disabled={!hasNext}
-                className='flex h-14 w-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
+                className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasNext
                     ? `Next track: ${tracks[currentIndex + 1]?.title}`
@@ -478,15 +478,15 @@ export default function AudioPlayer({
               aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
             >
               {/* Album cover */}
-              <div className='h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg'>
+              <div className='size-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg'>
                 {albumCover ? (
                   <img
                     src={albumCover}
                     alt={albumTitle}
-                    className='h-full w-full object-cover'
+                    className='size-full object-cover'
                   />
                 ) : (
-                  <div className='flex h-full w-full items-center justify-center'>
+                  <div className='flex size-full items-center justify-center'>
                     <Disc3 className="size-5 text-slate-600" aria-hidden="true" />
                   </div>
                 )}
@@ -511,7 +511,7 @@ export default function AudioPlayer({
               <button
                 onClick={playPrevious}
                 disabled={!hasPrevious}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
+                className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasPrevious
                     ? `Previous track: ${tracks[currentIndex - 1]?.title}`
@@ -525,7 +525,7 @@ export default function AudioPlayer({
               <button
                 onClick={handleTogglePlay}
                 disabled={isLoading}
-                className='flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50'
+                className='flex size-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50'
                 aria-label={
                   isLoading
                     ? "Loading track"
@@ -547,7 +547,7 @@ export default function AudioPlayer({
               <button
                 onClick={playNext}
                 disabled={!hasNext}
-                className='flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
+                className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
                 aria-label={
                   hasNext
                     ? `Next track: ${tracks[currentIndex + 1]?.title}`
@@ -578,7 +578,7 @@ export default function AudioPlayer({
             {/* Expand button */}
             <button
               onClick={onExpand}
-              className='hidden h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex'
+              className='hidden size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex'
               aria-label='Expand to fullscreen player'
             >
               <ChevronUp className="size-4" aria-hidden="true" />
@@ -588,7 +588,7 @@ export default function AudioPlayer({
             {onClose && (
               <button
                 onClick={onClose}
-                className='flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
+                className='flex size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none'
                 aria-label='Stop playback and close player'
               >
                 <X className="size-4" aria-hidden="true" />

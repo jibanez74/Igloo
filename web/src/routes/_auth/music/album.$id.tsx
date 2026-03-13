@@ -543,10 +543,10 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
         <img
           src={thumbUrl}
           alt=""
-          className="h-6 w-6 rounded-full object-cover"
+          className="size-6 rounded-full object-cover"
         />
       ) : (
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700">
+        <div className="flex size-6 items-center justify-center rounded-full bg-slate-700">
           <User className="size-3 text-slate-400" aria-hidden="true" />
         </div>
       )}

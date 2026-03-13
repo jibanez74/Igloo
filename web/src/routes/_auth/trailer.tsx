@@ -262,7 +262,7 @@ function TrailerPage() {
         className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
         <div className="max-w-md px-4 text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
           </div>
           <h2 className="mb-2 text-xl font-semibold text-white">
@@ -293,7 +293,7 @@ function TrailerPage() {
         className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
         <div className="max-w-md px-4 text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-800">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-slate-800">
             <Film className="size-10 text-slate-400" aria-hidden="true" />
           </div>
           <h2 className="mb-2 text-xl font-semibold text-white">
@@ -325,7 +325,7 @@ function TrailerPage() {
         className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
       >
         <div className="text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10">
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
             <Spinner className="size-10 text-amber-400" />
           </div>
           <p className="text-lg font-medium text-white">Loading trailer...</p>
@@ -373,7 +373,7 @@ function TrailerPage() {
         <button
           ref={closeButtonRef}
           onClick={handleClose}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
           aria-label="Close trailer (Escape)"
         >
           <X className="size-5" aria-hidden="true" />
@@ -390,7 +390,7 @@ function TrailerPage() {
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
             <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10">
+              <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-500/10">
                 <Spinner className="size-8 text-amber-400" />
               </div>
               <p className="font-medium text-white">Loading trailer...</p>
@@ -421,7 +421,7 @@ function TrailerPage() {
                 style={{ width: `${progress}%` }}
               />
               <div
-                className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+                className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100"
                 style={{ left: `calc(${progress}% - 6px)` }}
               />
             </div>
@@ -449,7 +449,7 @@ function TrailerPage() {
               {/* Rewind 10s */}
               <button
                 onClick={() => seekBackward(10)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 aria-label="Rewind 10 seconds (J or Left Arrow)"
               >
                 <Rewind className="size-5" aria-hidden="true" />
@@ -458,7 +458,7 @@ function TrailerPage() {
               {/* Play/Pause */}
               <button
                 onClick={togglePlay}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="flex size-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
                 aria-label={
                   isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
                 }
@@ -473,7 +473,7 @@ function TrailerPage() {
               {/* Forward 10s */}
               <button
                 onClick={() => seekForward(10)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 aria-label="Forward 10 seconds (L or Right Arrow)"
               >
                 <FastForward className="size-5" aria-hidden="true" />
@@ -485,7 +485,7 @@ function TrailerPage() {
               {/* Volume button */}
               <button
                 onClick={toggleMute}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
                 {isMuted || volume === 0 ? (
@@ -500,7 +500,7 @@ function TrailerPage() {
               {/* Fullscreen button */}
               <button
                 onClick={toggleFullscreen}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 aria-label="Toggle fullscreen (F)"
               >
                 <Maximize className="size-5" aria-hidden="true" />
