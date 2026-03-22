@@ -68,8 +68,8 @@ export function getAvailableModes(
       if (!hasCodecInfo) return true;
       return isVideoDirectPlayable(videoCodec);
     }
-    // transcode — filter by resolution
-    return m.maxHeight === 0 || (sourceHeight > 0 && m.maxHeight <= sourceHeight);
+    // transcode — filter by resolution (maxHeight is never 0 here; direct/remux handled above)
+    return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
 }
 
@@ -95,7 +95,10 @@ export function getDefaultMode(
 
   // Non-H.264: pick the highest transcode profile that fits the source
   const transcodes = STREAM_MODES.filter(
-    (m) => m.type === "transcode" && (m.maxHeight === 0 || m.maxHeight <= sourceHeight),
+    (m) =>
+      m.type === "transcode" &&
+      sourceHeight > 0 &&
+      m.maxHeight <= sourceHeight,
   );
   if (transcodes.length > 0) return transcodes[0].id;
 
