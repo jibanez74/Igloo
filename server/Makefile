@@ -1,6 +1,7 @@
 BINARY_NAME=igloo-server
-WEB_DIR=cmd/web
-WEB_DIST=web/dist
+# Frontend lives at repo root ../web (not server/cmd/web). Paths are relative to this Makefile (server/).
+WEB_DIR=../web
+WEB_DIST=../web/dist
 
 ## sync-schema: Copy schema from sqlc to cmd/api for embedding
 sync-schema:
@@ -21,7 +22,7 @@ build-web:
 	@echo "Web frontend built to ${WEB_DIST}!"
 
 ## dev: Run Go server in development mode (without building web).
-## Frontend requests redirect to Vite; run "cd ${WEB_DIR} && bun run dev" separately.
+## Frontend requests redirect to Vite; run "cd ../web && bun run dev" separately.
 dev: generate
 	@echo "Starting development server (backend only)..."
 	@echo "Note: Run frontend with 'cd ${WEB_DIR} && bun run dev' (Vite on port 3000)"

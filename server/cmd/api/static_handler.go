@@ -11,6 +11,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// embeddedPathLooksLikeStaticAsset is true for hashed Vite chunks and other non-HTML static files.
+// If these are missing from the embedded webdist, we must not fall back to index.html (the browser
+// expects JS/CSS and would error with "MIME type text/html" for module scripts).
+func embeddedPathLooksLikeStaticAsset(relPath string) bool {
+	ext := strings.ToLower(filepath.Ext(relPath))
+	switch ext {
+	case ".js", ".mjs", ".cjs", ".css", ".map":
+		return true
+	case ".woff", ".woff2", ".ttf", ".otf", ".eot":
+		return true
+	case ".ico", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif":
+		return true
+	case ".webmanifest", ".json":
+		return true
+	default:
+		return false
+	}
+}
+
 // ServeStaticFiles serves static files from the configured static directory.
 // It sets appropriate cache headers and prevents directory traversal attacks.
 func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request) {
@@ -89,10 +108,11 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the requested path from the URL
+	// Path under webdist/ (chi wildcard, or URL path if wildcard is empty)
 	requestedPath := chi.URLParam(r, "*")
-
-	// If no path specified, default to index.html
+	if requestedPath == "" {
+		requestedPath = strings.TrimPrefix(r.URL.Path, "/")
+	}
 	if requestedPath == "" {
 		requestedPath = "index.html"
 	}
@@ -114,7 +134,19 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	// Try to open the file from embedded filesystem
 	file, err := FrontendFS.Open(fsPath)
 	if err != nil {
-		// File doesn't exist - serve index.html for SPA routing
+		if embeddedPathLooksLikeStaticAsset(requestedPath) {
+			app.Logger.Warn(
+				"embedded frontend asset missing; rebuild web, copy to cmd/api/webdist, then rebuild the binary",
+				"path", fsPath,
+			)
+			http.Error(
+				w,
+				"Not Found: embedded static asset missing. From the repo: build the web app, copy dist to server/cmd/api/webdist, then run go build (see server/Makefile target build-full).",
+				http.StatusNotFound,
+			)
+			return
+		}
+		// File doesn't exist - serve index.html for SPA client-side routes
 		indexPath := "webdist/index.html"
 		content, err := fs.ReadFile(FrontendFS, indexPath)
 		if err != nil {

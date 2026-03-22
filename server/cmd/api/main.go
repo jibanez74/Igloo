@@ -63,8 +63,10 @@ var SQL string
 // FrontendFS contains the embedded frontend (webdist). A minimal placeholder is committed
 // so the app builds without running the frontend build. When VITE_DEV_SERVER is set,
 // ServeFrontend redirects to the Vite dev server instead of serving from here.
+// all:webdist is required because Vite can emit chunk names starting with "_",
+// and the default directory embed behavior excludes files beginning with "_" or ".".
 //
-//go:embed webdist
+//go:embed all:webdist
 var FrontendFS embed.FS
 
 func main() {
