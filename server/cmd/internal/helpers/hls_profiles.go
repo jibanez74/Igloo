@@ -10,7 +10,10 @@ type HLSProfileConfig struct {
 }
 
 // HLSAllowedProfiles is the ordered list of profile IDs allowed in requests.
+// HLS_PROFILE_REMUX copies the video stream and transcodes only audio;
+// it has no entry in HLSProfileConfigs because there are no resolution/bitrate constraints.
 var HLSAllowedProfiles = []string{
+	HLS_PROFILE_REMUX,
 	HLS_PROFILE_2160P_16MBPS,
 	HLS_PROFILE_1080P_8MBPS,
 	HLS_PROFILE_1080P_6MBPS,

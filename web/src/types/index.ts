@@ -65,11 +65,16 @@ export type {
   LibraryMovieProductionCompanyType,
   LibraryMovieExtraVideoType,
   MovieTechnicalDetailsResponse,
+  TmdbSearchResultType,
   VideoStreamType,
   AudioStreamType,
   SubtitleType,
   ChapterType,
 } from "./movies";
+
+// Movie playback route (search params)
+export type { PlaySearchParams } from "./movie-play";
+export { playSearchSchema } from "./movie-play";
 
 // Audio player types
 export type {

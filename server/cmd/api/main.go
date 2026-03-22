@@ -35,24 +35,24 @@ import (
 )
 
 type Application struct {
-	DB              *sql.DB
-	Queries         *database.Queries
-	Settings        *database.Setting
-	Logger          applogger.LoggerInterface
-	LoggerCloser    func() error
-	Ffprobe         ffprobe.FfprobeInterface
-	FFmpeg          *ffmpeg.FFmpeg
-	MusicBrainz     musicbrainz.MusicBrainzInterface
-	Tmdb            tmdb.TmdbInterface
-	SessionManager  *scs.SessionManager
-	Wait            *sync.WaitGroup
-	Router          *chi.Mux
-	Server          *http.Server
-	ScannerDBMu           sync.Mutex
-	HLSSessionCache       *cache.Cache
-	HLSSessionGroup       singleflight.Group
-	coverArtThrottleMu    sync.Mutex
-	lastCoverArtDownload  time.Time
+	DB                   *sql.DB
+	Queries              *database.Queries
+	Settings             *database.Setting
+	Logger               applogger.LoggerInterface
+	LoggerCloser         func() error
+	Ffprobe              ffprobe.FfprobeInterface
+	FFmpeg               *ffmpeg.FFmpeg
+	MusicBrainz          musicbrainz.MusicBrainzInterface
+	Tmdb                 tmdb.TmdbInterface
+	SessionManager       *scs.SessionManager
+	Wait                 *sync.WaitGroup
+	Router               *chi.Mux
+	Server               *http.Server
+	ScannerDBMu          sync.Mutex
+	HLSSessionCache      *cache.Cache
+	HLSSessionGroup      singleflight.Group
+	coverArtThrottleMu   sync.Mutex
+	lastCoverArtDownload time.Time
 }
 
 // SQL contains the database schema, embedded at compile time.
@@ -344,7 +344,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 // Required directories (static, logs) are always created.
 // Optional media directories (movies, shows, music) are only created if configured.
 func (app *Application) InitDirs() error {
-	// Create required directories - these are needed for the app to function.
 	created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
 	if err != nil {
 		return fmt.Errorf("failed to initialize static directory: %w", err)
@@ -355,23 +354,26 @@ func (app *Application) InitDirs() error {
 	}
 
 	// Subdirs for scanner-downloaded images (album covers, musician thumbs).
-	if _, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "albums")); err != nil {
+	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "albums"))
+	if err != nil {
 		return fmt.Errorf("failed to initialize static/albums: %w", err)
 	}
-	if _, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "musicians")); err != nil {
+
+	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "musicians"))
+	if err != nil {
 		return fmt.Errorf("failed to initialize static/musicians: %w", err)
 	}
 
-	created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)
-	if err != nil {
-		return fmt.Errorf("failed to initialize logs directory: %w", err)
+	if app.Settings.LogsDir != "" {
+		created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize logs directory: %w", err)
+		}
+		if created {
+			app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
+		}
 	}
 
-	if created {
-		app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
-	}
-
-	// Create optional media directories only if they are configured.
 	if app.Settings.MoviesDir.Valid {
 		created, err = helpers.GetOrCreateDir(app.Settings.MoviesDir.String)
 		if err != nil {
@@ -422,7 +424,6 @@ func (app *Application) InitLogger() error {
 		logsDir = "logs"
 	}
 
-	// Create logs directory if not in debug mode (file logging requires it).
 	if !debug {
 		_, err := helpers.GetOrCreateDir(logsDir)
 		if err != nil {
@@ -435,6 +436,7 @@ func (app *Application) InitLogger() error {
 		LogDir:  logsDir,
 		LogFile: "igloo.log",
 	})
+
 	if err != nil {
 		return err
 	}
@@ -541,6 +543,10 @@ func (app *Application) InitRouter() {
 			r.Get("/latest", app.GetLatestMovies)
 			r.Get("/details/{id}", app.GetMovieDetails)
 			r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
+			r.Post("/{id}/tmdb-search", app.TmdbSearchMovies)
+			r.Put("/{id}/identify", app.IdentifyMovie)
+			r.Patch("/{id}", app.UpdateMovieMetadata)
+			r.Delete("/{id}", app.DeleteMovie)
 			r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
 			r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 			r.Get("/{id}/stream", app.StreamMovie)

@@ -211,47 +211,6 @@ func (q *Queries) GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, e
 	return items, nil
 }
 
-const getAlbumsWithMissingCovers = `-- name: GetAlbumsWithMissingCovers :many
-SELECT id, title, sort_title, musician, musicbrainz_id, release_date, year, total_tracks, cover, created_at, updated_at FROM albums
-WHERE musicbrainz_id IS NOT NULL AND musicbrainz_id != ''
-  AND (cover IS NULL OR cover = '')
-`
-
-func (q *Queries) GetAlbumsWithMissingCovers(ctx context.Context) ([]Album, error) {
-	rows, err := q.query(ctx, q.getAlbumsWithMissingCoversStmt, getAlbumsWithMissingCovers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Album{}
-	for rows.Next() {
-		var i Album
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.SortTitle,
-			&i.Musician,
-			&i.MusicbrainzID,
-			&i.ReleaseDate,
-			&i.Year,
-			&i.TotalTracks,
-			&i.Cover,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,

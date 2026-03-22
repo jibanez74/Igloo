@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { Film, Play } from "lucide-react";
-import { TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
+import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestMovieType } from "@/types";
 
 export default function MovieCard({ movie }: { movie: LatestMovieType }) {
@@ -14,11 +15,10 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
 
   const ariaTitle = year.Valid ? `${title} ${year.Int64}` : title;
 
-  let posterUrl = "";
-  if (poster_path.Valid && poster_path.String !== "") {
-    const path = poster_path.String;
-    posterUrl = `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${path.startsWith("/") ? path : `/${path}`}`;
-  }
+  const posterUrl =
+    poster_path.Valid && poster_path.String !== ""
+      ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
+      : "";
 
   return (
     <article
@@ -75,6 +75,7 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
       <Link
         to="/movies/$id/play"
         params={{ id: String(id) }}
+        search={{ mode: "direct", audio_track: 0 }}
         className="absolute top-1/2 left-1/2 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
         aria-label={`Play ${ariaTitle}`}
       >

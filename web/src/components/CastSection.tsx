@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
-import { TMDB_IMAGE_BASE, TMDB_PROFILE_SIZE } from "@/lib/constants";
+import { TMDB_PROFILE_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { CastMemberType } from "@/types";
 
 type CastSectionProps = {
@@ -52,7 +53,7 @@ export default function CastSection({
             >
               {actor.profile_path ? (
                 <img
-                  src={`${TMDB_IMAGE_BASE}/${TMDB_PROFILE_SIZE}${actor.profile_path.startsWith("/") ? actor.profile_path : `/${actor.profile_path}`}`}
+                  src={buildTmdbImageUrl(actor.profile_path, TMDB_PROFILE_SIZE)}
                   alt={`Photo of ${actor.name}`}
                   className="aspect-2/3 w-full object-cover"
                   loading="lazy"

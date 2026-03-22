@@ -213,6 +213,15 @@ export type ChapterType = {
   movie_id: Int64Type;
 };
 
+// TMDB search result (from POST /api/movies/:id/tmdb-search)
+export type TmdbSearchResultType = {
+  tmdb_id: number;
+  title: string;
+  release_date: string;
+  overview: string;
+  poster_path: string;
+};
+
 // Full movie details including credits and videos (from TMDB API)
 export type MovieDetailsType = {
   id: number;

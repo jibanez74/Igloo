@@ -14,8 +14,10 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
   const thumbUrl = getMediaImageUrl(unwrapString(thumb));
   const [thumbLoadFailed, setThumbLoadFailed] = useState(false);
 
+  // Reset load-failed state when musician or thumb URL changes. Deferred to avoid
+  // synchronous setState in effect (react-hooks/set-state-in-effect).
   useEffect(() => {
-    setThumbLoadFailed(false);
+    queueMicrotask(() => setThumbLoadFailed(false));
   }, [id, thumbUrl]);
 
   const showThumb = thumbUrl && !thumbLoadFailed;

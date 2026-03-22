@@ -13,18 +13,21 @@ import {
   Info,
   Radio,
   Settings2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
 } from "@/lib/query-opts";
 import {
   TMDB_BACKDROP_SIZE,
-  TMDB_IMAGE_BASE,
   TMDB_LOGO_SIZE,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
@@ -32,8 +35,11 @@ import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
 import CastSection from "@/components/CastSection";
 import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
 import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
+import EditMovieDialog from "@/components/EditMovieDialog";
+import DeleteMovieDialog from "@/components/DeleteMovieDialog";
 import {
   DEFAULT_PLAYBACK_SETTINGS,
+  getDefaultMode,
   type PlaybackSettings,
 } from "@/lib/playback";
 import { buttonVariants } from "@/components/ui/button";
@@ -41,9 +47,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type {
+  AuthUser,
   CastMemberType,
   LibraryMovieDetailsResponse,
 } from "@/types";
@@ -65,12 +73,9 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
   component: MovieDetailsPage,
 });
 
-function buildTmdbUrl(path: string | null, size: string): string {
-  if (!path) return "";
-  return `${TMDB_IMAGE_BASE}/${size}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function libraryCastToCastSection(cast: LibraryMovieDetailsResponse["cast"]): CastMemberType[] {
+function libraryCastToCastSection(
+  cast: LibraryMovieDetailsResponse["cast"],
+): CastMemberType[] {
   return cast.map(c => ({
     id: c.id,
     name: c.artist_name,
@@ -116,12 +121,7 @@ function MovieDetailsPage() {
     );
   }
 
-  return (
-    <LibraryMovieDetailsContent
-      movieId={movieId}
-      payload={payload}
-    />
-  );
+  return <LibraryMovieDetailsContent movieId={movieId} payload={payload} />;
 }
 
 function LibraryMovieDetailsContent({
@@ -133,9 +133,42 @@ function LibraryMovieDetailsContent({
 }) {
   const [technicalDetailsOpen, setTechnicalDetailsOpen] = useState(false);
   const [playbackSettingsOpen, setPlaybackSettingsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const videoStream = techData?.data?.video_streams?.[0];
+  const audioStream = techData?.data?.audio_streams?.[0];
+  const mimeType = techData?.data?.movie?.mime_type;
+  const smartDefault: PlaybackSettings = !videoStream
+    ? DEFAULT_PLAYBACK_SETTINGS
+    : {
+        mode: getDefaultMode(
+          videoStream.codec,
+          audioStream?.codec ?? "",
+          mimeType ?? "",
+          videoStream.height,
+        ),
+        audioTrack: 0,
+      };
+
   const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(
     DEFAULT_PLAYBACK_SETTINGS,
   );
+
+  // Reset to smart default when techData arrives or movieId changes
+  const [prevMovieId, setPrevMovieId] = useState(movieId);
+  const [prevSmartMode, setPrevSmartMode] = useState(smartDefault.mode);
+  if (movieId !== prevMovieId || smartDefault.mode !== prevSmartMode) {
+    setPrevMovieId(movieId);
+    setPrevSmartMode(smartDefault.mode);
+    setPlaybackSettings(smartDefault);
+  }
+
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const user: AuthUser | null =
+    userData?.error === false && userData.data?.user
+      ? (userData.data.user as AuthUser)
+      : null;
 
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;
@@ -154,8 +187,8 @@ function LibraryMovieDetailsContent({
   const budget = unwrapFloat(movie.budget);
   const revenue = unwrapFloat(movie.revenue);
 
-  const posterUrl = buildTmdbUrl(posterPath, TMDB_POSTER_SIZE);
-  const backdropUrl = buildTmdbUrl(backdropPath, TMDB_BACKDROP_SIZE);
+  const posterUrl = buildTmdbImageUrl(posterPath, TMDB_POSTER_SIZE);
+  const backdropUrl = buildTmdbImageUrl(backdropPath, TMDB_BACKDROP_SIZE);
 
   const releaseYear =
     year ?? (releaseDateStr ? new Date(releaseDateStr).getFullYear() : null);
@@ -244,10 +277,7 @@ function LibraryMovieDetailsContent({
             className="aspect-21/9 w-full object-cover object-top"
           />
         ) : (
-          <div
-            className="aspect-21/9 w-full bg-slate-800"
-            aria-hidden="true"
-          />
+          <div className="aspect-21/9 w-full bg-slate-800" aria-hidden="true" />
         )}
         <div
           className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
@@ -327,7 +357,9 @@ function LibraryMovieDetailsContent({
                 <li className="flex items-center gap-1.5 text-slate-300">
                   <Clock className="size-4 text-slate-400" aria-hidden="true" />
                   <time
-                    dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}
+                    dateTime={
+                      runTimeMins != null ? `PT${runTimeMins}M` : undefined
+                    }
                     aria-label={`Duration: ${runtime}`}
                   >
                     {runtime}
@@ -396,7 +428,9 @@ function LibraryMovieDetailsContent({
                   <MoreVertical className="size-4" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onSelect={() => setPlaybackSettingsOpen(true)}>
+                  <DropdownMenuItem
+                    onSelect={() => setPlaybackSettingsOpen(true)}
+                  >
                     <Settings2 className="size-4" aria-hidden="true" />
                     Playback Settings
                   </DropdownMenuItem>
@@ -404,10 +438,30 @@ function LibraryMovieDetailsContent({
                     <Radio className="size-4" aria-hidden="true" />
                     Watch Together
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setTechnicalDetailsOpen(true)}>
+                  {user?.is_admin && (
+                    <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                      <Pencil className="size-4" aria-hidden="true" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onSelect={() => setTechnicalDetailsOpen(true)}
+                  >
                     <Info className="size-4" aria-hidden="true" />
                     Technical Details
                   </DropdownMenuItem>
+                  {user?.is_admin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setDeleteOpen(true)}
+                        className="text-red-400 focus:text-red-300"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -419,11 +473,29 @@ function LibraryMovieDetailsContent({
                 onSave={setPlaybackSettings}
               />
 
+              {user?.is_admin && (
+                <EditMovieDialog
+                  movieId={movieId}
+                  movie={movie}
+                  open={editOpen}
+                  onOpenChange={setEditOpen}
+                />
+              )}
+
               <TechnicalDetailsDialog
                 movieId={movieId}
                 open={technicalDetailsOpen}
                 onOpenChange={setTechnicalDetailsOpen}
               />
+
+              {user?.is_admin && (
+                <DeleteMovieDialog
+                  movieId={movieId}
+                  movieTitle={movie.title}
+                  open={deleteOpen}
+                  onOpenChange={setDeleteOpen}
+                />
+              )}
             </div>
 
             {extra_videos.length > 0 && (
@@ -446,7 +518,9 @@ function LibraryMovieDetailsContent({
                         className="block rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2 text-sm text-amber-200 transition-colors hover:border-amber-500/40 hover:bg-slate-800"
                       >
                         <span className="font-medium">{video.title}</span>
-                        <span className="ml-1 text-slate-400">({video.type})</span>
+                        <span className="ml-1 text-slate-400">
+                          ({video.type})
+                        </span>
                       </Link>
                     </li>
                   ))}
@@ -469,7 +543,10 @@ function LibraryMovieDetailsContent({
 
             {(director || writers.length > 0) && (
               <section className="mt-6" aria-labelledby="crew-heading">
-                <h2 id="crew-heading" className="mb-3 text-xl font-semibold text-white">
+                <h2
+                  id="crew-heading"
+                  className="mb-3 text-xl font-semibold text-white"
+                >
                   Key Crew
                 </h2>
                 <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -506,9 +583,7 @@ function LibraryMovieDetailsContent({
           </div>
         </div>
 
-        {castForSection.length > 0 && (
-          <CastSection cast={castForSection} />
-        )}
+        {castForSection.length > 0 && <CastSection cast={castForSection} />}
 
         <section
           className="mt-10 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4"
@@ -554,9 +629,7 @@ function LibraryMovieDetailsContent({
                 Budget
               </dt>
               <dd className="mt-1 text-white">
-                <data value={budget ?? 0}>
-                  {formatCurrency(budget ?? 0)}
-                </data>
+                <data value={budget ?? 0}>{formatCurrency(budget ?? 0)}</data>
               </dd>
             </div>
             <div
@@ -569,9 +642,7 @@ function LibraryMovieDetailsContent({
                 Revenue
               </dt>
               <dd className="mt-1 text-white">
-                <data value={revenue ?? 0}>
-                  {formatCurrency(revenue ?? 0)}
-                </data>
+                <data value={revenue ?? 0}>{formatCurrency(revenue ?? 0)}</data>
               </dd>
             </div>
           </dl>
@@ -588,7 +659,7 @@ function LibraryMovieDetailsContent({
             <ul className="flex flex-wrap items-center gap-6">
               {production_companies.map(pc => {
                 const logoPath = unwrapString(pc.logo);
-                const logoUrl = buildTmdbUrl(logoPath, TMDB_LOGO_SIZE);
+                const logoUrl = buildTmdbImageUrl(logoPath, TMDB_LOGO_SIZE);
                 return (
                   <li
                     key={pc.id}

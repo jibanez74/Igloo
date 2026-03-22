@@ -6,26 +6,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"igloo/cmd/internal/helpers"
-)
 
-const (
-	hlsSegmentWait      = 120 * time.Second
-	hlsSegmentPoll      = 250 * time.Millisecond
-	playlistContentType = "application/vnd.apple.mpegurl"
-	segmentContentType  = "video/mp4"
+	"github.com/go-chi/chi/v5"
 )
-
-var segmentFilenameRe = regexp.MustCompile(`^segment_\d+\.m4s$`)
 
 // HLSManifest serves GET /api/movies/:id/hls/:profile/playlist.m3u8
-//
 // Returns a complete VOD M3U8 immediately (generated from known duration).
 // All segments are listed upfront with #EXT-X-ENDLIST, so hls.js treats it
 // as on-demand: starts from 0, shows full duration bar, allows seeking.
@@ -58,7 +48,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
 
-	w.Header().Set("Content-Type", playlistContentType)
+	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
@@ -75,7 +65,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := chi.URLParam(r, "filename")
-	if filename != "init.mp4" && !segmentFilenameRe.MatchString(filename) {
+	if !isAllowedHLSFilename(filename) {
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
@@ -91,11 +81,11 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 
 	filePath := filepath.Join(session.TempDir, filename)
 
-	deadline := time.Now().Add(hlsSegmentWait)
+	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
 	pollCount := 0
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
-			w.Header().Set("Content-Type", segmentContentType)
+			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
 			http.ServeFile(w, r, filePath)
 			return
 		}
@@ -115,7 +105,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pollCount++
-		time.Sleep(hlsSegmentPoll)
+		time.Sleep(helpers.HLS_SEGMENT_POLL)
 	}
 
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
@@ -160,17 +150,22 @@ func fileReady(path string) bool {
 // decode errors and infinite retries.
 func segmentComplete(session *HLSSession, filename string) bool {
 	dir := session.TempDir
+	prefix := helpers.HLS_SEGMENT_FILENAME_PREFIX
+	suffix := helpers.HLS_SEGMENT_FILENAME_SUFFIX
 
-	if filename == "init.mp4" {
-		return fileReady(filepath.Join(dir, "segment_0.m4s"))
+	if filename == helpers.HLS_INIT_FILENAME {
+		firstSeg := fmt.Sprintf("%s%d%s", prefix, 0, suffix)
+		return fileReady(filepath.Join(dir, firstSeg))
 	}
 
-	var n int
-	if _, err := fmt.Sscanf(filename, "segment_%d.m4s", &n); err != nil {
+	rest := strings.TrimSuffix(strings.TrimPrefix(filename, prefix), suffix)
+	n, err := strconv.ParseInt(rest, 10, 64)
+	if err != nil || n < 0 {
 		return false
 	}
 
-	if fileReady(filepath.Join(dir, fmt.Sprintf("segment_%d.m4s", n+1))) {
+	nextSeg := fmt.Sprintf("%s%d%s", prefix, n+1, suffix)
+	if fileReady(filepath.Join(dir, nextSeg)) {
 		return true
 	}
 
@@ -179,4 +174,24 @@ func segmentComplete(session *HLSSession, filename string) bool {
 	session.ExitMu.Unlock()
 
 	return exited && fileReady(filepath.Join(dir, filename))
+}
+
+func isAllowedHLSFilename(name string) bool {
+	if name == helpers.HLS_INIT_FILENAME {
+		return true
+	}
+
+	p := helpers.HLS_SEGMENT_FILENAME_PREFIX
+	s := helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	if !strings.HasPrefix(name, p) || !strings.HasSuffix(name, s) {
+		return false
+	}
+
+	n := name[len(p) : len(name)-len(s)]
+	if n == "" {
+		return false
+	}
+
+	_, err := strconv.ParseUint(n, 10, 64)
+	return err == nil
 }

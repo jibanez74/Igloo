@@ -45,6 +45,22 @@ func cleanupHLSSession(session *HLSSession) {
 	}
 }
 
+// evictOtherHLSSessions kills FFmpeg and removes temp files for all cached
+// sessions whose key differs from keepKey.  This prevents hardware-encoder
+// contention (e.g. macOS videotoolbox supports only one concurrent encode).
+func (app *Application) evictOtherHLSSessions(keepKey string) {
+	for key, item := range app.HLSSessionCache.Items() {
+		if key == keepKey {
+			continue
+		}
+		if session, ok := item.Object.(*HLSSession); ok {
+			app.Logger.Info("evicting stale hls session", "key", key)
+			cleanupHLSSession(session)
+		}
+		app.HLSSessionCache.Delete(key)
+	}
+}
+
 // GetOrCreateHLSSession returns a cached session or creates a new one.
 // Uses singleflight to deduplicate concurrent creation for the same key.
 func (app *Application) GetOrCreateHLSSession(
@@ -65,6 +81,8 @@ func (app *Application) GetOrCreateHLSSession(
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
 			return raw.(*HLSSession), nil
 		}
+
+		app.evictOtherHLSSessions(key)
 
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack)
 		if createErr != nil {
@@ -134,6 +152,12 @@ func (app *Application) createHLSSession(
 	copyAudio := audioCodec == "aac"
 	copyVideo := strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
 
+	// Remux always copies video; the frontend only offers this when the
+	// source video codec is browser-compatible (H.264).
+	if profile == helpers.HLS_PROFILE_REMUX {
+		copyVideo = true
+	}
+
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {
 		hwDevice = app.Settings.HardwareAccelerationDevice.String
@@ -147,6 +171,7 @@ func (app *Application) createHLSSession(
 	session := &HLSSession{TempDir: tempDir, DurationSec: durationSec}
 
 	videoCodec := meta.Streams[videoStreams[0]].CodecName
+
 	app.Logger.Info("hls session starting",
 		"movie_id", movieID,
 		"profile", profile,

@@ -39,3 +39,14 @@ export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 export const PLAYLISTS_KEY = "playlists";
 export const PLAYLIST_DETAILS_KEY = "playlist-details";
 export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
+
+// playback constants
+export const STREAM_MODE_IDS = [
+  "direct",
+  "remux",
+  "2160p_16mbps",
+  "1080p_8mbps",
+  "1080p_6mbps",
+  "1080p_4mbps",
+  "720p_3mbps",
+] as const;

@@ -36,15 +36,6 @@ func (q *Queries) AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylist
 	return i, err
 }
 
-const clearPlaylist = `-- name: ClearPlaylist :exec
-DELETE FROM playlist_tracks WHERE playlist_id = ?
-`
-
-func (q *Queries) ClearPlaylist(ctx context.Context, playlistID int64) error {
-	_, err := q.exec(ctx, q.clearPlaylistStmt, clearPlaylist, playlistID)
-	return err
-}
-
 const countPlaylistTracks = `-- name: CountPlaylistTracks :one
 SELECT COUNT(*) as count FROM playlist_tracks WHERE playlist_id = ?
 `

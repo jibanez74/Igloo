@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/helpers"
 )
 
 func setupMockServer(t *testing.T, handler http.HandlerFunc) *musicBrainzClient {
@@ -487,16 +489,17 @@ func TestClearAllCaches(t *testing.T) {
 
 func TestArtistCacheEviction(t *testing.T) {
 	client := New().(*musicBrainzClient)
+	max := helpers.MUSICBRAINZ_ARTIST_MAX_CACHE
 
-	for i := 0; i < 105; i++ {
+	for i := 0; i < max+5; i++ {
 		client.setArtist(
 			string(rune('A'+i%26))+string(rune('0'+i/26)),
 			&ArtistResult{MusicBrainzID: "id"},
 		)
 	}
 
-	if len(client.artistCache) > 100 {
-		t.Errorf("expected cache size <= 100, got %d", len(client.artistCache))
+	if len(client.artistCache) > max {
+		t.Errorf("expected cache size <= %d, got %d", max, len(client.artistCache))
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"igloo/cmd/internal/helpers"
 )
 
 func setupAudioDBMockServer(t *testing.T, handler http.HandlerFunc) *musicBrainzClient {
@@ -205,16 +207,17 @@ func TestAudioDBRateLimiterIndependent(t *testing.T) {
 
 func TestImageCacheEviction(t *testing.T) {
 	client := New().(*musicBrainzClient)
+	max := helpers.MUSICBRAINZ_ARTIST_MAX_CACHE
 
-	for i := 0; i < 105; i++ {
+	for i := 0; i < max+5; i++ {
 		client.setImage(
 			string(rune('A'+i%26))+string(rune('0'+i/26)),
 			"https://example.com/thumb.jpg",
 		)
 	}
 
-	if len(client.imageCache) > 100 {
-		t.Errorf("expected cache size <= 100, got %d", len(client.imageCache))
+	if len(client.imageCache) > max {
+		t.Errorf("expected cache size <= %d, got %d", max, len(client.imageCache))
 	}
 }
 

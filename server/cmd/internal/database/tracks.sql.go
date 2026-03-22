@@ -11,23 +11,6 @@ import (
 	"strings"
 )
 
-const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
-SELECT 1 FROM tracks WHERE file_path = ? AND size = ? LIMIT 1
-`
-
-type CheckTrackUnchangedParams struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-}
-
-// Quick check if track exists with same path and size (likely unchanged)
-func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error) {
-	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT COUNT(*) FROM albums
 `

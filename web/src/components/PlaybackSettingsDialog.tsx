@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import {
-  STREAM_MODES,
   getAvailableModes,
   type StreamModeId,
   type PlaybackSettings,
@@ -49,17 +48,25 @@ export default function PlaybackSettingsDialog({
   const videoStreams = data?.data?.video_streams ?? [];
 
   const sourceHeight = videoStreams[0]?.height ?? 0;
-  const availableModes = getAvailableModes(sourceHeight);
+  const videoCodec = videoStreams[0]?.codec;
+  const audioCodec = audioStreams[0]?.codec;
+  const mimeType = data?.data?.movie?.mime_type;
+  const availableModes = getAvailableModes(
+    sourceHeight,
+    videoCodec,
+    audioCodec,
+    mimeType,
+  );
 
   const [prevOpen, setPrevOpen] = useState(false);
   if (open && !prevOpen) {
     setPrevOpen(true);
-    const modeEntry = STREAM_MODES.find((m) => m.id === settings.mode);
-    const fitsSource =
-      modeEntry &&
-      (modeEntry.maxHeight === 0 ||
-        (sourceHeight > 0 && modeEntry.maxHeight <= sourceHeight));
-    setMode(fitsSource ? settings.mode : "direct");
+    const validIds = availableModes.map(m => m.id) as readonly string[];
+    setMode(
+      validIds.includes(settings.mode)
+        ? settings.mode
+        : (availableModes[0]?.id ?? "direct"),
+    );
     setAudioTrack(settings.audioTrack);
   } else if (!open && prevOpen) {
     setPrevOpen(false);
@@ -85,7 +92,10 @@ export default function PlaybackSettingsDialog({
             <Label htmlFor="video-quality" className="text-slate-200">
               Video Quality
             </Label>
-            <Select value={mode} onValueChange={(v) => setMode(v as StreamModeId)}>
+            <Select
+              value={mode}
+              onValueChange={v => setMode(v as StreamModeId)}
+            >
               <SelectTrigger
                 id="video-quality"
                 className="border-slate-700 bg-slate-800 text-white"
@@ -93,8 +103,12 @@ export default function PlaybackSettingsDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border-slate-700 bg-slate-800">
-                {availableModes.map((m) => (
-                  <SelectItem key={m.id} value={m.id} className="text-slate-200">
+                {availableModes.map(m => (
+                  <SelectItem
+                    key={m.id}
+                    value={m.id}
+                    className="text-slate-200"
+                  >
                     {m.label}
                   </SelectItem>
                 ))}
@@ -108,7 +122,7 @@ export default function PlaybackSettingsDialog({
             </Label>
             <Select
               value={String(audioTrack)}
-              onValueChange={(v) => setAudioTrack(Number(v))}
+              onValueChange={v => setAudioTrack(Number(v))}
             >
               <SelectTrigger
                 id="audio-track"
@@ -118,16 +132,16 @@ export default function PlaybackSettingsDialog({
               </SelectTrigger>
               <SelectContent className="border-slate-700 bg-slate-800">
                 {audioStreams.length > 0 ? (
-                  audioStreams.map((stream) => {
+                  audioStreams.map((stream, index) => {
                     const lang = unwrapString(stream.language);
                     const layout = unwrapString(stream.channel_layout);
                     const label = lang
                       ? `${lang.toUpperCase()} — ${stream.codec} ${layout ?? `${stream.channels}ch`}`
-                      : `Track ${stream.stream_index} — ${stream.codec} ${layout ?? `${stream.channels}ch`}`;
+                      : `Track ${index + 1} — ${stream.codec} ${layout ?? `${stream.channels}ch`}`;
                     return (
                       <SelectItem
                         key={stream.id}
-                        value={String(stream.stream_index)}
+                        value={String(index)}
                         className="text-slate-200"
                       >
                         {label}

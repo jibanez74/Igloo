@@ -10,6 +10,71 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// TmdbSearchMovies searches TMDB by title/year or fetches a single movie by TMDB ID.
+// POST /api/movies/:id/tmdb-search   body: { title, year?, tmdb_id? }
+func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Title  string `json:"title"`
+		Year   int    `json:"year"`
+		TmdbID int    `json:"tmdb_id"`
+	}
+
+	err := helpers.ReadJSON(w, r, &payload, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	if payload.TmdbID > 0 {
+		movie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
+
+		err = app.Tmdb.GetTmdbMovieByID(movie)
+		if err != nil {
+			app.Logger.Error("tmdb get by id failed", "error", err, "tmdb_id", payload.TmdbID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movie from TMDB"))
+			return
+		}
+
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error: false,
+			Data: map[string]any{
+				"results": []tmdb.TmdbMovieSearchResult{tmdb.NewTmdbMovieSearchResult(movie)},
+			},
+		})
+
+		return
+	}
+
+	if payload.Title == "" {
+		helpers.ErrorJSON(w, errors.New("title or tmdb_id is required"), http.StatusBadRequest)
+		return
+	}
+
+	var results []tmdb.TmdbMovie
+
+	if payload.Year > 0 {
+		results, err = app.Tmdb.SearchMoviesByTitleAndYear(payload.Title, payload.Year)
+	} else {
+		results, err = app.Tmdb.SearchMoviesByTitleAndYear(payload.Title)
+	}
+
+	if err != nil {
+		app.Logger.Error("tmdb search failed", "error", err, "title", payload.Title)
+		helpers.ErrorJSON(w, errors.New("TMDB search failed"))
+		return
+	}
+
+	mapped := make([]tmdb.TmdbMovieSearchResult, 0, len(results))
+	for i := range results {
+		mapped = append(mapped, tmdb.NewTmdbMovieSearchResult(&results[i]))
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data:  map[string]any{"results": mapped},
+	})
+}
+
 // GetMoviesInTheaters returns the latest movies currently playing in theaters.
 // The response is limited to a maximum of 12 movies.
 func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Request) {

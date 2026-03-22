@@ -86,6 +86,41 @@ func TestBuildHLSArgs_HWAccelBeforeInput(t *testing.T) {
 	}
 }
 
+func TestBuildHLSArgs_Remux(t *testing.T) {
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, false)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-c:v copy") {
+		t.Error("remux must use -c:v copy")
+	}
+	if !strings.Contains(argStr, "-c:a aac") {
+		t.Error("remux with copyAudio=false must transcode audio to AAC")
+	}
+	for _, forbidden := range []string{"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv", "-hwaccel", "scale="} {
+		if strings.Contains(argStr, forbidden) {
+			t.Errorf("remux must not contain %q in args: %s", forbidden, argStr)
+		}
+	}
+}
+
+func TestBuildHLSArgs_RemuxCopyAudio(t *testing.T) {
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, true)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-c:v copy") {
+		t.Error("remux must use -c:v copy")
+	}
+	if !strings.Contains(argStr, "-c:a copy") {
+		t.Error("remux with copyAudio=true must use -c:a copy")
+	}
+}
+
 func TestBuildHLSArgs_InvalidProfile(t *testing.T) {
 	_, err := BuildHLSArgs("/s", t.TempDir(), "4k_20mbps", 0, 0, "cpu", false, false)
 	if err == nil {

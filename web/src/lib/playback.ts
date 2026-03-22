@@ -1,10 +1,15 @@
+const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
+const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
+const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
+
 export const STREAM_MODES = [
-  { id: "direct", label: "Direct stream", maxHeight: 0 },
-  { id: "2160p_16mbps", label: "HLS 2160p 16 Mbps", maxHeight: 2160 },
-  { id: "1080p_8mbps", label: "HLS 1080p 8 Mbps", maxHeight: 1080 },
-  { id: "1080p_6mbps", label: "HLS 1080p 6 Mbps", maxHeight: 1080 },
-  { id: "1080p_4mbps", label: "HLS 1080p 4 Mbps", maxHeight: 1080 },
-  { id: "720p_3mbps", label: "HLS 720p 3 Mbps", maxHeight: 720 },
+  { id: "direct", label: "Direct Play", type: "direct", maxHeight: 0 },
+  { id: "remux", label: "Remux", type: "remux", maxHeight: 0 },
+  { id: "2160p_16mbps", label: "HLS 2160p 16 Mbps", type: "transcode", maxHeight: 2160 },
+  { id: "1080p_8mbps", label: "HLS 1080p 8 Mbps", type: "transcode", maxHeight: 1080 },
+  { id: "1080p_6mbps", label: "HLS 1080p 6 Mbps", type: "transcode", maxHeight: 1080 },
+  { id: "1080p_4mbps", label: "HLS 1080p 4 Mbps", type: "transcode", maxHeight: 1080 },
+  { id: "720p_3mbps", label: "HLS 720p 3 Mbps", type: "transcode", maxHeight: 720 },
 ] as const;
 
 export type StreamModeId = (typeof STREAM_MODES)[number]["id"];
@@ -19,8 +24,81 @@ export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   audioTrack: 0,
 };
 
-export function getAvailableModes(sourceHeight: number) {
-  return STREAM_MODES.filter(
-    (m) => m.maxHeight === 0 || (sourceHeight > 0 && m.maxHeight <= sourceHeight),
+function isVideoDirectPlayable(codec: string): boolean {
+  return BROWSER_COMPATIBLE_VIDEO_CODECS.includes(codec.toLowerCase());
+}
+
+function isAudioDirectPlayable(codec: string): boolean {
+  return BROWSER_COMPATIBLE_AUDIO_CODECS.includes(codec.toLowerCase());
+}
+
+function isContainerDirectPlayable(mimeType: string): boolean {
+  return BROWSER_COMPATIBLE_MIME_TYPES.includes(mimeType.toLowerCase());
+}
+
+/**
+ * Returns the stream modes available for a given source.
+ *
+ * When codec/container info is provided the list is filtered:
+ * - "direct" only when video + audio + container are all browser-compatible
+ * - "remux" only when the video codec is H.264 (copy-safe for HLS fMP4)
+ * - transcode profiles filtered by source resolution as before
+ *
+ * Without codec info (pre-techData load), all modes are returned so the
+ * dialog can render immediately.
+ */
+export function getAvailableModes(
+  sourceHeight: number,
+  videoCodec?: string,
+  audioCodec?: string,
+  mimeType?: string,
+) {
+  const hasCodecInfo = videoCodec !== undefined;
+
+  return STREAM_MODES.filter((m) => {
+    if (m.type === "direct") {
+      if (!hasCodecInfo) return true;
+      return (
+        isVideoDirectPlayable(videoCodec) &&
+        isAudioDirectPlayable(audioCodec ?? "") &&
+        isContainerDirectPlayable(mimeType ?? "")
+      );
+    }
+    if (m.type === "remux") {
+      if (!hasCodecInfo) return true;
+      return isVideoDirectPlayable(videoCodec);
+    }
+    // transcode — filter by resolution
+    return m.maxHeight === 0 || (sourceHeight > 0 && m.maxHeight <= sourceHeight);
+  });
+}
+
+/**
+ * Picks the best default mode based on the movie's codecs and container.
+ *
+ * - H.264 + AAC + mp4/webm → direct (no processing needed)
+ * - H.264 + non-AAC         → remux  (video copy, audio transcode)
+ * - non-H.264               → best-fit transcode profile for source resolution
+ */
+export function getDefaultMode(
+  videoCodec: string,
+  audioCodec: string,
+  mimeType: string,
+  sourceHeight: number,
+): StreamModeId {
+  if (isVideoDirectPlayable(videoCodec)) {
+    if (isAudioDirectPlayable(audioCodec) && isContainerDirectPlayable(mimeType)) {
+      return "direct";
+    }
+    return "remux";
+  }
+
+  // Non-H.264: pick the highest transcode profile that fits the source
+  const transcodes = STREAM_MODES.filter(
+    (m) => m.type === "transcode" && (m.maxHeight === 0 || m.maxHeight <= sourceHeight),
   );
+  if (transcodes.length > 0) return transcodes[0].id;
+
+  // Fallback: lowest profile
+  return "720p_3mbps";
 }

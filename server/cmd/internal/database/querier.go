@@ -15,9 +15,6 @@ type Querier interface {
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
-	// Quick check if track exists with same path and size (likely unchanged)
-	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error)
-	ClearPlaylist(ctx context.Context, playlistID int64) error
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	// Link a movie to an extra video (trailer/special feature). Idempotent.
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
@@ -31,10 +28,16 @@ type Querier interface {
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAlbum(ctx context.Context, id int64) error
+	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
+	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie
 	DeleteMovieAudioStreams(ctx context.Context, movieID int64) error
+	// Remove all cast entries for a movie (used before re-identifying with TMDB).
+	DeleteMovieCast(ctx context.Context, movieID int64) error
 	// Delete all chapters for a movie
 	DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error
+	// Remove all crew entries for a movie (used before re-identifying with TMDB).
+	DeleteMovieCrew(ctx context.Context, movieID int64) error
 	// Remove all extra-video links for a movie (e.g. before re-scanning).
 	DeleteMovieExtraVideos(ctx context.Context, movieID int64) error
 	// Remove all genre links for a movie
@@ -62,7 +65,6 @@ type Querier interface {
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
 	GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, error)
-	GetAlbumsWithMissingCovers(ctx context.Context) ([]Album, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -79,7 +81,6 @@ type Querier interface {
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
-	GetLikedTracksByUserID(ctx context.Context, userID int64) ([]GetLikedTracksByUserIDRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
 	// When multiple rows share the same tmdb_id, returns the one with smallest id.
 	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (Movie, error)
@@ -150,6 +151,9 @@ type Querier interface {
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error
+	// Dedicated UPDATE for movie metadata (used by Edit feature).
+	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
+	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMusicianThumb(ctx context.Context, arg UpdateMusicianThumbParams) error
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error

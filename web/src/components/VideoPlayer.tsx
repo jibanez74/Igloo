@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 import type { RefObject } from "react";
 
@@ -7,7 +7,7 @@ type VideoPlayerProps = {
   src: string;
   title: string;
   isFullscreen?: boolean;
-  onError: () => void;
+  onError: (message: string) => void;
 };
 
 function isHLSUrl(url: string): boolean {
@@ -32,8 +32,6 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
-  const stableOnError = useCallback(onError, []);
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -46,14 +44,35 @@ export default function VideoPlayer({
         manifestLoadingTimeOut: 120_000,
         levelLoadingTimeOut: 120_000,
         fragLoadingTimeOut: 120_000,
+        // Evict buffered data that falls > 30 s behind the playhead.
+        // Without this, high-bitrate remux streams (~30 Mbps) fill the
+        // browser SourceBuffer quota and trigger QuotaExceededError,
+        // causing hls.js to retry the same segment endlessly.
+        backBufferLength: 30,
       });
       hlsRef.current = hls;
 
       hls.loadSource(src);
       hls.attachMedia(video);
 
+      let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) stableOnError();
+        if (!data.fatal) return;
+
+        if (data.type === "mediaError" && !mediaRecoveryAttempted) {
+          mediaRecoveryAttempted = true;
+          hls.recoverMediaError();
+          return;
+        }
+
+        const detail = data.details ?? "unknown error";
+        if (data.type === "networkError") {
+          onError(`Network error loading stream (${detail}).`);
+        } else if (data.type === "mediaError") {
+          onError(`The browser could not decode this stream (${detail}).`);
+        } else {
+          onError(`Stream error: ${detail}`);
+        }
       });
 
       return () => {
@@ -68,7 +87,7 @@ export default function VideoPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef, stableOnError]);
+  }, [src, videoRef, onError]);
 
   return (
     <div

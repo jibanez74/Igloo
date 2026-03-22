@@ -30,9 +30,20 @@ func BuildHLSArgs(
 	if !helpers.IsAllowedHLSProfile(profile) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", profile)
 	}
-	cfg, ok := helpers.HLSProfileConfigs[profile]
-	if !ok {
-		return nil, fmt.Errorf("unknown HLS profile: %s", profile)
+
+	// Remux forces video copy — no profile config needed.
+	if profile == helpers.HLS_PROFILE_REMUX {
+		copyVideo = true
+	}
+
+	// Transcode profiles need resolution/bitrate config.
+	var cfg helpers.HLSProfileConfig
+	if !copyVideo {
+		var ok bool
+		cfg, ok = helpers.HLSProfileConfigs[profile]
+		if !ok {
+			return nil, fmt.Errorf("unknown HLS profile: %s", profile)
+		}
 	}
 
 	// --- global + input ---

@@ -7,7 +7,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 )
 
 const getLikedTrackIDsByUserID = `-- name: GetLikedTrackIDsByUserID :many
@@ -29,88 +28,6 @@ func (q *Queries) GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([
 			return nil, err
 		}
 		items = append(items, track_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getLikedTracksByUserID = `-- name: GetLikedTracksByUserID :many
-SELECT
-  t.id,
-  t.title,
-  t.sort_title,
-  t.duration,
-  t.codec,
-  t.bit_rate,
-  t.file_path,
-  t.track_index,
-  t.disc,
-  a.id as album_id,
-  a.title as album_title,
-  a.cover as album_cover,
-  m.id as musician_id,
-  m.name as musician_name,
-  ult.created_at as liked_at
-FROM user_liked_tracks ult
-INNER JOIN tracks t ON ult.track_id = t.id
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
-WHERE ult.user_id = ?
-ORDER BY ult.created_at DESC
-`
-
-type GetLikedTracksByUserIDRow struct {
-	ID           int64          `json:"id"`
-	Title        string         `json:"title"`
-	SortTitle    string         `json:"sort_title"`
-	Duration     int64          `json:"duration"`
-	Codec        string         `json:"codec"`
-	BitRate      int64          `json:"bit_rate"`
-	FilePath     string         `json:"file_path"`
-	TrackIndex   int64          `json:"track_index"`
-	Disc         int64          `json:"disc"`
-	AlbumID      sql.NullInt64  `json:"album_id"`
-	AlbumTitle   sql.NullString `json:"album_title"`
-	AlbumCover   sql.NullString `json:"album_cover"`
-	MusicianID   sql.NullInt64  `json:"musician_id"`
-	MusicianName sql.NullString `json:"musician_name"`
-	LikedAt      string         `json:"liked_at"`
-}
-
-func (q *Queries) GetLikedTracksByUserID(ctx context.Context, userID int64) ([]GetLikedTracksByUserIDRow, error) {
-	rows, err := q.query(ctx, q.getLikedTracksByUserIDStmt, getLikedTracksByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetLikedTracksByUserIDRow{}
-	for rows.Next() {
-		var i GetLikedTracksByUserIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.SortTitle,
-			&i.Duration,
-			&i.Codec,
-			&i.BitRate,
-			&i.FilePath,
-			&i.TrackIndex,
-			&i.Disc,
-			&i.AlbumID,
-			&i.AlbumTitle,
-			&i.AlbumCover,
-			&i.MusicianID,
-			&i.MusicianName,
-			&i.LikedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

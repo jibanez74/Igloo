@@ -18,8 +18,8 @@ type NullableFloat64Like = { Valid: boolean; Float64: number };
  * Use for poster_path, backdrop_path, and any DB/API string that may be nullable.
  *
  * @example
- * const path = unwrapString(movie.poster_path);
- * const url = path ? `${TMDB_IMAGE_BASE}/${size}${path.startsWith("/") ? path : `/${path}`}` : "";
+ * import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+ * const url = buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE);
  */
 export function unwrapString(
   value: NullableStringLike | string | null | undefined,

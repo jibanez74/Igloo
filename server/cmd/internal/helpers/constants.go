@@ -49,6 +49,7 @@ const (
 	TMDB_YEAR_MATCH_SCORE = 10000.0
 
 	// HLS encoding profile IDs (allowed list in hls_profiles.go; used in URLs and validation).
+	HLS_PROFILE_REMUX        = "remux"
 	HLS_PROFILE_2160P_16MBPS = "2160p_16mbps"
 	HLS_PROFILE_1080P_8MBPS  = "1080p_8mbps"
 	HLS_PROFILE_1080P_6MBPS  = "1080p_6mbps"
@@ -56,7 +57,16 @@ const (
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
 
 	// HLS transcoding
-	HLS_SEGMENT_TIME_SEC  = 4                    // segment duration in seconds for fMP4 HLS
-	HLS_STDERR_TAIL_LINES = 20                   // lines of FFmpeg stderr kept for error reporting
-	HLS_SESSION_TTL       = 30 * time.Minute     // TTL for cached HLS session (eviction + cleanup)
+	HLS_SEGMENT_TIME_SEC  = 4                // segment duration in seconds for fMP4 HLS
+	HLS_STDERR_TAIL_LINES = 20               // lines of FFmpeg stderr kept for error reporting
+	HLS_SESSION_TTL       = 30 * time.Minute // TTL for cached HLS session (eviction + cleanup)
+
+	// HLS HTTP: manifest polling, response headers, and fMP4 filenames (match FFmpeg output)
+	HLS_SEGMENT_WAIT              = 120 * time.Second
+	HLS_SEGMENT_POLL              = 250 * time.Millisecond
+	HLS_PLAYLIST_CONTENT_TYPE     = "application/vnd.apple.mpegurl"
+	HLS_SEGMENT_HTTP_CONTENT_TYPE = "video/mp4"
+	HLS_INIT_FILENAME             = "init.mp4"
+	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
+	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
 )

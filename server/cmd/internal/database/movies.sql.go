@@ -89,6 +89,18 @@ func (q *Queries) CreateMovieProductionCompany(ctx context.Context, arg CreateMo
 	return err
 }
 
+const deleteMovie = `-- name: DeleteMovie :exec
+DELETE FROM movies
+WHERE
+  id = ?
+`
+
+// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
+func (q *Queries) DeleteMovie(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.deleteMovieStmt, deleteMovie, id)
+	return err
+}
+
 const deleteMovieAudioStreams = `-- name: DeleteMovieAudioStreams :exec
 DELETE FROM audio_streams
 WHERE
@@ -101,6 +113,18 @@ func (q *Queries) DeleteMovieAudioStreams(ctx context.Context, movieID int64) er
 	return err
 }
 
+const deleteMovieCast = `-- name: DeleteMovieCast :exec
+DELETE FROM cast
+WHERE
+  movie_id = ?
+`
+
+// Remove all cast entries for a movie (used before re-identifying with TMDB).
+func (q *Queries) DeleteMovieCast(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.deleteMovieCastStmt, deleteMovieCast, movieID)
+	return err
+}
+
 const deleteMovieChapters = `-- name: DeleteMovieChapters :exec
 DELETE FROM chapters
 WHERE
@@ -110,6 +134,18 @@ WHERE
 // Delete all chapters for a movie
 func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error {
 	_, err := q.exec(ctx, q.deleteMovieChaptersStmt, deleteMovieChapters, movieID)
+	return err
+}
+
+const deleteMovieCrew = `-- name: DeleteMovieCrew :exec
+DELETE FROM crew
+WHERE
+  movie_id = ?
+`
+
+// Remove all crew entries for a movie (used before re-identifying with TMDB).
+func (q *Queries) DeleteMovieCrew(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.deleteMovieCrewStmt, deleteMovieCrew, movieID)
 	return err
 }
 
@@ -1064,6 +1100,107 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 		&i.ColorTransfer,
 		&i.Language,
 		&i.Title,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateMovie = `-- name: UpdateMovie :one
+UPDATE movies
+SET
+  title = ?,
+  tmdb_id = ?,
+  imdb_id = ?,
+  poster_path = ?,
+  backdrop_path = ?,
+  adult = ?,
+  language = ?,
+  year = ?,
+  release_date = ?,
+  overview = ?,
+  tag_line = ?,
+  certification = ?,
+  critic_rating = ?,
+  audience_rating = ?,
+  revenue = ?,
+  budget = ?,
+  run_time = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE
+  id = ?
+RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+`
+
+type UpdateMovieParams struct {
+	Title          string          `json:"title"`
+	TmdbID         sql.NullInt64   `json:"tmdb_id"`
+	ImdbID         sql.NullString  `json:"imdb_id"`
+	PosterPath     sql.NullString  `json:"poster_path"`
+	BackdropPath   sql.NullString  `json:"backdrop_path"`
+	Adult          bool            `json:"adult"`
+	Language       sql.NullString  `json:"language"`
+	Year           sql.NullInt64   `json:"year"`
+	ReleaseDate    sql.NullString  `json:"release_date"`
+	Overview       sql.NullString  `json:"overview"`
+	TagLine        sql.NullString  `json:"tag_line"`
+	Certification  sql.NullString  `json:"certification"`
+	CriticRating   sql.NullFloat64 `json:"critic_rating"`
+	AudienceRating sql.NullFloat64 `json:"audience_rating"`
+	Revenue        sql.NullFloat64 `json:"revenue"`
+	Budget         sql.NullFloat64 `json:"budget"`
+	RunTime        sql.NullInt64   `json:"run_time"`
+	ID             int64           `json:"id"`
+}
+
+// Dedicated UPDATE for movie metadata (used by Edit feature).
+// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
+func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error) {
+	row := q.queryRow(ctx, q.updateMovieStmt, updateMovie,
+		arg.Title,
+		arg.TmdbID,
+		arg.ImdbID,
+		arg.PosterPath,
+		arg.BackdropPath,
+		arg.Adult,
+		arg.Language,
+		arg.Year,
+		arg.ReleaseDate,
+		arg.Overview,
+		arg.TagLine,
+		arg.Certification,
+		arg.CriticRating,
+		arg.AudienceRating,
+		arg.Revenue,
+		arg.Budget,
+		arg.RunTime,
+		arg.ID,
+	)
+	var i Movie
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.FilePath,
+		&i.FileName,
+		&i.Size,
+		&i.Container,
+		&i.MimeType,
+		&i.Adult,
+		&i.TmdbID,
+		&i.ImdbID,
+		&i.PosterPath,
+		&i.BackdropPath,
+		&i.Language,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Overview,
+		&i.TagLine,
+		&i.Certification,
+		&i.CriticRating,
+		&i.AudienceRating,
+		&i.Revenue,
+		&i.Budget,
+		&i.RunTime,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

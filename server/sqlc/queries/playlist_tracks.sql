@@ -45,6 +45,3 @@ UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?;
 
 -- name: IsTrackInPlaylist :one
 SELECT EXISTS(SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?) as is_in_playlist;
-
--- name: ClearPlaylist :exec
-DELETE FROM playlist_tracks WHERE playlist_id = ?;

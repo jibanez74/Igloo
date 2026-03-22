@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Film, Star, Clock, Calendar, Play } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
-import { TMDB_BACKDROP_SIZE, TMDB_IMAGE_BASE, TMDB_POSTER_SIZE } from "@/lib/constants";
+import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import CastSection from "@/components/CastSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,7 +20,7 @@ function MovieDetailsPage() {
   const movieId = parseInt(id, 10);
 
   const { data, isPending, isError } = useQuery(movieDetailsQueryOpts(movieId));
-    const movie = data?.data?.movie;
+  const movie = data?.data?.movie;
 
   if (isError || (data && data.error)) {
     return (
@@ -55,12 +56,14 @@ function MovieDetailsPage() {
 }
 
 function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
-  const backdropUrl = movie.backdrop_path
-    ? `${TMDB_IMAGE_BASE}/${TMDB_BACKDROP_SIZE}${movie.backdrop_path.startsWith("/") ? movie.backdrop_path : `/${movie.backdrop_path}`}`
-    : "";
-  const posterUrl = movie.poster_path
-    ? `${TMDB_IMAGE_BASE}/${TMDB_POSTER_SIZE}${movie.poster_path.startsWith("/") ? movie.poster_path : `/${movie.poster_path}`}`
-    : "";
+  const backdropUrl = buildTmdbImageUrl(
+    movie.backdrop_path ?? null,
+    TMDB_BACKDROP_SIZE,
+  );
+  const posterUrl = buildTmdbImageUrl(
+    movie.poster_path ?? null,
+    TMDB_POSTER_SIZE,
+  );
 
   const releaseYear = movie.release_date
     ? new Date(movie.release_date).getFullYear()

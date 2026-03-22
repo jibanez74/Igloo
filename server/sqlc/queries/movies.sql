@@ -419,6 +419,51 @@ ORDER BY
   extra_videos.type,
   extra_videos.title;
 
+-- name: UpdateMovie :one
+-- Dedicated UPDATE for movie metadata (used by Edit feature).
+-- Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
+UPDATE movies
+SET
+  title = ?,
+  tmdb_id = ?,
+  imdb_id = ?,
+  poster_path = ?,
+  backdrop_path = ?,
+  adult = ?,
+  language = ?,
+  year = ?,
+  release_date = ?,
+  overview = ?,
+  tag_line = ?,
+  certification = ?,
+  critic_rating = ?,
+  audience_rating = ?,
+  revenue = ?,
+  budget = ?,
+  run_time = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE
+  id = ?
+RETURNING *;
+
+-- name: DeleteMovieCast :exec
+-- Remove all cast entries for a movie (used before re-identifying with TMDB).
+DELETE FROM cast
+WHERE
+  movie_id = ?;
+
+-- name: DeleteMovieCrew :exec
+-- Remove all crew entries for a movie (used before re-identifying with TMDB).
+DELETE FROM crew
+WHERE
+  movie_id = ?;
+
+-- name: DeleteMovie :exec
+-- Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
+DELETE FROM movies
+WHERE
+  id = ?;
+
 -- name: GetVideoStreamsByMovieID :many
 -- Video streams for a movie (for technical details display).
 SELECT

@@ -7,6 +7,7 @@ import type {
   LibraryMovieDetailsResponse,
   MovieDetailsType,
   MovieTechnicalDetailsResponse,
+  TmdbSearchResultType,
   MusicianDetailsResponseType,
   MusicStatsType,
   MusiciansListResponseType,
@@ -40,7 +41,7 @@ const NETWORK_ERROR: ApiFailureType = {
   message: "500 - A network error occurred while processing your request.",
 };
 
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
   method?: HttpMethod;
@@ -168,6 +169,36 @@ export const getMovieDetails = (id: number) =>
 
 export const getMovieTechnicalDetails = (id: number) =>
   apiRequest<MovieTechnicalDetailsResponse>(`/api/movies/${id}/technical-details`);
+
+export const tmdbSearchMovies = (
+  movieId: number,
+  body: { title: string; year?: number; tmdb_id?: number },
+) =>
+  apiRequest<{ results: TmdbSearchResultType[] }>(
+    `/api/movies/${movieId}/tmdb-search`,
+    { method: "POST", body },
+  );
+
+export const identifyMovie = (movieId: number, tmdbId: number) =>
+  apiRequest<Record<string, never>>(`/api/movies/${movieId}/identify`, {
+    method: "PUT",
+    body: { tmdb_id: tmdbId },
+  });
+
+export const updateMovieMetadata = (
+  movieId: number,
+  body: Record<string, unknown>,
+) =>
+  apiRequest<Record<string, never>>(`/api/movies/${movieId}`, {
+    method: "PATCH",
+    body,
+  });
+
+export const deleteMovie = (movieId: number, deleteFile: boolean) =>
+  apiRequest<Record<string, never>>(`/api/movies/${movieId}`, {
+    method: "DELETE",
+    body: { delete_file: deleteFile },
+  });
 
 // ============================================================================
 // Music API - Albums

@@ -29,9 +29,10 @@ func rewritePlaylistURLs(playlist, baseURL string, audioTrack int) string {
 	for _, line := range strings.Split(playlist, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#EXT-X-MAP:") {
+			initName := helpers.HLS_INIT_FILENAME
 			trimmed = strings.Replace(trimmed,
-				`URI="init.mp4"`,
-				fmt.Sprintf(`URI="%sinit.mp4%s"`, baseURL, suffix), 1)
+				fmt.Sprintf(`URI="%s"`, initName),
+				fmt.Sprintf(`URI="%s%s%s"`, baseURL, initName, suffix), 1)
 			b.WriteString(trimmed)
 		} else if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
 			b.WriteString(baseURL + trimmed + suffix)
@@ -68,7 +69,7 @@ func generateVODPlaylist(totalDurationSec float64, baseURL string, audioTrack in
 	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", targetDuration))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")
-	b.WriteString(fmt.Sprintf("#EXT-X-MAP:URI=\"%sinit.mp4%s\"\n", baseURL, suffix))
+	b.WriteString(fmt.Sprintf("#EXT-X-MAP:URI=\"%s%s%s\"\n", baseURL, helpers.HLS_INIT_FILENAME, suffix))
 
 	for i := 0; i < segCount; i++ {
 		dur := segDur
@@ -80,7 +81,7 @@ func generateVODPlaylist(totalDurationSec float64, baseURL string, audioTrack in
 			dur = 0.001
 		}
 		b.WriteString(fmt.Sprintf("#EXTINF:%.6f,\n", dur))
-		b.WriteString(fmt.Sprintf("%ssegment_%d.m4s%s\n", baseURL, i, suffix))
+		b.WriteString(fmt.Sprintf("%s%s%d%s%s\n", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX, suffix))
 	}
 
 	b.WriteString("#EXT-X-ENDLIST\n")
