@@ -27,10 +27,7 @@ import type {
   UserListeningStatsResponseType,
 } from "@/types";
 
-// ============================================================================
 // API Client - Generic request handler
-// ============================================================================
-
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
@@ -54,7 +51,7 @@ type ApiRequestOptions = {
  */
 async function apiRequest<T extends Record<string, unknown>>(
   endpoint: string,
-  options: ApiRequestOptions = {}
+  options: ApiRequestOptions = {},
 ): Promise<ApiResponseType<T>> {
   const { method = "GET", body } = options;
 
@@ -77,10 +74,7 @@ async function apiRequest<T extends Record<string, unknown>>(
   }
 }
 
-// ============================================================================
 // Authentication API
-// ============================================================================
-
 export const login = (email: string, password: string) =>
   apiRequest("/api/auth/login", {
     method: "POST",
@@ -95,10 +89,7 @@ export const logout = () =>
 export const getAuthUser = () =>
   apiRequest<{ user: import("@/types").AuthUser }>("/api/auth/user");
 
-// ============================================================================
 // User Settings API
-// ============================================================================
-
 export const updateUserName = (name: string) =>
   apiRequest("/api/user/name", {
     method: "PUT",
@@ -107,7 +98,7 @@ export const updateUserName = (name: string) =>
 
 export const updateUserPassword = (
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ) =>
   apiRequest("/api/user/password", {
     method: "PUT",
@@ -121,7 +112,7 @@ export const updateUserAvatar = (avatar: string) =>
   });
 
 export const uploadUserAvatar = async (
-  file: File
+  file: File,
 ): Promise<ApiResponseType<{ user: import("@/types").AuthUser }>> => {
   const formData = new FormData();
   formData.append("avatar", file);
@@ -148,10 +139,7 @@ export const deleteUserAccount = () =>
     method: "DELETE",
   });
 
-// ============================================================================
 // Home Page API
-// ============================================================================
-
 export const getLatestAlbums = () =>
   apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
 
@@ -164,11 +152,14 @@ export const getMoviesInTheaters = () =>
 export const getMovieInTheaterDetails = (id: number) =>
   apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`);
 
+// movie details
 export const getMovieDetails = (id: number) =>
   apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
 
 export const getMovieTechnicalDetails = (id: number) =>
-  apiRequest<MovieTechnicalDetailsResponse>(`/api/movies/${id}/technical-details`);
+  apiRequest<MovieTechnicalDetailsResponse>(
+    `/api/movies/${id}/technical-details`,
+  );
 
 export const tmdbSearchMovies = (
   movieId: number,
@@ -200,10 +191,7 @@ export const deleteMovie = (movieId: number, deleteFile: boolean) =>
     body: { delete_file: deleteFile },
   });
 
-// ============================================================================
 // Music API - Albums
-// ============================================================================
-
 export const getAlbumDetails = (id: number) =>
   apiRequest<AlbumDetailsResponseType>(`/api/music/albums/details/${id}`);
 
@@ -214,7 +202,7 @@ export const deleteAlbum = (id: number) =>
 
 export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
   apiRequest<AlbumsListResponseType>(
-    `/api/music/albums?page=${page}&per_page=${perPage}`
+    `/api/music/albums?page=${page}&per_page=${perPage}`,
   );
 
 // ============================================================================
@@ -223,18 +211,18 @@ export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
 
 export const getTracksPaginated = (limit: number, offset: number) =>
   apiRequest<TracksListResponseType>(
-    `/api/music/tracks?limit=${limit}&offset=${offset}`
+    `/api/music/tracks?limit=${limit}&offset=${offset}`,
   );
 
 export const getShuffleTracks = (limit: number = 50) =>
   apiRequest<ShuffleTracksResponseType>(
-    `/api/music/tracks/shuffle?limit=${limit}`
+    `/api/music/tracks/shuffle?limit=${limit}`,
   );
 
 export const toggleLikeTrack = (trackId: number) =>
   apiRequest<{ track_id: number; is_liked: boolean }>(
     `/api/music/tracks/${trackId}/like`,
-    { method: "POST" }
+    { method: "POST" },
   );
 
 export const getLikedTrackIds = () =>
@@ -246,7 +234,7 @@ export const getLikedTrackIds = () =>
 
 export const getMusiciansPaginated = (page: number, perPage: number = 24) =>
   apiRequest<MusiciansListResponseType>(
-    `/api/music/musicians?page=${page}&per_page=${perPage}`
+    `/api/music/musicians?page=${page}&per_page=${perPage}`,
   );
 
 export const getMusicianDetails = (id: number) =>
@@ -271,7 +259,7 @@ export const getPlaylistDetails = (id: number) =>
 
 export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
   apiRequest<PlaylistTracksResponseType>(
-    `/api/music/playlists/${id}/tracks?limit=${limit}&offset=${offset}`
+    `/api/music/playlists/${id}/tracks?limit=${limit}&offset=${offset}`,
   );
 
 export const createPlaylist = (data: {
@@ -286,7 +274,7 @@ export const createPlaylist = (data: {
 
 export const updatePlaylist = (
   id: number,
-  data: { name: string; description?: string; is_public?: boolean }
+  data: { name: string; description?: string; is_public?: boolean },
 ) =>
   apiRequest<{ playlist: PlaylistSummaryType }>(`/api/music/playlists/${id}`, {
     method: "PUT",
@@ -304,13 +292,13 @@ export const addTracksToPlaylist = (playlistId: number, trackIds: number[]) =>
     {
       method: "POST",
       body: { track_ids: trackIds },
-    }
+    },
   );
 
 export const removeTrackFromPlaylist = (playlistId: number, trackId: number) =>
   apiRequest<Record<string, never>>(
     `/api/music/playlists/${playlistId}/tracks/${trackId}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 
 export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
@@ -319,7 +307,7 @@ export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
     {
       method: "PUT",
       body: { track_ids: trackIds },
-    }
+    },
   );
 
 // ============================================================================
@@ -329,7 +317,7 @@ export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
 export const recordPlayEvent = (
   trackId: number,
   durationPlayed: number,
-  completed: boolean
+  completed: boolean,
 ) =>
   apiRequest<{ recorded: boolean }>("/api/music/user-stats/play", {
     method: "POST",
@@ -345,27 +333,27 @@ export const getUserListeningStats = () =>
 
 export const getUserTopTracks = (limit: number = 20, offset: number = 0) =>
   apiRequest<TopTracksResponseType>(
-    `/api/music/user-stats/top-tracks?limit=${limit}&offset=${offset}`
+    `/api/music/user-stats/top-tracks?limit=${limit}&offset=${offset}`,
   );
 
 export const getUserTopMusicians = (limit: number = 10, offset: number = 0) =>
   apiRequest<TopMusiciansResponseType>(
-    `/api/music/user-stats/top-musicians?limit=${limit}&offset=${offset}`
+    `/api/music/user-stats/top-musicians?limit=${limit}&offset=${offset}`,
   );
 
 export const getUserTopGenres = (limit: number = 10) =>
   apiRequest<TopGenresResponseType>(
-    `/api/music/user-stats/top-genres?limit=${limit}`
+    `/api/music/user-stats/top-genres?limit=${limit}`,
   );
 
 export const getUserTopAlbums = (limit: number = 10, offset: number = 0) =>
   apiRequest<TopAlbumsResponseType>(
-    `/api/music/user-stats/top-albums?limit=${limit}&offset=${offset}`
+    `/api/music/user-stats/top-albums?limit=${limit}&offset=${offset}`,
   );
 
 export const getUserRecentlyPlayed = (limit: number = 20, offset: number = 0) =>
   apiRequest<RecentlyPlayedResponseType>(
-    `/api/music/user-stats/recently-played?limit=${limit}&offset=${offset}`
+    `/api/music/user-stats/recently-played?limit=${limit}&offset=${offset}`,
   );
 
 // ============================================================================
