@@ -1,4 +1,6 @@
 import { STREAM_MODES, type StreamModeId } from "@/lib/constants";
+import { unwrapStringOrUndefined } from "@/lib/nullable";
+import type { AudioStreamType } from "@/types/movies";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
@@ -97,4 +99,105 @@ export function getDefaultMode(
 
   // Fallback: lowest profile
   return "720p_3mbps";
+}
+
+/** Common ISO 639-1 codes → English display names for audio track labels. */
+const AUDIO_LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  pt: "Portuguese",
+  ru: "Russian",
+  hi: "Hindi",
+  nl: "Dutch",
+  sv: "Swedish",
+  no: "Norwegian",
+  da: "Danish",
+  fi: "Finnish",
+  pl: "Polish",
+  tr: "Turkish",
+};
+function formatAudioLanguageName(
+  raw: string | undefined,
+): string | undefined {
+  const code = raw?.trim().toLowerCase();
+  if (!code) return undefined;
+  const two = code.slice(0, 2);
+  if (AUDIO_LANGUAGE_NAMES[two]) return AUDIO_LANGUAGE_NAMES[two];
+  return code.length <= 3
+    ? code.toUpperCase()
+    : code.charAt(0).toUpperCase() + code.slice(1);
+}
+
+/**
+ * Human-readable channel layout (FFmpeg-style layout or channel count).
+ */
+function describePlaybackChannelLayout(
+  channelLayout: string | undefined,
+  channels: number,
+): string {
+  const l = channelLayout?.toLowerCase() ?? "";
+  if (l.includes("mono") || channels === 1) return "Mono";
+  if (l.includes("stereo") || channels === 2) return "Stereo";
+  if (l.includes("5.1") || l.includes("5.1(")) return "5.1 surround";
+  if (l.includes("7.1")) return "7.1 surround";
+  if (l.includes("quad") || l.includes("4.0")) return "Quad";
+  if (channels >= 6) return "Surround";
+  if (channels === 2) return "Stereo";
+  if (channels === 1) return "Mono";
+  return `${channels} channels`;
+}
+
+/**
+ * Dropdown label for an audio stream (language + channel layout; no codec).
+ */
+export function formatPlaybackAudioLabel(
+  stream: AudioStreamType,
+  index: number,
+): string {
+  const langRaw = unwrapStringOrUndefined(stream.language);
+  const langName = formatAudioLanguageName(langRaw);
+  const channels = describePlaybackChannelLayout(
+    unwrapStringOrUndefined(stream.channel_layout),
+    stream.channels,
+  );
+  if (langName) {
+    return `${langName} · ${channels}`;
+  }
+  return `Track ${index + 1} · ${channels}`;
+}
+
+/**
+ * Short summary of what playback will feel like for the chosen mode and track.
+ */
+export function describePlaybackExperience(
+  mode: StreamModeId,
+  audioStream: AudioStreamType | undefined,
+  audioTrackIndex: number,
+): string {
+  const entry = STREAM_MODES.find(m => m.id === mode);
+  const modeType = entry?.type ?? "transcode";
+
+  let videoPart: string;
+  if (modeType === "direct") {
+    videoPart =
+      "Your movie plays directly in the browser with no conversion—the best option when your file already matches what the browser can play.";
+  } else if (modeType === "remux") {
+    videoPart =
+      "The picture stays the same; the soundtrack is adjusted so playback works reliably in your browser.";
+  } else {
+    const label = entry?.label ?? "your selected quality";
+    videoPart = `Video is converted and streamed for smooth playback (${label}). A steady internet connection helps.`;
+  }
+
+  const audioPart = audioStream
+    ? ` You'll hear: ${formatPlaybackAudioLabel(audioStream, audioTrackIndex)}.`
+    : " Default audio is used.";
+
+  return videoPart + audioPart;
 }

@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import {
+  describePlaybackExperience,
+  formatPlaybackAudioLabel,
   getAvailableModes,
   type StreamModeId,
   type PlaybackSettings,
 } from "@/lib/playback";
-import { unwrapString } from "@/lib/nullable";
 import {
   Dialog,
   DialogContent,
@@ -43,8 +44,9 @@ export default function PlaybackSettingsDialog({
   const [mode, setMode] = useState<StreamModeId>(settings.mode);
   const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
 
-  const { data } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const { data, isPending } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
   const audioStreams = data?.data?.audio_streams ?? [];
+  const techLoaded = Boolean(data?.data);
   const videoStreams = data?.data?.video_streams ?? [];
 
   const sourceHeight = videoStreams[0]?.height ?? 0;
@@ -77,20 +79,30 @@ export default function PlaybackSettingsDialog({
     onOpenChange(false);
   };
 
+  const summaryText =
+    isPending && !techLoaded
+      ? "Loading playback options…"
+      : describePlaybackExperience(
+          mode,
+          audioStreams[audioTrack],
+          audioTrack,
+        );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-white">Playback Settings</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Configure video quality and audio track for playback.
+            Choose how the movie is prepared for your browser and which soundtrack
+            to use.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="video-quality" className="text-slate-200">
-              Video Quality
+              Playback
             </Label>
             <Select
               value={mode}
@@ -133,11 +145,7 @@ export default function PlaybackSettingsDialog({
               <SelectContent className="border-slate-700 bg-slate-800">
                 {audioStreams.length > 0 ? (
                   audioStreams.map((stream, index) => {
-                    const lang = unwrapString(stream.language);
-                    const layout = unwrapString(stream.channel_layout);
-                    const label = lang
-                      ? `${lang.toUpperCase()} — ${stream.codec} ${layout ?? `${stream.channels}ch`}`
-                      : `Track ${index + 1} — ${stream.codec} ${layout ?? `${stream.channels}ch`}`;
+                    const label = formatPlaybackAudioLabel(stream, index);
                     return (
                       <SelectItem
                         key={stream.id}
@@ -176,6 +184,13 @@ export default function PlaybackSettingsDialog({
             </Select>
           </div>
         </div>
+
+        <p
+          className="mt-1 text-sm/relaxed text-slate-400"
+          aria-live="polite"
+        >
+          {summaryText}
+        </p>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button

@@ -289,7 +289,7 @@ function LibraryMovieDetailsContent({
             src={backdropUrl}
             alt=""
             aria-hidden="true"
-            className="h-44 w-full object-cover object-top sm:h-52 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48 md:aspect-21/9"
+            className="h-44 w-full object-cover object-top sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48"
           />
         ) : (
           <div
@@ -329,7 +329,7 @@ function LibraryMovieDetailsContent({
             <h1
               id="movie-title"
               tabIndex={-1}
-              className="flex flex-col gap-1 text-2xl font-bold text-white outline-none sm:text-3xl sm:gap-0 md:flex-row md:flex-wrap md:items-baseline md:gap-x-3 md:text-4xl lg:text-5xl"
+              className="flex flex-col gap-1 text-2xl font-bold text-white outline-none sm:gap-0 sm:text-3xl md:flex-row md:flex-wrap md:items-baseline md:gap-x-3 md:text-4xl lg:text-5xl"
             >
               <span className="min-w-0">{movie.title}</span>
               {releaseYear != null && (
@@ -538,9 +538,9 @@ function LibraryMovieDetailsContent({
                           videoKey: video.key,
                           returnTo: `/movies/${movieId}`,
                         }}
-                        className="flex min-h-13 flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors hover:border-amber-500/40 hover:bg-slate-800 touch-manipulation sm:min-h-0"
+                        className="flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors hover:border-amber-500/40 hover:bg-slate-800 sm:min-h-0"
                       >
-                        <span className="font-medium leading-snug">
+                        <span className="leading-snug font-medium">
                           {video.title}
                         </span>
                         <span className="mt-0.5 text-slate-400">

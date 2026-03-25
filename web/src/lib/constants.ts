@@ -42,35 +42,45 @@ export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
 
 // playback — single source of truth for stream modes (ids + labels + metadata)
 export const STREAM_MODES = [
-  { id: "direct", label: "Direct Play", type: "direct", maxHeight: 0 },
-  { id: "remux", label: "Remux", type: "remux", maxHeight: 0 },
+  {
+    id: "direct",
+    label: "Original file — plays as-is",
+    type: "direct",
+    maxHeight: 0,
+  },
+  {
+    id: "remux",
+    label: "Original video, adjusted audio",
+    type: "remux",
+    maxHeight: 0,
+  },
   {
     id: "2160p_16mbps",
-    label: "HLS 2160p 16 Mbps",
+    label: "4K — highest quality",
     type: "transcode",
     maxHeight: 2160,
   },
   {
     id: "1080p_8mbps",
-    label: "HLS 1080p 8 Mbps",
+    label: "1080p — best quality",
     type: "transcode",
     maxHeight: 1080,
   },
   {
     id: "1080p_6mbps",
-    label: "HLS 1080p 6 Mbps",
+    label: "1080p — high quality",
     type: "transcode",
     maxHeight: 1080,
   },
   {
     id: "1080p_4mbps",
-    label: "HLS 1080p 4 Mbps",
+    label: "1080p — balanced",
     type: "transcode",
     maxHeight: 1080,
   },
   {
     id: "720p_3mbps",
-    label: "HLS 720p 3 Mbps",
+    label: "720p — lower bandwidth",
     type: "transcode",
     maxHeight: 720,
   },
