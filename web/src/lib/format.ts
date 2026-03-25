@@ -94,3 +94,8 @@ export function formatExtraVideoType(type: string): string {
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
+
+/** API stores `site` as lowercase (`youtube`, `vimeo`, `other`). */
+export function isYouTubeExtraVideoSite(site: string): boolean {
+  return site.trim().toLowerCase() === "youtube";
+}

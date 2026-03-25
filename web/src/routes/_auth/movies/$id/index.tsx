@@ -28,7 +28,12 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { formatCurrency, formatDate, formatExtraVideoType } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatExtraVideoType,
+  isYouTubeExtraVideoSite,
+} from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
@@ -173,6 +178,10 @@ function LibraryMovieDetailsContent({
 
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;
+
+  const youtubeExtraVideos = extra_videos.filter(v =>
+    isYouTubeExtraVideoSite(v.site),
+  );
 
   const posterPath = unwrapString(movie.poster_path);
   const backdropPath = unwrapString(movie.backdrop_path);
@@ -507,7 +516,7 @@ function LibraryMovieDetailsContent({
               )}
             </div>
 
-            {extra_videos.length > 0 && (
+            {youtubeExtraVideos.length > 0 && (
               <section className="mt-6" aria-labelledby="extra-videos-heading">
                 <h2
                   id="extra-videos-heading"
@@ -516,7 +525,7 @@ function LibraryMovieDetailsContent({
                   Extra Videos
                 </h2>
                 <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {extra_videos.map(video => (
+                  {youtubeExtraVideos.map(video => (
                     <li key={video.id}>
                       <Link
                         to="/trailer"
