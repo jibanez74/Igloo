@@ -28,7 +28,7 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatExtraVideoType } from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
@@ -43,6 +43,7 @@ import {
   type PlaybackSettings,
 } from "@/lib/playback";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -222,7 +223,7 @@ function LibraryMovieDetailsContent({
   };
 
   return (
-    <article aria-labelledby="movie-title">
+    <article aria-labelledby="movie-title" className="pb-6 sm:pb-10">
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
@@ -230,7 +231,7 @@ function LibraryMovieDetailsContent({
         aria-label="Skip to section"
         className="sr-only focus-within:not-sr-only"
       >
-        <ul className="mb-4 flex gap-2">
+        <ul className="mb-4 flex flex-wrap gap-2">
           <li>
             <a
               href="#movie-title"
@@ -268,16 +269,19 @@ function LibraryMovieDetailsContent({
         </ul>
       </nav>
 
-      <header className="relative -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-12">
+      <header className="relative -mx-4 sm:-mx-6 lg:-mx-8">
         {backdropUrl ? (
           <img
             src={backdropUrl}
             alt=""
             aria-hidden="true"
-            className="aspect-21/9 w-full object-cover object-top"
+            className="h-44 w-full object-cover object-top sm:h-52 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48 md:aspect-21/9"
           />
         ) : (
-          <div className="aspect-21/9 w-full bg-slate-800" aria-hidden="true" />
+          <div
+            className="h-44 w-full bg-slate-800 sm:h-52 md:aspect-21/9 md:min-h-48"
+            aria-hidden="true"
+          />
         )}
         <div
           className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
@@ -285,15 +289,15 @@ function LibraryMovieDetailsContent({
         />
       </header>
 
-      <div className="relative z-10 -mt-32">
-        <div className="flex min-w-0 flex-col gap-6 md:flex-row lg:gap-8">
-          <figure className="mx-auto min-w-0 shrink-0 md:mx-0">
-            <div className="w-48 overflow-hidden rounded-xl border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-64 lg:w-72">
+      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+        <div className="flex min-w-0 flex-col gap-6 sm:gap-8 md:flex-row md:items-start lg:gap-10">
+          <figure className="mx-auto min-w-0 shrink-0 md:mx-0 md:pt-1">
+            <div className="w-44 overflow-hidden rounded-xl border border-amber-500/20 shadow-2xl shadow-amber-500/10 sm:w-52 md:w-64 lg:w-72">
               {posterUrl ? (
                 <img
                   src={posterUrl}
                   alt={`Movie poster for ${movie.title}`}
-                  className="aspect-2/3 w-full object-cover"
+                  className="block aspect-2/3 w-full rounded-xl object-cover"
                 />
               ) : (
                 <div
@@ -307,15 +311,15 @@ function LibraryMovieDetailsContent({
             </div>
           </figure>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 text-center md:text-left">
             <h1
               id="movie-title"
               tabIndex={-1}
-              className="text-3xl font-bold text-white outline-none md:text-4xl lg:text-5xl"
+              className="flex flex-col gap-1 text-2xl font-bold text-white outline-none sm:text-3xl sm:gap-0 md:flex-row md:flex-wrap md:items-baseline md:gap-x-3 md:text-4xl lg:text-5xl"
             >
-              {movie.title}
+              <span className="min-w-0">{movie.title}</span>
               {releaseYear != null && (
-                <span className="ml-3 font-normal text-slate-400">
+                <span className="font-normal text-slate-400 sm:text-3xl md:text-4xl lg:text-5xl">
                   (
                   <time dateTime={releaseDateStr ?? undefined}>
                     {releaseYear}
@@ -326,13 +330,13 @@ function LibraryMovieDetailsContent({
             </h1>
 
             {tagLine && (
-              <p className="mt-2 text-lg text-slate-400 italic">
+              <p className="mt-2 text-base text-slate-400 italic sm:text-lg">
                 <q>{tagLine}</q>
               </p>
             )}
 
             <ul
-              className="mt-4 flex list-none flex-wrap items-center gap-3"
+              className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 md:justify-start"
               aria-label="Movie details"
             >
               {criticRating != null && criticRating > 0 && (
@@ -381,17 +385,13 @@ function LibraryMovieDetailsContent({
 
             {genres.length > 0 && (
               <ul
-                className="mt-4 flex list-none flex-wrap gap-2"
+                className="mt-4 flex list-none flex-wrap justify-center gap-2 md:justify-start"
                 aria-label={`Genres: ${genres.map(g => g.tag).join(", ")}`}
               >
-                {genres.map((genre, index) => (
+                {genres.map(genre => (
                   <li
                     key={genre.id}
-                    tabIndex={0}
-                    role="listitem"
-                    aria-posinset={index + 1}
-                    aria-setsize={genres.length}
-                    className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm outline-none focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400/50"
+                    className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
                   >
                     {genre.tag}
                   </li>
@@ -399,7 +399,7 @@ function LibraryMovieDetailsContent({
               </ul>
             )}
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 md:justify-start">
               <Link
                 to="/movies/$id/play"
                 params={{ id: String(movieId) }}
@@ -407,14 +407,20 @@ function LibraryMovieDetailsContent({
                   mode: playbackSettings.mode,
                   audio_track: playbackSettings.audioTrack,
                 }}
-                className={buttonVariants({ variant: "accent", size: "lg" })}
+                className={cn(
+                  buttonVariants({ variant: "accent", size: "lg" }),
+                  "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
+                )}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />
                 Play
               </Link>
               <button
                 type="button"
-                className={buttonVariants({ variant: "outline", size: "lg" })}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "min-h-11 touch-manipulation",
+                )}
                 aria-label="Add to likes"
               >
                 <Heart className="size-4" aria-hidden="true" />
@@ -422,7 +428,10 @@ function LibraryMovieDetailsContent({
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  className={buttonVariants({ variant: "outline", size: "lg" })}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "lg" }),
+                    "min-h-11 touch-manipulation",
+                  )}
                   aria-label="More options"
                 >
                   <MoreVertical className="size-4" aria-hidden="true" />
@@ -502,11 +511,11 @@ function LibraryMovieDetailsContent({
               <section className="mt-6" aria-labelledby="extra-videos-heading">
                 <h2
                   id="extra-videos-heading"
-                  className="mb-3 text-xl font-semibold text-white"
+                  className="mb-3 text-lg font-semibold text-white sm:text-xl"
                 >
                   Extra Videos
                 </h2>
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {extra_videos.map(video => (
                     <li key={video.id}>
                       <Link
@@ -515,11 +524,13 @@ function LibraryMovieDetailsContent({
                           videoKey: video.key,
                           returnTo: `/movies/${movieId}`,
                         }}
-                        className="block rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2 text-sm text-amber-200 transition-colors hover:border-amber-500/40 hover:bg-slate-800"
+                        className="flex min-h-13 flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors hover:border-amber-500/40 hover:bg-slate-800 touch-manipulation sm:min-h-0"
                       >
-                        <span className="font-medium">{video.title}</span>
-                        <span className="ml-1 text-slate-400">
-                          ({video.type})
+                        <span className="font-medium leading-snug">
+                          {video.title}
+                        </span>
+                        <span className="mt-0.5 text-slate-400">
+                          ({formatExtraVideoType(video.type)})
                         </span>
                       </Link>
                     </li>
@@ -528,28 +539,28 @@ function LibraryMovieDetailsContent({
               </section>
             )}
 
-            <section className="mt-6" aria-labelledby="overview-heading">
+            <section className="mt-6 text-left" aria-labelledby="overview-heading">
               <h2
                 id="overview-heading"
                 tabIndex={-1}
-                className="mb-2 text-xl font-semibold text-white outline-none"
+                className="mb-2 text-lg font-semibold text-white outline-none sm:text-xl"
               >
                 Overview
               </h2>
-              <p className="leading-relaxed text-slate-300">
+              <p className="text-[15px] leading-relaxed text-slate-300 sm:text-base">
                 {overview || "No overview available."}
               </p>
             </section>
 
             {(director || writers.length > 0) && (
-              <section className="mt-6" aria-labelledby="crew-heading">
+              <section className="mt-6 text-left" aria-labelledby="crew-heading">
                 <h2
                   id="crew-heading"
-                  className="mb-3 text-xl font-semibold text-white"
+                  className="mb-3 text-lg font-semibold text-white sm:text-xl"
                 >
                   Key Crew
                 </h2>
-                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
                   {director && (
                     <div
                       tabIndex={0}
@@ -586,7 +597,7 @@ function LibraryMovieDetailsContent({
         {castForSection.length > 0 && <CastSection cast={castForSection} />}
 
         <section
-          className="mt-10 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4"
+          className="mt-8 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4 sm:mt-10 sm:p-5"
           aria-labelledby="details-heading"
         >
           <h2
@@ -596,7 +607,7 @@ function LibraryMovieDetailsContent({
           >
             Additional Details
           </h2>
-          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+          <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
             <div
               tabIndex={0}
               className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
@@ -649,21 +660,21 @@ function LibraryMovieDetailsContent({
         </section>
 
         {production_companies.length > 0 && (
-          <section className="mt-10" aria-labelledby="companies-heading">
+          <section className="mt-8 sm:mt-10" aria-labelledby="companies-heading">
             <h2
               id="companies-heading"
-              className="mb-4 text-2xl font-semibold text-white"
+              className="mb-4 text-xl font-semibold text-white sm:text-2xl"
             >
               Production Companies
             </h2>
-            <ul className="flex flex-wrap items-center gap-6">
+            <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 md:gap-6">
               {production_companies.map(pc => {
                 const logoPath = unwrapString(pc.logo);
                 const logoUrl = buildTmdbImageUrl(logoPath, TMDB_LOGO_SIZE);
                 return (
                   <li
                     key={pc.id}
-                    className="flex items-center gap-3 rounded-lg border border-amber-500/10 bg-slate-800/50 px-4 py-3"
+                    className="flex min-w-0 items-center gap-3 rounded-lg border border-amber-500/10 bg-slate-800/50 px-4 py-3 sm:max-w-md"
                   >
                     {logoUrl ? (
                       <img

@@ -45,6 +45,7 @@ export function formatTrackDuration(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+// Formats bit rate data obtained from ffprobe scan
 export function formatBitRate(bitRate: number) {
   return `${Math.round(bitRate / 1000)} kbps`;
 }
@@ -68,4 +69,28 @@ export function formatCurrency(amount: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+/** TMDB extra video `type` values → user-facing labels */
+const EXTRA_VIDEO_TYPE_LABELS: Record<string, string> = {
+  trailer: "Trailer",
+  teaser: "Teaser",
+  clip: "Clip",
+  featurette: "Featurette",
+  behind_the_scenes: "Behind the scenes",
+  special_feature: "Special feature",
+  opening_credits: "Opening credits",
+  bloopers: "Bloopers",
+  documentary: "Documentary",
+};
+
+/** Maps TMDB extra video type strings to readable labels; falls back to title-cased text */
+export function formatExtraVideoType(type: string): string {
+  const key = type.trim().toLowerCase().replace(/-/g, "_");
+  if (EXTRA_VIDEO_TYPE_LABELS[key]) return EXTRA_VIDEO_TYPE_LABELS[key];
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }

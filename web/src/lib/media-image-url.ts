@@ -4,10 +4,9 @@
  * Use this for img src when displaying backend-provided image paths.
  * Returns null for empty or invalid values.
  */
-export function getMediaImageUrl(
-  value: string | null | undefined
-): string | null {
+export function getMediaImageUrl(value: string | null | undefined) {
   if (value == null || typeof value !== "string") return null;
+
   const s = value.trim();
   if (!s) return null;
   // Local same-origin path (e.g. /api/static/albums/1.jpg)

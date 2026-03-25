@@ -19,10 +19,10 @@ export default function CastSection({
   const displayedCast = cast.slice(0, maxDisplay);
 
   return (
-    <section className="mt-10" aria-labelledby="cast-heading">
+    <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-2xl font-semibold text-white"
+        className="mb-4 text-xl font-semibold text-white sm:text-2xl"
         tabIndex={-1}
       >
         Cast
@@ -34,7 +34,7 @@ export default function CastSection({
       </p>
 
       <ul
-        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-4 overflow-x-auto px-4 pb-4"
+        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >
