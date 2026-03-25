@@ -7,7 +7,6 @@ import type {
   VideoStreamType,
   AudioStreamType,
   SubtitleType,
-  ChapterType,
 } from "@/types";
 import {
   Dialog,
@@ -32,33 +31,37 @@ function formatRuntime(minutes: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function formatChapterTime(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function SectionHeading({ id, children }: { id: string; children: React.ReactNode }) {
+function SectionHeading({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
   return (
     <h3
       id={id}
-      className="mb-2 text-xs font-semibold tracking-wide text-amber-400/80 uppercase"
+      className="mb-3 text-sm font-semibold tracking-wide text-amber-400/90 uppercase"
     >
       {children}
     </h3>
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
+/** One label/value row — no landmark role; avoids “region” spam in rotor navigation. */
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
   if (!value) return null;
   return (
-    <div className="flex justify-between gap-4 py-1" role="row">
-      <dt className="shrink-0 text-sm text-slate-400">{label}</dt>
-      <dd className="text-right text-sm text-slate-200">{value}</dd>
-    </div>
+    <p className="m-0 flex flex-col gap-0.5 border-b border-slate-700/50 py-2 text-sm last:border-b-0 sm:flex-row sm:justify-between sm:gap-x-4">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-100 sm:text-right">{value}</span>
+    </p>
   );
 }
 
@@ -68,36 +71,51 @@ function VideoStreamCard({ stream }: { stream: VideoStreamType }) {
   const bitDepth = unwrapInt(stream.bit_depth);
   const colorSpace = unwrapString(stream.color_space);
   const language = unwrapString(stream.language);
-
-  const label = language
-    ? `Video stream ${stream.stream_index}, ${language}`
-    : `Video stream ${stream.stream_index}`;
+  const title = unwrapString(stream.title);
+  const headingId = `td-video-title-${stream.id}`;
 
   return (
     <div
-      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-      tabIndex={0}
-      aria-label={label}
+      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      aria-labelledby={headingId}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-medium text-white">
-          Stream {stream.stream_index}
-        </span>
+      <h4
+        id={headingId}
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+      >
+        <span>Video stream {stream.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 uppercase">
+          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
             {language}
           </span>
         )}
+        {title && (
+          <span className="text-sm font-normal text-slate-400">({title})</span>
+        )}
+      </h4>
+      <div className="space-y-0">
+        <DetailRow
+          label="Codec"
+          value={profile ? `${stream.codec} (${profile})` : stream.codec}
+        />
+        <DetailRow
+          label="Resolution"
+          value={`${stream.width}×${stream.height}`}
+        />
+        {aspect && <DetailRow label="Aspect ratio" value={aspect} />}
+        <DetailRow
+          label="Frame rate"
+          value={`${stream.frame_rate.toFixed(2)} fps`}
+        />
+        <DetailRow
+          label="Bit rate"
+          value={
+            stream.bit_rate > 0 ? formatBitRate(stream.bit_rate) : undefined
+          }
+        />
+        {bitDepth != null && <DetailRow label="Bit depth" value={`${bitDepth}-bit`} />}
+        {colorSpace && <DetailRow label="Color space" value={colorSpace} />}
       </div>
-      <dl className="space-y-0.5">
-        <DetailRow label="Codec" value={profile ? `${stream.codec} (${profile})` : stream.codec} />
-        <DetailRow label="Resolution" value={`${stream.width}×${stream.height}`} />
-        {aspect && <DetailRow label="Aspect Ratio" value={aspect} />}
-        <DetailRow label="Frame Rate" value={`${stream.frame_rate.toFixed(2)} fps`} />
-        <DetailRow label="Bit Rate" value={stream.bit_rate > 0 ? formatBitRate(stream.bit_rate) : undefined} />
-        {bitDepth != null && <DetailRow label="Bit Depth" value={`${bitDepth}-bit`} />}
-        {colorSpace && <DetailRow label="Color Space" value={colorSpace} />}
-      </dl>
     </div>
   );
 }
@@ -107,38 +125,54 @@ function AudioStreamCard({ stream }: { stream: AudioStreamType }) {
   const layout = unwrapString(stream.channel_layout);
   const sampleRate = unwrapInt(stream.sample_rate);
   const profile = unwrapString(stream.codec_profile);
-
-  const label = language
-    ? `Audio stream ${stream.stream_index}, ${language}`
-    : `Audio stream ${stream.stream_index}`;
+  const title = unwrapString(stream.title);
+  const headingId = `td-audio-title-${stream.id}`;
 
   return (
     <div
-      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-      tabIndex={0}
-      aria-label={label}
+      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      aria-labelledby={headingId}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-medium text-white">
-          Stream {stream.stream_index}
-        </span>
+      <h4
+        id={headingId}
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+      >
+        <span>Audio stream {stream.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 uppercase">
+          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
             {language}
           </span>
         )}
+        {title && (
+          <span className="text-sm font-normal text-slate-400">({title})</span>
+        )}
+      </h4>
+      <div className="space-y-0">
+        <DetailRow
+          label="Codec"
+          value={profile ? `${stream.codec} (${profile})` : stream.codec}
+        />
+        <DetailRow
+          label="Channels"
+          value={
+            layout ? `${stream.channels} (${layout})` : String(stream.channels)
+          }
+        />
+        {sampleRate != null && (
+          <DetailRow label="Sample rate" value={`${sampleRate} Hz`} />
+        )}
+        <DetailRow
+          label="Bit rate"
+          value={
+            stream.bit_rate > 0 ? formatBitRate(stream.bit_rate) : undefined
+          }
+        />
       </div>
-      <dl className="space-y-0.5">
-        <DetailRow label="Codec" value={profile ? `${stream.codec} (${profile})` : stream.codec} />
-        <DetailRow label="Channels" value={layout ? `${stream.channels} (${layout})` : String(stream.channels)} />
-        {sampleRate != null && <DetailRow label="Sample Rate" value={`${sampleRate} Hz`} />}
-        <DetailRow label="Bit Rate" value={stream.bit_rate > 0 ? formatBitRate(stream.bit_rate) : undefined} />
-      </dl>
     </div>
   );
 }
 
-function SubtitleRow({ subtitle }: { subtitle: SubtitleType }) {
+function SubtitleCard({ subtitle }: { subtitle: SubtitleType }) {
   const language = unwrapString(subtitle.language);
   const title = unwrapString(subtitle.title);
   const flags = [
@@ -146,49 +180,34 @@ function SubtitleRow({ subtitle }: { subtitle: SubtitleType }) {
     subtitle.is_forced && "Forced",
   ].filter(Boolean);
 
-  const parts = [`Stream ${subtitle.stream_index}`];
-  if (language) parts.push(language);
-  if (title) parts.push(title);
-  if (flags.length > 0) parts.push(flags.join(", "));
-  const label = parts.join(", ");
+  const headingId = `td-sub-title-${subtitle.id}`;
 
   return (
     <div
-      className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-      tabIndex={0}
-      aria-label={label}
+      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      aria-labelledby={headingId}
     >
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-white">Stream {subtitle.stream_index}</span>
+      <h4
+        id={headingId}
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+      >
+        <span>Subtitle stream {subtitle.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 uppercase">
+          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
             {language}
           </span>
         )}
-        {title && <span className="text-sm text-slate-400">{title}</span>}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500">{subtitle.codec}</span>
+        {title && (
+          <span className="text-sm font-normal text-slate-400">({title})</span>
+        )}
+      </h4>
+      <div className="space-y-0">
+        <DetailRow label="Codec" value={subtitle.codec} />
         {flags.length > 0 && (
-          <span className="text-xs text-amber-400">{flags.join(", ")}</span>
+          <DetailRow label="Flags" value={flags.join(", ")} />
         )}
       </div>
-    </div>
-  );
-}
-
-function ChapterRow({ chapter }: { chapter: ChapterType }) {
-  return (
-    <div
-      className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
-      tabIndex={0}
-      aria-label={`${chapter.title || "Untitled"} at ${formatChapterTime(chapter.start_time)}`}
-    >
-      <span className="text-sm text-white">{chapter.title || "Untitled"}</span>
-      <span className="font-mono text-xs text-slate-500">
-        {formatChapterTime(chapter.start_time)}
-      </span>
-    </div>
+        </div>
   );
 }
 
@@ -201,7 +220,7 @@ export default function TechnicalDetailsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const firstSectionRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   const { data, isPending, isError } = useQuery(
     movieTechnicalDetailsQueryOpts(movieId),
@@ -212,7 +231,11 @@ export default function TechnicalDetailsDialog({
 
   const handleOpenAutoFocus = useCallback((e: Event) => {
     e.preventDefault();
-    firstSectionRef.current?.focus();
+    // Focus the title first so SR starts at the top (Close is last in DOM).
+    // Do not focus body content here: its ref is missing while data is loading.
+    queueMicrotask(() => {
+      titleRef.current?.focus();
+    });
   }, []);
 
   return (
@@ -222,102 +245,148 @@ export default function TechnicalDetailsDialog({
         onOpenAutoFocus={handleOpenAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Technical Details</DialogTitle>
+          <DialogTitle
+            ref={titleRef}
+            id="technical-details-dialog-title"
+            tabIndex={-1}
+            className="text-white outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          >
+            Technical details
+          </DialogTitle>
           <DialogDescription className="text-slate-400">
-            File and stream information from the media scanner.
+            Scanner-detected file and stream information. Each line below states
+            what is being described, then its value—for example, file size and
+            the container format. Use headings to move between sections.
           </DialogDescription>
         </DialogHeader>
 
         {isPending && (
-          <div className="flex justify-center py-8">
-            <Spinner className="size-6 text-amber-400" />
+          <div className="flex justify-center py-8" role="status" aria-live="polite">
+            <Spinner className="size-6 text-amber-400" aria-hidden="true" />
+            <span className="sr-only">Loading technical details</span>
           </div>
         )}
 
         {isError && (
-          <div className="py-8 text-center text-sm text-red-400">
+          <div className="py-8 text-center text-sm text-red-400" role="alert">
             Failed to load technical details.
           </div>
         )}
 
         {details && (
-          <div className="space-y-6">
-            {/* File Info */}
+          <div className="space-y-8">
             <section
-              ref={firstSectionRef}
-              tabIndex={0}
-              aria-labelledby="td-file"
-              className="outline-none focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-amber-500/60"
+              aria-label="File"
+              className="rounded-lg outline-none"
             >
               <SectionHeading id="td-file">File</SectionHeading>
               <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-                <dl className="space-y-0.5">
-                  <DetailRow label="Filename" value={details.movie.file_name} />
-                  <DetailRow label="Size" value={formatFileSize(details.movie.size)} />
-                  <DetailRow label="Container" value={details.movie.container.toUpperCase()} />
-                  <DetailRow label="MIME Type" value={details.movie.mime_type} />
+                <div className="space-y-0">
+                  <DetailRow
+                    label="File name"
+                    value={details.movie.file_name}
+                  />
+                  <DetailRow
+                    label="File size"
+                    value={formatFileSize(details.movie.size)}
+                  />
+                  <DetailRow
+                    label="Container format"
+                    value={details.movie.container.toUpperCase()}
+                  />
+                  <DetailRow
+                    label="Media type (MIME)"
+                    value={details.movie.mime_type}
+                  />
                   {runTime != null && (
-                    <DetailRow label="Duration" value={formatRuntime(runTime)} />
+                    <DetailRow
+                      label="Duration"
+                      value={formatRuntime(runTime)}
+                    />
                   )}
-                </dl>
+                </div>
               </div>
             </section>
 
-            {/* Video Streams */}
             {details.video_streams.length > 0 && (
-              <section aria-labelledby="td-video">
+              <section
+                aria-label={
+                  details.video_streams.length > 1
+                    ? `Video streams, ${details.video_streams.length} streams`
+                    : "Video streams"
+                }
+              >
                 <SectionHeading id="td-video">
-                  Video{details.video_streams.length > 1 ? ` (${details.video_streams.length})` : ""}
+                  Video streams
+                  {details.video_streams.length > 1
+                    ? ` (${details.video_streams.length})`
+                    : ""}
                 </SectionHeading>
-                <div className="space-y-2">
-                  {details.video_streams.map((s) => (
-                    <VideoStreamCard key={s.id} stream={s} />
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {details.video_streams.map(s => (
+                    <li key={s.id}>
+                      <VideoStreamCard stream={s} />
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
             )}
 
-            {/* Audio Streams */}
             {details.audio_streams.length > 0 && (
-              <section aria-labelledby="td-audio">
+              <section
+                aria-label={
+                  details.audio_streams.length > 1
+                    ? `Audio streams, ${details.audio_streams.length} streams`
+                    : "Audio streams"
+                }
+              >
                 <SectionHeading id="td-audio">
-                  Audio{details.audio_streams.length > 1 ? ` (${details.audio_streams.length})` : ""}
+                  Audio streams
+                  {details.audio_streams.length > 1
+                    ? ` (${details.audio_streams.length})`
+                    : ""}
                 </SectionHeading>
-                <div className="space-y-2">
-                  {details.audio_streams.map((s) => (
-                    <AudioStreamCard key={s.id} stream={s} />
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {details.audio_streams.map(s => (
+                    <li key={s.id}>
+                      <AudioStreamCard stream={s} />
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
             )}
 
-            {/* Subtitles */}
             {details.subtitles.length > 0 && (
-              <section aria-labelledby="td-subtitles">
+              <section
+                aria-label={
+                  details.subtitles.length > 1
+                    ? `Subtitle streams, ${details.subtitles.length} streams`
+                    : "Subtitle streams"
+                }
+              >
                 <SectionHeading id="td-subtitles">
-                  Subtitles{details.subtitles.length > 1 ? ` (${details.subtitles.length})` : ""}
+                  Subtitle streams
+                  {details.subtitles.length > 1
+                    ? ` (${details.subtitles.length})`
+                    : ""}
                 </SectionHeading>
-                <div className="space-y-1.5">
-                  {details.subtitles.map((s) => (
-                    <SubtitleRow key={s.id} subtitle={s} />
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {details.subtitles.map(s => (
+                    <li key={s.id}>
+                      <SubtitleCard subtitle={s} />
+                    </li>
                   ))}
-                </div>
+                </ul>
               </section>
             )}
 
-            {/* Chapters */}
-            {details.chapters.length > 0 && (
-              <section aria-labelledby="td-chapters">
-                <SectionHeading id="td-chapters">
-                  Chapters ({details.chapters.length})
-                </SectionHeading>
-                <div className="space-y-1.5">
-                  {details.chapters.map((c) => (
-                    <ChapterRow key={c.id} chapter={c} />
-                  ))}
-                </div>
-              </section>
-            )}
+            {details.video_streams.length === 0 &&
+              details.audio_streams.length === 0 &&
+              details.subtitles.length === 0 && (
+                <p className="text-sm text-slate-400">
+                  No video, audio, or subtitle streams were reported for this file.
+                </p>
+              )}
           </div>
         )}
       </DialogContent>
