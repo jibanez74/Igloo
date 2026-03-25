@@ -29,6 +29,7 @@ import {
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
+  extraVideoTypeSortRank,
   formatCurrency,
   formatDate,
   formatExtraVideoType,
@@ -179,8 +180,12 @@ function LibraryMovieDetailsContent({
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;
 
-  const youtubeExtraVideos = extra_videos.filter(v =>
-    isYouTubeExtraVideoSite(v.site),
+  const youtubeExtraVideos = [...extra_videos.filter(v => isYouTubeExtraVideoSite(v.site))].sort(
+    (a, b) => {
+      const byType = extraVideoTypeSortRank(a.type) - extraVideoTypeSortRank(b.type);
+      if (byType !== 0) return byType;
+      return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+    },
   );
 
   const posterPath = unwrapString(movie.poster_path);

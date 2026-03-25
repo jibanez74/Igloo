@@ -99,3 +99,21 @@ export function formatExtraVideoType(type: string): string {
 export function isYouTubeExtraVideoSite(site: string): boolean {
   return site.trim().toLowerCase() === "youtube";
 }
+
+/**
+ * Sort order for library extra video `type` (see `mapTmdbVideoType` on the server):
+ * trailers first, then special features, then other/unknown.
+ */
+export function extraVideoTypeSortRank(type: string): number {
+  const key = type.trim().toLowerCase().replace(/-/g, "_");
+  switch (key) {
+    case "trailer":
+      return 0;
+    case "special_feature":
+      return 1;
+    case "other":
+      return 2;
+    default:
+      return 3;
+  }
+}
