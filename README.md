@@ -22,7 +22,7 @@ Igloo is currently in full development and has not yet reached its first stable 
 
 The current focus is the server platform and the React web client contained in this repository. Dedicated TV and mobile clients are planned as separate projects.
 
-Expect a full tv client to be available by end of April, with a mobile client comming later this year (2026).  Once they are available, this readme file will be updated with more information about this clients and URLs on how to get them.
+Expect a full tv client to be available by end of April, with a mobile client comming later this year (2026). Once they are available, this readme file will be updated with more information about this clients and URLs on how to get them.
 
 ---
 
@@ -37,15 +37,15 @@ Expect a full tv client to be available by end of April, with a mobile client co
 
 ## Repository layout
 
-| Path | Purpose |
-|------|---------|
-| `server/` | Go server, API, embedded schema, sqlc queries, and media tooling wrappers |
+| Path           | Purpose                                                                            |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `server/`      | Go server, API, embedded schema, sqlc queries, and media tooling wrappers          |
 | `server/sqlc/` | SQL schema and queries; generated Go code lives in `server/cmd/internal/database/` |
-| `web/` | React-based web client built and served by the Igloo server |
+| `web/`         | React-based web client built and served by the Igloo server                        |
 
 Large **FFmpeg** and **ffprobe** binaries are **not** committed to the repository. You need platform-specific binaries under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` that match the `//go:embed` files expected by the build tags, such as `ffmpeg_darwin_arm64.go` and `ffprobe_darwin_arm64.go`. Follow your normal workflow for placing those binaries before building.
 
-Currently this project uses the ffmpeg binaries provided by the Jellyfin project because they have some very nice features that are nice to have for media transcoding.  You can find them at:
+Currently this project uses the ffmpeg binaries provided by the Jellyfin project because they have some very nice features that are nice to have for media transcoding. You can find them at:
 
 ---
 
@@ -197,3 +197,4 @@ Testing
 cd server
 go test ./...
 Some tests may rely on fixtures or external APIs depending on the package being tested.
+```
