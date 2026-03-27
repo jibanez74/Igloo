@@ -552,6 +552,7 @@ func (app *Application) InitRouter() {
 			r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
 			r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 			r.Get("/{id}/stream", app.StreamMovie)
+			r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
 		})
 
 		r.Route("/settings", func(r chi.Router) {

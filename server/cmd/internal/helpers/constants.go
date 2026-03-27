@@ -69,4 +69,14 @@ const (
 	HLS_INIT_FILENAME             = "init.mp4"
 	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
+
+	// Subtitle extraction
+	SUBTITLE_WEBVTT_CONTENT_TYPE = "text/vtt"
+	SUBTITLE_EXTRACT_TIMEOUT     = 60 * time.Second
 )
+
+// Bitmap subtitle codecs cannot be converted to WebVTT.
+var BitmapSubtitleCodecs = map[string]bool{
+	"hdmv_pgs_subtitle": true,
+	"dvd_subtitle":      true,
+}
