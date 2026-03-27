@@ -93,3 +93,13 @@ export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonl
   StreamModeId,
   ...StreamModeId[],
 ];
+
+/** Key crew: max writing-department rows before "Show all crew" */
+export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
+
+/**
+ * tw-animate-css enter for library movie details (same family as MovieCard / AlbumCard).
+ * Stagger with `delay-*` + `motion-reduce:delay-0` on wrappers.
+ */
+export const MOVIE_DETAILS_CONTENT_ENTER_CLASS =
+  "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";

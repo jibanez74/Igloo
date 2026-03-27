@@ -76,6 +76,22 @@ export type {
 export type { PlaySearchParams } from "./movie-play";
 export { playSearchSchema } from "./movie-play";
 
+// Library movie details page (UI sections)
+export type {
+  MovieDetailsBackdropProps,
+  MovieDetailsSkipLinksProps,
+  MovieDetailsPosterBlockProps,
+  MovieDetailsTitleHeadingProps,
+  MovieDetailsMetadataChipsProps,
+  MovieDetailsGenresListProps,
+  MovieDetailsHeroActionsProps,
+  MovieOverviewSectionProps,
+  MovieKeyCrewSectionProps,
+  MovieAdditionalDetailsSectionProps,
+  MovieExtraVideosSectionProps,
+  MovieProductionCompaniesSectionProps,
+} from "./movie-details-page";
+
 // Audio player types
 export type {
   AlbumInfoType,

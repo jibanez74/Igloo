@@ -1,3 +1,8 @@
+import type {
+  LibraryMovieCrewType,
+  LibraryMovieExtraVideoType,
+} from "@/types/movies";
+
 const months = [
   "January",
   "February",
@@ -116,4 +121,33 @@ export function extraVideoTypeSortRank(type: string): number {
     default:
       return 3;
   }
+}
+
+/** YouTube-only extras, sorted: trailers → special features → others, then title. */
+export function prepareYouTubeExtrasForDisplay(
+  videos: LibraryMovieExtraVideoType[],
+): LibraryMovieExtraVideoType[] {
+  return [...videos.filter(v => isYouTubeExtraVideoSite(v.site))].sort(
+    (a, b) => {
+      const byType =
+        extraVideoTypeSortRank(a.type) - extraVideoTypeSortRank(b.type);
+      if (byType !== 0) return byType;
+      return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+    },
+  );
+}
+
+export function sortLibraryCrewForDisplay(
+  a: LibraryMovieCrewType,
+  b: LibraryMovieCrewType,
+): number {
+  const byDept = a.department.localeCompare(b.department, undefined, {
+    sensitivity: "base",
+  });
+  if (byDept !== 0) return byDept;
+  const byJob = a.job.localeCompare(b.job, undefined, { sensitivity: "base" });
+  if (byJob !== 0) return byJob;
+  return a.artist_name.localeCompare(b.artist_name, undefined, {
+    sensitivity: "base",
+  });
 }

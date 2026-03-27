@@ -18,9 +18,9 @@ export default function MovieDetailsSkeleton() {
 
       {/* Content skeleton */}
       <div className="relative z-10 -mt-32" aria-hidden="true">
-        <div className="flex flex-col gap-6 md:flex-row lg:gap-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
           {/* Poster skeleton */}
-          <div className="mx-auto shrink-0 md:mx-0">
+          <div className="mx-auto shrink-0 lg:mx-0">
             <div className="aspect-2/3 w-48 rounded-xl bg-slate-800 md:w-64 lg:w-72" />
           </div>
 

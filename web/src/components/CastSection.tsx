@@ -22,15 +22,15 @@ export default function CastSection({
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-white sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
         tabIndex={-1}
       >
         Cast
       </h2>
 
       <p className="sr-only">
-        Showing {displayedCast.length} of {cast.length} cast members. Use arrow
-        keys to scroll horizontally.
+        Showing {displayedCast.length} of {cast.length} cast members. Use Tab to
+        move between cast cards, or scroll horizontally to see more.
       </p>
 
       <ul
