@@ -63,7 +63,7 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "non-numeric suffix is rejected",
+			name:     "non-numeric middle is rejected",
 			input:    helpers.HLS_SEGMENT_FILENAME_PREFIX + "abc" + helpers.HLS_SEGMENT_FILENAME_SUFFIX,
 			expected: false,
 		},
@@ -78,9 +78,19 @@ func TestIsAllowedHLSFilename(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "segment with leading zero is accepted (valid uint)",
+			name:     "segment with leading zero digits is accepted (valid uint)",
 			input:    helpers.HLS_SEGMENT_FILENAME_PREFIX + "007" + helpers.HLS_SEGMENT_FILENAME_SUFFIX,
 			expected: true,
+		},
+		{
+			name:     "very large segment number is allowed",
+			input:    helpers.HLS_SEGMENT_FILENAME_PREFIX + "99999" + helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+			expected: true,
+		},
+		{
+			name:     "only prefix and suffix with spaces between is rejected",
+			input:    helpers.HLS_SEGMENT_FILENAME_PREFIX + "  " + helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+			expected: false,
 		},
 	}
 
@@ -132,11 +142,20 @@ func TestFileReady(t *testing.T) {
 		}
 	})
 
-	t.Run("directory path returns false", func(t *testing.T) {
+	t.Run("single byte file returns true", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// A directory has size 0 conceptually (or OS-dependent) but Stat succeeds.
-		// fileReady checks size > 0; a directory often has a nonzero size on disk.
-		// We just confirm it doesn't panic.
+		path := filepath.Join(tmpDir, "tiny.m4s")
+		if err := os.WriteFile(path, []byte("x"), 0644); err != nil {
+			t.Fatalf("Failed to write temp file: %v", err)
+		}
+		if !fileReady(path) {
+			t.Error("Expected true for single-byte file")
+		}
+	})
+
+	t.Run("directory path does not panic", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Directories have size > 0 on most systems; just verify it doesn't panic.
 		_ = fileReady(tmpDir)
 	})
 }
@@ -150,7 +169,7 @@ func makeTestSession(tmpDir string) *HLSSession {
 	}
 }
 
-func writeFile(t *testing.T, dir, name, content string) {
+func writeTestFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write %s: %v", name, err)
@@ -161,7 +180,8 @@ func TestSegmentComplete(t *testing.T) {
 	t.Run("init file complete when segment_0 exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
-		writeFile(t, tmpDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX, "data")
+		writeTestFile(t, tmpDir,
+			helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX, "data")
 
 		if !segmentComplete(session, helpers.HLS_INIT_FILENAME) {
 			t.Error("Expected init.mp4 to be complete when segment_0.m4s exists")
@@ -171,7 +191,7 @@ func TestSegmentComplete(t *testing.T) {
 	t.Run("init file not complete when segment_0 missing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
-		// segment_0 does not exist; no exit either
+
 		if segmentComplete(session, helpers.HLS_INIT_FILENAME) {
 			t.Error("Expected init.mp4 to be incomplete when segment_0.m4s is missing")
 		}
@@ -180,7 +200,8 @@ func TestSegmentComplete(t *testing.T) {
 	t.Run("segment_0 complete when segment_1 exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
-		writeFile(t, tmpDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"1"+helpers.HLS_SEGMENT_FILENAME_SUFFIX, "data")
+		writeTestFile(t, tmpDir,
+			helpers.HLS_SEGMENT_FILENAME_PREFIX+"1"+helpers.HLS_SEGMENT_FILENAME_SUFFIX, "data")
 
 		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "0" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
 		if !segmentComplete(session, filename) {
@@ -188,7 +209,7 @@ func TestSegmentComplete(t *testing.T) {
 		}
 	})
 
-	t.Run("segment_0 not complete when segment_1 missing and not exited", func(t *testing.T) {
+	t.Run("segment_0 not complete when segment_1 missing and ffmpeg running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
 		// neither segment_1 nor exit condition
@@ -205,8 +226,8 @@ func TestSegmentComplete(t *testing.T) {
 		session.Exited = true
 
 		lastSeg := helpers.HLS_SEGMENT_FILENAME_PREFIX + "9" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
-		writeFile(t, tmpDir, lastSeg, "data")
-		// segment_10 does NOT exist (it's the last one)
+		writeTestFile(t, tmpDir, lastSeg, "data")
+		// segment_10 does NOT exist — it's the last segment
 
 		if !segmentComplete(session, lastSeg) {
 			t.Error("Expected last segment to be complete when ffmpeg exited and file exists")
@@ -217,7 +238,6 @@ func TestSegmentComplete(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
 		session.Exited = true
-		// file does not exist
 
 		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "5" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
 		if segmentComplete(session, filename) {
@@ -238,10 +258,35 @@ func TestSegmentComplete(t *testing.T) {
 		tmpDir := t.TempDir()
 		session := makeTestSession(tmpDir)
 
-		// segment_-1.m4s is not a valid parsed uint but has the right prefix/suffix
 		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "-1" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
 		if segmentComplete(session, filename) {
 			t.Error("Expected false for segment with negative number")
+		}
+	})
+
+	t.Run("init file not complete when segment_0 is empty", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		session := makeTestSession(tmpDir)
+		// Create empty segment_0
+		p := filepath.Join(tmpDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		f, _ := os.Create(p)
+		f.Close()
+
+		if segmentComplete(session, helpers.HLS_INIT_FILENAME) {
+			t.Error("Expected init.mp4 to be incomplete when segment_0.m4s is empty")
+		}
+	})
+
+	t.Run("segment complete even when ffmpeg not exited if next segment ready", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		session := makeTestSession(tmpDir)
+		// segment_5 exists — so segment_4 is complete (FFmpeg has moved on)
+		writeTestFile(t, tmpDir,
+			helpers.HLS_SEGMENT_FILENAME_PREFIX+"5"+helpers.HLS_SEGMENT_FILENAME_SUFFIX, "data")
+
+		filename := helpers.HLS_SEGMENT_FILENAME_PREFIX + "4" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+		if !segmentComplete(session, filename) {
+			t.Error("Expected segment_4.m4s to be complete because segment_5.m4s exists")
 		}
 	})
 }

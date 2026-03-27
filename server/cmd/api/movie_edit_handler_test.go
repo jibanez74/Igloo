@@ -178,7 +178,7 @@ func TestBuildUpdateParamsFromTmdb(t *testing.T) {
 		}
 	})
 
-	t.Run("adult flag is mapped correctly", func(t *testing.T) {
+	t.Run("adult flag is mapped correctly when true", func(t *testing.T) {
 		m := &tmdb.TmdbMovie{
 			TmdbID: 1,
 			Title:  "Adult Movie",
@@ -192,12 +192,11 @@ func TestBuildUpdateParamsFromTmdb(t *testing.T) {
 		}
 	})
 
-	t.Run("certification is extracted from release dates", func(t *testing.T) {
+	t.Run("certification is extracted from US release dates", func(t *testing.T) {
 		m := &tmdb.TmdbMovie{
 			TmdbID: 1,
 			Title:  "Rated Movie",
 		}
-		// Populate US certification via the ReleaseDates nested struct
 		m.ReleaseDates.Results = []struct {
 			ISO3166_1    string `json:"iso_3166_1"`
 			ReleaseDates []struct {
@@ -227,7 +226,6 @@ func TestBuildUpdateParamsFromTmdb(t *testing.T) {
 
 		params := buildUpdateParamsFromTmdb(1, m)
 
-		// helpers.NullString("") returns invalid
 		if params.Certification.Valid {
 			t.Errorf("Expected Certification to be invalid when not set, got %v", params.Certification)
 		}
@@ -247,8 +245,7 @@ func TestBuildUpdateParamsFromTmdb(t *testing.T) {
 		}
 	})
 
-	t.Run("helpers.NullInt64 and NullString used consistently", func(t *testing.T) {
-		// Verify that the param-building logic matches the helper semantics
+	t.Run("helpers NullInt64 and NullString semantics are consistent", func(t *testing.T) {
 		if helpers.NullString("").Valid {
 			t.Error("Sanity: NullString('') should be invalid")
 		}
@@ -260,6 +257,42 @@ func TestBuildUpdateParamsFromTmdb(t *testing.T) {
 		}
 		if !helpers.NullInt64(1).Valid {
 			t.Error("Sanity: NullInt64(1) should be valid")
+		}
+	})
+
+	t.Run("movie ID is preserved in params", func(t *testing.T) {
+		m := &tmdb.TmdbMovie{TmdbID: 1, Title: "X"}
+		for _, movieID := range []int64{1, 42, 9999} {
+			params := buildUpdateParamsFromTmdb(movieID, m)
+			if params.ID != movieID {
+				t.Errorf("Expected ID=%d, got %d", movieID, params.ID)
+			}
+		}
+	})
+
+	t.Run("non-US first certification is used as fallback", func(t *testing.T) {
+		m := &tmdb.TmdbMovie{
+			TmdbID: 1,
+			Title:  "Foreign Movie",
+		}
+		m.ReleaseDates.Results = []struct {
+			ISO3166_1    string `json:"iso_3166_1"`
+			ReleaseDates []struct {
+				Certification string `json:"certification"`
+			} `json:"release_dates"`
+		}{
+			{
+				ISO3166_1: "GB",
+				ReleaseDates: []struct {
+					Certification string `json:"certification"`
+				}{{Certification: "15"}},
+			},
+		}
+
+		params := buildUpdateParamsFromTmdb(1, m)
+
+		if !params.Certification.Valid || params.Certification.String != "15" {
+			t.Errorf("Expected fallback Certification=15 (GB), got %v", params.Certification)
 		}
 	})
 }
