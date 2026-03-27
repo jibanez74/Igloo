@@ -134,6 +134,7 @@ function LibraryMovieDetailsContent({
           videoStream.height,
         ),
         audioTrack: 0,
+        subtitleTrack: null,
       };
 
   const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(

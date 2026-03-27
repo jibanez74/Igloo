@@ -1,6 +1,6 @@
-import { STREAM_MODES, type StreamModeId } from "@/lib/constants";
+import { BITMAP_SUBTITLE_CODECS, STREAM_MODES, type StreamModeId } from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
-import type { AudioStreamType } from "@/types/movies";
+import type { AudioStreamType, SubtitleType } from "@/types/movies";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
@@ -12,11 +12,13 @@ export { STREAM_MODES };
 export type PlaybackSettings = {
   mode: StreamModeId;
   audioTrack: number;
+  subtitleTrack: number | null;
 };
 
 export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
   audioTrack: 0,
+  subtitleTrack: null,
 };
 
 function isVideoDirectPlayable(codec: string): boolean {
@@ -200,4 +202,79 @@ export function describePlaybackExperience(
     : " Default audio is used.";
 
   return videoPart + audioPart;
+}
+
+/**
+ * Whether a subtitle codec is image-based (PGS, DVD sub) and cannot be
+ * converted to WebVTT for browser playback.
+ */
+export function isBitmapSubtitleCodec(codec: string): boolean {
+  return (BITMAP_SUBTITLE_CODECS as readonly string[]).includes(
+    codec.toLowerCase(),
+  );
+}
+
+/**
+ * Human-readable label for a subtitle stream in the playback settings UI.
+ * Reuse for any UI that renders subtitle choices.
+ */
+export function formatSubtitleLabel(
+  subtitle: SubtitleType,
+  index: number,
+): string {
+  const lang = formatSubtitleLanguageName(
+    unwrapStringOrUndefined(subtitle.language),
+  );
+  const title = unwrapStringOrUndefined(subtitle.title);
+
+  const parts: string[] = [];
+  if (lang) parts.push(lang);
+  if (title && title !== lang) parts.push(title);
+  if (subtitle.is_forced) parts.push("Forced");
+  if (subtitle.is_default) parts.push("Default");
+
+  if (parts.length > 0) return parts.join(" · ");
+  return `Track ${index + 1}`;
+}
+
+const SUBTITLE_LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  pt: "Portuguese",
+  ru: "Russian",
+  hi: "Hindi",
+  nl: "Dutch",
+  sv: "Swedish",
+  no: "Norwegian",
+  da: "Danish",
+  fi: "Finnish",
+  pl: "Polish",
+  tr: "Turkish",
+  ar: "Arabic",
+  th: "Thai",
+  vi: "Vietnamese",
+  cs: "Czech",
+  el: "Greek",
+  he: "Hebrew",
+  hu: "Hungarian",
+  ro: "Romanian",
+  uk: "Ukrainian",
+};
+
+function formatSubtitleLanguageName(
+  raw: string | undefined,
+): string | undefined {
+  const code = raw?.trim().toLowerCase();
+  if (!code) return undefined;
+  const two = code.slice(0, 2);
+  if (SUBTITLE_LANGUAGE_NAMES[two]) return SUBTITLE_LANGUAGE_NAMES[two];
+  return code.length <= 3
+    ? code.toUpperCase()
+    : code.charAt(0).toUpperCase() + code.slice(1);
 }

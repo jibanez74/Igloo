@@ -64,7 +64,7 @@ function buildStreamUrl(
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
-  const { mode, audio_track: audioTrack } = Route.useSearch();
+  const { mode, audio_track: audioTrack, subtitle_track: _subtitleTrack } = Route.useSearch();
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();

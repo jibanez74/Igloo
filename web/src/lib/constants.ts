@@ -94,6 +94,12 @@ export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonl
   ...StreamModeId[],
 ];
 
+// subtitle codecs that are image-based and cannot be converted to WebVTT
+export const BITMAP_SUBTITLE_CODECS = [
+  "hdmv_pgs_subtitle",
+  "dvd_subtitle",
+] as const;
+
 /** Key crew: max writing-department rows before "Show all crew" */
 export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 
