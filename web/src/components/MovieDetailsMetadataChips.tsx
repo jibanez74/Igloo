@@ -21,12 +21,22 @@ export default function MovieDetailsMetadataChips({
   runtime,
   runTimeMins,
   releaseDateStr,
+  tmdbVoteAverage,
 }: MovieDetailsMetadataChipsProps) {
   return (
     <ul
       className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
       aria-label="Movie details"
     >
+      {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
+        <li
+          className="flex items-center gap-2 rounded-full border border-sky-400/35 bg-slate-800/90 px-3 py-1.5 text-sm font-semibold text-sky-100"
+          aria-label={`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
+        >
+          <span className="text-slate-400">TMDB</span>
+          <span aria-hidden="true">{tmdbVoteAverage.toFixed(1)}</span>
+        </li>
+      )}
       {criticRating != null && criticRating > 0 && (
         <li
           className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${criticRatingColor(criticRating)}`}

@@ -37,6 +37,8 @@ export type MovieDetailsMetadataChipsProps = {
   runtime: string | null;
   runTimeMins: number | null;
   releaseDateStr: string | null;
+  /** TMDB community vote average (in-theaters page only); shown as a neutral “TMDB” chip. */
+  tmdbVoteAverage?: number | null;
 };
 
 export type MovieDetailsGenresListProps = {
@@ -69,6 +71,8 @@ export type MovieKeyCrewSectionProps = {
 };
 
 export type MovieAdditionalDetailsSectionProps = {
+  /** Release status (e.g. Released); in-theaters TMDB page only. */
+  status?: string | null;
   language: string | null;
   budget: number | null;
   revenue: number | null;
@@ -77,6 +81,8 @@ export type MovieAdditionalDetailsSectionProps = {
 export type MovieExtraVideosSectionProps = {
   videos: LibraryMovieExtraVideoType[];
   movieId: number;
+  /** Override trailer `returnTo` search param (e.g. `/movies/in-theaters/123`). */
+  trailerReturnTo?: string;
 };
 
 export type MovieProductionCompaniesSectionProps = {

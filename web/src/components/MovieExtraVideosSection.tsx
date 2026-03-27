@@ -6,8 +6,11 @@ import type { MovieExtraVideosSectionProps } from "@/types";
 export default function MovieExtraVideosSection({
   videos,
   movieId,
+  trailerReturnTo,
 }: MovieExtraVideosSectionProps) {
   if (videos.length === 0) return null;
+
+  const returnTo = trailerReturnTo ?? `/movies/${movieId}`;
 
   return (
     <section
@@ -38,7 +41,7 @@ export default function MovieExtraVideosSection({
               to="/trailer"
               search={{
                 videoKey: video.key,
-                returnTo: `/movies/${movieId}`,
+                returnTo,
               }}
               className={cn(
                 "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors",

@@ -1,19 +1,93 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Film, Star, Clock, Calendar, Play } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { Play } from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
-import { TMDB_BACKDROP_SIZE, TMDB_POSTER_SIZE } from "@/lib/constants";
+import {
+  MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+  TMDB_BACKDROP_SIZE,
+  TMDB_POSTER_SIZE,
+} from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import CastSection from "@/components/CastSection";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { buttonVariants } from "@/components/ui/button";
-import type { MovieDetailsType } from "@/types";
+import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
+import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
+import CastSection from "@/components/CastSection";
+import MovieDetailsBackdrop from "@/components/MovieDetailsBackdrop";
+import MovieDetailsSkipLinks from "@/components/MovieDetailsSkipLinks";
+import MovieDetailsPosterBlock from "@/components/MovieDetailsPosterBlock";
+import MovieDetailsTitleHeading from "@/components/MovieDetailsTitleHeading";
+import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
+import MovieDetailsGenresList from "@/components/MovieDetailsGenresList";
+import MovieOverviewSection from "@/components/MovieOverviewSection";
+import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
+import MovieAdditionalDetailsSection from "@/components/MovieAdditionalDetailsSection";
+import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
+import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type {
+  CrewMemberType,
+  LibraryMovieCrewType,
+  LibraryMovieExtraVideoType,
+  LibraryMovieProductionCompanyType,
+  MovieDetailsType,
+} from "@/types";
+import type { StringType } from "@/types/Sqlite";
 
 export const Route = createLazyFileRoute("/_auth/movies/in-theaters/$id")({
   component: MovieDetailsPage,
 });
+
+function toSqliteString(value: string | null | undefined): StringType {
+  if (value == null || value === "") return { String: "", Valid: false };
+  return { String: value, Valid: true };
+}
+
+function tmdbCrewToLibraryCrew(
+  movieId: number,
+  crew: CrewMemberType[],
+): LibraryMovieCrewType[] {
+  return crew.map(c => ({
+    id: c.id,
+    movie_id: movieId,
+    artist_id: c.id,
+    job: c.job,
+    department: c.department,
+    artist_name: c.name,
+    artist_profile: toSqliteString(c.profile_path),
+  }));
+}
+
+function tmdbYouTubeResultsToLibraryExtras(
+  results: MovieDetailsType["videos"]["results"],
+): LibraryMovieExtraVideoType[] {
+  const mapped: LibraryMovieExtraVideoType[] = results
+    .filter(v => v.site === "YouTube")
+    .map((v, index) => ({
+      id: index + 1,
+      title: v.name,
+      external_id: toSqliteString(v.id),
+      key: v.key,
+      type: v.type,
+      site: v.site,
+      official: v.official,
+      created_at: "",
+      updated_at: "",
+    }));
+  return prepareYouTubeExtrasForDisplay(mapped);
+}
+
+function tmdbProductionCompaniesToLibrary(
+  companies: MovieDetailsType["production_companies"],
+): LibraryMovieProductionCompanyType[] {
+  return companies.map(pc => ({
+    id: pc.id,
+    name: pc.name,
+    tmdb_id: pc.id,
+    logo: toSqliteString(pc.logo_path ?? undefined),
+    country: toSqliteString(pc.origin_country ?? undefined),
+  }));
+}
 
 function MovieDetailsPage() {
   const { id } = Route.useParams();
@@ -24,17 +98,12 @@ function MovieDetailsPage() {
 
   if (isError || (data && data.error)) {
     return (
-      <Alert
-        variant="destructive"
-        className="border-red-500/20 bg-red-500/10 text-red-400"
-      >
-        <AlertCircle className="size-4" aria-hidden="true" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-          {data?.message ||
-            "Failed to load movie details. Please try again later."}
-        </AlertDescription>
-      </Alert>
+      <MediaNotFound
+        message={
+          data?.message ||
+          "Failed to load movie details. Please try again later."
+        }
+      />
     );
   }
 
@@ -65,11 +134,11 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     TMDB_POSTER_SIZE,
   );
 
-  const releaseYear = movie.release_date
-    ? new Date(movie.release_date).getFullYear()
+  const releaseDateStr = movie.release_date || null;
+  const releaseYear = releaseDateStr
+    ? new Date(releaseDateStr).getFullYear()
     : null;
 
-  // React 19 document metadata - dynamic based on movie
   const pageTitle = releaseYear
     ? `${movie.title} (${releaseYear}) - Igloo`
     : `${movie.title} - Igloo`;
@@ -81,359 +150,137 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
     ? `${Math.floor(movie.runtime / 60)}h ${movie.runtime % 60}m`
     : null;
 
-  const director = movie.credits?.crew?.find(c => c.job === "Director");
-  const writers = movie.credits?.crew
-    ?.filter(c => c.department === "Writing")
-    .slice(0, 3);
-
   const trailer = movie.videos?.results?.find(
     v => v.type === "Trailer" && v.site === "YouTube",
   );
 
-  const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-amber-500 text-slate-900"; // High rating - gold
-    if (score >= 5) return "bg-amber-600/70 text-white"; // Medium rating - darker gold
-    return "bg-slate-500 text-white"; // Low rating - gray
-  };
+  const crewForSection = tmdbCrewToLibraryCrew(
+    movie.id,
+    movie.credits?.crew ?? [],
+  );
+  const castList = movie.credits?.cast ?? [];
+  const youtubeExtraVideos = tmdbYouTubeResultsToLibraryExtras(
+    movie.videos?.results ?? [],
+  );
+  const productionCompanies = tmdbProductionCompaniesToLibrary(
+    movie.production_companies ?? [],
+  );
+
+  const genresForList =
+    movie.genres?.map(g => ({ id: g.id, tag: g.name })) ?? [];
+
+  const showCrewSection = crewForSection.length > 0;
+  const trailerReturnPath = `/movies/in-theaters/${movie.id}`;
 
   return (
-    <article aria-labelledby="movie-title">
-      {/* React 19 Document Metadata */}
+    <article aria-labelledby="movie-title" className="pb-6 sm:pb-10">
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      {/* Skip navigation for screen readers */}
-      <nav
-        aria-label="Skip to section"
-        className="sr-only focus-within:not-sr-only"
-      >
-        <ul className="mb-4 flex gap-2">
-          <li>
-            <a
-              href="#movie-title"
-              className="rounded-sm px-2 py-1 text-amber-400 underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
-            >
-              Skip to movie info
-            </a>
-          </li>
-          <li>
-            <a
-              href="#overview-heading"
-              className="rounded-sm px-2 py-1 text-amber-400 underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
-            >
-              Skip to overview
-            </a>
-          </li>
-          {movie.credits?.cast && movie.credits.cast.length > 0 && (
-            <li>
-              <a
-                href="#cast-heading"
-                className="rounded-sm px-2 py-1 text-amber-400 underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              >
-                Skip to cast
-              </a>
-            </li>
-          )}
-          <li>
-            <a
-              href="#details-heading"
-              className="rounded-sm px-2 py-1 text-amber-400 underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
-            >
-              Skip to details
-            </a>
-          </li>
-        </ul>
-      </nav>
+      <MovieDetailsSkipLinks
+        showCrewSection={showCrewSection}
+        castNonEmpty={castList.length > 0}
+        extrasNonEmpty={youtubeExtraVideos.length > 0}
+        companiesNonEmpty={productionCompanies.length > 0}
+      />
 
-      {/* Hero backdrop */}
-      <header className="relative -mx-4 sm:-mx-6 lg:-mx-8 xl:-mx-12">
-        {backdropUrl ? (
-          <img
-            src={backdropUrl}
-            alt=""
-            aria-hidden="true"
-            className="aspect-21/9 w-full object-cover object-top"
-          />
-        ) : (
-          <div className="aspect-21/9 w-full bg-slate-800" aria-hidden="true" />
-        )}
+      <div className={cn(MOVIE_DETAILS_CONTENT_ENTER_CLASS)}>
+        <MovieDetailsBackdrop backdropUrl={backdropUrl} />
+      </div>
+
+      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
         <div
-          className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
-          aria-hidden="true"
-        />
-      </header>
+          className={cn(
+            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            "delay-75 motion-reduce:delay-0",
+          )}
+        >
+          <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
+            <MovieDetailsPosterBlock
+              posterUrl={posterUrl}
+              movieTitle={movie.title}
+            />
 
-      {/* Main content */}
-      <div className="relative z-10 -mt-32">
-        <div className="flex flex-col gap-6 md:flex-row lg:gap-8">
-          {/* Poster */}
-          <figure className="mx-auto shrink-0 md:mx-0">
-            <div className="w-48 overflow-hidden rounded-xl border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-64 lg:w-72">
-              {posterUrl ? (
-                <img
-                  src={posterUrl}
-                  alt={`Movie poster for ${movie.title}`}
-                  className="aspect-2/3 w-full object-cover"
-                />
-              ) : (
-                <div
-                  className="flex aspect-2/3 w-full items-center justify-center bg-slate-800"
-                  role="img"
-                  aria-label="No poster available"
-                >
-                  <Film className="size-12 text-slate-600" aria-hidden="true" />
+            <div className="min-w-0 flex-1 text-center lg:text-left">
+              <MovieDetailsTitleHeading
+                title={movie.title}
+                releaseYear={releaseYear}
+                releaseDateStr={releaseDateStr}
+              />
+
+              {movie.tagline && (
+                <p className="mt-2 max-w-full text-base wrap-break-word text-slate-400 italic sm:text-lg">
+                  <q>{movie.tagline}</q>
+                </p>
+              )}
+
+              <MovieDetailsMetadataChips
+                criticRating={null}
+                audienceRating={null}
+                certificationLabel={null}
+                runtime={runtime}
+                runTimeMins={movie.runtime ?? null}
+                releaseDateStr={releaseDateStr}
+                tmdbVoteAverage={
+                  movie.vote_average > 0 ? movie.vote_average : null
+                }
+              />
+
+              <MovieDetailsGenresList genres={genresForList} />
+
+              {trailer && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start">
+                  <Link
+                    to="/trailer"
+                    search={{
+                      mediaType: "movie",
+                      mediaId: movie.id,
+                      returnTo: trailerReturnPath,
+                    }}
+                    mask={{
+                      to: "/movies/in-theaters/$id",
+                      params: { id: String(movie.id) },
+                    }}
+                    className={cn(
+                      buttonVariants({ variant: "accent", size: "lg" }),
+                      "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
+                    )}
+                  >
+                    <Play className="size-4 fill-current" aria-hidden="true" />
+                    Play Trailer
+                  </Link>
                 </div>
               )}
+
+              <MovieOverviewSection overview={movie.overview || null} />
+              <MovieKeyCrewSection crew={crewForSection} />
             </div>
-          </figure>
-
-          {/* Movie info */}
-          <div className="flex-1">
-            {/* Title and year */}
-            <h1
-              id="movie-title"
-              tabIndex={-1}
-              className="text-3xl font-bold text-white outline-none md:text-4xl lg:text-5xl"
-            >
-              {movie.title}
-              {releaseYear && (
-                <span className="ml-3 font-normal text-slate-400">
-                  (<time dateTime={movie.release_date}>{releaseYear}</time>)
-                </span>
-              )}
-            </h1>
-
-            {/* Tagline */}
-            {movie.tagline && (
-              <p className="mt-2 text-lg text-slate-400 italic">
-                <q>{movie.tagline}</q>
-              </p>
-            )}
-
-            {/* Meta info row */}
-            <ul
-              className="mt-4 flex list-none flex-wrap items-center gap-3"
-              aria-label="Movie details"
-            >
-              {/* Rating badge */}
-              {movie.vote_average > 0 && (
-                <li
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${getRatingColor(
-                    movie.vote_average,
-                  )}`}
-                  aria-label={`User rating: ${movie.vote_average.toFixed(
-                    1,
-                  )} out of 10`}
-                >
-                  <Star className="size-3.5 fill-current" aria-hidden="true" />
-                  <span aria-hidden="true">
-                    {movie.vote_average.toFixed(1)}
-                  </span>
-                </li>
-              )}
-
-              {/* Runtime */}
-              {runtime && (
-                <li className="flex items-center gap-1.5 text-slate-300">
-                  <Clock className="size-4 text-slate-400" aria-hidden="true" />
-                  <time
-                    dateTime={`PT${movie.runtime}M`}
-                    aria-label={`Duration: ${runtime}`}
-                  >
-                    {runtime}
-                  </time>
-                </li>
-              )}
-
-              {/* Release date */}
-              {movie.release_date && (
-                <li className="flex items-center gap-1.5 text-slate-300">
-                  <Calendar
-                    className="size-4 text-slate-400"
-                    aria-hidden="true"
-                  />
-                  <time dateTime={movie.release_date}>
-                    {new Date(movie.release_date).toLocaleDateString("en-US", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </time>
-                </li>
-              )}
-            </ul>
-
-            {/* Genres */}
-            {movie.genres && movie.genres.length > 0 && (
-              <ul
-                className="mt-4 flex list-none flex-wrap gap-2"
-                aria-label={`Genres: ${movie.genres
-                  .map(g => g.name)
-                  .join(", ")}`}
-              >
-                {movie.genres.map((genre, index) => (
-                  <li
-                    key={genre.id}
-                    tabIndex={0}
-                    role="listitem"
-                    aria-posinset={index + 1}
-                    aria-setsize={movie.genres!.length}
-                    className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm outline-none focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400/50"
-                  >
-                    {genre.name}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Trailer button with route masking */}
-            {trailer && (
-              <Link
-                to="/trailer"
-                search={{
-                  mediaType: "movie",
-                  mediaId: movie.id,
-                  returnTo: "/movies/in-theaters/$id",
-                }}
-                mask={{
-                  to: "/movies/in-theaters/$id",
-                  params: { id: String(movie.id) },
-                }}
-                className={
-                  buttonVariants({ variant: "accent", size: "lg" }) + " mt-6"
-                }
-              >
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Play Trailer
-              </Link>
-            )}
-
-            {/* Overview */}
-            <section className="mt-6" aria-labelledby="overview-heading">
-              <h2
-                id="overview-heading"
-                tabIndex={-1}
-                className="mb-2 text-xl font-semibold text-white outline-none"
-              >
-                Overview
-              </h2>
-              <p className="leading-relaxed text-slate-300">
-                {movie.overview || "No overview available."}
-              </p>
-            </section>
-
-            {/* Crew highlights */}
-            {(director || (writers && writers.length > 0)) && (
-              <section className="mt-6" aria-labelledby="crew-heading">
-                <h2 id="crew-heading" className="sr-only">
-                  Key Crew
-                </h2>
-                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  {director && (
-                    <div
-                      tabIndex={0}
-                      className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-                      role="group"
-                      aria-label={`Director: ${director.name}`}
-                    >
-                      <dt className="text-sm text-slate-400">Director</dt>
-                      <dd className="font-semibold text-white">
-                        {director.name}
-                      </dd>
-                    </div>
-                  )}
-                  {writers?.map(writer => (
-                    <div
-                      key={writer.id}
-                      tabIndex={0}
-                      className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-                      role="group"
-                      aria-label={`${writer.job}: ${writer.name}`}
-                    >
-                      <dt className="text-sm text-slate-400">{writer.job}</dt>
-                      <dd className="font-semibold text-white">
-                        {writer.name}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            )}
           </div>
         </div>
 
-        {/* Cast section */}
-        {movie.credits?.cast && <CastSection cast={movie.credits.cast} />}
-
-        {/* Additional details */}
-        <section
-          className="mt-10 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4"
-          aria-labelledby="details-heading"
+        <div
+          className={cn(
+            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            "delay-150 motion-reduce:delay-0",
+          )}
         >
-          <h2
-            id="details-heading"
-            tabIndex={-1}
-            className="sr-only outline-none"
-          >
-            Additional Details
-          </h2>
-          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-            <div
-              tabIndex={0}
-              className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-              role="group"
-              aria-label={`Status: ${movie.status || "Unknown"}`}
-            >
-              <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
-                Status
-              </dt>
-              <dd className="mt-1 text-white">{movie.status || "-"}</dd>
-            </div>
-            <div
-              tabIndex={0}
-              className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-              role="group"
-              aria-label={`Original Language: ${
-                movie.original_language?.toUpperCase() || "Unknown"
-              }`}
-            >
-              <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
-                Original Language
-              </dt>
-              <dd className="mt-1 text-white uppercase">
-                {movie.original_language || "-"}
-              </dd>
-            </div>
-            <div
-              tabIndex={0}
-              className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-              role="group"
-              aria-label={`Budget: ${formatCurrency(movie.budget)}`}
-            >
-              <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
-                Budget
-              </dt>
-              <dd className="mt-1 text-white">
-                <data value={movie.budget}>{formatCurrency(movie.budget)}</data>
-              </dd>
-            </div>
-            <div
-              tabIndex={0}
-              className="-m-2 rounded-lg p-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-              role="group"
-              aria-label={`Revenue: ${formatCurrency(movie.revenue)}`}
-            >
-              <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
-                Revenue
-              </dt>
-              <dd className="mt-1 text-white">
-                <data value={movie.revenue}>
-                  {formatCurrency(movie.revenue)}
-                </data>
-              </dd>
-            </div>
-          </dl>
-        </section>
+          {castList.length > 0 && <CastSection cast={castList} />}
+
+          <MovieAdditionalDetailsSection
+            status={movie.status || null}
+            language={movie.original_language || null}
+            budget={movie.budget}
+            revenue={movie.revenue}
+          />
+
+          <MovieExtraVideosSection
+            videos={youtubeExtraVideos}
+            movieId={movie.id}
+            trailerReturnTo={trailerReturnPath}
+          />
+
+          <MovieProductionCompaniesSection companies={productionCompanies} />
+        </div>
       </div>
     </article>
   );
