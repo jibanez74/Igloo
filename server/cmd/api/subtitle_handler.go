@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"strconv"
 
 	"igloo/cmd/internal/helpers"
@@ -62,27 +61,15 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streamIndex := sub.StreamIndex
-
 	ctx, cancel := context.WithTimeout(r.Context(), helpers.SUBTITLE_EXTRACT_TIMEOUT)
 	defer cancel()
 
-	args := []string{
-		"-y",
-		"-i", movie.FilePath,
-		"-map", fmt.Sprintf("0:%d", streamIndex),
-		"-c:s", "webvtt",
-		"-f", "webvtt",
-		"pipe:1",
-	}
-
-	cmd := exec.CommandContext(ctx, app.FFmpeg.BinPath(), args...)
-	out, err := cmd.Output()
+	out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, movie.FilePath, sub.StreamIndex)
 	if err != nil {
 		app.Logger.Error("subtitle extraction failed",
 			"error", err,
 			"movie_id", movieID,
-			"stream_index", streamIndex,
+			"stream_index", sub.StreamIndex,
 			"codec", sub.Codec,
 		)
 		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
