@@ -8,6 +8,9 @@
 /server/cmd/internal/ffmpeg/ffmpeg_mac_arm
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
 
+# Local movie fixtures for manual/ffmpeg testing (often multi-GB; never commit)
+/server/cmd/internal/ffmpeg/*.mkv
+
 # IDE and editor
 .idea/
 .vscode/
