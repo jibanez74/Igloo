@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ListMusic } from "lucide-react";
 import { unwrapString } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import type { PlaylistSummaryType } from "@/types";
 import { formatDuration } from "@/lib/format";
 
@@ -11,7 +12,7 @@ type PlaylistCardProps = {
 export default function PlaylistCard({ playlist }: PlaylistCardProps) {
   const { id, name, track_count, total_duration, cover_image, is_owner } =
     playlist;
-  const coverUrl = unwrapString(cover_image);
+  const coverUrl = getMediaImageUrl(unwrapString(cover_image));
 
   return (
     <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20">

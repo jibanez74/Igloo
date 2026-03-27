@@ -13,13 +13,22 @@ const (
 	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
 
 	// media scanner
-	SCANNER_BATCH_SIZE = 54
+	SCANNER_BATCH_SIZE = 10
 
-	// spotify
-	SPOTIFY_ARTIST_MAX_CACHE = 100
-	SPOTIFY_ALBUM_MAX_CACHE  = 200
+	// cover art download throttle (CAA asks max 1 req/sec for anonymous use)
+	COVER_ART_MIN_INTERVAL = 1200 * time.Millisecond
 
-	// auth keys
+	// musicbrainz
+	MUSICBRAINZ_ARTIST_MAX_CACHE = 200
+	MUSICBRAINZ_ALBUM_MAX_CACHE  = 200
+	MUSICBRAINZ_BASE_URL         = "https://musicbrainz.org/ws/2"
+	MUSICBRAINZ_USER_AGENT       = "Igloo/1.0 (music media server)"
+	MUSICBRAINZ_CACHE_TTL        = 2 * time.Hour
+	COVER_ART_ARCHIVE_BASE_URL   = "https://coverartarchive.org/release-group"
+	AUDIODB_BASE_URL             = "https://www.theaudiodb.com/api/v1/json"
+	AUDIODB_API_KEY              = "2"
+
+	// cookie settings
 	COOKIE_USER_ID = "user_id"
 
 	// error messages
@@ -30,22 +39,34 @@ const (
 	// constants for tmdb
 	TMDB_BASE_API_URL   = "https://api.themoviedb.org/3"
 	TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+	TMDB_IMAGE_SIZE     = "original"
+	TMDB_POSTER_SIZE    = "w500"
+	TMDB_PROFILE_SIZE   = "w185"
+	TMDB_LOGO_SIZE      = "w92"
 	TMDB_MAX_ITEMS      = 12
 	// TMDB_YEAR_MATCH_SCORE is the score bonus for exact year matches in TMDB search results.
 	// This ensures exact year matches are prioritized over popularity/vote average.
 	TMDB_YEAR_MATCH_SCORE = 10000.0
 
-	// HLS encoding profiles (allowed list for v1; validate client request against these).
-	HLSProfile1080p8Mbps = "1080p_8mbps" // 1080p, 8 Mbps video, AAC audio
-	HLSProfile1080p4Mbps = "1080p_4mbps" //
-	// 1080p, 4 Mbps video, AAC audio
-	HLSProfile720p3Mbps   = "720p_3mbps" // 720p, 3 Mbps video, AAC audio
-	HLSSegmentTimeSeconds = 4
-	HLS_PLAYLIST_VOD      = "vod"
-	HLS_PLAYLIST_SIZE     = "vod"
+	// HLS encoding profile IDs (allowed list in hls_profiles.go; used in URLs and validation).
+	HLS_PROFILE_REMUX        = "remux"
+	HLS_PROFILE_2160P_16MBPS = "2160p_16mbps"
+	HLS_PROFILE_1080P_8MBPS  = "1080p_8mbps"
+	HLS_PROFILE_1080P_6MBPS  = "1080p_6mbps"
+	HLS_PROFILE_1080P_4MBPS  = "1080p_4mbps"
+	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
 
-	// HLS HTTP handler: polling and timeouts for manifest/segment readiness.
-	HLS_MANIFEST_POLL_INTERVAL = 200 * time.Millisecond
-	HLS_MANIFEST_POLL_TIMEOUT  = 60 * time.Second
-	HLS_SEGMENT_WAIT_TIMEOUT   = 60 * time.Second
+	// HLS transcoding
+	HLS_SEGMENT_TIME_SEC  = 4                // segment duration in seconds for fMP4 HLS
+	HLS_STDERR_TAIL_LINES = 20               // lines of FFmpeg stderr kept for error reporting
+	HLS_SESSION_TTL       = 30 * time.Minute // TTL for cached HLS session (eviction + cleanup)
+
+	// HLS HTTP: manifest polling, response headers, and fMP4 filenames (match FFmpeg output)
+	HLS_SEGMENT_WAIT              = 120 * time.Second
+	HLS_SEGMENT_POLL              = 250 * time.Millisecond
+	HLS_PLAYLIST_CONTENT_TYPE     = "application/vnd.apple.mpegurl"
+	HLS_SEGMENT_HTTP_CONTENT_TYPE = "video/mp4"
+	HLS_INIT_FILENAME             = "init.mp4"
+	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
+	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
 )

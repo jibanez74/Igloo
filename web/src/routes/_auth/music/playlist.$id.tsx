@@ -33,6 +33,7 @@ import {
   playlistTracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
@@ -117,9 +118,9 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const [showEditDialog, setShowEditDialog] = useState(false);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
-  const coverUrl = playlist.cover_image?.Valid
-    ? playlist.cover_image.String
-    : null;
+  const coverUrl = getMediaImageUrl(
+    playlist.cover_image?.Valid ? playlist.cover_image.String : null
+  );
   const description = playlist.description?.Valid
     ? playlist.description.String
     : null;

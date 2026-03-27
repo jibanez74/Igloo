@@ -34,7 +34,8 @@ func (app *Application) processProductionCompanies(
 		if ok {
 			dbCompany = cached
 		} else {
-			// Store logo path only; frontend builds the image URL
+
+			// Store logo path only (frontend builds full URL; Phase 0)
 			logo := helpers.NullString(company.LogoPath)
 
 			// Upsert production company
@@ -44,20 +45,24 @@ func (app *Application) processProductionCompanies(
 				Logo:    logo,
 				Country: helpers.NullString(company.OriginCountry),
 			})
+
 			if err != nil {
 				return fmt.Errorf("upsert production company failed: %w", err)
 			}
 
 			dbCompany = &upserted
+
 			// Cache for reuse
 			cache.SetProductionCompany(company.ID, dbCompany)
 		}
 
 		// Create movie-production company relationship
-		if err := qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
+		err := qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
 			ProductionCompanyID: dbCompany.ID,
-		}); err != nil {
+		})
+
+		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
 		}
 	}
@@ -87,12 +92,14 @@ func (app *Application) processCast(
 		}
 
 		// Upsert cast record
-		if _, err := qtx.UpsertCast(ctx, database.UpsertCastParams{
+		_, err = qtx.UpsertCast(ctx, database.UpsertCastParams{
 			MovieID:   movieID,
 			ArtistID:  artist.ID,
 			Character: castMember.Character,
 			CastOrder: int64(castMember.Order),
-		}); err != nil {
+		})
+
+		if err != nil {
 			return fmt.Errorf("upsert cast failed: %w", err)
 		}
 	}
@@ -122,12 +129,14 @@ func (app *Application) processCrew(
 		}
 
 		// Upsert crew record
-		if _, err := qtx.UpsertCrew(ctx, database.UpsertCrewParams{
+		_, err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
 			MovieID:    movieID,
 			ArtistID:   artist.ID,
 			Job:        crewMember.Job,
 			Department: crewMember.Department,
-		}); err != nil {
+		})
+
+		if err != nil {
 			return fmt.Errorf("upsert crew failed: %w", err)
 		}
 	}
@@ -167,7 +176,8 @@ func (app *Application) processExtraVideos(
 	movieID int64,
 	results []tmdb.TmdbVideoResult,
 ) error {
-	if err := qtx.DeleteMovieExtraVideos(ctx, movieID); err != nil {
+	err := qtx.DeleteMovieExtraVideos(ctx, movieID)
+	if err != nil {
 		return fmt.Errorf("delete movie extra videos failed: %w", err)
 	}
 
@@ -175,10 +185,12 @@ func (app *Application) processExtraVideos(
 		if v.Key == "" || v.ID == "" {
 			continue
 		}
+
 		title := strings.TrimSpace(v.Name)
 		if title == "" {
 			title = v.Key
 		}
+
 		extra, err := qtx.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{
 			Title:      title,
 			ExternalID: helpers.NullString(v.ID),
@@ -187,13 +199,17 @@ func (app *Application) processExtraVideos(
 			Site:       mapTmdbVideoSite(v.Site),
 			Official:   v.Official,
 		})
+
 		if err != nil {
 			return fmt.Errorf("upsert extra video failed: %w", err)
 		}
-		if err := qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
+
+		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
 			MovieID:      movieID,
 			ExtraVideoID: extra.ID,
-		}); err != nil {
+		})
+
+		if err != nil {
 			return fmt.Errorf("create movie extra video link failed: %w", err)
 		}
 	}
@@ -212,7 +228,8 @@ func (app *Application) processMovieGenres(
 	},
 ) error {
 	// Delete all existing genre links
-	if err := qtx.DeleteMovieGenres(ctx, movieID); err != nil {
+	err := qtx.DeleteMovieGenres(ctx, movieID)
+	if err != nil {
 		return fmt.Errorf("delete movie genres failed: %w", err)
 	}
 
@@ -222,15 +239,18 @@ func (app *Application) processMovieGenres(
 			Tag:       genre.Name,
 			GenreType: "movie",
 		})
+
 		if err != nil {
 			return fmt.Errorf("get or create genre failed: %w", err)
 		}
 
 		// Create movie-genre relationship
-		if err := qtx.CreateMovieGenre(ctx, database.CreateMovieGenreParams{
+		err = qtx.CreateMovieGenre(ctx, database.CreateMovieGenreParams{
 			MovieID: movieID,
 			GenreID: dbGenre.ID,
-		}); err != nil {
+		})
+
+		if err != nil {
 			return fmt.Errorf("create movie genre relationship failed: %w", err)
 		}
 	}

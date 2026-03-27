@@ -3,7 +3,6 @@ package main
 import (
   "database/sql"
   "errors"
-  "igloo/cmd/internal/database"
   "igloo/cmd/internal/helpers"
   "mime"
   "net/http"
@@ -15,48 +14,20 @@ import (
 )
 
 // GetLatestMovies returns the 12 most recently added movies from the database.
-// Response includes id, title, poster_path (path only; frontend builds image URL), and year.
+// Response includes id, title, poster_path (path only; frontend builds full URL), and year.
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
-  rows, err := app.Queries.GetLatestMovies(r.Context())
+  movies, err := app.Queries.GetLatestMovies(r.Context())
   if err != nil {
     app.Logger.Error("failed to get latest movies", "error", err)
     helpers.ErrorJSON(w, err)
     return
   }
 
-  movies := make([]map[string]any, 0, len(rows))
-  for _, row := range rows {
-    var posterPath any
-    if row.PosterPath.Valid && row.PosterPath.String != "" {
-      posterPath = row.PosterPath.String
-    } else {
-      posterPath = nil
-    }
-
-    var year any
-    if row.Year.Valid {
-      year = row.Year.Int64
-    } else {
-      year = nil
-    }
-
-    movies = append(movies, map[string]any{
-      "id":           row.ID,
-      "title":        row.Title,
-      "poster_path":  posterPath,
-      "year":         year,
-    })
-  }
-
-  // Ensure we return [] not null when empty
-  if movies == nil {
-    movies = []map[string]any{}
-  }
-
   res := helpers.JSONResponse{
     Error: false,
     Data:  map[string]any{"movies": movies},
   }
+
   helpers.WriteJSON(w, http.StatusOK, res)
 }
 
@@ -129,192 +100,101 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
     return
   }
 
-  // Build movie response with paths only (no URL building)
-  movieData := movieDetailsMovieToMap(movie)
-
-  // Build cast with artist_profile as path only
-  castData := make([]map[string]any, 0, len(cast))
-  for _, c := range cast {
-    profile := any(nil)
-    if c.ArtistProfile.Valid && c.ArtistProfile.String != "" {
-      profile = c.ArtistProfile.String
-    }
-    castData = append(castData, map[string]any{
-      "id":             c.ID,
-      "movie_id":       c.MovieID,
-      "artist_id":      c.ArtistID,
-      "character":      c.Character,
-      "cast_order":     c.CastOrder,
-      "artist_name":    c.ArtistName,
-      "artist_profile": profile,
-    })
+  res := helpers.JSONResponse{
+    Error: false,
+    Data: map[string]any{
+      "movie":                movie,
+      "cast":                 cast,
+      "crew":                 crew,
+      "genres":               genres,
+      "production_companies": productionCompanies,
+      "extra_videos":         extraVideos,
+    },
   }
 
-  // Build crew with artist_profile as path only
-  crewData := make([]map[string]any, 0, len(crew))
-  for _, c := range crew {
-    profile := any(nil)
-    if c.ArtistProfile.Valid && c.ArtistProfile.String != "" {
-      profile = c.ArtistProfile.String
-    }
-    crewData = append(crewData, map[string]any{
-      "id":             c.ID,
-      "movie_id":       c.MovieID,
-      "artist_id":      c.ArtistID,
-      "job":            c.Job,
-      "department":     c.Department,
-      "artist_name":    c.ArtistName,
-      "artist_profile": profile,
-    })
+  helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetMovieTechnicalDetails returns video/audio streams, subtitles, and chapters
+// for a movie. All data comes from the database (populated by the scanner via ffprobe).
+func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
+  idParam := chi.URLParam(r, "id")
+  id, err := strconv.ParseInt(idParam, 10, 64)
+  if err != nil {
+    helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+    return
   }
 
-  // Build genres (id, tag)
-  genresData := make([]map[string]any, 0, len(genres))
-  for _, g := range genres {
-    genresData = append(genresData, map[string]any{"id": g.ID, "tag": g.Tag})
+  ctx := r.Context()
+
+  tx, err := app.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+  if err != nil {
+    app.Logger.Error("failed to begin transaction", "error", err)
+    helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+    return
+  }
+  defer tx.Rollback()
+
+  qtx := app.Queries.WithTx(tx)
+
+  movie, err := qtx.GetMovieByID(ctx, id)
+  if err != nil {
+    if errors.Is(err, sql.ErrNoRows) {
+      helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
+      return
+    }
+    app.Logger.Error("failed to get movie", "error", err, "id", id)
+    helpers.ErrorJSON(w, errors.New("failed to fetch technical details"))
+    return
   }
 
-  // Build production companies with logo as path only
-  companiesData := make([]map[string]any, 0, len(productionCompanies))
-  for _, pc := range productionCompanies {
-    logo := any(nil)
-    if pc.Logo.Valid && pc.Logo.String != "" {
-      logo = pc.Logo.String
-    }
-    country := any(nil)
-    if pc.Country.Valid && pc.Country.String != "" {
-      country = pc.Country.String
-    }
-    companiesData = append(companiesData, map[string]any{
-      "id":      pc.ID,
-      "name":    pc.Name,
-      "tmdb_id": pc.TmdbID,
-      "logo":    logo,
-      "country": country,
-    })
+  videoStreams, err := qtx.GetVideoStreamsByMovieID(ctx, id)
+  if err != nil {
+    app.Logger.Error("failed to get video streams", "error", err, "movie_id", id)
+    helpers.ErrorJSON(w, errors.New("failed to fetch video streams"))
+    return
   }
 
-  // Build extra videos (trailers, featurettes) for playback
-  extraVideosData := make([]map[string]any, 0, len(extraVideos))
-  for _, v := range extraVideos {
-    externalID := any(nil)
-    if v.ExternalID.Valid {
-      externalID = v.ExternalID.String
-    }
-    extraVideosData = append(extraVideosData, map[string]any{
-      "id":          v.ID,
-      "title":       v.Title,
-      "external_id": externalID,
-      "key":         v.Key,
-      "type":        v.Type,
-      "site":        v.Site,
-      "official":    v.Official,
-    })
+  audioStreams, err := qtx.GetAudioStreamsByMovieID(ctx, id)
+  if err != nil {
+    app.Logger.Error("failed to get audio streams", "error", err, "movie_id", id)
+    helpers.ErrorJSON(w, errors.New("failed to fetch audio streams"))
+    return
+  }
+
+  subtitles, err := qtx.GetSubtitlesByMovieID(ctx, id)
+  if err != nil {
+    app.Logger.Error("failed to get subtitles", "error", err, "movie_id", id)
+    helpers.ErrorJSON(w, errors.New("failed to fetch subtitles"))
+    return
+  }
+
+  chapters, err := qtx.GetChaptersByMovieID(ctx, sql.NullInt64{Int64: id, Valid: true})
+  if err != nil {
+    app.Logger.Error("failed to get chapters", "error", err, "movie_id", id)
+    helpers.ErrorJSON(w, errors.New("failed to fetch chapters"))
+    return
   }
 
   res := helpers.JSONResponse{
     Error: false,
     Data: map[string]any{
-      "movie":                movieData,
-      "cast":                 castData,
-      "crew":                 crewData,
-      "genres":               genresData,
-      "production_companies": companiesData,
-      "extra_videos":         extraVideosData,
+      "movie": map[string]any{
+        "file_name": movie.FileName,
+        "file_path": movie.FilePath,
+        "size":      movie.Size,
+        "container": movie.Container,
+        "mime_type": movie.MimeType,
+        "run_time":  movie.RunTime,
+      },
+      "video_streams": videoStreams,
+      "audio_streams": audioStreams,
+      "subtitles":     subtitles,
+      "chapters":      chapters,
     },
   }
+
   helpers.WriteJSON(w, http.StatusOK, res)
-}
-
-// movieDetailsMovieToMap converts a Movie row to a response map with paths only (no URL building) and snake_case keys.
-func movieDetailsMovieToMap(m database.Movie) map[string]any {
-  posterPath := any(nil)
-  if m.PosterPath.Valid && m.PosterPath.String != "" {
-    posterPath = m.PosterPath.String
-  }
-  backdropPath := any(nil)
-  if m.BackdropPath.Valid && m.BackdropPath.String != "" {
-    backdropPath = m.BackdropPath.String
-  }
-  year := any(nil)
-  if m.Year.Valid {
-    year = m.Year.Int64
-  }
-  releaseDate := any(nil)
-  if m.ReleaseDate.Valid {
-    releaseDate = m.ReleaseDate.String
-  }
-  overview := any(nil)
-  if m.Overview.Valid {
-    overview = m.Overview.String
-  }
-  tagLine := any(nil)
-  if m.TagLine.Valid {
-    tagLine = m.TagLine.String
-  }
-  certification := any(nil)
-  if m.Certification.Valid {
-    certification = m.Certification.String
-  }
-  criticRating := any(nil)
-  if m.CriticRating.Valid {
-    criticRating = m.CriticRating.Float64
-  }
-  audienceRating := any(nil)
-  if m.AudienceRating.Valid {
-    audienceRating = m.AudienceRating.Float64
-  }
-  revenue := any(nil)
-  if m.Revenue.Valid {
-    revenue = m.Revenue.Float64
-  }
-  budget := any(nil)
-  if m.Budget.Valid {
-    budget = m.Budget.Float64
-  }
-  runTime := any(nil)
-  if m.RunTime.Valid {
-    runTime = m.RunTime.Int64
-  }
-  tmdbID := any(nil)
-  if m.TmdbID.Valid {
-    tmdbID = m.TmdbID.Int64
-  }
-  imdbID := any(nil)
-  if m.ImdbID.Valid {
-    imdbID = m.ImdbID.String
-  }
-  language := any(nil)
-  if m.Language.Valid {
-    language = m.Language.String
-  }
-
-  return map[string]any{
-    "id":              m.ID,
-    "title":           m.Title,
-    "file_path":       m.FilePath,
-    "file_name":       m.FileName,
-    "size":            m.Size,
-    "container":       m.Container,
-    "adult":           m.Adult,
-    "tmdb_id":         tmdbID,
-    "imdb_id":         imdbID,
-    "poster_path":     posterPath,
-    "backdrop_path":   backdropPath,
-    "language":        language,
-    "year":            year,
-    "release_date":    releaseDate,
-    "overview":        overview,
-    "tag_line":        tagLine,
-    "certification":   certification,
-    "critic_rating":   criticRating,
-    "audience_rating": audienceRating,
-    "revenue":         revenue,
-    "budget":          budget,
-    "run_time":        runTime,
-    "created_at":      m.CreatedAt,
-    "updated_at":      m.UpdatedAt,
-  }
 }
 
 // StreamMovie streams the movie file for playback (direct stream, no transcoding).
@@ -326,7 +206,7 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
     return
   }
 
-  movie, err := app.Queries.GetMovieByID(r.Context(), id)
+  movie, err := app.Queries.GetMovieForDirectStream(r.Context(), id)
   if err != nil {
     if errors.Is(err, sql.ErrNoRows) {
       helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusNotFound)
@@ -367,6 +247,7 @@ func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
       contentType = "application/octet-stream"
     }
   }
+
   w.Header().Set("Content-Type", contentType)
 
   http.ServeContent(w, r, movie.FileName, stat.ModTime(), file)

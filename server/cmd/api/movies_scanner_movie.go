@@ -190,14 +190,15 @@ func titleMatchConfidence(searchTitle, movieTitle string) bool {
 }
 
 // selectBestTmdbMatch selects the best matching movie from TMDB search results.
-// When targetYear > 0: prefer results that match that year (with year-match score bonus);
-// if none match, fall back to best by popularity and vote average.
+// When targetYear > 0: only results whose release year matches are considered; if none
+// match, returns nil so the caller can fall back to the first search hit with a title
+// confidence check. When targetYear == 0, picks the best candidate by popularity and vote average.
 func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetYear int) *tmdb.TmdbMovie {
 	if len(results) == 0 {
 		return nil
 	}
 
-	// When we have a target year, first try to find a result that matches it
+	// When we have a target year, only year-matching results qualify
 	if targetYear > 0 {
 		var bestMatch *tmdb.TmdbMovie
 		var bestScore float64 = -1
@@ -213,13 +214,10 @@ func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetYear int) *tmdb.TmdbMov
 				bestMatch = movie
 			}
 		}
-		if bestMatch != nil {
-			return bestMatch
-		}
-		// No year match: fall through to best by popularity and vote average
+		return bestMatch
 	}
 
-	// No year to match (or no result matched target year): pick best by popularity and vote average
+	// No target year: pick best by popularity and vote average
 	var bestMatch *tmdb.TmdbMovie
 	var bestScore float64 = -1
 	for i := range results {

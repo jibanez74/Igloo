@@ -126,7 +126,7 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
   return (
     <div
       ref={ref}
-      className={`group flex items-center gap-3 px-3 py-3 transition-all duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
+      className={`group flex items-center gap-3 p-3 transition-all duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
         isCurrentTrack ? "bg-slate-800/40" : ""
       } ${isDragging ? "opacity-50 shadow-lg ring-2 ring-amber-400/50" : ""}`}
     >

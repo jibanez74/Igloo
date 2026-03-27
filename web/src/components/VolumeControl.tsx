@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
 
-type MediaElement = HTMLAudioElement | HTMLVideoElement;
+  type MediaElement = HTMLAudioElement | HTMLVideoElement;
 
 type VolumeControlProps = {
   mediaRef: React.RefObject<MediaElement | null>;
@@ -91,7 +91,7 @@ export default function VolumeControl({
       <button
         onClick={toggleMute}
         className={`flex items-center justify-center rounded-full text-slate-400 transition-colors hover:text-white focus:ring-2 focus:outline-none ${styles.focusRing} ${
-          isExpanded ? "h-10 w-10" : "size-8 hover:bg-slate-800"
+          isExpanded ? "size-10" : "size-8 hover:bg-slate-800"
         }`}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >

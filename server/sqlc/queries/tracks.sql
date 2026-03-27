@@ -1,14 +1,9 @@
 -- name: GetTrack :one
 SELECT * FROM tracks WHERE id = ? LIMIT 1;
 
--- name: CheckTrackUnchanged :one
--- Quick check if track exists with same path and size (likely unchanged)
-SELECT 1 FROM tracks WHERE file_path = ? AND size = ? LIMIT 1;
-
--- name: GetAllTrackPathsAndSizes :many
--- Returns all track file paths and sizes for efficient batch skip-checking during scans.
--- Used to pre-load existing tracks into memory, replacing N individual queries with 1.
-SELECT file_path, size FROM tracks;
+-- name: GetTrackPathsAndSizesByPaths :many
+-- Returns file_path and size for tracks whose file_path is in the given list (for batch unchanged check).
+SELECT file_path, size FROM tracks WHERE file_path IN (sqlc.slice('paths'));
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (

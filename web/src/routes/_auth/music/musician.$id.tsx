@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
+import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import TrackItem from "@/components/TrackItem";
@@ -76,7 +77,7 @@ function MusicianDetailsContent({
 }: MusicianDetailsResponseType) {
   const audioPlayer = useAudioPlayer();
 
-  const thumbUrl = unwrapString(musician.thumb);
+  const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const summary = unwrapString(musician.summary);
   const spotifyPopularityRaw = unwrapFloat(musician.spotify_popularity);
   const spotifyPopularity = spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
@@ -381,7 +382,7 @@ function MusicianDetailsContent({
 }
 
 function AlbumCard({ album }: { album: MusicianAlbumType }) {
-  const coverUrl = unwrapString(album.cover);
+  const coverUrl = getMediaImageUrl(unwrapString(album.cover));
   const year = unwrapInt(album.year);
 
   return (

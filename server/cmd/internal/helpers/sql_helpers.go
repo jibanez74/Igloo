@@ -88,12 +88,11 @@ func ParseDate(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("empty string")
 	}
 
-	// Common date formats in audio metadata and TMDB (allow single-digit month/day)
+	// Common date formats in audio metadata
 	formats := []string{
 		"2006-01-02",          // ISO 8601
-		"2006-1-2",            // ISO-style with single-digit month/day (e.g. 2023-1-5)
+		"2006-1-2",            // ISO 8601 without leading zeros (e.g. TMDB-style)
 		"2006-01-02T15:04:05", // ISO 8601 with time
-		"2006-1-2T15:04:05",  // with time, single-digit month/day
 		"2006",                // Year only
 		"01/02/2006",          // US format
 		"02-01-2006",          // European format

@@ -24,7 +24,7 @@ func extractYearFromReleaseDate(releaseDate string) int {
 }
 
 // getOrCreateArtistFromCache gets an artist from cache or creates/upserts it in the database.
-// Returns the database artist and an error. Stores only the TMDB profile path (no URL building).
+// Returns the database artist and an error.
 func (app *Application) getOrCreateArtistFromCache(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -38,7 +38,7 @@ func (app *Application) getOrCreateArtistFromCache(
 		return cached, nil
 	}
 
-	// Store profile path only; frontend builds the image URL
+	// Store profile path only (frontend builds full URL; Phase 0)
 	profile := helpers.NullString(profilePath)
 
 	// Upsert artist

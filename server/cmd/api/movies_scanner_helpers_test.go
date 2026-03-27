@@ -79,9 +79,6 @@ func TestExtractYearFromReleaseDate(t *testing.T) {
 	}
 }
 
-// buildTmdbImageURL was removed; TMDB image URLs are built on the frontend only.
-// Scanner and API now store/return paths only.
-
 func TestParseBitRate(t *testing.T) {
 	tests := []struct {
 		name     string

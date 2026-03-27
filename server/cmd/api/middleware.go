@@ -28,3 +28,27 @@ func (app *Application) IsAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// requireAdmin checks that the current session belongs to an admin user.
+// On failure it writes the appropriate HTTP error and returns 0.
+// On success it returns the admin's user ID.
+func (app *Application) requireAdmin(w http.ResponseWriter, r *http.Request) int64 {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return 0
+	}
+
+	user, err := app.Queries.GetUser(r.Context(), userID)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return 0
+	}
+
+	if !user.IsAdmin {
+		helpers.ErrorJSON(w, errors.New("admin access required"), http.StatusForbidden)
+		return 0
+	}
+
+	return userID
+}

@@ -41,7 +41,7 @@ export default function MoviesInTheaters() {
           role="status"
           aria-label="Loading movies..."
         >
-          <Spinner className="size-8 text-cyan-400" />
+          <Spinner className="size-8 text-amber-400" />
           <span className="sr-only">Loading movies...</span>
         </div>
       ) : hasError ? (
@@ -59,7 +59,7 @@ export default function MoviesInTheaters() {
         <>
           <span
             tabIndex={0}
-            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-4 focus:py-2 focus:text-slate-900"
             aria-label={`Now Playing in Theaters section, ${movies.length} movies`}
           >
             Now Playing in Theaters - {movies.length} movies
@@ -72,8 +72,8 @@ export default function MoviesInTheaters() {
         </>
       ) : (
         <div className="py-12 text-center sm:py-16">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-slate-800">
-            <Film className="size-6 text-cyan-600" aria-hidden="true" />
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-amber-500/20 bg-slate-800">
+            <Film className="size-6 text-amber-600" aria-hidden="true" />
           </div>
           <h3 className="mb-2 text-lg font-semibold text-slate-300">
             No Movies Available

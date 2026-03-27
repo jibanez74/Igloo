@@ -58,12 +58,39 @@ export type {
   TheaterMovieType,
   MovieDetailsType,
   LibraryMovieDetailsMovieType,
-  LibraryCastMemberType,
-  LibraryCrewMemberType,
-  LibraryGenreType,
-  LibraryExtraVideoType,
   LibraryMovieDetailsResponse,
+  LibraryMovieCastType,
+  LibraryMovieCrewType,
+  LibraryMovieGenreType,
+  LibraryMovieProductionCompanyType,
+  LibraryMovieExtraVideoType,
+  MovieTechnicalDetailsResponse,
+  TmdbSearchResultType,
+  VideoStreamType,
+  AudioStreamType,
+  SubtitleType,
+  ChapterType,
 } from "./movies";
+
+// Movie playback route (search params)
+export type { PlaySearchParams } from "./movie-play";
+export { playSearchSchema } from "./movie-play";
+
+// Library movie details page (UI sections)
+export type {
+  MovieDetailsBackdropProps,
+  MovieDetailsSkipLinksProps,
+  MovieDetailsPosterBlockProps,
+  MovieDetailsTitleHeadingProps,
+  MovieDetailsMetadataChipsProps,
+  MovieDetailsGenresListProps,
+  MovieDetailsHeroActionsProps,
+  MovieOverviewSectionProps,
+  MovieKeyCrewSectionProps,
+  MovieAdditionalDetailsSectionProps,
+  MovieExtraVideosSectionProps,
+  MovieProductionCompaniesSectionProps,
+} from "./movie-details-page";
 
 // Audio player types
 export type {

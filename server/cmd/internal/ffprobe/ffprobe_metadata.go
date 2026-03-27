@@ -37,7 +37,12 @@ type Stream struct {
 	ColorPrimaries string `json:"color_primaries"`
 	ColorSpace     string `json:"color_space"`
 
-	Tags StreamTags `json:"tags"`
+	Tags        StreamTags        `json:"tags"`
+	Disposition StreamDisposition `json:"disposition"`
+}
+
+type StreamDisposition struct {
+	AttachedPic int `json:"attached_pic"`
 }
 
 type StreamTags struct {

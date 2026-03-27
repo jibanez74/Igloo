@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
-import { buildTmdbImageUrl } from "@/lib/movie-details-view";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { TheaterMovieType } from "@/types";
 
 type MovieCardProps = {
@@ -11,23 +11,25 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
-  const posterUrl = buildTmdbImageUrl(poster_path ?? null, TMDB_POSTER_SIZE);
+  const posterUrl = poster_path
+    ? buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE)
+    : "";
 
-    const rating = vote_average ? vote_average.toFixed(1) : null;
+  const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date ? new Date(release_date).getFullYear() : null;
 
   const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-teal-500 text-white"; // Northern lights green-blue
-    if (score >= 5) return "bg-sky-500 text-white"; // Glacier blue
-    return "bg-slate-500 text-white"; // Frozen gray
+    if (score >= 7) return "bg-amber-500 text-slate-900"; // Strong
+    if (score >= 5) return "bg-amber-400/80 text-slate-900"; // Mid
+    return "bg-slate-500 text-white"; // Low
   };
 
   return (
-    <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20">
+    <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20">
       <Link
         to="/movies/in-theaters/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        className="block rounded-xl focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}

@@ -142,18 +142,3 @@ func (q *Queries) RemoveCollaborator(ctx context.Context, arg RemoveCollaborator
 	_, err := q.exec(ctx, q.removeCollaboratorStmt, removeCollaborator, arg.PlaylistID, arg.UserID)
 	return err
 }
-
-const updateCollaboratorPermission = `-- name: UpdateCollaboratorPermission :exec
-UPDATE playlist_collaborators SET can_edit = ? WHERE playlist_id = ? AND user_id = ?
-`
-
-type UpdateCollaboratorPermissionParams struct {
-	CanEdit    bool  `json:"can_edit"`
-	PlaylistID int64 `json:"playlist_id"`
-	UserID     int64 `json:"user_id"`
-}
-
-func (q *Queries) UpdateCollaboratorPermission(ctx context.Context, arg UpdateCollaboratorPermissionParams) error {
-	_, err := q.exec(ctx, q.updateCollaboratorPermissionStmt, updateCollaboratorPermission, arg.CanEdit, arg.PlaylistID, arg.UserID)
-	return err
-}

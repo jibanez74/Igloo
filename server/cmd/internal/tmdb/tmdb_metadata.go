@@ -83,6 +83,31 @@ type TmdbMovie struct {
 	} `json:"release_dates"`
 }
 
+// TmdbMovieSearchResult is the JSON shape for Igloo TMDB search/identify list responses.
+// It uses tmdb_id to match the frontend contract; TmdbMovie uses json:"id" when
+// unmarshaling the TMDB API, so it is not suitable to embed directly in these responses.
+type TmdbMovieSearchResult struct {
+	TmdbID      int    `json:"tmdb_id"`
+	Title       string `json:"title"`
+	ReleaseDate string `json:"release_date"`
+	Overview    string `json:"overview"`
+	PosterPath  string `json:"poster_path"`
+}
+
+// NewTmdbMovieSearchResult maps a TmdbMovie to the slim search/identify API shape.
+func NewTmdbMovieSearchResult(m *TmdbMovie) TmdbMovieSearchResult {
+	if m == nil {
+		return TmdbMovieSearchResult{}
+	}
+	return TmdbMovieSearchResult{
+		TmdbID:      m.TmdbID,
+		Title:       m.Title,
+		ReleaseDate: m.ReleaseDate,
+		Overview:    m.Overview,
+		PosterPath:  m.PosterPath,
+	}
+}
+
 // Certification returns the parental rating (e.g. PG-13, R) from TMDB release_dates.
 // Prefers US certification; otherwise returns the first non-empty certification from any country.
 func (m *TmdbMovie) Certification() string {

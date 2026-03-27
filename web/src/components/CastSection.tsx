@@ -1,8 +1,10 @@
 import { User } from "lucide-react";
-import type { MovieCastMemberView } from "@/lib/movie-details-view";
+import { TMDB_PROFILE_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+import type { CastMemberType } from "@/types";
 
 type CastSectionProps = {
-  cast: MovieCastMemberView[];
+  cast: CastMemberType[];
   maxDisplay?: number;
 };
 
@@ -17,22 +19,22 @@ export default function CastSection({
   const displayedCast = cast.slice(0, maxDisplay);
 
   return (
-    <section className="mt-10 animate-in fade-in" aria-labelledby="cast-heading">
+    <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-white"
+        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
         tabIndex={-1}
       >
         Cast
       </h2>
 
       <p className="sr-only">
-        Showing {displayedCast.length} of {cast.length} cast members. Use arrow
-        keys to scroll horizontally.
+        Showing {displayedCast.length} of {cast.length} cast members. Use Tab to
+        move between cast cards, or scroll horizontally to see more.
       </p>
 
       <ul
-        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >
@@ -49,9 +51,9 @@ export default function CastSection({
               aria-setsize={displayedCast.length}
               className="cursor-default outline-none"
             >
-              {actor.imageUrl ? (
+              {actor.profile_path ? (
                 <img
-                  src={actor.imageUrl}
+                  src={buildTmdbImageUrl(actor.profile_path, TMDB_PROFILE_SIZE)}
                   alt={`Photo of ${actor.name}`}
                   className="aspect-2/3 w-full object-cover"
                   loading="lazy"

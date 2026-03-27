@@ -1,30 +1,36 @@
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Film, Play } from "lucide-react";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
-import { buildTmdbImageUrl } from "@/lib/movie-details-view";
+import { Film, Play } from "lucide-react";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestMovieType } from "@/types";
 
 export default function MovieCard({ movie }: { movie: LatestMovieType }) {
   const { id, title, poster_path, year } = movie;
-  const posterUrl = buildTmdbImageUrl(poster_path ?? null, TMDB_POSTER_SIZE);
   const queryClient = useQueryClient();
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
 
+  const ariaTitle = year.Valid ? `${title} ${year.Int64}` : title;
+
+  const posterUrl =
+    poster_path.Valid && poster_path.String !== ""
+      ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
+      : "";
+
   return (
     <article
-      className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in focus-within:ring-2 focus-within:ring-cyan-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/20"
+      className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20"
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
       <Link
         to="/movies/$id"
         params={{ id: String(id) }}
-        className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        aria-label={`${title}${year ? `, ${year}` : ""}`}
+        className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        aria-label={ariaTitle}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}
         <div className="relative aspect-2/3 bg-slate-800">
@@ -57,9 +63,9 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
           <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
             {title}
           </h3>
-          {year != null && (
+          {year.Valid && (
             <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
-              {year}
+              {year.Int64}
             </p>
           )}
         </div>
@@ -69,8 +75,9 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
       <Link
         to="/movies/$id/play"
         params={{ id: String(id) }}
-        className="absolute top-1/2 left-1/2 flex size-14 -translate-x-1/2 -translate-y-1/2 scale-90 items-center justify-center rounded-full bg-cyan-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-cyan-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-        aria-label={`Play ${title}${year ? `, ${year}` : ""}`}
+        search={{ mode: "direct", audio_track: 0 }}
+        className="absolute top-1/2 left-1/2 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        aria-label={`Play ${ariaTitle}`}
       >
         <Play className="size-7 fill-current" aria-hidden="true" />
       </Link>

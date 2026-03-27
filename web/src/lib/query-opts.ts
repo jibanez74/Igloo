@@ -8,6 +8,7 @@ import {
   getMovieDetails,
   getMovieInTheaterDetails,
   getMoviesInTheaters,
+  getMovieTechnicalDetails,
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
@@ -24,6 +25,7 @@ import {
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
+  MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
   MUSICIAN_DETAILS_KEY,
@@ -36,10 +38,31 @@ import {
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 
+/**
+ * TanStack Query cache tuning (v5: `gcTime` replaces former `cacheTime`).
+ *
+ * - staleTime: while fresh, the query will not refetch on mount/window focus.
+ * - gcTime: how long inactive cached data is kept after the last observer unmounts.
+ *
+ * Library / user-editable data uses shorter stale times; TMDB-style catalogs longer.
+ */
+const MIN = 60_000;
+/** 1 min — current user; also long scrolling lists where tracks can change */
+const STALE_1M = MIN;
+const STALE_LIST = 2 * MIN;
+const STALE_CATALOG = 5 * MIN;
+const STALE_THEATERS = 10 * MIN;
+const STALE_TECH = 10 * MIN;
+
+const GC_DEFAULT = 10 * MIN;
+const GC_LONG = 30 * MIN;
+
 export function authUserQueryOpts() {
   return queryOptions({
     queryKey: [AUTH_USER_KEY],
     queryFn: getAuthUser,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -47,6 +70,8 @@ export function latestAlbumsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_ALBUMS_KEY],
     queryFn: getLatestAlbums,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 
@@ -54,6 +79,8 @@ export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
     queryFn: getLatestMovies,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 
@@ -61,6 +88,8 @@ export function inTheatersQueryOpts() {
   return queryOptions({
     queryKey: [MOVIES_IN_THEATERS_KEY],
     queryFn: getMoviesInTheaters,
+    staleTime: STALE_THEATERS,
+    gcTime: GC_LONG,
   });
 }
 
@@ -69,6 +98,8 @@ export function movieDetailsQueryOpts(id: number) {
     queryKey: [MOVIE_DETAILS_KEY, id],
     queryFn: () => getMovieInTheaterDetails(id),
     enabled: id > 0,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 
@@ -77,6 +108,18 @@ export function libraryMovieDetailsQueryOpts(id: number) {
     queryKey: [LIBRARY_MOVIE_DETAILS_KEY, id],
     queryFn: () => getMovieDetails(id),
     enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function movieTechnicalDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_TECHNICAL_DETAILS_KEY, id],
+    queryFn: () => getMovieTechnicalDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_TECH,
+    gcTime: GC_LONG,
   });
 }
 
@@ -84,6 +127,8 @@ export function albumDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [ALBUM_DETAILS_KEY, id],
     queryFn: () => getAlbumDetails(id),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -96,6 +141,8 @@ export function tracksInfiniteQueryOpts(pageSize = 50) {
       if (lastPage.error || !lastPage.data?.has_more) return undefined;
       return lastPage.data.offset + lastPage.data.limit;
     },
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -103,6 +150,8 @@ export function musicStatsQueryOpts() {
   return queryOptions({
     queryKey: [MUSIC_STATS_KEY],
     queryFn: getMusicStats,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -110,6 +159,8 @@ export function settingsQueryOpts() {
   return queryOptions({
     queryKey: [SETTINGS_KEY],
     queryFn: getSettings,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 
@@ -117,6 +168,8 @@ export function albumsPaginatedQueryOpts(page: number, perPage: number = 24) {
   return queryOptions({
     queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
     queryFn: () => getAlbumsPaginated(page, perPage),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -127,6 +180,8 @@ export function musiciansPaginatedQueryOpts(
   return queryOptions({
     queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
     queryFn: () => getMusiciansPaginated(page, perPage),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -134,6 +189,8 @@ export function musicianDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [MUSICIAN_DETAILS_KEY, id],
     queryFn: () => getMusicianDetails(id),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -142,6 +199,8 @@ export function playlistsQueryOpts() {
   return queryOptions({
     queryKey: [PLAYLISTS_KEY],
     queryFn: getPlaylists,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -150,6 +209,8 @@ export function playlistDetailsQueryOpts(id: number) {
     queryKey: [PLAYLIST_DETAILS_KEY, id],
     queryFn: () => getPlaylistDetails(id),
     enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
   });
 }
 
@@ -167,5 +228,7 @@ export function playlistTracksInfiniteQueryOpts(
       return lastPage.data.next_offset;
     },
     enabled: playlistId > 0,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
   });
 }

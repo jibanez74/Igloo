@@ -10,55 +10,6 @@ import (
 	"database/sql"
 )
 
-const getUserListeningHistoryByPeriod = `-- name: GetUserListeningHistoryByPeriod :many
-SELECT
-    DATE(uph.played_at) AS play_date,
-    COUNT(*) AS play_count,
-    SUM(uph.duration_played) AS total_duration
-FROM user_play_history uph
-WHERE uph.user_id = ?
-  AND uph.played_at >= ?
-  AND uph.played_at <= ?
-GROUP BY DATE(uph.played_at)
-ORDER BY play_date ASC
-`
-
-type GetUserListeningHistoryByPeriodParams struct {
-	UserID     int64  `json:"user_id"`
-	PlayedAt   string `json:"played_at"`
-	PlayedAt_2 string `json:"played_at_2"`
-}
-
-type GetUserListeningHistoryByPeriodRow struct {
-	PlayDate      interface{}     `json:"play_date"`
-	PlayCount     int64           `json:"play_count"`
-	TotalDuration sql.NullFloat64 `json:"total_duration"`
-}
-
-// Returns listening stats grouped by date for charts
-func (q *Queries) GetUserListeningHistoryByPeriod(ctx context.Context, arg GetUserListeningHistoryByPeriodParams) ([]GetUserListeningHistoryByPeriodRow, error) {
-	rows, err := q.query(ctx, q.getUserListeningHistoryByPeriodStmt, getUserListeningHistoryByPeriod, arg.UserID, arg.PlayedAt, arg.PlayedAt_2)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetUserListeningHistoryByPeriodRow{}
-	for rows.Next() {
-		var i GetUserListeningHistoryByPeriodRow
-		if err := rows.Scan(&i.PlayDate, &i.PlayCount, &i.TotalDuration); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getUserListeningStats = `-- name: GetUserListeningStats :one
 SELECT
     COALESCE(SUM(uts.play_count), 0) AS total_plays,
@@ -447,25 +398,6 @@ func (q *Queries) GetUserTopTracks(ctx context.Context, arg GetUserTopTracksPara
 		return nil, err
 	}
 	return items, nil
-}
-
-const getUserTrackPlayCount = `-- name: GetUserTrackPlayCount :one
-SELECT play_count
-FROM user_track_stats
-WHERE user_id = ? AND track_id = ?
-`
-
-type GetUserTrackPlayCountParams struct {
-	UserID  int64 `json:"user_id"`
-	TrackID int64 `json:"track_id"`
-}
-
-// Returns the play count for a specific track
-func (q *Queries) GetUserTrackPlayCount(ctx context.Context, arg GetUserTrackPlayCountParams) (int64, error) {
-	row := q.queryRow(ctx, q.getUserTrackPlayCountStmt, getUserTrackPlayCount, arg.UserID, arg.TrackID)
-	var play_count int64
-	err := row.Scan(&play_count)
-	return play_count, err
 }
 
 const recordPlayEvent = `-- name: RecordPlayEvent :exec

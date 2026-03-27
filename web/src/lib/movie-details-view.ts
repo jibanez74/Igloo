@@ -12,6 +12,7 @@ import {
   TMDB_PROFILE_SIZE,
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
+import { unwrapString } from "@/lib/nullable";
 import type { MovieDetailsType } from "@/types";
 import type { LibraryMovieDetailsResponse } from "@/types";
 
@@ -238,7 +239,7 @@ export function libraryToMovieDetailsView(
     id: c.id,
     name: c.artist_name,
     character: c.character,
-    imageUrl: buildTmdbImageUrl(c.artist_profile ?? null, TMDB_PROFILE_SIZE),
+    imageUrl: buildTmdbImageUrl(unwrapString(c.artist_profile), TMDB_PROFILE_SIZE),
   }));
 
   const genres: MovieGenreView[] = res.genres.map(g => ({
@@ -278,7 +279,7 @@ export function libraryToMovieDetailsView(
   ).map((pc) => ({
     id: pc.id,
     name: pc.name,
-    logoUrl: buildTmdbImageUrl(pc.logo ?? null, TMDB_LOGO_SIZE),
+    logoUrl: buildTmdbImageUrl(unwrapString(pc.logo), TMDB_LOGO_SIZE),
   }));
 
   return {

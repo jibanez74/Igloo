@@ -17,7 +17,6 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  a.spotify_popularity,
   (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) as track_count
 FROM
   albums a
@@ -31,16 +30,14 @@ ORDER BY
 `
 
 type GetAlbumsByMusicianIDRow struct {
-	ID                int64           `json:"id"`
-	Title             string          `json:"title"`
-	Cover             sql.NullString  `json:"cover"`
-	Year              sql.NullInt64   `json:"year"`
-	ReleaseDate       sql.NullString  `json:"release_date"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	TrackCount        int64           `json:"track_count"`
+	ID          int64          `json:"id"`
+	Title       string         `json:"title"`
+	Cover       sql.NullString `json:"cover"`
+	Year        sql.NullInt64  `json:"year"`
+	ReleaseDate sql.NullString `json:"release_date"`
+	TrackCount  int64          `json:"track_count"`
 }
 
-// Returns all albums associated with a musician via the musician_albums join table
 // Sorted by release date (newest first), then by title
 func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getAlbumsByMusicianIDStmt, getAlbumsByMusicianID, musicianID)
@@ -57,7 +54,6 @@ func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) (
 			&i.Cover,
 			&i.Year,
 			&i.ReleaseDate,
-			&i.SpotifyPopularity,
 			&i.TrackCount,
 		); err != nil {
 			return nil, err
@@ -74,10 +70,9 @@ func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) (
 }
 
 const getMusicianByID = `-- name: GetMusicianByID :one
-SELECT id, name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb, created_at, updated_at FROM musicians WHERE id = ? LIMIT 1
+SELECT id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at FROM musicians WHERE id = ? LIMIT 1
 `
 
-// Returns a single musician by ID with full details
 func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, error) {
 	row := q.queryRow(ctx, q.getMusicianByIDStmt, getMusicianByID, id)
 	var i Musician
@@ -86,9 +81,7 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 		&i.Name,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.SpotifyID,
+		&i.MusicbrainzID,
 		&i.Thumb,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -96,21 +89,39 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 	return i, err
 }
 
-const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb, created_at, updated_at FROM musicians WHERE spotify_id = ? LIMIT 1
+const getMusicianByMusicBrainzID = `-- name: GetMusicianByMusicBrainzID :one
+SELECT id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at FROM musicians WHERE musicbrainz_id = ? LIMIT 1
 `
 
-func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error) {
-	row := q.queryRow(ctx, q.getMusicianBySpotifyIDStmt, getMusicianBySpotifyID, spotifyID)
+func (q *Queries) GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error) {
+	row := q.queryRow(ctx, q.getMusicianByMusicBrainzIDStmt, getMusicianByMusicBrainzID, musicbrainzID)
 	var i Musician
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.SpotifyID,
+		&i.MusicbrainzID,
+		&i.Thumb,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getMusicianByName = `-- name: GetMusicianByName :one
+SELECT id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at FROM musicians WHERE name = ? LIMIT 1
+`
+
+func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
+	row := q.queryRow(ctx, q.getMusicianByNameStmt, getMusicianByName, name)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SortName,
+		&i.Summary,
+		&i.MusicbrainzID,
 		&i.Thumb,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -189,7 +200,7 @@ SELECT
   m.id,
   m.name,
   m.thumb,
-  m.spotify_id
+  m.musicbrainz_id
 FROM
   musicians m
   INNER JOIN musician_albums ma ON m.id = ma.musician_id
@@ -200,10 +211,10 @@ ORDER BY
 `
 
 type GetMusiciansByAlbumIDRow struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	Thumb     sql.NullString `json:"thumb"`
-	SpotifyID sql.NullString `json:"spotify_id"`
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	Thumb         sql.NullString `json:"thumb"`
+	MusicbrainzID sql.NullString `json:"musicbrainz_id"`
 }
 
 func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error) {
@@ -219,7 +230,45 @@ func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]G
 			&i.ID,
 			&i.Name,
 			&i.Thumb,
-			&i.SpotifyID,
+			&i.MusicbrainzID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMusiciansNeedingThumbDownload = `-- name: GetMusiciansNeedingThumbDownload :many
+SELECT id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at FROM musicians
+WHERE (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
+  AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''))
+`
+
+func (q *Queries) GetMusiciansNeedingThumbDownload(ctx context.Context) ([]Musician, error) {
+	rows, err := q.query(ctx, q.getMusiciansNeedingThumbDownloadStmt, getMusiciansNeedingThumbDownload)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Musician{}
+	for rows.Next() {
+		var i Musician
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SortName,
+			&i.Summary,
+			&i.MusicbrainzID,
+			&i.Thumb,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -269,7 +318,6 @@ type GetTracksByMusicianIDRow struct {
 	AlbumCover sql.NullString `json:"album_cover"`
 }
 
-// Returns all tracks by a musician, sorted alphabetically by sort_title
 func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error) {
 	rows, err := q.query(ctx, q.getTracksByMusicianIDStmt, getTracksByMusicianID, musicianID)
 	if err != nil {
@@ -306,28 +354,38 @@ func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.Null
 	return items, nil
 }
 
+const updateMusicianThumb = `-- name: UpdateMusicianThumb :exec
+UPDATE musicians SET thumb = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+`
+
+type UpdateMusicianThumbParams struct {
+	Thumb sql.NullString `json:"thumb"`
+	ID    int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMusicianThumb(ctx context.Context, arg UpdateMusicianThumbParams) error {
+	_, err := q.exec(ctx, q.updateMusicianThumbStmt, updateMusicianThumb, arg.Thumb, arg.ID)
+	return err
+}
+
 const upsertMusician = `-- name: UpsertMusician :one
-INSERT INTO musicians (name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO musicians (name, sort_name, summary, musicbrainz_id, thumb)
+VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
-  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
+  musicbrainz_id = COALESCE(excluded.musicbrainz_id, musicians.musicbrainz_id),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
-RETURNING id, name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb, created_at, updated_at
+RETURNING id, name, sort_name, summary, musicbrainz_id, thumb, created_at, updated_at
 `
 
 type UpsertMusicianParams struct {
-	Name              string          `json:"name"`
-	SortName          string          `json:"sort_name"`
-	Summary           sql.NullString  `json:"summary"`
-	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
-	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`
-	SpotifyID         sql.NullString  `json:"spotify_id"`
-	Thumb             sql.NullString  `json:"thumb"`
+	Name          string         `json:"name"`
+	SortName      string         `json:"sort_name"`
+	Summary       sql.NullString `json:"summary"`
+	MusicbrainzID sql.NullString `json:"musicbrainz_id"`
+	Thumb         sql.NullString `json:"thumb"`
 }
 
 func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error) {
@@ -335,9 +393,7 @@ func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) 
 		arg.Name,
 		arg.SortName,
 		arg.Summary,
-		arg.SpotifyPopularity,
-		arg.SpotifyFollowers,
-		arg.SpotifyID,
+		arg.MusicbrainzID,
 		arg.Thumb,
 	)
 	var i Musician
@@ -346,9 +402,7 @@ func (q *Queries) UpsertMusician(ctx context.Context, arg UpsertMusicianParams) 
 		&i.Name,
 		&i.SortName,
 		&i.Summary,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.SpotifyID,
+		&i.MusicbrainzID,
 		&i.Thumb,
 		&i.CreatedAt,
 		&i.UpdatedAt,

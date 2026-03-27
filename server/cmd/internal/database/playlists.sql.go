@@ -10,17 +10,6 @@ import (
 	"database/sql"
 )
 
-const countPlaylistsByUserId = `-- name: CountPlaylistsByUserId :one
-SELECT COUNT(*) as count FROM playlists WHERE user_id = ?
-`
-
-func (q *Queries) CountPlaylistsByUserId(ctx context.Context, userID int64) (int64, error) {
-	row := q.queryRow(ctx, q.countPlaylistsByUserIdStmt, countPlaylistsByUserId, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createPlaylist = `-- name: CreatePlaylist :one
 INSERT INTO playlists (user_id, name, description, cover_image, is_public)
 VALUES (?, ?, ?, ?, ?)
@@ -91,65 +80,6 @@ func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, erro
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getPlaylistsByUserId = `-- name: GetPlaylistsByUserId :many
-SELECT 
-    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.created_at, p.updated_at,
-    (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) as track_count,
-    (SELECT COALESCE(SUM(t.duration), 0) FROM playlist_tracks pt JOIN tracks t ON pt.track_id = t.id WHERE pt.playlist_id = p.id) as total_duration
-FROM playlists p
-WHERE p.user_id = ? 
-ORDER BY p.updated_at DESC
-`
-
-type GetPlaylistsByUserIdRow struct {
-	ID            int64          `json:"id"`
-	UserID        int64          `json:"user_id"`
-	Name          string         `json:"name"`
-	Description   sql.NullString `json:"description"`
-	CoverImage    sql.NullString `json:"cover_image"`
-	IsPublic      bool           `json:"is_public"`
-	FolderID      sql.NullInt64  `json:"folder_id"`
-	CreatedAt     string         `json:"created_at"`
-	UpdatedAt     string         `json:"updated_at"`
-	TrackCount    int64          `json:"track_count"`
-	TotalDuration interface{}    `json:"total_duration"`
-}
-
-func (q *Queries) GetPlaylistsByUserId(ctx context.Context, userID int64) ([]GetPlaylistsByUserIdRow, error) {
-	rows, err := q.query(ctx, q.getPlaylistsByUserIdStmt, getPlaylistsByUserId, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetPlaylistsByUserIdRow{}
-	for rows.Next() {
-		var i GetPlaylistsByUserIdRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.Description,
-			&i.CoverImage,
-			&i.IsPublic,
-			&i.FolderID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.TrackCount,
-			&i.TotalDuration,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getPlaylistsWithCollaboratorAccess = `-- name: GetPlaylistsWithCollaboratorAccess :many

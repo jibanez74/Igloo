@@ -89,6 +89,18 @@ func (q *Queries) CreateMovieProductionCompany(ctx context.Context, arg CreateMo
 	return err
 }
 
+const deleteMovie = `-- name: DeleteMovie :exec
+DELETE FROM movies
+WHERE
+  id = ?
+`
+
+// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
+func (q *Queries) DeleteMovie(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.deleteMovieStmt, deleteMovie, id)
+	return err
+}
+
 const deleteMovieAudioStreams = `-- name: DeleteMovieAudioStreams :exec
 DELETE FROM audio_streams
 WHERE
@@ -101,6 +113,18 @@ func (q *Queries) DeleteMovieAudioStreams(ctx context.Context, movieID int64) er
 	return err
 }
 
+const deleteMovieCast = `-- name: DeleteMovieCast :exec
+DELETE FROM cast
+WHERE
+  movie_id = ?
+`
+
+// Remove all cast entries for a movie (used before re-identifying with TMDB).
+func (q *Queries) DeleteMovieCast(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.deleteMovieCastStmt, deleteMovieCast, movieID)
+	return err
+}
+
 const deleteMovieChapters = `-- name: DeleteMovieChapters :exec
 DELETE FROM chapters
 WHERE
@@ -110,6 +134,18 @@ WHERE
 // Delete all chapters for a movie
 func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64) error {
 	_, err := q.exec(ctx, q.deleteMovieChaptersStmt, deleteMovieChapters, movieID)
+	return err
+}
+
+const deleteMovieCrew = `-- name: DeleteMovieCrew :exec
+DELETE FROM crew
+WHERE
+  movie_id = ?
+`
+
+// Remove all crew entries for a movie (used before re-identifying with TMDB).
+func (q *Queries) DeleteMovieCrew(ctx context.Context, movieID int64) error {
+	_, err := q.exec(ctx, q.deleteMovieCrewStmt, deleteMovieCrew, movieID)
 	return err
 }
 
@@ -173,6 +209,55 @@ func (q *Queries) DeleteMovieVideoStreams(ctx context.Context, movieID int64) er
 	return err
 }
 
+const getAudioStreamsByMovieID = `-- name: GetAudioStreamsByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+FROM
+  audio_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Audio streams for a movie (for technical details and playback settings).
+func (q *Queries) GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error) {
+	rows, err := q.query(ctx, q.getAudioStreamsByMovieIDStmt, getAudioStreamsByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AudioStream{}
+	for rows.Next() {
+		var i AudioStream
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.BitRate,
+			&i.SampleRate,
+			&i.Channels,
+			&i.ChannelLayout,
+			&i.Language,
+			&i.Title,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCastByMovieID = `-- name: GetCastByMovieID :many
 SELECT
   c.id,
@@ -219,6 +304,47 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 			&i.CastOrder,
 			&i.ArtistName,
 			&i.ArtistProfile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getChaptersByMovieID = `-- name: GetChaptersByMovieID :many
+SELECT
+  id, title, start_time, thumb, movie_id
+FROM
+  chapters
+WHERE
+  movie_id = ?
+ORDER BY
+  start_time
+`
+
+// Chapters for a movie (for technical details display).
+func (q *Queries) GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error) {
+	rows, err := q.query(ctx, q.getChaptersByMovieIDStmt, getChaptersByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chapter{}
+	for rows.Next() {
+		var i Chapter
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.StartTime,
+			&i.Thumb,
+			&i.MovieID,
 		); err != nil {
 			return nil, err
 		}
@@ -388,50 +514,6 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 	return items, nil
 }
 
-const getMovieByFilePath = `-- name: GetMovieByFilePath :one
-SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
-FROM
-  movies
-WHERE
-  file_path = ?
-LIMIT
-  1
-`
-
-func (q *Queries) GetMovieByFilePath(ctx context.Context, filePath string) (Movie, error) {
-	row := q.queryRow(ctx, q.getMovieByFilePathStmt, getMovieByFilePath, filePath)
-	var i Movie
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.FilePath,
-		&i.FileName,
-		&i.Size,
-		&i.Container,
-		&i.MimeType,
-		&i.Adult,
-		&i.TmdbID,
-		&i.ImdbID,
-		&i.PosterPath,
-		&i.BackdropPath,
-		&i.Language,
-		&i.Year,
-		&i.ReleaseDate,
-		&i.Overview,
-		&i.TagLine,
-		&i.Certification,
-		&i.CriticRating,
-		&i.AudienceRating,
-		&i.Revenue,
-		&i.Budget,
-		&i.RunTime,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getMovieByID = `-- name: GetMovieByID :one
 SELECT
   id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
@@ -578,6 +660,23 @@ func (q *Queries) GetMovieExtraVideos(ctx context.Context, movieID int64) ([]Ext
 	return items, nil
 }
 
+const getMovieForDirectStream = `-- name: GetMovieForDirectStream :one
+SELECT file_path, file_name, mime_type FROM movies WHERE id = ? LIMIT 1
+`
+
+type GetMovieForDirectStreamRow struct {
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	MimeType string `json:"mime_type"`
+}
+
+func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error) {
+	row := q.queryRow(ctx, q.getMovieForDirectStreamStmt, getMovieForDirectStream, id)
+	var i GetMovieForDirectStreamRow
+	err := row.Scan(&i.FilePath, &i.FileName, &i.MimeType)
+	return i, err
+}
+
 const getProductionCompaniesByMovieID = `-- name: GetProductionCompaniesByMovieID :many
 SELECT
   pc.id,
@@ -618,6 +717,111 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 			&i.TmdbID,
 			&i.Logo,
 			&i.Country,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSubtitlesByMovieID = `-- name: GetSubtitlesByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
+FROM
+  subtitles
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Subtitle tracks for a movie (for technical details display).
+func (q *Queries) GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error) {
+	rows, err := q.query(ctx, q.getSubtitlesByMovieIDStmt, getSubtitlesByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Subtitle{}
+	for rows.Next() {
+		var i Subtitle
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.Language,
+			&i.Title,
+			&i.IsForced,
+			&i.IsDefault,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getVideoStreamsByMovieID = `-- name: GetVideoStreamsByMovieID :many
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+FROM
+  video_streams
+WHERE
+  movie_id = ?
+ORDER BY
+  stream_index
+`
+
+// Video streams for a movie (for technical details display).
+func (q *Queries) GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error) {
+	rows, err := q.query(ctx, q.getVideoStreamsByMovieIDStmt, getVideoStreamsByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []VideoStream{}
+	for rows.Next() {
+		var i VideoStream
+		if err := rows.Scan(
+			&i.ID,
+			&i.MovieID,
+			&i.StreamIndex,
+			&i.Codec,
+			&i.CodecProfile,
+			&i.CodecLevel,
+			&i.BitRate,
+			&i.Width,
+			&i.Height,
+			&i.CodedWidth,
+			&i.CodedHeight,
+			&i.AspectRatio,
+			&i.FrameRate,
+			&i.AvgFrameRate,
+			&i.BitDepth,
+			&i.ColorRange,
+			&i.ColorSpace,
+			&i.ColorPrimaries,
+			&i.ColorTransfer,
+			&i.Language,
+			&i.Title,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -896,6 +1100,107 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 		&i.ColorTransfer,
 		&i.Language,
 		&i.Title,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateMovie = `-- name: UpdateMovie :one
+UPDATE movies
+SET
+  title = ?,
+  tmdb_id = ?,
+  imdb_id = ?,
+  poster_path = ?,
+  backdrop_path = ?,
+  adult = ?,
+  language = ?,
+  year = ?,
+  release_date = ?,
+  overview = ?,
+  tag_line = ?,
+  certification = ?,
+  critic_rating = ?,
+  audience_rating = ?,
+  revenue = ?,
+  budget = ?,
+  run_time = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE
+  id = ?
+RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+`
+
+type UpdateMovieParams struct {
+	Title          string          `json:"title"`
+	TmdbID         sql.NullInt64   `json:"tmdb_id"`
+	ImdbID         sql.NullString  `json:"imdb_id"`
+	PosterPath     sql.NullString  `json:"poster_path"`
+	BackdropPath   sql.NullString  `json:"backdrop_path"`
+	Adult          bool            `json:"adult"`
+	Language       sql.NullString  `json:"language"`
+	Year           sql.NullInt64   `json:"year"`
+	ReleaseDate    sql.NullString  `json:"release_date"`
+	Overview       sql.NullString  `json:"overview"`
+	TagLine        sql.NullString  `json:"tag_line"`
+	Certification  sql.NullString  `json:"certification"`
+	CriticRating   sql.NullFloat64 `json:"critic_rating"`
+	AudienceRating sql.NullFloat64 `json:"audience_rating"`
+	Revenue        sql.NullFloat64 `json:"revenue"`
+	Budget         sql.NullFloat64 `json:"budget"`
+	RunTime        sql.NullInt64   `json:"run_time"`
+	ID             int64           `json:"id"`
+}
+
+// Dedicated UPDATE for movie metadata (used by Edit feature).
+// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
+func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error) {
+	row := q.queryRow(ctx, q.updateMovieStmt, updateMovie,
+		arg.Title,
+		arg.TmdbID,
+		arg.ImdbID,
+		arg.PosterPath,
+		arg.BackdropPath,
+		arg.Adult,
+		arg.Language,
+		arg.Year,
+		arg.ReleaseDate,
+		arg.Overview,
+		arg.TagLine,
+		arg.Certification,
+		arg.CriticRating,
+		arg.AudienceRating,
+		arg.Revenue,
+		arg.Budget,
+		arg.RunTime,
+		arg.ID,
+	)
+	var i Movie
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.FilePath,
+		&i.FileName,
+		&i.Size,
+		&i.Container,
+		&i.MimeType,
+		&i.Adult,
+		&i.TmdbID,
+		&i.ImdbID,
+		&i.PosterPath,
+		&i.BackdropPath,
+		&i.Language,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Overview,
+		&i.TagLine,
+		&i.Certification,
+		&i.CriticRating,
+		&i.AudienceRating,
+		&i.Revenue,
+		&i.Budget,
+		&i.RunTime,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

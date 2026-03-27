@@ -1,15 +1,16 @@
--- name: GetMusicianBySpotifyID :one
-SELECT * FROM musicians WHERE spotify_id = ? LIMIT 1;
+-- name: GetMusicianByName :one
+SELECT * FROM musicians WHERE name = ? LIMIT 1;
+
+-- name: GetMusicianByMusicBrainzID :one
+SELECT * FROM musicians WHERE musicbrainz_id = ? LIMIT 1;
 
 -- name: UpsertMusician :one
-INSERT INTO musicians (name, sort_name, summary, spotify_popularity, spotify_followers, spotify_id, thumb)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO musicians (name, sort_name, summary, musicbrainz_id, thumb)
+VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
-  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
-  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
-  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
+  musicbrainz_id = COALESCE(excluded.musicbrainz_id, musicians.musicbrainz_id),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
@@ -19,7 +20,7 @@ SELECT
   m.id,
   m.name,
   m.thumb,
-  m.spotify_id
+  m.musicbrainz_id
 FROM
   musicians m
   INNER JOIN musician_albums ma ON m.id = ma.musician_id
@@ -49,12 +50,18 @@ ORDER BY
   m.sort_name
 LIMIT ? OFFSET ?;
 
+-- name: UpdateMusicianThumb :exec
+UPDATE musicians SET thumb = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+
+-- name: GetMusiciansNeedingThumbDownload :many
+SELECT * FROM musicians
+WHERE (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
+  AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''));
+
 -- name: GetMusicianByID :one
--- Returns a single musician by ID with full details
 SELECT * FROM musicians WHERE id = ? LIMIT 1;
 
 -- name: GetAlbumsByMusicianID :many
--- Returns all albums associated with a musician via the musician_albums join table
 -- Sorted by release date (newest first), then by title
 SELECT
   a.id,
@@ -62,7 +69,6 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  a.spotify_popularity,
   (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) as track_count
 FROM
   albums a
@@ -75,7 +81,6 @@ ORDER BY
   a.sort_title ASC;
 
 -- name: GetTracksByMusicianID :many
--- Returns all tracks by a musician, sorted alphabetically by sort_title
 SELECT
   t.id,
   t.title,

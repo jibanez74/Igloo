@@ -363,7 +363,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12" role="status" aria-label="Loading albums">
-        <Spinner className="h-8 w-8 text-amber-400" />
+        <Spinner className="size-8 text-amber-400" />
         <span className="sr-only">Loading albums...</span>
       </div>
     );
@@ -491,7 +491,7 @@ function TracksTabContent() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12" role="status" aria-label="Loading tracks">
-        <Spinner className="h-8 w-8 text-amber-400" />
+        <Spinner className="size-8 text-amber-400" />
         <span className="sr-only">Loading tracks...</span>
       </div>
     );
@@ -563,7 +563,7 @@ function TracksTabContent() {
 
         {isFetchingNextPage && (
           <div className="flex justify-center py-4">
-            <Spinner className="h-6 w-6 text-amber-400" />
+            <Spinner className="size-6 text-amber-400" />
           </div>
         )}
       </div>

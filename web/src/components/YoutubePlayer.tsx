@@ -72,12 +72,12 @@ export default function YoutubePlayer({
 
         <div className='relative aspect-video w-full' onKeyDown={handleKeyDown}>
           {error ? (
-            <div className='flex h-full w-full items-center justify-center bg-slate-900'>
+            <div className='flex size-full items-center justify-center bg-slate-900'>
               <p className='text-slate-400'>{error}</p>
             </div>
           ) : (
             <>
-              <div ref={containerRef} className='h-full w-full' />
+              <div ref={containerRef} className='size-full' />
               {/* Loading overlay while player initializes */}
               {!isReady && (
                 <div className='absolute inset-0 flex items-center justify-center bg-slate-900'>

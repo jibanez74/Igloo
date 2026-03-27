@@ -11,8 +11,6 @@ INSERT INTO
   settings (
     tmdb_key,
     jellyfin_token,
-    spotify_client_id,
-    spotify_client_secret,
     hardware_acceleration_device,
     enable_logger,
     enable_watcher,
@@ -24,4 +22,4 @@ INSERT INTO
     logs_dir
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;

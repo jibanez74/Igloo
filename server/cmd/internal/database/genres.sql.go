@@ -9,48 +9,6 @@ import (
 	"context"
 )
 
-const getGenresByAlbumIDDirect = `-- name: GetGenresByAlbumIDDirect :many
-SELECT
-  g.id,
-  g.tag
-FROM
-  genres g
-  INNER JOIN album_genres ag ON g.id = ag.genre_id
-WHERE
-  ag.album_id = ?
-ORDER BY
-  g.tag ASC
-`
-
-type GetGenresByAlbumIDDirectRow struct {
-	ID  int64  `json:"id"`
-	Tag string `json:"tag"`
-}
-
-// Returns genres directly associated with an album via album_genres table
-func (q *Queries) GetGenresByAlbumIDDirect(ctx context.Context, albumID int64) ([]GetGenresByAlbumIDDirectRow, error) {
-	rows, err := q.query(ctx, q.getGenresByAlbumIDDirectStmt, getGenresByAlbumIDDirect, albumID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetGenresByAlbumIDDirectRow{}
-	for rows.Next() {
-		var i GetGenresByAlbumIDDirectRow
-		if err := rows.Scan(&i.ID, &i.Tag); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getGenresByMusicianID = `-- name: GetGenresByMusicianID :many
 SELECT
   g.id,

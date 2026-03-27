@@ -16,6 +16,8 @@ type tmdbClient struct {
 	key string
 }
 
+var _ TmdbInterface = (*tmdbClient)(nil)
+
 func New(apiKey string) (TmdbInterface, error) {
 	if apiKey == "" {
 		return nil, errors.New("TMDB_API_KEY environment variable is not set")

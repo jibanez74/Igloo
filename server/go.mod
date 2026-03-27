@@ -8,13 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/zmb3/spotify/v2 v2.4.3
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	golang.org/x/crypto v0.46.0
-	golang.org/x/oauth2 v0.34.0
-)
-
-require (
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
-	github.com/stretchr/testify v1.8.1 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.19.0
 )

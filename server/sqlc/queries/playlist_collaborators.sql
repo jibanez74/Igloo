@@ -28,6 +28,3 @@ SELECT EXISTS(
     LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
     WHERE p.id = ? AND (p.user_id = ? OR (pc.user_id = ? AND pc.can_edit = true))
 ) as can_edit;
-
--- name: UpdateCollaboratorPermission :exec
-UPDATE playlist_collaborators SET can_edit = ? WHERE playlist_id = ? AND user_id = ?;

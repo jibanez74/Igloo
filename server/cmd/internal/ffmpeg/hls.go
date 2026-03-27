@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,146 +11,174 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-type RunHLSConfig struct {
-	Ctx           context.Context
-	Log           *slog.Logger
-	OnExit        func(err error)
-	SourcePath    string
-	OutDir        string
-	Profile       string
-	AudioTrackIdx int
-	VideoTrackIdx int
-	HWDevice      string
-	UseFastPath   bool
-}
-
-// RunHLS starts FFmpeg in the background to produce HLS fMP4 output in cfg.OutDir.
-// It does not block: it starts the process and a goroutine that reads stderr and calls Wait().
-// When the process exits, cfg.OnExit is called with the exit error (nil if success).
-// The caller must kill the returned Cmd on cleanup and delete cfg.OutDir.
-func (f *ffmpeg) RunHLS(cfg *RunHLSConfig) (*exec.Cmd, error) {
-	args, err := buildHLSArgs(cfg.SourcePath, cfg.OutDir, cfg.Profile, cfg.AudioTrackIdx, cfg.VideoTrackIdx, cfg.HWDevice, cfg.UseFastPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := exec.CommandContext(cfg.Ctx, f.bin, args...)
-	cmd.Dir = cfg.OutDir
-	cmd.Stdin = nil
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("ffmpeg stderr pipe: %w", err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		return nil, fmt.Errorf("ffmpeg start: %w", err)
-	}
-
-	go func() {
-		defer func() {
-			exitErr := cmd.Wait()
-			if cfg.OnExit != nil {
-				cfg.OnExit(exitErr)
-			}
-		}()
-
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				cfg.Log.Debug("ffmpeg", "stderr", line)
-			}
-		}
-	}()
-
-	return cmd, nil
-}
-
-// buildHLSArgs returns FFmpeg arguments for HLS fMP4. Paths are used as single arguments (no injection).
-func buildHLSArgs(
+// BuildHLSArgs builds FFmpeg arguments for HLS fMP4 output.
+//
+// Arg ordering follows FFmpeg requirements:
+//
+//	[global] [-hwaccel …] [-i source] [-map …] [-c:v … -c:a …] [-f hls …] output
+//
+// videoStreamIndex / audioStreamIndex are 0-based indices among streams of that type
+// (i.e. 0 = first video, 0 = first audio).
+// copyVideo / copyAudio control codec copy independently — e.g. video may need
+// transcoding while AAC audio can be passed through without re-encoding.
+func BuildHLSArgs(
 	sourcePath, outDir, profile string,
-	audioTrackIdx, videoTrackIdx int,
+	videoStreamIndex, audioStreamIndex int,
 	hwDevice string,
-	useFastPath bool,
+	copyVideo, copyAudio bool,
 ) ([]string, error) {
 	if !helpers.IsAllowedHLSProfile(profile) {
-		return nil, fmt.Errorf("invalid HLS profile %q", profile)
+		return nil, fmt.Errorf("invalid HLS profile: %s", profile)
 	}
 
-	cfg, ok := helpers.HLSProfileConfigs[profile]
-	if !ok {
-		return nil, fmt.Errorf("no config for HLS profile %q", profile)
+	// Remux forces video copy — no profile config needed.
+	if profile == helpers.HLS_PROFILE_REMUX {
+		copyVideo = true
 	}
 
-	// Input: reliable opening of large files.
-	args := []string{
-		"-analyzeduration", "20000000",
-		"-probesize", "20000000",
-		"-i", sourcePath,
-	}
-
-	// Video and audio map. Caller passes validated indices (Phase 4 validates).
-	args = append(args, "-map", fmt.Sprintf("0:v:%d", videoTrackIdx))
-	args = append(args, "-map", fmt.Sprintf("0:a:%d", audioTrackIdx))
-
-	// Video codec: HW or libx264, or copy for fast path.
-	if useFastPath {
-		args = append(args, "-c:v", "copy", "-c:a", "copy")
-	} else {
-		hwAccel, encoder := hwDeviceToFFmpeg(hwDevice)
-		if hwAccel != "" {
-			args = append(args, "-hwaccel", hwAccel)
+	// Transcode profiles need resolution/bitrate config.
+	var cfg helpers.HLSProfileConfig
+	if !copyVideo {
+		var ok bool
+		cfg, ok = helpers.HLSProfileConfigs[profile]
+		if !ok {
+			return nil, fmt.Errorf("unknown HLS profile: %s", profile)
 		}
-
-		args = append(args, "-c:v", encoder)
-		args = append(args, "-vf", cfg.ScaleFilter)
-		args = append(args, "-b:v", cfg.VideoBitrate)
-		args = append(args, "-c:a", "aac", "-b:a", "192k")
 	}
 
-	// HLS fMP4 output (main plan §5.11).
-	playlistPath := filepath.Join(outDir, "playlist.m3u8")
-	segmentPattern := filepath.Join(outDir, "segment_%d.m4s")
-	initPath := filepath.Join(outDir, "init.mp4")
+	// --- global + input ---
+	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "20000000", "-probesize", "20000000"}
 
+	// -hwaccel MUST come before -i
+	if !copyVideo {
+		switch strings.ToLower(hwDevice) {
+		case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+			args = append(args, "-hwaccel", "videotoolbox")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+			args = append(args, "-hwaccel", "cuda")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+			args = append(args, "-hwaccel", "qsv")
+		}
+	}
+
+	args = append(args,
+		"-i", sourcePath,
+		"-map", fmt.Sprintf("0:v:%d", videoStreamIndex),
+		"-map", fmt.Sprintf("0:a:%d", audioStreamIndex),
+	)
+
+	// --- video encoding ---
+	if copyVideo {
+		args = append(args, "-c:v", "copy")
+	} else {
+		switch strings.ToLower(hwDevice) {
+		case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+			args = append(args, "-c:v", "h264_videotoolbox")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+			args = append(args, "-c:v", "h264_nvenc")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+			args = append(args, "-c:v", "h264_qsv")
+		default:
+			args = append(args, "-c:v", "libx264", "-preset", "veryfast")
+		}
+		args = append(args,
+			"-b:v", cfg.VideoBitrate,
+			"-maxrate", cfg.VideoBitrate,
+			"-bufsize", cfg.Bufsize,
+			"-vf", fmt.Sprintf("scale=-2:%d", cfg.Height),
+		)
+	}
+
+	// --- audio encoding ---
+	if copyAudio {
+		args = append(args, "-c:a", "copy")
+	} else {
+		// Downmix to stereo: browser MSE decoders generally don't support
+		// multichannel AAC (PCE-encoded 5.1/7.1). Stereo at 192k is
+		// universally supported and sounds good for web playback.
+		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "192k")
+	}
+
+	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
+
+	// --- HLS output ---
+	segmentPattern := filepath.Join(outDir, "segment_%d.m4s")
 	args = append(args,
 		"-f", "hls",
 		"-hls_segment_type", "fmp4",
-		"-hls_playlist_type", helpers.HLS_PLAYLIST_VOD,
-		"-hls_list_size", helpers.HLS_PLAYLIST_SIZE,
-		"-hls_time", fmt.Sprintf("%d", helpers.HLSSegmentTimeSeconds),
+		"-hls_playlist_type", "event",
+		"-hls_list_size", "0",
+		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,
-		"-hls_fmp4_init_filename", initPath,
-		playlistPath,
+		"-hls_fmp4_init_filename", "init.mp4",
+		filepath.Join(outDir, "playlist.m3u8"),
 	)
 
 	return args, nil
 }
 
-// hwDeviceToFFmpeg returns (-hwaccel value, -c:v encoder) for the given device.
-// Empty hwAccel means no hwaccel (use with libx264).
-func hwDeviceToFFmpeg(hwDevice string) (hwAccel, encoder string) {
-	switch hwDevice {
-	case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
-		return "videotoolbox", "h264_videotoolbox"
-	case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
-		return "cuda", "h264_nvenc"
-	case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
-		return "qsv", "h264_qsv"
-	default:
-		return "", "libx264"
-	}
-}
-
-// BuildHLSArgsForTest is used by tests to assert on built args without running FFmpeg.
-// It returns the same slice that RunHLS would pass to exec, or an error.
-func BuildHLSArgsForTest(
+// RunHLS starts FFmpeg in the background for HLS transcoding.
+// It does not block on process exit. onExit is called asynchronously when
+// the process finishes; stderrTail contains the last HLS_STDERR_TAIL_LINES
+// of FFmpeg's stderr output for error diagnostics.
+func (f *FFmpeg) RunHLS(
+	ctx context.Context,
 	sourcePath, outDir, profile string,
-	audioTrackIdx, videoTrackIdx int,
+	videoStreamIndex, audioStreamIndex int,
 	hwDevice string,
-	useFastPath bool,
-) ([]string, error) {
-	return buildHLSArgs(sourcePath, outDir, profile, audioTrackIdx, videoTrackIdx, hwDevice, useFastPath)
+	copyVideo, copyAudio bool,
+	onExit func(exitErr error, stderrTail []string),
+) (*exec.Cmd, error) {
+	args, err := BuildHLSArgs(sourcePath, outDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, f.bin, args...)
+	cmd.Dir = outDir
+	cmd.Stdout = nil
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	// Ring buffer: keep only the last HLS_STDERR_TAIL_LINES for error reporting.
+	ring := make([]string, helpers.HLS_STDERR_TAIL_LINES)
+	var ringIdx int
+	var ringCount int
+
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = scanner.Text()
+			ringIdx++
+			ringCount++
+		}
+	}()
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	go func() {
+		exitErr := cmd.Wait()
+		if onExit != nil {
+			n := helpers.HLS_STDERR_TAIL_LINES
+			if ringCount < n {
+				n = ringCount
+			}
+			tail := make([]string, 0, n)
+			start := ringIdx - n
+			if start < 0 {
+				start = 0
+			}
+			for i := start; i < ringIdx; i++ {
+				tail = append(tail, ring[i%helpers.HLS_STDERR_TAIL_LINES])
+			}
+			onExit(exitErr, tail)
+		}
+	}()
+
+	return cmd, nil
 }
