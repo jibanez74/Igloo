@@ -26,9 +26,11 @@ import {
 import { formatTimeSeconds } from "@/lib/format";
 import {
   STREAM_MODES,
+  formatSubtitleLabel,
   getAvailableModes,
   type StreamModeId,
 } from "@/lib/playback";
+import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { playSearchSchema } from "@/types/movie-play";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
@@ -64,7 +66,7 @@ function buildStreamUrl(
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
-  const { mode, audio_track: audioTrack, subtitle_track: _subtitleTrack } = Route.useSearch();
+  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack } = Route.useSearch();
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -118,6 +120,18 @@ function PlayMoviePage() {
     : null;
   const modeUnavailable =
     availableModes !== null && !availableModes.some(m => m.id === mode);
+
+  const subtitleInfo = (() => {
+    if (subtitleTrack === undefined || !techLoaded) return null;
+    const subs = techData!.data!.subtitles ?? [];
+    if (subtitleTrack < 0 || subtitleTrack >= subs.length) return null;
+    const sub = subs[subtitleTrack];
+    return {
+      url: `/api/movies/${movieId}/subtitles/${subtitleTrack}/web.vtt`,
+      label: formatSubtitleLabel(sub, subtitleTrack),
+      srclang: unwrapStringOrUndefined(sub.language) ?? "",
+    };
+  })();
 
   const handleBack = () => {
     if (router.history.length > 1) {
@@ -580,6 +594,7 @@ function PlayMoviePage() {
           title={title}
           isFullscreen={isFullscreen}
           onError={msg => setPlaybackError(msg)}
+          subtitleTrack={subtitleInfo}
         />
       </div>
 

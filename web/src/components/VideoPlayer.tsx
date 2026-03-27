@@ -2,12 +2,19 @@ import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 import type { RefObject } from "react";
 
+type SubtitleTrackInfo = {
+  url: string;
+  label: string;
+  srclang: string;
+};
+
 type VideoPlayerProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
+  subtitleTrack?: SubtitleTrackInfo | null;
 };
 
 function isHLSUrl(url: string): boolean {
@@ -29,6 +36,7 @@ export default function VideoPlayer({
   title,
   isFullscreen = false,
   onError,
+  subtitleTrack = null,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -88,6 +96,34 @@ export default function VideoPlayer({
       video.load();
     };
   }, [src, videoRef, onError]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const existing = video.querySelector("track[data-subtitle]");
+    if (existing) {
+      video.removeChild(existing);
+    }
+
+    if (!subtitleTrack) return;
+
+    const track = document.createElement("track");
+    track.kind = "subtitles";
+    track.src = subtitleTrack.url;
+    track.srclang = subtitleTrack.srclang;
+    track.label = subtitleTrack.label;
+    track.default = true;
+    track.setAttribute("data-subtitle", "");
+    video.appendChild(track);
+    track.track.mode = "showing";
+
+    return () => {
+      if (video.contains(track)) {
+        video.removeChild(track);
+      }
+    };
+  }, [subtitleTrack?.url, videoRef]);
 
   return (
     <div
