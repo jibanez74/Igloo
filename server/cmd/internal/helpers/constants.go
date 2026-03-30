@@ -73,6 +73,9 @@ const (
 	// Subtitle extraction
 	SUBTITLE_WEBVTT_CONTENT_TYPE = "text/vtt"
 	SUBTITLE_EXTRACT_TIMEOUT     = 60 * time.Second
+	SUBTITLE_CACHE_TTL           = 1 * time.Hour
+	SUBTITLE_CACHE_CLEANUP       = 10 * time.Minute
+	SUBTITLE_CACHE_KEY_PREFIX    = "sub:"
 )
 
 // Bitmap subtitle codecs cannot be converted to WebVTT.

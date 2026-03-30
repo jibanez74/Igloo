@@ -51,6 +51,7 @@ type Application struct {
 	ScannerDBMu          sync.Mutex
 	HLSSessionCache      *cache.Cache
 	HLSSessionGroup      singleflight.Group
+	SubtitleVTTCache     *cache.Cache
 	coverArtThrottleMu   sync.Mutex
 	lastCoverArtDownload time.Time
 }
@@ -192,6 +193,8 @@ func InitApp() (*Application, error) {
 		}
 	})
 	app.HLSSessionCache = hlsCache
+
+	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
 	// Initialize MusicBrainz client for music metadata and cover art lookups.
 	// In-memory cache only; cleared when the music scan completes.

@@ -18,6 +18,8 @@ func (app *Application) processMovieStreams(
 	movieID int64,
 	streams []ffprobe.Stream,
 ) (videoStreamCount int, err error) {
+	app.invalidateSubtitleVTTCache(movieID)
+
 	if err := qtx.DeleteMovieVideoStreams(ctx, movieID); err != nil {
 		return 0, fmt.Errorf("delete movie video streams failed: %w", err)
 	}

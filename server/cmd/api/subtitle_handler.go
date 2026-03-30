@@ -7,11 +7,21 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
 )
+
+func (app *Application) invalidateSubtitleVTTCache(movieID int64) {
+	prefix := helpers.SubtitleCachePrefix(movieID)
+	for key := range app.SubtitleVTTCache.Items() {
+		if strings.HasPrefix(key, prefix) {
+			app.SubtitleVTTCache.Delete(key)
+		}
+	}
+}
 
 // SubtitleWebVTT serves GET /api/movies/:id/subtitles/:trackIndex/web.vtt
 //
@@ -61,6 +71,16 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cacheKey := helpers.SubtitleCacheKey(movieID, sub.StreamIndex)
+
+	if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
+		w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(cached.([]byte))
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), helpers.SUBTITLE_EXTRACT_TIMEOUT)
 	defer cancel()
 
@@ -75,6 +95,8 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
 		return
 	}
+
+	app.SubtitleVTTCache.Set(cacheKey, out, helpers.SUBTITLE_CACHE_TTL)
 
 	w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
 	w.Header().Set("Cache-Control", "private, max-age=3600")

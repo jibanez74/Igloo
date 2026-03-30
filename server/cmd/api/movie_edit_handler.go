@@ -270,6 +270,8 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.invalidateSubtitleVTTCache(id)
+
 	if err = app.Queries.DeleteMovie(ctx, id); err != nil {
 		app.Logger.Error("failed to delete movie", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to delete movie"))
