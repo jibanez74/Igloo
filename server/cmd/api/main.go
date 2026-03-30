@@ -51,6 +51,7 @@ type Application struct {
 	ScannerDBMu          sync.Mutex
 	HLSSessionCache      *cache.Cache
 	HLSSessionGroup      singleflight.Group
+	SubtitleVTTCache     *cache.Cache
 	coverArtThrottleMu   sync.Mutex
 	lastCoverArtDownload time.Time
 }
@@ -192,6 +193,8 @@ func InitApp() (*Application, error) {
 		}
 	})
 	app.HLSSessionCache = hlsCache
+
+	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
 	// Initialize MusicBrainz client for music metadata and cover art lookups.
 	// In-memory cache only; cleared when the music scan completes.
@@ -552,6 +555,7 @@ func (app *Application) InitRouter() {
 			r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
 			r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 			r.Get("/{id}/stream", app.StreamMovie)
+			r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
 		})
 
 		r.Route("/settings", func(r chi.Router) {

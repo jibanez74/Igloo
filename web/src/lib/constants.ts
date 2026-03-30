@@ -94,6 +94,44 @@ export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonl
   ...StreamModeId[],
 ];
 
+// subtitle codecs that are image-based and cannot be converted to WebVTT
+export const BITMAP_SUBTITLE_CODECS = [
+  "hdmv_pgs_subtitle",
+  "dvd_subtitle",
+  "dvb_subtitle",
+] as const;
+
+/** ISO 639-1 two-letter codes → English display names (audio + subtitle labels). */
+export const LANGUAGE_NAMES: Record<string, string> = {
+  ar: "Arabic",
+  cs: "Czech",
+  da: "Danish",
+  de: "German",
+  el: "Greek",
+  en: "English",
+  es: "Spanish",
+  fi: "Finnish",
+  fr: "French",
+  he: "Hebrew",
+  hi: "Hindi",
+  hu: "Hungarian",
+  it: "Italian",
+  ja: "Japanese",
+  ko: "Korean",
+  nl: "Dutch",
+  no: "Norwegian",
+  pl: "Polish",
+  pt: "Portuguese",
+  ro: "Romanian",
+  ru: "Russian",
+  sv: "Swedish",
+  th: "Thai",
+  tr: "Turkish",
+  uk: "Ukrainian",
+  vi: "Vietnamese",
+  zh: "Chinese",
+};
+
 /** Key crew: max writing-department rows before "Show all crew" */
 export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 

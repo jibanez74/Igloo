@@ -1,6 +1,11 @@
-import { STREAM_MODES, type StreamModeId } from "@/lib/constants";
+import {
+  BITMAP_SUBTITLE_CODECS,
+  LANGUAGE_NAMES,
+  STREAM_MODES,
+  type StreamModeId,
+} from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
-import type { AudioStreamType } from "@/types/movies";
+import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
@@ -12,12 +17,27 @@ export { STREAM_MODES };
 export type PlaybackSettings = {
   mode: StreamModeId;
   audioTrack: number;
+  subtitleTrack: number | null;
 };
 
 export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
   audioTrack: 0,
+  subtitleTrack: null,
 };
+
+const COVER_ART_CODECS = ["mjpeg", "png", "gif", "bmp"];
+
+/** First real video stream, skipping embedded cover art (mjpeg/png/gif/bmp). */
+export function getPrimaryVideoStream(
+  streams: VideoStreamType[] | undefined,
+): VideoStreamType | undefined {
+  if (!streams || streams.length === 0) return undefined;
+  const primary = streams.find(
+    (s) => !COVER_ART_CODECS.includes(s.codec.toLowerCase()),
+  );
+  return primary ?? streams[0];
+}
 
 function isVideoDirectPlayable(codec: string): boolean {
   return BROWSER_COMPATIBLE_VIDEO_CODECS.includes(codec.toLowerCase());
@@ -32,15 +52,9 @@ function isContainerDirectPlayable(mimeType: string): boolean {
 }
 
 /**
- * Returns the stream modes available for a given source.
- *
- * When codec/container info is provided the list is filtered:
- * - "direct" only when video + audio + container are all browser-compatible
- * - "remux" only when the video codec is H.264 (copy-safe for HLS fMP4)
- * - transcode profiles filtered by source resolution as before
- *
- * Without codec info (pre-techData load), all modes are returned so the
- * dialog can render immediately.
+ * Available stream modes for the source. Without `videoCodec`, all modes are
+ * returned (e.g. before technical details load). With codecs, filters direct /
+ * remux / transcode per browser and resolution rules.
  */
 export function getAvailableModes(
   sourceHeight: number,
@@ -63,18 +77,11 @@ export function getAvailableModes(
       if (!hasCodecInfo) return true;
       return isVideoDirectPlayable(videoCodec);
     }
-    // transcode — filter by resolution (maxHeight is never 0 here; direct/remux handled above)
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
 }
 
-/**
- * Picks the best default mode based on the movie's codecs and container.
- *
- * - H.264 + AAC + mp4/webm → direct (no processing needed)
- * - H.264 + non-AAC         → remux  (video copy, audio transcode)
- * - non-H.264               → best-fit transcode profile for source resolution
- */
+/** Default mode from codecs, container, and source height (direct → remux → transcode). */
 export function getDefaultMode(
   videoCodec: string,
   audioCodec: string,
@@ -88,7 +95,6 @@ export function getDefaultMode(
     return "remux";
   }
 
-  // Non-H.264: pick the highest transcode profile that fits the source
   const transcodes = STREAM_MODES.filter(
     (m) =>
       m.type === "transcode" &&
@@ -97,46 +103,21 @@ export function getDefaultMode(
   );
   if (transcodes.length > 0) return transcodes[0].id;
 
-  // Fallback: lowest profile
   return "720p_3mbps";
 }
 
-/** Common ISO 639-1 codes → English display names for audio track labels. */
-const AUDIO_LANGUAGE_NAMES: Record<string, string> = {
-  en: "English",
-  es: "Spanish",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-  ja: "Japanese",
-  ko: "Korean",
-  zh: "Chinese",
-  pt: "Portuguese",
-  ru: "Russian",
-  hi: "Hindi",
-  nl: "Dutch",
-  sv: "Swedish",
-  no: "Norwegian",
-  da: "Danish",
-  fi: "Finnish",
-  pl: "Polish",
-  tr: "Turkish",
-};
-function formatAudioLanguageName(
+export function formatLanguageName(
   raw: string | undefined,
 ): string | undefined {
   const code = raw?.trim().toLowerCase();
   if (!code) return undefined;
   const two = code.slice(0, 2);
-  if (AUDIO_LANGUAGE_NAMES[two]) return AUDIO_LANGUAGE_NAMES[two];
+  if (LANGUAGE_NAMES[two]) return LANGUAGE_NAMES[two];
   return code.length <= 3
     ? code.toUpperCase()
     : code.charAt(0).toUpperCase() + code.slice(1);
 }
 
-/**
- * Human-readable channel layout (FFmpeg-style layout or channel count).
- */
 function describePlaybackChannelLayout(
   channelLayout: string | undefined,
   channels: number,
@@ -153,15 +134,12 @@ function describePlaybackChannelLayout(
   return `${channels} channels`;
 }
 
-/**
- * Dropdown label for an audio stream (language + channel layout; no codec).
- */
 export function formatPlaybackAudioLabel(
   stream: AudioStreamType,
   index: number,
 ): string {
   const langRaw = unwrapStringOrUndefined(stream.language);
-  const langName = formatAudioLanguageName(langRaw);
+  const langName = formatLanguageName(langRaw);
   const channels = describePlaybackChannelLayout(
     unwrapStringOrUndefined(stream.channel_layout),
     stream.channels,
@@ -172,9 +150,6 @@ export function formatPlaybackAudioLabel(
   return `Track ${index + 1} · ${channels}`;
 }
 
-/**
- * Short summary of what playback will feel like for the chosen mode and track.
- */
 export function describePlaybackExperience(
   mode: StreamModeId,
   audioStream: AudioStreamType | undefined,
@@ -200,4 +175,27 @@ export function describePlaybackExperience(
     : " Default audio is used.";
 
   return videoPart + audioPart;
+}
+
+export function isBitmapSubtitleCodec(codec: string): boolean {
+  return (BITMAP_SUBTITLE_CODECS as readonly string[]).includes(
+    codec.toLowerCase(),
+  );
+}
+
+export function formatSubtitleLabel(
+  subtitle: SubtitleType,
+  index: number,
+): string {
+  const lang = formatLanguageName(unwrapStringOrUndefined(subtitle.language));
+  const title = unwrapStringOrUndefined(subtitle.title);
+
+  const parts: string[] = [];
+  if (lang) parts.push(lang);
+  if (title && title !== lang) parts.push(title);
+  if (subtitle.is_forced) parts.push("Forced");
+  if (subtitle.is_default) parts.push("Default");
+
+  if (parts.length > 0) return parts.join(" · ");
+  return `Track ${index + 1}`;
 }

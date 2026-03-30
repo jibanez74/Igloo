@@ -49,6 +49,7 @@ export default function MovieDetailsHeroActions({
         search={{
           mode: playbackSettings.mode,
           audio_track: playbackSettings.audioTrack,
+          subtitle_track: playbackSettings.subtitleTrack ?? undefined,
         }}
         className={cn(
           buttonVariants({ variant: "accent", size: "lg" }),

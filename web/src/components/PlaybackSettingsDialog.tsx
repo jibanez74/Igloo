@@ -4,7 +4,10 @@ import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import {
   describePlaybackExperience,
   formatPlaybackAudioLabel,
+  formatSubtitleLabel,
   getAvailableModes,
+  getPrimaryVideoStream,
+  isBitmapSubtitleCodec,
   type StreamModeId,
   type PlaybackSettings,
 } from "@/lib/playback";
@@ -43,14 +46,17 @@ export default function PlaybackSettingsDialog({
 }: PlaybackSettingsDialogProps) {
   const [mode, setMode] = useState<StreamModeId>(settings.mode);
   const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
+  const [subtitleTrack, setSubtitleTrack] = useState<number | null>(settings.subtitleTrack);
 
   const { data, isPending } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
   const audioStreams = data?.data?.audio_streams ?? [];
+  const subtitleStreams = data?.data?.subtitles ?? [];
   const techLoaded = Boolean(data?.data);
   const videoStreams = data?.data?.video_streams ?? [];
 
-  const sourceHeight = videoStreams[0]?.height ?? 0;
-  const videoCodec = videoStreams[0]?.codec;
+  const primaryVideo = getPrimaryVideoStream(videoStreams);
+  const sourceHeight = primaryVideo?.height ?? 0;
+  const videoCodec = primaryVideo?.codec;
   const audioCodec = audioStreams[0]?.codec;
   const mimeType = data?.data?.movie?.mime_type;
   const availableModes = getAvailableModes(
@@ -70,12 +76,13 @@ export default function PlaybackSettingsDialog({
         : (availableModes[0]?.id ?? "direct"),
     );
     setAudioTrack(settings.audioTrack);
+    setSubtitleTrack(settings.subtitleTrack);
   } else if (!open && prevOpen) {
     setPrevOpen(false);
   }
 
   const handleSave = () => {
-    onSave({ mode, audioTrack });
+    onSave({ mode, audioTrack, subtitleTrack });
     onOpenChange(false);
   };
 
@@ -169,7 +176,12 @@ export default function PlaybackSettingsDialog({
             <Label htmlFor="subtitles" className="text-slate-200">
               Subtitles
             </Label>
-            <Select value="none" disabled>
+            <Select
+              value={subtitleTrack === null ? "off" : String(subtitleTrack)}
+              onValueChange={v =>
+                setSubtitleTrack(v === "off" ? null : Number(v))
+              }
+            >
               <SelectTrigger
                 id="subtitles"
                 className="border-slate-700 bg-slate-800 text-white"
@@ -177,9 +189,23 @@ export default function PlaybackSettingsDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border-slate-700 bg-slate-800">
-                <SelectItem value="none" className="text-slate-200">
+                <SelectItem value="off" className="text-slate-200">
                   None
                 </SelectItem>
+                {subtitleStreams.map((stream, index) => {
+                  const bitmap = isBitmapSubtitleCodec(stream.codec);
+                  const label = formatSubtitleLabel(stream, index);
+                  return (
+                    <SelectItem
+                      key={stream.id}
+                      value={String(index)}
+                      disabled={bitmap}
+                      className={bitmap ? "text-slate-500" : "text-slate-200"}
+                    >
+                      {bitmap ? `${label} (image-based)` : label}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

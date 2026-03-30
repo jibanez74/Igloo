@@ -32,6 +32,7 @@ import MovieProductionCompaniesSection from "@/components/MovieProductionCompani
 import {
   DEFAULT_PLAYBACK_SETTINGS,
   getDefaultMode,
+  getPrimaryVideoStream,
   type PlaybackSettings,
 } from "@/lib/playback";
 import { cn } from "@/lib/utils";
@@ -121,7 +122,7 @@ function LibraryMovieDetailsContent({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
-  const videoStream = techData?.data?.video_streams?.[0];
+  const videoStream = getPrimaryVideoStream(techData?.data?.video_streams);
   const audioStream = techData?.data?.audio_streams?.[0];
   const mimeType = techData?.data?.movie?.mime_type;
   const smartDefault: PlaybackSettings = !videoStream
@@ -134,6 +135,7 @@ function LibraryMovieDetailsContent({
           videoStream.height,
         ),
         audioTrack: 0,
+        subtitleTrack: null,
       };
 
   const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(

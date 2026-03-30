@@ -18,6 +18,8 @@ func (app *Application) processMovieStreams(
 	movieID int64,
 	streams []ffprobe.Stream,
 ) (videoStreamCount int, err error) {
+	app.invalidateSubtitleVTTCache(movieID)
+
 	if err := qtx.DeleteMovieVideoStreams(ctx, movieID); err != nil {
 		return 0, fmt.Errorf("delete movie video streams failed: %w", err)
 	}
@@ -31,6 +33,9 @@ func (app *Application) processMovieStreams(
 	for _, stream := range streams {
 		switch stream.CodecType {
 		case "video":
+			if stream.Disposition.AttachedPic == 1 {
+				continue
+			}
 			if err := app.insertVideoStream(ctx, qtx, movieID, stream); err != nil {
 				return 0, err
 			}
