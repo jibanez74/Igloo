@@ -1,6 +1,7 @@
 package ffmpeg
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -33,6 +34,10 @@ func (f *FFmpeg) ExtractSubtitleAsWebVTT(
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w", err)
 	}
+
+	// ffmpeg leaves ASS-style \h (non-breaking space) escapes in WebVTT
+	// output for some codecs (notably eia_608). Replace with regular spaces.
+	out = bytes.ReplaceAll(out, []byte(`\h`), []byte(" "))
 
 	return out, nil
 }

@@ -75,7 +75,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 
 	if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
 		w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
-		w.Header().Set("Cache-Control", "private, max-age=3600")
+		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(cached.([]byte))
 		return
@@ -99,7 +99,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	app.SubtitleVTTCache.Set(cacheKey, out, helpers.SUBTITLE_CACHE_TTL)
 
 	w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(out)
 }
