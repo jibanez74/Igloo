@@ -74,11 +74,20 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	cacheKey := helpers.SubtitleCacheKey(movieID, sub.StreamIndex)
 
 	if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
-		w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
-		w.Header().Set("Cache-Control", "no-cache")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(cached.([]byte))
-		return
+		vtt, ok := cached.([]byte)
+		if !ok {
+			app.Logger.Warn("subtitle VTT cache type mismatch",
+				"key", cacheKey,
+				"got_type", fmt.Sprintf("%T", cached),
+			)
+			app.SubtitleVTTCache.Delete(cacheKey)
+		} else {
+			w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(vtt)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), helpers.SUBTITLE_EXTRACT_TIMEOUT)

@@ -82,4 +82,5 @@ const (
 var BitmapSubtitleCodecs = map[string]bool{
 	"hdmv_pgs_subtitle": true,
 	"dvd_subtitle":      true,
+	"dvb_subtitle":      true,
 }
