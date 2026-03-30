@@ -5,16 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
-// ExtractSubtitleAsWebVTT runs ffmpeg to extract a single subtitle stream
-// from sourcePath and convert it to WebVTT. streamIndex is the absolute
-// ffprobe stream index (not a type-relative index). The full WebVTT output
-// is returned as a byte slice.
-//
-// Supported input codecs: subrip, mov_text, webvtt, eia_608, ass, ssa.
-// Bitmap codecs (PGS, DVD sub) must be rejected by the caller before
-// invoking this function.
+// ExtractSubtitleAsWebVTT converts one subtitle stream to WebVTT via ffmpeg.
+// streamIndex is the absolute ffprobe index; the caller must reject bitmap codecs.
 func (f *FFmpeg) ExtractSubtitleAsWebVTT(
 	ctx context.Context,
 	sourcePath string,
@@ -30,13 +25,22 @@ func (f *FFmpeg) ExtractSubtitleAsWebVTT(
 	}
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
-	out, err := cmd.Output()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 	if err != nil {
+		tail := strings.TrimSpace(stderr.String())
+		if len(tail) > 4096 {
+			tail = tail[len(tail)-4096:]
+		}
+		if tail != "" {
+			return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w: %s", err, tail)
+		}
 		return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w", err)
 	}
 
-	// ffmpeg leaves ASS-style \h (non-breaking space) escapes in WebVTT
-	// output for some codecs (notably eia_608). Replace with regular spaces.
+	out := stdout.Bytes()
 	out = bytes.ReplaceAll(out, []byte(`\h`), []byte(" "))
 
 	return out, nil
