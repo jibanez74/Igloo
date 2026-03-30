@@ -1,6 +1,6 @@
 import { BITMAP_SUBTITLE_CODECS, STREAM_MODES, type StreamModeId } from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
-import type { AudioStreamType, SubtitleType } from "@/types/movies";
+import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
@@ -20,6 +20,22 @@ export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   audioTrack: 0,
   subtitleTrack: null,
 };
+
+const COVER_ART_CODECS = ["mjpeg", "png", "gif", "bmp"];
+
+/**
+ * Returns the first video stream that is actual video content, skipping
+ * embedded cover art (MJPEG/PNG stills sometimes stored as video streams).
+ */
+export function getPrimaryVideoStream(
+  streams: VideoStreamType[] | undefined,
+): VideoStreamType | undefined {
+  if (!streams || streams.length === 0) return undefined;
+  const primary = streams.find(
+    (s) => !COVER_ART_CODECS.includes(s.codec.toLowerCase()),
+  );
+  return primary ?? streams[0];
+}
 
 function isVideoDirectPlayable(codec: string): boolean {
   return BROWSER_COMPATIBLE_VIDEO_CODECS.includes(codec.toLowerCase());

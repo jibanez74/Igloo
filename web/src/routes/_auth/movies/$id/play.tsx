@@ -28,6 +28,7 @@ import {
   STREAM_MODES,
   formatSubtitleLabel,
   getAvailableModes,
+  getPrimaryVideoStream,
   type StreamModeId,
 } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
@@ -110,10 +111,13 @@ function PlayMoviePage() {
     movieTechnicalDetailsQueryOpts(movieId),
   );
   const techLoaded = !techPending && techData?.data != null;
+  const primaryVideo = techLoaded
+    ? getPrimaryVideoStream(techData.data!.video_streams)
+    : undefined;
   const availableModes = techLoaded
     ? getAvailableModes(
-        techData.data!.video_streams?.[0]?.height ?? 0,
-        techData.data!.video_streams?.[0]?.codec,
+        primaryVideo?.height ?? 0,
+        primaryVideo?.codec,
         techData.data!.audio_streams?.[0]?.codec,
         techData.data!.movie?.mime_type,
       )

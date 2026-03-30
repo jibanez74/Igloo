@@ -33,6 +33,9 @@ func (app *Application) processMovieStreams(
 	for _, stream := range streams {
 		switch stream.CodecType {
 		case "video":
+			if stream.Disposition.AttachedPic == 1 {
+				continue
+			}
 			if err := app.insertVideoStream(ctx, qtx, movieID, stream); err != nil {
 				return 0, err
 			}

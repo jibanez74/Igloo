@@ -6,6 +6,7 @@ import {
   formatPlaybackAudioLabel,
   formatSubtitleLabel,
   getAvailableModes,
+  getPrimaryVideoStream,
   isBitmapSubtitleCodec,
   type StreamModeId,
   type PlaybackSettings,
@@ -53,8 +54,9 @@ export default function PlaybackSettingsDialog({
   const techLoaded = Boolean(data?.data);
   const videoStreams = data?.data?.video_streams ?? [];
 
-  const sourceHeight = videoStreams[0]?.height ?? 0;
-  const videoCodec = videoStreams[0]?.codec;
+  const primaryVideo = getPrimaryVideoStream(videoStreams);
+  const sourceHeight = primaryVideo?.height ?? 0;
+  const videoCodec = primaryVideo?.codec;
   const audioCodec = audioStreams[0]?.codec;
   const mimeType = data?.data?.movie?.mime_type;
   const availableModes = getAvailableModes(
