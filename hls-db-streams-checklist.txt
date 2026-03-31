@@ -99,14 +99,14 @@ Phase 6 - Frontend stability
 
 Phase 7 - Tests
 
-[ ] Fix existing backend unit tests affected by:
-[ ] image-only video stream filtering
-[ ] ffprobe-derived runtime fields
-[ ] HLS session creation using DB streams
-[ ] HLS FFmpeg mapping using global `stream_index`
-[ ] Add or update targeted unit tests where they materially protect the new behavior.
-[ ] Keep tests focused on one behavior each.
-[ ] Avoid noisy tests that duplicate implementation details without protecting behavior.
+[x] Fix existing backend unit tests affected by:
+[x] image-only video stream filtering
+[x] ffprobe-derived runtime fields
+[x] HLS session creation using DB streams
+[x] HLS FFmpeg mapping using global `stream_index`
+[x] Add or update targeted unit tests where they materially protect the new behavior.
+[x] Keep tests focused on one behavior each.
+[x] Avoid noisy tests that duplicate implementation details without protecting behavior.
 
 Phase 8 - Verification
 

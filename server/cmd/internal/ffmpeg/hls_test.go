@@ -34,6 +34,34 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	}
 }
 
+func TestBuildHLSArgs_GlobalStreamIndices(t *testing.T) {
+	args, err := BuildHLSArgs(
+		"/src.mkv",
+		t.TempDir(),
+		helpers.HLS_PROFILE_720P_3MBPS,
+		3,
+		7,
+		helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		false,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+	var mapTargets []string
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "-map" {
+			mapTargets = append(mapTargets, args[i+1])
+		}
+	}
+	if len(mapTargets) < 2 {
+		t.Fatalf("expected two -map targets, got %v", mapTargets)
+	}
+	if mapTargets[0] != "0:3" || mapTargets[1] != "0:7" {
+		t.Errorf("global stream maps = %v, want [0:3 0:7]", mapTargets)
+	}
+}
+
 func TestBuildHLSArgs_CopyAudioOnly(t *testing.T) {
 	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_1080P_4MBPS, 0, 0, "cpu", false, true)
 	if err != nil {
