@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
+	"math"
 	"mime"
 	"path/filepath"
 	"strconv"
@@ -96,7 +97,6 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		params.CriticRating = helpers.NullFloat64(tmdbMovie.VoteAverage)
 		params.Revenue = helpers.NullFloat64(float64(tmdbMovie.Revenue))
 		params.Budget = helpers.NullFloat64(float64(tmdbMovie.Budget))
-		params.RunTime = helpers.NullInt64(int64(tmdbMovie.Runtime))
 
 		// Parse release date
 		if tmdbMovie.ReleaseDate != "" {
@@ -110,6 +110,16 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		// Use year from filename if TMDB not available
 		if titleYear.Year > 0 {
 			params.Year = helpers.NullInt64(int64(titleYear.Year))
+		}
+	}
+
+	// Populate runtime fields from ffprobe duration
+	durationSec, err := strconv.ParseFloat(info.Format.Duration, 64)
+	if err == nil && durationSec > 0 {
+		params.Duration = helpers.NullFloat64(durationSec)
+		runTimeMinutes := int64(math.Round(durationSec / 60))
+		if runTimeMinutes > 0 {
+			params.RunTime = helpers.NullInt64(runTimeMinutes)
 		}
 	}
 

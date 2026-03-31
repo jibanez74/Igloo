@@ -13,14 +13,8 @@ import (
 
 // BuildHLSArgs builds FFmpeg arguments for HLS fMP4 output.
 //
-// Arg ordering follows FFmpeg requirements:
-//
-//	[global] [-hwaccel …] [-i source] [-map …] [-c:v … -c:a …] [-f hls …] output
-//
-// videoStreamIndex / audioStreamIndex are 0-based indices among streams of that type
-// (i.e. 0 = first video, 0 = first audio).
-// copyVideo / copyAudio control codec copy independently — e.g. video may need
-// transcoding while AAC audio can be passed through without re-encoding.
+// videoStreamIndex / audioStreamIndex are global ffprobe stream indices
+// used directly with -map 0:<index>.
 func BuildHLSArgs(
 	sourcePath, outDir, profile string,
 	videoStreamIndex, audioStreamIndex int,
@@ -63,8 +57,8 @@ func BuildHLSArgs(
 
 	args = append(args,
 		"-i", sourcePath,
-		"-map", fmt.Sprintf("0:v:%d", videoStreamIndex),
-		"-map", fmt.Sprintf("0:a:%d", audioStreamIndex),
+		"-map", fmt.Sprintf("0:%d", videoStreamIndex),
+		"-map", fmt.Sprintf("0:%d", audioStreamIndex),
 	)
 
 	// --- video encoding ---

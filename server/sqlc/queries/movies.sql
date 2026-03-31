@@ -75,10 +75,12 @@ INSERT INTO
     audience_rating,
     revenue,
     budget,
-    run_time
+    run_time,
+    duration
   )
 VALUES
   (
+    ?,
     ?,
     ?,
     ?,
@@ -124,6 +126,7 @@ SET
   revenue = COALESCE(excluded.revenue, movies.revenue),
   budget = COALESCE(excluded.budget, movies.budget),
   run_time = COALESCE(excluded.run_time, movies.run_time),
+  duration = COALESCE(excluded.duration, movies.duration),
   updated_at = CURRENT_TIMESTAMP RETURNING *;
 
 -- name: UpsertProductionCompany :one

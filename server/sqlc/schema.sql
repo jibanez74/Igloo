@@ -134,6 +134,7 @@ CREATE TABLE
     revenue REAL,
     budget REAL,
     run_time INTEGER,
+    duration REAL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );

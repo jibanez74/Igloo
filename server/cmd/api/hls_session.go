@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -99,7 +98,8 @@ func (app *Application) GetOrCreateHLSSession(
 	return v.(*HLSSession), nil
 }
 
-// createHLSSession probes the movie, creates a temp dir, and starts FFmpeg.
+// createHLSSession loads stream metadata from the database, creates a temp dir,
+// and starts FFmpeg. No runtime ffprobe call is made.
 //
 // FFmpeg runs on context.Background() so the process outlives the originating
 // HTTP request. The session cache (with TTL + eviction) owns the lifecycle.
@@ -114,46 +114,35 @@ func (app *Application) createHLSSession(
 		return nil, fmt.Errorf("movie not found: %w", err)
 	}
 
-	meta, err := app.Ffprobe.GetMetadata(movie.FilePath)
+	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
+		return nil, fmt.Errorf("movie %d has no valid duration in the database", movieID)
+	}
+	durationSec := movie.Duration.Float64
+
+	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movieID)
 	if err != nil {
-		return nil, fmt.Errorf("ffprobe failed: %w", err)
+		return nil, fmt.Errorf("failed to load video streams: %w", err)
 	}
-
-	durationSec, _ := strconv.ParseFloat(meta.Format.Duration, 64)
-	if durationSec <= 0 {
-		return nil, fmt.Errorf("could not determine file duration")
-	}
-
-	var videoStreams []int
-	var audioStreams []int
-	for i, s := range meta.Streams {
-		switch s.CodecType {
-		case "video":
-			if s.Disposition.AttachedPic == 1 {
-				continue
-			}
-			videoStreams = append(videoStreams, i)
-		case "audio":
-			audioStreams = append(audioStreams, i)
-		}
-	}
-
 	if len(videoStreams) == 0 {
-		return nil, fmt.Errorf("no playable video track found")
+		return nil, fmt.Errorf("no playable video track found for movie %d", movieID)
+	}
+
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, movieID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load audio streams: %w", err)
 	}
 	if audioTrack < 0 || audioTrack >= len(audioStreams) {
 		return nil, fmt.Errorf("audio track %d out of range (0–%d)", audioTrack, len(audioStreams)-1)
 	}
 
-	videoStreamIndex := 0
-	audioStreamIndex := audioTrack
+	primaryVideo := videoStreams[0]
+	selectedAudio := audioStreams[audioTrack]
 
-	audioCodec := strings.ToLower(meta.Streams[audioStreams[audioTrack]].CodecName)
+	videoCodec := strings.ToLower(primaryVideo.Codec)
+	audioCodec := strings.ToLower(selectedAudio.Codec)
+	copyVideo := videoCodec == "h264"
 	copyAudio := audioCodec == "aac"
-	copyVideo := strings.EqualFold(meta.Streams[videoStreams[0]].CodecName, "h264")
 
-	// Remux always copies video; the frontend only offers this when the
-	// source video codec is browser-compatible (H.264).
 	if profile == helpers.HLS_PROFILE_REMUX {
 		copyVideo = true
 	}
@@ -170,12 +159,15 @@ func (app *Application) createHLSSession(
 
 	session := &HLSSession{TempDir: tempDir, DurationSec: durationSec}
 
-	videoCodec := meta.Streams[videoStreams[0]].CodecName
+	videoStreamIndex := int(primaryVideo.StreamIndex)
+	audioStreamIndex := int(selectedAudio.StreamIndex)
 
 	app.Logger.Info("hls session starting",
 		"movie_id", movieID,
 		"profile", profile,
 		"audio_track", audioTrack,
+		"video_stream_index", videoStreamIndex,
+		"audio_stream_index", audioStreamIndex,
 		"video_codec", videoCodec,
 		"audio_codec", audioCodec,
 		"copy_video", copyVideo,

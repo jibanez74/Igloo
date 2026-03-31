@@ -516,7 +516,7 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 
 const getMovieByID = `-- name: GetMovieByID :one
 SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 FROM
   movies
 WHERE
@@ -552,6 +552,7 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 		&i.Revenue,
 		&i.Budget,
 		&i.RunTime,
+		&i.Duration,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -560,7 +561,7 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 
 const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
 SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 FROM
   movies
 WHERE
@@ -599,6 +600,7 @@ func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (M
 		&i.Revenue,
 		&i.Budget,
 		&i.RunTime,
+		&i.Duration,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1129,7 +1131,7 @@ SET
   updated_at = CURRENT_TIMESTAMP
 WHERE
   id = ?
-RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 `
 
 type UpdateMovieParams struct {
@@ -1201,6 +1203,7 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie
 		&i.Revenue,
 		&i.Budget,
 		&i.RunTime,
+		&i.Duration,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1388,10 +1391,12 @@ INSERT INTO
     audience_rating,
     revenue,
     budget,
-    run_time
+    run_time,
+    duration
   )
 VALUES
   (
+    ?,
     ?,
     ?,
     ?,
@@ -1437,7 +1442,8 @@ SET
   revenue = COALESCE(excluded.revenue, movies.revenue),
   budget = COALESCE(excluded.budget, movies.budget),
   run_time = COALESCE(excluded.run_time, movies.run_time),
-  updated_at = CURRENT_TIMESTAMP RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, created_at, updated_at
+  duration = COALESCE(excluded.duration, movies.duration),
+  updated_at = CURRENT_TIMESTAMP RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 `
 
 type UpsertMovieParams struct {
@@ -1463,6 +1469,7 @@ type UpsertMovieParams struct {
 	Revenue        sql.NullFloat64 `json:"revenue"`
 	Budget         sql.NullFloat64 `json:"budget"`
 	RunTime        sql.NullInt64   `json:"run_time"`
+	Duration       sql.NullFloat64 `json:"duration"`
 }
 
 func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error) {
@@ -1489,6 +1496,7 @@ func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie
 		arg.Revenue,
 		arg.Budget,
 		arg.RunTime,
+		arg.Duration,
 	)
 	var i Movie
 	err := row.Scan(
@@ -1515,6 +1523,7 @@ func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie
 		&i.Revenue,
 		&i.Budget,
 		&i.RunTime,
+		&i.Duration,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

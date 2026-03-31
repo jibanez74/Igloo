@@ -1,6 +1,8 @@
 package main
 
 import (
+	"math"
+	"strconv"
 	"testing"
 
 	"igloo/cmd/internal/tmdb"
@@ -138,8 +140,8 @@ func TestSelectBestTmdbMatch(t *testing.T) {
 				TmdbID:      2,
 				Title:       "Less Popular Movie 2023",
 				ReleaseDate: "2023-01-01",
-				Popularity:  1.0,   // Not popular
-				VoteAverage: 1.0,   // Low rating
+				Popularity:  1.0, // Not popular
+				VoteAverage: 1.0, // Low rating
 				// Score: 10000 (year match) + 1 + 10 = 10011
 			},
 		}
@@ -260,4 +262,46 @@ func TestSelectBestTmdbMatch(t *testing.T) {
 			t.Errorf("Expected TMDB ID 2 (higher score), got %d", result.TmdbID)
 		}
 	})
+}
+
+// TestFfprobeFormatDurationToRunTimeMinutes mirrors processMovieFile: parse Format.Duration,
+// round to minutes for UI run_time.
+func TestFfprobeFormatDurationToRunTimeMinutes(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		format  string
+		wantMin int64
+		wantSec float64
+	}{
+		{"5423.456", 90, 5423.456},
+		{"3600", 60, 3600},
+		{"59.9", 1, 59.9},
+	}
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			t.Parallel()
+			durationSec, err := strconv.ParseFloat(tt.format, 64)
+			if err != nil || durationSec <= 0 {
+				t.Fatalf("parse %q: %v", tt.format, err)
+			}
+			runTimeMinutes := int64(math.Round(durationSec / 60))
+			if runTimeMinutes != tt.wantMin {
+				t.Errorf("rounded minutes = %d, want %d", runTimeMinutes, tt.wantMin)
+			}
+			if durationSec != tt.wantSec {
+				t.Errorf("seconds = %v, want %v", durationSec, tt.wantSec)
+			}
+		})
+	}
+}
+
+func TestFfprobeFormatDurationRejectedWhenInvalid(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{"", "0", "-1", "not-a-number"} {
+		sec, err := strconv.ParseFloat(s, 64)
+		ok := err == nil && sec > 0
+		if ok {
+			t.Errorf("%q should not be accepted as positive duration", s)
+		}
+	}
 }

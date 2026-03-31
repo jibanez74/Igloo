@@ -186,6 +186,7 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
         "container": movie.Container,
         "mime_type": movie.MimeType,
         "run_time":  movie.RunTime,
+        "duration":  movie.Duration,
       },
       "video_streams": videoStreams,
       "audio_streams": audioStreams,

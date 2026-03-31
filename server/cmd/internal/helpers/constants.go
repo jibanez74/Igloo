@@ -84,3 +84,11 @@ var BitmapSubtitleCodecs = map[string]bool{
 	"dvd_subtitle":      true,
 	"dvb_subtitle":      true,
 }
+
+// CoverArtVideoCodecs lists embedded still-image video tracks (posters) to skip for HLS/direct playback logic.
+var CoverArtVideoCodecs = map[string]bool{
+	"mjpeg": true,
+	"png":   true,
+	"gif":   true,
+	"bmp":   true,
+}
