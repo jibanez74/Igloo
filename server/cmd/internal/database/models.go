@@ -119,6 +119,7 @@ type Movie struct {
 	Revenue        sql.NullFloat64 `json:"revenue"`
 	Budget         sql.NullFloat64 `json:"budget"`
 	RunTime        sql.NullInt64   `json:"run_time"`
+	Duration       sql.NullFloat64 `json:"duration"`
 	CreatedAt      string          `json:"created_at"`
 	UpdatedAt      string          `json:"updated_at"`
 }

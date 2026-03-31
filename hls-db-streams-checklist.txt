@@ -1,0 +1,132 @@
+HLS DB Streams Implementation Checklist
+
+Goal:
+- Move HLS stream/session creation to persisted DB stream rows instead of runtime ffprobe.
+- Keep scanner as the only place that probes movie files.
+- Split movie runtime into:
+  - run_time for UI-facing display
+  - one exact duration field for HLS/session use
+- Do not handle fsnotify, stale DB recovery, or fallback ffprobe in this work.
+
+Implementation rules:
+- Follow DRY. Do not duplicate stream-selection or codec-filter rules.
+- Follow best Go practices:
+  - keep helpers small and explicit
+  - keep error handling readable and on its own lines
+  - wrap errors with useful context
+- Keep frontend behavior stable unless a change is explicitly required by the plan.
+- Fix affected unit tests and keep them focused and low-noise.
+- All constants in the backend go in constants.go
+- All constants in the client go in constants.ts
+- Never define types inside of functions
+- Avoid comments unless they are strictly necessary
+- In the backend, helper functions should go in the helpers package unless for some reason they can’t.
+
+Phase 1 - Scanner stream filtering
+
+[x] Add one canonical backend helper for image-only video stream detection.
+[x] Keep the image-only codec list in `server/cmd/internal/helpers/constants.go`.
+[x] Ensure the helper covers:
+[x] `mjpeg`
+[x] `png`
+[x] `gif`
+[x] `bmp`
+[x] Use that helper in the movie scanner so image-only video streams are never inserted into `video_streams`.
+[x] Continue skipping `Disposition.AttachedPic == 1`.
+[x] Confirm scanner ordering remains `stream_index` ascending.
+[x] Do not add a new "primary video" DB field in this phase.
+[x] Verify that a movie with poster-art video streams saves only actual playable video rows.
+
+Phase 2 - Runtime fields from ffprobe
+
+[x] Update movie scanning so runtime comes from `info.Format.Duration`.
+[x] Stop assigning runtime from `tmdbMovie.Runtime`.
+[x] Add one exact movie-duration field to the movie schema for HLS/session use.
+[x] Keep `run_time` as the UI-facing runtime field.
+[x] Decide and implement the conversion from ffprobe duration into:
+[x] `run_time` for UI display
+[x] exact duration field for HLS/session use
+[x] Regenerate sqlc after schema/query updates.
+[x] Make scanner the only writer for both runtime fields.
+[x] Verify current runtime consumers still behave correctly:
+[x] movie details page
+[x] technical details dialog
+[x] API payloads that expose movie runtime
+
+Phase 3 - HLS uses DB streams
+
+[ ] Refactor `createHLSSession()` to stop calling `app.Ffprobe.GetMetadata(movie.FilePath)` for stream selection.
+[ ] Load the movie row with `GetMovieByID()`.
+[ ] Load persisted stream rows with:
+[ ] `GetVideoStreamsByMovieID()`
+[ ] `GetAudioStreamsByMovieID()`
+[ ] Select primary video as the first usable `video_streams` row ordered by `stream_index`.
+[ ] Keep audio-track semantics unchanged: `audioTrack` is the 0-based index into ordered audio rows.
+[ ] Validate:
+[ ] fail clearly if no usable video row exists
+[ ] fail clearly if `audioTrack` is out of range
+[ ] Use DB codecs to determine `copyVideo`.
+[ ] Use DB codecs to determine `copyAudio`.
+[ ] Keep the existing remux rule unchanged.
+[ ] Do not re-introduce runtime ffprobe usage for stream selection.
+
+Phase 4 - HLS uses DB stream_index directly
+
+[ ] Refactor the HLS FFmpeg layer so it accepts global stream indices, not type-relative ordinals.
+[ ] Update FFmpeg mapping to use:
+[ ] `-map 0:<video_stream_index>`
+[ ] `-map 0:<audio_stream_index>`
+[ ] Remove any helper that converts chosen streams back into ffprobe ordinals for HLS.
+[ ] Keep subtitle extraction behavior unchanged unless required by compile/runtime fallout.
+[ ] Verify HLS stream mapping uses persisted DB `stream_index` exactly.
+
+Phase 5 - HLS runtime uses DB duration
+
+[ ] Remove HLS dependency on `meta.Format.Duration`.
+[ ] Read exact HLS duration from the movie row instead.
+[ ] Convert exact persisted duration into `DurationSec` if the session/playlist code still needs it.
+[ ] Fail clearly if exact duration is missing or invalid in the DB.
+[ ] Do not add fallback ffprobe logic in this phase.
+
+Phase 6 - Frontend stability
+
+[ ] Review all frontend/runtime consumers of movie runtime.
+[ ] Confirm `run_time` still renders correctly anywhere the UI expects it.
+[ ] Update shared types/API responses if required by the added exact duration field.
+[ ] Ensure direct playback behavior is unchanged.
+[ ] Ensure playback settings remain unchanged unless backend contract changes require an adjustment.
+[ ] Fix any frontend regressions caused by the runtime split.
+
+Phase 7 - Tests
+
+[ ] Fix existing backend unit tests affected by:
+[ ] image-only video stream filtering
+[ ] ffprobe-derived runtime fields
+[ ] HLS session creation using DB streams
+[ ] HLS FFmpeg mapping using global `stream_index`
+[ ] Add or update targeted unit tests where they materially protect the new behavior.
+[ ] Keep tests focused on one behavior each.
+[ ] Avoid noisy tests that duplicate implementation details without protecting behavior.
+
+Phase 8 - Verification
+
+[ ] Re-scan at least one movie with embedded poster-art video streams.
+[ ] Verify image-only streams are not persisted in `video_streams`.
+[ ] Verify `run_time` is populated from ffprobe-derived data for UI display.
+[ ] Verify exact HLS duration field is populated from ffprobe-derived data.
+[ ] Verify movie details page runtime still looks correct.
+[ ] Verify technical details runtime still looks correct.
+[ ] Verify direct playback still works.
+[ ] Verify HLS remux still works.
+[ ] Verify HLS transcoding still works.
+[ ] Re-test `Mary Queen of Scots`.
+[ ] Verify 720p HLS works for files with poster-art video streams.
+[ ] Verify alternate audio track selection still maps to the expected stream.
+[ ] Verify HLS playlist/session duration matches the exact persisted duration field.
+
+Out of scope reminders
+
+[ ] Do not add fsnotify work here.
+[ ] Do not add stale DB detection/recovery here.
+[ ] Do not add fallback ffprobe recovery here.
+[ ] Do not spend time on production-safe DB migration planning here.
