@@ -76,6 +76,8 @@ export type LibraryMovieDetailsMovieType = {
   revenue: Float64Type;
   budget: Float64Type;
   run_time: Int64Type;
+  /** Exact container duration in seconds (ffprobe); HLS/session use. */
+  duration: Float64Type;
   created_at: string;
   updated_at: string;
 };
@@ -149,6 +151,8 @@ export type MovieTechnicalDetailsResponse = {
     container: string;
     mime_type: string;
     run_time: Int64Type;
+    /** Exact duration in seconds (ffprobe), when scanned. */
+    duration: Float64Type;
   };
   video_streams: VideoStreamType[];
   audio_streams: AudioStreamType[];

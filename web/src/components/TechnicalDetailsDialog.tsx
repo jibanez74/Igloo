@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
-import { unwrapString, unwrapInt } from "@/lib/nullable";
+import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { formatBitRate } from "@/lib/format";
 import type {
   VideoStreamType,
@@ -228,6 +228,7 @@ export default function TechnicalDetailsDialog({
 
   const details = data?.data;
   const runTime = details ? unwrapInt(details.movie.run_time) : null;
+  const durationSec = details ? unwrapFloat(details.movie.duration) : null;
 
   const handleOpenAutoFocus = useCallback((e: Event) => {
     e.preventDefault();
@@ -300,8 +301,14 @@ export default function TechnicalDetailsDialog({
                   />
                   {runTime != null && (
                     <DetailRow
-                      label="Duration"
+                      label="Duration (rounded, for display)"
                       value={formatRuntime(runTime)}
+                    />
+                  )}
+                  {durationSec != null && (
+                    <DetailRow
+                      label="Exact duration (ffprobe)"
+                      value={`${durationSec.toFixed(2)} s`}
                     />
                   )}
                 </div>

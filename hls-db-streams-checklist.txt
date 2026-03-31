@@ -90,12 +90,12 @@ Phase 5 - HLS runtime uses DB duration
 
 Phase 6 - Frontend stability
 
-[ ] Review all frontend/runtime consumers of movie runtime.
-[ ] Confirm `run_time` still renders correctly anywhere the UI expects it.
-[ ] Update shared types/API responses if required by the added exact duration field.
-[ ] Ensure direct playback behavior is unchanged.
-[ ] Ensure playback settings remain unchanged unless backend contract changes require an adjustment.
-[ ] Fix any frontend regressions caused by the runtime split.
+[x] Review all frontend/runtime consumers of movie runtime.
+[x] Confirm `run_time` still renders correctly anywhere the UI expects it.
+[x] Update shared types/API responses if required by the added exact duration field.
+[x] Ensure direct playback behavior is unchanged.
+[x] Ensure playback settings remain unchanged unless backend contract changes require an adjustment.
+[x] Fix any frontend regressions caused by the runtime split.
 
 Phase 7 - Tests
 
