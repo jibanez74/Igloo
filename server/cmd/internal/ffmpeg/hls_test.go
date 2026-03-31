@@ -13,7 +13,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	outDir := t.TempDir()
 	profile := helpers.HLS_PROFILE_1080P_4MBPS
 
-	args, err := BuildHLSArgs(sourcePath, outDir, profile, 0, 0, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, false, false)
+	args, err := BuildHLSArgs(sourcePath, outDir, profile, 0, 1, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, false, false)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 
 	for _, want := range []string{
 		sourcePath, outDir, "fmp4", "event", "playlist.m3u8",
-		"0:v:0", "0:a:0",
+		"-map 0:0", "-map 0:1",
 		"libx264", "-preset", "veryfast",
 		"-c:a aac", "-ac", "2", "-b:a", "192k",
 		"scale=-2:1080",

@@ -55,38 +55,38 @@ Phase 2 - Runtime fields from ffprobe
 
 Phase 3 - HLS uses DB streams
 
-[ ] Refactor `createHLSSession()` to stop calling `app.Ffprobe.GetMetadata(movie.FilePath)` for stream selection.
-[ ] Load the movie row with `GetMovieByID()`.
-[ ] Load persisted stream rows with:
-[ ] `GetVideoStreamsByMovieID()`
-[ ] `GetAudioStreamsByMovieID()`
-[ ] Select primary video as the first usable `video_streams` row ordered by `stream_index`.
-[ ] Keep audio-track semantics unchanged: `audioTrack` is the 0-based index into ordered audio rows.
-[ ] Validate:
-[ ] fail clearly if no usable video row exists
-[ ] fail clearly if `audioTrack` is out of range
-[ ] Use DB codecs to determine `copyVideo`.
-[ ] Use DB codecs to determine `copyAudio`.
-[ ] Keep the existing remux rule unchanged.
-[ ] Do not re-introduce runtime ffprobe usage for stream selection.
+[x] Refactor `createHLSSession()` to stop calling `app.Ffprobe.GetMetadata(movie.FilePath)` for stream selection.
+[x] Load the movie row with `GetMovieByID()`.
+[x] Load persisted stream rows with:
+[x] `GetVideoStreamsByMovieID()`
+[x] `GetAudioStreamsByMovieID()`
+[x] Select primary video as the first usable `video_streams` row ordered by `stream_index`.
+[x] Keep audio-track semantics unchanged: `audioTrack` is the 0-based index into ordered audio rows.
+[x] Validate:
+[x] fail clearly if no usable video row exists
+[x] fail clearly if `audioTrack` is out of range
+[x] Use DB codecs to determine `copyVideo`.
+[x] Use DB codecs to determine `copyAudio`.
+[x] Keep the existing remux rule unchanged.
+[x] Do not re-introduce runtime ffprobe usage for stream selection.
 
 Phase 4 - HLS uses DB stream_index directly
 
-[ ] Refactor the HLS FFmpeg layer so it accepts global stream indices, not type-relative ordinals.
-[ ] Update FFmpeg mapping to use:
-[ ] `-map 0:<video_stream_index>`
-[ ] `-map 0:<audio_stream_index>`
-[ ] Remove any helper that converts chosen streams back into ffprobe ordinals for HLS.
-[ ] Keep subtitle extraction behavior unchanged unless required by compile/runtime fallout.
-[ ] Verify HLS stream mapping uses persisted DB `stream_index` exactly.
+[x] Refactor the HLS FFmpeg layer so it accepts global stream indices, not type-relative ordinals.
+[x] Update FFmpeg mapping to use:
+[x] `-map 0:<video_stream_index>`
+[x] `-map 0:<audio_stream_index>`
+[x] Remove any helper that converts chosen streams back into ffprobe ordinals for HLS.
+[x] Keep subtitle extraction behavior unchanged unless required by compile/runtime fallout.
+[x] Verify HLS stream mapping uses persisted DB `stream_index` exactly.
 
 Phase 5 - HLS runtime uses DB duration
 
-[ ] Remove HLS dependency on `meta.Format.Duration`.
-[ ] Read exact HLS duration from the movie row instead.
-[ ] Convert exact persisted duration into `DurationSec` if the session/playlist code still needs it.
-[ ] Fail clearly if exact duration is missing or invalid in the DB.
-[ ] Do not add fallback ffprobe logic in this phase.
+[x] Remove HLS dependency on `meta.Format.Duration`.
+[x] Read exact HLS duration from the movie row instead.
+[x] Convert exact persisted duration into `DurationSec` if the session/playlist code still needs it.
+[x] Fail clearly if exact duration is missing or invalid in the DB.
+[x] Do not add fallback ffprobe logic in this phase.
 
 Phase 6 - Frontend stability
 
