@@ -36,6 +36,9 @@ func (app *Application) processMovieStreams(
 			if stream.Disposition.AttachedPic == 1 {
 				continue
 			}
+			if helpers.IsCoverArtVideoCodec(stream.CodecName) {
+				continue
+			}
 			if err := app.insertVideoStream(ctx, qtx, movieID, stream); err != nil {
 				return 0, err
 			}

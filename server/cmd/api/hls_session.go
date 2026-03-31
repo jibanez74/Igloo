@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -132,6 +133,9 @@ func (app *Application) createHLSSession(
 			if s.Disposition.AttachedPic == 1 {
 				continue
 			}
+			if helpers.IsCoverArtVideoCodec(s.CodecName) {
+				continue
+			}
 			videoStreams = append(videoStreams, i)
 		case "audio":
 			audioStreams = append(audioStreams, i)
@@ -145,7 +149,12 @@ func (app *Application) createHLSSession(
 		return nil, fmt.Errorf("audio track %d out of range (0–%d)", audioTrack, len(audioStreams)-1)
 	}
 
-	videoStreamIndex := 0
+	chosenVideoGlobal := videoStreams[0]
+	videoStreamIndex := videoStreamOrdinal(meta.Streams, chosenVideoGlobal)
+	if videoStreamIndex < 0 {
+		return nil, fmt.Errorf("could not resolve video stream index for HLS mapping")
+	}
+
 	audioStreamIndex := audioTrack
 
 	audioCodec := strings.ToLower(meta.Streams[audioStreams[audioTrack]].CodecName)
@@ -225,4 +234,20 @@ func (app *Application) createHLSSession(
 
 	session.Cmd = cmd
 	return session, nil
+}
+
+// videoStreamOrdinal returns N for FFmpeg -map 0:v:N where N is the 0-based
+// index among all video streams in the container in file order.
+func videoStreamOrdinal(streams []ffprobe.Stream, globalIndex int) int {
+	n := 0
+	for i, s := range streams {
+		if s.CodecType != "video" {
+			continue
+		}
+		if i == globalIndex {
+			return n
+		}
+		n++
+	}
+	return -1
 }
