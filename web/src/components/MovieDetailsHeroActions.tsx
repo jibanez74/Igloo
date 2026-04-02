@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import {
   Play,
-  Heart,
   MoreVertical,
   Info,
   Radio,
@@ -22,6 +21,7 @@ import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
 import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
 import EditMovieDialog from "@/components/EditMovieDialog";
 import DeleteMovieDialog from "@/components/DeleteMovieDialog";
+import MovieLikeButton from "@/components/MovieLikeButton";
 import { cn } from "@/lib/utils";
 import type { MovieDetailsHeroActionsProps } from "@/types";
 
@@ -59,17 +59,7 @@ export default function MovieDetailsHeroActions({
         <Play className="size-4 fill-current" aria-hidden="true" />
         Play
       </Link>
-      <button
-        type="button"
-        className={cn(
-          buttonVariants({ variant: "outline", size: "lg" }),
-          "min-h-11 touch-manipulation",
-        )}
-        aria-label="Add to likes"
-      >
-        <Heart className="size-4" aria-hidden="true" />
-        Like
-      </button>
+      <MovieLikeButton movieId={movieId} variant="hero" />
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(

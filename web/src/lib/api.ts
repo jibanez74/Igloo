@@ -6,7 +6,13 @@ import type {
   LatestMovieType,
   LibraryMovieDetailsResponse,
   MovieDetailsType,
+  MoviePlaylistDetailResponseType,
+  MoviePlaylistRowType,
+  MoviePlaylistsListResponseType,
   MovieTechnicalDetailsResponse,
+  MovieGenreWithCountType,
+  MoviesLibraryPaginatedDataType,
+  MoviesStatsDataType,
   TmdbSearchResultType,
   MusicianDetailsResponseType,
   MusicStatsType,
@@ -26,6 +32,7 @@ import type {
   TracksListResponseType,
   UserListeningStatsResponseType,
 } from "@/types";
+import { MOVIES_PER_PAGE } from "@/lib/constants";
 
 // API Client - Generic request handler
 const ERROR_NOTFOUND: ApiFailureType = {
@@ -190,6 +197,121 @@ export const deleteMovie = (movieId: number, deleteFile: boolean) =>
     method: "DELETE",
     body: { delete_file: deleteFile },
   });
+
+// ============================================================================
+// Movies library page (GET /api/movies/library, /stats, /liked, playlists, like)
+// ============================================================================
+
+export const getMoviesLibrary = (
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<MoviesLibraryPaginatedDataType>(
+    `/api/movies/library?page=${page}&per_page=${perPage}&sort=${sort}`,
+  );
+
+export const getMovieGenresWithCounts = () =>
+  apiRequest<{ genres: MovieGenreWithCountType[] }>("/api/movies/genres");
+
+export const getMoviesByGenre = (
+  genreId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<MoviesLibraryPaginatedDataType>(
+    `/api/movies/genres/${genreId}/movies?page=${page}&per_page=${perPage}&sort=${sort}`,
+  );
+
+export const getMoviesStats = () =>
+  apiRequest<MoviesStatsDataType>("/api/movies/stats");
+
+export const getLikedMovies = (
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<MoviesLibraryPaginatedDataType>(
+    `/api/movies/liked?page=${page}&per_page=${perPage}&sort=${sort}`,
+  );
+
+export const getMovieLikeStatus = (movieId: number) =>
+  apiRequest<{ is_liked: boolean }>(`/api/movies/${movieId}/like-status`);
+
+export const toggleLikeMovie = (movieId: number) =>
+  apiRequest<{ movie_id: number; is_liked: boolean }>(
+    `/api/movies/${movieId}/like`,
+    { method: "POST" },
+  );
+
+export const getMoviePlaylists = () =>
+  apiRequest<MoviePlaylistsListResponseType>("/api/movies/playlists");
+
+export const getMoviePlaylistDetails = (id: number) =>
+  apiRequest<MoviePlaylistDetailResponseType>(`/api/movies/playlists/${id}`);
+
+export const getMoviePlaylistMovies = (
+  playlistId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) =>
+  apiRequest<MoviesLibraryPaginatedDataType>(
+    `/api/movies/playlists/${playlistId}/movies?page=${page}&per_page=${perPage}&sort=${sort}`,
+  );
+
+export const createMoviePlaylist = (data: {
+  name: string;
+  description?: string;
+  is_public?: boolean;
+  movie_id?: number;
+}) =>
+  apiRequest<{ playlist: MoviePlaylistRowType }>("/api/movies/playlists", {
+    method: "POST",
+    body: data,
+  });
+
+export const updateMoviePlaylist = (
+  id: number,
+  data: {
+    name: string;
+    description?: string;
+    cover_image?: string;
+    is_public?: boolean;
+    movie_id?: number | null;
+  },
+) =>
+  apiRequest<{ playlist: MoviePlaylistRowType }>(`/api/movies/playlists/${id}`, {
+    method: "PUT",
+    body: data,
+  });
+
+export const deleteMoviePlaylist = (id: number) =>
+  apiRequest<Record<string, never>>(`/api/movies/playlists/${id}`, {
+    method: "DELETE",
+  });
+
+export const addMoviesToMoviePlaylist = (
+  playlistId: number,
+  movieIds: number[],
+) =>
+  apiRequest<{ added: number; skipped: number }>(
+    `/api/movies/playlists/${playlistId}/movies`,
+    {
+      method: "POST",
+      body: { movie_ids: movieIds },
+    },
+  );
+
+export const removeMovieFromMoviePlaylist = (
+  playlistId: number,
+  movieId: number,
+) =>
+  apiRequest<Record<string, never>>(
+    `/api/movies/playlists/${playlistId}/movies/${movieId}`,
+    { method: "DELETE" },
+  );
 
 // Music API - Albums
 export const getAlbumDetails = (id: number) =>

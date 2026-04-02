@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
+  movieLikeStatusQueryOpts,
   movieTechnicalDetailsQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -52,6 +53,9 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
         ),
         context.queryClient.ensureQueryData(
           movieTechnicalDetailsQueryOpts(movieId),
+        ),
+        context.queryClient.ensureQueryData(
+          movieLikeStatusQueryOpts(movieId),
         ),
       ]);
     }

@@ -10,10 +10,51 @@ import (
 	"database/sql"
 )
 
+const createMoviePlaylist = `-- name: CreateMoviePlaylist :one
+INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type, movie_id)
+VALUES (?, ?, ?, ?, ?, 'movie', ?)
+RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
+`
+
+type CreateMoviePlaylistParams struct {
+	UserID      int64          `json:"user_id"`
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+	CoverImage  sql.NullString `json:"cover_image"`
+	IsPublic    bool           `json:"is_public"`
+	MovieID     sql.NullInt64  `json:"movie_id"`
+}
+
+func (q *Queries) CreateMoviePlaylist(ctx context.Context, arg CreateMoviePlaylistParams) (Playlist, error) {
+	row := q.queryRow(ctx, q.createMoviePlaylistStmt, createMoviePlaylist,
+		arg.UserID,
+		arg.Name,
+		arg.Description,
+		arg.CoverImage,
+		arg.IsPublic,
+		arg.MovieID,
+	)
+	var i Playlist
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Description,
+		&i.CoverImage,
+		&i.IsPublic,
+		&i.FolderID,
+		&i.MovieID,
+		&i.ContentType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createPlaylist = `-- name: CreatePlaylist :one
-INSERT INTO playlists (user_id, name, description, cover_image, is_public)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, user_id, name, description, cover_image, is_public, folder_id, created_at, updated_at
+INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type)
+VALUES (?, ?, ?, ?, ?, 'track')
+RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
 
 type CreatePlaylistParams struct {
@@ -41,6 +82,8 @@ func (q *Queries) CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) 
 		&i.CoverImage,
 		&i.IsPublic,
 		&i.FolderID,
+		&i.MovieID,
+		&i.ContentType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -61,8 +104,145 @@ func (q *Queries) DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) 
 	return err
 }
 
+const getMoviePlaylistsForUser = `-- name: GetMoviePlaylistsForUser :many
+SELECT
+  p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.movie_id, p.content_type, p.created_at, p.updated_at,
+  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
+FROM playlists p
+WHERE p.user_id = ? AND p.content_type = 'movie'
+ORDER BY p.updated_at DESC
+`
+
+type GetMoviePlaylistsForUserRow struct {
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+	CoverImage  sql.NullString `json:"cover_image"`
+	IsPublic    bool           `json:"is_public"`
+	FolderID    sql.NullInt64  `json:"folder_id"`
+	MovieID     sql.NullInt64  `json:"movie_id"`
+	ContentType string         `json:"content_type"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
+	MovieCount  int64          `json:"movie_count"`
+}
+
+func (q *Queries) GetMoviePlaylistsForUser(ctx context.Context, userID int64) ([]GetMoviePlaylistsForUserRow, error) {
+	rows, err := q.query(ctx, q.getMoviePlaylistsForUserStmt, getMoviePlaylistsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviePlaylistsForUserRow{}
+	for rows.Next() {
+		var i GetMoviePlaylistsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Description,
+			&i.CoverImage,
+			&i.IsPublic,
+			&i.FolderID,
+			&i.MovieID,
+			&i.ContentType,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MovieCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviePlaylistsWithCollaboratorAccess = `-- name: GetMoviePlaylistsWithCollaboratorAccess :many
+SELECT
+  p.id,
+  p.user_id,
+  p.name,
+  p.description,
+  p.cover_image,
+  p.is_public,
+  p.folder_id,
+  p.movie_id,
+  p.content_type,
+  p.created_at,
+  p.updated_at,
+  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
+FROM playlists p
+LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
+WHERE (p.user_id = ? OR pc.user_id = ?) AND p.content_type = 'movie'
+GROUP BY p.id
+ORDER BY p.updated_at DESC
+`
+
+type GetMoviePlaylistsWithCollaboratorAccessParams struct {
+	UserID   int64 `json:"user_id"`
+	UserID_2 int64 `json:"user_id_2"`
+}
+
+type GetMoviePlaylistsWithCollaboratorAccessRow struct {
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+	CoverImage  sql.NullString `json:"cover_image"`
+	IsPublic    bool           `json:"is_public"`
+	FolderID    sql.NullInt64  `json:"folder_id"`
+	MovieID     sql.NullInt64  `json:"movie_id"`
+	ContentType string         `json:"content_type"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
+	MovieCount  int64          `json:"movie_count"`
+}
+
+func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error) {
+	rows, err := q.query(ctx, q.getMoviePlaylistsWithCollaboratorAccessStmt, getMoviePlaylistsWithCollaboratorAccess, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviePlaylistsWithCollaboratorAccessRow{}
+	for rows.Next() {
+		var i GetMoviePlaylistsWithCollaboratorAccessRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Description,
+			&i.CoverImage,
+			&i.IsPublic,
+			&i.FolderID,
+			&i.MovieID,
+			&i.ContentType,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MovieCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPlaylistById = `-- name: GetPlaylistById :one
-SELECT id, user_id, name, description, cover_image, is_public, folder_id, created_at, updated_at FROM playlists WHERE id = ?
+SELECT id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at FROM playlists WHERE id = ?
 `
 
 func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, error) {
@@ -76,6 +256,8 @@ func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, erro
 		&i.CoverImage,
 		&i.IsPublic,
 		&i.FolderID,
+		&i.MovieID,
+		&i.ContentType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -83,13 +265,14 @@ func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, erro
 }
 
 const getPlaylistsWithCollaboratorAccess = `-- name: GetPlaylistsWithCollaboratorAccess :many
-SELECT 
-    p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.created_at, p.updated_at,
-    (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) as track_count,
-    (SELECT COALESCE(SUM(t.duration), 0) FROM playlist_tracks pt JOIN tracks t ON pt.track_id = t.id WHERE pt.playlist_id = p.id) as total_duration
+SELECT
+  p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.movie_id, p.content_type, p.created_at, p.updated_at,
+  (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count,
+  (SELECT COALESCE(SUM(t.duration), 0) FROM playlist_tracks pt
+   JOIN tracks t ON pt.track_id = t.id WHERE pt.playlist_id = p.id) AS total_duration
 FROM playlists p
 LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
-WHERE p.user_id = ? OR pc.user_id = ?
+WHERE (p.user_id = ? OR pc.user_id = ?) AND p.content_type = 'track'
 GROUP BY p.id
 ORDER BY p.updated_at DESC
 `
@@ -107,6 +290,8 @@ type GetPlaylistsWithCollaboratorAccessRow struct {
 	CoverImage    sql.NullString `json:"cover_image"`
 	IsPublic      bool           `json:"is_public"`
 	FolderID      sql.NullInt64  `json:"folder_id"`
+	MovieID       sql.NullInt64  `json:"movie_id"`
+	ContentType   string         `json:"content_type"`
 	CreatedAt     string         `json:"created_at"`
 	UpdatedAt     string         `json:"updated_at"`
 	TrackCount    int64          `json:"track_count"`
@@ -130,6 +315,8 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg Ge
 			&i.CoverImage,
 			&i.IsPublic,
 			&i.FolderID,
+			&i.MovieID,
+			&i.ContentType,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TrackCount,
@@ -148,11 +335,61 @@ func (q *Queries) GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg Ge
 	return items, nil
 }
 
+const updateMoviePlaylist = `-- name: UpdateMoviePlaylist :one
+UPDATE playlists
+SET
+  name = ?,
+  description = ?,
+  cover_image = ?,
+  is_public = ?,
+  movie_id = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ? AND content_type = 'movie'
+RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
+`
+
+type UpdateMoviePlaylistParams struct {
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+	CoverImage  sql.NullString `json:"cover_image"`
+	IsPublic    bool           `json:"is_public"`
+	MovieID     sql.NullInt64  `json:"movie_id"`
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error) {
+	row := q.queryRow(ctx, q.updateMoviePlaylistStmt, updateMoviePlaylist,
+		arg.Name,
+		arg.Description,
+		arg.CoverImage,
+		arg.IsPublic,
+		arg.MovieID,
+		arg.ID,
+		arg.UserID,
+	)
+	var i Playlist
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Description,
+		&i.CoverImage,
+		&i.IsPublic,
+		&i.FolderID,
+		&i.MovieID,
+		&i.ContentType,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updatePlaylist = `-- name: UpdatePlaylist :one
-UPDATE playlists 
+UPDATE playlists
 SET name = ?, description = ?, cover_image = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, user_id, name, description, cover_image, is_public, folder_id, created_at, updated_at
+RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
 
 type UpdatePlaylistParams struct {
@@ -180,6 +417,8 @@ func (q *Queries) UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) 
 		&i.CoverImage,
 		&i.IsPublic,
 		&i.FolderID,
+		&i.MovieID,
+		&i.ContentType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

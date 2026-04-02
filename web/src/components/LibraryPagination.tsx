@@ -60,7 +60,7 @@ export default function LibraryPagination({
 
   return (
     <Pagination>
-      <PaginationContent>
+      <PaginationContent className="max-w-full flex-wrap justify-center gap-y-2">
         <PaginationItem>
           <PaginationPrevious
             onClick={() => onPageChange(currentPage - 1)}

@@ -31,6 +31,35 @@ export const ALBUMS_PER_PAGE = 24;
 export const MUSICIANS_PER_PAGE = 24;
 export const PLAYLISTS_PER_PAGE = 24;
 
+/** Default page size for GET /api/movies/library (matches server MOVIES_LIBRARY_DEFAULT_PER_PAGE). */
+export const MOVIES_PER_PAGE = 24;
+
+/** Default search params when navigating to /movies from the sidebar (fresh entry). */
+export const MOVIES_INDEX_DEFAULT_SEARCH = {
+  tab: "all" as const,
+  allPage: 1,
+  sort: "asc" as const,
+  genresPage: 1,
+  playlistsPage: 1,
+};
+
+/** Search when opening /movies on the Playlists tab (e.g. back link from a movie playlist). */
+export const MOVIES_PLAYLISTS_TAB_SEARCH = {
+  ...MOVIES_INDEX_DEFAULT_SEARCH,
+  tab: "playlists" as const,
+};
+
+// movies library page — query keys (TanStack Query)
+export const MOVIES_LIBRARY_KEY = "movies-library";
+export const MOVIES_GENRES_KEY = "movies-genres";
+export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
+export const MOVIES_STATS_KEY = "movies-stats";
+export const MOVIES_LIKED_KEY = "movies-liked";
+export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
+export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
+export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
+export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";
+
 // virtual list item heights (in pixels)
 export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
 export const VIRTUAL_LIST_TRACK_HEIGHT = 60;

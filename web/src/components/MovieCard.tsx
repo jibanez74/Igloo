@@ -5,8 +5,18 @@ import { Film, Play } from "lucide-react";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestMovieType } from "@/types";
+import MovieLikeButton from "@/components/MovieLikeButton";
 
-export default function MovieCard({ movie }: { movie: LatestMovieType }) {
+type MovieCardProps = {
+  movie: LatestMovieType;
+  /** Show heart like control (library / grids). Hide for non-interactive listings if needed. */
+  showLikeButton?: boolean;
+};
+
+export default function MovieCard({
+  movie,
+  showLikeButton = true,
+}: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
 
@@ -26,57 +36,70 @@ export default function MovieCard({ movie }: { movie: LatestMovieType }) {
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
-      <Link
-        to="/movies/$id"
-        params={{ id: String(id) }}
-        className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        aria-label={ariaTitle}
-      >
-        {/* Poster with 2:3 aspect ratio (standard movie poster) */}
-        <div className="relative aspect-2/3 bg-slate-800">
-          {posterUrl ? (
-            <img
-              src={posterUrl}
-              alt=""
-              width={500}
-              height={750}
-              loading="lazy"
-              decoding="async"
-              fetchPriority="low"
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+      <div className="relative">
+        <Link
+          to="/movies/$id"
+          params={{ id: String(id) }}
+          className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          aria-label={ariaTitle}
+        >
+          {/* Poster with 2:3 aspect ratio (standard movie poster) */}
+          <div className="relative aspect-2/3 bg-slate-800">
+            {posterUrl ? (
+              <img
+                src={posterUrl}
+                alt=""
+                width={500}
+                height={750}
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex size-full items-center justify-center">
+                <Film className="size-10 text-slate-600" aria-hidden="true" />
+              </div>
+            )}
+            {/* Overlay - appears on hover/focus */}
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100"
+              aria-hidden="true"
             />
-          ) : (
-            <div className="flex size-full items-center justify-center">
-              <Film className="size-10 text-slate-600" aria-hidden="true" />
-            </div>
-          )}
-          {/* Overlay - appears on hover/focus */}
+            {/* Gradient overlay for text readability */}
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+          </div>
+          {/* Movie info */}
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
+              {title}
+            </h3>
+            {year.Valid && (
+              <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
+                {year.Int64}
+              </p>
+            )}
+          </div>
+        </Link>
+        {showLikeButton && (
           <div
-            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100"
-            aria-hidden="true"
-          />
-          {/* Gradient overlay for text readability */}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
-        </div>
-        {/* Movie info */}
-        <div className="absolute inset-x-0 bottom-0 p-3">
-          <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
-            {title}
-          </h3>
-          {year.Valid && (
-            <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
-              {year.Int64}
-            </p>
-          )}
-        </div>
-      </Link>
+            className="pointer-events-auto absolute top-2 right-2 z-20"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <MovieLikeButton movieId={id} />
+          </div>
+        )}
+      </div>
 
       {/* Play button - goes to play page without opening details */}
       <Link
         to="/movies/$id/play"
         params={{ id: String(id) }}
         search={{ mode: "direct", audio_track: 0 }}
-        className="absolute top-1/2 left-1/2 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        className="absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
         aria-label={`Play ${ariaTitle}`}
       >
         <Play className="size-7 fill-current" aria-hidden="true" />

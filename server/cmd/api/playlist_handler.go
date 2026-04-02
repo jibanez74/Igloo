@@ -12,8 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const maxPlaylistRequestSize = 1024 * 1024 // 1MB
-
 // Permission levels for playlist access
 type PlaylistPermission int
 
@@ -49,6 +47,25 @@ type ReorderTracksRequest struct {
 type AddCollaboratorRequest struct {
 	UserId  int64 `json:"user_id"`
 	CanEdit bool  `json:"can_edit"`
+}
+
+type CreateMoviePlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsPublic    bool   `json:"is_public"`
+	MovieID     *int64 `json:"movie_id"`
+}
+
+type UpdateMoviePlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CoverImage  string `json:"cover_image"`
+	IsPublic    bool   `json:"is_public"`
+	MovieID     *int64 `json:"movie_id"`
+}
+
+type AddMoviesRequest struct {
+	MovieIds []int64 `json:"movie_ids"`
 }
 
 // getPlaylistPermission checks the user's permission level for a playlist
@@ -96,6 +113,22 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 	}
 
 	return PermissionNone, nil
+}
+
+func (app *Application) mustBeTrackPlaylist(w http.ResponseWriter, playlist database.Playlist) bool {
+	if playlist.ContentType != helpers.PLAYLIST_CONTENT_TYPE_TRACK {
+		helpers.ErrorJSON(w, errors.New("not a track playlist"), http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist database.Playlist) bool {
+	if playlist.ContentType != helpers.PLAYLIST_CONTENT_TYPE_MOVIE {
+		helpers.ErrorJSON(w, errors.New("not a movie playlist"), http.StatusBadRequest)
+		return false
+	}
+	return true
 }
 
 // GetPlaylists returns all playlists the user owns or has collaborator access to
@@ -192,6 +225,10 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !app.mustBeTrackPlaylist(w, playlist) {
+		return
+	}
+
 	// Get track count and duration
 	trackCount, _ := app.Queries.CountPlaylistTracks(r.Context(), playlistId)
 	duration, _ := app.Queries.GetPlaylistDuration(r.Context(), playlistId)
@@ -249,6 +286,16 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, pl) {
+		return
+	}
+
 	// Parse pagination params
 	limit := int64(50)
 	if l := r.URL.Query().Get("limit"); l != "" {
@@ -302,7 +349,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -379,8 +426,22 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, existing) {
+		return
+	}
+
 	var req UpdatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -457,6 +518,10 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !app.mustBeTrackPlaylist(w, playlist) {
+		return
+	}
+
 	err = app.Queries.DeletePlaylist(r.Context(), database.DeletePlaylistParams{
 		ID:     playlistId,
 		UserID: userID,
@@ -509,8 +574,22 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to add tracks"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, pl) {
+		return
+	}
+
 	var req AddTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -602,6 +681,20 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to remove track"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, pl) {
+		return
+	}
+
 	err = app.Queries.RemoveTrackFromPlaylist(r.Context(), database.RemoveTrackFromPlaylistParams{
 		PlaylistID: playlistId,
 		TrackID:    trackId,
@@ -657,8 +750,22 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to reorder tracks"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, pl) {
+		return
+	}
+
 	var req ReorderTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -725,6 +832,20 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 		return
 	}
 
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch collaborators"))
+		return
+	}
+	if !app.mustBeTrackPlaylist(w, pl) {
+		return
+	}
+
 	collaborators, err := app.Queries.GetPlaylistCollaborators(r.Context(), playlistId)
 	if err != nil {
 		app.Logger.Error("failed to get collaborators", "error", err)
@@ -774,8 +895,12 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !app.mustBeTrackPlaylist(w, playlist) {
+		return
+	}
+
 	var req AddCollaboratorRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -861,6 +986,10 @@ func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if !app.mustBeTrackPlaylist(w, playlist) {
+		return
+	}
+
 	err = app.Queries.RemoveCollaborator(r.Context(), database.RemoveCollaboratorParams{
 		PlaylistID: playlistId,
 		UserID:     collaboratorId,
@@ -876,6 +1005,677 @@ func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 	res := helpers.JSONResponse{
 		Error:   false,
 		Message: "Collaborator removed successfully",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+func libraryRowsFromPlaylistAsc(rows []database.GetPlaylistMoviesPaginatedAscRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+// GetMoviePlaylists lists movie playlists (content_type = movie) for the current user (owner or collaborator).
+func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	playlists, err := app.Queries.GetMoviePlaylistsWithCollaboratorAccess(r.Context(), database.GetMoviePlaylistsWithCollaboratorAccessParams{
+		UserID:   userID,
+		UserID_2: userID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to get movie playlists", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlists"))
+		return
+	}
+
+	type moviePlaylistResponse struct {
+		database.GetMoviePlaylistsWithCollaboratorAccessRow
+		IsOwner bool `json:"is_owner"`
+		CanEdit bool `json:"can_edit"`
+	}
+
+	response := make([]moviePlaylistResponse, len(playlists))
+	for i, p := range playlists {
+		isOwner := p.UserID == userID
+		canEdit := isOwner
+		if !isOwner {
+			canEditResult, _ := app.Queries.CanUserEditPlaylist(r.Context(), database.CanUserEditPlaylistParams{
+				ID:       p.ID,
+				UserID:   userID,
+				UserID_2: userID,
+			})
+			canEdit = canEditResult == 1
+		}
+		response[i] = moviePlaylistResponse{
+			GetMoviePlaylistsWithCollaboratorAccessRow: p,
+			IsOwner: isOwner,
+			CanEdit: canEdit,
+		}
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"playlists": response,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// CreateMoviePlaylist creates a movie playlist (content_type = movie).
+func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	var req CreateMoviePlaylistRequest
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Name) > 255 {
+		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Description) > 1000 {
+		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	var movieID sql.NullInt64
+	if req.MovieID != nil {
+		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
+				return
+			}
+			app.Logger.Error("failed to verify movie for playlist", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
+	}
+
+	playlist, err := app.Queries.CreateMoviePlaylist(ctx, database.CreateMoviePlaylistParams{
+		UserID:      userID,
+		Name:        req.Name,
+		Description: helpers.NullString(req.Description),
+		CoverImage:  sql.NullString{Valid: false},
+		IsPublic:    req.IsPublic,
+		MovieID:     movieID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to create movie playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to create playlist"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Playlist created successfully",
+		Data: map[string]any{
+			"playlist": playlist,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusCreated, res)
+}
+
+// GetMoviePlaylist returns one movie playlist with item count.
+func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	playlistID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	permission, err := app.getPlaylistPermission(r.Context(), playlistID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to check playlist permission", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		return
+	}
+
+	if permission == PermissionNone {
+		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+		return
+	}
+
+	playlist, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		return
+	}
+
+	if !app.mustBeMoviePlaylist(w, playlist) {
+		return
+	}
+
+	movieCount, _ := app.Queries.CountPlaylistMovies(r.Context(), playlistID)
+
+	var collaborators []database.GetPlaylistCollaboratorsRow
+	if permission == PermissionOwner {
+		collaborators, _ = app.Queries.GetPlaylistCollaborators(r.Context(), playlistID)
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"playlist":      playlist,
+			"movie_count":   movieCount,
+			"is_owner":      permission == PermissionOwner,
+			"can_edit":      permission >= PermissionEdit,
+			"collaborators": collaborators,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// UpdateMoviePlaylist updates metadata for a movie playlist (owner only).
+func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	playlistID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	permission, err := app.getPlaylistPermission(r.Context(), playlistID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to check playlist permission", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		return
+	}
+
+	if permission != PermissionOwner {
+		helpers.ErrorJSON(w, errors.New("only the playlist owner can update metadata"), http.StatusForbidden)
+		return
+	}
+
+	existing, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		return
+	}
+
+	if !app.mustBeMoviePlaylist(w, existing) {
+		return
+	}
+
+	var req UpdateMoviePlaylistRequest
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Name) > 255 {
+		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Description) > 1000 {
+		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	var movieID sql.NullInt64
+	if req.MovieID != nil {
+		_, err := app.Queries.GetMovieByID(ctx, *req.MovieID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				helpers.ErrorJSON(w, errors.New("movie not found"), http.StatusBadRequest)
+				return
+			}
+			app.Logger.Error("failed to verify movie for playlist", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to verify movie"))
+			return
+		}
+		movieID = sql.NullInt64{Int64: *req.MovieID, Valid: true}
+	} else {
+		movieID = existing.MovieID
+	}
+
+	playlist, err := app.Queries.UpdateMoviePlaylist(ctx, database.UpdateMoviePlaylistParams{
+		Name:        req.Name,
+		Description: helpers.NullString(req.Description),
+		CoverImage:  helpers.NullString(req.CoverImage),
+		IsPublic:    req.IsPublic,
+		MovieID:     movieID,
+		ID:          playlistID,
+		UserID:      userID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to update movie playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update playlist"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Playlist updated successfully",
+		Data: map[string]any{
+			"playlist": playlist,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// DeleteMoviePlaylist deletes a movie playlist (owner only).
+func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	playlistID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	playlist, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		return
+	}
+
+	if playlist.UserID != userID {
+		helpers.ErrorJSON(w, errors.New("only the playlist owner can delete it"), http.StatusForbidden)
+		return
+	}
+
+	if !app.mustBeMoviePlaylist(w, playlist) {
+		return
+	}
+
+	err = app.Queries.DeletePlaylist(r.Context(), database.DeletePlaylistParams{
+		ID:     playlistID,
+		UserID: userID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to delete movie playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to delete playlist"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Playlist deleted successfully",
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetMoviePlaylistMovies returns paginated movies in a movie playlist (same item shape as GET /api/movies/library).
+func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	playlistID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	permission, err := app.getPlaylistPermission(r.Context(), playlistID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to check playlist permission", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		return
+	}
+
+	if permission == PermissionNone {
+		helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+		return
+	}
+
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist"))
+		return
+	}
+	if !app.mustBeMoviePlaylist(w, pl) {
+		return
+	}
+
+	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.CountPlaylistMovies(ctx, playlistID)
+	if err != nil {
+		app.Logger.Error("failed to count playlist movies", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch playlist items"))
+		return
+	}
+
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetPlaylistMoviesPaginatedDesc(ctx, database.GetPlaylistMoviesPaginatedDescParams{
+			PlaylistID: playlistID,
+			Limit:      perPage,
+			Offset:     offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get playlist movies", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			return
+		}
+		movies = libraryRowsFromPlaylistDesc(descRows)
+	} else {
+		ascRows, err := app.Queries.GetPlaylistMoviesPaginatedAsc(ctx, database.GetPlaylistMoviesPaginatedAscParams{
+			PlaylistID: playlistID,
+			Limit:      perPage,
+			Offset:     offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get playlist movies", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			return
+		}
+		movies = libraryRowsFromPlaylistAsc(ascRows)
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages,
+			Sort:       sortParam,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// AddMoviesToMoviePlaylist adds movies to a movie playlist (edit permission).
+func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	playlistID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	permission, err := app.getPlaylistPermission(r.Context(), playlistID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to check playlist permission", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to add movies"))
+		return
+	}
+
+	if permission < PermissionEdit {
+		helpers.ErrorJSON(w, errors.New("you don't have permission to edit this playlist"), http.StatusForbidden)
+		return
+	}
+
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to add movies"))
+		return
+	}
+	if !app.mustBeMoviePlaylist(w, pl) {
+		return
+	}
+
+	var req AddMoviesRequest
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	if len(req.MovieIds) == 0 {
+		helpers.ErrorJSON(w, errors.New("at least one movie id is required"), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	addedCount := 0
+	skippedCount := 0
+
+	for _, movieID := range req.MovieIds {
+		_, err := app.Queries.GetMovieByID(ctx, movieID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				skippedCount++
+				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
+				continue
+			}
+			app.Logger.Error("failed to look up movie", "error", err, "movie_id", movieID)
+			helpers.ErrorJSON(w, errors.New("failed to verify movies"), http.StatusInternalServerError)
+			return
+		}
+
+		inPl, err := app.Queries.IsMovieInPlaylist(ctx, database.IsMovieInPlaylistParams{
+			PlaylistID: playlistID,
+			MovieID:    movieID,
+		})
+		if err != nil {
+			app.Logger.Error("failed to check movie in playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to update playlist"), http.StatusInternalServerError)
+			return
+		}
+		if inPl == 1 {
+			skippedCount++
+			continue
+		}
+
+		_, err = app.Queries.AddMovieToPlaylist(ctx, database.AddMovieToPlaylistParams{
+			PlaylistID: playlistID,
+			MovieID:    movieID,
+			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
+		})
+		if err != nil {
+			app.Logger.Error("failed to add movie to playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+			return
+		}
+		addedCount++
+	}
+
+	if addedCount > 0 {
+		if err := app.Queries.UpdatePlaylistTimestamp(ctx, playlistID); err != nil {
+			app.Logger.Error("failed to update playlist timestamp", "error", err, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Movies processed",
+		Data: map[string]any{
+			"added":   addedCount,
+			"skipped": skippedCount,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// RemoveMovieFromMoviePlaylist removes a movie from a movie playlist.
+func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	playlistID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid playlist id"), http.StatusBadRequest)
+		return
+	}
+
+	movieID, err := strconv.ParseInt(chi.URLParam(r, "movieId"), 10, 64)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
+	}
+
+	permission, err := app.getPlaylistPermission(r.Context(), playlistID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to check playlist permission", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
+		return
+	}
+
+	if permission < PermissionEdit {
+		helpers.ErrorJSON(w, errors.New("you don't have permission to edit this playlist"), http.StatusForbidden)
+		return
+	}
+
+	pl, err := app.Queries.GetPlaylistById(r.Context(), playlistID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("playlist not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("failed to get playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
+		return
+	}
+	if !app.mustBeMoviePlaylist(w, pl) {
+		return
+	}
+
+	err = app.Queries.RemoveMovieFromPlaylist(r.Context(), database.RemoveMovieFromPlaylistParams{
+		PlaylistID: playlistID,
+		MovieID:    movieID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to remove movie from playlist", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to remove movie"))
+		return
+	}
+
+	if err := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID); err != nil {
+		app.Logger.Error("failed to update playlist timestamp", "error", err, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error:   false,
+		Message: "Movie removed from playlist",
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
