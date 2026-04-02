@@ -57,6 +57,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createMovieGenreStmt, err = db.PrepareContext(ctx, createMovieGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateMovieGenre: %w", err)
 	}
+	if q.createMoviePlaylistStmt, err = db.PrepareContext(ctx, createMoviePlaylist); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateMoviePlaylist: %w", err)
+	}
 	if q.createMovieProductionCompanyStmt, err = db.PrepareContext(ctx, createMovieProductionCompany); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateMovieProductionCompany: %w", err)
 	}
@@ -198,6 +201,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMoviePlaylistsForUserStmt, err = db.PrepareContext(ctx, getMoviePlaylistsForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviePlaylistsForUser: %w", err)
 	}
+	if q.getMoviePlaylistsWithCollaboratorAccessStmt, err = db.PrepareContext(ctx, getMoviePlaylistsWithCollaboratorAccess); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMoviePlaylistsWithCollaboratorAccess: %w", err)
+	}
 	if q.getMoviesByGenreAscStmt, err = db.PrepareContext(ctx, getMoviesByGenreAsc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesByGenreAsc: %w", err)
 	}
@@ -324,6 +330,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.insertVideoStreamStmt, err = db.PrepareContext(ctx, insertVideoStream); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertVideoStream: %w", err)
 	}
+	if q.isMovieInPlaylistStmt, err = db.PrepareContext(ctx, isMovieInPlaylist); err != nil {
+		return nil, fmt.Errorf("error preparing query IsMovieInPlaylist: %w", err)
+	}
 	if q.isMovieLikedStmt, err = db.PrepareContext(ctx, isMovieLiked); err != nil {
 		return nil, fmt.Errorf("error preparing query IsMovieLiked: %w", err)
 	}
@@ -365,6 +374,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateMovieStmt, err = db.PrepareContext(ctx, updateMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMovie: %w", err)
+	}
+	if q.updateMoviePlaylistStmt, err = db.PrepareContext(ctx, updateMoviePlaylist); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateMoviePlaylist: %w", err)
 	}
 	if q.updateMusicianThumbStmt, err = db.PrepareContext(ctx, updateMusicianThumb); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMusicianThumb: %w", err)
@@ -481,6 +493,11 @@ func (q *Queries) Close() error {
 	if q.createMovieGenreStmt != nil {
 		if cerr := q.createMovieGenreStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createMovieGenreStmt: %w", cerr)
+		}
+	}
+	if q.createMoviePlaylistStmt != nil {
+		if cerr := q.createMoviePlaylistStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createMoviePlaylistStmt: %w", cerr)
 		}
 	}
 	if q.createMovieProductionCompanyStmt != nil {
@@ -718,6 +735,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMoviePlaylistsForUserStmt: %w", cerr)
 		}
 	}
+	if q.getMoviePlaylistsWithCollaboratorAccessStmt != nil {
+		if cerr := q.getMoviePlaylistsWithCollaboratorAccessStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMoviePlaylistsWithCollaboratorAccessStmt: %w", cerr)
+		}
+	}
 	if q.getMoviesByGenreAscStmt != nil {
 		if cerr := q.getMoviesByGenreAscStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMoviesByGenreAscStmt: %w", cerr)
@@ -928,6 +950,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing insertVideoStreamStmt: %w", cerr)
 		}
 	}
+	if q.isMovieInPlaylistStmt != nil {
+		if cerr := q.isMovieInPlaylistStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing isMovieInPlaylistStmt: %w", cerr)
+		}
+	}
 	if q.isMovieLikedStmt != nil {
 		if cerr := q.isMovieLikedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing isMovieLikedStmt: %w", cerr)
@@ -996,6 +1023,11 @@ func (q *Queries) Close() error {
 	if q.updateMovieStmt != nil {
 		if cerr := q.updateMovieStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMovieStmt: %w", cerr)
+		}
+	}
+	if q.updateMoviePlaylistStmt != nil {
+		if cerr := q.updateMoviePlaylistStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateMoviePlaylistStmt: %w", cerr)
 		}
 	}
 	if q.updateMusicianThumbStmt != nil {
@@ -1130,279 +1162,287 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                     DBTX
-	tx                                     *sql.Tx
-	addCollaboratorStmt                    *sql.Stmt
-	addMovieToPlaylistStmt                 *sql.Stmt
-	addTrackToPlaylistStmt                 *sql.Stmt
-	canUserEditPlaylistStmt                *sql.Stmt
-	checkMovieUnchangedStmt                *sql.Stmt
-	countMoviesForGenreStmt                *sql.Stmt
-	countPlaylistMoviesStmt                *sql.Stmt
-	countPlaylistTracksStmt                *sql.Stmt
-	countUserLikedMoviesStmt               *sql.Stmt
-	createMovieExtraVideoStmt              *sql.Stmt
-	createMovieGenreStmt                   *sql.Stmt
-	createMovieProductionCompanyStmt       *sql.Stmt
-	createMusicianAlbumStmt                *sql.Stmt
-	createPlaylistStmt                     *sql.Stmt
-	createSettingsStmt                     *sql.Stmt
-	createTrackGenreStmt                   *sql.Stmt
-	createUserStmt                         *sql.Stmt
-	deleteAlbumStmt                        *sql.Stmt
-	deleteMovieStmt                        *sql.Stmt
-	deleteMovieAudioStreamsStmt            *sql.Stmt
-	deleteMovieCastStmt                    *sql.Stmt
-	deleteMovieChaptersStmt                *sql.Stmt
-	deleteMovieCrewStmt                    *sql.Stmt
-	deleteMovieExtraVideosStmt             *sql.Stmt
-	deleteMovieGenresStmt                  *sql.Stmt
-	deleteMovieProductionCompaniesStmt     *sql.Stmt
-	deleteMovieSubtitlesStmt               *sql.Stmt
-	deleteMovieVideoStreamsStmt            *sql.Stmt
-	deletePlaylistStmt                     *sql.Stmt
-	deleteTrackGenresStmt                  *sql.Stmt
-	deleteTrackGenresExceptStmt            *sql.Stmt
-	deleteUserStmt                         *sql.Stmt
-	getAdminUserStmt                       *sql.Stmt
-	getAlbumByIDStmt                       *sql.Stmt
-	getAlbumByMusicBrainzIDStmt            *sql.Stmt
-	getAlbumByTitleAndMusicianStmt         *sql.Stmt
-	getAlbumsAlphabeticalStmt              *sql.Stmt
-	getAlbumsByMusicianIDStmt              *sql.Stmt
-	getAlbumsCountStmt                     *sql.Stmt
-	getAlbumsNeedingCoverDownloadStmt      *sql.Stmt
-	getAudioStreamsByMovieIDStmt           *sql.Stmt
-	getCastByMovieIDStmt                   *sql.Stmt
-	getChaptersByMovieIDStmt               *sql.Stmt
-	getCrewByMovieIDStmt                   *sql.Stmt
-	getGenresByAlbumIDStmt                 *sql.Stmt
-	getGenresByMovieIDStmt                 *sql.Stmt
-	getGenresByMusicianIDStmt              *sql.Stmt
-	getLatestAlbumsStmt                    *sql.Stmt
-	getLatestMoviesStmt                    *sql.Stmt
-	getLikedMoviesForUserAscStmt           *sql.Stmt
-	getLikedMoviesForUserDescStmt          *sql.Stmt
-	getLikedTrackIDsByUserIDStmt           *sql.Stmt
-	getMovieByIDStmt                       *sql.Stmt
-	getMovieByTmdbIDStmt                   *sql.Stmt
-	getMovieExtraVideosStmt                *sql.Stmt
-	getMovieForDirectStreamStmt            *sql.Stmt
-	getMovieGenresWithCountsStmt           *sql.Stmt
-	getMoviePlaylistsForUserStmt           *sql.Stmt
-	getMoviesByGenreAscStmt                *sql.Stmt
-	getMoviesByGenreDescStmt               *sql.Stmt
-	getMoviesCountStmt                     *sql.Stmt
-	getMoviesLibraryAscStmt                *sql.Stmt
-	getMoviesLibraryDescStmt               *sql.Stmt
-	getMusicianByIDStmt                    *sql.Stmt
-	getMusicianByMusicBrainzIDStmt         *sql.Stmt
-	getMusicianByNameStmt                  *sql.Stmt
-	getMusiciansAlphabeticalStmt           *sql.Stmt
-	getMusiciansByAlbumIDStmt              *sql.Stmt
-	getMusiciansCountStmt                  *sql.Stmt
-	getMusiciansNeedingThumbDownloadStmt   *sql.Stmt
-	getOrCreateGenreStmt                   *sql.Stmt
-	getPlaylistByIdStmt                    *sql.Stmt
-	getPlaylistCollaboratorsStmt           *sql.Stmt
-	getPlaylistDurationStmt                *sql.Stmt
-	getPlaylistMoviesPaginatedStmt         *sql.Stmt
-	getPlaylistTracksInfiniteStmt          *sql.Stmt
-	getPlaylistsWithCollaboratorAccessStmt *sql.Stmt
-	getProductionCompaniesByMovieIDStmt    *sql.Stmt
-	getRandomTracksStmt                    *sql.Stmt
-	getSettingsStmt                        *sql.Stmt
-	getSubtitlesByMovieIDStmt              *sql.Stmt
-	getTrackStmt                           *sql.Stmt
-	getTrackPathsAndSizesByPathsStmt       *sql.Stmt
-	getTracksAlphabeticalStmt              *sql.Stmt
-	getTracksByAlbumIDStmt                 *sql.Stmt
-	getTracksByMusicianIDStmt              *sql.Stmt
-	getTracksCountStmt                     *sql.Stmt
-	getUserStmt                            *sql.Stmt
-	getUserByEmailStmt                     *sql.Stmt
-	getUserListeningStatsStmt              *sql.Stmt
-	getUserRecentlyPlayedStmt              *sql.Stmt
-	getUserTopAlbumsStmt                   *sql.Stmt
-	getUserTopGenresStmt                   *sql.Stmt
-	getUserTopMusiciansStmt                *sql.Stmt
-	getUserTopTracksStmt                   *sql.Stmt
-	getVideoStreamsByMovieIDStmt           *sql.Stmt
-	insertAudioStreamStmt                  *sql.Stmt
-	insertChapterStmt                      *sql.Stmt
-	insertSubtitleStmt                     *sql.Stmt
-	insertVideoStreamStmt                  *sql.Stmt
-	isMovieLikedStmt                       *sql.Stmt
-	isTrackInPlaylistStmt                  *sql.Stmt
-	isTrackLikedStmt                       *sql.Stmt
-	isUserCollaboratorStmt                 *sql.Stmt
-	likeMovieStmt                          *sql.Stmt
-	likeTrackStmt                          *sql.Stmt
-	recordPlayEventStmt                    *sql.Stmt
-	removeCollaboratorStmt                 *sql.Stmt
-	removeMovieFromPlaylistStmt            *sql.Stmt
-	removeTrackFromPlaylistStmt            *sql.Stmt
-	unlikeMovieStmt                        *sql.Stmt
-	unlikeTrackStmt                        *sql.Stmt
-	updateAlbumCoverStmt                   *sql.Stmt
-	updateMovieStmt                        *sql.Stmt
-	updateMusicianThumbStmt                *sql.Stmt
-	updatePlaylistStmt                     *sql.Stmt
-	updatePlaylistTimestampStmt            *sql.Stmt
-	updateTrackPositionStmt                *sql.Stmt
-	updateUserAvatarStmt                   *sql.Stmt
-	updateUserNameStmt                     *sql.Stmt
-	updateUserPasswordStmt                 *sql.Stmt
-	upsertAlbumStmt                        *sql.Stmt
-	upsertAlbumGenreStmt                   *sql.Stmt
-	upsertArtistStmt                       *sql.Stmt
-	upsertCastStmt                         *sql.Stmt
-	upsertCrewStmt                         *sql.Stmt
-	upsertExtraVideoStmt                   *sql.Stmt
-	upsertMovieStmt                        *sql.Stmt
-	upsertMusicianStmt                     *sql.Stmt
-	upsertMusicianGenreStmt                *sql.Stmt
-	upsertProductionCompanyStmt            *sql.Stmt
-	upsertTrackStmt                        *sql.Stmt
-	upsertUserTrackStatsStmt               *sql.Stmt
+	db                                          DBTX
+	tx                                          *sql.Tx
+	addCollaboratorStmt                         *sql.Stmt
+	addMovieToPlaylistStmt                      *sql.Stmt
+	addTrackToPlaylistStmt                      *sql.Stmt
+	canUserEditPlaylistStmt                     *sql.Stmt
+	checkMovieUnchangedStmt                     *sql.Stmt
+	countMoviesForGenreStmt                     *sql.Stmt
+	countPlaylistMoviesStmt                     *sql.Stmt
+	countPlaylistTracksStmt                     *sql.Stmt
+	countUserLikedMoviesStmt                    *sql.Stmt
+	createMovieExtraVideoStmt                   *sql.Stmt
+	createMovieGenreStmt                        *sql.Stmt
+	createMoviePlaylistStmt                     *sql.Stmt
+	createMovieProductionCompanyStmt            *sql.Stmt
+	createMusicianAlbumStmt                     *sql.Stmt
+	createPlaylistStmt                          *sql.Stmt
+	createSettingsStmt                          *sql.Stmt
+	createTrackGenreStmt                        *sql.Stmt
+	createUserStmt                              *sql.Stmt
+	deleteAlbumStmt                             *sql.Stmt
+	deleteMovieStmt                             *sql.Stmt
+	deleteMovieAudioStreamsStmt                 *sql.Stmt
+	deleteMovieCastStmt                         *sql.Stmt
+	deleteMovieChaptersStmt                     *sql.Stmt
+	deleteMovieCrewStmt                         *sql.Stmt
+	deleteMovieExtraVideosStmt                  *sql.Stmt
+	deleteMovieGenresStmt                       *sql.Stmt
+	deleteMovieProductionCompaniesStmt          *sql.Stmt
+	deleteMovieSubtitlesStmt                    *sql.Stmt
+	deleteMovieVideoStreamsStmt                 *sql.Stmt
+	deletePlaylistStmt                          *sql.Stmt
+	deleteTrackGenresStmt                       *sql.Stmt
+	deleteTrackGenresExceptStmt                 *sql.Stmt
+	deleteUserStmt                              *sql.Stmt
+	getAdminUserStmt                            *sql.Stmt
+	getAlbumByIDStmt                            *sql.Stmt
+	getAlbumByMusicBrainzIDStmt                 *sql.Stmt
+	getAlbumByTitleAndMusicianStmt              *sql.Stmt
+	getAlbumsAlphabeticalStmt                   *sql.Stmt
+	getAlbumsByMusicianIDStmt                   *sql.Stmt
+	getAlbumsCountStmt                          *sql.Stmt
+	getAlbumsNeedingCoverDownloadStmt           *sql.Stmt
+	getAudioStreamsByMovieIDStmt                *sql.Stmt
+	getCastByMovieIDStmt                        *sql.Stmt
+	getChaptersByMovieIDStmt                    *sql.Stmt
+	getCrewByMovieIDStmt                        *sql.Stmt
+	getGenresByAlbumIDStmt                      *sql.Stmt
+	getGenresByMovieIDStmt                      *sql.Stmt
+	getGenresByMusicianIDStmt                   *sql.Stmt
+	getLatestAlbumsStmt                         *sql.Stmt
+	getLatestMoviesStmt                         *sql.Stmt
+	getLikedMoviesForUserAscStmt                *sql.Stmt
+	getLikedMoviesForUserDescStmt               *sql.Stmt
+	getLikedTrackIDsByUserIDStmt                *sql.Stmt
+	getMovieByIDStmt                            *sql.Stmt
+	getMovieByTmdbIDStmt                        *sql.Stmt
+	getMovieExtraVideosStmt                     *sql.Stmt
+	getMovieForDirectStreamStmt                 *sql.Stmt
+	getMovieGenresWithCountsStmt                *sql.Stmt
+	getMoviePlaylistsForUserStmt                *sql.Stmt
+	getMoviePlaylistsWithCollaboratorAccessStmt *sql.Stmt
+	getMoviesByGenreAscStmt                     *sql.Stmt
+	getMoviesByGenreDescStmt                    *sql.Stmt
+	getMoviesCountStmt                          *sql.Stmt
+	getMoviesLibraryAscStmt                     *sql.Stmt
+	getMoviesLibraryDescStmt                    *sql.Stmt
+	getMusicianByIDStmt                         *sql.Stmt
+	getMusicianByMusicBrainzIDStmt              *sql.Stmt
+	getMusicianByNameStmt                       *sql.Stmt
+	getMusiciansAlphabeticalStmt                *sql.Stmt
+	getMusiciansByAlbumIDStmt                   *sql.Stmt
+	getMusiciansCountStmt                       *sql.Stmt
+	getMusiciansNeedingThumbDownloadStmt        *sql.Stmt
+	getOrCreateGenreStmt                        *sql.Stmt
+	getPlaylistByIdStmt                         *sql.Stmt
+	getPlaylistCollaboratorsStmt                *sql.Stmt
+	getPlaylistDurationStmt                     *sql.Stmt
+	getPlaylistMoviesPaginatedStmt              *sql.Stmt
+	getPlaylistTracksInfiniteStmt               *sql.Stmt
+	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
+	getProductionCompaniesByMovieIDStmt         *sql.Stmt
+	getRandomTracksStmt                         *sql.Stmt
+	getSettingsStmt                             *sql.Stmt
+	getSubtitlesByMovieIDStmt                   *sql.Stmt
+	getTrackStmt                                *sql.Stmt
+	getTrackPathsAndSizesByPathsStmt            *sql.Stmt
+	getTracksAlphabeticalStmt                   *sql.Stmt
+	getTracksByAlbumIDStmt                      *sql.Stmt
+	getTracksByMusicianIDStmt                   *sql.Stmt
+	getTracksCountStmt                          *sql.Stmt
+	getUserStmt                                 *sql.Stmt
+	getUserByEmailStmt                          *sql.Stmt
+	getUserListeningStatsStmt                   *sql.Stmt
+	getUserRecentlyPlayedStmt                   *sql.Stmt
+	getUserTopAlbumsStmt                        *sql.Stmt
+	getUserTopGenresStmt                        *sql.Stmt
+	getUserTopMusiciansStmt                     *sql.Stmt
+	getUserTopTracksStmt                        *sql.Stmt
+	getVideoStreamsByMovieIDStmt                *sql.Stmt
+	insertAudioStreamStmt                       *sql.Stmt
+	insertChapterStmt                           *sql.Stmt
+	insertSubtitleStmt                          *sql.Stmt
+	insertVideoStreamStmt                       *sql.Stmt
+	isMovieInPlaylistStmt                       *sql.Stmt
+	isMovieLikedStmt                            *sql.Stmt
+	isTrackInPlaylistStmt                       *sql.Stmt
+	isTrackLikedStmt                            *sql.Stmt
+	isUserCollaboratorStmt                      *sql.Stmt
+	likeMovieStmt                               *sql.Stmt
+	likeTrackStmt                               *sql.Stmt
+	recordPlayEventStmt                         *sql.Stmt
+	removeCollaboratorStmt                      *sql.Stmt
+	removeMovieFromPlaylistStmt                 *sql.Stmt
+	removeTrackFromPlaylistStmt                 *sql.Stmt
+	unlikeMovieStmt                             *sql.Stmt
+	unlikeTrackStmt                             *sql.Stmt
+	updateAlbumCoverStmt                        *sql.Stmt
+	updateMovieStmt                             *sql.Stmt
+	updateMoviePlaylistStmt                     *sql.Stmt
+	updateMusicianThumbStmt                     *sql.Stmt
+	updatePlaylistStmt                          *sql.Stmt
+	updatePlaylistTimestampStmt                 *sql.Stmt
+	updateTrackPositionStmt                     *sql.Stmt
+	updateUserAvatarStmt                        *sql.Stmt
+	updateUserNameStmt                          *sql.Stmt
+	updateUserPasswordStmt                      *sql.Stmt
+	upsertAlbumStmt                             *sql.Stmt
+	upsertAlbumGenreStmt                        *sql.Stmt
+	upsertArtistStmt                            *sql.Stmt
+	upsertCastStmt                              *sql.Stmt
+	upsertCrewStmt                              *sql.Stmt
+	upsertExtraVideoStmt                        *sql.Stmt
+	upsertMovieStmt                             *sql.Stmt
+	upsertMusicianStmt                          *sql.Stmt
+	upsertMusicianGenreStmt                     *sql.Stmt
+	upsertProductionCompanyStmt                 *sql.Stmt
+	upsertTrackStmt                             *sql.Stmt
+	upsertUserTrackStatsStmt                    *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                     tx,
-		tx:                                     tx,
-		addCollaboratorStmt:                    q.addCollaboratorStmt,
-		addMovieToPlaylistStmt:                 q.addMovieToPlaylistStmt,
-		addTrackToPlaylistStmt:                 q.addTrackToPlaylistStmt,
-		canUserEditPlaylistStmt:                q.canUserEditPlaylistStmt,
-		checkMovieUnchangedStmt:                q.checkMovieUnchangedStmt,
-		countMoviesForGenreStmt:                q.countMoviesForGenreStmt,
-		countPlaylistMoviesStmt:                q.countPlaylistMoviesStmt,
-		countPlaylistTracksStmt:                q.countPlaylistTracksStmt,
-		countUserLikedMoviesStmt:               q.countUserLikedMoviesStmt,
-		createMovieExtraVideoStmt:              q.createMovieExtraVideoStmt,
-		createMovieGenreStmt:                   q.createMovieGenreStmt,
-		createMovieProductionCompanyStmt:       q.createMovieProductionCompanyStmt,
-		createMusicianAlbumStmt:                q.createMusicianAlbumStmt,
-		createPlaylistStmt:                     q.createPlaylistStmt,
-		createSettingsStmt:                     q.createSettingsStmt,
-		createTrackGenreStmt:                   q.createTrackGenreStmt,
-		createUserStmt:                         q.createUserStmt,
-		deleteAlbumStmt:                        q.deleteAlbumStmt,
-		deleteMovieStmt:                        q.deleteMovieStmt,
-		deleteMovieAudioStreamsStmt:            q.deleteMovieAudioStreamsStmt,
-		deleteMovieCastStmt:                    q.deleteMovieCastStmt,
-		deleteMovieChaptersStmt:                q.deleteMovieChaptersStmt,
-		deleteMovieCrewStmt:                    q.deleteMovieCrewStmt,
-		deleteMovieExtraVideosStmt:             q.deleteMovieExtraVideosStmt,
-		deleteMovieGenresStmt:                  q.deleteMovieGenresStmt,
-		deleteMovieProductionCompaniesStmt:     q.deleteMovieProductionCompaniesStmt,
-		deleteMovieSubtitlesStmt:               q.deleteMovieSubtitlesStmt,
-		deleteMovieVideoStreamsStmt:            q.deleteMovieVideoStreamsStmt,
-		deletePlaylistStmt:                     q.deletePlaylistStmt,
-		deleteTrackGenresStmt:                  q.deleteTrackGenresStmt,
-		deleteTrackGenresExceptStmt:            q.deleteTrackGenresExceptStmt,
-		deleteUserStmt:                         q.deleteUserStmt,
-		getAdminUserStmt:                       q.getAdminUserStmt,
-		getAlbumByIDStmt:                       q.getAlbumByIDStmt,
-		getAlbumByMusicBrainzIDStmt:            q.getAlbumByMusicBrainzIDStmt,
-		getAlbumByTitleAndMusicianStmt:         q.getAlbumByTitleAndMusicianStmt,
-		getAlbumsAlphabeticalStmt:              q.getAlbumsAlphabeticalStmt,
-		getAlbumsByMusicianIDStmt:              q.getAlbumsByMusicianIDStmt,
-		getAlbumsCountStmt:                     q.getAlbumsCountStmt,
-		getAlbumsNeedingCoverDownloadStmt:      q.getAlbumsNeedingCoverDownloadStmt,
-		getAudioStreamsByMovieIDStmt:           q.getAudioStreamsByMovieIDStmt,
-		getCastByMovieIDStmt:                   q.getCastByMovieIDStmt,
-		getChaptersByMovieIDStmt:               q.getChaptersByMovieIDStmt,
-		getCrewByMovieIDStmt:                   q.getCrewByMovieIDStmt,
-		getGenresByAlbumIDStmt:                 q.getGenresByAlbumIDStmt,
-		getGenresByMovieIDStmt:                 q.getGenresByMovieIDStmt,
-		getGenresByMusicianIDStmt:              q.getGenresByMusicianIDStmt,
-		getLatestAlbumsStmt:                    q.getLatestAlbumsStmt,
-		getLatestMoviesStmt:                    q.getLatestMoviesStmt,
-		getLikedMoviesForUserAscStmt:           q.getLikedMoviesForUserAscStmt,
-		getLikedMoviesForUserDescStmt:          q.getLikedMoviesForUserDescStmt,
-		getLikedTrackIDsByUserIDStmt:           q.getLikedTrackIDsByUserIDStmt,
-		getMovieByIDStmt:                       q.getMovieByIDStmt,
-		getMovieByTmdbIDStmt:                   q.getMovieByTmdbIDStmt,
-		getMovieExtraVideosStmt:                q.getMovieExtraVideosStmt,
-		getMovieForDirectStreamStmt:            q.getMovieForDirectStreamStmt,
-		getMovieGenresWithCountsStmt:           q.getMovieGenresWithCountsStmt,
-		getMoviePlaylistsForUserStmt:           q.getMoviePlaylistsForUserStmt,
-		getMoviesByGenreAscStmt:                q.getMoviesByGenreAscStmt,
-		getMoviesByGenreDescStmt:               q.getMoviesByGenreDescStmt,
-		getMoviesCountStmt:                     q.getMoviesCountStmt,
-		getMoviesLibraryAscStmt:                q.getMoviesLibraryAscStmt,
-		getMoviesLibraryDescStmt:               q.getMoviesLibraryDescStmt,
-		getMusicianByIDStmt:                    q.getMusicianByIDStmt,
-		getMusicianByMusicBrainzIDStmt:         q.getMusicianByMusicBrainzIDStmt,
-		getMusicianByNameStmt:                  q.getMusicianByNameStmt,
-		getMusiciansAlphabeticalStmt:           q.getMusiciansAlphabeticalStmt,
-		getMusiciansByAlbumIDStmt:              q.getMusiciansByAlbumIDStmt,
-		getMusiciansCountStmt:                  q.getMusiciansCountStmt,
-		getMusiciansNeedingThumbDownloadStmt:   q.getMusiciansNeedingThumbDownloadStmt,
-		getOrCreateGenreStmt:                   q.getOrCreateGenreStmt,
-		getPlaylistByIdStmt:                    q.getPlaylistByIdStmt,
-		getPlaylistCollaboratorsStmt:           q.getPlaylistCollaboratorsStmt,
-		getPlaylistDurationStmt:                q.getPlaylistDurationStmt,
-		getPlaylistMoviesPaginatedStmt:         q.getPlaylistMoviesPaginatedStmt,
-		getPlaylistTracksInfiniteStmt:          q.getPlaylistTracksInfiniteStmt,
-		getPlaylistsWithCollaboratorAccessStmt: q.getPlaylistsWithCollaboratorAccessStmt,
-		getProductionCompaniesByMovieIDStmt:    q.getProductionCompaniesByMovieIDStmt,
-		getRandomTracksStmt:                    q.getRandomTracksStmt,
-		getSettingsStmt:                        q.getSettingsStmt,
-		getSubtitlesByMovieIDStmt:              q.getSubtitlesByMovieIDStmt,
-		getTrackStmt:                           q.getTrackStmt,
-		getTrackPathsAndSizesByPathsStmt:       q.getTrackPathsAndSizesByPathsStmt,
-		getTracksAlphabeticalStmt:              q.getTracksAlphabeticalStmt,
-		getTracksByAlbumIDStmt:                 q.getTracksByAlbumIDStmt,
-		getTracksByMusicianIDStmt:              q.getTracksByMusicianIDStmt,
-		getTracksCountStmt:                     q.getTracksCountStmt,
-		getUserStmt:                            q.getUserStmt,
-		getUserByEmailStmt:                     q.getUserByEmailStmt,
-		getUserListeningStatsStmt:              q.getUserListeningStatsStmt,
-		getUserRecentlyPlayedStmt:              q.getUserRecentlyPlayedStmt,
-		getUserTopAlbumsStmt:                   q.getUserTopAlbumsStmt,
-		getUserTopGenresStmt:                   q.getUserTopGenresStmt,
-		getUserTopMusiciansStmt:                q.getUserTopMusiciansStmt,
-		getUserTopTracksStmt:                   q.getUserTopTracksStmt,
-		getVideoStreamsByMovieIDStmt:           q.getVideoStreamsByMovieIDStmt,
-		insertAudioStreamStmt:                  q.insertAudioStreamStmt,
-		insertChapterStmt:                      q.insertChapterStmt,
-		insertSubtitleStmt:                     q.insertSubtitleStmt,
-		insertVideoStreamStmt:                  q.insertVideoStreamStmt,
-		isMovieLikedStmt:                       q.isMovieLikedStmt,
-		isTrackInPlaylistStmt:                  q.isTrackInPlaylistStmt,
-		isTrackLikedStmt:                       q.isTrackLikedStmt,
-		isUserCollaboratorStmt:                 q.isUserCollaboratorStmt,
-		likeMovieStmt:                          q.likeMovieStmt,
-		likeTrackStmt:                          q.likeTrackStmt,
-		recordPlayEventStmt:                    q.recordPlayEventStmt,
-		removeCollaboratorStmt:                 q.removeCollaboratorStmt,
-		removeMovieFromPlaylistStmt:            q.removeMovieFromPlaylistStmt,
-		removeTrackFromPlaylistStmt:            q.removeTrackFromPlaylistStmt,
-		unlikeMovieStmt:                        q.unlikeMovieStmt,
-		unlikeTrackStmt:                        q.unlikeTrackStmt,
-		updateAlbumCoverStmt:                   q.updateAlbumCoverStmt,
-		updateMovieStmt:                        q.updateMovieStmt,
-		updateMusicianThumbStmt:                q.updateMusicianThumbStmt,
-		updatePlaylistStmt:                     q.updatePlaylistStmt,
-		updatePlaylistTimestampStmt:            q.updatePlaylistTimestampStmt,
-		updateTrackPositionStmt:                q.updateTrackPositionStmt,
-		updateUserAvatarStmt:                   q.updateUserAvatarStmt,
-		updateUserNameStmt:                     q.updateUserNameStmt,
-		updateUserPasswordStmt:                 q.updateUserPasswordStmt,
-		upsertAlbumStmt:                        q.upsertAlbumStmt,
-		upsertAlbumGenreStmt:                   q.upsertAlbumGenreStmt,
-		upsertArtistStmt:                       q.upsertArtistStmt,
-		upsertCastStmt:                         q.upsertCastStmt,
-		upsertCrewStmt:                         q.upsertCrewStmt,
-		upsertExtraVideoStmt:                   q.upsertExtraVideoStmt,
-		upsertMovieStmt:                        q.upsertMovieStmt,
-		upsertMusicianStmt:                     q.upsertMusicianStmt,
-		upsertMusicianGenreStmt:                q.upsertMusicianGenreStmt,
-		upsertProductionCompanyStmt:            q.upsertProductionCompanyStmt,
-		upsertTrackStmt:                        q.upsertTrackStmt,
-		upsertUserTrackStatsStmt:               q.upsertUserTrackStatsStmt,
+		db:                                          tx,
+		tx:                                          tx,
+		addCollaboratorStmt:                         q.addCollaboratorStmt,
+		addMovieToPlaylistStmt:                      q.addMovieToPlaylistStmt,
+		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
+		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
+		checkMovieUnchangedStmt:                     q.checkMovieUnchangedStmt,
+		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
+		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
+		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
+		countUserLikedMoviesStmt:                    q.countUserLikedMoviesStmt,
+		createMovieExtraVideoStmt:                   q.createMovieExtraVideoStmt,
+		createMovieGenreStmt:                        q.createMovieGenreStmt,
+		createMoviePlaylistStmt:                     q.createMoviePlaylistStmt,
+		createMovieProductionCompanyStmt:            q.createMovieProductionCompanyStmt,
+		createMusicianAlbumStmt:                     q.createMusicianAlbumStmt,
+		createPlaylistStmt:                          q.createPlaylistStmt,
+		createSettingsStmt:                          q.createSettingsStmt,
+		createTrackGenreStmt:                        q.createTrackGenreStmt,
+		createUserStmt:                              q.createUserStmt,
+		deleteAlbumStmt:                             q.deleteAlbumStmt,
+		deleteMovieStmt:                             q.deleteMovieStmt,
+		deleteMovieAudioStreamsStmt:                 q.deleteMovieAudioStreamsStmt,
+		deleteMovieCastStmt:                         q.deleteMovieCastStmt,
+		deleteMovieChaptersStmt:                     q.deleteMovieChaptersStmt,
+		deleteMovieCrewStmt:                         q.deleteMovieCrewStmt,
+		deleteMovieExtraVideosStmt:                  q.deleteMovieExtraVideosStmt,
+		deleteMovieGenresStmt:                       q.deleteMovieGenresStmt,
+		deleteMovieProductionCompaniesStmt:          q.deleteMovieProductionCompaniesStmt,
+		deleteMovieSubtitlesStmt:                    q.deleteMovieSubtitlesStmt,
+		deleteMovieVideoStreamsStmt:                 q.deleteMovieVideoStreamsStmt,
+		deletePlaylistStmt:                          q.deletePlaylistStmt,
+		deleteTrackGenresStmt:                       q.deleteTrackGenresStmt,
+		deleteTrackGenresExceptStmt:                 q.deleteTrackGenresExceptStmt,
+		deleteUserStmt:                              q.deleteUserStmt,
+		getAdminUserStmt:                            q.getAdminUserStmt,
+		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
+		getAlbumByMusicBrainzIDStmt:                 q.getAlbumByMusicBrainzIDStmt,
+		getAlbumByTitleAndMusicianStmt:              q.getAlbumByTitleAndMusicianStmt,
+		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
+		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
+		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
+		getAlbumsNeedingCoverDownloadStmt:           q.getAlbumsNeedingCoverDownloadStmt,
+		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
+		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
+		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
+		getCrewByMovieIDStmt:                        q.getCrewByMovieIDStmt,
+		getGenresByAlbumIDStmt:                      q.getGenresByAlbumIDStmt,
+		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
+		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
+		getLatestAlbumsStmt:                         q.getLatestAlbumsStmt,
+		getLatestMoviesStmt:                         q.getLatestMoviesStmt,
+		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
+		getLikedMoviesForUserDescStmt:               q.getLikedMoviesForUserDescStmt,
+		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
+		getMovieByIDStmt:                            q.getMovieByIDStmt,
+		getMovieByTmdbIDStmt:                        q.getMovieByTmdbIDStmt,
+		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
+		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
+		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,
+		getMoviePlaylistsForUserStmt:                q.getMoviePlaylistsForUserStmt,
+		getMoviePlaylistsWithCollaboratorAccessStmt: q.getMoviePlaylistsWithCollaboratorAccessStmt,
+		getMoviesByGenreAscStmt:                     q.getMoviesByGenreAscStmt,
+		getMoviesByGenreDescStmt:                    q.getMoviesByGenreDescStmt,
+		getMoviesCountStmt:                          q.getMoviesCountStmt,
+		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
+		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
+		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
+		getMusicianByMusicBrainzIDStmt:              q.getMusicianByMusicBrainzIDStmt,
+		getMusicianByNameStmt:                       q.getMusicianByNameStmt,
+		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
+		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
+		getMusiciansCountStmt:                       q.getMusiciansCountStmt,
+		getMusiciansNeedingThumbDownloadStmt:        q.getMusiciansNeedingThumbDownloadStmt,
+		getOrCreateGenreStmt:                        q.getOrCreateGenreStmt,
+		getPlaylistByIdStmt:                         q.getPlaylistByIdStmt,
+		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
+		getPlaylistDurationStmt:                     q.getPlaylistDurationStmt,
+		getPlaylistMoviesPaginatedStmt:              q.getPlaylistMoviesPaginatedStmt,
+		getPlaylistTracksInfiniteStmt:               q.getPlaylistTracksInfiniteStmt,
+		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
+		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,
+		getRandomTracksStmt:                         q.getRandomTracksStmt,
+		getSettingsStmt:                             q.getSettingsStmt,
+		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
+		getTrackStmt:                                q.getTrackStmt,
+		getTrackPathsAndSizesByPathsStmt:            q.getTrackPathsAndSizesByPathsStmt,
+		getTracksAlphabeticalStmt:                   q.getTracksAlphabeticalStmt,
+		getTracksByAlbumIDStmt:                      q.getTracksByAlbumIDStmt,
+		getTracksByMusicianIDStmt:                   q.getTracksByMusicianIDStmt,
+		getTracksCountStmt:                          q.getTracksCountStmt,
+		getUserStmt:                                 q.getUserStmt,
+		getUserByEmailStmt:                          q.getUserByEmailStmt,
+		getUserListeningStatsStmt:                   q.getUserListeningStatsStmt,
+		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
+		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
+		getUserTopGenresStmt:                        q.getUserTopGenresStmt,
+		getUserTopMusiciansStmt:                     q.getUserTopMusiciansStmt,
+		getUserTopTracksStmt:                        q.getUserTopTracksStmt,
+		getVideoStreamsByMovieIDStmt:                q.getVideoStreamsByMovieIDStmt,
+		insertAudioStreamStmt:                       q.insertAudioStreamStmt,
+		insertChapterStmt:                           q.insertChapterStmt,
+		insertSubtitleStmt:                          q.insertSubtitleStmt,
+		insertVideoStreamStmt:                       q.insertVideoStreamStmt,
+		isMovieInPlaylistStmt:                       q.isMovieInPlaylistStmt,
+		isMovieLikedStmt:                            q.isMovieLikedStmt,
+		isTrackInPlaylistStmt:                       q.isTrackInPlaylistStmt,
+		isTrackLikedStmt:                            q.isTrackLikedStmt,
+		isUserCollaboratorStmt:                      q.isUserCollaboratorStmt,
+		likeMovieStmt:                               q.likeMovieStmt,
+		likeTrackStmt:                               q.likeTrackStmt,
+		recordPlayEventStmt:                         q.recordPlayEventStmt,
+		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
+		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
+		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
+		unlikeMovieStmt:                             q.unlikeMovieStmt,
+		unlikeTrackStmt:                             q.unlikeTrackStmt,
+		updateAlbumCoverStmt:                        q.updateAlbumCoverStmt,
+		updateMovieStmt:                             q.updateMovieStmt,
+		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,
+		updateMusicianThumbStmt:                     q.updateMusicianThumbStmt,
+		updatePlaylistStmt:                          q.updatePlaylistStmt,
+		updatePlaylistTimestampStmt:                 q.updatePlaylistTimestampStmt,
+		updateTrackPositionStmt:                     q.updateTrackPositionStmt,
+		updateUserAvatarStmt:                        q.updateUserAvatarStmt,
+		updateUserNameStmt:                          q.updateUserNameStmt,
+		updateUserPasswordStmt:                      q.updateUserPasswordStmt,
+		upsertAlbumStmt:                             q.upsertAlbumStmt,
+		upsertAlbumGenreStmt:                        q.upsertAlbumGenreStmt,
+		upsertArtistStmt:                            q.upsertArtistStmt,
+		upsertCastStmt:                              q.upsertCastStmt,
+		upsertCrewStmt:                              q.upsertCrewStmt,
+		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
+		upsertMovieStmt:                             q.upsertMovieStmt,
+		upsertMusicianStmt:                          q.upsertMusicianStmt,
+		upsertMusicianGenreStmt:                     q.upsertMusicianGenreStmt,
+		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,
+		upsertTrackStmt:                             q.upsertTrackStmt,
+		upsertUserTrackStatsStmt:                    q.upsertUserTrackStatsStmt,
 	}
 }

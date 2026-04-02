@@ -37,3 +37,40 @@ SELECT
 FROM playlists p
 WHERE p.user_id = ? AND p.content_type = 'movie'
 ORDER BY p.updated_at DESC;
+
+-- name: CreateMoviePlaylist :one
+INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type, movie_id)
+VALUES (?, ?, ?, ?, ?, 'movie', ?)
+RETURNING *;
+
+-- name: UpdateMoviePlaylist :one
+UPDATE playlists
+SET
+  name = ?,
+  description = ?,
+  cover_image = ?,
+  is_public = ?,
+  movie_id = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ? AND content_type = 'movie'
+RETURNING *;
+
+-- name: GetMoviePlaylistsWithCollaboratorAccess :many
+SELECT
+  p.id,
+  p.user_id,
+  p.name,
+  p.description,
+  p.cover_image,
+  p.is_public,
+  p.folder_id,
+  p.movie_id,
+  p.content_type,
+  p.created_at,
+  p.updated_at,
+  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
+FROM playlists p
+LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
+WHERE (p.user_id = ? OR pc.user_id = ?) AND p.content_type = 'movie'
+GROUP BY p.id
+ORDER BY p.updated_at DESC;

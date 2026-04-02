@@ -24,6 +24,7 @@ type Querier interface {
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
 	// Link movie to genre via junction table
 	CreateMovieGenre(ctx context.Context, arg CreateMovieGenreParams) error
+	CreateMoviePlaylist(ctx context.Context, arg CreateMoviePlaylistParams) (Playlist, error)
 	// Link movie to production company via junction table
 	CreateMovieProductionCompany(ctx context.Context, arg CreateMovieProductionCompanyParams) error
 	CreateMusicianAlbum(ctx context.Context, arg CreateMusicianAlbumParams) error
@@ -97,6 +98,7 @@ type Querier interface {
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
 	GetMoviePlaylistsForUser(ctx context.Context, userID int64) ([]GetMoviePlaylistsForUserRow, error)
+	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
@@ -157,6 +159,7 @@ type Querier interface {
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) (VideoStream, error)
+	IsMovieInPlaylist(ctx context.Context, arg IsMovieInPlaylistParams) (int64, error)
 	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
 	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (int64, error)
 	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
@@ -177,6 +180,7 @@ type Querier interface {
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
+	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
 	UpdateMusicianThumb(ctx context.Context, arg UpdateMusicianThumbParams) error
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error

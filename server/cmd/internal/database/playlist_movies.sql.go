@@ -12,24 +12,23 @@ import (
 
 const addMovieToPlaylist = `-- name: AddMovieToPlaylist :one
 INSERT INTO playlist_movies (playlist_id, movie_id, position, added_by)
-VALUES (?, ?, ?, ?)
+VALUES (
+  ?1,
+  ?2,
+  (SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_movies pm2 WHERE pm2.playlist_id = ?1),
+  ?3
+)
 RETURNING id, playlist_id, movie_id, position, added_by, added_at
 `
 
 type AddMovieToPlaylistParams struct {
 	PlaylistID int64         `json:"playlist_id"`
 	MovieID    int64         `json:"movie_id"`
-	Position   int64         `json:"position"`
 	AddedBy    sql.NullInt64 `json:"added_by"`
 }
 
 func (q *Queries) AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error) {
-	row := q.queryRow(ctx, q.addMovieToPlaylistStmt, addMovieToPlaylist,
-		arg.PlaylistID,
-		arg.MovieID,
-		arg.Position,
-		arg.AddedBy,
-	)
+	row := q.queryRow(ctx, q.addMovieToPlaylistStmt, addMovieToPlaylist, arg.PlaylistID, arg.MovieID, arg.AddedBy)
 	var i PlaylistMovie
 	err := row.Scan(
 		&i.ID,
@@ -99,6 +98,22 @@ func (q *Queries) GetPlaylistMoviesPaginated(ctx context.Context, arg GetPlaylis
 		return nil, err
 	}
 	return items, nil
+}
+
+const isMovieInPlaylist = `-- name: IsMovieInPlaylist :one
+SELECT EXISTS(SELECT 1 FROM playlist_movies WHERE playlist_id = ? AND movie_id = ?) AS is_in_playlist
+`
+
+type IsMovieInPlaylistParams struct {
+	PlaylistID int64 `json:"playlist_id"`
+	MovieID    int64 `json:"movie_id"`
+}
+
+func (q *Queries) IsMovieInPlaylist(ctx context.Context, arg IsMovieInPlaylistParams) (int64, error) {
+	row := q.queryRow(ctx, q.isMovieInPlaylistStmt, isMovieInPlaylist, arg.PlaylistID, arg.MovieID)
+	var is_in_playlist int64
+	err := row.Scan(&is_in_playlist)
+	return is_in_playlist, err
 }
 
 const removeMovieFromPlaylist = `-- name: RemoveMovieFromPlaylist :exec
