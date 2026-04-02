@@ -327,8 +327,14 @@ function AccountSettings() {
       } else {
         showSuccess("Account deleted successfully");
         // Logout and redirect to login
-        await logout();
-        queryClient.clear();
+        const logoutRes = await logout();
+        if (logoutRes.error) {
+          showActionFailed("log out", logoutRes.message);
+          setIsDeleting(false);
+          return;
+        }
+        queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
+        queryClient.invalidateQueries();
         navigate({ to: "/login", replace: true });
       }
     } catch {

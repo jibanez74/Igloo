@@ -25,7 +25,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
 import { logout } from "@/lib/api";
-import { MOVIES_INDEX_DEFAULT_SEARCH } from "@/lib/constants";
+import { AUTH_USER_KEY, MOVIES_INDEX_DEFAULT_SEARCH } from "@/lib/constants";
+import { showError } from "@/lib/toast-helpers";
 
 type NavItem = {
   title: string;
@@ -88,8 +89,15 @@ export default function AppSidebar({
     if (isMobile) {
       setOpenMobile(false);
     }
-    await logout();
-    queryClient.clear();
+
+    const res = await logout();
+    if (res.error) {
+      showError("Logout failed", res.message || "Please try again.");
+      return;
+    }
+
+    queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
+    queryClient.invalidateQueries();
     navigate({ to: "/login", replace: true });
   };
 
