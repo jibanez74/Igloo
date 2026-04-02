@@ -1667,7 +1667,11 @@ func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *h
 		return
 	}
 
-	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID)
+	if err := app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistID); err != nil {
+		app.Logger.Error("failed to update playlist timestamp", "error", err, "playlist_id", playlistID)
+		helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+		return
+	}
 
 	res := helpers.JSONResponse{
 		Error:   false,
