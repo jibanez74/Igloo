@@ -679,7 +679,7 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMoviesByGenreAsc = `-- name: GetMoviesByGenreAsc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC LIMIT ? OFFSET ?
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC, m.id ASC LIMIT ? OFFSET ?
 `
 
 type GetMoviesByGenreAscParams struct {
@@ -726,7 +726,7 @@ func (q *Queries) GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreA
 }
 
 const getMoviesByGenreDesc = `-- name: GetMoviesByGenreDesc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC LIMIT ? OFFSET ?
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC, m.id DESC LIMIT ? OFFSET ?
 `
 
 type GetMoviesByGenreDescParams struct {
@@ -784,7 +784,7 @@ func (q *Queries) GetMoviesCount(ctx context.Context) (int64, error) {
 }
 
 const getMoviesLibraryAsc = `-- name: GetMoviesLibraryAsc :many
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC LIMIT ? OFFSET ?
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC, id ASC LIMIT ? OFFSET ?
 `
 
 type GetMoviesLibraryAscParams struct {
@@ -800,7 +800,7 @@ type GetMoviesLibraryAscRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
-// Paginated library A-Z.
+// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 func (q *Queries) GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error) {
 	rows, err := q.query(ctx, q.getMoviesLibraryAscStmt, getMoviesLibraryAsc, arg.Limit, arg.Offset)
 	if err != nil {
@@ -831,7 +831,7 @@ func (q *Queries) GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryA
 }
 
 const getMoviesLibraryDesc = `-- name: GetMoviesLibraryDesc :many
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC LIMIT ? OFFSET ?
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC, id DESC LIMIT ? OFFSET ?
 `
 
 type GetMoviesLibraryDescParams struct {
@@ -847,7 +847,7 @@ type GetMoviesLibraryDescRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
-// Paginated library Z-A.
+// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 func (q *Queries) GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error) {
 	rows, err := q.query(ctx, q.getMoviesLibraryDescStmt, getMoviesLibraryDesc, arg.Limit, arg.Offset)
 	if err != nil {

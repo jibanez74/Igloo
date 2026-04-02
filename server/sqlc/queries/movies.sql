@@ -455,12 +455,12 @@ SELECT * FROM chapters WHERE movie_id = ? ORDER BY start_time;
 SELECT COUNT(*) FROM movies;
 
 -- name: GetMoviesLibraryAsc :many
--- Paginated library A-Z.
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC LIMIT ? OFFSET ?;
+-- Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC, id ASC LIMIT ? OFFSET ?;
 
 -- name: GetMoviesLibraryDesc :many
--- Paginated library Z-A.
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC LIMIT ? OFFSET ?;
+-- Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC, id DESC LIMIT ? OFFSET ?;
 
 -- name: GetMovieGenresWithCounts :many
 -- Movie genres with counts per tag (genre_type movie only).
@@ -470,8 +470,8 @@ SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(mg.movie_id) AS movie_count F
 SELECT COUNT(*) FROM movie_genres WHERE genre_id = ?;
 
 -- name: GetMoviesByGenreAsc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC LIMIT ? OFFSET ?;
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC, m.id ASC LIMIT ? OFFSET ?;
 
 -- name: GetMoviesByGenreDesc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC LIMIT ? OFFSET ?;
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC, m.id DESC LIMIT ? OFFSET ?;
 

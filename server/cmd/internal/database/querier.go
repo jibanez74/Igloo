@@ -102,9 +102,9 @@ type Querier interface {
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
-	// Paginated library A-Z.
+	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
-	// Paginated library Z-A.
+	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error)
@@ -164,6 +164,7 @@ type Querier interface {
 	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (int64, error)
 	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
 	IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (int64, error)
+	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	// ============================================================================
@@ -174,6 +175,7 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
+	// Idempotent: deleting a non-existent row affects 0 rows and is not an error in SQLite.
 	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error

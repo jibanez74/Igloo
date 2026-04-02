@@ -50,8 +50,7 @@ export default function CreateMoviePlaylistDialog({
         "Playlist",
         `"${name.trim()}" has been created. Add movies from a movie's menu or this playlist page.`,
       );
-      setName("");
-      setDescription("");
+      resetForm();
       onOpenChange(false);
     },
     onError: () => {
@@ -61,6 +60,19 @@ export default function CreateMoviePlaylistDialog({
       );
     },
   });
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    mutation.reset();
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      resetForm();
+    }
+    onOpenChange(next);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +88,7 @@ export default function CreateMoviePlaylistDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -120,7 +132,7 @@ export default function CreateMoviePlaylistDialog({
               type="button"
               variant="ghost"
               className="text-slate-400"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>

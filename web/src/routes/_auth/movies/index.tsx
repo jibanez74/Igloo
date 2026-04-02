@@ -35,7 +35,8 @@ import {
   moviesStatsQueryOpts,
 } from "@/lib/query-opts";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
-import { MoviesLoadError, isApiFailure } from "@/components/MoviesLoadError";
+import { MoviesLoadError } from "@/components/MoviesLoadError";
+import { isApiFailure } from "@/lib/is-api-failure";
 
 // ---------------------------------------------------------------------------
 // Search schema — URL-driven state for all tabs
@@ -174,21 +175,21 @@ function MoviesPage() {
         <TabsList className="flex h-auto w-full max-w-full flex-wrap gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none">
           <TabsTrigger
             value="all"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
           >
             <Grid3X3 className="mr-2 size-4 shrink-0" aria-hidden="true" />
             All Movies
           </TabsTrigger>
           <TabsTrigger
             value="genres"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
           >
             <Film className="mr-2 size-4 shrink-0" aria-hidden="true" />
             Genres
           </TabsTrigger>
           <TabsTrigger
             value="playlists"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
           >
             <ListVideo className="mr-2 size-4 shrink-0" aria-hidden="true" />
             Playlists
@@ -758,6 +759,12 @@ function PlaylistsTabContent({
   const navigate = Route.useNavigate();
   const [showCreate, setShowCreate] = useState(false);
 
+  const { data, isLoading, isError, refetch } = useQuery({
+    ...moviePlaylistsQueryOpts(),
+    enabled: view !== "liked",
+  });
+  const playlists = data?.error === false ? data.data.playlists : [];
+
   if (view === "liked") {
     return (
       <LikedMoviesInPlaylistsTab
@@ -777,11 +784,6 @@ function PlaylistsTabContent({
       />
     );
   }
-
-  const { data, isLoading, isError, refetch } = useQuery(
-    moviePlaylistsQueryOpts(),
-  );
-  const playlists = data?.error === false ? data.data.playlists : [];
 
   if (isLoading) {
     return <PlaylistsTabSkeleton />;

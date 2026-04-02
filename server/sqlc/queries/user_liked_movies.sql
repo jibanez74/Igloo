@@ -1,9 +1,11 @@
 -- name: LikeMovie :exec
+-- Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 INSERT INTO user_liked_movies (user_id, movie_id)
 VALUES (?, ?)
 ON CONFLICT (user_id, movie_id) DO NOTHING;
 
 -- name: UnlikeMovie :exec
+-- Idempotent: deleting a non-existent row affects 0 rows and is not an error in SQLite.
 DELETE FROM user_liked_movies WHERE user_id = ? AND movie_id = ?;
 
 -- name: IsMovieLiked :one

@@ -11,6 +11,7 @@ type MoviePlaylistCardProps = {
 export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) {
   const { id, name, movie_count, cover_image, is_owner } = playlist;
   const coverUrl = getMediaImageUrl(unwrapString(cover_image));
+  const movieNoun = movie_count === 1 ? "movie" : "movies";
 
   return (
     <article className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20">
@@ -18,7 +19,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
         to="/movies/playlist/$id"
         params={{ id: id.toString() }}
         className="block focus:ring-2 focus:ring-amber-400 focus:outline-none focus:ring-inset"
-        aria-label={`${name}, ${movie_count} movies`}
+        aria-label={`${name}, ${movie_count} ${movieNoun}`}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-slate-800">
           {coverUrl ? (
@@ -41,7 +42,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
         <div className="text-center">
           <h3 className="truncate text-sm font-semibold text-white">{name}</h3>
           <p className="mt-0.5 text-xs text-slate-400">
-            {movie_count} {movie_count === 1 ? "movie" : "movies"}
+            {movie_count} {movieNoun}
           </p>
         </div>
       </Link>

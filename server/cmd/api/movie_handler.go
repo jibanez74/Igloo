@@ -1,18 +1,19 @@
 package main
 
 import (
-  "database/sql"
-  "errors"
-  "igloo/cmd/internal/database"
-  "igloo/cmd/internal/helpers"
-  "mime"
-  "net/http"
-  "os"
-  "path/filepath"
-  "strconv"
-  "strings"
+	"context"
+	"database/sql"
+	"errors"
+	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
-  "github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5"
 )
 
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
@@ -371,6 +372,43 @@ func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// toggleMovieLike flips like state in a single DB transaction without IsMovieLiked (avoids read-then-write races).
+// It DELETEs the row; if a row was removed, the new state is unliked; otherwise it INSERTs (LikeMovie is
+// idempotent via ON CONFLICT DO NOTHING).
+func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int64) (isLiked bool, err error) {
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx,
+		`DELETE FROM user_liked_movies WHERE user_id = ? AND movie_id = ?`,
+		userID, movieID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if n > 0 {
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	if err := qtx.LikeMovie(ctx, database.LikeMovieParams{UserID: userID, MovieID: movieID}); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ToggleLikeMovie toggles like for the session user on the given movie (same behavior as music track likes).
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
@@ -399,43 +437,18 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	isLiked, err := app.Queries.IsMovieLiked(ctx, database.IsMovieLikedParams{
-		UserID:  userID,
-		MovieID: movieID,
-	})
+	isLiked, err := app.toggleMovieLike(ctx, userID, movieID)
 	if err != nil {
-		app.Logger.Error("failed to check if movie is liked", "error", err, "movieID", movieID, "userID", userID)
-		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		app.Logger.Error("failed to toggle movie like", "error", err, "movieID", movieID, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to update like"))
 		return
-	}
-
-	if isLiked {
-		err = app.Queries.UnlikeMovie(ctx, database.UnlikeMovieParams{
-			UserID:  userID,
-			MovieID: movieID,
-		})
-		if err != nil {
-			app.Logger.Error("failed to unlike movie", "error", err, "movieID", movieID, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to unlike movie"))
-			return
-		}
-	} else {
-		err = app.Queries.LikeMovie(ctx, database.LikeMovieParams{
-			UserID:  userID,
-			MovieID: movieID,
-		})
-		if err != nil {
-			app.Logger.Error("failed to like movie", "error", err, "movieID", movieID, "userID", userID)
-			helpers.ErrorJSON(w, errors.New("failed to like movie"))
-			return
-		}
 	}
 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
 			"movie_id": movieID,
-			"is_liked": !isLiked,
+			"is_liked": isLiked,
 		},
 	}
 

@@ -12,7 +12,8 @@ import {
 } from "@/lib/query-opts";
 import { MOVIES_PER_PAGE, MOVIES_PLAYLISTS_TAB_SEARCH } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
-import { MoviesLoadError, isApiFailure } from "@/components/MoviesLoadError";
+import { MoviesLoadError } from "@/components/MoviesLoadError";
+import { isApiFailure } from "@/lib/is-api-failure";
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({
   loader: async ({ context, params }) => {

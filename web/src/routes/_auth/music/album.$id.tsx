@@ -123,7 +123,7 @@ function AlbumDetailsSkeleton() {
           <div className="flex gap-3 pt-2">
             <div className="h-12 w-32 rounded-full bg-slate-800" />
             <div className="h-12 w-24 rounded-full bg-slate-800" />
-            <div className="h-12 w-12 rounded-full bg-slate-800" />
+            <div className="size-12 rounded-full bg-slate-800" />
           </div>
         </div>
       </header>

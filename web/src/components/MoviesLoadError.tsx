@@ -1,16 +1,3 @@
-/** Shared load-error UI for movies routes (library, playlist detail, etc.). */
-
-export function isApiFailure(data: unknown): data is { error: true; message: string } {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "error" in data &&
-    (data as { error: unknown }).error === true &&
-    "message" in data &&
-    typeof (data as { message: string }).message === "string"
-  );
-}
-
 export function MoviesLoadError({
   message,
   onRetry,
@@ -26,9 +13,7 @@ export function MoviesLoadError({
       <p>{message}</p>
       <button
         type="button"
-        onClick={() => {
-          onRetry();
-        }}
+        onClick={onRetry}
         className="mt-2 text-sm font-medium text-amber-400 underline hover:text-amber-300"
       >
         Try again

@@ -43,6 +43,23 @@ const navItems: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
+function SidebarItemContent({
+  icon: Icon,
+  title,
+  active,
+}: {
+  icon: LucideIcon;
+  title: string;
+  active: boolean;
+}) {
+  return (
+    <>
+      <Icon className={active ? "text-amber-400" : "text-slate-400"} />
+      <span>{title}</span>
+    </>
+  );
+}
+
 export default function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
@@ -117,29 +134,21 @@ export default function AppSidebar({
                           : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
                       }
                     >
-                      {item.url === "/movies" ? (
-                        <Link
-                          to="/movies"
-                          search={MOVIES_INDEX_DEFAULT_SEARCH}
-                          onClick={handleNavClick}
-                        >
-                          <item.icon
-                            className={
-                              active ? "text-amber-400" : "text-slate-400"
-                            }
-                          />
-                          <span>{item.title}</span>
-                        </Link>
-                      ) : (
-                        <Link to={item.url} onClick={handleNavClick}>
-                          <item.icon
-                            className={
-                              active ? "text-amber-400" : "text-slate-400"
-                            }
-                          />
-                          <span>{item.title}</span>
-                        </Link>
-                      )}
+                      <Link
+                        to={item.url}
+                        search={
+                          item.url === "/movies"
+                            ? MOVIES_INDEX_DEFAULT_SEARCH
+                            : undefined
+                        }
+                        onClick={handleNavClick}
+                      >
+                        <SidebarItemContent
+                          icon={item.icon}
+                          title={item.title}
+                          active={active}
+                        />
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
