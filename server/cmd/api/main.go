@@ -549,6 +549,9 @@ func (app *Application) InitRouter() {
 			r.Get("/library", app.GetMoviesLibrary)
 			r.Get("/stats", app.GetMoviesStats)
 			r.Get("/liked", app.GetLikedMovies)
+			r.Get("/{id}/like-status", app.GetMovieLikeStatus)
+			r.Get("/genres", app.GetMovieGenresList)
+			r.Get("/genres/{genreId}/movies", app.GetMoviesByGenreLibrary)
 			r.Route("/playlists", func(pr chi.Router) {
 				pr.Get("/{id}/movies", app.GetMoviePlaylistMovies)
 				pr.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)

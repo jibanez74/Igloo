@@ -5,9 +5,18 @@ import {
   getAuthUser,
   getLatestAlbums,
   getLatestMovies,
+  getLikedMovies,
   getMovieDetails,
   getMovieInTheaterDetails,
+  getMoviePlaylistDetails,
+  getMoviePlaylistMovies,
+  getMoviePlaylists,
   getMoviesInTheaters,
+  getMovieGenresWithCounts,
+  getMovieLikeStatus,
+  getMoviesByGenre,
+  getMoviesLibrary,
+  getMoviesStats,
   getMovieTechnicalDetails,
   getMusicianDetails,
   getMusiciansPaginated,
@@ -25,9 +34,19 @@ import {
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
+  MOVIE_PLAYLIST_DETAILS_KEY,
+  MOVIE_PLAYLIST_MOVIES_KEY,
+  MOVIE_PLAYLISTS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
+  MOVIES_BY_GENRE_KEY,
+  MOVIES_GENRES_KEY,
+  MOVIES_LIBRARY_KEY,
+  MOVIES_LIKED_KEY,
+  MOVIE_LIKE_STATUS_KEY,
+  MOVIES_PER_PAGE,
+  MOVIES_STATS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
@@ -229,6 +248,110 @@ export function playlistTracksInfiniteQueryOpts(
     },
     enabled: playlistId > 0,
     staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// Movies library page (/movies)
+export function moviesLibraryQueryOpts(
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_LIBRARY_KEY, page, perPage, sort],
+    queryFn: () => getMoviesLibrary(page, perPage, sort),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviesGenresQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIES_GENRES_KEY],
+    queryFn: getMovieGenresWithCounts,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviesByGenreQueryOpts(
+  genreId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_BY_GENRE_KEY, genreId, page, perPage, sort],
+    queryFn: () => getMoviesByGenre(genreId, page, perPage, sort),
+    enabled: genreId > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviesStatsQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIES_STATS_KEY],
+    queryFn: getMoviesStats,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function likedMoviesQueryOpts(
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIES_LIKED_KEY, page, perPage, sort],
+    queryFn: () => getLikedMovies(page, perPage, sort),
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function movieLikeStatusQueryOpts(movieId: number) {
+  return queryOptions({
+    queryKey: [MOVIE_LIKE_STATUS_KEY, movieId],
+    queryFn: () => getMovieLikeStatus(movieId),
+    enabled: movieId > 0,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviePlaylistsQueryOpts() {
+  return queryOptions({
+    queryKey: [MOVIE_PLAYLISTS_KEY],
+    queryFn: getMoviePlaylists,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviePlaylistDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_PLAYLIST_DETAILS_KEY, id],
+    queryFn: () => getMoviePlaylistDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function moviePlaylistMoviesQueryOpts(
+  playlistId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
+) {
+  return queryOptions({
+    queryKey: [MOVIE_PLAYLIST_MOVIES_KEY, playlistId, page, perPage, sort],
+    queryFn: () => getMoviePlaylistMovies(playlistId, page, perPage, sort),
+    enabled: playlistId > 0,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }

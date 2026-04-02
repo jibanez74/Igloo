@@ -1,0 +1,1060 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  Film,
+  Grid3X3,
+  Heart,
+  ListVideo,
+  MoreHorizontal,
+  Plus,
+  X,
+} from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import LiveAnnouncer from "@/components/LiveAnnouncer";
+import CreateMoviePlaylistDialog from "@/components/CreateMoviePlaylistDialog";
+import MovieCard from "@/components/MovieCard";
+import MoviePlaylistCard from "@/components/MoviePlaylistCard";
+import LibraryPagination from "@/components/LibraryPagination";
+import {
+  likedMoviesQueryOpts,
+  moviePlaylistsQueryOpts,
+  moviesByGenreQueryOpts,
+  moviesGenresQueryOpts,
+  moviesLibraryQueryOpts,
+  moviesStatsQueryOpts,
+} from "@/lib/query-opts";
+import { MOVIES_PER_PAGE } from "@/lib/constants";
+import { MoviesLoadError, isApiFailure } from "@/components/MoviesLoadError";
+
+// ---------------------------------------------------------------------------
+// Search schema — URL-driven state for all tabs
+// ---------------------------------------------------------------------------
+
+const moviesSearchSchema = z.object({
+  tab: fallback(
+    z.enum(["all", "genres", "playlists"]),
+    "all",
+  ).default("all"),
+  allPage: fallback(z.number().int().positive(), 1).default(1),
+  sort: fallback(z.enum(["asc", "desc"]), "asc").default("asc"),
+  genresPage: fallback(z.number().int().positive(), 1).default(1),
+  genreId: fallback(z.number().int().positive().optional(), undefined),
+  playlistsPage: fallback(z.number().int().positive(), 1).default(1),
+  view: fallback(z.enum(["liked"]).optional(), undefined),
+});
+
+export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
+
+// ---------------------------------------------------------------------------
+// Route definition
+// ---------------------------------------------------------------------------
+
+export const Route = createFileRoute("/_auth/movies/")({
+  validateSearch: zodSearchValidator(moviesSearchSchema),
+  loaderDeps: ({
+    search: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
+  }) => ({
+    allPage,
+    sort,
+    tab,
+    genreId,
+    genresPage,
+    view,
+    playlistsPage,
+  }),
+  loader: async ({
+    context,
+    deps: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
+  }) => {
+    const { queryClient } = context;
+    const promises: Promise<unknown>[] = [
+      queryClient.ensureQueryData(moviesStatsQueryOpts()),
+      queryClient.ensureQueryData(
+        moviesLibraryQueryOpts(allPage, MOVIES_PER_PAGE, sort),
+      ),
+    ];
+    if (tab === "genres") {
+      promises.push(queryClient.ensureQueryData(moviesGenresQueryOpts()));
+      if (genreId != null && genreId > 0) {
+        promises.push(
+          queryClient.ensureQueryData(
+            moviesByGenreQueryOpts(
+              genreId,
+              genresPage,
+              MOVIES_PER_PAGE,
+              sort,
+            ),
+          ),
+        );
+      }
+    }
+    if (tab === "playlists") {
+      promises.push(queryClient.ensureQueryData(moviePlaylistsQueryOpts()));
+      if (view === "liked") {
+        promises.push(
+          queryClient.ensureQueryData(
+            likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
+          ),
+        );
+      }
+    }
+    await Promise.all(promises);
+  },
+  component: MoviesPage,
+});
+
+// ---------------------------------------------------------------------------
+// Page component
+// ---------------------------------------------------------------------------
+
+function MoviesPage() {
+  const navigate = Route.useNavigate();
+  const { tab, allPage, sort, genreId, genresPage, view, playlistsPage } =
+    Route.useSearch();
+
+  const handleTabChange = (newTab: string) =>
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        tab: newTab as MoviesSearchParams["tab"],
+        ...(newTab !== "playlists" ? { view: undefined } : {}),
+      }),
+      replace: true,
+    });
+
+  return (
+    <div className="min-w-0">
+      <title>Movies - Igloo</title>
+      <meta
+        name="description"
+        content="Browse and organize your personal movie collection in your Igloo media library."
+      />
+
+      {/* Page header */}
+      <header
+        className="-m-3 mb-8 rounded-lg p-3 focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        tabIndex={0}
+        aria-label="Movie Library. Browse your collection of movies."
+      >
+        <h1
+          className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl"
+          aria-hidden="true"
+        >
+          <Film className="size-6 text-amber-400" aria-hidden="true" />
+          <span>Movie Library</span>
+        </h1>
+        <p
+          className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base"
+          aria-hidden="true"
+        >
+          Browse, organize, and enjoy your film collection
+        </p>
+      </header>
+
+      {/* Stats + More dropdown */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <MoviesStats />
+        <MoreMenu />
+      </div>
+
+      {/* Tabs — controlled by URL search param */}
+      <Tabs value={tab} onValueChange={handleTabChange}>
+        <TabsList className="flex h-auto w-full max-w-full flex-wrap gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none">
+          <TabsTrigger
+            value="all"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <Grid3X3 className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            All Movies
+          </TabsTrigger>
+          <TabsTrigger
+            value="genres"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <Film className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            Genres
+          </TabsTrigger>
+          <TabsTrigger
+            value="playlists"
+            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white sm:flex-initial sm:px-4 data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+          >
+            <ListVideo className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            Playlists
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all" className="mt-6">
+          <AllMoviesTabContent currentPage={allPage} sort={sort} />
+        </TabsContent>
+
+        <TabsContent value="genres" className="mt-6">
+          <GenresTabContent
+            genreId={genreId}
+            genresPage={genresPage}
+            sort={sort}
+          />
+        </TabsContent>
+
+        <TabsContent value="playlists" className="mt-6">
+          <PlaylistsTabContent
+            view={view}
+            playlistsPage={playlistsPage}
+            sort={sort}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stats row
+// ---------------------------------------------------------------------------
+
+function MoviesStats() {
+  const { data, isError, isLoading, refetch } = useQuery(moviesStatsQueryOpts());
+
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load library statistics. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  const total = data?.error === false ? data.data.total_movies : 0;
+  const label = isLoading
+    ? "Library statistics: loading"
+    : `Library statistics: ${total} movies`;
+
+  return (
+    <section
+      className="flex flex-wrap gap-6 rounded-lg focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+      aria-label={label}
+      tabIndex={0}
+    >
+      <div className="flex items-center gap-2" aria-hidden="true">
+        <Film className="size-4 text-amber-400" />
+        <span className="font-medium text-white">
+          {isLoading ? "—" : total}
+        </span>
+        <span className="text-slate-400">Movies</span>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// More dropdown (placeholders only)
+// ---------------------------------------------------------------------------
+
+function MoreMenu() {
+  const navigate = Route.useNavigate();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        aria-label="More options"
+      >
+        <MoreHorizontal className="size-5" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="border-slate-700 bg-slate-800"
+      >
+        <DropdownMenuItem
+          className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+          onClick={() =>
+            navigate({
+              to: "/movies",
+              search: (prev: MoviesSearchParams) => ({
+                ...prev,
+                tab: "playlists",
+                view: "liked",
+                playlistsPage: 1,
+              }),
+              replace: true,
+            })
+          }
+        >
+          <Heart className="mr-2 size-4" aria-hidden="true" />
+          Liked movies
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+          onClick={() =>
+            navigate({
+              to: "/movies",
+              search: (prev: MoviesSearchParams) => ({
+                ...prev,
+                tab: "playlists",
+                view: undefined,
+                playlistsPage: 1,
+              }),
+              replace: true,
+            })
+          }
+        >
+          <ListVideo className="mr-2 size-4" aria-hidden="true" />
+          Movie playlists
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// All Movies tab
+// ---------------------------------------------------------------------------
+
+type AllMoviesTabContentProps = {
+  currentPage: number;
+  sort: "asc" | "desc";
+};
+
+function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
+  const navigate = Route.useNavigate();
+
+  const { data, isLoading, isError, refetch } = useQuery(
+    moviesLibraryQueryOpts(currentPage, MOVIES_PER_PAGE, sort),
+  );
+
+  const movies = data?.error === false ? data.data.movies : [];
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
+  const total = data?.error === false ? data.data.total : 0;
+
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (movies.length === 0) return "No movies found";
+    return `Showing ${movies.length} movies, page ${currentPage} of ${totalPages}`;
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        allPage: newPage,
+      }),
+      replace: true,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSortToggle = () =>
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        sort: prev.sort === "asc" ? "desc" : "asc",
+        allPage: 1,
+      }),
+      replace: true,
+    });
+
+  if (isLoading) {
+    return <AllMoviesTabSkeleton />;
+  }
+
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load movies. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if (movies.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
+        <p>No movies found in your library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <LiveAnnouncer message={getAnnouncement()} />
+
+      {/* Header with count, page info, and sort toggle */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-sm text-slate-400">
+          {total.toLocaleString()} movies
+        </span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="text-sm text-slate-400">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={handleSortToggle}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            aria-label={sort === "asc" ? "Sorted A to Z, click to sort Z to A" : "Sorted Z to A, click to sort A to Z"}
+          >
+            {sort === "asc" ? (
+              <>
+                <ArrowDownAZ className="size-4" aria-hidden="true" />
+                A–Z
+              </>
+            ) : (
+              <>
+                <ArrowUpAZ className="size-4" aria-hidden="true" />
+                Z–A
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Movie grid */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {movies.map((movie) => (
+          <MovieCard key={movie.id} movie={movie} />
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <LibraryPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function AllMoviesTabSkeleton() {
+  return (
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="h-4 w-20 animate-pulse rounded-sm bg-slate-800" />
+          <div className="h-8 w-16 animate-pulse rounded-full bg-slate-800" />
+        </div>
+      </div>
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {Array.from({ length: MOVIES_PER_PAGE }).map((_, i) => (
+          <div
+            key={i}
+            className="animate-pulse overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+          >
+            <div className="aspect-2/3 bg-slate-800" />
+            <div className="p-3">
+              <div className="h-4 w-3/4 rounded-sm bg-slate-800" />
+              <div className="mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Genres tab
+// ---------------------------------------------------------------------------
+
+type GenresTabContentProps = {
+  genreId: number | undefined;
+  genresPage: number;
+  sort: "asc" | "desc";
+};
+
+function GenresTabContent({ genreId, genresPage, sort }: GenresTabContentProps) {
+  const navigate = Route.useNavigate();
+
+  const genresQuery = useQuery(moviesGenresQueryOpts());
+  const genresRes = genresQuery.data;
+  const genresLoading = genresQuery.isLoading;
+
+  const genres =
+    genresRes?.error === false ? genresRes.data.genres : [];
+
+  const moviesQuery = useQuery({
+    ...moviesByGenreQueryOpts(
+      genreId ?? 0,
+      genresPage,
+      MOVIES_PER_PAGE,
+      sort,
+    ),
+  });
+  const moviesRes = moviesQuery.data;
+  const moviesLoading = moviesQuery.isLoading;
+
+  const movies =
+    moviesRes?.error === false ? moviesRes.data.movies : [];
+  const totalPages =
+    moviesRes?.error === false ? moviesRes.data.total_pages : 0;
+  const total =
+    moviesRes?.error === false ? moviesRes.data.total : 0;
+
+  const selectedGenreTag =
+    genreId != null
+      ? genres.find((g) => g.genre_id === genreId)?.genre_tag
+      : undefined;
+
+  const getAnnouncement = () => {
+    if (genreId == null) return undefined;
+    if (moviesLoading) return undefined;
+    if (movies.length === 0) return "No movies in this genre";
+    return `Showing ${movies.length} movies, page ${genresPage} of ${totalPages}`;
+  };
+
+  const handleSelectGenre = (id: number) => {
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        genreId: id,
+        genresPage: 1,
+      }),
+      replace: true,
+    });
+  };
+
+  const handleClearGenre = () => {
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        genreId: undefined,
+        genresPage: 1,
+      }),
+      replace: true,
+    });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        genresPage: newPage,
+      }),
+      replace: true,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSortToggle = () =>
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        sort: prev.sort === "asc" ? "desc" : "asc",
+        genresPage: 1,
+      }),
+      replace: true,
+    });
+
+  if (genresLoading) {
+    return <GenresTabSkeleton />;
+  }
+
+  if (genresQuery.isError || isApiFailure(genresRes)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(genresRes)
+            ? genresRes.message
+            : "Couldn’t load genres. Check your connection and try again."
+        }
+        onRetry={() => void genresQuery.refetch()}
+      />
+    );
+  }
+
+  if (genres.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
+        <p>No genres with movies in your library yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap gap-2" role="list" aria-label="Movie genres">
+        {genres.map((g) => {
+          const selected = genreId === g.genre_id;
+          return (
+            <button
+              key={g.genre_id}
+              type="button"
+              role="listitem"
+              onClick={() => handleSelectGenre(g.genre_id)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                selected
+                  ? "border-amber-500 bg-amber-500 text-slate-900"
+                  : "border-slate-600 bg-slate-800/80 text-slate-300 hover:border-slate-500 hover:text-white"
+              }`}
+              aria-pressed={selected}
+            >
+              {g.genre_tag}
+              <span className="ml-1.5 text-xs opacity-80">
+                ({g.movie_count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {genreId == null && (
+        <p className="mb-8 text-center text-sm text-slate-500">
+          Select a genre to browse movies in that category.
+        </p>
+      )}
+
+      {genreId != null && (
+        <>
+          <LiveAnnouncer message={getAnnouncement()} />
+
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-white">
+                {selectedGenreTag ?? "Genre"}
+              </span>
+              <span className="text-sm text-slate-400">
+                {total.toLocaleString()} movies
+              </span>
+              <button
+                type="button"
+                onClick={handleClearGenre}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                aria-label="Clear genre filter"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+                Clear
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-sm text-slate-400">
+                Page {genresPage} of {Math.max(totalPages, 1)}
+              </span>
+              <button
+                type="button"
+                onClick={handleSortToggle}
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                aria-label={
+                  sort === "asc"
+                    ? "Sorted A to Z, click to sort Z to A"
+                    : "Sorted Z to A, click to sort A to Z"
+                }
+              >
+                {sort === "asc" ? (
+                  <>
+                    <ArrowDownAZ className="size-4" aria-hidden="true" />
+                    A–Z
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpAZ className="size-4" aria-hidden="true" />
+                    Z–A
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {moviesQuery.isError || isApiFailure(moviesRes) ? (
+            <MoviesLoadError
+              message={
+                isApiFailure(moviesRes)
+                  ? moviesRes.message
+                  : "Couldn’t load movies for this genre. Check your connection and try again."
+              }
+              onRetry={() => void moviesQuery.refetch()}
+            />
+          ) : moviesLoading ? (
+            <AllMoviesTabSkeleton />
+          ) : movies.length === 0 ? (
+            <div className="py-12 text-center text-slate-400">
+              <Film
+                className="mx-auto mb-4 size-10 opacity-50"
+                aria-hidden="true"
+              />
+              <p>No movies found for this genre.</p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {movies.map((movie) => (
+                  <MovieCard key={movie.id} movie={movie} />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <LibraryPagination
+                  currentPage={genresPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function GenresTabSkeleton() {
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap gap-2">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-9 w-28 animate-pulse rounded-full bg-slate-800"
+          />
+        ))}
+      </div>
+      <p className="mb-8 text-center text-sm text-slate-600">Loading genres…</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Playlists tab + Liked (view=liked)
+// ---------------------------------------------------------------------------
+
+type PlaylistsTabContentProps = {
+  view: "liked" | undefined;
+  playlistsPage: number;
+  sort: "asc" | "desc";
+};
+
+function PlaylistsTabContent({
+  view,
+  playlistsPage,
+  sort,
+}: PlaylistsTabContentProps) {
+  const navigate = Route.useNavigate();
+  const [showCreate, setShowCreate] = useState(false);
+
+  if (view === "liked") {
+    return (
+      <LikedMoviesInPlaylistsTab
+        playlistsPage={playlistsPage}
+        sort={sort}
+        onExitLiked={() =>
+          navigate({
+            to: "/movies",
+            search: (prev: MoviesSearchParams) => ({
+              ...prev,
+              view: undefined,
+              playlistsPage: 1,
+            }),
+            replace: true,
+          })
+        }
+      />
+    );
+  }
+
+  const { data, isLoading, isError, refetch } = useQuery(
+    moviePlaylistsQueryOpts(),
+  );
+  const playlists = data?.error === false ? data.data.playlists : [];
+
+  if (isLoading) {
+    return <PlaylistsTabSkeleton />;
+  }
+
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load playlists. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-sm text-slate-400">
+          {playlists.length}{" "}
+          {playlists.length === 1 ? "playlist" : "playlists"}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              navigate({
+                to: "/movies",
+                search: (prev: MoviesSearchParams) => ({
+                  ...prev,
+                  view: "liked",
+                  playlistsPage: 1,
+                }),
+                replace: true,
+              })
+            }
+            className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          >
+            <Heart className="size-4 shrink-0" aria-hidden="true" />
+            Liked movies
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          >
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            New playlist
+          </button>
+        </div>
+      </div>
+
+      {playlists.length === 0 ? (
+        <EmptyMoviePlaylistsState onCreate={() => setShowCreate(true)} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {playlists.map((p) => (
+            <MoviePlaylistCard key={p.id} playlist={p} />
+          ))}
+        </div>
+      )}
+
+      <CreateMoviePlaylistDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+      />
+    </div>
+  );
+}
+
+type LikedMoviesInPlaylistsTabProps = {
+  playlistsPage: number;
+  sort: "asc" | "desc";
+  onExitLiked: () => void;
+};
+
+function LikedMoviesInPlaylistsTab({
+  playlistsPage,
+  sort,
+  onExitLiked,
+}: LikedMoviesInPlaylistsTabProps) {
+  const navigate = Route.useNavigate();
+
+  const { data, isLoading, isError, refetch } = useQuery(
+    likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
+  );
+
+  const movies = data?.error === false ? data.data.movies : [];
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
+  const total = data?.error === false ? data.data.total : 0;
+
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (movies.length === 0) return "No liked movies";
+    return `Showing ${movies.length} liked movies, page ${playlistsPage} of ${totalPages}`;
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        playlistsPage: newPage,
+      }),
+      replace: true,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSortToggle = () =>
+    navigate({
+      to: "/movies",
+      search: (prev: MoviesSearchParams) => ({
+        ...prev,
+        sort: prev.sort === "asc" ? "desc" : "asc",
+        playlistsPage: 1,
+      }),
+      replace: true,
+    });
+
+  if (isLoading) {
+    return <AllMoviesTabSkeleton />;
+  }
+
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load liked movies. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if (movies.length === 0) {
+    return (
+      <div>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onExitLiked}
+            className="text-sm font-medium text-amber-400 hover:underline"
+          >
+            Back to playlists
+          </button>
+        </div>
+        <div className="py-12 text-center text-slate-400">
+          <Heart
+            className="mx-auto mb-4 size-10 opacity-50"
+            aria-hidden="true"
+          />
+          <p>You have not liked any movies yet.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <LiveAnnouncer message={getAnnouncement()} />
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onExitLiked}
+            className="text-sm font-medium text-amber-400 hover:underline"
+          >
+            Back to playlists
+          </button>
+          <span className="text-sm text-slate-400">
+            {total.toLocaleString()} liked
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="text-sm text-slate-400">
+            Page {playlistsPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={handleSortToggle}
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            aria-label={
+              sort === "asc"
+                ? "Sorted A to Z, click to sort Z to A"
+                : "Sorted Z to A, click to sort A to Z"
+            }
+          >
+            {sort === "asc" ? (
+              <>
+                <ArrowDownAZ className="size-4" aria-hidden="true" />
+                A–Z
+              </>
+            ) : (
+              <>
+                <ArrowUpAZ className="size-4" aria-hidden="true" />
+                Z–A
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {movies.map((movie) => (
+          <MovieCard key={movie.id} movie={movie} />
+        ))}
+      </div>
+
+      {totalPages > 1 && (
+        <LibraryPagination
+          currentPage={playlistsPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function PlaylistsTabSkeleton() {
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
+        <div className="h-10 w-40 animate-pulse rounded-full bg-slate-800" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div
+            key={i}
+            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
+            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type EmptyMoviePlaylistsStateProps = {
+  onCreate: () => void;
+};
+
+function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-6 flex size-24 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/30 shadow-lg shadow-amber-500/5">
+        <ListVideo className="size-10 text-amber-200/40" aria-hidden="true" />
+      </div>
+      <h3 className="mb-2 text-xl font-semibold text-white">
+        No movie playlists yet
+      </h3>
+      <p className="mb-6 max-w-sm text-slate-400">
+        Create a playlist to group films. Music playlists stay on the Music
+        page.
+      </p>
+      <button
+        type="button"
+        onClick={onCreate}
+        className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Create your first playlist
+      </button>
+    </div>
+  );
+}

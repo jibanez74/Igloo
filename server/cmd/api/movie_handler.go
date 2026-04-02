@@ -158,6 +158,117 @@ func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+func libraryRowsFromGenreAsc(rows []database.GetMoviesByGenreAscRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromGenreDesc(rows []database.GetMoviesByGenreDescRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+// GetMovieGenresList returns movie genres that appear in the library with counts (genre_type = movie).
+func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
+	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
+	if err != nil {
+		app.Logger.Error("failed to get movie genres with counts", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to fetch genres"))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"genres": rows,
+		},
+	}
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetMoviesByGenreLibrary returns a paginated list of movies for a genre (same JSON shape as GET /api/movies/library).
+// Route: GET /api/movies/genres/{genreId}/movies — query: page, per_page, sort=asc|desc.
+func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
+	genreIDStr := chi.URLParam(r, "genreId")
+	genreID, err := strconv.ParseInt(genreIDStr, 10, 64)
+	if err != nil || genreID <= 0 {
+		helpers.ErrorJSON(w, errors.New("invalid genre id"), http.StatusBadRequest)
+		return
+	}
+
+	page, perPage, sortParam := parseMoviesLibraryQuery(r)
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.CountMoviesForGenre(ctx, genreID)
+	if err != nil {
+		app.Logger.Error("failed to count movies for genre", "error", err, "genre_id", genreID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movies count for genre"))
+		return
+	}
+
+	paramsAsc := database.GetMoviesByGenreAscParams{GenreID: genreID, Limit: perPage, Offset: offset}
+
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetMoviesByGenreDesc(ctx, database.GetMoviesByGenreDescParams{
+			GenreID: paramsAsc.GenreID,
+			Limit:   paramsAsc.Limit,
+			Offset:  paramsAsc.Offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+		movies = libraryRowsFromGenreDesc(descRows)
+	} else {
+		ascRows, err := app.Queries.GetMoviesByGenreAsc(ctx, paramsAsc)
+		if err != nil {
+			app.Logger.Error("failed to get movies by genre", "error", err, "genre_id", genreID)
+			helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+			return
+		}
+		movies = libraryRowsFromGenreAsc(ascRows)
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: moviesLibraryData{
+			Movies:     movies,
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			TotalPages: totalPages,
+			Sort:       sortParam,
+		},
+	}
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 // GetLikedMovies returns the current user's liked movies as paginated rows (same shape as GET /api/movies/library).
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
@@ -220,6 +331,44 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetMovieLikeStatus returns whether the signed-in user has liked this movie ({ is_liked: bool }). Guests always get false.
+func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	idParam := chi.URLParam(r, "id")
+	movieID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil || movieID <= 0 {
+		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
+		return
+	}
+
+	if userID == 0 {
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error: false,
+			Data: map[string]any{
+				"is_liked": false,
+			},
+		})
+		return
+	}
+
+	isLiked, err := app.Queries.IsMovieLiked(r.Context(), database.IsMovieLikedParams{
+		UserID:  userID,
+		MovieID: movieID,
+	})
+	if err != nil {
+		app.Logger.Error("failed to check movie like status", "error", err, "movie_id", movieID)
+		helpers.ErrorJSON(w, errors.New("failed to check like status"))
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"is_liked": isLiked,
+		},
+	})
 }
 
 // ToggleLikeMovie toggles like for the session user on the given movie (same behavior as music track likes).

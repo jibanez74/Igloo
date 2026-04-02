@@ -14,7 +14,7 @@
 # IDE and editor
 .idea/
 .vscode/
-.cursor/
+.cursor/*
 
 # Environment files
 .env

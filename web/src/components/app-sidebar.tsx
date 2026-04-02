@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
 import { logout } from "@/lib/api";
+import { MOVIES_INDEX_DEFAULT_SEARCH } from "@/lib/constants";
 
 type NavItem = {
   title: string;
@@ -116,14 +117,29 @@ export default function AppSidebar({
                           : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
                       }
                     >
-                      <Link to={item.url} onClick={handleNavClick}>
-                        <item.icon
-                          className={
-                            active ? "text-amber-400" : "text-slate-400"
-                          }
-                        />
-                        <span>{item.title}</span>
-                      </Link>
+                      {item.url === "/movies" ? (
+                        <Link
+                          to="/movies"
+                          search={MOVIES_INDEX_DEFAULT_SEARCH}
+                          onClick={handleNavClick}
+                        >
+                          <item.icon
+                            className={
+                              active ? "text-amber-400" : "text-slate-400"
+                            }
+                          />
+                          <span>{item.title}</span>
+                        </Link>
+                      ) : (
+                        <Link to={item.url} onClick={handleNavClick}>
+                          <item.icon
+                            className={
+                              active ? "text-amber-400" : "text-slate-400"
+                            }
+                          />
+                          <span>{item.title}</span>
+                        </Link>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
@@ -24,16 +24,16 @@ export const Route = createLazyFileRoute("/login/")({
 });
 
 function LoginPage() {
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
 
-  const loginHandler = (e: React.FormEvent<HTMLFormElement>) => {
+  const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    startTransition(async () => {
+    setIsSubmitting(true);
+    try {
       const formData = new FormData(e.currentTarget);
       const email = formData.get("email") as string;
       const password = formData.get("password") as string;
@@ -45,21 +45,29 @@ function LoginPage() {
           "Login failed",
           res.message || "An error occurred during login"
         );
-
         return;
       }
 
       showSuccess("Welcome back!", res.message || "Login successful");
 
       await queryClient.fetchQuery(authUserQueryOpts());
-      await queryClient.invalidateQueries();
 
-      navigate({
+      await navigate({
         to: redirect,
-        from: "/login",
         replace: true,
       });
-    });
+
+      // Refresh non-login data for the new session without blocking navigation.
+      void queryClient.invalidateQueries();
+    } catch (err) {
+      console.error(err);
+      showError(
+        "Login failed",
+        "Something went wrong after sign-in. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -116,7 +124,7 @@ function LoginPage() {
                       autoComplete="username"
                       required
                       className="pl-10"
-                      disabled={isPending}
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -137,7 +145,7 @@ function LoginPage() {
                       name="password"
                       required
                       className="px-10"
-                      disabled={isPending}
+                      disabled={isSubmitting}
                     />
                     <button
                       type="button"
@@ -147,7 +155,7 @@ function LoginPage() {
                         showPassword ? "Hide password" : "Show password"
                       }
                       onClick={() => setShowPassword(!showPassword)}
-                      disabled={isPending}
+                      disabled={isSubmitting}
                     >
                       {showPassword ? (
                         <EyeOff className="size-4" aria-hidden="true" />
@@ -164,10 +172,10 @@ function LoginPage() {
                     type="submit"
                     variant="accent"
                     className="w-full"
-                    disabled={isPending}
+                    disabled={isSubmitting}
                   >
                     <LogIn className="size-4" aria-hidden="true" />
-                    <span>{isPending ? "Signing in..." : "Sign in"}</span>
+                    <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
                   </Button>
                 </div>
               </form>

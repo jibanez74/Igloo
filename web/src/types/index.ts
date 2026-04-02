@@ -70,6 +70,14 @@ export type {
   AudioStreamType,
   SubtitleType,
   ChapterType,
+  MoviesLibraryListItemType,
+  MoviesLibraryPaginatedDataType,
+  MoviesStatsDataType,
+  MovieGenreWithCountType,
+  MoviePlaylistRowType,
+  MoviePlaylistSummaryType,
+  MoviePlaylistsListResponseType,
+  MoviePlaylistDetailResponseType,
 } from "./movies";
 
 // Movie playback route (search params)

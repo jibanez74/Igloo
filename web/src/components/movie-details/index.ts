@@ -6,7 +6,7 @@ export { default as MovieDetailsSkipNav } from "./MovieDetailsSkipNav";
 export { default as MovieDocumentMeta } from "./MovieDocumentMeta";
 export { default as MovieExtraVideosSection } from "./MovieExtraVideosSection";
 export { default as MovieGenres } from "./MovieGenres";
-export { default as MovieLikeButton } from "./MovieLikeButton";
+export { default as MovieLikeButton } from "../MovieLikeButton";
 export { default as MovieMetaRow } from "./MovieMetaRow";
 export { default as MovieMoreMenu } from "./MovieMoreMenu";
 export { default as MovieOverviewSection } from "./MovieOverviewSection";

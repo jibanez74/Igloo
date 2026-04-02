@@ -1,4 +1,9 @@
 import type { Float64Type, Int64Type, StringType } from "@/types/Sqlite";
+import type {
+  NullableInt64,
+  NullableString,
+  PlaylistCollaboratorType,
+} from "@/types/music";
 
 // Simple movie type for basic listings
 export type SimpleMovieType = {
@@ -13,6 +18,68 @@ export type LatestMovieType = {
   title: string;
   poster_path: StringType;
   year: Int64Type;
+};
+
+/** Rows from GET /api/movies/library, /liked, and playlist movie pages (includes certification). Compatible with MovieCard. */
+export type MoviesLibraryListItemType = LatestMovieType & {
+  certification: StringType;
+};
+
+/** Paginated movie list payload (library, liked, playlist items). */
+export type MoviesLibraryPaginatedDataType = {
+  movies: MoviesLibraryListItemType[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  sort: "asc" | "desc";
+};
+
+/** GET /api/movies/stats */
+export type MoviesStatsDataType = {
+  total_movies: number;
+};
+
+/** Row from GET /api/movies/genres (genres that have at least one movie). */
+export type MovieGenreWithCountType = {
+  genre_id: number;
+  genre_tag: string;
+  movie_count: number;
+};
+
+/** Full playlist row for content_type = movie (API `playlist` object). */
+export type MoviePlaylistRowType = {
+  id: number;
+  user_id: number;
+  name: string;
+  description: NullableString;
+  cover_image: NullableString;
+  is_public: boolean;
+  folder_id: NullableInt64;
+  movie_id: NullableInt64;
+  content_type: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** GET /api/movies/playlists */
+export type MoviePlaylistSummaryType = MoviePlaylistRowType & {
+  movie_count: number;
+  is_owner: boolean;
+  can_edit: boolean;
+};
+
+export type MoviePlaylistsListResponseType = {
+  playlists: MoviePlaylistSummaryType[];
+};
+
+/** GET /api/movies/playlists/:id */
+export type MoviePlaylistDetailResponseType = {
+  playlist: MoviePlaylistRowType;
+  movie_count: number;
+  is_owner: boolean;
+  can_edit: boolean;
+  collaborators: PlaylistCollaboratorType[] | null;
 };
 
 // Cast member from TMDB credits
