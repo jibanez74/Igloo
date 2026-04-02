@@ -4,6 +4,7 @@ import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
+import { AUTH_USER_KEY } from "@/lib/constants";
 import loginBg from "@/assets/images/login-bg.jpg";
 import {
   Card,
@@ -50,6 +51,9 @@ function LoginPage() {
 
       showSuccess("Welcome back!", res.message || "Login successful");
 
+      // Clear the fresh unauthenticated cache entry created by the login route
+      // guard so the next auth-user read reflects the new session cookie.
+      queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
       await queryClient.fetchQuery(authUserQueryOpts());
 
       await navigate({
