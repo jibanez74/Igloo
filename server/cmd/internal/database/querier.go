@@ -119,8 +119,9 @@ type Querier interface {
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error)
-	// One-line SELECT required for paginated rows (sqlc; see movies.sql).
-	GetPlaylistMoviesPaginated(ctx context.Context, arg GetPlaylistMoviesPaginatedParams) ([]GetPlaylistMoviesPaginatedRow, error)
+	// One-line SELECT required for paginated rows (sqlc; see movies.sql). Title order matches GET /api/movies/library sort=asc.
+	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
+	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg GetPlaylistsWithCollaboratorAccessParams) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).

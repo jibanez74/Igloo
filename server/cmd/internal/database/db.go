@@ -252,8 +252,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getPlaylistDurationStmt, err = db.PrepareContext(ctx, getPlaylistDuration); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistDuration: %w", err)
 	}
-	if q.getPlaylistMoviesPaginatedStmt, err = db.PrepareContext(ctx, getPlaylistMoviesPaginated); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPlaylistMoviesPaginated: %w", err)
+	if q.getPlaylistMoviesPaginatedAscStmt, err = db.PrepareContext(ctx, getPlaylistMoviesPaginatedAsc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetPlaylistMoviesPaginatedAsc: %w", err)
+	}
+	if q.getPlaylistMoviesPaginatedDescStmt, err = db.PrepareContext(ctx, getPlaylistMoviesPaginatedDesc); err != nil {
+		return nil, fmt.Errorf("error preparing query GetPlaylistMoviesPaginatedDesc: %w", err)
 	}
 	if q.getPlaylistTracksInfiniteStmt, err = db.PrepareContext(ctx, getPlaylistTracksInfinite); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPlaylistTracksInfinite: %w", err)
@@ -820,9 +823,14 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getPlaylistDurationStmt: %w", cerr)
 		}
 	}
-	if q.getPlaylistMoviesPaginatedStmt != nil {
-		if cerr := q.getPlaylistMoviesPaginatedStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPlaylistMoviesPaginatedStmt: %w", cerr)
+	if q.getPlaylistMoviesPaginatedAscStmt != nil {
+		if cerr := q.getPlaylistMoviesPaginatedAscStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getPlaylistMoviesPaginatedAscStmt: %w", cerr)
+		}
+	}
+	if q.getPlaylistMoviesPaginatedDescStmt != nil {
+		if cerr := q.getPlaylistMoviesPaginatedDescStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getPlaylistMoviesPaginatedDescStmt: %w", cerr)
 		}
 	}
 	if q.getPlaylistTracksInfiniteStmt != nil {
@@ -1240,7 +1248,8 @@ type Queries struct {
 	getPlaylistByIdStmt                         *sql.Stmt
 	getPlaylistCollaboratorsStmt                *sql.Stmt
 	getPlaylistDurationStmt                     *sql.Stmt
-	getPlaylistMoviesPaginatedStmt              *sql.Stmt
+	getPlaylistMoviesPaginatedAscStmt           *sql.Stmt
+	getPlaylistMoviesPaginatedDescStmt          *sql.Stmt
 	getPlaylistTracksInfiniteStmt               *sql.Stmt
 	getPlaylistsWithCollaboratorAccessStmt      *sql.Stmt
 	getProductionCompaniesByMovieIDStmt         *sql.Stmt
@@ -1383,7 +1392,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getPlaylistByIdStmt:                         q.getPlaylistByIdStmt,
 		getPlaylistCollaboratorsStmt:                q.getPlaylistCollaboratorsStmt,
 		getPlaylistDurationStmt:                     q.getPlaylistDurationStmt,
-		getPlaylistMoviesPaginatedStmt:              q.getPlaylistMoviesPaginatedStmt,
+		getPlaylistMoviesPaginatedAscStmt:           q.getPlaylistMoviesPaginatedAscStmt,
+		getPlaylistMoviesPaginatedDescStmt:          q.getPlaylistMoviesPaginatedDescStmt,
 		getPlaylistTracksInfiniteStmt:               q.getPlaylistTracksInfiniteStmt,
 		getPlaylistsWithCollaboratorAccessStmt:      q.getPlaylistsWithCollaboratorAccessStmt,
 		getProductionCompaniesByMovieIDStmt:         q.getProductionCompaniesByMovieIDStmt,

@@ -12,8 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const maxPlaylistRequestSize = 1024 * 1024 // 1MB
-
 // Permission levels for playlist access
 type PlaylistPermission int
 
@@ -351,7 +349,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -443,7 +441,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -591,7 +589,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req AddTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -767,7 +765,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 	}
 
 	var req ReorderTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -902,7 +900,7 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req AddCollaboratorRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1012,7 +1010,21 @@ func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-func libraryRowsFromPlaylistPage(rows []database.GetPlaylistMoviesPaginatedRow) []database.GetMoviesLibraryAscRow {
+func libraryRowsFromPlaylistAsc(rows []database.GetPlaylistMoviesPaginatedAscRow) []database.GetMoviesLibraryAscRow {
+	out := make([]database.GetMoviesLibraryAscRow, len(rows))
+	for i, r := range rows {
+		out[i] = database.GetMoviesLibraryAscRow{
+			ID:            r.ID,
+			Title:         r.Title,
+			PosterPath:    r.PosterPath,
+			Year:          r.Year,
+			Certification: r.Certification,
+		}
+	}
+	return out
+}
+
+func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescRow) []database.GetMoviesLibraryAscRow {
 	out := make([]database.GetMoviesLibraryAscRow, len(rows))
 	for i, r := range rows {
 		out[i] = database.GetMoviesLibraryAscRow{
@@ -1088,7 +1100,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req CreateMoviePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1199,10 +1211,10 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"playlist":     playlist,
-			"movie_count":  movieCount,
-			"is_owner":     permission == PermissionOwner,
-			"can_edit":     permission >= PermissionEdit,
+			"playlist":      playlist,
+			"movie_count":   movieCount,
+			"is_owner":      permission == PermissionOwner,
+			"can_edit":      permission >= PermissionEdit,
 			"collaborators": collaborators,
 		},
 	}
@@ -1257,7 +1269,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req UpdateMoviePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1428,19 +1440,32 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	params := database.GetPlaylistMoviesPaginatedParams{
-		PlaylistID: playlistID,
-		Limit:      perPage,
-		Offset:     offset,
+	var movies []database.GetMoviesLibraryAscRow
+	if sortParam == "desc" {
+		descRows, err := app.Queries.GetPlaylistMoviesPaginatedDesc(ctx, database.GetPlaylistMoviesPaginatedDescParams{
+			PlaylistID: playlistID,
+			Limit:      perPage,
+			Offset:     offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get playlist movies", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			return
+		}
+		movies = libraryRowsFromPlaylistDesc(descRows)
+	} else {
+		ascRows, err := app.Queries.GetPlaylistMoviesPaginatedAsc(ctx, database.GetPlaylistMoviesPaginatedAscParams{
+			PlaylistID: playlistID,
+			Limit:      perPage,
+			Offset:     offset,
+		})
+		if err != nil {
+			app.Logger.Error("failed to get playlist movies", "error", err)
+			helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
+			return
+		}
+		movies = libraryRowsFromPlaylistAsc(ascRows)
 	}
-
-	rows, err := app.Queries.GetPlaylistMoviesPaginated(ctx, params)
-	if err != nil {
-		app.Logger.Error("failed to get playlist movies", "error", err)
-		helpers.ErrorJSON(w, errors.New("failed to fetch playlist movies"))
-		return
-	}
-	movies := libraryRowsFromPlaylistPage(rows)
 
 	totalPages := total / perPage
 	if total%perPage > 0 {
@@ -1508,7 +1533,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	}
 
 	var req AddMoviesRequest
-	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1526,17 +1551,24 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 		_, err := app.Queries.GetMovieByID(ctx, movieID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				skippedCount++
 				app.Logger.Warn("skip unknown movie id for playlist", "movie_id", movieID)
 				continue
 			}
 			app.Logger.Error("failed to look up movie", "error", err, "movie_id", movieID)
-			continue
+			helpers.ErrorJSON(w, errors.New("failed to verify movies"), http.StatusInternalServerError)
+			return
 		}
 
-		inPl, _ := app.Queries.IsMovieInPlaylist(ctx, database.IsMovieInPlaylistParams{
+		inPl, err := app.Queries.IsMovieInPlaylist(ctx, database.IsMovieInPlaylistParams{
 			PlaylistID: playlistID,
 			MovieID:    movieID,
 		})
+		if err != nil {
+			app.Logger.Error("failed to check movie in playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to update playlist"), http.StatusInternalServerError)
+			return
+		}
 		if inPl == 1 {
 			skippedCount++
 			continue
@@ -1548,13 +1580,20 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 			AddedBy:    sql.NullInt64{Int64: userID, Valid: true},
 		})
 		if err != nil {
-			app.Logger.Warn("failed to add movie to playlist", "error", err, "movie_id", movieID)
-			continue
+			app.Logger.Error("failed to add movie to playlist", "error", err, "movie_id", movieID, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to add movies to playlist"), http.StatusInternalServerError)
+			return
 		}
 		addedCount++
 	}
 
-	_ = app.Queries.UpdatePlaylistTimestamp(ctx, playlistID)
+	if addedCount > 0 {
+		if err := app.Queries.UpdatePlaylistTimestamp(ctx, playlistID); err != nil {
+			app.Logger.Error("failed to update playlist timestamp", "error", err, "playlist_id", playlistID)
+			helpers.ErrorJSON(w, errors.New("failed to finalize playlist update"), http.StatusInternalServerError)
+			return
+		}
+	}
 
 	res := helpers.JSONResponse{
 		Error:   false,

@@ -52,17 +52,17 @@ func (q *Queries) CountPlaylistMovies(ctx context.Context, playlistID int64) (in
 	return count, err
 }
 
-const getPlaylistMoviesPaginated = `-- name: GetPlaylistMoviesPaginated :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM playlist_movies pm INNER JOIN movies m ON m.id = pm.movie_id WHERE pm.playlist_id = ? ORDER BY pm.position ASC, LOWER(m.title) ASC LIMIT ? OFFSET ?
+const getPlaylistMoviesPaginatedAsc = `-- name: GetPlaylistMoviesPaginatedAsc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM playlist_movies pm INNER JOIN movies m ON m.id = pm.movie_id WHERE pm.playlist_id = ? ORDER BY LOWER(m.title) ASC, m.id ASC LIMIT ? OFFSET ?
 `
 
-type GetPlaylistMoviesPaginatedParams struct {
+type GetPlaylistMoviesPaginatedAscParams struct {
 	PlaylistID int64 `json:"playlist_id"`
 	Limit      int64 `json:"limit"`
 	Offset     int64 `json:"offset"`
 }
 
-type GetPlaylistMoviesPaginatedRow struct {
+type GetPlaylistMoviesPaginatedAscRow struct {
 	ID            int64          `json:"id"`
 	Title         string         `json:"title"`
 	PosterPath    sql.NullString `json:"poster_path"`
@@ -70,16 +70,63 @@ type GetPlaylistMoviesPaginatedRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
-// One-line SELECT required for paginated rows (sqlc; see movies.sql).
-func (q *Queries) GetPlaylistMoviesPaginated(ctx context.Context, arg GetPlaylistMoviesPaginatedParams) ([]GetPlaylistMoviesPaginatedRow, error) {
-	rows, err := q.query(ctx, q.getPlaylistMoviesPaginatedStmt, getPlaylistMoviesPaginated, arg.PlaylistID, arg.Limit, arg.Offset)
+// One-line SELECT required for paginated rows (sqlc; see movies.sql). Title order matches GET /api/movies/library sort=asc.
+func (q *Queries) GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error) {
+	rows, err := q.query(ctx, q.getPlaylistMoviesPaginatedAscStmt, getPlaylistMoviesPaginatedAsc, arg.PlaylistID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetPlaylistMoviesPaginatedRow{}
+	items := []GetPlaylistMoviesPaginatedAscRow{}
 	for rows.Next() {
-		var i GetPlaylistMoviesPaginatedRow
+		var i GetPlaylistMoviesPaginatedAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPlaylistMoviesPaginatedDesc = `-- name: GetPlaylistMoviesPaginatedDesc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM playlist_movies pm INNER JOIN movies m ON m.id = pm.movie_id WHERE pm.playlist_id = ? ORDER BY LOWER(m.title) DESC, m.id DESC LIMIT ? OFFSET ?
+`
+
+type GetPlaylistMoviesPaginatedDescParams struct {
+	PlaylistID int64 `json:"playlist_id"`
+	Limit      int64 `json:"limit"`
+	Offset     int64 `json:"offset"`
+}
+
+type GetPlaylistMoviesPaginatedDescRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+func (q *Queries) GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error) {
+	rows, err := q.query(ctx, q.getPlaylistMoviesPaginatedDescStmt, getPlaylistMoviesPaginatedDesc, arg.PlaylistID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPlaylistMoviesPaginatedDescRow{}
+	for rows.Next() {
+		var i GetPlaylistMoviesPaginatedDescRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
