@@ -11,11 +11,15 @@ import (
 
 type Querier interface {
 	AddCollaborator(ctx context.Context, arg AddCollaboratorParams) (PlaylistCollaborator, error)
+	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error)
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error)
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
+	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
+	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
+	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	// Link a movie to an extra video (trailer/special feature). Idempotent.
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
 	// Link movie to genre via junction table
@@ -80,6 +84,9 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
+	// One-line SELECT required for paginated rows (sqlc; see movies.sql).
+	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
+	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
 	// When multiple rows share the same tmdb_id, returns the one with smallest id.
@@ -87,6 +94,16 @@ type Querier interface {
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
+	// Movie genres with counts per tag (genre_type movie only).
+	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
+	GetMoviePlaylistsForUser(ctx context.Context, userID int64) ([]GetMoviePlaylistsForUserRow, error)
+	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
+	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
+	GetMoviesCount(ctx context.Context) (int64, error)
+	// Paginated library A-Z.
+	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
+	// Paginated library Z-A.
+	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
@@ -100,6 +117,8 @@ type Querier interface {
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error)
+	// One-line SELECT required for paginated rows (sqlc; see movies.sql).
+	GetPlaylistMoviesPaginated(ctx context.Context, arg GetPlaylistMoviesPaginatedParams) ([]GetPlaylistMoviesPaginatedRow, error)
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)
 	GetPlaylistsWithCollaboratorAccess(ctx context.Context, arg GetPlaylistsWithCollaboratorAccessParams) ([]GetPlaylistsWithCollaboratorAccessRow, error)
 	// Production companies linked to a movie (for details view).
@@ -138,9 +157,11 @@ type Querier interface {
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
 	InsertVideoStream(ctx context.Context, arg InsertVideoStreamParams) (VideoStream, error)
+	IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (bool, error)
 	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (int64, error)
 	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
 	IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (int64, error)
+	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
@@ -148,7 +169,9 @@ type Querier interface {
 	// Records a new play event when a track is played
 	RecordPlayEvent(ctx context.Context, arg RecordPlayEventParams) error
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
+	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
+	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error
 	// Dedicated UPDATE for movie metadata (used by Edit feature).

@@ -11,15 +11,7 @@ import (
 )
 
 const checkMovieUnchanged = `-- name: CheckMovieUnchanged :one
-SELECT
-  1
-FROM
-  movies
-WHERE
-  file_path = ?
-  AND size = ?
-LIMIT
-  1
+SELECT 1 FROM movies WHERE file_path = ? AND size = ? LIMIT 1
 `
 
 type CheckMovieUnchangedParams struct {
@@ -33,6 +25,17 @@ func (q *Queries) CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchang
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const countMoviesForGenre = `-- name: CountMoviesForGenre :one
+SELECT COUNT(*) FROM movie_genres WHERE genre_id = ?
+`
+
+func (q *Queries) CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error) {
+	row := q.queryRow(ctx, q.countMoviesForGenreStmt, countMoviesForGenre, genreID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createMovieExtraVideo = `-- name: CreateMovieExtraVideo :exec
@@ -210,14 +213,7 @@ func (q *Queries) DeleteMovieVideoStreams(ctx context.Context, movieID int64) er
 }
 
 const getAudioStreamsByMovieID = `-- name: GetAudioStreamsByMovieID :many
-SELECT
-  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
-FROM
-  audio_streams
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index
+SELECT id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at FROM audio_streams WHERE movie_id = ? ORDER BY stream_index
 `
 
 // Audio streams for a movie (for technical details and playback settings).
@@ -319,14 +315,7 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 }
 
 const getChaptersByMovieID = `-- name: GetChaptersByMovieID :many
-SELECT
-  id, title, start_time, thumb, movie_id
-FROM
-  chapters
-WHERE
-  movie_id = ?
-ORDER BY
-  start_time
+SELECT id, title, start_time, thumb, movie_id FROM chapters WHERE movie_id = ? ORDER BY start_time
 `
 
 // Chapters for a movie (for technical details display).
@@ -463,18 +452,10 @@ func (q *Queries) GetGenresByMovieID(ctx context.Context, movieID int64) ([]GetG
 }
 
 const getLatestMovies = `-- name: GetLatestMovies :many
-SELECT
-  id,
-  title,
-  poster_path,
-  year,
-  certification
-FROM
-  movies
-ORDER BY
-  created_at DESC
-LIMIT
-  12
+SELECT id, title, poster_path, year, certification
+FROM movies
+ORDER BY created_at DESC
+LIMIT 12
 `
 
 type GetLatestMoviesRow struct {
@@ -515,14 +496,7 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 }
 
 const getMovieByID = `-- name: GetMovieByID :one
-SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
-FROM
-  movies
-WHERE
-  id = ?
-LIMIT
-  1
+SELECT id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at FROM movies WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
@@ -560,16 +534,7 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 }
 
 const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
-SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
-FROM
-  movies
-WHERE
-  tmdb_id = ?
-ORDER BY
-  id ASC
-LIMIT
-  1
+SELECT id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at FROM movies WHERE tmdb_id = ? ORDER BY id ASC LIMIT 1
 `
 
 // When multiple rows share the same tmdb_id, returns the one with smallest id.
@@ -679,6 +644,239 @@ func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMov
 	return i, err
 }
 
+const getMovieGenresWithCounts = `-- name: GetMovieGenresWithCounts :many
+SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(mg.movie_id) AS movie_count FROM genres g INNER JOIN movie_genres mg ON mg.genre_id = g.id WHERE g.genre_type = 'movie' GROUP BY g.id, g.tag ORDER BY LOWER(g.tag) ASC
+`
+
+type GetMovieGenresWithCountsRow struct {
+	GenreID    int64  `json:"genre_id"`
+	GenreTag   string `json:"genre_tag"`
+	MovieCount int64  `json:"movie_count"`
+}
+
+// Movie genres with counts per tag (genre_type movie only).
+func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error) {
+	rows, err := q.query(ctx, q.getMovieGenresWithCountsStmt, getMovieGenresWithCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMovieGenresWithCountsRow{}
+	for rows.Next() {
+		var i GetMovieGenresWithCountsRow
+		if err := rows.Scan(&i.GenreID, &i.GenreTag, &i.MovieCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesByGenreAsc = `-- name: GetMoviesByGenreAsc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC LIMIT ? OFFSET ?
+`
+
+type GetMoviesByGenreAscParams struct {
+	GenreID int64 `json:"genre_id"`
+	Limit   int64 `json:"limit"`
+	Offset  int64 `json:"offset"`
+}
+
+type GetMoviesByGenreAscRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+func (q *Queries) GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error) {
+	rows, err := q.query(ctx, q.getMoviesByGenreAscStmt, getMoviesByGenreAsc, arg.GenreID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviesByGenreAscRow{}
+	for rows.Next() {
+		var i GetMoviesByGenreAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesByGenreDesc = `-- name: GetMoviesByGenreDesc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC LIMIT ? OFFSET ?
+`
+
+type GetMoviesByGenreDescParams struct {
+	GenreID int64 `json:"genre_id"`
+	Limit   int64 `json:"limit"`
+	Offset  int64 `json:"offset"`
+}
+
+type GetMoviesByGenreDescRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error) {
+	rows, err := q.query(ctx, q.getMoviesByGenreDescStmt, getMoviesByGenreDesc, arg.GenreID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviesByGenreDescRow{}
+	for rows.Next() {
+		var i GetMoviesByGenreDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesCount = `-- name: GetMoviesCount :one
+SELECT COUNT(*) FROM movies
+`
+
+func (q *Queries) GetMoviesCount(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getMoviesCountStmt, getMoviesCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getMoviesLibraryAsc = `-- name: GetMoviesLibraryAsc :many
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC LIMIT ? OFFSET ?
+`
+
+type GetMoviesLibraryAscParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetMoviesLibraryAscRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+// Paginated library A-Z.
+func (q *Queries) GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error) {
+	rows, err := q.query(ctx, q.getMoviesLibraryAscStmt, getMoviesLibraryAsc, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviesLibraryAscRow{}
+	for rows.Next() {
+		var i GetMoviesLibraryAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesLibraryDesc = `-- name: GetMoviesLibraryDesc :many
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC LIMIT ? OFFSET ?
+`
+
+type GetMoviesLibraryDescParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetMoviesLibraryDescRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	PosterPath    sql.NullString `json:"poster_path"`
+	Year          sql.NullInt64  `json:"year"`
+	Certification sql.NullString `json:"certification"`
+}
+
+// Paginated library Z-A.
+func (q *Queries) GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error) {
+	rows, err := q.query(ctx, q.getMoviesLibraryDescStmt, getMoviesLibraryDesc, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMoviesLibraryDescRow{}
+	for rows.Next() {
+		var i GetMoviesLibraryDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getProductionCompaniesByMovieID = `-- name: GetProductionCompaniesByMovieID :many
 SELECT
   pc.id,
@@ -734,14 +932,7 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 }
 
 const getSubtitlesByMovieID = `-- name: GetSubtitlesByMovieID :many
-SELECT
-  id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
-FROM
-  subtitles
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index
+SELECT id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at FROM subtitles WHERE movie_id = ? ORDER BY stream_index
 `
 
 // Subtitle tracks for a movie (for technical details display).
@@ -780,14 +971,7 @@ func (q *Queries) GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]S
 }
 
 const getVideoStreamsByMovieID = `-- name: GetVideoStreamsByMovieID :many
-SELECT
-  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
-FROM
-  video_streams
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index
+SELECT id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at FROM video_streams WHERE movie_id = ? ORDER BY stream_index
 `
 
 // Video streams for a movie (for technical details display).

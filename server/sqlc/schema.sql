@@ -456,6 +456,21 @@ CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_user ON user_liked_tracks (user
 
 CREATE INDEX IF NOT EXISTS idx_user_liked_tracks_track ON user_liked_tracks (track_id);
 
+-- user_liked_movies (movie likes; mirrors user_liked_tracks — Phase 0 / movies page)
+CREATE TABLE
+  IF NOT EXISTS user_liked_movies (
+    user_id INTEGER NOT NULL,
+    movie_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, movie_id),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_user_liked_movies_user ON user_liked_movies (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_liked_movies_movie ON user_liked_movies (movie_id);
+
 -- sessions
 CREATE TABLE
   IF NOT EXISTS sessions (
@@ -476,12 +491,18 @@ CREATE TABLE
     cover_image TEXT,
     is_public BOOLEAN NOT NULL DEFAULT false,
     folder_id INTEGER,
+    movie_id INTEGER,
+    content_type TEXT NOT NULL DEFAULT 'track',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+    CHECK (content_type IN ('movie', 'track')),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE SET NULL ON UPDATE CASCADE
   );
 
 CREATE INDEX IF NOT EXISTS idx_playlist_user ON playlists (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_playlist_content_type ON playlists (content_type);
 
 CREATE INDEX IF NOT EXISTS idx_playlist_folder ON playlists (folder_id);
 
@@ -503,6 +524,25 @@ CREATE TABLE
 CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks (playlist_id);
 
 CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position ON playlist_tracks (playlist_id, position);
+
+-- playlist_movies (items for movie playlists; use with playlists.content_type = 'movie')
+CREATE TABLE
+  IF NOT EXISTS playlist_movies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id INTEGER NOT NULL,
+    movie_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    added_by INTEGER,
+    added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (playlist_id, movie_id),
+    FOREIGN KEY (playlist_id) REFERENCES playlists (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (added_by) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_playlist_movies_playlist ON playlist_movies (playlist_id);
+
+CREATE INDEX IF NOT EXISTS idx_playlist_movies_position ON playlist_movies (playlist_id, position);
 
 -- playlist_collaborators
 CREATE TABLE

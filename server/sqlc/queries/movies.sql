@@ -4,52 +4,20 @@ SELECT file_path, file_name, mime_type FROM movies WHERE id = ? LIMIT 1;
 
 -- name: CheckMovieUnchanged :one
 -- Quick check if movie exists with same path and size (likely unchanged)
-SELECT
-  1
-FROM
-  movies
-WHERE
-  file_path = ?
-  AND size = ?
-LIMIT
-  1;
+SELECT 1 FROM movies WHERE file_path = ? AND size = ? LIMIT 1;
 
 -- name: GetMovieByID :one
-SELECT
-  *
-FROM
-  movies
-WHERE
-  id = ?
-LIMIT
-  1;
+SELECT * FROM movies WHERE id = ? LIMIT 1;
 
 -- name: GetMovieByTmdbID :one
 -- When multiple rows share the same tmdb_id, returns the one with smallest id.
-SELECT
-  *
-FROM
-  movies
-WHERE
-  tmdb_id = ?
-ORDER BY
-  id ASC
-LIMIT
-  1;
+SELECT * FROM movies WHERE tmdb_id = ? ORDER BY id ASC LIMIT 1;
 
 -- name: GetLatestMovies :many
-SELECT
-  id,
-  title,
-  poster_path,
-  year,
-  certification
-FROM
-  movies
-ORDER BY
-  created_at DESC
-LIMIT
-  12;
+SELECT id, title, poster_path, year, certification
+FROM movies
+ORDER BY created_at DESC
+LIMIT 12;
 
 -- name: UpsertMovie :one
 INSERT INTO
@@ -469,45 +437,41 @@ WHERE
 
 -- name: GetVideoStreamsByMovieID :many
 -- Video streams for a movie (for technical details display).
-SELECT
-  *
-FROM
-  video_streams
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index;
+SELECT * FROM video_streams WHERE movie_id = ? ORDER BY stream_index;
 
 -- name: GetAudioStreamsByMovieID :many
 -- Audio streams for a movie (for technical details and playback settings).
-SELECT
-  *
-FROM
-  audio_streams
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index;
+SELECT * FROM audio_streams WHERE movie_id = ? ORDER BY stream_index;
 
 -- name: GetSubtitlesByMovieID :many
 -- Subtitle tracks for a movie (for technical details display).
-SELECT
-  *
-FROM
-  subtitles
-WHERE
-  movie_id = ?
-ORDER BY
-  stream_index;
+SELECT * FROM subtitles WHERE movie_id = ? ORDER BY stream_index;
 
 -- name: GetChaptersByMovieID :many
 -- Chapters for a movie (for technical details display).
-SELECT
-  *
-FROM
-  chapters
-WHERE
-  movie_id = ?
-ORDER BY
-  start_time;
+SELECT * FROM chapters WHERE movie_id = ? ORDER BY start_time;
+
+-- name: GetMoviesCount :one
+SELECT COUNT(*) FROM movies;
+
+-- name: GetMoviesLibraryAsc :many
+-- Paginated library A-Z.
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC LIMIT ? OFFSET ?;
+
+-- name: GetMoviesLibraryDesc :many
+-- Paginated library Z-A.
+SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC LIMIT ? OFFSET ?;
+
+-- name: GetMovieGenresWithCounts :many
+-- Movie genres with counts per tag (genre_type movie only).
+SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(mg.movie_id) AS movie_count FROM genres g INNER JOIN movie_genres mg ON mg.genre_id = g.id WHERE g.genre_type = 'movie' GROUP BY g.id, g.tag ORDER BY LOWER(g.tag) ASC;
+
+-- name: CountMoviesForGenre :one
+SELECT COUNT(*) FROM movie_genres WHERE genre_id = ?;
+
+-- name: GetMoviesByGenreAsc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC LIMIT ? OFFSET ?;
+
+-- name: GetMoviesByGenreDesc :many
+SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC LIMIT ? OFFSET ?;
 

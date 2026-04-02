@@ -28,6 +28,14 @@ const (
 	AUDIODB_BASE_URL             = "https://www.theaudiodb.com/api/v1/json"
 	AUDIODB_API_KEY              = "2"
 
+	// playlists — content_type discriminator (movies page / unified playlists table)
+	PLAYLIST_CONTENT_TYPE_TRACK = "track"
+	PLAYLIST_CONTENT_TYPE_MOVIE = "movie"
+
+	// movies library API (paginated list; align with music musicians defaults)
+	MOVIES_LIBRARY_DEFAULT_PER_PAGE = 24
+	MOVIES_LIBRARY_MAX_PER_PAGE     = 48
+
 	// cookie settings
 	COOKIE_USER_ID = "user_id"
 

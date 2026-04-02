@@ -143,6 +143,8 @@ type Playlist struct {
 	CoverImage  sql.NullString `json:"cover_image"`
 	IsPublic    bool           `json:"is_public"`
 	FolderID    sql.NullInt64  `json:"folder_id"`
+	MovieID     sql.NullInt64  `json:"movie_id"`
+	ContentType string         `json:"content_type"`
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
 }
@@ -154,6 +156,15 @@ type PlaylistCollaborator struct {
 	CanEdit    bool   `json:"can_edit"`
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
+}
+
+type PlaylistMovie struct {
+	ID         int64         `json:"id"`
+	PlaylistID int64         `json:"playlist_id"`
+	MovieID    int64         `json:"movie_id"`
+	Position   int64         `json:"position"`
+	AddedBy    sql.NullInt64 `json:"added_by"`
+	AddedAt    string        `json:"added_at"`
 }
 
 type PlaylistTrack struct {
