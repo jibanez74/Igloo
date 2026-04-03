@@ -15,6 +15,8 @@ INSERT INTO
   settings (
     tmdb_key,
     jellyfin_token,
+    spotify_client_id,
+    spotify_client_secret,
     hardware_acceleration_device,
     enable_logger,
     enable_watcher,
@@ -26,12 +28,14 @@ INSERT INTO
     logs_dir
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
 	TmdbKey                    sql.NullString `json:"tmdb_key"`
 	JellyfinToken              sql.NullString `json:"jellyfin_token"`
+	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
+	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
 	EnableLogger               bool           `json:"enable_logger"`
 	EnableWatcher              bool           `json:"enable_watcher"`
@@ -47,6 +51,8 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 	row := q.queryRow(ctx, q.createSettingsStmt, createSettings,
 		arg.TmdbKey,
 		arg.JellyfinToken,
+		arg.SpotifyClientID,
+		arg.SpotifyClientSecret,
 		arg.HardwareAccelerationDevice,
 		arg.EnableLogger,
 		arg.EnableWatcher,

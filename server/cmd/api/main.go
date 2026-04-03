@@ -337,6 +337,8 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
 		JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
+		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
+		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
 		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
 		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,

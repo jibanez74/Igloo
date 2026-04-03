@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// trackFile holds path, extension, and size collected during directory walk.
-// Size is captured during walk to avoid blocking the transaction with file I/O.
 type trackFile struct {
 	path string
 	ext  string
@@ -39,7 +37,6 @@ func (app *Application) ScanMusicLibrary() {
 	tracksSkipped := 0
 	startTime := time.Now()
 
-	// Batch buffer to collect tracks before processing
 	batch := make([]trackFile, 0, helpers.SCANNER_BATCH_SIZE)
 
 	err := filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
@@ -92,7 +89,9 @@ func (app *Application) ScanMusicLibrary() {
 		errorCount += errors
 	}
 
-	app.Spotify.ClearAllCaches()
+	if app.Spotify != nil {
+		app.Spotify.ClearAllCaches()
+	}
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
