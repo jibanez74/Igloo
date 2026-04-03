@@ -39,6 +39,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.checkMovieUnchangedStmt, err = db.PrepareContext(ctx, checkMovieUnchanged); err != nil {
 		return nil, fmt.Errorf("error preparing query CheckMovieUnchanged: %w", err)
 	}
+	if q.checkTrackUnchangedStmt, err = db.PrepareContext(ctx, checkTrackUnchanged); err != nil {
+		return nil, fmt.Errorf("error preparing query CheckTrackUnchanged: %w", err)
+	}
 	if q.countMoviesForGenreStmt, err = db.PrepareContext(ctx, countMoviesForGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMoviesForGenre: %w", err)
 	}
@@ -285,9 +288,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getTrackStmt, err = db.PrepareContext(ctx, getTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTrack: %w", err)
 	}
-	if q.getTrackPathsAndSizesByPathsStmt, err = db.PrepareContext(ctx, getTrackPathsAndSizesByPaths); err != nil {
-		return nil, fmt.Errorf("error preparing query GetTrackPathsAndSizesByPaths: %w", err)
-	}
 	if q.getTracksAlphabeticalStmt, err = db.PrepareContext(ctx, getTracksAlphabetical); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTracksAlphabetical: %w", err)
 	}
@@ -472,6 +472,11 @@ func (q *Queries) Close() error {
 	if q.checkMovieUnchangedStmt != nil {
 		if cerr := q.checkMovieUnchangedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing checkMovieUnchangedStmt: %w", cerr)
+		}
+	}
+	if q.checkTrackUnchangedStmt != nil {
+		if cerr := q.checkTrackUnchangedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing checkTrackUnchangedStmt: %w", cerr)
 		}
 	}
 	if q.countMoviesForGenreStmt != nil {
@@ -884,11 +889,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getTrackStmt: %w", cerr)
 		}
 	}
-	if q.getTrackPathsAndSizesByPathsStmt != nil {
-		if cerr := q.getTrackPathsAndSizesByPathsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getTrackPathsAndSizesByPathsStmt: %w", cerr)
-		}
-	}
 	if q.getTracksAlphabeticalStmt != nil {
 		if cerr := q.getTracksAlphabeticalStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTracksAlphabeticalStmt: %w", cerr)
@@ -1193,6 +1193,7 @@ type Queries struct {
 	addTrackToPlaylistStmt                      *sql.Stmt
 	canUserEditPlaylistStmt                     *sql.Stmt
 	checkMovieUnchangedStmt                     *sql.Stmt
+	checkTrackUnchangedStmt                     *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
@@ -1275,7 +1276,6 @@ type Queries struct {
 	getSettingsStmt                             *sql.Stmt
 	getSubtitlesByMovieIDStmt                   *sql.Stmt
 	getTrackStmt                                *sql.Stmt
-	getTrackPathsAndSizesByPathsStmt            *sql.Stmt
 	getTracksAlphabeticalStmt                   *sql.Stmt
 	getTracksByAlbumIDStmt                      *sql.Stmt
 	getTracksByMusicianIDStmt                   *sql.Stmt
@@ -1339,6 +1339,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
 		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
 		checkMovieUnchangedStmt:                     q.checkMovieUnchangedStmt,
+		checkTrackUnchangedStmt:                     q.checkTrackUnchangedStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
@@ -1421,7 +1422,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getSettingsStmt:                             q.getSettingsStmt,
 		getSubtitlesByMovieIDStmt:                   q.getSubtitlesByMovieIDStmt,
 		getTrackStmt:                                q.getTrackStmt,
-		getTrackPathsAndSizesByPathsStmt:            q.getTrackPathsAndSizesByPathsStmt,
 		getTracksAlphabeticalStmt:                   q.getTracksAlphabeticalStmt,
 		getTracksByAlbumIDStmt:                      q.getTracksByAlbumIDStmt,
 		getTracksByMusicianIDStmt:                   q.getTracksByMusicianIDStmt,

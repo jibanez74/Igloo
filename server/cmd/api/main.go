@@ -21,7 +21,6 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
-	"igloo/cmd/internal/musicbrainz"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
@@ -43,7 +42,6 @@ type Application struct {
 	LoggerCloser         func() error
 	Ffprobe              ffprobe.FfprobeInterface
 	FFmpeg               *ffmpeg.FFmpeg
-	MusicBrainz          musicbrainz.MusicBrainzInterface
 	Spotify              spotify.SpotifyInterface
 	Tmdb                 tmdb.TmdbInterface
 	SessionManager       *scs.SessionManager
@@ -187,20 +185,18 @@ func InitApp() (*Application, error) {
 	}
 	app.FFmpeg = ffmpegApp
 
-	// HLS session cache: 30 min default TTL, 10 min cleanup. OnEvicted kills FFmpeg and deletes temp dir.
-	hlsCache := cache.New(30*time.Minute, 10*time.Minute)
+	// HLS sessions expire after the shared TTL and are cleaned up on eviction.
+	hlsCache := cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	hlsCache.OnEvicted(func(key string, val interface{}) {
-		if session, ok := val.(*HLSSession); ok {
+		session, ok := val.(*HLSSession)
+		if ok {
 			cleanupHLSSession(session)
 		}
 	})
-	app.HLSSessionCache = hlsCache
+
+  app.HLSSessionCache = hlsCache
 
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
-
-	// Initialize MusicBrainz client for music metadata and cover art lookups.
-	// In-memory cache only; cleared when the music scan completes.
-	app.MusicBrainz = musicbrainz.New()
 
 	// Initialize TMDB client if TMDB key is configured.
 	// This is optional - the app works without TMDB integration.
