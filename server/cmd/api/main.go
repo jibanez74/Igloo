@@ -193,9 +193,10 @@ func InitApp() (*Application, error) {
 			cleanupHLSSession(session)
 		}
 	})
+	app.HLSSessionCache = hlsCache
 
-  app.HLSSessionCache = hlsCache
-
+	// Cache extracted WebVTT subtitle payloads so repeat subtitle requests avoid
+	// re-running extraction/transcoding work for the same source subtitle stream.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
 	// Initialize TMDB client if TMDB key is configured.
@@ -207,6 +208,22 @@ func InitApp() (*Application, error) {
 		} else {
 			app.Tmdb = tmdb
 			app.Logger.Info("tmdb client initialized successfully")
+		}
+	}
+
+	// Initialize Spotify client if both Spotify credentials are configured.
+	// This is optional - the app works without Spotify integration.
+	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
+		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
+		spotifyClient, err := spotify.New(
+			app.Settings.SpotifyClientID.String,
+			app.Settings.SpotifyClientSecret.String,
+		)
+		if err != nil {
+			app.Logger.Warn("failed to initialize spotify client", "error", err)
+		} else {
+			app.Spotify = spotifyClient
+			app.Logger.Info("spotify client initialized successfully")
 		}
 	}
 
