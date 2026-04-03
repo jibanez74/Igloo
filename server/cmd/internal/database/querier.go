@@ -62,6 +62,7 @@ type Querier interface {
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Album, error)
+	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
 	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
@@ -109,6 +110,7 @@ type Querier interface {
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
+	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)

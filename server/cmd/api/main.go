@@ -22,6 +22,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/musicbrainz"
+	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
 	"github.com/alexedwards/scs/sqlite3store"
@@ -43,6 +44,7 @@ type Application struct {
 	Ffprobe              ffprobe.FfprobeInterface
 	FFmpeg               *ffmpeg.FFmpeg
 	MusicBrainz          musicbrainz.MusicBrainzInterface
+	Spotify              spotify.SpotifyInterface
 	Tmdb                 tmdb.TmdbInterface
 	SessionManager       *scs.SessionManager
 	Wait                 *sync.WaitGroup

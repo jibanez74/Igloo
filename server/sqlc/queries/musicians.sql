@@ -4,30 +4,38 @@ SELECT * FROM musicians WHERE name = ? LIMIT 1;
 -- name: GetMusicianByMusicBrainzID :one
 SELECT * FROM musicians WHERE musicbrainz_id = ? LIMIT 1;
 
+-- name: GetMusicianBySpotifyID :one
+SELECT * FROM musicians WHERE spotify_id = ? LIMIT 1;
+
 -- name: UpsertMusician :one
-INSERT INTO musicians (name, sort_name, summary, musicbrainz_id, thumb)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO musicians (
+  name,
+  sort_name,
+  summary,
+  musicbrainz_id,
+  spotify_id,
+  spotify_popularity,
+  spotify_followers,
+  thumb
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
   musicbrainz_id = COALESCE(excluded.musicbrainz_id, musicians.musicbrainz_id),
+  spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
+  spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
+  spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
   thumb = COALESCE(excluded.thumb, musicians.thumb),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
 -- name: GetMusiciansByAlbumID :many
-SELECT
-  m.id,
-  m.name,
-  m.thumb,
-  m.musicbrainz_id
-FROM
-  musicians m
-  INNER JOIN musician_albums ma ON m.id = ma.musician_id
-WHERE
-  ma.album_id = ?
-ORDER BY
-  m.name ASC;
+SELECT m.id, m.name, m.thumb, m.musicbrainz_id
+FROM musicians m
+INNER JOIN musician_albums ma ON m.id = ma.musician_id
+WHERE ma.album_id = ?
+ORDER BY m.name ASC;
 
 -- name: GetMusiciansAlphabetical :many
 -- Returns musicians sorted alphabetically by sort_name with pagination.
@@ -37,25 +45,26 @@ SELECT
   m.name,
   m.thumb,
   m.sort_name,
-  (SELECT COUNT(*) FROM musician_albums ma WHERE ma.musician_id = m.id) as album_count,
-  (SELECT COUNT(*) FROM tracks t WHERE t.musician_id = m.id) as track_count
-FROM
-  musicians m
+  (SELECT COUNT(*) FROM musician_albums ma WHERE ma.musician_id = m.id) AS album_count,
+  (SELECT COUNT(*) FROM tracks t WHERE t.musician_id = m.id) AS track_count
+FROM musicians m
 ORDER BY
   CASE
-    WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z'
-    THEN UPPER(SUBSTR(m.sort_name, 1, 1))
+    WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(m.sort_name, 1, 1))
     ELSE '#'
   END,
   m.sort_name
 LIMIT ? OFFSET ?;
 
 -- name: UpdateMusicianThumb :exec
-UPDATE musicians SET thumb = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+UPDATE musicians
+SET thumb = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
 
 -- name: GetMusiciansNeedingThumbDownload :many
 SELECT * FROM musicians
-WHERE (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
+WHERE
+  (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
   AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''));
 
 -- name: GetMusicianByID :one
@@ -69,16 +78,11 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) as track_count
-FROM
-  albums a
-  INNER JOIN musician_albums ma ON a.id = ma.album_id
-WHERE
-  ma.musician_id = ?
-ORDER BY
-  a.release_date DESC,
-  a.year DESC,
-  a.sort_title ASC;
+  (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) AS track_count
+FROM albums a
+INNER JOIN musician_albums ma ON a.id = ma.album_id
+WHERE ma.musician_id = ?
+ORDER BY a.release_date DESC, a.year DESC, a.sort_title ASC;
 
 -- name: GetTracksByMusicianID :many
 SELECT
@@ -91,9 +95,9 @@ SELECT
   t.file_path,
   t.track_index,
   t.disc,
-  a.id as album_id,
-  a.title as album_title,
-  a.cover as album_cover
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover
 FROM tracks t
 LEFT JOIN albums a ON t.album_id = a.id
 WHERE t.musician_id = ?

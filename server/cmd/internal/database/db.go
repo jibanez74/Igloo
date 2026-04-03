@@ -132,6 +132,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumByMusicBrainzIDStmt, err = db.PrepareContext(ctx, getAlbumByMusicBrainzID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumByMusicBrainzID: %w", err)
 	}
+	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
+	}
 	if q.getAlbumByTitleAndMusicianStmt, err = db.PrepareContext(ctx, getAlbumByTitleAndMusician); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumByTitleAndMusician: %w", err)
 	}
@@ -227,6 +230,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMusicianByNameStmt, err = db.PrepareContext(ctx, getMusicianByName); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianByName: %w", err)
+	}
+	if q.getMusicianBySpotifyIDStmt, err = db.PrepareContext(ctx, getMusicianBySpotifyID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicianBySpotifyID: %w", err)
 	}
 	if q.getMusiciansAlphabeticalStmt, err = db.PrepareContext(ctx, getMusiciansAlphabetical); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusiciansAlphabetical: %w", err)
@@ -623,6 +629,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumByMusicBrainzIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumBySpotifyIDStmt != nil {
+		if cerr := q.getAlbumBySpotifyIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumByTitleAndMusicianStmt != nil {
 		if cerr := q.getAlbumByTitleAndMusicianStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumByTitleAndMusicianStmt: %w", cerr)
@@ -781,6 +792,11 @@ func (q *Queries) Close() error {
 	if q.getMusicianByNameStmt != nil {
 		if cerr := q.getMusicianByNameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicianByNameStmt: %w", cerr)
+		}
+	}
+	if q.getMusicianBySpotifyIDStmt != nil {
+		if cerr := q.getMusicianBySpotifyIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicianBySpotifyIDStmt: %w", cerr)
 		}
 	}
 	if q.getMusiciansAlphabeticalStmt != nil {
@@ -1208,6 +1224,7 @@ type Queries struct {
 	getAdminUserStmt                            *sql.Stmt
 	getAlbumByIDStmt                            *sql.Stmt
 	getAlbumByMusicBrainzIDStmt                 *sql.Stmt
+	getAlbumBySpotifyIDStmt                     *sql.Stmt
 	getAlbumByTitleAndMusicianStmt              *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
@@ -1240,6 +1257,7 @@ type Queries struct {
 	getMusicianByIDStmt                         *sql.Stmt
 	getMusicianByMusicBrainzIDStmt              *sql.Stmt
 	getMusicianByNameStmt                       *sql.Stmt
+	getMusicianBySpotifyIDStmt                  *sql.Stmt
 	getMusiciansAlphabeticalStmt                *sql.Stmt
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
 	getMusiciansCountStmt                       *sql.Stmt
@@ -1352,6 +1370,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAdminUserStmt:                            q.getAdminUserStmt,
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
 		getAlbumByMusicBrainzIDStmt:                 q.getAlbumByMusicBrainzIDStmt,
+		getAlbumBySpotifyIDStmt:                     q.getAlbumBySpotifyIDStmt,
 		getAlbumByTitleAndMusicianStmt:              q.getAlbumByTitleAndMusicianStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
@@ -1384,6 +1403,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
 		getMusicianByMusicBrainzIDStmt:              q.getMusicianByMusicBrainzIDStmt,
 		getMusicianByNameStmt:                       q.getMusicianByNameStmt,
+		getMusicianBySpotifyIDStmt:                  q.getMusicianBySpotifyIDStmt,
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
 		getMusiciansCountStmt:                       q.getMusiciansCountStmt,

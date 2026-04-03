@@ -26,7 +26,7 @@ INSERT INTO
     logs_dir
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, tmdb_key, jellyfin_token, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
@@ -62,6 +62,8 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.ID,
 		&i.TmdbKey,
 		&i.JellyfinToken,
+		&i.SpotifyClientID,
+		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
 		&i.EnableLogger,
 		&i.EnableWatcher,
@@ -79,7 +81,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 
 const getSettings = `-- name: GetSettings :one
 SELECT
-  id, tmdb_key, jellyfin_token, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
+  id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
 FROM
   settings
 LIMIT
@@ -93,6 +95,8 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.ID,
 		&i.TmdbKey,
 		&i.JellyfinToken,
+		&i.SpotifyClientID,
+		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
 		&i.EnableLogger,
 		&i.EnableWatcher,
