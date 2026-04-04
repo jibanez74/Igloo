@@ -132,6 +132,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
 	}
+	if q.getAlbumGenresStmt, err = db.PrepareContext(ctx, getAlbumGenres); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumGenres: %w", err)
+	}
 	if q.getAlbumsAlphabeticalStmt, err = db.PrepareContext(ctx, getAlbumsAlphabetical); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsAlphabetical: %w", err)
 	}
@@ -591,6 +594,11 @@ func (q *Queries) Close() error {
 	if q.getAlbumBySpotifyIDStmt != nil {
 		if cerr := q.getAlbumBySpotifyIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
+		}
+	}
+	if q.getAlbumGenresStmt != nil {
+		if cerr := q.getAlbumGenresStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumGenresStmt: %w", cerr)
 		}
 	}
 	if q.getAlbumsAlphabeticalStmt != nil {
@@ -1128,6 +1136,7 @@ type Queries struct {
 	getAdminUserStmt                            *sql.Stmt
 	getAlbumByIDStmt                            *sql.Stmt
 	getAlbumBySpotifyIDStmt                     *sql.Stmt
+	getAlbumGenresStmt                          *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
@@ -1262,6 +1271,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAdminUserStmt:                            q.getAdminUserStmt,
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
 		getAlbumBySpotifyIDStmt:                     q.getAlbumBySpotifyIDStmt,
+		getAlbumGenresStmt:                          q.getAlbumGenresStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,

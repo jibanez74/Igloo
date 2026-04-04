@@ -62,6 +62,8 @@ type Querier interface {
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	// Returns all genres associated with an album
+	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
