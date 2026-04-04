@@ -30,14 +30,6 @@ DELETE FROM playlists WHERE id = ? AND user_id = ?;
 -- name: UpdatePlaylistTimestamp :exec
 UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = ?;
 
--- name: GetMoviePlaylistsForUser :many
-SELECT
-  p.*,
-  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
-FROM playlists p
-WHERE p.user_id = ? AND p.content_type = 'movie'
-ORDER BY p.updated_at DESC;
-
 -- name: CreateMoviePlaylist :one
 INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type, movie_id)
 VALUES (?, ?, ?, ?, ?, 'movie', ?)

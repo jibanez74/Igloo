@@ -533,45 +533,6 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 	return i, err
 }
 
-const getMovieByTmdbID = `-- name: GetMovieByTmdbID :one
-SELECT id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at FROM movies WHERE tmdb_id = ? ORDER BY id ASC LIMIT 1
-`
-
-// When multiple rows share the same tmdb_id, returns the one with smallest id.
-func (q *Queries) GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (Movie, error) {
-	row := q.queryRow(ctx, q.getMovieByTmdbIDStmt, getMovieByTmdbID, tmdbID)
-	var i Movie
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.FilePath,
-		&i.FileName,
-		&i.Size,
-		&i.Container,
-		&i.MimeType,
-		&i.Adult,
-		&i.TmdbID,
-		&i.ImdbID,
-		&i.PosterPath,
-		&i.BackdropPath,
-		&i.Language,
-		&i.Year,
-		&i.ReleaseDate,
-		&i.Overview,
-		&i.TagLine,
-		&i.Certification,
-		&i.CriticRating,
-		&i.AudienceRating,
-		&i.Revenue,
-		&i.Budget,
-		&i.RunTime,
-		&i.Duration,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getMovieExtraVideos = `-- name: GetMovieExtraVideos :many
 SELECT
   extra_videos.id,

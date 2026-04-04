@@ -3,9 +3,6 @@ INSERT INTO track_genres (track_id, genre_id)
 VALUES (?, ?)
 ON CONFLICT (track_id, genre_id) DO NOTHING;
 
--- name: DeleteTrackGenres :exec
-DELETE FROM track_genres WHERE track_id = ?;
-
 -- name: DeleteTrackGenresExcept :exec
 -- Deletes all genre relationships for a track except the specified genre.
 -- Used to efficiently update genres: only removes stale relationships.

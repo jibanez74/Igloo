@@ -19,6 +19,8 @@ CREATE TABLE
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tmdb_key TEXT,
     jellyfin_token TEXT,
+    spotify_client_id TEXT,
+    spotify_client_secret TEXT,
     hardware_acceleration_device TEXT CHECK (
       hardware_acceleration_device IN ('cpu', 'apple', 'nvidia', 'intel')
     ),
@@ -41,7 +43,9 @@ CREATE TABLE
     name TEXT NOT NULL UNIQUE,
     sort_name TEXT NOT NULL,
     summary TEXT,
-    musicbrainz_id TEXT UNIQUE,
+    spotify_id TEXT UNIQUE,
+    spotify_popularity REAL,
+    spotify_followers INTEGER,
     thumb TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -55,8 +59,9 @@ CREATE TABLE
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     sort_title TEXT NOT NULL,
+    spotify_id TEXT UNIQUE,
+    spotify_popularity REAL,
     musician TEXT,
-    musicbrainz_id TEXT UNIQUE,
     release_date TEXT,
     year INTEGER,
     total_tracks INTEGER,

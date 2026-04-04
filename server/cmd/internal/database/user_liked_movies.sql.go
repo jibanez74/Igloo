@@ -148,18 +148,3 @@ func (q *Queries) LikeMovie(ctx context.Context, arg LikeMovieParams) error {
 	_, err := q.exec(ctx, q.likeMovieStmt, likeMovie, arg.UserID, arg.MovieID)
 	return err
 }
-
-const unlikeMovie = `-- name: UnlikeMovie :exec
-DELETE FROM user_liked_movies WHERE user_id = ? AND movie_id = ?
-`
-
-type UnlikeMovieParams struct {
-	UserID  int64 `json:"user_id"`
-	MovieID int64 `json:"movie_id"`
-}
-
-// Idempotent: deleting a non-existent row affects 0 rows and is not an error in SQLite.
-func (q *Queries) UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) error {
-	_, err := q.exec(ctx, q.unlikeMovieStmt, unlikeMovie, arg.UserID, arg.MovieID)
-	return err
-}

@@ -104,66 +104,6 @@ func (q *Queries) DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) 
 	return err
 }
 
-const getMoviePlaylistsForUser = `-- name: GetMoviePlaylistsForUser :many
-SELECT
-  p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.movie_id, p.content_type, p.created_at, p.updated_at,
-  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
-FROM playlists p
-WHERE p.user_id = ? AND p.content_type = 'movie'
-ORDER BY p.updated_at DESC
-`
-
-type GetMoviePlaylistsForUserRow struct {
-	ID          int64          `json:"id"`
-	UserID      int64          `json:"user_id"`
-	Name        string         `json:"name"`
-	Description sql.NullString `json:"description"`
-	CoverImage  sql.NullString `json:"cover_image"`
-	IsPublic    bool           `json:"is_public"`
-	FolderID    sql.NullInt64  `json:"folder_id"`
-	MovieID     sql.NullInt64  `json:"movie_id"`
-	ContentType string         `json:"content_type"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
-	MovieCount  int64          `json:"movie_count"`
-}
-
-func (q *Queries) GetMoviePlaylistsForUser(ctx context.Context, userID int64) ([]GetMoviePlaylistsForUserRow, error) {
-	rows, err := q.query(ctx, q.getMoviePlaylistsForUserStmt, getMoviePlaylistsForUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetMoviePlaylistsForUserRow{}
-	for rows.Next() {
-		var i GetMoviePlaylistsForUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.Description,
-			&i.CoverImage,
-			&i.IsPublic,
-			&i.FolderID,
-			&i.MovieID,
-			&i.ContentType,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.MovieCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getMoviePlaylistsWithCollaboratorAccess = `-- name: GetMoviePlaylistsWithCollaboratorAccess :many
 SELECT
   p.id,

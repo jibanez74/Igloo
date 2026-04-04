@@ -8,8 +8,27 @@ package database
 import (
 	"context"
 	"database/sql"
-	"strings"
 )
+
+const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
+SELECT EXISTS(
+  SELECT 1
+  FROM tracks
+  WHERE file_path = ? AND size = ?
+) AS track_exists
+`
+
+type CheckTrackUnchangedParams struct {
+	FilePath string `json:"file_path"`
+	Size     int64  `json:"size"`
+}
+
+func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error) {
+	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size)
+	var track_exists int64
+	err := row.Scan(&track_exists)
+	return track_exists, err
+}
 
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT COUNT(*) FROM albums
@@ -137,49 +156,6 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getTrackPathsAndSizesByPaths = `-- name: GetTrackPathsAndSizesByPaths :many
-SELECT file_path, size FROM tracks WHERE file_path IN (/*SLICE:paths*/?)
-`
-
-type GetTrackPathsAndSizesByPathsRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-}
-
-// Returns file_path and size for tracks whose file_path is in the given list (for batch unchanged check).
-func (q *Queries) GetTrackPathsAndSizesByPaths(ctx context.Context, paths []string) ([]GetTrackPathsAndSizesByPathsRow, error) {
-	query := getTrackPathsAndSizesByPaths
-	var queryParams []interface{}
-	if len(paths) > 0 {
-		for _, v := range paths {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:paths*/?", strings.Repeat(",?", len(paths))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:paths*/?", "NULL", 1)
-	}
-	rows, err := q.query(ctx, nil, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetTrackPathsAndSizesByPathsRow{}
-	for rows.Next() {
-		var i GetTrackPathsAndSizesByPathsRow
-		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getTracksAlphabetical = `-- name: GetTracksAlphabetical :many

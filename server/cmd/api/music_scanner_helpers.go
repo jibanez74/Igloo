@@ -6,214 +6,247 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"igloo/cmd/internal/musicbrainz"
 	"strings"
+
+	"github.com/zmb3/spotify/v2"
 )
 
-func generateMusicianSummary(name, country, artistType, disambiguation string) string {
-  var parts []string
-  parts = append(parts, name)
+// generateMusicianSummary creates a rich, descriptive summary for a musician
+// based on their Spotify data including genres, popularity, and follower count.
+func generateMusicianSummary(artist *spotify.FullArtist) string {
+	var parts []string
 
-  if artistType != "" {
-    parts = append(parts, fmt.Sprintf("is a %s", strings.ToLower(artistType)))
-  }
+	// Base info - artist name
+	parts = append(parts, artist.Name)
 
-  if country != "" {
-    parts = append(parts, fmt.Sprintf("from %s", country))
-  }
+	// Genres from Spotify (more accurate than file metadata)
+	if len(artist.Genres) > 0 {
+		// Limit to first 3 genres
+		maxGenres := 3
+		if len(artist.Genres) < maxGenres {
+			maxGenres = len(artist.Genres)
+		}
+		genreStr := strings.Join(artist.Genres[:maxGenres], ", ")
+		parts = append(parts, fmt.Sprintf("known for %s", genreStr))
+	}
 
-  if disambiguation != "" {
-    parts = append(parts, fmt.Sprintf("(%s)", disambiguation))
-  }
+	// Popularity tier
+	pop := artist.Popularity
+	switch {
+	case pop >= 80:
+		parts = append(parts, "is a globally recognized artist")
+	case pop >= 60:
+		parts = append(parts, "is a popular artist")
+	case pop >= 40:
+		parts = append(parts, "has a dedicated following")
+	case pop >= 20:
+		parts = append(parts, "is an emerging artist")
+	default:
+		parts = append(parts, "is an independent artist")
+	}
 
-  return strings.Join(parts, " ") + "."
+	// Follower count with human-readable formatting
+	followers := artist.Followers.Count
+	switch {
+	case followers >= 10_000_000:
+		parts = append(parts, fmt.Sprintf("with over %dM followers on Spotify", followers/1_000_000))
+	case followers >= 1_000_000:
+		parts = append(parts, fmt.Sprintf("with %.1fM followers on Spotify", float64(followers)/1_000_000))
+	case followers >= 100_000:
+		parts = append(parts, fmt.Sprintf("with %dK followers on Spotify", followers/1_000))
+	case followers >= 1_000:
+		parts = append(parts, fmt.Sprintf("with %.1fK followers on Spotify", float64(followers)/1_000))
+	default:
+		parts = append(parts, fmt.Sprintf("with %d followers on Spotify", followers))
+	}
+
+	return strings.Join(parts, " ") + "."
 }
 
+// getOrCreateMusician looks up or creates a musician in the database.
+// If Spotify is configured, attempts to enrich the data with Spotify info.
+// Falls back to basic metadata if Spotify lookup fails.
 func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Queries, name, sortName string) (*database.Musician, error) {
-  existing, err := qtx.GetMusicianByName(ctx, name)
-  if err == nil {
-    return &existing, nil
-  }
+	// Try Spotify lookup first if configured
+	if app.Spotify != nil {
+		artist, err := app.Spotify.SearchArtistByName(ctx, name)
+		if err == nil && artist != nil {
+			// Check if we already have this Spotify artist
+			existing, err := qtx.GetMusicianBySpotifyID(ctx, sql.NullString{String: artist.ID.String(), Valid: true})
+			if err == nil {
+				// Even if musician exists, process Spotify genres to enrich the data
+				app.processSpotifyGenres(ctx, qtx, existing.ID, artist.Genres)
+				return &existing, nil
+			}
 
-  artist, err := app.MusicBrainz.SearchArtistByName(name)
-  if err == nil && artist != nil {
-    existing, err := qtx.GetMusicianByMusicBrainzID(ctx, sql.NullString{String: artist.MusicBrainzID, Valid: true})
-    if err == nil {
-      return &existing, nil
-    }
+			// Build thumb from Spotify artist images
+			var thumb sql.NullString
+			if len(artist.Images) > 0 {
+				thumb = sql.NullString{String: artist.Images[0].URL, Valid: true}
+			}
 
-    summary := generateMusicianSummary(artist.Name, artist.Country, artist.Type, artist.Disambiguation)
-    var thumb sql.NullString
-    app.throttleCoverArtDownload()
-    if thumbURL, thumbErr := app.MusicBrainz.GetArtistImageURL(artist.MusicBrainzID); thumbErr == nil && thumbURL != "" {
-      thumb = sql.NullString{String: thumbURL, Valid: true}
-    }
+			// Generate enhanced summary
+			summary := generateMusicianSummary(artist)
 
-    musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
-      Name:          name,
-      SortName:      sortName,
-      Summary:       sql.NullString{String: summary, Valid: true},
-      MusicbrainzID: sql.NullString{String: artist.MusicBrainzID, Valid: true},
-      Thumb:         thumb,
-    })
+			// Upsert with Spotify data
+			musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
+				Name:              name,
+				SortName:          sortName,
+				Summary:           sql.NullString{String: summary, Valid: true},
+				SpotifyPopularity: helpers.NullFloat64(float64(artist.Popularity)),
+				SpotifyFollowers:  helpers.NullInt64(int64(artist.Followers.Count)),
+				SpotifyID:         sql.NullString{String: artist.ID.String(), Valid: true},
+				Thumb:             thumb,
+			})
+			if err != nil {
+				return nil, err
+			}
 
-    if err != nil {
-      return nil, err
-    }
+			// Process Spotify genres for this musician
+			app.processSpotifyGenres(ctx, qtx, musician.ID, artist.Genres)
 
-    return &musician, nil
-  }
+			return &musician, nil
+		}
+	}
 
-  musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
-    Name:     name,
-    SortName: sortName,
-  })
-
-  if err != nil {
-    return nil, err
-  }
-
-  return &musician, nil
+	// Upsert with basic data only
+	musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
+		Name:     name,
+		SortName: sortName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &musician, nil
 }
 
-func (app *Application) getOrCreateMusicianWithResult(ctx context.Context, qtx *database.Queries, name, sortName string, mbArtist *musicbrainz.ArtistResult) (*database.Musician, error) {
-	existing, err := qtx.GetMusicianByName(ctx, name)
-	if err == nil {
-		return &existing, nil
-	}
-	if mbArtist != nil {
-		existing, err := qtx.GetMusicianByMusicBrainzID(ctx, sql.NullString{String: mbArtist.MusicBrainzID, Valid: true})
-		if err == nil {
-			return &existing, nil
-		}
-		summary := generateMusicianSummary(mbArtist.Name, mbArtist.Country, mbArtist.Type, mbArtist.Disambiguation)
-		var thumb sql.NullString
-		app.throttleCoverArtDownload()
-		if thumbURL, thumbErr := app.MusicBrainz.GetArtistImageURL(mbArtist.MusicBrainzID); thumbErr == nil && thumbURL != "" {
-			thumb = sql.NullString{String: thumbURL, Valid: true}
-		}
-		musician, err := qtx.UpsertMusician(ctx, database.UpsertMusicianParams{
-			Name:          name,
-			SortName:      sortName,
-			Summary:       sql.NullString{String: summary, Valid: true},
-			MusicbrainzID: sql.NullString{String: mbArtist.MusicBrainzID, Valid: true},
-			Thumb:         thumb,
+// processSpotifyGenres creates genre entries and musician-genre relationships
+// for each genre provided by Spotify's artist data.
+func (app *Application) processSpotifyGenres(ctx context.Context, qtx *database.Queries, musicianID int64, spotifyGenres []string) {
+	for _, genreTag := range spotifyGenres {
+		// Get or create the genre
+		genre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
+			Tag:       genreTag,
+			GenreType: "music",
 		})
 		if err != nil {
-			return nil, err
+			app.Logger.Warn("failed to get/create Spotify genre",
+				"error", err,
+				"genre", genreTag,
+			)
+			continue
 		}
-		return &musician, nil
+
+		// Create musician-genre relationship
+		err = qtx.UpsertMusicianGenre(ctx, database.UpsertMusicianGenreParams{
+			MusicianID: musicianID,
+			GenreID:    genre.ID,
+		})
+		if err != nil {
+			app.Logger.Warn("failed to create musician-genre relationship for Spotify genre",
+				"error", err,
+				"musician_id", musicianID,
+				"genre_id", genre.ID,
+				"genre", genreTag,
+			)
+		}
 	}
-	return app.getOrCreateMusician(ctx, qtx, name, sortName)
 }
 
-func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, string, error) {
-  if albumArtist != "" {
-    existing, err := qtx.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
-      Title:    title,
-      Musician: sql.NullString{String: albumArtist, Valid: true},
-    })
+// processSpotifyAlbumGenres creates genre entries and album-genre relationships
+// for each genre provided by Spotify's album data.
+func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Queries, albumID int64, spotifyGenres []string) {
+	for _, genreTag := range spotifyGenres {
+		genre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
+			Tag:       genreTag,
+			GenreType: "music",
+		})
+		if err != nil {
+			app.Logger.Warn("failed to get/create Spotify genre for album",
+				"error", err,
+				"genre", genreTag,
+			)
+			continue
+		}
 
-    if err == nil {
-      return &existing, "", nil
-    }
-  }
-
-  albumDetails, err := app.MusicBrainz.SearchAlbumByName(title, albumArtist)
-  if err == nil && albumDetails != nil {
-    existing, err := qtx.GetAlbumByMusicBrainzID(ctx, sql.NullString{String: albumDetails.MusicBrainzID, Valid: true})
-    if err == nil {
-      return &existing, albumDetails.CoverURL, nil
-    }
-
-    params := database.UpsertAlbumParams{
-      Title:         title,
-      SortTitle:     sortTitle,
-      MusicbrainzID: sql.NullString{String: albumDetails.MusicBrainzID, Valid: true},
-    }
-
-    if albumDetails.ReleaseDate != "" {
-      params.ReleaseDate = sql.NullString{String: albumDetails.ReleaseDate, Valid: true}
-    }
-
-    if albumDetails.Year > 0 {
-      params.Year = sql.NullInt64{Int64: int64(albumDetails.Year), Valid: true}
-    }
-
-    if albumArtist != "" {
-      params.Musician = sql.NullString{String: albumArtist, Valid: true}
-    }
-
-    if albumDetails.CoverURL != "" {
-      params.Cover = sql.NullString{String: albumDetails.CoverURL, Valid: true}
-    } else if albumDetails.MusicBrainzID != "" {
-      params.Cover = sql.NullString{String: fmt.Sprintf("%s/%s/front-500", helpers.COVER_ART_ARCHIVE_BASE_URL, albumDetails.MusicBrainzID), Valid: true}
-    }
-
-    album, err := qtx.UpsertAlbum(ctx, params)
-    if err != nil {
-      return nil, "", err
-    }
-
-    return &album, albumDetails.CoverURL, nil
-  }
-
-  params := database.UpsertAlbumParams{
-    Title:     title,
-    SortTitle: sortTitle,
-  }
-
-  if albumArtist != "" {
-    params.Musician = sql.NullString{String: albumArtist, Valid: true}
-  }
-
-  album, err := qtx.UpsertAlbum(ctx, params)
-  if err != nil {
-    return nil, "", err
-  }
-
-  return &album, "", nil
+		err = qtx.UpsertAlbumGenre(ctx, database.UpsertAlbumGenreParams{
+			AlbumID: albumID,
+			GenreID: genre.ID,
+		})
+		if err != nil {
+			app.Logger.Warn("failed to create album-genre relationship for Spotify genre",
+				"error", err,
+				"album_id", albumID,
+				"genre_id", genre.ID,
+				"genre", genreTag,
+			)
+		}
+	}
 }
 
-func (app *Application) getOrCreateAlbumWithResult(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string, mbAlbum *musicbrainz.AlbumResult) (*database.Album, string, error) {
+// getOrCreateAlbum looks up or creates an album in the database.
+// If Spotify is configured, attempts to enrich the data with Spotify info.
+// Falls back to basic metadata if Spotify lookup fails.
+func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, error) {
+	// Try Spotify lookup first if configured
+	if app.Spotify != nil {
+		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title)
+		if err == nil && albumDetails != nil {
+			// Check if we already have this Spotify album
+			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
+			if err == nil {
+				app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
+				return &existing, nil
+			}
+
+			// Build params with Spotify data
+			params := database.UpsertAlbumParams{
+				Title:             title,
+				SortTitle:         sortTitle,
+				SpotifyID:         sql.NullString{String: albumDetails.ID.String(), Valid: true},
+				SpotifyPopularity: helpers.NullFloat64(float64(albumDetails.Popularity)),
+				TotalTracks:       helpers.NullInt64(int64(albumDetails.TotalTracks)),
+			}
+
+			// Parse release date
+			releaseDate := albumDetails.ReleaseDateTime()
+			if !releaseDate.IsZero() {
+				params.ReleaseDate = sql.NullString{String: releaseDate.Format("2006-01-02"), Valid: true}
+				params.Year = sql.NullInt64{Int64: int64(releaseDate.Year()), Valid: true}
+			}
+
+			// Album artist
+			if albumArtist != "" {
+				params.Musician = sql.NullString{String: albumArtist, Valid: true}
+			}
+
+			// Store Spotify cover URL (local download planned for later)
+			if len(albumDetails.Images) > 0 {
+				params.Cover = sql.NullString{String: albumDetails.Images[0].URL, Valid: true}
+			}
+
+			album, err := qtx.UpsertAlbum(ctx, params)
+			if err != nil {
+				return nil, err
+			}
+			app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
+			return &album, nil
+		}
+		// Spotify failed, continue with basic metadata (silent failure as per design)
+	}
+
+	// Upsert with basic data only
+	params := database.UpsertAlbumParams{
+		Title:     title,
+		SortTitle: sortTitle,
+	}
 	if albumArtist != "" {
-		existing, err := qtx.GetAlbumByTitleAndMusician(ctx, database.GetAlbumByTitleAndMusicianParams{
-			Title:    title,
-			Musician: sql.NullString{String: albumArtist, Valid: true},
-		})
-		if err == nil {
-			return &existing, "", nil
-		}
+		params.Musician = sql.NullString{String: albumArtist, Valid: true}
 	}
-	if mbAlbum != nil {
-		existing, err := qtx.GetAlbumByMusicBrainzID(ctx, sql.NullString{String: mbAlbum.MusicBrainzID, Valid: true})
-		if err == nil {
-			return &existing, mbAlbum.CoverURL, nil
-		}
-		params := database.UpsertAlbumParams{
-			Title:         title,
-			SortTitle:     sortTitle,
-			MusicbrainzID: sql.NullString{String: mbAlbum.MusicBrainzID, Valid: true},
-		}
-		if mbAlbum.ReleaseDate != "" {
-			params.ReleaseDate = sql.NullString{String: mbAlbum.ReleaseDate, Valid: true}
-		}
-		if mbAlbum.Year > 0 {
-			params.Year = sql.NullInt64{Int64: int64(mbAlbum.Year), Valid: true}
-		}
-		if albumArtist != "" {
-			params.Musician = sql.NullString{String: albumArtist, Valid: true}
-		}
-		if mbAlbum.CoverURL != "" {
-			params.Cover = sql.NullString{String: mbAlbum.CoverURL, Valid: true}
-		} else if mbAlbum.MusicBrainzID != "" {
-			params.Cover = sql.NullString{String: fmt.Sprintf("%s/%s/front-500", helpers.COVER_ART_ARCHIVE_BASE_URL, mbAlbum.MusicBrainzID), Valid: true}
-		}
-		album, err := qtx.UpsertAlbum(ctx, params)
-		if err != nil {
-			return nil, "", err
-		}
-		return &album, mbAlbum.CoverURL, nil
+
+	album, err := qtx.UpsertAlbum(ctx, params)
+	if err != nil {
+		return nil, err
 	}
-	return app.getOrCreateAlbum(ctx, qtx, title, sortTitle, albumArtist)
+	return &album, nil
 }

@@ -21,7 +21,7 @@ import (
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
-	"igloo/cmd/internal/musicbrainz"
+	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
 
 	"github.com/alexedwards/scs/sqlite3store"
@@ -42,7 +42,7 @@ type Application struct {
 	LoggerCloser         func() error
 	Ffprobe              ffprobe.FfprobeInterface
 	FFmpeg               *ffmpeg.FFmpeg
-	MusicBrainz          musicbrainz.MusicBrainzInterface
+	Spotify              spotify.SpotifyInterface
 	Tmdb                 tmdb.TmdbInterface
 	SessionManager       *scs.SessionManager
 	Wait                 *sync.WaitGroup
@@ -56,16 +56,16 @@ type Application struct {
 	lastCoverArtDownload time.Time
 }
 
-// SQL contains the database schema, embedded at compile time.
+// SQL is the embedded startup schema applied by InitTables.
 //
 //go:embed schema.sql
 var SQL string
 
-// FrontendFS contains the embedded frontend (webdist). A minimal placeholder is committed
+// FrontendFS contains the embedded frontend bundle. A minimal placeholder is committed
 // so the app builds without running the frontend build. When VITE_DEV_SERVER is set,
 // ServeFrontend redirects to the Vite dev server instead of serving from here.
-// all:webdist is required because Vite can emit chunk names starting with "_",
-// and the default directory embed behavior excludes files beginning with "_" or ".".
+// all:webdist is required because Vite can emit chunk names starting with "_" and
+// the default embed behavior skips files beginning with "_" or ".".
 //
 //go:embed all:webdist
 var FrontendFS embed.FS
@@ -73,10 +73,7 @@ var FrontendFS embed.FS
 func main() {
 	log.Println("igloo server starting up...")
 
-	// Load environment variables from .env file.
-	// This allows local development without setting system env vars.
-	// In production, env vars can come from Docker, systemd, or other sources.
-	// I am still not sure if I will keep it like this, but for the time being will use this package for env vars and grab them like this.
+	// Load local development settings from server/.env before startup.
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal(err)
@@ -107,101 +104,79 @@ func main() {
 	}
 }
 
-// InitApp creates and initializes all application components in the correct order.
-// The initialization sequence is critical - each step depends on the previous:
+// InitApp wires startup dependencies in dependency order.
 func InitApp() (*Application, error) {
 	app := Application{
 		Wait: &sync.WaitGroup{},
 	}
 
-	// Create a background context for database operations during startup.
 	ctx := context.Background()
 
-	// Initialize the logger first so all other init functions can log errors.
-	// Uses environment variables directly since settings aren't loaded yet.
-	// In debug mode logs to stdout, otherwise logs to file with rotation.
+	// Logger comes first so later startup failures are captured consistently.
 	err := app.InitLogger()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %v", err)
 	}
 
-	// Initialize database connection and create the database file if it doesn't exist.
 	err = app.InitDB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
 
-	// Create database tables if they don't exist.
-	// Uses the embedded schema.sql with CREATE TABLE IF NOT EXISTS.
 	err = app.InitTables()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
-	// Get the prepared queries from the database package.
-	// The base queries are stored in sqlc/queries and sqlc generates the prepared queries.
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
 	}
 
-	// Load or create application settings.
-	// Reads existing settings from DB, or creates defaults from env vars.
 	err = app.InitSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize settings: %v", err)
 	}
 
-	// Create required directories (static, logs) and optional media directories.
-	// Must run after InitSettings since directory paths come from settings.
+	// Directory paths come from settings, so this must run after InitSettings.
 	err = app.InitDirs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize directories: %v", err)
 	}
 
-	// Ensure a default admin user exists.
-	// Creates admin@sample.com with password "AdminPassword" if no admin found.
 	err = app.InitDefaultUser(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize default user: %v", err)
 	}
 
-	// Initialize session manager for authentication.
-	// Uses SQLite as the session store, sharing the same database connection.
 	app.InitSession()
 
-	// Initialize ffprobe for media metadata extraction.
-	// Extracts the platform-specific binary from embedded data to a temp directory.
 	ffprobeApp, err := ffprobe.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ffprobe: %v", err)
 	}
 	app.Ffprobe = ffprobeApp
 
-	// Initialize FFmpeg for HLS transcoding (embedded binary extracted to temp dir).
 	ffmpegApp, err := ffmpeg.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ffmpeg: %v", err)
 	}
 	app.FFmpeg = ffmpegApp
 
-	// HLS session cache: 30 min default TTL, 10 min cleanup. OnEvicted kills FFmpeg and deletes temp dir.
-	hlsCache := cache.New(30*time.Minute, 10*time.Minute)
+	// Eviction callback removes generated files when an HLS session ages out.
+	hlsCache := cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	hlsCache.OnEvicted(func(key string, val interface{}) {
-		if session, ok := val.(*HLSSession); ok {
+		session, ok := val.(*HLSSession)
+		if ok {
 			cleanupHLSSession(session)
 		}
 	})
 	app.HLSSessionCache = hlsCache
 
+	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
-	// Initialize MusicBrainz client for music metadata and cover art lookups.
-	// In-memory cache only; cleared when the music scan completes.
-	app.MusicBrainz = musicbrainz.New()
-
-	// Initialize TMDB client if TMDB key is configured.
-	// This is optional - the app works without TMDB integration.
+	// TMDB enrichment is optional.
 	if app.Settings.TmdbKey.Valid {
 		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
 		if err != nil {
@@ -212,12 +187,26 @@ func InitApp() (*Application, error) {
 		}
 	}
 
-	// Start movies library scanner in background if TMDB key is set and movies directory is configured.
+	// Spotify enrichment is optional.
+	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
+		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
+		spotifyClient, err := spotify.New(
+			app.Settings.SpotifyClientID.String,
+			app.Settings.SpotifyClientSecret.String,
+		)
+		if err != nil {
+			app.Logger.Warn("failed to initialize spotify client", "error", err)
+		} else {
+			app.Spotify = spotifyClient
+			app.Logger.Info("spotify client initialized successfully")
+		}
+	}
+
+	// Background scanners run after startup so the server can begin serving immediately.
 	if app.Settings.TmdbKey.Valid && app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
 		go app.ScanMoviesLibrary()
 	}
 
-	// Start music library scanner in background if music directory is configured.
 	if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
 		go app.ScanMusicLibrary()
 	}
@@ -262,9 +251,7 @@ func (app *Application) InitDB() error {
 	return nil
 }
 
-// InitTables executes the embedded schema.sql to create all database tables.
-// Uses CREATE TABLE IF NOT EXISTS so it's safe to run on every startup.
-// This ensures the database schema is always up to date with the application.
+// InitTables applies the embedded schema and any small startup migrations.
 func (app *Application) InitTables() error {
 	_, err := app.DB.Exec(SQL)
 	if err != nil {
@@ -279,13 +266,10 @@ func (app *Application) InitTables() error {
 	return nil
 }
 
-// InitSettings loads application settings from the database.
-// If no settings exist (first run), creates a new settings record
-// populated from environment variables with sensible defaults.
+// InitSettings loads persisted settings or creates the first record from env defaults.
 func (app *Application) InitSettings(ctx context.Context) error {
 	settings, err := app.Queries.GetSettings(ctx)
 	if err == nil {
-		// Settings exist - use them.
 		app.Logger.Info("loaded existing settings from database")
 		app.Settings = &settings
 		return nil
@@ -311,17 +295,16 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		staticDir = "static"
 	}
 
-	// Hardware acceleration defaults to CPU (no acceleration).
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {
 		hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	}
 
-	// Build the settings record from environment variables.
-	// NullString handles empty strings by setting Valid=false.
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
 		JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
+		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
+		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
 		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
 		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,
@@ -345,9 +328,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	return nil
 }
 
-// InitDirs ensures all required directories exist, creating them if necessary.
-// Required directories (static, logs) are always created.
-// Optional media directories (movies, shows, music) are only created if configured.
+// InitDirs ensures required app directories exist and creates configured media roots.
 func (app *Application) InitDirs() error {
 	created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
 	if err != nil {
@@ -358,7 +339,7 @@ func (app *Application) InitDirs() error {
 		app.Logger.Info("created static directory", "path", app.Settings.StaticDir)
 	}
 
-	// Subdirs for scanner-downloaded images (album covers, musician thumbs).
+	// Scanner-downloaded artwork is stored beneath static/.
 	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "albums"))
 	if err != nil {
 		return fmt.Errorf("failed to initialize static/albums: %w", err)
@@ -417,10 +398,7 @@ func (app *Application) InitDirs() error {
 	return nil
 }
 
-// InitLogger initializes the application logger.
-// In debug mode (DEBUG=true), logs are written to stdout with text format.
-// In production mode, logs are written to a file with JSON format and rotation.
-// Uses LOGS_DIR environment variable (defaults to "logs").
+// InitLogger configures stdout logging for debug mode and file-backed logging otherwise.
 func (app *Application) InitLogger() error {
 	debug := os.Getenv("DEBUG") == "true"
 
@@ -454,15 +432,10 @@ func (app *Application) InitLogger() error {
 	return nil
 }
 
-// InitDefaultUser ensures an admin user exists in the database.
-// On first run, creates a default admin account that can be used
-// to access the application and create additional users.
-// Credentials: admin@sample.com / AdminPassword
-// The password should be changed after first login.
+// InitDefaultUser bootstraps the first admin account on an empty database.
 func (app *Application) InitDefaultUser(ctx context.Context) error {
 	_, err := app.Queries.GetAdminUser(ctx)
 	if err == nil {
-		// An admin exists - nothing to do.
 		return nil
 	}
 
@@ -495,9 +468,7 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 	return nil
 }
 
-// InitSession initializes the session manager with SQLite as the session store.
-// Sessions are used for authentication and maintaining user state across requests.
-// The sessions table is created by InitTables via schema.sql.
+// InitSession stores sessions in SQLite so auth state survives process restarts.
 func (app *Application) InitSession() {
 	sessionManager := scs.New()
 	sessionManager.Store = sqlite3store.New(app.DB)
@@ -536,7 +507,7 @@ func (app *Application) InitRouter() {
 			r.Delete("/", app.DeleteUserAccount)
 		})
 
-		// Static file serving (avatars, etc.)
+		// Static assets include uploaded avatars and scanner-downloaded artwork.
 		r.Get("/static/*", app.ServeStaticFiles)
 
 		r.Route("/tmdb", func(r chi.Router) {

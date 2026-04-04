@@ -113,13 +113,15 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
       return `${baseClasses} ${
         isCurrentTrack
           ? "opacity-100"
-          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       }`;
     }
 
-    // Album: hover reveal only
+    // Album: hover on desktop; always visible on touch / small screens
     return `${baseClasses} ${
-      isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      isCurrentTrack
+        ? "opacity-100"
+        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
     }`;
   };
 

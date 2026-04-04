@@ -16,6 +16,7 @@ type Querier interface {
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
+	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
@@ -54,22 +55,21 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
-	DeleteTrackGenres(ctx context.Context, trackID int64) error
 	// Deletes all genre relationships for a track except the specified genre.
 	// Used to efficiently update genres: only removes stale relationships.
 	DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
-	GetAlbumByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Album, error)
-	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
+	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
+	// Returns all genres associated with an album
+	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
 	// Sorted by release date (newest first), then by title
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
-	GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -90,14 +90,11 @@ type Querier interface {
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
-	// When multiple rows share the same tmdb_id, returns the one with smallest id.
-	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (Movie, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
-	GetMoviePlaylistsForUser(ctx context.Context, userID int64) ([]GetMoviePlaylistsForUserRow, error)
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
@@ -107,14 +104,12 @@ type Querier interface {
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
-	GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error)
-	GetMusicianByName(ctx context.Context, name string) (Musician, error)
+	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
-	GetMusiciansNeedingThumbDownload(ctx context.Context) ([]Musician, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
@@ -131,8 +126,6 @@ type Querier interface {
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (Track, error)
-	// Returns file_path and size for tracks whose file_path is in the given list (for batch unchanged check).
-	GetTrackPathsAndSizesByPaths(ctx context.Context, paths []string) ([]GetTrackPathsAndSizesByPathsRow, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
 	GetTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) ([]GetTracksByMusicianIDRow, error)
@@ -176,15 +169,11 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
-	// Idempotent: deleting a non-existent row affects 0 rows and is not an error in SQLite.
-	UnlikeMovie(ctx context.Context, arg UnlikeMovieParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
-	UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
-	UpdateMusicianThumb(ctx context.Context, arg UpdateMusicianThumbParams) error
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
 	UpdateTrackPosition(ctx context.Context, arg UpdateTrackPositionParams) error

@@ -9,6 +9,48 @@ import (
 	"context"
 )
 
+const getAlbumGenres = `-- name: GetAlbumGenres :many
+SELECT
+  g.id,
+  g.tag
+FROM
+  genres g
+  INNER JOIN album_genres ag ON g.id = ag.genre_id
+WHERE
+  ag.album_id = ?
+ORDER BY
+  g.tag ASC
+`
+
+type GetAlbumGenresRow struct {
+	ID  int64  `json:"id"`
+	Tag string `json:"tag"`
+}
+
+// Returns all genres associated with an album
+func (q *Queries) GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error) {
+	rows, err := q.query(ctx, q.getAlbumGenresStmt, getAlbumGenres, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAlbumGenresRow{}
+	for rows.Next() {
+		var i GetAlbumGenresRow
+		if err := rows.Scan(&i.ID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGenresByMusicianID = `-- name: GetGenresByMusicianID :many
 SELECT
   g.id,
