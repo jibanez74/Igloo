@@ -15,6 +15,8 @@ type VideoPlayerProps = {
   isFullscreen?: boolean;
   onError: (message: string) => void;
   subtitleTrack?: SubtitleTrackInfo | null;
+  startSec?: number;
+  onSessionLost?: (currentTime: number) => void;
 };
 
 function isHLSUrl(url: string): boolean {
@@ -37,6 +39,8 @@ export default function VideoPlayer({
   isFullscreen = false,
   onError,
   subtitleTrack = null,
+  startSec = 0,
+  onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -52,10 +56,6 @@ export default function VideoPlayer({
         manifestLoadingTimeOut: 120_000,
         levelLoadingTimeOut: 120_000,
         fragLoadingTimeOut: 120_000,
-        // Evict buffered data that falls > 30 s behind the playhead.
-        // Without this, high-bitrate remux streams (~30 Mbps) fill the
-        // browser SourceBuffer quota and trigger QuotaExceededError,
-        // causing hls.js to retry the same segment endlessly.
         backBufferLength: 30,
       });
       hlsRef.current = hls;
@@ -63,8 +63,23 @@ export default function VideoPlayer({
       hls.loadSource(src);
       hls.attachMedia(video);
 
+      if (startSec > 0) {
+        hls.once(Hls.Events.MANIFEST_PARSED, () => {
+          video.currentTime = startSec;
+        });
+      }
+
       let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (
+          data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+          data.response?.code === 404 &&
+          onSessionLost
+        ) {
+          onSessionLost(video.currentTime);
+          return;
+        }
+
         if (!data.fatal) return;
 
         if (data.type === "mediaError" && !mediaRecoveryAttempted) {
@@ -91,11 +106,20 @@ export default function VideoPlayer({
 
     // Native HLS (Safari) or direct stream
     video.src = src;
+    if (startSec > 0) {
+      video.addEventListener(
+        "loadedmetadata",
+        () => {
+          video.currentTime = startSec;
+        },
+        { once: true },
+      );
+    }
     return () => {
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef, onError]);
+  }, [src, videoRef, onError, startSec, onSessionLost]);
 
   useEffect(() => {
     const video = videoRef.current;

@@ -20,6 +20,7 @@ func BuildHLSArgs(
 	videoStreamIndex, audioStreamIndex int,
 	hwDevice string,
 	copyVideo, copyAudio bool,
+	startSec float64,
 ) ([]string, error) {
 	if !helpers.IsAllowedHLSProfile(profile) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", profile)
@@ -53,6 +54,10 @@ func BuildHLSArgs(
 		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
 			args = append(args, "-hwaccel", "qsv")
 		}
+	}
+
+	if startSec > 0 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", startSec))
 	}
 
 	args = append(args,
@@ -121,9 +126,10 @@ func (f *FFmpeg) RunHLS(
 	videoStreamIndex, audioStreamIndex int,
 	hwDevice string,
 	copyVideo, copyAudio bool,
+	startSec float64,
 	onExit func(exitErr error, stderrTail []string),
 ) (*exec.Cmd, error) {
-	args, err := BuildHLSArgs(sourcePath, outDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio)
+	args, err := BuildHLSArgs(sourcePath, outDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, startSec)
 	if err != nil {
 		return nil, err
 	}

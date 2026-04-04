@@ -21,12 +21,12 @@ import (
 // as on-demand: starts from 0, shows full duration bar, allows seeking.
 // FFmpeg produces the actual segment files in the background.
 func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
-	movieID, profile, audioTrack, ok := parseHLSParams(w, r)
+	movieID, profile, audioTrack, startSec, ok := parseHLSParams(w, r)
 	if !ok {
 		return
 	}
 
-	session, err := app.GetOrCreateHLSSession(r.Context(), movieID, profile, audioTrack)
+	session, err := app.GetOrCreateHLSSession(r.Context(), movieID, profile, audioTrack, startSec)
 	if err != nil {
 		app.Logger.Error("hls session failed", "error", err, "movie_id", movieID)
 		helpers.ErrorJSON(w, err, http.StatusBadRequest)
@@ -35,13 +35,17 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
 
-	session.ExitMu.Lock()
-	finalPlaylist := session.FinalPlaylist
-	session.ExitMu.Unlock()
-
 	var playlist string
-	if finalPlaylist != "" {
-		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
+	if session.StartSec == 0 {
+		session.ExitMu.Lock()
+		finalPlaylist := session.FinalPlaylist
+		session.ExitMu.Unlock()
+
+		if finalPlaylist != "" {
+			playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
+		} else {
+			playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+		}
 	} else {
 		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
 	}
@@ -59,7 +63,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 // Waits for the requested segment file to appear on disk (FFmpeg produces
 // them sequentially in the background), then serves it.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
-	movieID, profile, audioTrack, ok := parseHLSParams(w, r)
+	movieID, profile, audioTrack, _, ok := parseHLSParams(w, r)
 	if !ok {
 		return
 	}
@@ -79,12 +83,27 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	session := raw.(*HLSSession)
 	app.RefreshHLSSessionTTL(key, session)
 
-	filePath := filepath.Join(session.TempDir, filename)
+	diskFilename := filename
+	if filename != helpers.HLS_INIT_FILENAME && session.StartSegment > 0 {
+		reqIdx, parseErr := parseSegmentIndex(filename)
+		if parseErr != nil {
+			helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
+			return
+		}
+		if reqIdx < session.StartSegment {
+			helpers.ErrorJSON(w, errors.New("segment before start offset"), http.StatusNotFound)
+			return
+		}
+		mappedIdx := reqIdx - session.StartSegment
+		diskFilename = fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, mappedIdx, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+	}
+
+	filePath := filepath.Join(session.TempDir, diskFilename)
 
 	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
 	pollCount := 0
 	for time.Now().Before(deadline) {
-		if segmentComplete(session, filename) {
+		if segmentComplete(session, diskFilename) {
 			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
 			http.ServeFile(w, r, filePath)
 			return
@@ -111,26 +130,39 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
 }
 
-func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, profile string, audioTrack int, ok bool) {
+func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, profile string, audioTrack int, startSec float64, ok bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
 		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
-		return 0, "", 0, false
+		return 0, "", 0, 0, false
 	}
 	profile = chi.URLParam(r, "profile")
 	if !helpers.IsAllowedHLSProfile(profile) {
 		helpers.ErrorJSON(w, errors.New("invalid quality profile"), http.StatusBadRequest)
-		return 0, "", 0, false
+		return 0, "", 0, 0, false
 	}
 	if q := r.URL.Query().Get("audio_track"); q != "" {
 		at, err := strconv.Atoi(q)
 		if err != nil || at < 0 {
 			helpers.ErrorJSON(w, errors.New("invalid audio_track"), http.StatusBadRequest)
-			return 0, "", 0, false
+			return 0, "", 0, 0, false
 		}
 		audioTrack = at
 	}
-	return id, profile, audioTrack, true
+	if q := r.URL.Query().Get("start"); q != "" {
+		s, err := strconv.ParseFloat(q, 64)
+		if err != nil || s < 0 {
+			helpers.ErrorJSON(w, errors.New("invalid start parameter"), http.StatusBadRequest)
+			return 0, "", 0, 0, false
+		}
+		startSec = s
+	}
+	return id, profile, audioTrack, startSec, true
+}
+
+func parseSegmentIndex(filename string) (int64, error) {
+	rest := strings.TrimSuffix(strings.TrimPrefix(filename, helpers.HLS_SEGMENT_FILENAME_PREFIX), helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+	return strconv.ParseInt(rest, 10, 64)
 }
 
 // fileReady returns true when the file exists and has content.

@@ -60,14 +60,19 @@ function buildStreamUrl(
   movieId: number,
   mode: StreamModeId,
   audioTrack: number,
+  startSec: number,
 ): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
-  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?audio_track=${audioTrack}`;
+  const params = new URLSearchParams({
+    audio_track: String(audioTrack),
+    start: String(Math.floor(startSec)),
+  });
+  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?${params}`;
 }
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
-  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack } = Route.useSearch();
+  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack, start } = Route.useSearch();
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -84,7 +89,7 @@ function PlayMoviePage() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
 
-  const streamUrl = buildStreamUrl(movieId, mode, audioTrack);
+  const streamUrl = buildStreamUrl(movieId, mode, audioTrack, start);
   const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
 
   const scheduleHideControls = () => {
@@ -143,6 +148,13 @@ function PlayMoviePage() {
     } else {
       navigate({ to: "/movies" });
     }
+  };
+
+  const handleSessionLost = (currentTimeSec: number) => {
+    navigate({
+      search: (prev) => ({ ...prev, start: Math.floor(currentTimeSec) }),
+      replace: true,
+    });
   };
 
   const togglePlay = () => {
@@ -599,6 +611,8 @@ function PlayMoviePage() {
           isFullscreen={isFullscreen}
           onError={msg => setPlaybackError(msg)}
           subtitleTrack={subtitleInfo}
+          startSec={start}
+          onSessionLost={handleSessionLost}
         />
       </div>
 
