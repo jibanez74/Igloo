@@ -67,7 +67,6 @@ func (app *Application) GetOrCreateHLSSession(
 			return session, nil
 		}
 		app.HLSSessionCache.Delete(key)
-		cleanupHLSSession(session)
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
@@ -77,7 +76,6 @@ func (app *Application) GetOrCreateHLSSession(
 				return existing, nil
 			}
 			app.HLSSessionCache.Delete(key)
-			cleanupHLSSession(existing)
 		}
 
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, startSec)

@@ -629,7 +629,7 @@ func (app *Application) ListenForShutdown() {
 	app.Logger.Info("shutting down server...")
 
 	// Create a context with timeout for graceful shutdown.
-	// Gives in-flight requests 10 seconds to complete.
+	// Gives in-flight requests 30 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
