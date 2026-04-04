@@ -132,7 +132,12 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 		}
 
 		// File is new or size changed - process it
-		err = app.processTrackFile(ctx, qtx, file.path, file.ext)
+		// Use savepoint to allow per-track rollback on failure while continuing with other tracks.
+		savepointName := fmt.Sprintf("sp_track_%d", scanned+skipped+errCount)
+
+		err = manageSavepoint(ctx, tx, savepointName, func() error {
+			return app.processTrackFile(ctx, qtx, file.path, file.ext)
+		})
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
 			errCount++
@@ -145,14 +150,14 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 	err = tx.Commit()
 	if err != nil {
 		processedCount := scanned + skipped + errCount
-		successCount := scanned + skipped
-		failedCount := errCount
+		successCount := 0
+		failedCount := processedCount
 
 		app.Logger.Error(fmt.Sprintf(
 			"failed to commit batch: %s, processed=%d, succeeded=%d, failed=%d",
 			err.Error(), processedCount, successCount, failedCount,
 		))
-		return scanned, skipped, errCount
+		return 0, 0, processedCount
 	}
 
 	return scanned, skipped, errCount

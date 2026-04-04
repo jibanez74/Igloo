@@ -9,10 +9,6 @@ SELECT 1 FROM movies WHERE file_path = ? AND size = ? LIMIT 1;
 -- name: GetMovieByID :one
 SELECT * FROM movies WHERE id = ? LIMIT 1;
 
--- name: GetMovieByTmdbID :one
--- When multiple rows share the same tmdb_id, returns the one with smallest id.
-SELECT * FROM movies WHERE tmdb_id = ? ORDER BY id ASC LIMIT 1;
-
 -- name: GetLatestMovies :many
 SELECT id, title, poster_path, year, certification
 FROM movies
@@ -474,4 +470,3 @@ SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER
 
 -- name: GetMoviesByGenreDesc :many
 SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC, m.id DESC LIMIT ? OFFSET ?;
-

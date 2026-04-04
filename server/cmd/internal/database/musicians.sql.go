@@ -86,28 +86,6 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 	return i, err
 }
 
-const getMusicianByName = `-- name: GetMusicianByName :one
-SELECT id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at FROM musicians WHERE name = ? LIMIT 1
-`
-
-func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
-	row := q.queryRow(ctx, q.getMusicianByNameStmt, getMusicianByName, name)
-	var i Musician
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.SortName,
-		&i.Summary,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.SpotifyFollowers,
-		&i.Thumb,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
 SELECT id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at FROM musicians WHERE spotify_id = ? LIMIT 1
 `
@@ -231,48 +209,6 @@ func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]G
 	return items, nil
 }
 
-const getMusiciansNeedingThumbDownload = `-- name: GetMusiciansNeedingThumbDownload :many
-SELECT id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at FROM musicians
-WHERE
-  thumb IS NOT NULL
-  AND thumb != ''
-  AND thumb LIKE 'http%'
-`
-
-func (q *Queries) GetMusiciansNeedingThumbDownload(ctx context.Context) ([]Musician, error) {
-	rows, err := q.query(ctx, q.getMusiciansNeedingThumbDownloadStmt, getMusiciansNeedingThumbDownload)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Musician{}
-	for rows.Next() {
-		var i Musician
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.SortName,
-			&i.Summary,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.SpotifyFollowers,
-			&i.Thumb,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getTracksByMusicianID = `-- name: GetTracksByMusicianID :many
 SELECT
   t.id,
@@ -342,22 +278,6 @@ func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.Null
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateMusicianThumb = `-- name: UpdateMusicianThumb :exec
-UPDATE musicians
-SET thumb = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-`
-
-type UpdateMusicianThumbParams struct {
-	Thumb sql.NullString `json:"thumb"`
-	ID    int64          `json:"id"`
-}
-
-func (q *Queries) UpdateMusicianThumb(ctx context.Context, arg UpdateMusicianThumbParams) error {
-	_, err := q.exec(ctx, q.updateMusicianThumbStmt, updateMusicianThumb, arg.Thumb, arg.ID)
-	return err
 }
 
 const upsertMusician = `-- name: UpsertMusician :one

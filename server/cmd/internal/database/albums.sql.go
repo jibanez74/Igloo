@@ -68,35 +68,6 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullStr
 	return i, err
 }
 
-const getAlbumByTitleAndMusician = `-- name: GetAlbumByTitleAndMusician :one
-SELECT id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at FROM albums WHERE title = ? AND musician = ? LIMIT 1
-`
-
-type GetAlbumByTitleAndMusicianParams struct {
-	Title    string         `json:"title"`
-	Musician sql.NullString `json:"musician"`
-}
-
-func (q *Queries) GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error) {
-	row := q.queryRow(ctx, q.getAlbumByTitleAndMusicianStmt, getAlbumByTitleAndMusician, arg.Title, arg.Musician)
-	var i Album
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.SortTitle,
-		&i.SpotifyID,
-		&i.SpotifyPopularity,
-		&i.Musician,
-		&i.ReleaseDate,
-		&i.Year,
-		&i.TotalTracks,
-		&i.Cover,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getAlbumsAlphabetical = `-- name: GetAlbumsAlphabetical :many
 SELECT id, title, cover, musician, year
 FROM albums
@@ -153,50 +124,6 @@ func (q *Queries) GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphab
 	return items, nil
 }
 
-const getAlbumsNeedingCoverDownload = `-- name: GetAlbumsNeedingCoverDownload :many
-SELECT id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at FROM albums
-WHERE
-  cover IS NOT NULL
-  AND cover != ''
-  AND cover LIKE 'http%'
-`
-
-func (q *Queries) GetAlbumsNeedingCoverDownload(ctx context.Context) ([]Album, error) {
-	rows, err := q.query(ctx, q.getAlbumsNeedingCoverDownloadStmt, getAlbumsNeedingCoverDownload)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Album{}
-	for rows.Next() {
-		var i Album
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.SortTitle,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.Musician,
-			&i.ReleaseDate,
-			&i.Year,
-			&i.TotalTracks,
-			&i.Cover,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT id, title, cover, musician, year
 FROM albums
@@ -239,22 +166,6 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateAlbumCover = `-- name: UpdateAlbumCover :exec
-UPDATE albums
-SET cover = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-`
-
-type UpdateAlbumCoverParams struct {
-	Cover sql.NullString `json:"cover"`
-	ID    int64          `json:"id"`
-}
-
-func (q *Queries) UpdateAlbumCover(ctx context.Context, arg UpdateAlbumCoverParams) error {
-	_, err := q.exec(ctx, q.updateAlbumCoverStmt, updateAlbumCover, arg.Cover, arg.ID)
-	return err
 }
 
 const upsertAlbum = `-- name: UpsertAlbum :one

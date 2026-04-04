@@ -2,6 +2,7 @@ package spotify
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"igloo/cmd/internal/helpers"
@@ -36,6 +37,10 @@ func New(clientID, clientSecret string) (SpotifyInterface, error) {
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		TokenURL:     "https://accounts.spotify.com/api/token",
+	}
+
+	if _, err := config.Token(ctx); err != nil {
+		return nil, fmt.Errorf("failed to get spotify token: %w", err)
 	}
 
 	httpClient := config.Client(ctx)

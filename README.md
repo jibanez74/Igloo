@@ -4,7 +4,7 @@ The goal of this project is to build a modern, inclusive media system that prior
 At its core, this system is hyper-focused on media playback, supporting a wide range of codecs while maintaining a strong commitment to accessibility—especially for blind users. As a blind developer, I created this system to ensure that I can fully manage and enjoy my own media environment without missing out on any features or relying on others. Accessibility is not treated as an afterthought, but as a fundamental requirement.
 This project is also deeply personal. In my family, we value the experience of watching movies together, enjoying music, and revisiting photos and videos that hold meaningful memories. As the person responsible for managing our technology, I need tools that are both powerful and accessible—tools that won’t fail because of inaccessible interfaces or overlooked details. This system is built to meet that need, empowering not only me but other blind users to independently manage and enjoy their own media ecosystems.
 
-This project is currently in active development and has not yet reached its first stable release. Igloo is being built as a focused media server platform for movies, TV shows, personal videos, and music, with multiple clients planned over time.
+Igloo is currently in active development and has not yet reached its first stable release. It is being built as a focused media server platform for movies, TV shows, personal videos, and music, with multiple clients planned over time.
 
 This repository contains the Igloo server, including the Go backend, APIs, media indexing and management logic, playback and transcoding workflows, and the React-based web client. The web client is part of this repository, but it is only one client of the platform. Dedicated TV and mobile clients are planned as separate applications that will connect to the same server.
 
@@ -18,7 +18,7 @@ For photos, Igloo is intended to integrate with Immich instead of duplicating fu
 
 ## Project Status
 
-Igloo is currently in full development and has not yet reached its first stable release. APIs, features, playback workflows, and client applications are still evolving.
+APIs, features, playback workflows, and client applications are still evolving.
 
 The current focus is the server platform and the React web client contained in this repository. Dedicated TV and mobile clients are planned as separate projects.
 
@@ -72,6 +72,8 @@ DB_PATH=igloo.db
 STATIC_DIR=static
 LOGS_DIR=logs
 TMDB_API_KEY=your_tmdb_v3_key
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 MOVIES_DIR=/path/to/movies
 MUSIC_DIR=/path/to/music
 SHOWS_DIR=/path/to/shows
@@ -85,6 +87,7 @@ Notes:
 
 - `HARDWARE_ACCELERATION_DEVICE`: `cpu`, `apple`, `nvidia`, or `intel`
 - `TMDB_API_KEY`: enables movie matching, in-theaters data, and background movie scanning when `MOVIES_DIR` is configured
+- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`: optional, but required if you want Spotify-based music metadata and cover enrichment
 - `JELLYFIN_TOKEN`: optional and only relevant if you are using Jellyfin-related integrations
 
 ### 2. Start the backend
@@ -96,6 +99,8 @@ make dev
 ```
 
 This runs sqlc generation, syncs the schema into `cmd/api`, and starts the server with `VITE_DEV_SERVER=http://localhost:3000` so the backend can hand browser requests off to the Vite app during development.
+
+Before running this, make sure the required FFmpeg and ffprobe binaries are present under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` as described above.
 
 ### 3. Start the web client
 
@@ -114,6 +119,8 @@ On a fresh database, if no admin exists, the server creates:
 
 - Email: `admin@sample.com`
 - Password: `AdminPassword`
+
+Change this password immediately after first login. These credentials are only intended as a bootstrap account for local setup.
 
 ## Production Build
 
@@ -193,6 +200,8 @@ The server **requires** a valid `server/.env` file for normal startup: `server/c
 | `STATIC_DIR`                             | Static file directory for avatars, downloaded images, and related assets |
 | `LOGS_DIR`                               | Log directory when not running in debug mode                             |
 | `TMDB_API_KEY`                           | TMDB API v3 key                                                          |
+| `SPOTIFY_CLIENT_ID`                     | Spotify client ID for optional music metadata enrichment                 |
+| `SPOTIFY_CLIENT_SECRET`                 | Spotify client secret for optional music metadata enrichment             |
 | `JELLYFIN_TOKEN`                         | Optional Jellyfin integration token                                      |
 | `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories                                           |
 | `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded                            |
@@ -205,7 +214,9 @@ The server **requires** a valid `server/.env` file for normal startup: `server/c
 From `server/`:
 
 ```bash
-go test ./...
+make test
 ```
+
+This runs `go test -v ./...`.
 
 Some tests may rely on fixtures or external APIs depending on the package being tested.

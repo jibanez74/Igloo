@@ -1,9 +1,6 @@
 -- name: GetAlbumByID :one
 SELECT * FROM albums WHERE id = ? LIMIT 1;
 
--- name: GetAlbumByTitleAndMusician :one
-SELECT * FROM albums WHERE title = ? AND musician = ? LIMIT 1;
-
 -- name: GetAlbumBySpotifyID :one
 SELECT * FROM albums WHERE spotify_id = ? LIMIT 1;
 
@@ -50,18 +47,6 @@ UPDATE SET
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
-
--- name: UpdateAlbumCover :exec
-UPDATE albums
-SET cover = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
-
--- name: GetAlbumsNeedingCoverDownload :many
-SELECT * FROM albums
-WHERE
-  cover IS NOT NULL
-  AND cover != ''
-  AND cover LIKE 'http%';
 
 -- name: DeleteAlbum :exec
 DELETE FROM albums

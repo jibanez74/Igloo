@@ -1,6 +1,3 @@
--- name: GetMusicianByName :one
-SELECT * FROM musicians WHERE name = ? LIMIT 1;
-
 -- name: GetMusicianBySpotifyID :one
 SELECT * FROM musicians WHERE spotify_id = ? LIMIT 1;
 
@@ -50,18 +47,6 @@ ORDER BY
   END,
   m.sort_name
 LIMIT ? OFFSET ?;
-
--- name: UpdateMusicianThumb :exec
-UPDATE musicians
-SET thumb = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
-
--- name: GetMusiciansNeedingThumbDownload :many
-SELECT * FROM musicians
-WHERE
-  thumb IS NOT NULL
-  AND thumb != ''
-  AND thumb LIKE 'http%';
 
 -- name: GetMusicianByID :one
 SELECT * FROM musicians WHERE id = ? LIMIT 1;
