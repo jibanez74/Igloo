@@ -117,9 +117,11 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
       }`;
     }
 
-    // Album: hover reveal only
+    // Album: hover on desktop; always visible on touch / small screens
     return `${baseClasses} ${
-      isCurrentTrack ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      isCurrentTrack
+        ? "opacity-100"
+        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
     }`;
   };
 

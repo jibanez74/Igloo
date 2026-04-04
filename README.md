@@ -6,7 +6,7 @@ This project is currently in active development and has not yet reached its firs
 
 This repository contains the Igloo server, including the Go backend, APIs, media indexing and management logic, playback and transcoding workflows, and the React-based web client. The web client is part of this repository, but it is only one client of the platform. Dedicated TV and mobile clients are planned as separate applications that will connect to the same server.
 
-Igloo exists in part because current media servers, while powerful, still leave important accessibility gaps. The goal is to build a more modern and more inclusive system that works especially well for people who value accessible interfaces and dependable local media playback.
+Igloo exists in part because current media servers, while powerful, still leave important accessibility gaps. 
 
 Igloo is intentionally focused on personal media libraries and local playback. Rather than trying to reproduce every feature found in larger media platforms, it focuses on a smaller set of core capabilities done well. Features such as live TV, torrent integrations, and large plugin ecosystems are outside the current scope.
 
