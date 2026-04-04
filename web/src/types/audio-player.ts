@@ -55,6 +55,9 @@ export type AudioPlayerControls = {
   // Stop playback and clear the player
   stop: () => void;
 
+  // Pause playback without clearing the player
+  pause: () => void;
+
   togglePlay: () => void;
   isPlaying: boolean;
 
@@ -66,6 +69,11 @@ export type AudioPlayerControls = {
 
   // Minimize the player to the bottom bar
   minimize: () => void;
+
+  // Suspend/resume global keyboard shortcuts (used when another player has focus)
+  isKeyboardSuspended: boolean;
+  suspendKeyboard: () => void;
+  resumeKeyboard: () => void;
 };
 
 // Combined audio player context type

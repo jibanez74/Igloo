@@ -19,6 +19,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 const trailerSearchSchema = z.object({
   mediaType: z.enum(["movie", "tv"]).optional(),
@@ -48,9 +49,18 @@ function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
+  const audioPlayer = useAudioPlayer();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (audioPlayer.isPlaying) {
+      audioPlayer.pause();
+    }
+    audioPlayer.suspendKeyboard();
+    return () => audioPlayer.resumeKeyboard();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
   const shouldFetchMovie =

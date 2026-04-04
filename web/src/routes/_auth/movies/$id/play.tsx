@@ -33,6 +33,7 @@ import {
 } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { playSearchSchema } from "@/types/movie-play";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: zodSearchValidator(playSearchSchema),
@@ -76,11 +77,20 @@ function PlayMoviePage() {
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
+  const audioPlayer = useAudioPlayer();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (audioPlayer.isPlaying) {
+      audioPlayer.pause();
+    }
+    audioPlayer.suspendKeyboard();
+    return () => audioPlayer.resumeKeyboard();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

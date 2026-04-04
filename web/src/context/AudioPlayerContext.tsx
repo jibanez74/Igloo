@@ -43,11 +43,15 @@ const defaultContext: AudioPlayerContextType = {
   startPlayAllPlayback: async () => {},
   setTrack: () => {},
   stop: () => {},
+  pause: () => {},
   togglePlay: () => {},
   isPlaying: false,
   isExpanded: false,
   expand: () => {},
   minimize: () => {},
+  isKeyboardSuspended: false,
+  suspendKeyboard: () => {},
+  resumeKeyboard: () => {},
 };
 
 const AudioPlayerContext =
@@ -61,6 +65,7 @@ export function AudioPlayerProvider({
   const [state, setState] = useState<AudioPlayerState>(initialState);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isKeyboardSuspended, setIsKeyboardSuspended] = useState(false);
   const isFetchingMoreRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -384,7 +389,10 @@ export function AudioPlayerProvider({
     setIsExpanded(false);
   };
 
-  // Toggle play/pause
+  const pause = () => {
+    audioRef.current?.pause();
+  };
+
   const togglePlay = () => {
     if (!audioRef.current) return;
 
@@ -394,6 +402,9 @@ export function AudioPlayerProvider({
       audioRef.current.play();
     }
   };
+
+  const suspendKeyboard = () => setIsKeyboardSuspended(true);
+  const resumeKeyboard = () => setIsKeyboardSuspended(false);
 
   // Expand player to fullscreen
   const expand = () => {
@@ -419,11 +430,15 @@ export function AudioPlayerProvider({
     startPlayAllPlayback,
     setTrack,
     stop,
+    pause,
     togglePlay,
     isPlaying,
     isExpanded,
     expand,
     minimize,
+    isKeyboardSuspended,
+    suspendKeyboard,
+    resumeKeyboard,
   };
 
   return (
@@ -443,6 +458,7 @@ export function AudioPlayerProvider({
         isExpanded={isExpanded}
         onMinimize={minimize}
         onExpand={expand}
+        isKeyboardSuspended={isKeyboardSuspended}
       />
     </AudioPlayerContext.Provider>
   );
