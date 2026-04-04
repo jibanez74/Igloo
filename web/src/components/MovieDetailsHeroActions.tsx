@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Play,
@@ -41,9 +42,12 @@ export default function MovieDetailsHeroActions({
   deleteOpen,
   onDeleteOpenChange,
 }: MovieDetailsHeroActionsProps) {
+  const playButtonRef = useRef<HTMLAnchorElement | null>(null);
+
   return (
     <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start">
       <Link
+        ref={playButtonRef}
         to="/movies/$id/play"
         params={{ id: String(movieId) }}
         search={{
@@ -112,6 +116,7 @@ export default function MovieDetailsHeroActions({
         onOpenChange={onPlaybackSettingsOpenChange}
         settings={playbackSettings}
         onSave={onPlaybackSettingsChange}
+        restoreFocusRef={playButtonRef}
       />
 
       {user?.is_admin && (

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import type { RefObject } from "react";
 
 type PlaybackSettingsDialogProps = {
   movieId: number;
@@ -35,6 +36,7 @@ type PlaybackSettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   settings: PlaybackSettings;
   onSave: (settings: PlaybackSettings) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 export default function PlaybackSettingsDialog({
@@ -43,6 +45,7 @@ export default function PlaybackSettingsDialog({
   onOpenChange,
   settings,
   onSave,
+  restoreFocusRef,
 }: PlaybackSettingsDialogProps) {
   const [mode, setMode] = useState<StreamModeId>(settings.mode);
   const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
@@ -97,7 +100,16 @@ export default function PlaybackSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        onCloseAutoFocus={event => {
+          const restoreTarget = restoreFocusRef?.current;
+          if (!restoreTarget) return;
+
+          event.preventDefault();
+          restoreTarget.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-white">Playback Settings</DialogTitle>
           <DialogDescription className="text-slate-400">
