@@ -7,7 +7,7 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-func (s *spotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error) {
+func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, query string) (*spotify.FullAlbum, error) {
 	if query == "" {
 		return nil, fmt.Errorf("search query cannot be empty")
 	}
@@ -17,20 +17,18 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(query string) (*spotify.FullAlb
 		return cached, nil
 	}
 
-	ctx := context.Background()
-
 	results, err := s.client.Search(ctx, query, spotify.SearchTypeAlbum, spotify.Limit(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to search albums for query '%s': %w", query, err)
+		return nil, err
 	}
 
 	if len(results.Albums.Albums) == 0 {
 		return nil, fmt.Errorf("no albums found for query '%s'", query)
 	}
 
-	albumID := results.Albums.Albums[0].ID.String()
+	albumID := results.Albums.Albums[0].ID
 
-	album, err := s.client.GetAlbum(ctx, spotify.ID(albumID))
+	album, err := s.client.GetAlbum(ctx, albumID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get album details for ID %s: %w", albumID, err)
 	}

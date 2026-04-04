@@ -1,12 +1,14 @@
 # Igloo
 
-Igloo is a self-hosted media center server inspired by Plex and Jellyfin, built for accessible, high-quality playback of personal media libraries.
+The goal of this project is to build a modern, inclusive media system that prioritizes accessible interfaces and dependable local media playback. It is designed to deliver a high-quality experience for users who value reliability, flexibility, and full control over their media.
+At its core, this system is hyper-focused on media playback, supporting a wide range of codecs while maintaining a strong commitment to accessibility—especially for blind users. As a blind developer, I created this system to ensure that I can fully manage and enjoy my own media environment without missing out on any features or relying on others. Accessibility is not treated as an afterthought, but as a fundamental requirement.
+This project is also deeply personal. In my family, we value the experience of watching movies together, enjoying music, and revisiting photos and videos that hold meaningful memories. As the person responsible for managing our technology, I need tools that are both powerful and accessible—tools that won’t fail because of inaccessible interfaces or overlooked details. This system is built to meet that need, empowering not only me but other blind users to independently manage and enjoy their own media ecosystems.
 
 This project is currently in active development and has not yet reached its first stable release. Igloo is being built as a focused media server platform for movies, TV shows, personal videos, and music, with multiple clients planned over time.
 
 This repository contains the Igloo server, including the Go backend, APIs, media indexing and management logic, playback and transcoding workflows, and the React-based web client. The web client is part of this repository, but it is only one client of the platform. Dedicated TV and mobile clients are planned as separate applications that will connect to the same server.
 
-Igloo exists in part because current media servers, while powerful, still leave important accessibility gaps. 
+Igloo exists in part because current media servers, while powerful, still leave important accessibility gaps.
 
 Igloo is intentionally focused on personal media libraries and local playback. Rather than trying to reproduce every feature found in larger media platforms, it focuses on a smaller set of core capabilities done well. Features such as live TV, torrent integrations, and large plugin ecosystems are outside the current scope.
 
@@ -23,17 +25,17 @@ The current focus is the server platform and the React web client contained in t
 ## Features
 
 - Movies and TV shows: library scanning, metadata enrichment, artwork, trailers where available, technical media details, watch progress, direct streaming, and HLS playback with hardware-accelerated transcoding where supported
-- Music: albums, tracks, musicians, playlists with collaborators, liked tracks, listening statistics, and cover art sourced through MusicBrainz or Spotify where configured
+- Music: albums, tracks, musicians, playlists with collaborators, liked tracks, listening statistics, and cover art; metadata and cover enrichment use Spotify when it is configured (Spotify is optional), and when Spotify is not configured the system relies on basic file metadata only
 - Accounts and settings: session-based authentication with SQLite-backed users and application settings
 - Multi-client platform: the server exposes APIs used by the built-in web client in this repository and by future dedicated TV and mobile clients
 
 ## Repository Layout
 
-| Path | Purpose |
-| --- | --- |
-| `server/` | Go server, API, embedded schema, sqlc queries, and media tooling wrappers |
+| Path           | Purpose                                                                            |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `server/`      | Go server, API, embedded schema, sqlc queries, and media tooling wrappers          |
 | `server/sqlc/` | SQL schema and queries; generated Go code lives in `server/cmd/internal/database/` |
-| `web/` | React-based web client built and served by the Igloo server |
+| `web/`         | React-based web client built and served by the Igloo server                        |
 
 ## Prerequisites
 
@@ -144,16 +146,16 @@ Use this only if you are handling web assets separately or copying them yourself
 
 ## Useful Make Targets
 
-| Target | Description |
-| --- | --- |
-| `make dev` | Generate sqlc code and run the API with Vite development URL support |
-| `make generate` | Run `sqlc generate` and sync `schema.sql` into `cmd/api` |
-| `make build` | Build the `igloo-server` binary for the current platform |
-| `make build-web` | Build the web client into `web/dist` |
-| `make build-full` | Build the web client and embed it into the server binary |
-| `make build-mac` / `make build-linux` | Cross-compile the backend |
-| `make test` | Run `go test -v ./...` |
-| `make clean` | Remove generated binaries and `web/dist` |
+| Target                                | Description                                                          |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| `make dev`                            | Generate sqlc code and run the API with Vite development URL support |
+| `make generate`                       | Run `sqlc generate` and sync `schema.sql` into `cmd/api`             |
+| `make build`                          | Build the `igloo-server` binary for the current platform             |
+| `make build-web`                      | Build the web client into `web/dist`                                 |
+| `make build-full`                     | Build the web client and embed it into the server binary             |
+| `make build-mac` / `make build-linux` | Cross-compile the backend                                            |
+| `make test`                           | Run `go test -v ./...`                                               |
+| `make clean`                          | Remove generated binaries and `web/dist`                             |
 
 ## Database and SQL
 
@@ -172,31 +174,31 @@ make generate
 
 ## Frontend Scripts
 
-| Script | Description |
-| --- | --- |
-| `bun run dev` | Start the Vite development server |
-| `bun run build` | Type-check and build the production bundle |
-| `bun run lint` | Run ESLint |
-| `bun run preview` | Preview the production build |
+| Script            | Description                                |
+| ----------------- | ------------------------------------------ |
+| `bun run dev`     | Start the Vite development server          |
+| `bun run build`   | Type-check and build the production bundle |
+| `bun run lint`    | Run ESLint                                 |
+| `bun run preview` | Preview the production build               |
 
 ## Configuration Reference
 
-Variables are read from `server/.env` when present and may also be provided through the process environment.
+The server **requires** a valid `server/.env` file for normal startup: `server/cmd/api/main.go` calls `godotenv.Load()`, and if that call returns an error (for example when the file is missing or cannot be read), the process exits immediately with `log.Fatal(err)`. After a successful load, variables may still be overridden by the process environment where your deployment sets them.
 
-| Variable | Role |
-| --- | --- |
-| `PORT` | HTTP listen port |
-| `DB_PATH` | SQLite database file path |
-| `DEBUG` | Enables debug-friendly behavior such as stdout logging |
-| `STATIC_DIR` | Static file directory for avatars, downloaded images, and related assets |
-| `LOGS_DIR` | Log directory when not running in debug mode |
-| `TMDB_API_KEY` | TMDB API v3 key |
-| `JELLYFIN_TOKEN` | Optional Jellyfin integration token |
-| `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories |
-| `DOWNLOAD_IMAGES` | Controls whether remote images are downloaded |
-| `ENABLE_LOGGER` / `ENABLE_WATCHER` | Feature flags for logging and watchers |
-| `HARDWARE_ACCELERATION_DEVICE` | Transcoding target: `cpu`, `apple`, `nvidia`, or `intel` |
-| `VITE_DEV_SERVER` | Development URL used to hand off browser requests to the Vite app |
+| Variable                                 | Role                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------ |
+| `PORT`                                   | HTTP listen port                                                         |
+| `DB_PATH`                                | SQLite database file path                                                |
+| `DEBUG`                                  | Enables debug-friendly behavior such as stdout logging                   |
+| `STATIC_DIR`                             | Static file directory for avatars, downloaded images, and related assets |
+| `LOGS_DIR`                               | Log directory when not running in debug mode                             |
+| `TMDB_API_KEY`                           | TMDB API v3 key                                                          |
+| `JELLYFIN_TOKEN`                         | Optional Jellyfin integration token                                      |
+| `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories                                           |
+| `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded                            |
+| `ENABLE_LOGGER` / `ENABLE_WATCHER`       | Feature flags for logging and watchers                                   |
+| `HARDWARE_ACCELERATION_DEVICE`           | Transcoding target: `cpu`, `apple`, `nvidia`, or `intel`                 |
+| `VITE_DEV_SERVER`                        | Development URL used to hand off browser requests to the Vite app        |
 
 ## Testing
 

@@ -6,6 +6,16 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
+func compactFIFOKeys(keys []string) []string {
+	if len(keys) <= 1 {
+		return nil
+	}
+
+	compacted := make([]string, len(keys)-1)
+	copy(compacted, keys[1:])
+	return compacted
+}
+
 func (c *spotifyClient) getArtist(key string) (*spotify.FullArtist, bool) {
 	c.artistMu.RLock()
 	defer c.artistMu.RUnlock()
@@ -25,7 +35,7 @@ func (c *spotifyClient) setArtist(key string, artist *spotify.FullArtist) {
 
 	if len(c.artistCache) >= helpers.SPOTIFY_ARTIST_MAX_CACHE {
 		oldestKey := c.artistKeys[0]
-		c.artistKeys = c.artistKeys[1:]
+		c.artistKeys = compactFIFOKeys(c.artistKeys)
 		delete(c.artistCache, oldestKey)
 	}
 
@@ -52,7 +62,7 @@ func (c *spotifyClient) setAlbum(key string, album *spotify.FullAlbum) {
 
 	if len(c.albumCache) >= helpers.SPOTIFY_ALBUM_MAX_CACHE {
 		oldestKey := c.albumKeys[0]
-		c.albumKeys = c.albumKeys[1:]
+		c.albumKeys = compactFIFOKeys(c.albumKeys)
 		delete(c.albumCache, oldestKey)
 	}
 
@@ -65,7 +75,7 @@ func (c *spotifyClient) clearArtistCache() {
 	defer c.artistMu.Unlock()
 
 	c.artistCache = make(map[string]*spotify.FullArtist)
-	c.artistKeys = make([]string, 0, helpers.SPOTIFY_ARTIST_MAX_CACHE)
+	c.artistKeys = nil
 }
 
 func (c *spotifyClient) clearAlbumCache() {
@@ -73,7 +83,7 @@ func (c *spotifyClient) clearAlbumCache() {
 	defer c.albumMu.Unlock()
 
 	c.albumCache = make(map[string]*spotify.FullAlbum)
-	c.albumKeys = make([]string, 0, helpers.SPOTIFY_ALBUM_MAX_CACHE)
+	c.albumKeys = nil
 }
 
 func (c *spotifyClient) ClearAllCaches() {

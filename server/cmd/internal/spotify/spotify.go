@@ -13,8 +13,8 @@ import (
 )
 
 type SpotifyInterface interface {
-	SearchAndGetAlbumDetails(query string) (*spotify.FullAlbum, error)
-	SearchArtistByName(artistName string) (*spotify.FullArtist, error)
+	SearchAndGetAlbumDetails(ctx context.Context, query string) (*spotify.FullAlbum, error)
+	SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error)
 	ClearAllCaches()
 }
 

@@ -55,7 +55,7 @@ func generateMusicianSummary(artist *spotify.FullArtist) string {
 	case followers >= 100_000:
 		parts = append(parts, fmt.Sprintf("with %dK followers on Spotify", followers/1_000))
 	case followers >= 1_000:
-		parts = append(parts, fmt.Sprintf("with %dK followers on Spotify", followers/1_000))
+		parts = append(parts, fmt.Sprintf("with %.1fK followers on Spotify", float64(followers)/1_000))
 	default:
 		parts = append(parts, fmt.Sprintf("with %d followers on Spotify", followers))
 	}
@@ -69,7 +69,7 @@ func generateMusicianSummary(artist *spotify.FullArtist) string {
 func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Queries, name, sortName string) (*database.Musician, error) {
 	// Try Spotify lookup first if configured
 	if app.Spotify != nil {
-		artist, err := app.Spotify.SearchArtistByName(name)
+		artist, err := app.Spotify.SearchArtistByName(ctx, name)
 		if err == nil && artist != nil {
 			// Check if we already have this Spotify artist
 			existing, err := qtx.GetMusicianBySpotifyID(ctx, sql.NullString{String: artist.ID.String(), Valid: true})
@@ -153,17 +153,49 @@ func (app *Application) processSpotifyGenres(ctx context.Context, qtx *database.
 	}
 }
 
+// processSpotifyAlbumGenres creates genre entries and album-genre relationships
+// for each genre provided by Spotify's album data.
+func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *database.Queries, albumID int64, spotifyGenres []string) {
+	for _, genreTag := range spotifyGenres {
+		genre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
+			Tag:       genreTag,
+			GenreType: "music",
+		})
+		if err != nil {
+			app.Logger.Warn("failed to get/create Spotify genre for album",
+				"error", err,
+				"genre", genreTag,
+			)
+			continue
+		}
+
+		err = qtx.UpsertAlbumGenre(ctx, database.UpsertAlbumGenreParams{
+			AlbumID: albumID,
+			GenreID: genre.ID,
+		})
+		if err != nil {
+			app.Logger.Warn("failed to create album-genre relationship for Spotify genre",
+				"error", err,
+				"album_id", albumID,
+				"genre_id", genre.ID,
+				"genre", genreTag,
+			)
+		}
+	}
+}
+
 // getOrCreateAlbum looks up or creates an album in the database.
 // If Spotify is configured, attempts to enrich the data with Spotify info.
 // Falls back to basic metadata if Spotify lookup fails.
 func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, error) {
 	// Try Spotify lookup first if configured
 	if app.Spotify != nil {
-		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(title)
+		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title)
 		if err == nil && albumDetails != nil {
 			// Check if we already have this Spotify album
 			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
 			if err == nil {
+				app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
 				return &existing, nil
 			}
 
@@ -197,6 +229,7 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 			if err != nil {
 				return nil, err
 			}
+			app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
 			return &album, nil
 		}
 		// Spotify failed, continue with basic metadata (silent failure as per design)

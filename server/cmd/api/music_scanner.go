@@ -138,8 +138,15 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 
 	err = tx.Commit()
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", err.Error()))
-		return 0, 0, len(files)
+		processedCount := scanned + skipped + errCount
+		successCount := scanned + skipped
+		failedCount := errCount
+
+		app.Logger.Error(fmt.Sprintf(
+			"failed to commit batch: %s, processed=%d, succeeded=%d, failed=%d",
+			err.Error(), processedCount, successCount, failedCount,
+		))
+		return scanned, skipped, errCount
 	}
 
 	return scanned, skipped, errCount
