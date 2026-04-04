@@ -75,7 +75,7 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
           <SpotifyGlyph className="size-4 shrink-0 text-green-500" />
           <span>Spotify popularity</span>
         </span>
-        <span className="shrink-0 font-semibold tabular-nums text-green-400">
+        <span className="shrink-0 font-semibold text-green-400 tabular-nums">
           {pct}
         </span>
       </div>
@@ -188,7 +188,7 @@ function AlbumDetailsSkeleton() {
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
               <div className="h-12 w-full rounded-full bg-slate-800 sm:w-32" />
               <div className="h-12 w-full rounded-full bg-slate-800 sm:w-24" />
-              <div className="mx-auto h-12 w-12 rounded-full bg-slate-800 sm:mx-0" />
+              <div className="mx-auto size-12 rounded-full bg-slate-800 sm:mx-0" />
             </div>
           </div>
         </div>
@@ -548,7 +548,7 @@ function AlbumDetailsContent({
         <div
           className={cn(
             MOVIE_DETAILS_CONTENT_ENTER_CLASS,
-            "delay-150 motion-reduce:delay-0 space-y-8 sm:space-y-10",
+            "space-y-8 delay-150 motion-reduce:delay-0 sm:space-y-10",
           )}
         >
           <section className="min-w-0" aria-labelledby="tracklist-heading">
@@ -641,7 +641,7 @@ function AlbumDetailsContent({
                     Spotify popularity
                   </dt>
                   <dd className="mt-1 flex items-baseline gap-2 text-white">
-                    <span className="text-lg font-semibold tabular-nums text-green-400">
+                    <span className="text-lg font-semibold text-green-400 tabular-nums">
                       {Math.round(spotifyPopularity)}
                     </span>
                     <span className="text-slate-500">/ 100</span>

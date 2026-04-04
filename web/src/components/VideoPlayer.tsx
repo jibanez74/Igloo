@@ -123,7 +123,7 @@ export default function VideoPlayer({
         video.removeChild(track);
       }
     };
-  }, [subtitleTrack?.url, videoRef]);
+  }, [subtitleTrack, videoRef]);
 
   return (
     <div
