@@ -16,7 +16,7 @@ type Querier interface {
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
-	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (CheckTrackUnchangedRow, error)
+	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
@@ -62,7 +62,6 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
-	GetAlbumByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
 	GetAlbumByTitleAndMusician(ctx context.Context, arg GetAlbumByTitleAndMusicianParams) (Album, error)
 	// Returns albums sorted alphabetically by title with pagination.
@@ -109,7 +108,6 @@ type Querier interface {
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
-	GetMusicianByMusicBrainzID(ctx context.Context, musicbrainzID sql.NullString) (Musician, error)
 	GetMusicianByName(ctx context.Context, name string) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.

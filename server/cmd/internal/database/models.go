@@ -12,7 +12,6 @@ type Album struct {
 	ID                int64           `json:"id"`
 	Title             string          `json:"title"`
 	SortTitle         string          `json:"sort_title"`
-	MusicbrainzID     sql.NullString  `json:"musicbrainz_id"`
 	SpotifyID         sql.NullString  `json:"spotify_id"`
 	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
 	Musician          sql.NullString  `json:"musician"`
@@ -131,7 +130,6 @@ type Musician struct {
 	Name              string          `json:"name"`
 	SortName          string          `json:"sort_name"`
 	Summary           sql.NullString  `json:"summary"`
-	MusicbrainzID     sql.NullString  `json:"musicbrainz_id"`
 	SpotifyID         sql.NullString  `json:"spotify_id"`
 	SpotifyPopularity sql.NullFloat64 `json:"spotify_popularity"`
 	SpotifyFollowers  sql.NullInt64   `json:"spotify_followers"`

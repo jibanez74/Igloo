@@ -115,12 +115,18 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 
 	for _, file := range files {
 		// Check if track exists with same path and size (file unchanged)
-		_, err = qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
+		unchanged, err := qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
 			FilePath: file.path,
 			Size:     file.size,
 		})
 
-		if err == nil {
+		if err != nil {
+			app.Logger.Error(fmt.Sprintf("failed to check track state for %s: %s", file.path, err.Error()))
+			errCount++
+			continue
+		}
+
+		if unchanged != 0 {
 			skipped++
 			continue
 		}

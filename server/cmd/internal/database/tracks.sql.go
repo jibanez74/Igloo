@@ -11,10 +11,11 @@ import (
 )
 
 const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
-SELECT file_path, size
-FROM tracks
-WHERE file_path = ? AND size = ?
-LIMIT 1
+SELECT EXISTS(
+  SELECT 1
+  FROM tracks
+  WHERE file_path = ? AND size = ?
+) AS track_exists
 `
 
 type CheckTrackUnchangedParams struct {
@@ -22,16 +23,11 @@ type CheckTrackUnchangedParams struct {
 	Size     int64  `json:"size"`
 }
 
-type CheckTrackUnchangedRow struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-}
-
-func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (CheckTrackUnchangedRow, error) {
+func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error) {
 	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size)
-	var i CheckTrackUnchangedRow
-	err := row.Scan(&i.FilePath, &i.Size)
-	return i, err
+	var track_exists int64
+	err := row.Scan(&track_exists)
+	return track_exists, err
 }
 
 const getAlbumsCount = `-- name: GetAlbumsCount :one

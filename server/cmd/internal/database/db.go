@@ -132,9 +132,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumByIDStmt, err = db.PrepareContext(ctx, getAlbumByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumByID: %w", err)
 	}
-	if q.getAlbumByMusicBrainzIDStmt, err = db.PrepareContext(ctx, getAlbumByMusicBrainzID); err != nil {
-		return nil, fmt.Errorf("error preparing query GetAlbumByMusicBrainzID: %w", err)
-	}
 	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
 	}
@@ -227,9 +224,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMusicianByIDStmt, err = db.PrepareContext(ctx, getMusicianByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianByID: %w", err)
-	}
-	if q.getMusicianByMusicBrainzIDStmt, err = db.PrepareContext(ctx, getMusicianByMusicBrainzID); err != nil {
-		return nil, fmt.Errorf("error preparing query GetMusicianByMusicBrainzID: %w", err)
 	}
 	if q.getMusicianByNameStmt, err = db.PrepareContext(ctx, getMusicianByName); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianByName: %w", err)
@@ -629,11 +623,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumByIDStmt: %w", cerr)
 		}
 	}
-	if q.getAlbumByMusicBrainzIDStmt != nil {
-		if cerr := q.getAlbumByMusicBrainzIDStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getAlbumByMusicBrainzIDStmt: %w", cerr)
-		}
-	}
 	if q.getAlbumBySpotifyIDStmt != nil {
 		if cerr := q.getAlbumBySpotifyIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
@@ -787,11 +776,6 @@ func (q *Queries) Close() error {
 	if q.getMusicianByIDStmt != nil {
 		if cerr := q.getMusicianByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicianByIDStmt: %w", cerr)
-		}
-	}
-	if q.getMusicianByMusicBrainzIDStmt != nil {
-		if cerr := q.getMusicianByMusicBrainzIDStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getMusicianByMusicBrainzIDStmt: %w", cerr)
 		}
 	}
 	if q.getMusicianByNameStmt != nil {
@@ -1224,7 +1208,6 @@ type Queries struct {
 	deleteUserStmt                              *sql.Stmt
 	getAdminUserStmt                            *sql.Stmt
 	getAlbumByIDStmt                            *sql.Stmt
-	getAlbumByMusicBrainzIDStmt                 *sql.Stmt
 	getAlbumBySpotifyIDStmt                     *sql.Stmt
 	getAlbumByTitleAndMusicianStmt              *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
@@ -1256,7 +1239,6 @@ type Queries struct {
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
 	getMusicianByIDStmt                         *sql.Stmt
-	getMusicianByMusicBrainzIDStmt              *sql.Stmt
 	getMusicianByNameStmt                       *sql.Stmt
 	getMusicianBySpotifyIDStmt                  *sql.Stmt
 	getMusiciansAlphabeticalStmt                *sql.Stmt
@@ -1370,7 +1352,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteUserStmt:                              q.deleteUserStmt,
 		getAdminUserStmt:                            q.getAdminUserStmt,
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
-		getAlbumByMusicBrainzIDStmt:                 q.getAlbumByMusicBrainzIDStmt,
 		getAlbumBySpotifyIDStmt:                     q.getAlbumBySpotifyIDStmt,
 		getAlbumByTitleAndMusicianStmt:              q.getAlbumByTitleAndMusicianStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
@@ -1402,7 +1383,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
-		getMusicianByMusicBrainzIDStmt:              q.getMusicianByMusicBrainzIDStmt,
 		getMusicianByNameStmt:                       q.getMusicianByNameStmt,
 		getMusicianBySpotifyIDStmt:                  q.getMusicianBySpotifyIDStmt,
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,

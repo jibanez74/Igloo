@@ -1,9 +1,6 @@
 -- name: GetMusicianByName :one
 SELECT * FROM musicians WHERE name = ? LIMIT 1;
 
--- name: GetMusicianByMusicBrainzID :one
-SELECT * FROM musicians WHERE musicbrainz_id = ? LIMIT 1;
-
 -- name: GetMusicianBySpotifyID :one
 SELECT * FROM musicians WHERE spotify_id = ? LIMIT 1;
 
@@ -12,17 +9,15 @@ INSERT INTO musicians (
   name,
   sort_name,
   summary,
-  musicbrainz_id,
   spotify_id,
   spotify_popularity,
   spotify_followers,
   thumb
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (name) DO UPDATE SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
-  musicbrainz_id = COALESCE(excluded.musicbrainz_id, musicians.musicbrainz_id),
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
   spotify_popularity = COALESCE(excluded.spotify_popularity, musicians.spotify_popularity),
   spotify_followers = COALESCE(excluded.spotify_followers, musicians.spotify_followers),
@@ -31,7 +26,7 @@ ON CONFLICT (name) DO UPDATE SET
 RETURNING *;
 
 -- name: GetMusiciansByAlbumID :many
-SELECT m.id, m.name, m.thumb, m.musicbrainz_id
+SELECT m.id, m.name, m.thumb
 FROM musicians m
 INNER JOIN musician_albums ma ON m.id = ma.musician_id
 WHERE ma.album_id = ?
@@ -64,8 +59,9 @@ WHERE id = ?;
 -- name: GetMusiciansNeedingThumbDownload :many
 SELECT * FROM musicians
 WHERE
-  (thumb IS NULL OR thumb = '' OR thumb LIKE 'http%')
-  AND (thumb LIKE 'http%' OR (musicbrainz_id IS NOT NULL AND musicbrainz_id != ''));
+  thumb IS NOT NULL
+  AND thumb != ''
+  AND thumb LIKE 'http%';
 
 -- name: GetMusicianByID :one
 SELECT * FROM musicians WHERE id = ? LIMIT 1;

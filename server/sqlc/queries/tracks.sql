@@ -2,10 +2,11 @@
 SELECT * FROM tracks WHERE id = ? LIMIT 1;
 
 -- name: CheckTrackUnchanged :one
-SELECT file_path, size
-FROM tracks
-WHERE file_path = ? AND size = ?
-LIMIT 1;
+SELECT EXISTS(
+  SELECT 1
+  FROM tracks
+  WHERE file_path = ? AND size = ?
+) AS track_exists;
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (

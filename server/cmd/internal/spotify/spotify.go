@@ -2,13 +2,11 @@ package spotify
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"igloo/cmd/internal/helpers"
 
 	"github.com/zmb3/spotify/v2"
-	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
@@ -37,15 +35,10 @@ func New(clientID, clientSecret string) (SpotifyInterface, error) {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		TokenURL:     spotifyauth.TokenURL,
+		TokenURL:     "https://accounts.spotify.com/api/token",
 	}
 
-	token, err := config.Token(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
-
-	httpClient := spotifyauth.New().Client(ctx, token)
+	httpClient := config.Client(ctx)
 	client := spotify.New(httpClient)
 
 	return &spotifyClient{

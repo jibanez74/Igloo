@@ -113,7 +113,7 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
       return `${baseClasses} ${
         isCurrentTrack
           ? "opacity-100"
-          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
       }`;
     }
 
@@ -121,7 +121,7 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
     return `${baseClasses} ${
       isCurrentTrack
         ? "opacity-100"
-        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
     }`;
   };
 
