@@ -129,6 +129,31 @@ export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
 /** Min ms between `onSessionLost` calls to avoid tight loops when `src` updates re-triggers 404. */
 export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
+/** hls.js: manifest / level / fragment request timeout (ms). */
+export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
+/** hls.js: seconds of buffer to keep behind the playhead. */
+export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 30;
+
+// playback settings dialog (movie play UI)
+export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";
+/** Subtitle `<select>` / Radix value when subtitles are off. */
+export const SUBTITLE_TRACK_SELECT_OFF_VALUE = "off";
+/** Single audio stream placeholder option value/index. */
+export const AUDIO_TRACK_SELECT_DEFAULT_VALUE = "0";
+export const AUDIO_TRACK_DEFAULT_LABEL = "Default";
+export const SUBTITLES_NONE_LABEL = "None";
+/**
+ * Radix Select content uses `data-slot="select-content"` in components/ui/select.tsx.
+ * Used to avoid closing a dialog when interacting with a portaled select.
+ */
+export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
+export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
+  "w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50";
+export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
+  "w-full min-w-0 border-slate-700 bg-slate-800 text-white";
+export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
+  "z-100 border-slate-700 bg-slate-800";
+
 // subtitle codecs that are image-based and cannot be converted to WebVTT
 export const BITMAP_SUBTITLE_CODECS = [
   "hdmv_pgs_subtitle",

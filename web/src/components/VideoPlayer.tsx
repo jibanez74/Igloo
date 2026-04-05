@@ -2,10 +2,15 @@ import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 import type { RefObject } from "react";
 import {
+  HLS_JS_BACK_BUFFER_LENGTH_SEC,
+  HLS_JS_LOAD_TIMEOUT_MS,
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
-import { hlsStreamRecoveryKey } from "@/lib/playback";
+import {
+  hlsStreamRecoveryKey,
+  supportsNativeHLS,
+} from "@/lib/playback";
 
 type SubtitleTrackInfo = {
   url: string;
@@ -23,19 +28,6 @@ type VideoPlayerProps = {
   startSec?: number;
   onSessionLost?: (currentTime: number) => void;
 };
-
-function isHLSUrl(url: string): boolean {
-  return url.endsWith(".m3u8") || url.includes(".m3u8?");
-}
-
-const supportsNativeHLS = (() => {
-  if (typeof document === "undefined") return false;
-  const v = document.createElement("video");
-  return (
-    v.canPlayType("application/vnd.apple.mpegurl") !== "" ||
-    v.canPlayType("application/x-mpegURL") !== ""
-  );
-})();
 
 export default function VideoPlayer({
   videoRef,
@@ -56,7 +48,11 @@ export default function VideoPlayer({
     const video = videoRef.current;
     if (!video || !src) return;
 
-    if (isHLSUrl(src) && Hls.isSupported() && !supportsNativeHLS) {
+    if (
+      (src.endsWith(".m3u8") || src.includes(".m3u8?")) &&
+      Hls.isSupported() &&
+      !supportsNativeHLS
+    ) {
       const recoveryKey = hlsStreamRecoveryKey(src);
       if (sessionRecoveryKeyRef.current !== recoveryKey) {
         sessionRecoveryKeyRef.current = recoveryKey;
@@ -68,10 +64,10 @@ export default function VideoPlayer({
         xhrSetup(xhr) {
           xhr.withCredentials = true;
         },
-        manifestLoadingTimeOut: 120_000,
-        levelLoadingTimeOut: 120_000,
-        fragLoadingTimeOut: 120_000,
-        backBufferLength: 30,
+        manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+        levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+        fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+        backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
       });
       hlsRef.current = hls;
 
@@ -129,7 +125,6 @@ export default function VideoPlayer({
       };
     }
 
-    // Native HLS (Safari) or direct stream
     video.src = src;
     if (startSec > 0) {
       video.addEventListener(
