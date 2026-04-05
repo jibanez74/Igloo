@@ -191,6 +191,7 @@ function PlayMoviePage() {
 
   const streamUrl = buildStreamUrl(movieId, mode, audioTrack, start);
   const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
+  const isHlsPlayback = mode !== "direct";
 
   const scheduleHideControls = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -902,7 +903,7 @@ function PlayMoviePage() {
           isFullscreen={isFullscreen}
           onError={msg => setPlaybackError(msg)}
           subtitleTrack={subtitleInfo}
-          startSec={start}
+          startSec={isHlsPlayback ? 0 : start}
           onSessionLost={handleSessionLost}
         />
       </div>

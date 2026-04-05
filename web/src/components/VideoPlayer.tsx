@@ -78,12 +78,6 @@ export default function VideoPlayer({
       hls.loadSource(src);
       hls.attachMedia(video);
 
-      if (startSec > 0) {
-        hls.once(Hls.Events.MANIFEST_PARSED, () => {
-          video.currentTime = startSec;
-        });
-      }
-
       let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (

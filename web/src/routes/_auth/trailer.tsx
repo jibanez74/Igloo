@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -84,7 +84,7 @@ function TrailerPage() {
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
   // Navigate back to origin page (use router.navigate for dynamic path to avoid /trailer search typing)
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (returnTo) {
       try {
         router.navigate({ to: returnTo });
@@ -94,7 +94,7 @@ function TrailerPage() {
     } else {
       navigate({ to: "/" });
     }
-  };
+  }, [navigate, returnTo, router]);
 
   // YouTube player hook
   const {
@@ -155,7 +155,7 @@ function TrailerPage() {
   };
 
   // Fullscreen toggle
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
 
     if (document.fullscreenElement) {
@@ -163,7 +163,7 @@ function TrailerPage() {
     } else {
       containerRef.current.requestFullscreen();
     }
-  };
+  }, []);
 
   // Focus the close button when component mounts
   useEffect(() => {
@@ -242,7 +242,17 @@ function TrailerPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  }, [
+    togglePlay,
+    seekBackward,
+    seekForward,
+    setVolume,
+    volume,
+    toggleMute,
+    toggleFullscreen,
+    currentTime,
+    handleClose,
+  ]);
 
   // Focus trap within dialog
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
