@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -15,11 +15,20 @@ import {
   Volume1,
   Volume2,
   Maximize,
+  Minimize,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { toast } from "sonner";
+import {
+  canRequestElementFullscreen,
+  exitDocumentFullscreen,
+  getFullscreenElement,
+  isDocumentFullscreenEntryLikely,
+  requestElementFullscreen,
+} from "@/lib/fullscreen";
 
 const trailerSearchSchema = z.object({
   mediaType: z.enum(["movie", "tv"]).optional(),
@@ -53,6 +62,7 @@ function TrailerPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
 
   // Mount-only: snapshot playing state once so we do not re-run when the audio
   // player updates. suspendKeyboard/resumeKeyboard are reference-counted in
@@ -154,15 +164,40 @@ function TrailerPage() {
     }
   };
 
-  // Fullscreen toggle
-  const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsBrowserFullscreen(!!getFullscreenElement());
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        onFullscreenChange,
+      );
+    };
+  }, []);
 
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      containerRef.current.requestFullscreen();
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    if (getFullscreenElement()) {
+      void exitDocumentFullscreen();
+      return;
     }
+
+    if (!canRequestElementFullscreen(el) || !isDocumentFullscreenEntryLikely()) {
+      toast.info("Full screen isn't available in this browser.");
+      return;
+    }
+
+    void requestElementFullscreen(el)
+      .then(() => {})
+      .catch(() => {
+        toast.info("Full screen isn't available in this browser.");
+      });
   }, []);
 
   // Focus the close button when component mounts
@@ -525,9 +560,18 @@ function TrailerPage() {
               <button
                 onClick={toggleFullscreen}
                 className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                aria-label="Toggle fullscreen (F)"
+                aria-label={
+                  isBrowserFullscreen
+                    ? "Exit fullscreen (F)"
+                    : "Fullscreen (F)"
+                }
+                aria-pressed={isBrowserFullscreen}
               >
-                <Maximize className="size-5" aria-hidden="true" />
+                {isBrowserFullscreen ? (
+                  <Minimize className="size-5" aria-hidden="true" />
+                ) : (
+                  <Maximize className="size-5" aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
