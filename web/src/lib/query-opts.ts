@@ -18,6 +18,7 @@ import {
   getMoviesLibrary,
   getMoviesStats,
   getMovieTechnicalDetails,
+  getMovieWatchProgress,
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
@@ -38,6 +39,7 @@ import {
   MOVIE_PLAYLIST_MOVIES_KEY,
   MOVIE_PLAYLISTS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
+  MOVIE_WATCH_PROGRESS_KEY,
   MOVIE_DETAILS_KEY,
   MOVIES_IN_THEATERS_KEY,
   MOVIES_BY_GENRE_KEY,
@@ -139,6 +141,16 @@ export function movieTechnicalDetailsQueryOpts(id: number) {
     enabled: id > 0,
     staleTime: STALE_TECH,
     gcTime: GC_LONG,
+  });
+}
+
+export function movieWatchProgressQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_WATCH_PROGRESS_KEY, id],
+    queryFn: () => getMovieWatchProgress(id),
+    enabled: id > 0,
+    staleTime: 30_000,
+    gcTime: GC_DEFAULT,
   });
 }
 

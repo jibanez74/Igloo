@@ -3,6 +3,7 @@ package helpers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,10 @@ func ParseBitRate(bitRateStr string) int64 {
 		return 0
 	}
 	return parsed
+}
+
+func ClampFloat64(v, min, max float64) float64 {
+	return math.Min(math.Max(v, min), max)
 }
 
 // ParseDate attempts to parse a date string in various common formats.

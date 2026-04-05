@@ -56,6 +56,7 @@ export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
 export const MOVIES_STATS_KEY = "movies-stats";
 export const MOVIES_LIKED_KEY = "movies-liked";
 export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
+export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
 export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
 export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
 export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";

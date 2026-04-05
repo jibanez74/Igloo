@@ -150,6 +150,23 @@ CREATE INDEX IF NOT EXISTS idx_movies_tmdb_id ON movies (tmdb_id);
 
 CREATE INDEX IF NOT EXISTS idx_movies_imdb_id ON movies (imdb_id);
 
+-- movie_watch_progress
+CREATE TABLE
+  IF NOT EXISTS movie_watch_progress (
+    user_id INTEGER NOT NULL,
+    movie_id INTEGER NOT NULL,
+    progress_sec REAL NOT NULL DEFAULT 0,
+    duration_sec REAL NOT NULL DEFAULT 0,
+    watched BOOLEAN NOT NULL DEFAULT false,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, movie_id),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_user_updated_at
+ON movie_watch_progress (user_id, updated_at DESC);
+
 -- production_companies
 CREATE TABLE
   IF NOT EXISTS production_companies (

@@ -114,6 +114,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteMovieVideoStreamsStmt, err = db.PrepareContext(ctx, deleteMovieVideoStreams); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovieVideoStreams: %w", err)
 	}
+	if q.deleteMovieWatchProgressStmt, err = db.PrepareContext(ctx, deleteMovieWatchProgress); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteMovieWatchProgress: %w", err)
+	}
 	if q.deletePlaylistStmt, err = db.PrepareContext(ctx, deletePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query DeletePlaylist: %w", err)
 	}
@@ -194,6 +197,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMoviePlaylistsWithCollaboratorAccessStmt, err = db.PrepareContext(ctx, getMoviePlaylistsWithCollaboratorAccess); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviePlaylistsWithCollaboratorAccess: %w", err)
+	}
+	if q.getMovieWatchProgressStmt, err = db.PrepareContext(ctx, getMovieWatchProgress); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMovieWatchProgress: %w", err)
 	}
 	if q.getMoviesByGenreAscStmt, err = db.PrepareContext(ctx, getMoviesByGenreAsc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesByGenreAsc: %w", err)
@@ -336,6 +342,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.likeTrackStmt, err = db.PrepareContext(ctx, likeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query LikeTrack: %w", err)
 	}
+	if q.markMovieUnwatchedStmt, err = db.PrepareContext(ctx, markMovieUnwatched); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkMovieUnwatched: %w", err)
+	}
+	if q.markMovieWatchedStmt, err = db.PrepareContext(ctx, markMovieWatched); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkMovieWatched: %w", err)
+	}
 	if q.recordPlayEventStmt, err = db.PrepareContext(ctx, recordPlayEvent); err != nil {
 		return nil, fmt.Errorf("error preparing query RecordPlayEvent: %w", err)
 	}
@@ -395,6 +407,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertMovieStmt, err = db.PrepareContext(ctx, upsertMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMovie: %w", err)
+	}
+	if q.upsertMovieWatchProgressStmt, err = db.PrepareContext(ctx, upsertMovieWatchProgress); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertMovieWatchProgress: %w", err)
 	}
 	if q.upsertMusicianStmt, err = db.PrepareContext(ctx, upsertMusician); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMusician: %w", err)
@@ -566,6 +581,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteMovieVideoStreamsStmt: %w", cerr)
 		}
 	}
+	if q.deleteMovieWatchProgressStmt != nil {
+		if cerr := q.deleteMovieWatchProgressStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteMovieWatchProgressStmt: %w", cerr)
+		}
+	}
 	if q.deletePlaylistStmt != nil {
 		if cerr := q.deletePlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deletePlaylistStmt: %w", cerr)
@@ -699,6 +719,11 @@ func (q *Queries) Close() error {
 	if q.getMoviePlaylistsWithCollaboratorAccessStmt != nil {
 		if cerr := q.getMoviePlaylistsWithCollaboratorAccessStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMoviePlaylistsWithCollaboratorAccessStmt: %w", cerr)
+		}
+	}
+	if q.getMovieWatchProgressStmt != nil {
+		if cerr := q.getMovieWatchProgressStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMovieWatchProgressStmt: %w", cerr)
 		}
 	}
 	if q.getMoviesByGenreAscStmt != nil {
@@ -936,6 +961,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing likeTrackStmt: %w", cerr)
 		}
 	}
+	if q.markMovieUnwatchedStmt != nil {
+		if cerr := q.markMovieUnwatchedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markMovieUnwatchedStmt: %w", cerr)
+		}
+	}
+	if q.markMovieWatchedStmt != nil {
+		if cerr := q.markMovieWatchedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markMovieWatchedStmt: %w", cerr)
+		}
+	}
 	if q.recordPlayEventStmt != nil {
 		if cerr := q.recordPlayEventStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing recordPlayEventStmt: %w", cerr)
@@ -1036,6 +1071,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertMovieStmt: %w", cerr)
 		}
 	}
+	if q.upsertMovieWatchProgressStmt != nil {
+		if cerr := q.upsertMovieWatchProgressStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertMovieWatchProgressStmt: %w", cerr)
+		}
+	}
 	if q.upsertMusicianStmt != nil {
 		if cerr := q.upsertMusicianStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertMusicianStmt: %w", cerr)
@@ -1130,6 +1170,7 @@ type Queries struct {
 	deleteMovieProductionCompaniesStmt          *sql.Stmt
 	deleteMovieSubtitlesStmt                    *sql.Stmt
 	deleteMovieVideoStreamsStmt                 *sql.Stmt
+	deleteMovieWatchProgressStmt                *sql.Stmt
 	deletePlaylistStmt                          *sql.Stmt
 	deleteTrackGenresExceptStmt                 *sql.Stmt
 	deleteUserStmt                              *sql.Stmt
@@ -1157,6 +1198,7 @@ type Queries struct {
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
 	getMoviePlaylistsWithCollaboratorAccessStmt *sql.Stmt
+	getMovieWatchProgressStmt                   *sql.Stmt
 	getMoviesByGenreAscStmt                     *sql.Stmt
 	getMoviesByGenreDescStmt                    *sql.Stmt
 	getMoviesCountStmt                          *sql.Stmt
@@ -1204,6 +1246,8 @@ type Queries struct {
 	isUserCollaboratorStmt                      *sql.Stmt
 	likeMovieStmt                               *sql.Stmt
 	likeTrackStmt                               *sql.Stmt
+	markMovieUnwatchedStmt                      *sql.Stmt
+	markMovieWatchedStmt                        *sql.Stmt
 	recordPlayEventStmt                         *sql.Stmt
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
@@ -1224,6 +1268,7 @@ type Queries struct {
 	upsertCrewStmt                              *sql.Stmt
 	upsertExtraVideoStmt                        *sql.Stmt
 	upsertMovieStmt                             *sql.Stmt
+	upsertMovieWatchProgressStmt                *sql.Stmt
 	upsertMusicianStmt                          *sql.Stmt
 	upsertMusicianGenreStmt                     *sql.Stmt
 	upsertProductionCompanyStmt                 *sql.Stmt
@@ -1265,6 +1310,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieProductionCompaniesStmt:          q.deleteMovieProductionCompaniesStmt,
 		deleteMovieSubtitlesStmt:                    q.deleteMovieSubtitlesStmt,
 		deleteMovieVideoStreamsStmt:                 q.deleteMovieVideoStreamsStmt,
+		deleteMovieWatchProgressStmt:                q.deleteMovieWatchProgressStmt,
 		deletePlaylistStmt:                          q.deletePlaylistStmt,
 		deleteTrackGenresExceptStmt:                 q.deleteTrackGenresExceptStmt,
 		deleteUserStmt:                              q.deleteUserStmt,
@@ -1292,6 +1338,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,
 		getMoviePlaylistsWithCollaboratorAccessStmt: q.getMoviePlaylistsWithCollaboratorAccessStmt,
+		getMovieWatchProgressStmt:                   q.getMovieWatchProgressStmt,
 		getMoviesByGenreAscStmt:                     q.getMoviesByGenreAscStmt,
 		getMoviesByGenreDescStmt:                    q.getMoviesByGenreDescStmt,
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
@@ -1339,6 +1386,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		isUserCollaboratorStmt:                      q.isUserCollaboratorStmt,
 		likeMovieStmt:                               q.likeMovieStmt,
 		likeTrackStmt:                               q.likeTrackStmt,
+		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
+		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
 		recordPlayEventStmt:                         q.recordPlayEventStmt,
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
@@ -1359,6 +1408,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertCrewStmt:                              q.upsertCrewStmt,
 		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
 		upsertMovieStmt:                             q.upsertMovieStmt,
+		upsertMovieWatchProgressStmt:                q.upsertMovieWatchProgressStmt,
 		upsertMusicianStmt:                          q.upsertMusicianStmt,
 		upsertMusicianGenreStmt:                     q.upsertMusicianGenreStmt,
 		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,

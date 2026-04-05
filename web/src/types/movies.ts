@@ -227,6 +227,13 @@ export type MovieTechnicalDetailsResponse = {
   chapters: ChapterType[];
 };
 
+export type MovieWatchProgressType = {
+  progress_sec: number | null;
+  duration_sec: number | null;
+  watched: boolean;
+  updated_at: string | null;
+};
+
 export type VideoStreamType = {
   id: number;
   movie_id: number;
