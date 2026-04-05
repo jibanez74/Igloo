@@ -65,6 +65,7 @@ export type {
   LibraryMovieProductionCompanyType,
   LibraryMovieExtraVideoType,
   MovieTechnicalDetailsResponse,
+  MovieWatchProgressType,
   TmdbSearchResultType,
   VideoStreamType,
   AudioStreamType,

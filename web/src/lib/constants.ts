@@ -56,6 +56,7 @@ export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
 export const MOVIES_STATS_KEY = "movies-stats";
 export const MOVIES_LIKED_KEY = "movies-liked";
 export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
+export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
 export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
 export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
 export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";
@@ -122,6 +123,11 @@ export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonl
   StreamModeId,
   ...StreamModeId[],
 ];
+
+/** hls.js: max `onSessionLost` recoveries per logical stream (see `hlsStreamRecoveryKey`). */
+export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
+/** Min ms between `onSessionLost` calls to avoid tight loops when `src` updates re-triggers 404. */
+export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
 // subtitle codecs that are image-based and cannot be converted to WebVTT
 export const BITMAP_SUBTITLE_CODECS = [

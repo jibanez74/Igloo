@@ -13,7 +13,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	outDir := t.TempDir()
 	profile := helpers.HLS_PROFILE_1080P_4MBPS
 
-	args, err := BuildHLSArgs(sourcePath, outDir, profile, 0, 1, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, false, false)
+	args, err := BuildHLSArgs(sourcePath, outDir, profile, 0, 1, helpers.HARDWARE_ACCELERATION_DEVICE_CPU, false, false, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -44,6 +44,7 @@ func TestBuildHLSArgs_GlobalStreamIndices(t *testing.T) {
 		helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
 		false,
 		false,
+		0,
 	)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
@@ -63,7 +64,7 @@ func TestBuildHLSArgs_GlobalStreamIndices(t *testing.T) {
 }
 
 func TestBuildHLSArgs_CopyAudioOnly(t *testing.T) {
-	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_1080P_4MBPS, 0, 0, "cpu", false, true)
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_1080P_4MBPS, 0, 0, "cpu", false, true, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -81,7 +82,7 @@ func TestBuildHLSArgs_CopyAudioOnly(t *testing.T) {
 }
 
 func TestBuildHLSArgs_CopyBoth(t *testing.T) {
-	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, "cpu", true, true)
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, "cpu", true, true, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -99,7 +100,7 @@ func TestBuildHLSArgs_CopyBoth(t *testing.T) {
 }
 
 func TestBuildHLSArgs_HWAccelBeforeInput(t *testing.T) {
-	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, helpers.HARDWARE_ACCELERATION_DEVICE_APPLE, false, false)
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, helpers.HARDWARE_ACCELERATION_DEVICE_APPLE, false, false, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestBuildHLSArgs_HWAccelBeforeInput(t *testing.T) {
 }
 
 func TestBuildHLSArgs_Remux(t *testing.T) {
-	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, false)
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, false, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestBuildHLSArgs_Remux(t *testing.T) {
 }
 
 func TestBuildHLSArgs_RemuxCopyAudio(t *testing.T) {
-	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, true)
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_REMUX, 0, 0, "cpu", false, true, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestBuildHLSArgs_RemuxCopyAudio(t *testing.T) {
 }
 
 func TestBuildHLSArgs_InvalidProfile(t *testing.T) {
-	_, err := BuildHLSArgs("/s", t.TempDir(), "4k_20mbps", 0, 0, "cpu", false, false)
+	_, err := BuildHLSArgs("/s", t.TempDir(), "4k_20mbps", 0, 0, "cpu", false, false, 0)
 	if err == nil {
 		t.Error("expected error for disallowed profile")
 	}
@@ -158,7 +159,7 @@ func TestBuildHLSArgs_InvalidProfile(t *testing.T) {
 
 func TestBuildHLSArgs_SegmentFilenameInOutDir(t *testing.T) {
 	outDir := t.TempDir()
-	args, err := BuildHLSArgs("/s", outDir, helpers.HLS_PROFILE_1080P_4MBPS, 0, 0, "cpu", false, false)
+	args, err := BuildHLSArgs("/s", outDir, helpers.HLS_PROFILE_1080P_4MBPS, 0, 0, "cpu", false, false, 0)
 	if err != nil {
 		t.Fatalf("BuildHLSArgs: %v", err)
 	}
@@ -172,6 +173,59 @@ func TestBuildHLSArgs_SegmentFilenameInOutDir(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected -hls_segment_filename %q in args", want)
+	}
+}
+
+func TestBuildHLSArgs_SeekOffsetBeforeInput(t *testing.T) {
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, "cpu", false, false, 3600)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+
+	ssIdx := indexOf(args, "-ss")
+	iIdx := indexOf(args, "-i")
+	if ssIdx < 0 {
+		t.Fatal("-ss flag missing when startSec > 0")
+	}
+	if ssIdx >= iIdx {
+		t.Errorf("-ss (pos %d) must come before -i (pos %d)", ssIdx, iIdx)
+	}
+	if args[ssIdx+1] != "3600.000" {
+		t.Errorf("-ss value = %q, want 3600.000", args[ssIdx+1])
+	}
+}
+
+func TestBuildHLSArgs_NoSeekOffsetWhenZero(t *testing.T) {
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, "cpu", false, false, 0)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+
+	if indexOf(args, "-ss") >= 0 {
+		t.Error("-ss should not be present when startSec is 0")
+	}
+}
+
+func TestBuildHLSArgs_SeekOffsetWithHWAccel(t *testing.T) {
+	args, err := BuildHLSArgs("/s", t.TempDir(), helpers.HLS_PROFILE_720P_3MBPS, 0, 0, helpers.HARDWARE_ACCELERATION_DEVICE_APPLE, false, false, 120.5)
+	if err != nil {
+		t.Fatalf("BuildHLSArgs: %v", err)
+	}
+
+	hwIdx := indexOf(args, "-hwaccel")
+	ssIdx := indexOf(args, "-ss")
+	iIdx := indexOf(args, "-i")
+	if hwIdx < 0 {
+		t.Fatal("-hwaccel flag missing")
+	}
+	if ssIdx < 0 {
+		t.Fatal("-ss flag missing")
+	}
+	if !(hwIdx < ssIdx && ssIdx < iIdx) {
+		t.Errorf("expected order: -hwaccel(%d) < -ss(%d) < -i(%d)", hwIdx, ssIdx, iIdx)
+	}
+	if args[ssIdx+1] != "120.500" {
+		t.Errorf("-ss value = %q, want 120.500", args[ssIdx+1])
 	}
 }
 

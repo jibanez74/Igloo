@@ -125,6 +125,15 @@ type Movie struct {
 	UpdatedAt      string          `json:"updated_at"`
 }
 
+type MovieWatchProgress struct {
+	UserID      int64   `json:"user_id"`
+	MovieID     int64   `json:"movie_id"`
+	ProgressSec float64 `json:"progress_sec"`
+	DurationSec float64 `json:"duration_sec"`
+	Watched     bool    `json:"watched"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
 type Musician struct {
 	ID                int64           `json:"id"`
 	Name              string          `json:"name"`

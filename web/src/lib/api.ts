@@ -10,6 +10,7 @@ import type {
   MoviePlaylistRowType,
   MoviePlaylistsListResponseType,
   MovieTechnicalDetailsResponse,
+  MovieWatchProgressType,
   MovieGenreWithCountType,
   MoviesLibraryPaginatedDataType,
   MoviesStatsDataType,
@@ -243,6 +244,33 @@ export const toggleLikeMovie = (movieId: number) =>
   apiRequest<{ movie_id: number; is_liked: boolean }>(
     `/api/movies/${movieId}/like`,
     { method: "POST" },
+  );
+
+export const getMovieWatchProgress = (movieId: number) =>
+  apiRequest<MovieWatchProgressType>(`/api/movies/${movieId}/watch-progress`);
+
+export const updateMovieWatchProgress = (
+  movieId: number,
+  progressSec: number,
+  durationSec: number,
+) =>
+  apiRequest<{ watched: boolean }>(`/api/movies/${movieId}/watch-progress`, {
+    method: "PUT",
+    body: { progress_sec: progressSec, duration_sec: durationSec },
+  });
+
+export const deleteMovieWatchProgress = (movieId: number) =>
+  apiRequest<{ cleared: boolean }>(`/api/movies/${movieId}/watch-progress`, {
+    method: "DELETE",
+  });
+
+export const setMovieWatched = (movieId: number, watched: boolean) =>
+  apiRequest<{ movie_id: number; watched: boolean }>(
+    `/api/movies/${movieId}/watch-progress/watched`,
+    {
+      method: "PUT",
+      body: { watched },
+    },
   );
 
 export const getMoviePlaylists = () =>

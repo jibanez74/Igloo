@@ -28,6 +28,7 @@ type AudioPlayerProps = {
   isExpanded: boolean;
   onMinimize: () => void;
   onExpand: () => void;
+  isKeyboardSuspended?: boolean;
 };
 
 export default function AudioPlayer({
@@ -44,6 +45,7 @@ export default function AudioPlayer({
   isExpanded,
   onMinimize,
   onExpand,
+  isKeyboardSuspended = false,
 }: AudioPlayerProps) {
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
   const expandedContainerRef = useRef<HTMLDivElement>(null);
@@ -208,7 +210,7 @@ export default function AudioPlayer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
 
-      if (!track || !audioRef.current) return;
+      if (!track || !audioRef.current || isKeyboardSuspended) return;
 
       // Skip keyboard shortcuts when user is typing in an input field
       const target = e.target as HTMLElement;
@@ -295,6 +297,7 @@ export default function AudioPlayer({
     currentIndex,
     tracks,
     onTrackChange,
+    isKeyboardSuspended,
   ]);
 
   if (!track) return null;

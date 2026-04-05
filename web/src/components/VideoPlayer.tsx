@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 import type { RefObject } from "react";
+import {
+  HLS_SESSION_LOST_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MIN_INTERVAL_MS,
+} from "@/lib/constants";
+import { hlsStreamRecoveryKey } from "@/lib/playback";
 
 type SubtitleTrackInfo = {
   url: string;
@@ -15,6 +20,8 @@ type VideoPlayerProps = {
   isFullscreen?: boolean;
   onError: (message: string) => void;
   subtitleTrack?: SubtitleTrackInfo | null;
+  startSec?: number;
+  onSessionLost?: (currentTime: number) => void;
 };
 
 function isHLSUrl(url: string): boolean {
@@ -37,14 +44,26 @@ export default function VideoPlayer({
   isFullscreen = false,
   onError,
   subtitleTrack = null,
+  startSec = 0,
+  onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  const sessionRecoveryKeyRef = useRef<string>("");
+  const sessionLostAttemptsRef = useRef(0);
+  const lastSessionLostAtRef = useRef(0);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
 
     if (isHLSUrl(src) && Hls.isSupported() && !supportsNativeHLS) {
+      const recoveryKey = hlsStreamRecoveryKey(src);
+      if (sessionRecoveryKeyRef.current !== recoveryKey) {
+        sessionRecoveryKeyRef.current = recoveryKey;
+        sessionLostAttemptsRef.current = 0;
+        lastSessionLostAtRef.current = 0;
+      }
+
       const hls = new Hls({
         xhrSetup(xhr) {
           xhr.withCredentials = true;
@@ -52,10 +71,6 @@ export default function VideoPlayer({
         manifestLoadingTimeOut: 120_000,
         levelLoadingTimeOut: 120_000,
         fragLoadingTimeOut: 120_000,
-        // Evict buffered data that falls > 30 s behind the playhead.
-        // Without this, high-bitrate remux streams (~30 Mbps) fill the
-        // browser SourceBuffer quota and trigger QuotaExceededError,
-        // causing hls.js to retry the same segment endlessly.
         backBufferLength: 30,
       });
       hlsRef.current = hls;
@@ -65,6 +80,31 @@ export default function VideoPlayer({
 
       let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (
+          data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+          data.response?.code === 404 &&
+          onSessionLost
+        ) {
+          const now = Date.now();
+          if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
+            onError(
+              "Playback session could not be recovered. Try reloading the page or choosing another quality.",
+            );
+            return;
+          }
+          const tooSoon =
+            sessionLostAttemptsRef.current > 0 &&
+            now - lastSessionLostAtRef.current <
+              HLS_SESSION_LOST_MIN_INTERVAL_MS;
+          if (tooSoon) {
+            return;
+          }
+          sessionLostAttemptsRef.current += 1;
+          lastSessionLostAtRef.current = now;
+          onSessionLost(video.currentTime);
+          return;
+        }
+
         if (!data.fatal) return;
 
         if (data.type === "mediaError" && !mediaRecoveryAttempted) {
@@ -91,11 +131,20 @@ export default function VideoPlayer({
 
     // Native HLS (Safari) or direct stream
     video.src = src;
+    if (startSec > 0) {
+      video.addEventListener(
+        "loadedmetadata",
+        () => {
+          video.currentTime = startSec;
+        },
+        { once: true },
+      );
+    }
     return () => {
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef, onError]);
+  }, [src, videoRef, onError, startSec, onSessionLost]);
 
   useEffect(() => {
     const video = videoRef.current;

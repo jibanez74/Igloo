@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 const trailerSearchSchema = z.object({
   mediaType: z.enum(["movie", "tv"]).optional(),
@@ -48,9 +49,22 @@ function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
+  const audioPlayer = useAudioPlayer();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Mount-only: snapshot playing state once so we do not re-run when the audio
+  // player updates. suspendKeyboard/resumeKeyboard are reference-counted in
+  // AudioPlayerProvider, so overlapping trailer pages or other players are safe.
+  useEffect(() => {
+    const wasPlaying = audioPlayer.isPlaying;
+    if (wasPlaying) {
+      audioPlayer.pause();
+    }
+    audioPlayer.suspendKeyboard();
+    return () => audioPlayer.resumeKeyboard();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only teardown
 
   // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
   const shouldFetchMovie =
@@ -70,7 +84,7 @@ function TrailerPage() {
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
   // Navigate back to origin page (use router.navigate for dynamic path to avoid /trailer search typing)
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (returnTo) {
       try {
         router.navigate({ to: returnTo });
@@ -80,7 +94,7 @@ function TrailerPage() {
     } else {
       navigate({ to: "/" });
     }
-  };
+  }, [navigate, returnTo, router]);
 
   // YouTube player hook
   const {
@@ -141,7 +155,7 @@ function TrailerPage() {
   };
 
   // Fullscreen toggle
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
 
     if (document.fullscreenElement) {
@@ -149,7 +163,7 @@ function TrailerPage() {
     } else {
       containerRef.current.requestFullscreen();
     }
-  };
+  }, []);
 
   // Focus the close button when component mounts
   useEffect(() => {
@@ -228,7 +242,17 @@ function TrailerPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  });
+  }, [
+    togglePlay,
+    seekBackward,
+    seekForward,
+    setVolume,
+    volume,
+    toggleMute,
+    toggleFullscreen,
+    currentTime,
+    handleClose,
+  ]);
 
   // Focus trap within dialog
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {

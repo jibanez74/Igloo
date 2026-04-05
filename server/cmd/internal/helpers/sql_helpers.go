@@ -3,6 +3,7 @@ package helpers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,16 @@ func ParseBitRate(bitRateStr string) int64 {
 		return 0
 	}
 	return parsed
+}
+
+// ClampFloat64 returns v limited to [min, max]. If min > max, the bounds are swapped.
+// If v, min, or max is NaN, the result follows IEEE 754 (NaN propagates); callers that
+// require finite values should validate before calling.
+func ClampFloat64(v, min, max float64) float64 {
+	if min > max {
+		min, max = max, min
+	}
+	return math.Min(math.Max(v, min), max)
 }
 
 // ParseDate attempts to parse a date string in various common formats.

@@ -54,6 +54,7 @@ type Querier interface {
 	DeleteMovieSubtitles(ctx context.Context, movieID int64) error
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
+	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	// Deletes all genre relationships for a track except the specified genre.
 	// Used to efficiently update genres: only removes stale relationships.
@@ -96,6 +97,7 @@ type Querier interface {
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
+	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
@@ -161,6 +163,8 @@ type Querier interface {
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
+	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
+	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
@@ -190,6 +194,7 @@ type Querier interface {
 	// Call with a non-null external_id so conflicts are detected; then link via CreateMovieExtraVideo.
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
+	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
 	// Creates a relationship between a musician and a genre (idempotent)
 	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error

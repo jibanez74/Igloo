@@ -72,6 +72,9 @@ const (
 	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
 
+	// Watch progress
+	WATCH_COMPLETION_THRESHOLD = 0.98
+
 	// Subtitle extraction
 	SUBTITLE_WEBVTT_CONTENT_TYPE = "text/vtt"
 	SUBTITLE_EXTRACT_TIMEOUT     = 60 * time.Second

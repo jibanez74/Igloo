@@ -18,6 +18,8 @@ type HLSSession struct {
 	TempDir       string
 	Cmd           *exec.Cmd
 	DurationSec   float64
+	StartSec      float64
+	StartSegment  int64
 	Exited        bool
 	ExitErr       error
 	FinalPlaylist string
@@ -44,46 +46,39 @@ func cleanupHLSSession(session *HLSSession) {
 	}
 }
 
-// evictOtherHLSSessions kills FFmpeg and removes temp files for all cached
-// sessions whose key differs from keepKey.  This prevents hardware-encoder
-// contention (e.g. macOS videotoolbox supports only one concurrent encode).
-func (app *Application) evictOtherHLSSessions(keepKey string) {
-	for key, item := range app.HLSSessionCache.Items() {
-		if key == keepKey {
-			continue
-		}
-		if session, ok := item.Object.(*HLSSession); ok {
-			app.Logger.Info("evicting stale hls session", "key", key)
-			cleanupHLSSession(session)
-		}
-		app.HLSSessionCache.Delete(key)
-	}
-}
-
 // GetOrCreateHLSSession returns a cached session or creates a new one.
+// If a cached session exists but its StartSec differs from the requested
+// startSec, the old session is evicted and a new one is created so FFmpeg
+// begins encoding from the requested offset.
 // Uses singleflight to deduplicate concurrent creation for the same key.
 func (app *Application) GetOrCreateHLSSession(
 	ctx context.Context,
 	movieID int64,
 	profile string,
 	audioTrack int,
+	startSec float64,
 ) (*HLSSession, error) {
 	key := HLSSessionKey(movieID, profile, audioTrack)
 
 	if raw, ok := app.HLSSessionCache.Get(key); ok {
 		session := raw.(*HLSSession)
-		app.RefreshHLSSessionTTL(key, session)
-		return session, nil
+		if session.StartSec == startSec {
+			app.RefreshHLSSessionTTL(key, session)
+			return session, nil
+		}
+		app.HLSSessionCache.Delete(key)
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
-			return raw.(*HLSSession), nil
+			existing := raw.(*HLSSession)
+			if existing.StartSec == startSec {
+				return existing, nil
+			}
+			app.HLSSessionCache.Delete(key)
 		}
 
-		app.evictOtherHLSSessions(key)
-
-		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack)
+		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, startSec)
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -108,6 +103,7 @@ func (app *Application) createHLSSession(
 	movieID int64,
 	profile string,
 	audioTrack int,
+	startSec float64,
 ) (*HLSSession, error) {
 	movie, err := app.Queries.GetMovieByID(ctx, movieID)
 	if err != nil {
@@ -157,7 +153,13 @@ func (app *Application) createHLSSession(
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	session := &HLSSession{TempDir: tempDir, DurationSec: durationSec}
+	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
+	session := &HLSSession{
+		TempDir:      tempDir,
+		DurationSec:  durationSec,
+		StartSec:     startSec,
+		StartSegment: startSegment,
+	}
 
 	videoStreamIndex := int(primaryVideo.StreamIndex)
 	audioStreamIndex := int(selectedAudio.StreamIndex)
@@ -166,6 +168,8 @@ func (app *Application) createHLSSession(
 		"movie_id", movieID,
 		"profile", profile,
 		"audio_track", audioTrack,
+		"start_sec", startSec,
+		"start_segment", startSegment,
 		"video_stream_index", videoStreamIndex,
 		"audio_stream_index", audioStreamIndex,
 		"video_codec", videoCodec,
@@ -209,7 +213,7 @@ func (app *Application) createHLSSession(
 		}
 	}
 
-	cmd, err := app.FFmpeg.RunHLS(context.Background(), movie.FilePath, tempDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, onExit)
+	cmd, err := app.FFmpeg.RunHLS(context.Background(), movie.FilePath, tempDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, startSec, onExit)
 	if err != nil {
 		cleanupHLSSession(session)
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)

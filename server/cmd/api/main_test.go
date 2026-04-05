@@ -140,6 +140,7 @@ func TestInitTables(t *testing.T) {
 		"musician_albums",
 		"track_genres",
 		"sessions",
+		"movie_watch_progress",
 	}
 
 	for _, tableName := range expectedTables {
@@ -190,6 +191,7 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_track_genres_track",
 		"idx_track_genres_genre",
 		"idx_sessions_expiry",
+		"idx_movie_watch_progress_user_updated_at",
 	}
 
 	for _, indexName := range expectedIndexes {

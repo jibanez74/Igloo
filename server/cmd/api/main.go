@@ -535,7 +535,11 @@ func (app *Application) InitRouter() {
 			})
 			r.Get("/details/{id}", app.GetMovieDetails)
 			r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
+			r.Get("/{id}/watch-progress", app.GetMovieWatchProgress)
 			r.Post("/{id}/like", app.ToggleLikeMovie)
+			r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
+			r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
+			r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
 			r.Post("/{id}/tmdb-search", app.TmdbSearchMovies)
 			r.Put("/{id}/identify", app.IdentifyMovie)
 			r.Patch("/{id}", app.UpdateMovieMetadata)
@@ -629,7 +633,7 @@ func (app *Application) ListenForShutdown() {
 	app.Logger.Info("shutting down server...")
 
 	// Create a context with timeout for graceful shutdown.
-	// Gives in-flight requests 10 seconds to complete.
+	// Gives in-flight requests 30 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

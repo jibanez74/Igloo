@@ -27,7 +27,7 @@ func TestCreateHLSSession_ErrorsWhenMovieHasNoDuration(t *testing.T) {
 		t.Fatalf("select id: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, id, "720p_3mbps", 0)
+	_, err = app.createHLSSession(ctx, id, "720p_3mbps", 0, 0)
 	if err == nil {
 		t.Fatal("expected error when duration missing")
 	}
@@ -55,7 +55,7 @@ func TestCreateHLSSession_ErrorsWhenNoVideoStream(t *testing.T) {
 		t.Fatalf("select id: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, id, "720p_3mbps", 0)
+	_, err = app.createHLSSession(ctx, id, "720p_3mbps", 0, 0)
 	if err == nil {
 		t.Fatal("expected error when no video stream rows")
 	}
@@ -97,7 +97,7 @@ func TestCreateHLSSession_ErrorsWhenAudioTrackOutOfRange(t *testing.T) {
 		t.Fatalf("insert audio stream: %v", err)
 	}
 
-	_, err = app.createHLSSession(ctx, movieID, "720p_3mbps", 1)
+	_, err = app.createHLSSession(ctx, movieID, "720p_3mbps", 1, 0)
 	if err == nil {
 		t.Fatal("expected error when audio track index out of range")
 	}

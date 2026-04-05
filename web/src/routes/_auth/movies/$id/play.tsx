@@ -20,10 +20,29 @@ import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
+  movieWatchProgressQueryOpts,
 } from "@/lib/query-opts";
 import { formatTimeSeconds } from "@/lib/format";
+import {
+  deleteMovieWatchProgress,
+  updateMovieWatchProgress,
+} from "@/lib/api";
+import {
+  HLS_SESSION_LOST_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MIN_INTERVAL_MS,
+} from "@/lib/constants";
 import {
   STREAM_MODES,
   formatSubtitleLabel,
@@ -31,8 +50,11 @@ import {
   getPrimaryVideoStream,
   type StreamModeId,
 } from "@/lib/playback";
+import { showActionFailed } from "@/lib/toast-helpers";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
+import type { PlaySearchParams } from "@/types";
 import { playSearchSchema } from "@/types/movie-play";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: zodSearchValidator(playSearchSchema),
@@ -55,27 +77,107 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
 const SEEK_STEP_SEC = 10;
 const VOLUME_STEP = 0.1;
 const CONTROLS_IDLE_MS = 3000;
+const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+const WATCH_PROGRESS_MIN_SECONDS = 180;
+const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 
 function buildStreamUrl(
   movieId: number,
   mode: StreamModeId,
   audioTrack: number,
+  startSec: number,
 ): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
-  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?audio_track=${audioTrack}`;
+  const params = new URLSearchParams({
+    audio_track: String(audioTrack),
+    start: String(Math.floor(startSec)),
+  });
+  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?${params}`;
+}
+
+function shouldPersistWatchProgress(progressSec: number, durationSec: number) {
+  if (!(durationSec > 0)) return false;
+  const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
+  const completionRatio = clampedProgress / durationSec;
+
+  return (
+    completionRatio >= WATCH_PROGRESS_COMPLETION_THRESHOLD ||
+    clampedProgress >= WATCH_PROGRESS_MIN_SECONDS
+  );
+}
+
+async function persistMovieWatchProgress(
+  movieId: number,
+  progressSec: number,
+  durationSec: number,
+  options?: { keepalive?: boolean },
+) {
+  if (!(durationSec > 0)) return;
+
+  const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
+  if (!shouldPersistWatchProgress(clampedProgress, durationSec)) return;
+
+  if (options?.keepalive) {
+    try {
+      await fetch(`/api/movies/${movieId}/watch-progress`, {
+        method: "PUT",
+        credentials: "include",
+        keepalive: true,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          progress_sec: clampedProgress,
+          duration_sec: durationSec,
+        }),
+      });
+    } catch {
+      // Best-effort pagehide save; ignore network failures.
+    }
+    return;
+  }
+
+  const res = await updateMovieWatchProgress(movieId, clampedProgress, durationSec);
+  if (res.error) {
+    throw new Error(res.message);
+  }
 }
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
-  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack } = Route.useSearch();
+  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack, start } = Route.useSearch();
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
+  const audioPlayer = useAudioPlayer();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentTimeRef = useRef(0);
+  const durationRef = useRef(0);
+  const sessionLostNavAttemptsRef = useRef(0);
+  const lastSessionLostNavAtRef = useRef(0);
+  const sessionLostStreamKeyRef = useRef("");
+
+  const sessionLostStreamKey = `${movieId}:${mode}:${audioTrack}`;
+
+  useEffect(() => {
+    if (sessionLostStreamKeyRef.current !== sessionLostStreamKey) {
+      sessionLostStreamKeyRef.current = sessionLostStreamKey;
+      sessionLostNavAttemptsRef.current = 0;
+      lastSessionLostNavAtRef.current = 0;
+    }
+  }, [sessionLostStreamKey]);
+
+  useEffect(() => {
+    if (audioPlayer.isPlaying) {
+      audioPlayer.pause();
+    }
+    audioPlayer.suspendKeyboard();
+    return () => audioPlayer.resumeKeyboard();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -83,9 +185,13 @@ function PlayMoviePage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [resumeDismissed, setResumeDismissed] = useState(start > 0);
+  const [resumeActionPending, setResumeActionPending] = useState(false);
+  const [pendingDirectResumeSec, setPendingDirectResumeSec] = useState<number | null>(null);
 
-  const streamUrl = buildStreamUrl(movieId, mode, audioTrack);
+  const streamUrl = buildStreamUrl(movieId, mode, audioTrack, start);
   const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
+  const isHlsPlayback = mode !== "direct";
 
   const scheduleHideControls = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -109,6 +215,9 @@ function PlayMoviePage() {
 
   const { data: techData, isPending: techPending } = useQuery(
     movieTechnicalDetailsQueryOpts(movieId),
+  );
+  const { data: watchProgressData, isPending: watchProgressPending } = useQuery(
+    movieWatchProgressQueryOpts(movieId),
   );
   const techLoaded = !techPending && techData?.data != null;
   const primaryVideo = techLoaded
@@ -137,12 +246,50 @@ function PlayMoviePage() {
     };
   })();
 
+  const savedProgress =
+    watchProgressData?.error === false ? watchProgressData.data : null;
+  const savedProgressSec = savedProgress?.progress_sec ?? null;
+  const savedDurationSec = savedProgress?.duration_sec ?? null;
+  const hasEligibleResumeProgress =
+    savedProgressSec !== null &&
+    savedDurationSec !== null &&
+    savedDurationSec > 0 &&
+    savedProgressSec >= WATCH_PROGRESS_MIN_SECONDS &&
+    savedProgressSec / savedDurationSec < WATCH_PROGRESS_COMPLETION_THRESHOLD;
+  const resumeDialogOpen =
+    !resumeDismissed && start === 0 && !watchProgressPending && hasEligibleResumeProgress;
+
   const handleBack = () => {
     if (router.history.length > 1) {
       router.history.back();
     } else {
       navigate({ to: "/movies" });
     }
+  };
+
+  const handleSessionLost = (currentTimeSec: number) => {
+    const now = Date.now();
+    if (sessionLostNavAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
+      setPlaybackError(
+        "Playback session could not be recovered. Try reloading the page or choosing another quality.",
+      );
+      return;
+    }
+    const tooSoon =
+      sessionLostNavAttemptsRef.current > 0 &&
+      now - lastSessionLostNavAtRef.current < HLS_SESSION_LOST_MIN_INTERVAL_MS;
+    if (tooSoon) {
+      return;
+    }
+    sessionLostNavAttemptsRef.current += 1;
+    lastSessionLostNavAtRef.current = now;
+    navigate({
+      search: (prev: PlaySearchParams) => ({
+        ...prev,
+        start: Math.floor(currentTimeSec),
+      }),
+      replace: true,
+    });
   };
 
   const togglePlay = () => {
@@ -200,6 +347,99 @@ function PlayMoviePage() {
   };
 
   // Video element event listeners (single source of truth — VideoPlayer renders a bare <video>)
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+    durationRef.current = duration;
+  }, [currentTime, duration]);
+
+  useEffect(() => {
+    if (pendingDirectResumeSec === null) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const applyResume = () => {
+      video.currentTime = pendingDirectResumeSec;
+      setCurrentTime(pendingDirectResumeSec);
+      setPendingDirectResumeSec(null);
+    };
+
+    if (video.readyState >= 1) {
+      applyResume();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", applyResume, { once: true });
+    return () => {
+      video.removeEventListener("loadedmetadata", applyResume);
+    };
+  }, [pendingDirectResumeSec]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const interval = window.setInterval(() => {
+      void persistMovieWatchProgress(
+        movieId,
+        currentTimeRef.current,
+        durationRef.current,
+      ).catch(() => {
+        // Silent background save failure; pause/end handlers surface failures when needed.
+      });
+    }, WATCH_PROGRESS_SAVE_INTERVAL_MS);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [movieId, playing]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handlePauseSave = () => {
+      void persistMovieWatchProgress(
+        movieId,
+        currentTimeRef.current,
+        durationRef.current,
+      ).catch(() => {
+        // Best effort on pause; avoid interrupting playback UI with repeated toasts.
+      });
+    };
+
+    const handleEndedSave = () => {
+      void persistMovieWatchProgress(
+        movieId,
+        durationRef.current,
+        durationRef.current,
+      ).catch(() => {
+        showActionFailed(
+          "save watch progress",
+          "Unable to mark this movie as watched.",
+        );
+      });
+    };
+
+    video.addEventListener("pause", handlePauseSave);
+    video.addEventListener("ended", handleEndedSave);
+    return () => {
+      video.removeEventListener("pause", handlePauseSave);
+      video.removeEventListener("ended", handleEndedSave);
+    };
+  }, [movieId]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      void persistMovieWatchProgress(
+        movieId,
+        currentTimeRef.current,
+        durationRef.current,
+        { keepalive: true },
+      );
+    };
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [movieId]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -401,6 +641,37 @@ function PlayMoviePage() {
 
   const announcement = playing ? `Playing: ${title}` : `Paused: ${title}`;
 
+  const handleResume = () => {
+    if (savedProgressSec === null) return;
+
+    setResumeDismissed(true);
+    if (mode === "direct") {
+      setPendingDirectResumeSec(savedProgressSec);
+      return;
+    }
+
+    navigate({
+      search: (prev: PlaySearchParams) => ({
+        ...prev,
+        start: Math.floor(savedProgressSec),
+      }),
+      replace: true,
+    });
+  };
+
+  const handleStartFromBeginning = async () => {
+    setResumeActionPending(true);
+    const res = await deleteMovieWatchProgress(movieId);
+    setResumeActionPending(false);
+
+    if (res.error) {
+      showActionFailed("clear watch progress", res.message);
+      return;
+    }
+
+    setResumeDismissed(true);
+  };
+
   if (movieNotFound) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
@@ -539,6 +810,39 @@ function PlayMoviePage() {
       aria-label={`Video player for ${title}`}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
+      <AlertDialog open={resumeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resume movie?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {savedProgressSec !== null
+                ? `Resume from ${formatTimeSeconds(savedProgressSec)} or start from the beginning.`
+                : "Resume your saved progress or start from the beginning."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={(e) => {
+                e.preventDefault();
+                void handleStartFromBeginning();
+              }}
+              disabled={resumeActionPending}
+            >
+              Start from beginning
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="accent"
+              onClick={(e) => {
+                e.preventDefault();
+                handleResume();
+              }}
+              disabled={resumeActionPending}
+            >
+              Resume
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <p className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind
@@ -599,6 +903,8 @@ function PlayMoviePage() {
           isFullscreen={isFullscreen}
           onError={msg => setPlaybackError(msg)}
           subtitleTrack={subtitleInfo}
+          startSec={isHlsPlayback ? 0 : start}
+          onSessionLost={handleSessionLost}
         />
       </div>
 

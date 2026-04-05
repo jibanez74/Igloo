@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Film, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ type Props = {
   movie: LibraryMovieDetailsMovieType;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 export default function EditMovieDialog({
@@ -42,10 +43,20 @@ export default function EditMovieDialog({
   movie,
   open,
   onOpenChange,
+  restoreFocusRef,
 }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
+        onCloseAutoFocus={(event) => {
+          const restoreTarget = restoreFocusRef?.current;
+          if (!restoreTarget) return;
+
+          event.preventDefault();
+          restoreTarget.focus();
+        }}
+      >
         <DialogTitle className="text-white">Edit Movie</DialogTitle>
         <DialogDescription className="text-slate-400">
           Identify with TMDB to replace all metadata, or manually edit
