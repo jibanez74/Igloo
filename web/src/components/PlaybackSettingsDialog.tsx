@@ -408,7 +408,7 @@ export default function PlaybackSettingsDialog({
           }}
           onCancel={() => onOpenChange(false)}
         />
-      </DialogContent>
+        </DialogContent>
     </Dialog>
   );
 }

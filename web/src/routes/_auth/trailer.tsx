@@ -193,9 +193,7 @@ function TrailerPage() {
       return;
     }
 
-    void requestElementFullscreen(el)
-      .then(() => {})
-      .catch(() => {
+    void requestElementFullscreen(el).catch(() => {
         toast.info("Full screen isn't available in this browser.");
       });
   }, []);

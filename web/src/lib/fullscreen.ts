@@ -61,15 +61,13 @@ export function canRequestElementFullscreen(el: HTMLElement): boolean {
   );
 }
 
+// Permissive heuristic: accept either the standard or WebKit fullscreen flag.
 export function isDocumentFullscreenEntryLikely(): boolean {
   const doc = document as WebkitDocument;
-  if (document.fullscreenEnabled === false) {
-    return false;
+  if (document.fullscreenEnabled || doc.webkitFullscreenEnabled) {
+    return true;
   }
-  if (doc.webkitFullscreenEnabled === false) {
-    return false;
-  }
-  return true;
+  return document.fullscreenEnabled !== false && doc.webkitFullscreenEnabled !== false;
 }
 
 export function tryWebKitVideoEnterFullscreen(video: HTMLVideoElement): boolean {

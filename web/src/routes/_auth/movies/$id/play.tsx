@@ -369,9 +369,7 @@ function PlayMoviePage() {
       return;
     }
 
-    void requestElementFullscreen(container)
-      .then(() => {})
-      .catch(() => {
+    void requestElementFullscreen(container).catch(() => {
         enterFallback();
       });
   }, [isImmersiveViewport]);
@@ -690,7 +688,9 @@ function PlayMoviePage() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentTime, duration, isImmersiveViewport, toggleFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Intentionally omit seekBackward, seekForward, togglePlay, and seek from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, duration, isImmersiveViewport, toggleFullscreen]);
 
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Tab" && containerRef.current) {

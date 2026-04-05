@@ -47,5 +47,8 @@
 # OS files
 .DS_Store
 
+# Agent instructions
+AGENTS.md
+
 # Testing media files directory
 /server/media/*

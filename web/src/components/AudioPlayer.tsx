@@ -112,6 +112,8 @@ export default function AudioPlayer({
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
+  const prevAriaLabel = hasPrevious ? "Previous track" : "No previous track";
+  const nextAriaLabel = hasNext ? "Next track" : "No next track";
 
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
@@ -403,7 +405,7 @@ export default function AudioPlayer({
                 onClick={playPrevious}
                 disabled={!hasPrevious}
                 className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={hasPrevious ? "Previous track" : "No previous track"}
+                aria-label={prevAriaLabel}
               >
                 <SkipBack className="size-6" aria-hidden="true" />
               </button>
@@ -428,7 +430,7 @@ export default function AudioPlayer({
                 onClick={playNext}
                 disabled={!hasNext}
                 className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={hasNext ? "Next track" : "No next track"}
+                aria-label={nextAriaLabel}
               >
                 <SkipForward className="size-6" aria-hidden="true" />
               </button>
@@ -501,7 +503,7 @@ export default function AudioPlayer({
                 onClick={playPrevious}
                 disabled={!hasPrevious}
                 className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={hasPrevious ? "Previous track" : "No previous track"}
+                aria-label={prevAriaLabel}
               >
                 <SkipBack className="size-4" aria-hidden="true" />
               </button>
@@ -527,7 +529,7 @@ export default function AudioPlayer({
                 onClick={playNext}
                 disabled={!hasNext}
                 className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={hasNext ? "Next track" : "No next track"}
+                aria-label={nextAriaLabel}
               >
                 <SkipForward className="size-4" aria-hidden="true" />
               </button>
