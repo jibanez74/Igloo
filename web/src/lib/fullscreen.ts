@@ -1,11 +1,11 @@
 type WebkitDocument = Document & {
   webkitFullscreenElement?: Element | null;
-  webkitExitFullscreen?: () => Promise<void>;
+  webkitExitFullscreen?: () => void;
   webkitFullscreenEnabled?: boolean;
 };
 
 type WebkitHTMLElement = HTMLElement & {
-  webkitRequestFullscreen?: () => Promise<void>;
+  webkitRequestFullscreen?: () => void;
 };
 
 type WebkitHTMLVideoElement = HTMLVideoElement & {

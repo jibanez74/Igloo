@@ -114,6 +114,7 @@ export default function AudioPlayer({
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
   const prevAriaLabel = hasPrevious ? "Previous track" : "No previous track";
   const nextAriaLabel = hasNext ? "Next track" : "No next track";
+  const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
 
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
@@ -415,7 +416,7 @@ export default function AudioPlayer({
                 onClick={handleTogglePlay}
                 disabled={isLoading}
                 className='flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50'
-                aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
+                aria-label={isLoading ? "Loading" : playPauseAriaLabel}
               >
                 {isLoading ? (
                   <Spinner className="size-8" />
@@ -513,7 +514,7 @@ export default function AudioPlayer({
                 onClick={handleTogglePlay}
                 disabled={isLoading}
                 className='flex size-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50'
-                aria-label={isLoading ? "Loading" : isPlaying ? "Pause" : "Play"}
+                aria-label={isLoading ? "Loading" : playPauseAriaLabel}
               >
                 {isLoading ? (
                   <Spinner className="size-5" />

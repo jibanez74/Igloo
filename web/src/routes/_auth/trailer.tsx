@@ -268,6 +268,12 @@ function TrailerPage() {
           break;
         case "Escape":
           e.preventDefault();
+          if (getFullscreenElement()) {
+            void exitDocumentFullscreen().finally(() => {
+              handleClose();
+            });
+            break;
+          }
           handleClose();
           break;
       }

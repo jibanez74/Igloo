@@ -55,6 +55,7 @@ type PlaybackSettingsDialogProps = {
 };
 
 type ModeOption = { id: StreamModeId; label: string };
+const NO_PLAYBACK_MODES_LABEL = "No playback modes are available for this movie yet.";
 
 type PlaybackSettingsDialogFormProps = {
   settings: PlaybackSettings;
@@ -82,24 +83,33 @@ function PlaybackSettingsDialogForm({
   onCancel,
 }: PlaybackSettingsDialogFormProps) {
   const validIds = availableModes.map(m => m.id) as readonly string[];
-  const initialMode = validIds.includes(settings.mode)
-    ? settings.mode
-    : (availableModes[0]?.id ?? "direct");
+  const initialMode: StreamModeId | null =
+    availableModes.length === 0
+      ? null
+      : validIds.includes(settings.mode)
+        ? settings.mode
+        : availableModes[0].id;
 
-  const [mode, setMode] = useState<StreamModeId>(initialMode);
+  const [mode, setMode] = useState<StreamModeId | null>(initialMode);
   const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
   const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
     settings.subtitleTrack,
   );
+  const loadingSelectsDisabled = isPending && !techLoaded;
+  const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
+  const canSave = mode !== null;
 
   const handleSave = () => {
+    if (!mode) return;
     onSave({ mode, audioTrack, subtitleTrack });
   };
 
   const summaryText =
     isPending && !techLoaded
       ? PLAYBACK_SETTINGS_SUMMARY_LOADING
-      : describePlaybackExperience(
+      : mode === null
+        ? NO_PLAYBACK_MODES_LABEL
+        : describePlaybackExperience(
           mode,
           audioStreams[audioTrack],
           audioTrack,
@@ -124,26 +134,31 @@ function PlaybackSettingsDialogForm({
             <select
               id="video-quality"
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
-              value={mode}
+              value={mode ?? ""}
               onChange={e => setMode(e.target.value as StreamModeId)}
-              disabled={isPending && !techLoaded}
+              disabled={modeSelectDisabled}
             >
-              {availableModes.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
+              {availableModes.length > 0 ? (
+                availableModes.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))
+              ) : (
+                <option value="">{NO_PLAYBACK_MODES_LABEL}</option>
+              )}
             </select>
           ) : (
             <Select
-              value={mode}
+              value={mode ?? undefined}
               onValueChange={v => setMode(v as StreamModeId)}
+              disabled={modeSelectDisabled}
             >
               <SelectTrigger
                 id="video-quality"
                 className={PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS}
               >
-                <SelectValue />
+                <SelectValue placeholder={NO_PLAYBACK_MODES_LABEL} />
               </SelectTrigger>
               <SelectContent
                 container={selectPortalContainer}
@@ -173,7 +188,7 @@ function PlaybackSettingsDialogForm({
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={String(audioTrack)}
               onChange={e => setAudioTrack(Number(e.target.value))}
-              disabled={isPending && !techLoaded}
+              disabled={loadingSelectsDisabled}
             >
               {audioStreams.length > 0 ? (
                 audioStreams.map((stream, index) => {
@@ -194,6 +209,7 @@ function PlaybackSettingsDialogForm({
             <Select
               value={String(audioTrack)}
               onValueChange={v => setAudioTrack(Number(v))}
+              disabled={loadingSelectsDisabled}
             >
               <SelectTrigger
                 id="audio-track"
@@ -250,7 +266,7 @@ function PlaybackSettingsDialogForm({
                   v === SUBTITLE_TRACK_SELECT_OFF_VALUE ? null : Number(v),
                 );
               }}
-              disabled={isPending && !techLoaded}
+              disabled={loadingSelectsDisabled}
             >
               <option value={SUBTITLE_TRACK_SELECT_OFF_VALUE}>
                 {SUBTITLES_NONE_LABEL}
@@ -281,6 +297,7 @@ function PlaybackSettingsDialogForm({
                   v === SUBTITLE_TRACK_SELECT_OFF_VALUE ? null : Number(v),
                 )
               }
+              disabled={loadingSelectsDisabled}
             >
               <SelectTrigger
                 id="subtitles"
@@ -331,7 +348,12 @@ function PlaybackSettingsDialogForm({
         >
           Cancel
         </Button>
-        <Button type="button" variant="accent" onClick={handleSave}>
+        <Button
+          type="button"
+          variant="accent"
+          onClick={handleSave}
+          disabled={!canSave}
+        >
           Done
         </Button>
       </DialogFooter>
