@@ -14,6 +14,23 @@ const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
 export type { StreamModeId };
 export { STREAM_MODES };
 
+/**
+ * Normalizes an HLS playlist URL for session-recovery rate limiting: same movie, profile,
+ * and audio track but different `start` query values share one key so recovery navigations
+ * do not reset the attempt counter.
+ */
+export function hlsStreamRecoveryKey(src: string): string {
+  try {
+    const base =
+      typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const u = new URL(src, base);
+    u.searchParams.delete("start");
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return src;
+  }
+}
+
 export type PlaybackSettings = {
   mode: StreamModeId;
   audioTrack: number;

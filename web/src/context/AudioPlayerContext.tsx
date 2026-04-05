@@ -65,7 +65,7 @@ export function AudioPlayerProvider({
   const [state, setState] = useState<AudioPlayerState>(initialState);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isKeyboardSuspended, setIsKeyboardSuspended] = useState(false);
+  const [keyboardSuspendCount, setKeyboardSuspendCount] = useState(0);
   const isFetchingMoreRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -403,8 +403,15 @@ export function AudioPlayerProvider({
     }
   };
 
-  const suspendKeyboard = () => setIsKeyboardSuspended(true);
-  const resumeKeyboard = () => setIsKeyboardSuspended(false);
+  const suspendKeyboard = () => {
+    setKeyboardSuspendCount(c => c + 1);
+  };
+
+  const resumeKeyboard = () => {
+    setKeyboardSuspendCount(c => Math.max(0, c - 1));
+  };
+
+  const isKeyboardSuspended = keyboardSuspendCount > 0;
 
   // Expand player to fullscreen
   const expand = () => {

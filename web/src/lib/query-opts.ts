@@ -74,6 +74,7 @@ const STALE_LIST = 2 * MIN;
 const STALE_CATALOG = 5 * MIN;
 const STALE_THEATERS = 10 * MIN;
 const STALE_TECH = 10 * MIN;
+const STALE_30S = 30_000;
 
 const GC_DEFAULT = 10 * MIN;
 const GC_LONG = 30 * MIN;
@@ -149,7 +150,7 @@ export function movieWatchProgressQueryOpts(id: number) {
     queryKey: [MOVIE_WATCH_PROGRESS_KEY, id],
     queryFn: () => getMovieWatchProgress(id),
     enabled: id > 0,
-    staleTime: 30_000,
+    staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
   });
 }

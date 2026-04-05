@@ -54,13 +54,17 @@ function TrailerPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Mount-only: snapshot playing state once so we do not re-run when the audio
+  // player updates. suspendKeyboard/resumeKeyboard are reference-counted in
+  // AudioPlayerProvider, so overlapping trailer pages or other players are safe.
   useEffect(() => {
-    if (audioPlayer.isPlaying) {
+    const wasPlaying = audioPlayer.isPlaying;
+    if (wasPlaying) {
       audioPlayer.pause();
     }
     audioPlayer.suspendKeyboard();
     return () => audioPlayer.resumeKeyboard();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only teardown
 
   // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
   const shouldFetchMovie =

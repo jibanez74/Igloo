@@ -124,6 +124,11 @@ export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonl
   ...StreamModeId[],
 ];
 
+/** hls.js: max `onSessionLost` recoveries per logical stream (see `hlsStreamRecoveryKey`). */
+export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
+/** Min ms between `onSessionLost` calls to avoid tight loops when `src` updates re-triggers 404. */
+export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
+
 // subtitle codecs that are image-based and cannot be converted to WebVTT
 export const BITMAP_SUBTITLE_CODECS = [
   "hdmv_pgs_subtitle",

@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"math"
 	"testing"
 )
 
@@ -21,6 +22,8 @@ func TestClampFloat64(t *testing.T) {
 		{"zero range", 5.0, 3.0, 3.0, 3.0},
 		{"fractional values", 0.5, 0.0, 1.0, 0.5},
 		{"large values", 99999.0, 0.0, 7200.0, 7200.0},
+		{"inverted bounds clamp high", 7.0, 10.0, 5.0, 7.0},
+		{"inverted bounds clamp low", 3.0, 10.0, 5.0, 5.0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -30,5 +33,18 @@ func TestClampFloat64(t *testing.T) {
 					tt.v, tt.min, tt.max, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestClampFloat64_NaNPropagates(t *testing.T) {
+	nan := math.NaN()
+	if !math.IsNaN(ClampFloat64(nan, 0, 1)) {
+		t.Error("expected NaN when v is NaN")
+	}
+	if !math.IsNaN(ClampFloat64(1, nan, 2)) {
+		t.Error("expected NaN when min is NaN")
+	}
+	if !math.IsNaN(ClampFloat64(1, 0, nan)) {
+		t.Error("expected NaN when max is NaN")
 	}
 }

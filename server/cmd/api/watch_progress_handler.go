@@ -14,12 +14,12 @@ import (
 )
 
 type updateMovieWatchProgressRequest struct {
-	ProgressSec float64 `json:"progress_sec"`
-	DurationSec float64 `json:"duration_sec"`
+	ProgressSec *float64 `json:"progress_sec"`
+	DurationSec *float64 `json:"duration_sec"`
 }
 
 type setMovieWatchedRequest struct {
-	Watched bool `json:"watched"`
+	Watched *bool `json:"watched"`
 }
 
 type movieWatchProgressResponse struct {
@@ -153,17 +153,29 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if math.IsNaN(req.ProgressSec) || math.IsNaN(req.DurationSec) || math.IsInf(req.ProgressSec, 0) || math.IsInf(req.DurationSec, 0) {
+	if req.ProgressSec == nil {
+		helpers.ErrorJSON(w, errors.New("progress_sec is required"), http.StatusBadRequest)
+		return
+	}
+	if req.DurationSec == nil {
+		helpers.ErrorJSON(w, errors.New("duration_sec is required"), http.StatusBadRequest)
+		return
+	}
+
+	progressVal := *req.ProgressSec
+	durationVal := *req.DurationSec
+
+	if math.IsNaN(progressVal) || math.IsNaN(durationVal) || math.IsInf(progressVal, 0) || math.IsInf(durationVal, 0) {
 		helpers.ErrorJSON(w, errors.New("progress and duration must be finite numbers"), http.StatusBadRequest)
 		return
 	}
-	if req.DurationSec <= 0 {
+	if durationVal <= 0 {
 		helpers.ErrorJSON(w, errors.New("duration_sec must be greater than 0"), http.StatusBadRequest)
 		return
 	}
 
-	progressSec := helpers.ClampFloat64(req.ProgressSec, 0, req.DurationSec)
-	durationSec := req.DurationSec
+	progressSec := helpers.ClampFloat64(progressVal, 0, durationVal)
+	durationSec := durationVal
 
 	if progressSec/durationSec >= helpers.WATCH_COMPLETION_THRESHOLD {
 		if err := app.Queries.MarkMovieWatched(r.Context(), database.MarkMovieWatchedParams{
@@ -270,7 +282,14 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Watched {
+	if req.Watched == nil {
+		helpers.ErrorJSON(w, errors.New("watched is required"), http.StatusBadRequest)
+		return
+	}
+
+	watched := *req.Watched
+
+	if watched {
 		if err := app.Queries.MarkMovieWatched(r.Context(), database.MarkMovieWatchedParams{
 			UserID:  userID,
 			MovieID: movieID,
@@ -294,7 +313,7 @@ func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) 
 		Error: false,
 		Data: map[string]any{
 			"movie_id": movieID,
-			"watched":  req.Watched,
+			"watched":  watched,
 		},
 	})
 }

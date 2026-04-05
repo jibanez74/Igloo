@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 import type { RefObject } from "react";
+import {
+  HLS_SESSION_LOST_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MIN_INTERVAL_MS,
+} from "@/lib/constants";
+import { hlsStreamRecoveryKey } from "@/lib/playback";
 
 type SubtitleTrackInfo = {
   url: string;
@@ -43,12 +48,22 @@ export default function VideoPlayer({
   onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+  const sessionRecoveryKeyRef = useRef<string>("");
+  const sessionLostAttemptsRef = useRef(0);
+  const lastSessionLostAtRef = useRef(0);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
 
     if (isHLSUrl(src) && Hls.isSupported() && !supportsNativeHLS) {
+      const recoveryKey = hlsStreamRecoveryKey(src);
+      if (sessionRecoveryKeyRef.current !== recoveryKey) {
+        sessionRecoveryKeyRef.current = recoveryKey;
+        sessionLostAttemptsRef.current = 0;
+        lastSessionLostAtRef.current = 0;
+      }
+
       const hls = new Hls({
         xhrSetup(xhr) {
           xhr.withCredentials = true;
@@ -76,6 +91,22 @@ export default function VideoPlayer({
           data.response?.code === 404 &&
           onSessionLost
         ) {
+          const now = Date.now();
+          if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
+            onError(
+              "Playback session could not be recovered. Try reloading the page or choosing another quality.",
+            );
+            return;
+          }
+          const tooSoon =
+            sessionLostAttemptsRef.current > 0 &&
+            now - lastSessionLostAtRef.current <
+              HLS_SESSION_LOST_MIN_INTERVAL_MS;
+          if (tooSoon) {
+            return;
+          }
+          sessionLostAttemptsRef.current += 1;
+          lastSessionLostAtRef.current = now;
           onSessionLost(video.currentTime);
           return;
         }

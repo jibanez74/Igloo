@@ -1,12 +1,19 @@
-	package main
+package main
 
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int64) {
@@ -342,7 +349,7 @@ func TestWatchProgress_MarkUnwatched(t *testing.T) {
 	}
 }
 
-func TestWatchProgress_MarkUnwatchedNonExistentIsNoOp(t *testing.T) {
+func TestWatchProgress_MarkUnwatchedIdempotentCreatesRow(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	ctx := context.Background()
@@ -354,7 +361,22 @@ func TestWatchProgress_MarkUnwatchedNonExistentIsNoOp(t *testing.T) {
 		MovieID: movieID,
 	})
 	if err != nil {
-		t.Fatalf("MarkMovieUnwatched on non-existent row should not error, got: %v", err)
+		t.Fatalf("MarkMovieUnwatched failed: %v", err)
+	}
+
+	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID:  userID,
+		MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("GetMovieWatchProgress failed: %v", err)
+	}
+	if row.Watched {
+		t.Error("expected watched=false when inserting unwatched row")
+	}
+	if row.ProgressSec != 0 || row.DurationSec != 0 {
+		t.Errorf("expected zero progress/duration for new row, got progress_sec=%f duration_sec=%f",
+			row.ProgressSec, row.DurationSec)
 	}
 }
 
@@ -523,5 +545,163 @@ func TestWatchProgress_CompletionThreshold(t *testing.T) {
 					tt.progressSec, tt.durationSec, ratio, isWatched, tt.wantWatched)
 			}
 		})
+	}
+}
+
+func TestUpdateMovieWatchProgressRequest_JSONOmission(t *testing.T) {
+	tests := []struct {
+		name            string
+		json            string
+		wantProgressNil bool
+		wantDurationNil bool
+	}{
+		{"empty object", `{}`, true, true},
+		{"only progress", `{"progress_sec": 10}`, false, true},
+		{"only duration", `{"duration_sec": 100}`, true, false},
+		{"both present", `{"progress_sec": 10, "duration_sec": 100}`, false, false},
+		{"null progress", `{"progress_sec": null, "duration_sec": 100}`, true, false},
+		{"null duration", `{"progress_sec": 10, "duration_sec": null}`, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req updateMovieWatchProgressRequest
+			err := json.Unmarshal([]byte(tt.json), &req)
+			if err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if (req.ProgressSec == nil) != tt.wantProgressNil {
+				t.Errorf("ProgressSec nil=%v, want nil=%v", req.ProgressSec == nil, tt.wantProgressNil)
+			}
+			if (req.DurationSec == nil) != tt.wantDurationNil {
+				t.Errorf("DurationSec nil=%v, want nil=%v", req.DurationSec == nil, tt.wantDurationNil)
+			}
+		})
+	}
+}
+
+func TestSetMovieWatchedRequest_JSONOmission(t *testing.T) {
+	var req setMovieWatchedRequest
+	err := json.Unmarshal([]byte(`{}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.Watched != nil {
+		t.Errorf("expected Watched nil, got %v", req.Watched)
+	}
+
+	err = json.Unmarshal([]byte(`{"watched": true}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.Watched == nil || !*req.Watched {
+		t.Errorf("expected Watched true, got %v", req.Watched)
+	}
+
+	err = json.Unmarshal([]byte(`{"watched": null}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.Watched != nil {
+		t.Errorf("expected Watched nil for JSON null, got %v", req.Watched)
+	}
+}
+
+func setupWatchProgressHTTPTestApp(t *testing.T) *Application {
+	t.Helper()
+	app := setupTestApp(t)
+	app.InitSession()
+	return app
+}
+
+func TestUpdateMovieWatchProgress_HTTPMissingFields(t *testing.T) {
+	app := setupWatchProgressHTTPTestApp(t)
+	defer app.DB.Close()
+
+	userID, movieID := createTestUserAndMovie(t, app)
+
+	r := chi.NewRouter()
+	r.Put("/api/movies/{id}/watch-progress", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.UpdateMovieWatchProgress(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(r)
+
+	run := func(t *testing.T, body string, wantStatus int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress", movieID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != wantStatus {
+			t.Errorf("body=%q status=%d, want %d, resp=%s", body, w.Code, wantStatus, w.Body.String())
+		}
+	}
+
+	t.Run("empty object", func(t *testing.T) {
+		run(t, `{}`, http.StatusBadRequest)
+	})
+	t.Run("missing duration", func(t *testing.T) {
+		run(t, `{"progress_sec": 100}`, http.StatusBadRequest)
+	})
+	t.Run("missing progress", func(t *testing.T) {
+		run(t, `{"duration_sec": 7200}`, http.StatusBadRequest)
+	})
+	t.Run("valid body", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200}`, http.StatusOK)
+	})
+}
+
+func TestSetMovieWatched_HTTPMissingWatched(t *testing.T) {
+	app := setupWatchProgressHTTPTestApp(t)
+	defer app.DB.Close()
+
+	userID, movieID := createTestUserAndMovie(t, app)
+
+	r := chi.NewRouter()
+	r.Put("/api/movies/{id}/watch-progress/watched", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SetMovieWatched(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(r)
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want %d, body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{"watched": true}`))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("status=%d, want %d, body=%s", w2.Code, http.StatusOK, w2.Body.String())
+	}
+}
+
+func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {
+	var req updateMovieWatchProgressRequest
+	body := strings.NewReader(`{"progress_sec": 1, "duration_sec": 2, "extra": true}`)
+	r := httptest.NewRequest(http.MethodPut, "/", body)
+	w := httptest.NewRecorder()
+	err := helpers.ReadJSON(w, r, &req, 1024)
+	if err == nil {
+		t.Fatal("expected error for unknown field")
+	}
+}
+
+func TestReadJSON_SetMovieWatchedRequest_UsesReadJSON(t *testing.T) {
+	var req setMovieWatchedRequest
+	body := strings.NewReader(`{"watched": false}`)
+	r := httptest.NewRequest(http.MethodPut, "/", body)
+	w := httptest.NewRecorder()
+	err := helpers.ReadJSON(w, r, &req, 1024)
+	if err != nil {
+		t.Fatalf("ReadJSON: %v", err)
+	}
+	if req.Watched == nil || *req.Watched {
+		t.Errorf("expected watched false, got %v", req.Watched)
 	}
 }

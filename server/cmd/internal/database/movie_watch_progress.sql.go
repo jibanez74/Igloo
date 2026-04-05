@@ -50,10 +50,18 @@ func (q *Queries) GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchPr
 }
 
 const markMovieUnwatched = `-- name: MarkMovieUnwatched :exec
-UPDATE movie_watch_progress
-SET watched = false,
-    updated_at = CURRENT_TIMESTAMP
-WHERE user_id = ? AND movie_id = ?
+INSERT INTO movie_watch_progress (
+  user_id,
+  movie_id,
+  progress_sec,
+  duration_sec,
+  watched,
+  updated_at
+)
+VALUES (?, ?, 0, 0, false, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, movie_id) DO UPDATE SET
+  watched = false,
+  updated_at = CURRENT_TIMESTAMP
 `
 
 type MarkMovieUnwatchedParams struct {

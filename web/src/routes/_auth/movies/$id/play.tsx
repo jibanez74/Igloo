@@ -40,6 +40,10 @@ import {
   updateMovieWatchProgress,
 } from "@/lib/api";
 import {
+  HLS_SESSION_LOST_MAX_ATTEMPTS,
+  HLS_SESSION_LOST_MIN_INTERVAL_MS,
+} from "@/lib/constants";
+import {
   STREAM_MODES,
   formatSubtitleLabel,
   getAvailableModes,
@@ -153,6 +157,19 @@ function PlayMoviePage() {
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
+  const sessionLostNavAttemptsRef = useRef(0);
+  const lastSessionLostNavAtRef = useRef(0);
+  const sessionLostStreamKeyRef = useRef("");
+
+  const sessionLostStreamKey = `${movieId}:${mode}:${audioTrack}`;
+
+  useEffect(() => {
+    if (sessionLostStreamKeyRef.current !== sessionLostStreamKey) {
+      sessionLostStreamKeyRef.current = sessionLostStreamKey;
+      sessionLostNavAttemptsRef.current = 0;
+      lastSessionLostNavAtRef.current = 0;
+    }
+  }, [sessionLostStreamKey]);
 
   useEffect(() => {
     if (audioPlayer.isPlaying) {
@@ -250,6 +267,21 @@ function PlayMoviePage() {
   };
 
   const handleSessionLost = (currentTimeSec: number) => {
+    const now = Date.now();
+    if (sessionLostNavAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
+      setPlaybackError(
+        "Playback session could not be recovered. Try reloading the page or choosing another quality.",
+      );
+      return;
+    }
+    const tooSoon =
+      sessionLostNavAttemptsRef.current > 0 &&
+      now - lastSessionLostNavAtRef.current < HLS_SESSION_LOST_MIN_INTERVAL_MS;
+    if (tooSoon) {
+      return;
+    }
+    sessionLostNavAttemptsRef.current += 1;
+    lastSessionLostNavAtRef.current = now;
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
