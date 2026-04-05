@@ -95,22 +95,24 @@ function PlaybackSettingsDialogForm({
   const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
     settings.subtitleTrack,
   );
+  const resolvedMode =
+    mode !== null && validIds.includes(mode) ? mode : initialMode;
   const loadingSelectsDisabled = isPending && !techLoaded;
   const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
-  const canSave = mode !== null;
+  const canSave = resolvedMode !== null;
 
   const handleSave = () => {
-    if (!mode) return;
-    onSave({ mode, audioTrack, subtitleTrack });
+    if (!resolvedMode) return;
+    onSave({ mode: resolvedMode, audioTrack, subtitleTrack });
   };
 
   const summaryText =
     isPending && !techLoaded
       ? PLAYBACK_SETTINGS_SUMMARY_LOADING
-      : mode === null
+      : resolvedMode === null
         ? NO_PLAYBACK_MODES_LABEL
         : describePlaybackExperience(
-          mode,
+          resolvedMode,
           audioStreams[audioTrack],
           audioTrack,
         );
@@ -134,7 +136,7 @@ function PlaybackSettingsDialogForm({
             <select
               id="video-quality"
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
-              value={mode ?? ""}
+              value={resolvedMode ?? ""}
               onChange={e => setMode(e.target.value as StreamModeId)}
               disabled={modeSelectDisabled}
             >
@@ -150,7 +152,7 @@ function PlaybackSettingsDialogForm({
             </select>
           ) : (
             <Select
-              value={mode ?? undefined}
+              value={resolvedMode ?? undefined}
               onValueChange={v => setMode(v as StreamModeId)}
               disabled={modeSelectDisabled}
             >

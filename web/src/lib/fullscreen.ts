@@ -26,12 +26,16 @@ export function exitDocumentFullscreen(): Promise<void> {
   if (!exit) {
     return Promise.resolve();
   }
-  const result = exit();
-  if (
-    result !== undefined &&
-    typeof (result as Promise<void>).then === "function"
-  ) {
-    return result as Promise<void>;
+  try {
+    const result = exit();
+    if (
+      result !== undefined &&
+      typeof (result as Promise<void>).then === "function"
+    ) {
+      return result as Promise<void>;
+    }
+  } catch {
+    return Promise.resolve();
   }
   return Promise.resolve();
 }
@@ -43,12 +47,16 @@ export function requestElementFullscreen(el: HTMLElement): Promise<void> {
   if (!req) {
     return Promise.reject(new Error("Fullscreen API not available"));
   }
-  const result = req();
-  if (
-    result !== undefined &&
-    typeof (result as Promise<void>).then === "function"
-  ) {
-    return result as Promise<void>;
+  try {
+    const result = req();
+    if (
+      result !== undefined &&
+      typeof (result as Promise<void>).then === "function"
+    ) {
+      return result as Promise<void>;
+    }
+  } catch {
+    return Promise.resolve();
   }
   return Promise.resolve();
 }
@@ -75,8 +83,12 @@ export function tryWebKitVideoEnterFullscreen(video: HTMLVideoElement): boolean 
   if (typeof v.webkitEnterFullscreen !== "function") {
     return false;
   }
-  v.webkitEnterFullscreen();
-  return true;
+  try {
+    v.webkitEnterFullscreen();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function tryWebKitVideoExitFullscreen(video: HTMLVideoElement): boolean {
@@ -84,6 +96,10 @@ export function tryWebKitVideoExitFullscreen(video: HTMLVideoElement): boolean {
   if (typeof v.webkitExitFullscreen !== "function") {
     return false;
   }
-  v.webkitExitFullscreen();
-  return true;
+  try {
+    v.webkitExitFullscreen();
+    return true;
+  } catch {
+    return false;
+  }
 }

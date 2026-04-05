@@ -269,9 +269,7 @@ function TrailerPage() {
         case "Escape":
           e.preventDefault();
           if (getFullscreenElement()) {
-            void exitDocumentFullscreen().finally(() => {
-              handleClose();
-            });
+            void exitDocumentFullscreen();
             break;
           }
           handleClose();
