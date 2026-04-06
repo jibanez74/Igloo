@@ -418,7 +418,7 @@ function TrailerPage() {
       <p className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or left arrow to rewind
         10 seconds, L or right arrow to forward 10 seconds, up/down arrows for
-        volume, M to mute, F for fullscreen, Escape to close.
+        volume, M to mute, F for fullscreen, Escape to exit fullscreen or close.
       </p>
 
       {/* Header with close button */}
