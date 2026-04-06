@@ -41,7 +41,7 @@ type Application struct {
 	Logger               applogger.LoggerInterface
 	LoggerCloser         func() error
 	Ffprobe              ffprobe.FfprobeInterface
-	FFmpeg               *ffmpeg.FFmpeg
+	FFmpeg               ffmpeg.FFmpegInterface
 	Spotify              spotify.SpotifyInterface
 	Tmdb                 tmdb.TmdbInterface
 	SessionManager       *scs.SessionManager

@@ -152,6 +152,15 @@ export default function VideoPlayer({
     };
   }, [src, videoRef, startSec]);
 
+  // The subtitleTrack object gets a new reference on every parent render;
+  // key on the URL which uniquely identifies the active subtitle so the
+  // effect only re-runs when the subtitle actually changes.
+  const subtitleUrl = subtitleTrack?.url ?? null;
+  const subtitleTrackRef = useRef(subtitleTrack);
+  useEffect(() => {
+    subtitleTrackRef.current = subtitleTrack;
+  }, [subtitleTrack]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -161,13 +170,14 @@ export default function VideoPlayer({
       video.removeChild(existing);
     }
 
-    if (!subtitleTrack) return;
+    const sub = subtitleTrackRef.current;
+    if (!sub) return;
 
     const track = document.createElement("track");
     track.kind = "subtitles";
-    track.src = subtitleTrack.url;
-    track.srclang = subtitleTrack.srclang;
-    track.label = subtitleTrack.label;
+    track.src = sub.url;
+    track.srclang = sub.srclang;
+    track.label = sub.label;
     track.default = true;
     track.setAttribute("data-subtitle", "");
     video.appendChild(track);
@@ -178,7 +188,7 @@ export default function VideoPlayer({
         video.removeChild(track);
       }
     };
-  }, [subtitleTrack, videoRef]);
+  }, [subtitleUrl, videoRef]);
 
   return (
     <div
