@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -35,25 +36,23 @@ import (
 )
 
 type Application struct {
-	DB                   *sql.DB
-	Queries              *database.Queries
-	Settings             *database.Setting
-	Logger               applogger.LoggerInterface
-	LoggerCloser         func() error
-	Ffprobe              ffprobe.FfprobeInterface
-	FFmpeg               ffmpeg.FFmpegInterface
-	Spotify              spotify.SpotifyInterface
-	Tmdb                 tmdb.TmdbInterface
-	SessionManager       *scs.SessionManager
-	Wait                 *sync.WaitGroup
-	Router               *chi.Mux
-	Server               *http.Server
-	ScannerDBMu          sync.Mutex
-	HLSSessionCache      *cache.Cache
-	HLSSessionGroup      singleflight.Group
-	SubtitleVTTCache     *cache.Cache
-	coverArtThrottleMu   sync.Mutex
-	lastCoverArtDownload time.Time
+	DB               *sql.DB
+	Queries          *database.Queries
+	Settings         *database.Setting
+	Logger           applogger.LoggerInterface
+	LoggerCloser     func() error
+	Ffprobe          ffprobe.FfprobeInterface
+	FFmpeg           ffmpeg.FFmpegInterface
+	Spotify          spotify.SpotifyInterface
+	Tmdb             tmdb.TmdbInterface
+	SessionManager   *scs.SessionManager
+	Wait             *sync.WaitGroup
+	Router           *chi.Mux
+	Server           *http.Server
+	ScannerDBMu      sync.Mutex
+	HLSSessionCache  *cache.Cache
+	HLSSessionGroup  singleflight.Group
+	SubtitleVTTCache *cache.Cache
 }
 
 // SQL is the embedded startup schema applied by InitTables.
@@ -176,7 +175,6 @@ func InitApp() (*Application, error) {
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
-	// TMDB enrichment is optional.
 	if app.Settings.TmdbKey.Valid {
 		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
 		if err != nil {
@@ -187,13 +185,13 @@ func InitApp() (*Application, error) {
 		}
 	}
 
-	// Spotify enrichment is optional.
 	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
 		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
 		spotifyClient, err := spotify.New(
 			app.Settings.SpotifyClientID.String,
 			app.Settings.SpotifyClientSecret.String,
 		)
+
 		if err != nil {
 			app.Logger.Warn("failed to initialize spotify client", "error", err)
 		} else {
@@ -202,7 +200,6 @@ func InitApp() (*Application, error) {
 		}
 	}
 
-	// Background scanners run after startup so the server can begin serving immediately.
 	if app.Settings.TmdbKey.Valid && app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
 		go app.ScanMoviesLibrary()
 	}
@@ -257,9 +254,6 @@ func (app *Application) InitTables() error {
 	if err != nil {
 		return err
 	}
-
-	// One-off migration: add poster_path to movies if missing (e.g. existing DBs created before this column).
-	_, _ = app.DB.Exec("ALTER TABLE movies ADD COLUMN poster_path TEXT")
 
 	app.Logger.Info("database tables initialized successfully")
 
@@ -355,6 +349,7 @@ func (app *Application) InitDirs() error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize logs directory: %w", err)
 		}
+
 		if created {
 			app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
 		}
@@ -445,14 +440,29 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 
 	app.Logger.Info("no admin user found, creating default admin user...")
 
-	hashedPassword, err := helpers.HashPassword("AdminPassword")
+	name := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_NAME))
+	if name == "" {
+		name = helpers.DEFAULT_ADMIN_NAME
+	}
+
+	email := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_EMAIL))
+	if email == "" {
+		email = helpers.DEFAULT_ADMIN_EMAIL
+	}
+
+	password := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_PASSWORD))
+	if password == "" {
+		password = helpers.DEFAULT_ADMIN_PASSWORD
+	}
+
+	hashedPassword, err := helpers.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %v", err)
 	}
 
 	params := database.CreateUserParams{
-		Name:     "Admin",
-		Email:    "admin@sample.com",
+		Name:     name,
+		Email:    email,
 		Password: hashedPassword,
 		IsAdmin:  true,
 		Avatar:   sql.NullString{Valid: false},
