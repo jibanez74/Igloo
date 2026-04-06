@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -52,6 +52,14 @@ export default function MovieDetailsHeroActions({
   const queryClient = useQueryClient();
   const playButtonRef = useRef<HTMLAnchorElement | null>(null);
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [playbackFormResetKey, setPlaybackFormResetKey] = useState(0);
+
+  const handlePlaybackSettingsOpenChange = (next: boolean) => {
+    if (next) {
+      setPlaybackFormResetKey(k => k + 1);
+    }
+    onPlaybackSettingsOpenChange(next);
+  };
   const { data: watchProgressData, isLoading: watchProgressLoading } = useQuery(
     movieWatchProgressQueryOpts(movieId),
   );
@@ -184,7 +192,9 @@ export default function MovieDetailsHeroActions({
           <MoreVertical className="size-4" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          <DropdownMenuItem onSelect={() => onPlaybackSettingsOpenChange(true)}>
+          <DropdownMenuItem
+            onSelect={() => handlePlaybackSettingsOpenChange(true)}
+          >
             <Settings2 className="size-4" aria-hidden="true" />
             Playback Settings
           </DropdownMenuItem>
@@ -222,10 +232,11 @@ export default function MovieDetailsHeroActions({
       <PlaybackSettingsDialog
         movieId={movieId}
         open={playbackSettingsOpen}
-        onOpenChange={onPlaybackSettingsOpenChange}
+        onOpenChange={handlePlaybackSettingsOpenChange}
         settings={playbackSettings}
         onSave={onPlaybackSettingsChange}
         restoreFocusRef={playButtonRef}
+        formResetKey={playbackFormResetKey}
       />
 
       {user?.is_admin && (

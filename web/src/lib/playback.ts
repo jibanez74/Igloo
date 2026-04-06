@@ -31,6 +31,19 @@ export function hlsStreamRecoveryKey(src: string): string {
   }
 }
 
+/**
+ * True when the browser can play HLS via MSE without hls.js (e.g. Safari).
+ * Evaluated once at module load; false in non-browser environments.
+ */
+export const supportsNativeHLS = (() => {
+  if (typeof document === "undefined") return false;
+  const v = document.createElement("video");
+  return (
+    v.canPlayType("application/vnd.apple.mpegurl") !== "" ||
+    v.canPlayType("application/x-mpegURL") !== ""
+  );
+})();
+
 export type PlaybackSettings = {
   mode: StreamModeId;
   audioTrack: number;

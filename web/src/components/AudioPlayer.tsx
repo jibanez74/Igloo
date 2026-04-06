@@ -112,6 +112,9 @@ export default function AudioPlayer({
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
+  const prevAriaLabel = hasPrevious ? "Previous track" : "No previous track";
+  const nextAriaLabel = hasNext ? "Next track" : "No next track";
+  const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
 
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
@@ -403,11 +406,7 @@ export default function AudioPlayer({
                 onClick={playPrevious}
                 disabled={!hasPrevious}
                 className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={
-                  hasPrevious
-                    ? `Previous track: ${tracks[currentIndex - 1]?.title}`
-                    : "No previous track"
-                }
+                aria-label={prevAriaLabel}
               >
                 <SkipBack className="size-6" aria-hidden="true" />
               </button>
@@ -417,13 +416,7 @@ export default function AudioPlayer({
                 onClick={handleTogglePlay}
                 disabled={isLoading}
                 className='flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50'
-                aria-label={
-                  isLoading
-                    ? "Loading track"
-                    : isPlaying
-                      ? `Pause ${track.title}`
-                      : `Play ${track.title}`
-                }
+                aria-label={isLoading ? "Loading" : playPauseAriaLabel}
               >
                 {isLoading ? (
                   <Spinner className="size-8" />
@@ -438,11 +431,7 @@ export default function AudioPlayer({
                 onClick={playNext}
                 disabled={!hasNext}
                 className='flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={
-                  hasNext
-                    ? `Next track: ${tracks[currentIndex + 1]?.title}`
-                    : "No next track"
-                }
+                aria-label={nextAriaLabel}
               >
                 <SkipForward className="size-6" aria-hidden="true" />
               </button>
@@ -515,11 +504,7 @@ export default function AudioPlayer({
                 onClick={playPrevious}
                 disabled={!hasPrevious}
                 className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={
-                  hasPrevious
-                    ? `Previous track: ${tracks[currentIndex - 1]?.title}`
-                    : "No previous track"
-                }
+                aria-label={prevAriaLabel}
               >
                 <SkipBack className="size-4" aria-hidden="true" />
               </button>
@@ -529,13 +514,7 @@ export default function AudioPlayer({
                 onClick={handleTogglePlay}
                 disabled={isLoading}
                 className='flex size-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50'
-                aria-label={
-                  isLoading
-                    ? "Loading track"
-                    : isPlaying
-                      ? `Pause ${track.title}`
-                      : `Play ${track.title}`
-                }
+                aria-label={isLoading ? "Loading" : playPauseAriaLabel}
               >
                 {isLoading ? (
                   <Spinner className="size-5" />
@@ -551,11 +530,7 @@ export default function AudioPlayer({
                 onClick={playNext}
                 disabled={!hasNext}
                 className='flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30'
-                aria-label={
-                  hasNext
-                    ? `Next track: ${tracks[currentIndex + 1]?.title}`
-                    : "No next track"
-                }
+                aria-label={nextAriaLabel}
               >
                 <SkipForward className="size-4" aria-hidden="true" />
               </button>

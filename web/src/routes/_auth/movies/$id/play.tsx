@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
@@ -51,6 +51,17 @@ import {
   type StreamModeId,
 } from "@/lib/playback";
 import { showActionFailed } from "@/lib/toast-helpers";
+import { toast } from "sonner";
+import {
+  canRequestElementFullscreen,
+  exitDocumentFullscreen,
+  getFullscreenElement,
+  isDocumentFullscreenEntryLikely,
+  requestElementFullscreen,
+  tryWebKitVideoEnterFullscreen,
+  tryWebKitVideoExitFullscreen,
+} from "@/lib/fullscreen";
+import { cn } from "@/lib/utils";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type { PlaySearchParams } from "@/types";
 import { playSearchSchema } from "@/types/movie-play";
@@ -183,6 +194,10 @@ function PlayMoviePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isImmersiveViewport, setIsImmersiveViewport] = useState(false);
+  const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
+    "none",
+  );
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(start > 0);
@@ -192,6 +207,7 @@ function PlayMoviePage() {
   const streamUrl = buildStreamUrl(movieId, mode, audioTrack, start);
   const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
   const isHlsPlayback = mode !== "direct";
+  const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
   const scheduleHideControls = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -317,34 +333,46 @@ function PlayMoviePage() {
   const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
   const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
 
-  const toggleFullscreen = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const isCurrentlyFullscreen = !!(
-      document.fullscreenElement ??
-      (document as Document & { webkitFullscreenElement?: Element })
-        .webkitFullscreenElement
-    );
-    if (isCurrentlyFullscreen) {
-      const exitFs =
-        document.exitFullscreen ??
-        (
-          document as Document & {
-            webkitExitFullscreen?: () => Promise<void>;
-          }
-        ).webkitExitFullscreen;
-      exitFs?.call(document);
-    } else {
-      const requestFs =
-        el.requestFullscreen ??
-        (
-          el as HTMLElement & {
-            webkitRequestFullscreen?: () => Promise<void>;
-          }
-        ).webkitRequestFullscreen;
-      requestFs?.call(el);
+  const toggleFullscreen = useCallback(() => {
+    const container = containerRef.current;
+    const video = videoRef.current;
+    if (!container || !video) return;
+
+    if (getFullscreenElement()) {
+      void exitDocumentFullscreen();
+      return;
     }
-  };
+    if (fullscreenSourceRef.current === "webkitVideo") {
+      tryWebKitVideoExitFullscreen(video);
+      return;
+    }
+    if (isImmersiveViewport) {
+      setIsImmersiveViewport(false);
+      return;
+    }
+
+    const enterFallback = () => {
+      if (tryWebKitVideoEnterFullscreen(video)) {
+        return;
+      }
+      setIsImmersiveViewport(true);
+      toast.info(
+        "Full screen isn't available in this browser. Using expanded view instead.",
+      );
+    };
+
+    if (
+      !canRequestElementFullscreen(container) ||
+      !isDocumentFullscreenEntryLikely()
+    ) {
+      enterFallback();
+      return;
+    }
+
+    void requestElementFullscreen(container).catch(() => {
+        enterFallback();
+      });
+  }, [isImmersiveViewport]);
 
   // Video element event listeners (single source of truth — VideoPlayer renders a bare <video>)
   useEffect(() => {
@@ -475,13 +503,18 @@ function PlayMoviePage() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      const fullscreenEl =
-        document.fullscreenElement ??
-        (document as Document & { webkitFullscreenElement?: Element })
-          .webkitFullscreenElement;
-      const entering = !!fullscreenEl;
-      setIsFullscreen(entering);
-      if (entering) setControlsVisible(true);
+      const entering = !!getFullscreenElement();
+      if (entering) {
+        fullscreenSourceRef.current = "document";
+        setIsFullscreen(true);
+        setIsImmersiveViewport(false);
+        setControlsVisible(true);
+      } else {
+        if (fullscreenSourceRef.current === "document") {
+          fullscreenSourceRef.current = "none";
+        }
+        setIsFullscreen(false);
+      }
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("webkitfullscreenchange", onFullscreenChange);
@@ -495,7 +528,39 @@ function PlayMoviePage() {
   }, []);
 
   useEffect(() => {
-    if (!isFullscreen) {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onWebKitBegin = () => {
+      fullscreenSourceRef.current = "webkitVideo";
+      setIsFullscreen(true);
+      setIsImmersiveViewport(false);
+      setControlsVisible(true);
+    };
+    const onWebKitEnd = () => {
+      fullscreenSourceRef.current = "none";
+      setIsFullscreen(false);
+    };
+
+    video.addEventListener("webkitbeginfullscreen", onWebKitBegin);
+    video.addEventListener("webkitendfullscreen", onWebKitEnd);
+    return () => {
+      video.removeEventListener("webkitbeginfullscreen", onWebKitBegin);
+      video.removeEventListener("webkitendfullscreen", onWebKitEnd);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isImmersiveViewport) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isImmersiveViewport]);
+
+  useEffect(() => {
+    if (!chromeFullscreenMode) {
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -509,7 +574,7 @@ function PlayMoviePage() {
         idleTimerRef.current = null;
       }
     };
-  }, [isFullscreen]);
+  }, [chromeFullscreenMode]);
 
   useEffect(() => {
     const timer = setTimeout(() => backButtonRef.current?.focus(), 50);
@@ -529,11 +594,9 @@ function PlayMoviePage() {
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      const fullscreenEl =
-        document.fullscreenElement ??
-        (document as Document & { webkitFullscreenElement?: Element })
-          .webkitFullscreenElement;
-      if (fullscreenEl) showControlsAndResetIdle();
+      if (getFullscreenElement() || isImmersiveViewport) {
+        showControlsAndResetIdle();
+      }
 
       switch (e.key) {
         case " ":
@@ -598,21 +661,26 @@ function PlayMoviePage() {
           seek(0);
           break;
         case "Escape": {
-          const fse =
-            document.fullscreenElement ??
-            (document as Document & { webkitFullscreenElement?: Element })
-              .webkitFullscreenElement;
-          if (fse) {
+          if (getFullscreenElement()) {
             e.preventDefault();
             e.stopPropagation();
-            const exitFs =
-              document.exitFullscreen ??
-              (
-                document as Document & {
-                  webkitExitFullscreen?: () => Promise<void>;
-                }
-              ).webkitExitFullscreen;
-            exitFs?.call(document);
+            void exitDocumentFullscreen();
+            break;
+          }
+          const v = videoRef.current;
+          if (
+            fullscreenSourceRef.current === "webkitVideo" &&
+            v &&
+            tryWebKitVideoExitFullscreen(v)
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            break;
+          }
+          if (isImmersiveViewport) {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsImmersiveViewport(false);
           }
           break;
         }
@@ -620,7 +688,9 @@ function PlayMoviePage() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [currentTime, duration]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Intentionally omit seekBackward, seekForward, togglePlay, and seek from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, duration, isImmersiveViewport, toggleFullscreen]);
 
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Tab" && containerRef.current) {
@@ -803,9 +873,17 @@ function PlayMoviePage() {
     <div
       ref={containerRef}
       onKeyDown={handleContainerKeyDown}
-      onMouseMove={isFullscreen ? showControlsAndResetIdle : undefined}
-      onTouchStart={isFullscreen ? showControlsAndResetIdle : undefined}
-      className="flex min-h-0 flex-1 flex-col bg-slate-900 [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen"
+      onMouseMove={
+        chromeFullscreenMode ? showControlsAndResetIdle : undefined
+      }
+      onTouchStart={
+        chromeFullscreenMode ? showControlsAndResetIdle : undefined
+      }
+      className={cn(
+        "flex min-h-0 flex-1 flex-col bg-slate-900 [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        isImmersiveViewport &&
+          "fixed inset-0 z-50 min-h-dvh w-full max-w-none overflow-hidden",
+      )}
       role="region"
       aria-label={`Video player for ${title}`}
     >
@@ -853,7 +931,7 @@ function PlayMoviePage() {
 
       <header
         className={
-          isFullscreen
+          chromeFullscreenMode
             ? `absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg transition-all duration-300 ease-out ${
                 controlsVisible
                   ? "translate-y-0 opacity-100"
@@ -880,11 +958,11 @@ function PlayMoviePage() {
 
       <div
         className="flex min-h-0 flex-1 flex-col"
-        onClick={isFullscreen ? togglePlay : undefined}
-        role={isFullscreen ? "button" : undefined}
-        tabIndex={isFullscreen ? 0 : undefined}
+        onClick={chromeFullscreenMode ? togglePlay : undefined}
+        role={chromeFullscreenMode ? "button" : undefined}
+        tabIndex={chromeFullscreenMode ? 0 : undefined}
         onKeyDown={
-          isFullscreen
+          chromeFullscreenMode
             ? e => {
                 if (e.key === " " || e.key === "Enter") {
                   e.preventDefault();
@@ -894,13 +972,13 @@ function PlayMoviePage() {
               }
             : undefined
         }
-        aria-label={isFullscreen ? "Play or pause" : undefined}
+        aria-label={chromeFullscreenMode ? "Play or pause" : undefined}
       >
         <VideoPlayer
           videoRef={videoRef}
           src={streamUrl}
           title={title}
-          isFullscreen={isFullscreen}
+          isFullscreen={chromeFullscreenMode}
           onError={msg => setPlaybackError(msg)}
           subtitleTrack={subtitleInfo}
           startSec={isHlsPlayback ? 0 : start}
@@ -910,7 +988,7 @@ function PlayMoviePage() {
 
       <footer
         className={
-          isFullscreen
+          chromeFullscreenMode
             ? `absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-all duration-300 ease-out ${
                 controlsVisible
                   ? "translate-y-0 opacity-100"
@@ -987,10 +1065,16 @@ function PlayMoviePage() {
               <button
                 onClick={toggleFullscreen}
                 className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
-                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                aria-pressed={isFullscreen}
+                aria-label={
+                  chromeFullscreenMode
+                    ? isImmersiveViewport && !isFullscreen
+                      ? "Exit expanded view"
+                      : "Exit fullscreen"
+                    : "Fullscreen"
+                }
+                aria-pressed={chromeFullscreenMode}
               >
-                {isFullscreen ? (
+                {chromeFullscreenMode ? (
                   <Minimize className="size-5" aria-hidden="true" />
                 ) : (
                   <Maximize className="size-5" aria-hidden="true" />

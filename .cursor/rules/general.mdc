@@ -1,123 +1,97 @@
 ---
-description: General engineering rules for the media center project
+description: Global engineering rules for the media center project
 alwaysApply: true
 ---
 
 # General Rules
 
-## Project Context
+## Project Overview
+
 This repository contains a media center application with:
+
 - a Go backend
 - a React frontend
 
-The product is focused on local media management and playback.  
-Prefer solutions that support performance, maintainability, accessibility, and a clean user experience.
+The product is focused on local media management and playback.
 
-## General Expectations
-- Follow the existing architecture and patterns already present in the codebase.
-- Prefer incremental improvements over broad rewrites.
+Prioritize:
+- performance
+- accessibility, especially for screen reader users
+- reliability for local media serving
+- a clean and consistent user experience
+
+Do not expand scope beyond core media playback and management unless explicitly requested.
+
+## Core Principles
+
+- Follow the existing architecture and patterns in the codebase.
+- Prefer incremental improvements over large rewrites.
 - Keep solutions practical and production-oriented.
-- Avoid unnecessary abstraction.
-- Do not introduce new dependencies unless there is a clear and justified need.
-- Reuse existing utilities, helpers, components, and patterns before creating new ones.
-- When making changes, keep them scoped to the task being worked on.
+- Avoid unnecessary abstractions.
+- Do not introduce new dependencies unless clearly justified.
+- Reuse existing utilities, helpers, and components before creating new ones.
+- Keep all changes tightly scoped to the task.
 
 ## Code Style
+
 - Write clear, readable, and direct code.
-- Prefer simple control flow over clever or overly compact solutions.
-- Use descriptive names for variables, functions, types, and components.
+- Prefer simple control flow over clever or compact solutions.
+- Use descriptive and explicit naming.
 - Keep functions and components focused on a single responsibility.
-- Avoid deeply nested logic when a clearer structure is possible.
-- Prefer explicit code over magic behavior.
+- Avoid deep nesting when a clearer structure is possible.
+- Prefer explicit behavior over hidden or magic behavior.
 - Avoid premature optimization.
 
 ## Comments
-- Avoid comments unless they are strictly necessary.
-- Do not add comments that simply restate what the code already makes obvious.
-- Only use comments when they provide important context, explain a non-obvious constraint, document a workaround, or clarify a decision that cannot be easily inferred from the code itself.
 
-## Backend Rules
-- Use Go idioms and standard library patterns whenever reasonable.
-- Keep handlers thin and push business logic into appropriate services or application layers.
-- Validate input at the boundary of the system.
-- Return consistent and predictable error responses.
-- Handle errors explicitly and avoid swallowing them.
-- Prefer straightforward database and file handling logic.
-- Be careful with file streaming, range requests, and large media handling.
-- Prioritize reliability and efficiency for local media serving.
-- Do not refactor working backend code unless the task requires it.
-- All constants go in the file constants.go
-- All helper or utilities go in the hlpers package
-- Never define types inside of functions
-- All functions, variables or types in the main package should start with a capital letter.
-
-## Go Error Handling
-- Never use the `if x, err := ...; err != nil {}` pattern.
-- Always assign the returned values first.
-- Always place `if err != nil {}` on its own line immediately after the assignment when checking errors.
-- This rule applies to all Go code in the repository.
-
-Preferred:
-
-```go
-info, err := os.Stat(path)
-if err != nil {
-    return err
-}
-Not allowed:
-if info, err := os.Stat(path); err != nil {
-    return err
-}
-
-## Frontend Rules
-- Use React and TypeScript patterns consistent with the existing application.
-- Always use functional components.
-- Do not use memoization hooks because we are using the react compiler.
-- Keep components small, focused, and composable.
-- Reuse existing UI components before creating new ones.
-- Keep styling consistent with the existing design system and theme.
-- Prefer clear state flows and predictable component behavior.
-- Avoid unnecessary client-side complexity.
-- Prefer accessible markup and keyboard-friendly interactions where relevant.
-- Helper and utilities go in the lib directory.
-- All constants must always go in the constants.ts file inside of the lib directory.
-- Components should always go directly in the components directory.
-
-## Data Fetching and State
-- Follow the existing project conventions for data fetching and state management.
-- Use the established libraries and patterns already used in the application.
-- Keep server state and UI state clearly separated.
-- Avoid duplicated fetching logic when reusable hooks or utilities already exist.
-- Do not introduce global state unless there is a clear need.
+- Avoid comments unless strictly necessary.
+- Do not restate what the code already makes obvious.
+- Use comments only for:
+  - non-obvious constraints
+  - important context
+  - workarounds
+  - design decisions that cannot be inferred
 
 ## Performance
-- Prefer efficient solutions, but do not sacrifice readability without a clear reason.
-- Be mindful of rendering costs on the frontend.
-- Be mindful of I/O, streaming behavior, and memory usage on the backend.
-- Optimize only where there is an actual need or a known bottleneck.
-- Do not add memoization, caching, or complex optimizations by default.
 
-## Accessibility and UX
-- Keep accessibility in mind when building UI.
-- Prefer semantic HTML where possible.
-- Ensure interactive elements are understandable and usable.
-- Avoid UI patterns that make navigation harder.
-- Keep the interface clean and consistent.
+- Prefer efficient solutions, but not at the cost of readability.
+- Optimize only when necessary.
+- Do not introduce caching or complexity by default.
 
-## Media Center Product Direction
-- Keep the project focused on local media playback and management.
-- Do not introduce features that push the product toward unrelated scope such as plugin ecosystems, torrent integrations, or unnecessary platform-style complexity unless explicitly requested.
-- Prefer solutions that improve the core experience of browsing, managing, and playing local media.
+## Accessibility
+
+- Accessibility is a first-class requirement.
+- Ensure keyboard navigability.
+- Ensure screen reader compatibility.
+- Prefer semantic structures and predictable UI behavior.
+
+## Tooling Rules
+
+- Use Bun as the package manager.
+- Never use npm, yarn, or pnpm.
+- Do not introduce tooling that conflicts with Bun.
+
+## Product Direction
+
+- Focus strictly on:
+  - local media playback
+  - media management
+
+Do not introduce:
+- plugin ecosystems
+- torrent integrations
+- unrelated platform features
 
 ## When Making Changes
-- First understand the existing implementation.
-- Match the style and structure of nearby code.
-- Change only what is needed for the task.
-- Do not perform unrelated cleanup unless it is required to complete the work safely.
-- Preserve backwards compatibility unless the task explicitly calls for a breaking change.
+
+- Understand the existing implementation first.
+- Match nearby code style and structure.
+- Change only what is necessary.
+- Avoid unrelated refactoring.
+- Preserve backwards compatibility unless explicitly required.
 
 ## Output Expectations
-- Produce code that is ready to integrate.
-- Do not include unnecessary explanatory text inside the code.
+
+- Produce production-ready code.
 - Keep diffs clean and focused.
-- When relevant, mention important tradeoffs, assumptions, or follow-up work briefly and clearly.
+- Do not include unnecessary explanations inside code.
