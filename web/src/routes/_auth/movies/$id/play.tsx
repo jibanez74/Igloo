@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
@@ -308,15 +308,17 @@ function PlayMoviePage() {
     });
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      video.play().catch(() => {
+      try {
+        await video.play();
+      } catch {
         setPlaybackError(
           "Playback failed — the browser could not play this stream.",
         );
-      });
+      }
     } else {
       video.pause();
     }
@@ -333,7 +335,7 @@ function PlayMoviePage() {
   const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
   const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
 
-  const toggleFullscreen = useCallback(() => {
+  const toggleFullscreen = async () => {
     const container = containerRef.current;
     const video = videoRef.current;
     if (!container || !video) return;
@@ -369,10 +371,12 @@ function PlayMoviePage() {
       return;
     }
 
-    void requestElementFullscreen(container).catch(() => {
-        enterFallback();
-      });
-  }, [isImmersiveViewport]);
+    try {
+      await requestElementFullscreen(container);
+    } catch {
+      enterFallback();
+    }
+  };
 
   // Video element event listeners (single source of truth — VideoPlayer renders a bare <video>)
   useEffect(() => {
@@ -404,14 +408,16 @@ function PlayMoviePage() {
 
   useEffect(() => {
     if (!playing) return;
-    const interval = window.setInterval(() => {
-      void persistMovieWatchProgress(
-        movieId,
-        currentTimeRef.current,
-        durationRef.current,
-      ).catch(() => {
+    const interval = window.setInterval(async () => {
+      try {
+        await persistMovieWatchProgress(
+          movieId,
+          currentTimeRef.current,
+          durationRef.current,
+        );
+      } catch {
         // Silent background save failure; pause/end handlers surface failures when needed.
-      });
+      }
     }, WATCH_PROGRESS_SAVE_INTERVAL_MS);
     return () => {
       window.clearInterval(interval);
@@ -422,27 +428,31 @@ function PlayMoviePage() {
     const video = videoRef.current;
     if (!video) return;
 
-    const handlePauseSave = () => {
-      void persistMovieWatchProgress(
-        movieId,
-        currentTimeRef.current,
-        durationRef.current,
-      ).catch(() => {
+    const handlePauseSave = async () => {
+      try {
+        await persistMovieWatchProgress(
+          movieId,
+          currentTimeRef.current,
+          durationRef.current,
+        );
+      } catch {
         // Best effort on pause; avoid interrupting playback UI with repeated toasts.
-      });
+      }
     };
 
-    const handleEndedSave = () => {
-      void persistMovieWatchProgress(
-        movieId,
-        durationRef.current,
-        durationRef.current,
-      ).catch(() => {
+    const handleEndedSave = async () => {
+      try {
+        await persistMovieWatchProgress(
+          movieId,
+          durationRef.current,
+          durationRef.current,
+        );
+      } catch {
         showActionFailed(
           "save watch progress",
           "Unable to mark this movie as watched.",
         );
-      });
+      }
     };
 
     video.addEventListener("pause", handlePauseSave);

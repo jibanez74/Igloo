@@ -44,6 +44,15 @@ export default function VideoPlayer({
   const sessionLostAttemptsRef = useRef(0);
   const lastSessionLostAtRef = useRef(0);
 
+  // Stable refs for callbacks so the main setup effect only re-runs when the
+  // stream URL or start position actually changes, not on every parent render.
+  const onErrorRef = useRef(onError);
+  const onSessionLostRef = useRef(onSessionLost);
+  useEffect(() => {
+    onErrorRef.current = onError;
+    onSessionLostRef.current = onSessionLost;
+  }, [onError, onSessionLost]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
@@ -79,11 +88,11 @@ export default function VideoPlayer({
         if (
           data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
           data.response?.code === 404 &&
-          onSessionLost
+          onSessionLostRef.current
         ) {
           const now = Date.now();
           if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
-            onError(
+            onErrorRef.current(
               "Playback session could not be recovered. Try reloading the page or choosing another quality.",
             );
             return;
@@ -97,7 +106,7 @@ export default function VideoPlayer({
           }
           sessionLostAttemptsRef.current += 1;
           lastSessionLostAtRef.current = now;
-          onSessionLost(video.currentTime);
+          onSessionLostRef.current(video.currentTime);
           return;
         }
 
@@ -111,11 +120,13 @@ export default function VideoPlayer({
 
         const detail = data.details ?? "unknown error";
         if (data.type === "networkError") {
-          onError(`Network error loading stream (${detail}).`);
+          onErrorRef.current(`Network error loading stream (${detail}).`);
         } else if (data.type === "mediaError") {
-          onError(`The browser could not decode this stream (${detail}).`);
+          onErrorRef.current(
+            `The browser could not decode this stream (${detail}).`,
+          );
         } else {
-          onError(`Stream error: ${detail}`);
+          onErrorRef.current(`Stream error: ${detail}`);
         }
       });
 
@@ -139,7 +150,7 @@ export default function VideoPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef, onError, startSec, onSessionLost]);
+  }, [src, videoRef, startSec]);
 
   useEffect(() => {
     const video = videoRef.current;
