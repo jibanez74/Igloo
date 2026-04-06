@@ -55,8 +55,8 @@ export function requestElementFullscreen(el: HTMLElement): Promise<void> {
     ) {
       return result as Promise<void>;
     }
-  } catch {
-    return Promise.resolve();
+  } catch (error) {
+    return Promise.reject(error);
   }
   return Promise.resolve();
 }

@@ -168,6 +168,7 @@ function TrailerPage() {
     const onFullscreenChange = () => {
       setIsBrowserFullscreen(!!getFullscreenElement());
     };
+    onFullscreenChange();
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("webkitfullscreenchange", onFullscreenChange);
     return () => {
