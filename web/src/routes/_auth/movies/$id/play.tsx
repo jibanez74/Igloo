@@ -48,6 +48,7 @@ import {
   formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
+  resolvePlaybackSettings,
   type StreamModeId,
 } from "@/lib/playback";
 import { showActionFailed } from "@/lib/toast-helpers";
@@ -178,16 +179,6 @@ function PlayMoviePage() {
   const lastSessionLostNavAtRef = useRef(0);
   const sessionLostStreamKeyRef = useRef("");
 
-  const sessionLostStreamKey = `${movieId}:${mode}:${audioTrack}`;
-
-  useEffect(() => {
-    if (sessionLostStreamKeyRef.current !== sessionLostStreamKey) {
-      sessionLostStreamKeyRef.current = sessionLostStreamKey;
-      sessionLostNavAttemptsRef.current = 0;
-      lastSessionLostNavAtRef.current = 0;
-    }
-  }, [sessionLostStreamKey]);
-
   useEffect(() => {
     if (audioPlayer.isPlaying) {
       audioPlayer.pause();
@@ -210,14 +201,6 @@ function PlayMoviePage() {
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
 
-  const streamUrl = buildStreamUrl(
-    movieId,
-    mode,
-    audioTrack,
-    start,
-    streamReloadKey,
-  );
-  const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
   const scheduleHideControls = () => {
@@ -247,31 +230,107 @@ function PlayMoviePage() {
     movieWatchProgressQueryOpts(movieId),
   );
   const techLoaded = !techPending && techData?.data != null;
+  const videoStreams = techData?.data?.video_streams ?? [];
+  const audioStreams = techData?.data?.audio_streams ?? [];
+  const subtitleStreams = techData?.data?.subtitles ?? [];
   const primaryVideo = techLoaded
-    ? getPrimaryVideoStream(techData.data!.video_streams)
+    ? getPrimaryVideoStream(videoStreams)
     : undefined;
   const availableModes = techLoaded
     ? getAvailableModes(
         primaryVideo?.height ?? 0,
         primaryVideo?.codec,
-        techData.data!.audio_streams?.[0]?.codec,
+        audioStreams[0]?.codec,
         techData.data!.movie?.mime_type,
       )
     : null;
-  const modeUnavailable =
-    availableModes !== null && !availableModes.some(m => m.id === mode);
+  const resolvedPlaybackSettings =
+    availableModes !== null
+      ? resolvePlaybackSettings(
+          {
+            mode,
+            audioTrack,
+            subtitleTrack: subtitleTrack ?? null,
+          },
+          availableModes,
+          audioStreams,
+          subtitleStreams,
+        )
+      : {
+          mode,
+          audioTrack,
+          subtitleTrack: subtitleTrack ?? null,
+        };
+  const resolvedMode = resolvedPlaybackSettings.mode;
+  const resolvedAudioTrack = resolvedPlaybackSettings.audioTrack;
+  const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
+  const streamUrl = buildStreamUrl(
+    movieId,
+    resolvedMode,
+    resolvedAudioTrack,
+    start,
+    streamReloadKey,
+  );
+  const qualityLabel =
+    STREAM_MODES.find(m => m.id === resolvedMode)?.label ?? resolvedMode;
+  const modeUnavailable = availableModes !== null && availableModes.length === 0;
 
   const subtitleInfo = (() => {
-    if (subtitleTrack === undefined || !techLoaded) return null;
-    const subs = techData!.data!.subtitles ?? [];
-    if (subtitleTrack < 0 || subtitleTrack >= subs.length) return null;
-    const sub = subs[subtitleTrack];
+    if (resolvedSubtitleTrack === null || !techLoaded) return null;
+    if (
+      resolvedSubtitleTrack < 0 ||
+      resolvedSubtitleTrack >= subtitleStreams.length
+    ) {
+      return null;
+    }
+    const sub = subtitleStreams[resolvedSubtitleTrack];
     return {
-      url: `/api/movies/${movieId}/subtitles/${subtitleTrack}/web.vtt`,
-      label: formatSubtitleLabel(sub, subtitleTrack),
+      url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt`,
+      label: formatSubtitleLabel(sub, resolvedSubtitleTrack),
       srclang: unwrapStringOrUndefined(sub.language) ?? "",
     };
   })();
+  const sessionLostStreamKey = `${movieId}:${resolvedMode}:${resolvedAudioTrack}`;
+
+  useEffect(() => {
+    if (sessionLostStreamKeyRef.current !== sessionLostStreamKey) {
+      sessionLostStreamKeyRef.current = sessionLostStreamKey;
+      sessionLostNavAttemptsRef.current = 0;
+      lastSessionLostNavAtRef.current = 0;
+    }
+  }, [sessionLostStreamKey]);
+
+  useEffect(() => {
+    if (availableModes === null) return;
+
+    const resolvedSubtitleSearch = resolvedSubtitleTrack ?? undefined;
+    if (
+      mode === resolvedMode &&
+      audioTrack === resolvedAudioTrack &&
+      subtitleTrack === resolvedSubtitleSearch
+    ) {
+      return;
+    }
+
+    navigate({
+      search: (prev: PlaySearchParams) => ({
+        ...prev,
+        mode: resolvedMode,
+        audio_track: resolvedAudioTrack,
+        subtitle_track: resolvedSubtitleSearch,
+      }),
+      replace: true,
+    });
+  }, [
+    audioTrack,
+    availableModes,
+    mode,
+    navigate,
+    resolvedAudioTrack,
+    resolvedMode,
+    resolvedSubtitleTrack,
+    subtitleTrack,
+  ]);
 
   const savedProgress =
     watchProgressData?.error === false ? watchProgressData.data : null;
@@ -314,6 +373,9 @@ function PlayMoviePage() {
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
+        mode: resolvedMode,
+        audio_track: resolvedAudioTrack,
+        subtitle_track: resolvedSubtitleTrack ?? undefined,
         start: Math.floor(currentTimeSec),
       }),
       replace: true,
@@ -577,19 +639,25 @@ function PlayMoviePage() {
   }, [chromeFullscreenMode]);
 
   useEffect(() => {
-    const timer = setTimeout(() => backButtonRef.current?.focus(), 50);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
+      const container = containerRef.current;
+      const targetInsidePlayer = container?.contains(target) ?? false;
+      const targetIsPageBody =
+        target === document.body || target === document.documentElement;
+
+      if (resumeDialogOpen) {
+        return;
+      }
       if (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
         target.tagName === "SELECT" ||
         target.isContentEditable
       ) {
+        return;
+      }
+      if (!targetInsidePlayer && !targetIsPageBody) {
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -690,24 +758,13 @@ function PlayMoviePage() {
     return () => document.removeEventListener("keydown", handleKeyDown);
     // Intentionally omit seekBackward, seekForward, togglePlay, and seek from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTime, duration, isImmersiveViewport, toggleFullscreen]);
-
-  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab" && containerRef.current) {
-      const focusable = containerRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    }
-  };
+  }, [
+    currentTime,
+    duration,
+    isImmersiveViewport,
+    resumeDialogOpen,
+    toggleFullscreen,
+  ]);
 
   const announcement = playing ? `Playing: ${title}` : `Paused: ${title}`;
 
@@ -718,6 +775,9 @@ function PlayMoviePage() {
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
+        mode: resolvedMode,
+        audio_track: resolvedAudioTrack,
+        subtitle_track: resolvedSubtitleTrack ?? undefined,
         start: Math.floor(savedProgressSec),
       }),
       replace: true,
@@ -867,7 +927,6 @@ function PlayMoviePage() {
   return (
     <div
       ref={containerRef}
-      onKeyDown={handleContainerKeyDown}
       onMouseMove={
         chromeFullscreenMode ? showControlsAndResetIdle : undefined
       }
@@ -954,20 +1013,6 @@ function PlayMoviePage() {
       <div
         className="flex min-h-0 flex-1 flex-col"
         onClick={chromeFullscreenMode ? togglePlay : undefined}
-        role={chromeFullscreenMode ? "button" : undefined}
-        tabIndex={chromeFullscreenMode ? 0 : undefined}
-        onKeyDown={
-          chromeFullscreenMode
-            ? e => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  togglePlay();
-                  showControlsAndResetIdle();
-                }
-              }
-            : undefined
-        }
-        aria-label={chromeFullscreenMode ? "Play or pause" : undefined}
       >
         <VideoPlayer
           videoRef={videoRef}

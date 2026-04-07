@@ -32,8 +32,10 @@ import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
 import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
 import {
   DEFAULT_PLAYBACK_SETTINGS,
-  getDefaultMode,
+  getAvailableModes,
+  getDefaultPlaybackSettings,
   getPrimaryVideoStream,
+  resolvePlaybackSettings,
   type PlaybackSettings,
 } from "@/lib/playback";
 import { cn } from "@/lib/utils";
@@ -126,21 +128,23 @@ function LibraryMovieDetailsContent({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
-  const videoStream = getPrimaryVideoStream(techData?.data?.video_streams);
-  const audioStream = techData?.data?.audio_streams?.[0];
+  const videoStreams = techData?.data?.video_streams ?? [];
+  const audioStreams = techData?.data?.audio_streams ?? [];
+  const subtitleStreams = techData?.data?.subtitles ?? [];
+  const videoStream = getPrimaryVideoStream(videoStreams);
   const mimeType = techData?.data?.movie?.mime_type;
-  const smartDefault: PlaybackSettings = !videoStream
-    ? DEFAULT_PLAYBACK_SETTINGS
-    : {
-        mode: getDefaultMode(
-          videoStream.codec,
-          audioStream?.codec ?? "",
-          mimeType ?? "",
-          videoStream.height,
-        ),
-        audioTrack: 0,
-        subtitleTrack: null,
-      };
+  const availableModes = getAvailableModes(
+    videoStream?.height ?? 0,
+    videoStream?.codec,
+    audioStreams[0]?.codec,
+    mimeType ?? undefined,
+  );
+  const smartDefault: PlaybackSettings = resolvePlaybackSettings(
+    getDefaultPlaybackSettings(availableModes),
+    availableModes,
+    audioStreams,
+    subtitleStreams,
+  );
 
   const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(
     DEFAULT_PLAYBACK_SETTINGS,

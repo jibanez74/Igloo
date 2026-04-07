@@ -16,9 +16,11 @@ import {
   describePlaybackExperience,
   formatPlaybackAudioLabel,
   formatSubtitleLabel,
+  getDefaultPlaybackSettings,
   getAvailableModes,
   getPrimaryVideoStream,
   isBitmapSubtitleCodec,
+  resolvePlaybackSettings,
   type StreamModeId,
   type PlaybackSettings,
 } from "@/lib/playback";
@@ -83,27 +85,48 @@ function PlaybackSettingsDialogForm({
   onCancel,
 }: PlaybackSettingsDialogFormProps) {
   const validIds = availableModes.map(m => m.id) as readonly string[];
+  const normalizedSettings = resolvePlaybackSettings(
+    settings,
+    availableModes,
+    audioStreams,
+    subtitleStreams,
+  );
+  const fallbackSettings = getDefaultPlaybackSettings(availableModes);
   const initialMode: StreamModeId | null =
-    availableModes.length === 0
-      ? null
-      : validIds.includes(settings.mode)
-        ? settings.mode
-        : availableModes[0].id;
+    availableModes.length === 0 ? null : normalizedSettings.mode;
 
   const [mode, setMode] = useState<StreamModeId | null>(initialMode);
-  const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
+  const [audioTrack, setAudioTrack] = useState(normalizedSettings.audioTrack);
   const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
-    settings.subtitleTrack,
+    normalizedSettings.subtitleTrack,
   );
   const resolvedMode =
     mode !== null && validIds.includes(mode) ? mode : initialMode;
+  const resolvedAudioTrack =
+    audioStreams.length > 0 &&
+    Number.isInteger(audioTrack) &&
+    audioTrack >= 0 &&
+    audioTrack < audioStreams.length
+      ? audioTrack
+      : fallbackSettings.audioTrack;
+  const resolvedSubtitleTrack =
+    subtitleTrack !== null &&
+    Number.isInteger(subtitleTrack) &&
+    subtitleTrack >= 0 &&
+    subtitleTrack < subtitleStreams.length
+      ? subtitleTrack
+      : fallbackSettings.subtitleTrack;
   const loadingSelectsDisabled = isPending && !techLoaded;
   const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
   const canSave = resolvedMode !== null;
 
   const handleSave = () => {
     if (!resolvedMode) return;
-    onSave({ mode: resolvedMode, audioTrack, subtitleTrack });
+    onSave({
+      mode: resolvedMode,
+      audioTrack: resolvedAudioTrack,
+      subtitleTrack: resolvedSubtitleTrack,
+    });
   };
 
   const summaryText =
@@ -113,8 +136,8 @@ function PlaybackSettingsDialogForm({
         ? NO_PLAYBACK_MODES_LABEL
         : describePlaybackExperience(
           resolvedMode,
-          audioStreams[audioTrack],
-          audioTrack,
+          audioStreams[resolvedAudioTrack],
+          resolvedAudioTrack,
         );
 
   return (

@@ -16,8 +16,8 @@ export { STREAM_MODES };
 
 /**
  * Normalizes an HLS playlist URL for session-recovery rate limiting: same movie, profile,
- * and audio track but different `start` query values share one key so recovery navigations
- * do not reset the attempt counter.
+ * and audio track but different resume/reload query values share one key so recovery
+ * navigations do not reset the attempt counter.
  */
 export function hlsStreamRecoveryKey(src: string): string {
   try {
@@ -25,6 +25,8 @@ export function hlsStreamRecoveryKey(src: string): string {
       typeof window !== "undefined" ? window.location.origin : "http://localhost";
     const u = new URL(src, base);
     u.searchParams.delete("start");
+    u.searchParams.delete("resume");
+    u.searchParams.delete("reload");
     return `${u.pathname}${u.search}`;
   } catch {
     return src;
@@ -54,6 +56,10 @@ export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
   audioTrack: 0,
   subtitleTrack: null,
+};
+
+type PlaybackModeOption = {
+  id: StreamModeId;
 };
 
 const COVER_ART_CODECS = ["mjpeg", "png", "gif", "bmp"];
@@ -134,6 +140,54 @@ export function getDefaultMode(
   if (transcodes.length > 0) return transcodes[0].id;
 
   return "720p_3mbps";
+}
+
+export function getDefaultPlaybackSettings(
+  availableModes: readonly PlaybackModeOption[],
+): PlaybackSettings {
+  return {
+    mode: availableModes[0]?.id ?? DEFAULT_PLAYBACK_SETTINGS.mode,
+    audioTrack: 0,
+    subtitleTrack: null,
+  };
+}
+
+export function resolvePlaybackSettings(
+  settings: PlaybackSettings | null | undefined,
+  availableModes: readonly PlaybackModeOption[],
+  audioStreams: AudioStreamType[] | undefined,
+  subtitleStreams: SubtitleType[] | undefined,
+): PlaybackSettings {
+  const defaults = getDefaultPlaybackSettings(availableModes);
+  if (!settings) return defaults;
+
+  const resolvedMode = availableModes.some((mode) => mode.id === settings.mode)
+    ? settings.mode
+    : defaults.mode;
+
+  const audioStreamCount = audioStreams?.length ?? 0;
+  const resolvedAudioTrack =
+    audioStreamCount > 0 &&
+    Number.isInteger(settings.audioTrack) &&
+    settings.audioTrack >= 0 &&
+    settings.audioTrack < audioStreamCount
+      ? settings.audioTrack
+      : defaults.audioTrack;
+
+  const subtitleStreamCount = subtitleStreams?.length ?? 0;
+  const resolvedSubtitleTrack =
+    settings.subtitleTrack !== null &&
+    Number.isInteger(settings.subtitleTrack) &&
+    settings.subtitleTrack >= 0 &&
+    settings.subtitleTrack < subtitleStreamCount
+      ? settings.subtitleTrack
+      : defaults.subtitleTrack;
+
+  return {
+    mode: resolvedMode,
+    audioTrack: resolvedAudioTrack,
+    subtitleTrack: resolvedSubtitleTrack,
+  };
 }
 
 export function formatLanguageName(
