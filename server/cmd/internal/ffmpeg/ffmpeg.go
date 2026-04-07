@@ -1,26 +1,35 @@
 package ffmpeg
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 )
 
-type FFmpeg struct {
+type FFmpegInterface interface {
+	RunHLS(ctx context.Context, params HLSParams, onExit func(exitErr error, stderrTail []string)) (*exec.Cmd, error)
+	ExtractSubtitleAsWebVTT(ctx context.Context, sourcePath string, streamIndex int64) ([]byte, error)
+}
+
+type ffmpeg struct {
 	bin string
 }
 
+var _ FFmpegInterface = (*ffmpeg)(nil)
+
 var (
-	instance     *FFmpeg
+	instance     *ffmpeg
 	instanceMu   sync.Mutex
 	extractedDir string
 )
 
-// New returns a singleton FFmpeg instance.
+// New returns a singleton FFmpeg implementation.
 // The embedded binary is extracted to a temp directory on first call.
 // Subsequent calls return the same instance without re-extracting.
-func New() (*FFmpeg, error) {
+func New() (FFmpegInterface, error) {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
 
@@ -33,13 +42,9 @@ func New() (*FFmpeg, error) {
 		return nil, err
 	}
 
-	instance = &FFmpeg{bin: binPath}
+	instance = &ffmpeg{bin: binPath}
 
 	return instance, nil
-}
-
-func (f *FFmpeg) BinPath() string {
-	return f.bin
 }
 
 // Cleanup removes the extracted binary and its temp directory.
@@ -53,7 +58,8 @@ func Cleanup() error {
 		return nil
 	}
 
-	if err := os.RemoveAll(extractedDir); err != nil {
+	err := os.RemoveAll(extractedDir)
+	if err != nil {
 		return fmt.Errorf("failed to cleanup ffmpeg: %w", err)
 	}
 
@@ -64,7 +70,6 @@ func Cleanup() error {
 
 // extractBinary writes the embedded ffmpeg binary to a temporary directory
 // and returns the path to the executable.
-//
 // embeddedBinary is defined in platform-specific files (ffmpeg_darwin_arm64.go,
 // ffmpeg_linux_amd64.go) and is populated at compile time via //go:embed.
 func extractBinary() (string, error) {
@@ -76,10 +81,11 @@ func extractBinary() (string, error) {
 	extractedDir = tempDir
 
 	binPath := filepath.Join(tempDir, "ffmpeg")
-	if err := os.WriteFile(binPath, embeddedBinary, 0755); err != nil {
+	writeErr := os.WriteFile(binPath, embeddedBinary, 0755)
+	if writeErr != nil {
 		os.RemoveAll(tempDir)
 		extractedDir = ""
-		return "", fmt.Errorf("failed to write ffmpeg binary: %w", err)
+		return "", fmt.Errorf("failed to write ffmpeg binary: %w", writeErr)
 	}
 
 	return binPath, nil

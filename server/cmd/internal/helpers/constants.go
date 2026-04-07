@@ -32,6 +32,15 @@ const (
 	// cookie settings
 	COOKIE_USER_ID = "user_id"
 
+	// default admin bootstrap (InitDefaultUser when the database has no admin)
+	DEFAULT_ADMIN_NAME     = "Admin"
+	DEFAULT_ADMIN_EMAIL    = "admin@sample.com"
+	DEFAULT_ADMIN_PASSWORD = "AdminPassword"
+
+	ENV_DEFAULT_ADMIN_NAME     = "DEFAULT_ADMIN_NAME"
+	ENV_DEFAULT_ADMIN_EMAIL    = "DEFAULT_ADMIN_EMAIL"
+	ENV_DEFAULT_ADMIN_PASSWORD = "DEFAULT_ADMIN_PASSWORD"
+
 	// error messages
 	INTERNAL_SERVER_ERROR       = "The server encountered an unexpected error"
 	NOT_AUTHORIZED_MESSAGE      = "not authorized"
@@ -58,10 +67,10 @@ const (
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
 
 	// HLS transcoding
-	HLS_SEGMENT_TIME_SEC    = 4                 // segment duration in seconds for fMP4 HLS
-	HLS_STDERR_TAIL_LINES   = 20                // lines of FFmpeg stderr kept for error reporting
-	HLS_SESSION_TTL         = 30 * time.Minute  // TTL for cached HLS session entries
-	HLS_SESSION_CACHE_SWEEP = 10 * time.Minute  // interval for removing expired HLS session entries
+	HLS_SEGMENT_TIME_SEC    = 4                // segment duration in seconds for fMP4 HLS
+	HLS_STDERR_TAIL_LINES   = 20               // lines of FFmpeg stderr kept for error reporting
+	HLS_SESSION_TTL         = 30 * time.Minute // TTL for cached HLS session entries
+	HLS_SESSION_CACHE_SWEEP = 10 * time.Minute // interval for removing expired HLS session entries
 
 	// HLS HTTP: manifest polling, response headers, and fMP4 filenames (match FFmpeg output)
 	HLS_SEGMENT_WAIT              = 120 * time.Second

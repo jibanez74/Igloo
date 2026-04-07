@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -213,7 +214,17 @@ func (app *Application) createHLSSession(
 		}
 	}
 
-	cmd, err := app.FFmpeg.RunHLS(context.Background(), movie.FilePath, tempDir, profile, videoStreamIndex, audioStreamIndex, hwDevice, copyVideo, copyAudio, startSec, onExit)
+	cmd, err := app.FFmpeg.RunHLS(context.Background(), ffmpeg.HLSParams{
+		SourcePath:       movie.FilePath,
+		OutDir:           tempDir,
+		Profile:          profile,
+		VideoStreamIndex: videoStreamIndex,
+		AudioStreamIndex: audioStreamIndex,
+		HWDevice:         hwDevice,
+		CopyVideo:        copyVideo,
+		CopyAudio:        copyAudio,
+		StartSec:         startSec,
+	}, onExit)
 	if err != nil {
 		cleanupHLSSession(session)
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)

@@ -51,13 +51,12 @@ type StreamTags struct {
 }
 
 type Format struct {
-	Filename       string     `json:"filename"`
-	Duration       string     `json:"duration"`
-	Size           string     `json:"size"`
-	BitRate        string     `json:"bit_rate"`
-	FormatName     string     `json:"format_name"`
-	FormatLongName string     `json:"format_long_name"`
-	Tags           FormatTags `json:"tags"`
+	Filename   string     `json:"filename"`
+	Duration   string     `json:"duration"`
+	Size       string     `json:"size"`
+	BitRate    string     `json:"bit_rate"`
+	FormatName string     `json:"format_name"`
+	Tags       FormatTags `json:"tags"`
 }
 
 type FormatTags struct {
@@ -70,9 +69,8 @@ type FormatTags struct {
 	Track        string `json:"track"`
 	Disc         string `json:"disc"`
 	Date         string `json:"date"`
-	Copyright    string `json:"copyright"`
-	PurchaseDate string `json:"purchase_date"`
-	SortName     string `json:"sort_name"`
+	Copyright string `json:"copyright"`
+	SortName  string `json:"sort_name"`
 	SortAlbum    string `json:"sort_album"`
 	SortArtist   string `json:"sort_artist"`
 }
@@ -80,8 +78,6 @@ type FormatTags struct {
 type Chapter struct {
 	StartTime string `json:"start_time"`
 	Start     int    `json:"start"`
-	End       int    `json:"end"`
-	EndTime   string `json:"end_time"`
 
 	Tags struct {
 		Title string `json:"title"`

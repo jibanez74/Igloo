@@ -10,7 +10,7 @@ import (
 
 // ExtractSubtitleAsWebVTT converts one subtitle stream to WebVTT via ffmpeg.
 // streamIndex is the absolute ffprobe index; the caller must reject bitmap codecs.
-func (f *FFmpeg) ExtractSubtitleAsWebVTT(
+func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 	ctx context.Context,
 	sourcePath string,
 	streamIndex int64,
