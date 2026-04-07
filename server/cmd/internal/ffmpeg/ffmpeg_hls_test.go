@@ -1,7 +1,9 @@
 package ffmpeg
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -534,6 +536,187 @@ func TestBuildHLSArgs_HLSOutputStructure(t *testing.T) {
 	if lastArg != wantPlaylist {
 		t.Errorf("last arg = %q, want playlist path %q", lastArg, wantPlaylist)
 	}
+}
+
+func TestRunHLS_UsesAbsoluteOutDir(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+
+	parentDir := t.TempDir()
+	outDir := filepath.Join(parentDir, "out")
+	if err := os.Mkdir(outDir, 0755); err != nil {
+		t.Fatalf("mkdir outdir: %v", err)
+	}
+
+	relOutDir, err := filepath.Rel(cwd, outDir)
+	if err != nil {
+		t.Fatalf("filepath.Rel: %v", err)
+	}
+
+	scriptPath := filepath.Join(parentDir, "fake-ffmpeg.sh")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		"printf '%s\\n' \"$PWD\" > pwd.txt",
+		"printf '%s\\n' \"$@\" > args.txt",
+	}, "\n") + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+
+	exitCh := make(chan []string, 1)
+	f := &ffmpeg{bin: scriptPath}
+	_, err = f.RunHLS(context.Background(), HLSParams{
+		SourcePath:       "/tmp/source.mkv",
+		OutDir:           relOutDir,
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+	}, func(exitErr error, stderrTail []string) {
+		if exitErr != nil {
+			t.Errorf("RunHLS exitErr = %v, want nil", exitErr)
+		}
+		exitCh <- stderrTail
+	})
+	if err != nil {
+		t.Fatalf("RunHLS: %v", err)
+	}
+
+	<-exitCh
+
+	pwdRaw, err := os.ReadFile(filepath.Join(outDir, "pwd.txt"))
+	if err != nil {
+		t.Fatalf("read pwd.txt: %v", err)
+	}
+	gotPwd := strings.TrimSpace(string(pwdRaw))
+	if gotPwd != outDir {
+		t.Fatalf("command dir = %q, want %q", gotPwd, outDir)
+	}
+
+	argsRaw, err := os.ReadFile(filepath.Join(outDir, "args.txt"))
+	if err != nil {
+		t.Fatalf("read args.txt: %v", err)
+	}
+	gotArgs := strings.Split(strings.TrimSpace(string(argsRaw)), "\n")
+
+	wantSegmentPattern := filepath.Join(outDir, "segment_%d.m4s")
+	if !contains(gotArgs, wantSegmentPattern) {
+		t.Fatalf("args missing absolute segment pattern %q: %v", wantSegmentPattern, gotArgs)
+	}
+
+	wantPlaylist := filepath.Join(outDir, "playlist.m3u8")
+	if gotArgs[len(gotArgs)-1] != wantPlaylist {
+		t.Fatalf("playlist arg = %q, want %q", gotArgs[len(gotArgs)-1], wantPlaylist)
+	}
+}
+
+func TestRunHLS_CapturesLongStderrLines(t *testing.T) {
+	outDir := t.TempDir()
+	scriptPath := filepath.Join(outDir, "fake-ffmpeg.sh")
+	longLine := strings.Repeat("x", 128*1024)
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		fmt.Sprintf("printf '%s\\n' '%s' >&2", "%s", longLine),
+	}, "\n") + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+
+	type runResult struct {
+		exitErr    error
+		stderrTail []string
+	}
+	exitCh := make(chan runResult, 1)
+
+	f := &ffmpeg{bin: scriptPath}
+	_, err := f.RunHLS(context.Background(), HLSParams{
+		SourcePath:       "/tmp/source.mkv",
+		OutDir:           outDir,
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+	}, func(exitErr error, stderrTail []string) {
+		exitCh <- runResult{exitErr: exitErr, stderrTail: stderrTail}
+	})
+	if err != nil {
+		t.Fatalf("RunHLS: %v", err)
+	}
+
+	result := <-exitCh
+	if result.exitErr != nil {
+		t.Fatalf("exitErr = %v, want nil", result.exitErr)
+	}
+	if len(result.stderrTail) != 1 {
+		t.Fatalf("stderr tail len = %d, want 1", len(result.stderrTail))
+	}
+	if len(result.stderrTail[0]) != len(longLine) {
+		t.Fatalf("captured line length = %d, want %d", len(result.stderrTail[0]), len(longLine))
+	}
+}
+
+func TestRunHLS_ReportsStderrScannerErrors(t *testing.T) {
+	outDir := t.TempDir()
+	scriptPath := filepath.Join(outDir, "fake-ffmpeg.sh")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		"head -c 2000000 /dev/zero | tr '\\000' 'x' >&2",
+		"exit 1",
+	}, "\n") + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake ffmpeg: %v", err)
+	}
+
+	type runResult struct {
+		exitErr    error
+		stderrTail []string
+	}
+	exitCh := make(chan runResult, 1)
+
+	f := &ffmpeg{bin: scriptPath}
+	_, err := f.RunHLS(context.Background(), HLSParams{
+		SourcePath:       "/tmp/source.mkv",
+		OutDir:           outDir,
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+	}, func(exitErr error, stderrTail []string) {
+		exitCh <- runResult{exitErr: exitErr, stderrTail: stderrTail}
+	})
+	if err != nil {
+		t.Fatalf("RunHLS: %v", err)
+	}
+
+	result := <-exitCh
+	if result.exitErr == nil {
+		t.Fatal("exitErr = nil, want ffmpeg failure")
+	}
+	if !containsMatching(result.stderrTail, func(line string) bool {
+		return strings.Contains(line, "stderr scan error:") && strings.Contains(line, "token too long")
+	}) {
+		t.Fatalf("stderr tail missing scanner error: %v", result.stderrTail)
+	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsMatching(values []string, match func(string) bool) bool {
+	for _, value := range values {
+		if match(value) {
+			return true
+		}
+	}
+	return false
 }
 
 func indexOf(args []string, flag string) int {

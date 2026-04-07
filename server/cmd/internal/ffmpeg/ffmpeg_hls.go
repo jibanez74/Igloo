@@ -4,12 +4,19 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"igloo/cmd/internal/helpers"
+)
+
+const (
+	hlsStderrScannerBufferSize = 64 * 1024
+	hlsStderrScannerMaxToken   = 1024 * 1024
 )
 
 // HLSParams holds inputs for HLS transcoding: argument building and RunHLS.
@@ -36,7 +43,7 @@ var hlsHWTranscodeByDevice = map[string]struct {
 }{
 	helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:  {HWAccel: "videotoolbox", Encoder: "h264_videotoolbox"},
 	helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA: {HWAccel: "cuda", Encoder: "h264_nvenc"},
-	helpers.HARDWARE_ACCELERATION_DEVICE_INTEL: {HWAccel: "qsv", Encoder: "h264_qsv"},
+	helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:  {HWAccel: "qsv", Encoder: "h264_qsv"},
 }
 
 func buildHLSArgs(p HLSParams) ([]string, error) {
@@ -119,19 +126,40 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 // RunHLS starts FFmpeg in the background for HLS transcoding.
 // It does not block on process exit. onExit is called asynchronously when
 // the process finishes; stderrTail contains the last HLS_STDERR_TAIL_LINES
-// of FFmpeg's stderr output for error diagnostics.
+// of FFmpeg's stderr output for error diagnostics. The returned command is
+// for process lifecycle control only; RunHLS owns cmd.Wait and exit delivery.
 func (f *ffmpeg) RunHLS(
 	ctx context.Context,
 	params HLSParams,
 	onExit func(exitErr error, stderrTail []string),
 ) (*exec.Cmd, error) {
+	outDir := strings.TrimSpace(params.OutDir)
+	if outDir == "" {
+		return nil, fmt.Errorf("output directory is required")
+	}
+
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve output directory: %w", err)
+	}
+
+	info, err := os.Stat(absOutDir)
+	if err != nil {
+		return nil, fmt.Errorf("stat output directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("output path is not a directory: %s", absOutDir)
+	}
+
+	params.OutDir = absOutDir
+
 	args, err := buildHLSArgs(params)
 	if err != nil {
 		return nil, err
 	}
 
 	cmd := exec.CommandContext(ctx, f.bin, args...)
-	cmd.Dir = params.OutDir
+	cmd.Dir = absOutDir
 	cmd.Stdout = nil
 
 	stderrPipe, err := cmd.StderrPipe()
@@ -142,16 +170,24 @@ func (f *ffmpeg) RunHLS(
 	ring := make([]string, helpers.HLS_STDERR_TAIL_LINES)
 	var ringIdx int
 	var ringCount int
+	appendTail := func(line string) {
+		ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = line
+		ringIdx++
+		ringCount++
+	}
 
 	var stderrWg sync.WaitGroup
 	stderrWg.Add(1)
 	go func() {
 		defer stderrWg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
+		scanner.Buffer(make([]byte, hlsStderrScannerBufferSize), hlsStderrScannerMaxToken)
 		for scanner.Scan() {
-			ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = scanner.Text()
-			ringIdx++
-			ringCount++
+			appendTail(scanner.Text())
+		}
+		if scanErr := scanner.Err(); scanErr != nil {
+			appendTail(fmt.Sprintf("stderr scan error: %v", scanErr))
+			_, _ = io.Copy(io.Discard, stderrPipe)
 		}
 	}()
 
