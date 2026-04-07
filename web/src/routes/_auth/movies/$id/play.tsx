@@ -97,12 +97,18 @@ function buildStreamUrl(
   mode: StreamModeId,
   audioTrack: number,
   startSec: number,
+  reloadKey: number,
 ): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
   const params = new URLSearchParams({
     audio_track: String(audioTrack),
-    start: String(Math.floor(startSec)),
   });
+  if (startSec > 0) {
+    params.set("resume", String(Math.floor(startSec)));
+  }
+  if (reloadKey > 0) {
+    params.set("reload", String(reloadKey));
+  }
   return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?${params}`;
 }
 
@@ -202,11 +208,16 @@ function PlayMoviePage() {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(start > 0);
   const [resumeActionPending, setResumeActionPending] = useState(false);
-  const [pendingDirectResumeSec, setPendingDirectResumeSec] = useState<number | null>(null);
+  const [streamReloadKey, setStreamReloadKey] = useState(0);
 
-  const streamUrl = buildStreamUrl(movieId, mode, audioTrack, start);
+  const streamUrl = buildStreamUrl(
+    movieId,
+    mode,
+    audioTrack,
+    start,
+    streamReloadKey,
+  );
   const qualityLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
-  const isHlsPlayback = mode !== "direct";
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
   const scheduleHideControls = () => {
@@ -299,6 +310,7 @@ function PlayMoviePage() {
     }
     sessionLostNavAttemptsRef.current += 1;
     lastSessionLostNavAtRef.current = now;
+    setStreamReloadKey(prev => prev + 1);
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
@@ -383,28 +395,6 @@ function PlayMoviePage() {
     currentTimeRef.current = currentTime;
     durationRef.current = duration;
   }, [currentTime, duration]);
-
-  useEffect(() => {
-    if (pendingDirectResumeSec === null) return;
-    const video = videoRef.current;
-    if (!video) return;
-
-    const applyResume = () => {
-      video.currentTime = pendingDirectResumeSec;
-      setCurrentTime(pendingDirectResumeSec);
-      setPendingDirectResumeSec(null);
-    };
-
-    if (video.readyState >= 1) {
-      applyResume();
-      return;
-    }
-
-    video.addEventListener("loadedmetadata", applyResume, { once: true });
-    return () => {
-      video.removeEventListener("loadedmetadata", applyResume);
-    };
-  }, [pendingDirectResumeSec]);
 
   useEffect(() => {
     if (!playing) return;
@@ -725,11 +715,6 @@ function PlayMoviePage() {
     if (savedProgressSec === null) return;
 
     setResumeDismissed(true);
-    if (mode === "direct") {
-      setPendingDirectResumeSec(savedProgressSec);
-      return;
-    }
-
     navigate({
       search: (prev: PlaySearchParams) => ({
         ...prev,
@@ -991,7 +976,7 @@ function PlayMoviePage() {
           isFullscreen={chromeFullscreenMode}
           onError={msg => setPlaybackError(msg)}
           subtitleTrack={subtitleInfo}
-          startSec={isHlsPlayback ? 0 : start}
+          startSec={start}
           onSessionLost={handleSessionLost}
         />
       </div>

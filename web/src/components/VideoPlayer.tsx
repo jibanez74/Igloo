@@ -137,20 +137,33 @@ export default function VideoPlayer({
     }
 
     video.src = src;
-    if (startSec > 0) {
-      video.addEventListener(
-        "loadedmetadata",
-        () => {
-          video.currentTime = startSec;
-        },
-        { once: true },
-      );
-    }
     return () => {
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef, startSec]);
+  }, [src, videoRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || startSec <= 0) return;
+
+    const applyStart = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const nextTime =
+        duration > 0 ? Math.min(startSec, duration) : startSec;
+      video.currentTime = nextTime;
+    };
+
+    if (video.readyState >= 1) {
+      applyStart();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", applyStart, { once: true });
+    return () => {
+      video.removeEventListener("loadedmetadata", applyStart);
+    };
+  }, [startSec, src, videoRef]);
 
   // The subtitleTrack object gets a new reference on every parent render;
   // key on the URL which uniquely identifies the active subtitle so the

@@ -88,6 +88,13 @@ export function authUserQueryOpts() {
   });
 }
 
+export function latestMoviesQueryOpts() {
+  return queryOptions({
+    queryKey: [LATEST_MOVIES_KEY],
+    queryFn: getLatestMovies,
+  });
+}
+
 export function latestAlbumsQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_ALBUMS_KEY],
@@ -97,14 +104,7 @@ export function latestAlbumsQueryOpts() {
   });
 }
 
-export function latestMoviesQueryOpts() {
-  return queryOptions({
-    queryKey: [LATEST_MOVIES_KEY],
-    queryFn: getLatestMovies,
-    staleTime: STALE_CATALOG,
-    gcTime: GC_LONG,
-  });
-}
+CDATASection;
 
 export function inTheatersQueryOpts() {
   return queryOptions({
