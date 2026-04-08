@@ -16,16 +16,13 @@ export { STREAM_MODES };
 
 /**
  * Normalizes an HLS playlist URL for session-recovery rate limiting: same movie, profile,
- * and audio track but different resume/reload query values share one key so recovery
- * navigations do not reset the attempt counter.
+ * audio track, and backend start offset share one key, while reload-only query changes do not.
  */
 export function hlsStreamRecoveryKey(src: string): string {
   try {
     const base =
       typeof window !== "undefined" ? window.location.origin : "http://localhost";
     const u = new URL(src, base);
-    u.searchParams.delete("start");
-    u.searchParams.delete("resume");
     u.searchParams.delete("reload");
     return `${u.pathname}${u.search}`;
   } catch {

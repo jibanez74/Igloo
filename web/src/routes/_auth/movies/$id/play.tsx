@@ -92,20 +92,22 @@ const CONTROLS_IDLE_MS = 3000;
 const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 const WATCH_PROGRESS_MIN_SECONDS = 180;
 const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
+const HLS_REWIND_BUFFER_SEC = 120;
+const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 
 function buildStreamUrl(
   movieId: number,
   mode: StreamModeId,
   audioTrack: number,
-  startSec: number,
+  hlsStartSec: number,
   reloadKey: number,
 ): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
   const params = new URLSearchParams({
     audio_track: String(audioTrack),
   });
-  if (startSec > 0) {
-    params.set("resume", String(Math.floor(startSec)));
+  if (hlsStartSec > 0) {
+    params.set("start", String(Math.floor(hlsStartSec)));
   }
   if (reloadKey > 0) {
     params.set("reload", String(reloadKey));
@@ -200,6 +202,7 @@ function PlayMoviePage() {
   const [resumeDismissed, setResumeDismissed] = useState(start > 0);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
+  const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
 
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
@@ -264,11 +267,15 @@ function PlayMoviePage() {
   const resolvedMode = resolvedPlaybackSettings.mode;
   const resolvedAudioTrack = resolvedPlaybackSettings.audioTrack;
   const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
+  const isHlsPlayback = resolvedMode !== "direct";
+  const hlsStartSec = isHlsPlayback
+    ? Math.max(0, start - HLS_REWIND_BUFFER_SEC)
+    : 0;
   const streamUrl = buildStreamUrl(
     movieId,
     resolvedMode,
     resolvedAudioTrack,
-    start,
+    hlsStartSec,
     streamReloadKey,
   );
   const qualityLabel =
@@ -291,14 +298,15 @@ function PlayMoviePage() {
     };
   })();
   const sessionLostStreamKey = `${movieId}:${resolvedMode}:${resolvedAudioTrack}`;
+  const sessionWindowKey = `${sessionLostStreamKey}:${Math.floor(hlsStartSec)}`;
 
   useEffect(() => {
-    if (sessionLostStreamKeyRef.current !== sessionLostStreamKey) {
-      sessionLostStreamKeyRef.current = sessionLostStreamKey;
+    if (sessionLostStreamKeyRef.current !== sessionWindowKey) {
+      sessionLostStreamKeyRef.current = sessionWindowKey;
       sessionLostNavAttemptsRef.current = 0;
       lastSessionLostNavAtRef.current = 0;
     }
-  }, [sessionLostStreamKey]);
+  }, [sessionWindowKey]);
 
   useEffect(() => {
     if (availableModes === null) return;
@@ -353,6 +361,44 @@ function PlayMoviePage() {
     }
   };
 
+  const clampPlaybackTime = (value: number) => {
+    const knownDuration =
+      durationRef.current > 0
+        ? durationRef.current
+        : duration > 0
+          ? duration
+          : value;
+    return Math.max(0, Math.min(value, knownDuration));
+  };
+
+  const navigateToPlaybackPosition = (
+    targetTimeSec: number,
+    options?: { forceReload?: boolean },
+  ) => {
+    const clampedTargetTime = clampPlaybackTime(targetTimeSec);
+    const video = videoRef.current;
+    const shouldResumePlayback = !!video && !video.paused && !video.ended;
+
+    if (shouldResumePlayback) {
+      setPendingAutoPlayOnLoad(true);
+    }
+
+    if (options?.forceReload) {
+      setStreamReloadKey(prev => prev + 1);
+    }
+
+    navigate({
+      search: (prev: PlaySearchParams) => ({
+        ...prev,
+        mode: resolvedMode,
+        audio_track: resolvedAudioTrack,
+        subtitle_track: resolvedSubtitleTrack ?? undefined,
+        start: Math.floor(clampedTargetTime),
+      }),
+      replace: true,
+    });
+  };
+
   const handleSessionLost = (currentTimeSec: number) => {
     const now = Date.now();
     if (sessionLostNavAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
@@ -369,17 +415,7 @@ function PlayMoviePage() {
     }
     sessionLostNavAttemptsRef.current += 1;
     lastSessionLostNavAtRef.current = now;
-    setStreamReloadKey(prev => prev + 1);
-    navigate({
-      search: (prev: PlaySearchParams) => ({
-        ...prev,
-        mode: resolvedMode,
-        audio_track: resolvedAudioTrack,
-        subtitle_track: resolvedSubtitleTrack ?? undefined,
-        start: Math.floor(currentTimeSec),
-      }),
-      replace: true,
-    });
+    navigateToPlaybackPosition(currentTimeSec, { forceReload: true });
   };
 
   const togglePlay = async () => {
@@ -401,7 +437,18 @@ function PlayMoviePage() {
   const seek = (newTime: number) => {
     const video = videoRef.current;
     if (!video) return;
-    const t = Math.max(0, Math.min(newTime, duration || 0));
+    const t = clampPlaybackTime(newTime);
+    const currentVideoTime = video.currentTime;
+    const shouldRebaseHlsSession =
+      isHlsPlayback &&
+      (t < hlsStartSec ||
+        t > currentVideoTime + HLS_FORWARD_REBASE_THRESHOLD_SEC);
+
+    if (shouldRebaseHlsSession) {
+      navigateToPlaybackPosition(t);
+      return;
+    }
+
     video.currentTime = t;
     setCurrentTime(t);
   };
@@ -529,6 +576,32 @@ function PlayMoviePage() {
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, [movieId]);
+
+  useEffect(() => {
+    if (!pendingAutoPlayOnLoad) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const resumePlayback = async () => {
+      try {
+        await video.play();
+      } catch {
+        // Best-effort playback resume after rebasing the HLS session.
+      } finally {
+        setPendingAutoPlayOnLoad(false);
+      }
+    };
+
+    if (video.readyState >= 2) {
+      void resumePlayback();
+      return;
+    }
+
+    video.addEventListener("canplay", resumePlayback, { once: true });
+    return () => {
+      video.removeEventListener("canplay", resumePlayback);
+    };
+  }, [pendingAutoPlayOnLoad, streamUrl]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -772,16 +845,7 @@ function PlayMoviePage() {
     if (savedProgressSec === null) return;
 
     setResumeDismissed(true);
-    navigate({
-      search: (prev: PlaySearchParams) => ({
-        ...prev,
-        mode: resolvedMode,
-        audio_track: resolvedAudioTrack,
-        subtitle_track: resolvedSubtitleTrack ?? undefined,
-        start: Math.floor(savedProgressSec),
-      }),
-      replace: true,
-    });
+    navigateToPlaybackPosition(savedProgressSec);
   };
 
   const handleStartFromBeginning = async () => {
