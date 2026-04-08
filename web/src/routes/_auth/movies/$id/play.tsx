@@ -40,6 +40,7 @@ import {
   updateMovieWatchProgress,
 } from "@/lib/api";
 import {
+  HLS_RESUME_REWIND_BUFFER_SEC,
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
@@ -92,7 +93,6 @@ const CONTROLS_IDLE_MS = 3000;
 const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 const WATCH_PROGRESS_MIN_SECONDS = 180;
 const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
-const HLS_REWIND_BUFFER_SEC = 120;
 const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 
 function buildStreamUrl(
@@ -269,7 +269,7 @@ function PlayMoviePage() {
   const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
   const isHlsPlayback = resolvedMode !== "direct";
   const hlsStartSec = isHlsPlayback
-    ? Math.max(0, start - HLS_REWIND_BUFFER_SEC)
+    ? Math.max(0, start - HLS_RESUME_REWIND_BUFFER_SEC)
     : 0;
   const streamUrl = buildStreamUrl(
     movieId,
@@ -523,44 +523,32 @@ function PlayMoviePage() {
     };
   }, [movieId, playing]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+  const handlePauseSave = async () => {
+    try {
+      await persistMovieWatchProgress(
+        movieId,
+        currentTimeRef.current,
+        durationRef.current,
+      );
+    } catch {
+      // Best effort on pause; avoid interrupting playback UI with repeated toasts.
+    }
+  };
 
-    const handlePauseSave = async () => {
-      try {
-        await persistMovieWatchProgress(
-          movieId,
-          currentTimeRef.current,
-          durationRef.current,
-        );
-      } catch {
-        // Best effort on pause; avoid interrupting playback UI with repeated toasts.
-      }
-    };
-
-    const handleEndedSave = async () => {
-      try {
-        await persistMovieWatchProgress(
-          movieId,
-          durationRef.current,
-          durationRef.current,
-        );
-      } catch {
-        showActionFailed(
-          "save watch progress",
-          "Unable to mark this movie as watched.",
-        );
-      }
-    };
-
-    video.addEventListener("pause", handlePauseSave);
-    video.addEventListener("ended", handleEndedSave);
-    return () => {
-      video.removeEventListener("pause", handlePauseSave);
-      video.removeEventListener("ended", handleEndedSave);
-    };
-  }, [movieId]);
+  const handleEndedSave = async () => {
+    try {
+      await persistMovieWatchProgress(
+        movieId,
+        durationRef.current,
+        durationRef.current,
+      );
+    } catch {
+      showActionFailed(
+        "save watch progress",
+        "Unable to mark this movie as watched.",
+      );
+    }
+  };
 
   useEffect(() => {
     const handlePageHide = () => {
@@ -603,38 +591,17 @@ function PlayMoviePage() {
     };
   }, [pendingAutoPlayOnLoad, streamUrl]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTimeUpdate = () => setCurrentTime(video.currentTime);
-    const onDurationChange = () => setDuration(video.duration);
-    const onError = () => {
-      const code = video.error?.code;
-      if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-        setPlaybackError("This media format is not supported by the browser.");
-      } else if (code === MediaError.MEDIA_ERR_DECODE) {
-        setPlaybackError("The stream could not be decoded.");
-      } else if (code === MediaError.MEDIA_ERR_NETWORK) {
-        setPlaybackError("A network error interrupted playback.");
-      } else {
-        setPlaybackError("Playback failed.");
-      }
-    };
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("durationchange", onDurationChange);
-    video.addEventListener("error", onError);
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("durationchange", onDurationChange);
-      video.removeEventListener("error", onError);
-    };
-  }, []);
+  const handleNativePlaybackError = (code: number | null | undefined) => {
+    if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+      setPlaybackError("This media format is not supported by the browser.");
+    } else if (code === MediaError.MEDIA_ERR_DECODE) {
+      setPlaybackError("The stream could not be decoded.");
+    } else if (code === MediaError.MEDIA_ERR_NETWORK) {
+      setPlaybackError("A network error interrupted playback.");
+    } else {
+      setPlaybackError("Playback failed.");
+    }
+  };
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -1084,8 +1051,30 @@ function PlayMoviePage() {
           title={title}
           isFullscreen={chromeFullscreenMode}
           onError={msg => setPlaybackError(msg)}
+          onPlay={() => setPlaying(true)}
+          onPause={() => {
+            setPlaying(false);
+            void handlePauseSave();
+          }}
+          onEnded={() => {
+            setPlaying(false);
+            void handleEndedSave();
+          }}
+          onTimeUpdate={(time) => {
+            currentTimeRef.current = time;
+            setCurrentTime(time);
+          }}
+          onDurationChange={(nextDuration) => {
+            durationRef.current = nextDuration;
+            setDuration(nextDuration);
+          }}
+          onNativeError={handleNativePlaybackError}
           subtitleTrack={subtitleInfo}
           startSec={start}
+          onStartApplied={(time) => {
+            currentTimeRef.current = time;
+            setCurrentTime(time);
+          }}
           onSessionLost={handleSessionLost}
         />
       </div>

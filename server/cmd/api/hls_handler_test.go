@@ -90,6 +90,61 @@ func TestStartSegmentComputation(t *testing.T) {
 	}
 }
 
+func TestResolveHLSDiskFilename(t *testing.T) {
+	session := &HLSSession{StartSegment: 69}
+
+	tests := []struct {
+		name     string
+		filename string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "init file is unchanged",
+			filename: helpers.HLS_INIT_FILENAME,
+			want:     helpers.HLS_INIT_FILENAME,
+		},
+		{
+			name:     "start segment maps to first disk segment",
+			filename: "segment_69.m4s",
+			want:     "segment_0.m4s",
+		},
+		{
+			name:     "later segment maps relative to start segment",
+			filename: "segment_99.m4s",
+			want:     "segment_30.m4s",
+		},
+		{
+			name:     "request before session start returns error",
+			filename: "segment_0.m4s",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid segment name returns error",
+			filename: "bad_name.m4s",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveHLSDiskFilename(session, tt.filename)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("resolveHLSDiskFilename(%q) expected error", tt.filename)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveHLSDiskFilename(%q) unexpected error: %v", tt.filename, err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveHLSDiskFilename(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFileReady(t *testing.T) {
 	dir := t.TempDir()
 

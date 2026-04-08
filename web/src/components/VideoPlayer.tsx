@@ -24,8 +24,15 @@ type VideoPlayerProps = {
   title: string;
   isFullscreen?: boolean;
   onError: (message: string) => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onEnded?: () => void;
+  onTimeUpdate?: (time: number) => void;
+  onDurationChange?: (duration: number) => void;
+  onNativeError?: (code: number | null | undefined) => void;
   subtitleTrack?: SubtitleTrackInfo | null;
   startSec?: number;
+  onStartApplied?: (time: number) => void;
   onSessionLost?: (currentTime: number) => void;
 };
 
@@ -35,8 +42,15 @@ export default function VideoPlayer({
   title,
   isFullscreen = false,
   onError,
+  onPlay,
+  onPause,
+  onEnded,
+  onTimeUpdate,
+  onDurationChange,
+  onNativeError,
   subtitleTrack = null,
   startSec = 0,
+  onStartApplied,
   onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
@@ -48,10 +62,12 @@ export default function VideoPlayer({
   // stream URL or start position actually changes, not on every parent render.
   const onErrorRef = useRef(onError);
   const onSessionLostRef = useRef(onSessionLost);
+  const onStartAppliedRef = useRef(onStartApplied);
   useEffect(() => {
     onErrorRef.current = onError;
     onSessionLostRef.current = onSessionLost;
-  }, [onError, onSessionLost]);
+    onStartAppliedRef.current = onStartApplied;
+  }, [onError, onSessionLost, onStartApplied]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -77,6 +93,7 @@ export default function VideoPlayer({
         levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
         fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
         backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
+        startPosition: startSec > 0 ? startSec : -1,
       });
       hlsRef.current = hls;
 
@@ -152,6 +169,7 @@ export default function VideoPlayer({
       const nextTime =
         duration > 0 ? Math.min(startSec, duration) : startSec;
       video.currentTime = nextTime;
+      onStartAppliedRef.current?.(nextTime);
     };
 
     if (video.readyState >= 1) {
@@ -223,6 +241,24 @@ export default function VideoPlayer({
           className={`size-full bg-black object-contain ${isFullscreen ? "rounded-none" : "rounded-lg"}`}
           playsInline
           aria-label={`Video player for ${title}`}
+          onPlay={onPlay}
+          onPause={onPause}
+          onEnded={onEnded}
+          onTimeUpdate={
+            onTimeUpdate
+              ? (e) => onTimeUpdate(e.currentTarget.currentTime)
+              : undefined
+          }
+          onDurationChange={
+            onDurationChange
+              ? (e) => onDurationChange(e.currentTarget.duration)
+              : undefined
+          }
+          onError={
+            onNativeError
+              ? (e) => onNativeError(e.currentTarget.error?.code)
+              : undefined
+          }
         />
       </div>
     </div>
