@@ -92,6 +92,8 @@ export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
     queryFn: getLatestMovies,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
   });
 }
 
@@ -103,8 +105,6 @@ export function latestAlbumsQueryOpts() {
     gcTime: GC_LONG,
   });
 }
-
-CDATASection;
 
 export function inTheatersQueryOpts() {
   return queryOptions({
@@ -159,6 +159,7 @@ export function albumDetailsQueryOpts(id: number) {
   return queryOptions({
     queryKey: [ALBUM_DETAILS_KEY, id],
     queryFn: () => getAlbumDetails(id),
+    enabled: id > 0,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
@@ -166,7 +167,7 @@ export function albumDetailsQueryOpts(id: number) {
 
 export function tracksInfiniteQueryOpts(pageSize = 50) {
   return infiniteQueryOptions({
-    queryKey: [TRACKS_INFINITE_KEY],
+    queryKey: [TRACKS_INFINITE_KEY, pageSize],
     queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
     initialPageParam: 0,
     getNextPageParam: lastPage => {
@@ -251,7 +252,7 @@ export function playlistTracksInfiniteQueryOpts(
   pageSize = 50,
 ) {
   return infiniteQueryOptions({
-    queryKey: [PLAYLIST_TRACKS_KEY, playlistId],
+    queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
     queryFn: ({ pageParam = 0 }) =>
       getPlaylistTracks(playlistId, pageSize, pageParam),
     initialPageParam: 0,

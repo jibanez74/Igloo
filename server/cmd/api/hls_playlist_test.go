@@ -271,6 +271,109 @@ func TestBuildResumePlaylist_UsesActualDurations(t *testing.T) {
 	if !strings.Contains(got, wantSeg10) {
 		t.Errorf("expected logical segment URL %q for first actual segment, got:\n%s", wantSeg10, got)
 	}
+
+	// Total playlist duration must equal totalDuration.
+	var totalINF float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				totalINF += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if totalINF < totalDuration-epsilon || totalINF > totalDuration+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want %.6f (±%.3f)", totalINF, totalDuration, epsilon)
+	}
+}
+
+func TestBuildResumePlaylist_PlaceholderDurationIsConsistent(t *testing.T) {
+	// Actual durations sum to 21s, not 40s (startSegment*segDur).
+	// Placeholders must cover the remaining 39s so total == 60s.
+	finalPlaylist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		"#EXTINF:6.000000,", "segment_0.m4s",
+		"#EXTINF:5.000000,", "segment_1.m4s",
+		"#EXTINF:4.000000,", "segment_2.m4s",
+		"#EXTINF:4.000000,", "segment_3.m4s",
+		"#EXTINF:2.000000,", "segment_4.m4s",
+		"#EXT-X-ENDLIST", "",
+	}, "\n")
+
+	totalDuration := 60.0
+	startSegment := int64(10)
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, startSegment)
+
+	// Sum all EXTINF durations.
+	var total float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				total += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if total < totalDuration-epsilon || total > totalDuration+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want %.6f (±%.3f)", total, totalDuration, epsilon)
+	}
+
+	// Each placeholder must be (60-21)/10 = 3.9s.
+	wantPlaceholder := (totalDuration - 21.0) / float64(startSegment)
+	lines := strings.Split(got, "\n")
+	var infLines []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			infLines = append(infLines, line)
+		}
+	}
+	for i := 0; i < int(startSegment); i++ {
+		raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(infLines[i]), "#EXTINF:"), ",")
+		var d float64
+		if _, err := fmt.Sscanf(raw, "%f", &d); err != nil {
+			t.Fatalf("could not parse EXTINF at index %d: %q", i, infLines[i])
+		}
+		if d < wantPlaceholder-epsilon || d > wantPlaceholder+epsilon {
+			t.Errorf("placeholder segment %d duration = %.6f, want %.6f (±%.3f)", i, d, wantPlaceholder, epsilon)
+		}
+	}
+}
+
+func TestBuildResumePlaylist_ZeroStartSegmentNoPlaceholders(t *testing.T) {
+	// startSegment=0: no placeholders, all durations come from actualDurations.
+	finalPlaylist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		"#EXTINF:5.500000,", "segment_0.m4s",
+		"#EXTINF:4.500000,", "segment_1.m4s",
+		"#EXT-X-ENDLIST", "",
+	}, "\n")
+
+	totalDuration := 10.0
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, 0)
+
+	var total float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				total += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if total < 10.0-epsilon || total > 10.0+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want 10.0 (±%.3f)", total, epsilon)
+	}
+	if !strings.Contains(got, "#EXTINF:5.500000,") || !strings.Contains(got, "#EXTINF:4.500000,") {
+		t.Error("expected actual durations 5.5 and 4.5 in playlist")
+	}
 }
 
 func TestBuildResumePlaylist_TargetDurationFallsBackToEstimate(t *testing.T) {

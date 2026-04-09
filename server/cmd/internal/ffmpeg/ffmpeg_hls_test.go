@@ -42,6 +42,8 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		sourcePath, outDir, "fmp4", "event", "playlist.m3u8",
 		"-map 0:0", "-map 0:1",
 		"libx264", "-preset", "veryfast",
+		"-sc_threshold", "0",
+		"-force_key_frames", "expr:gte(t,n_forced*4)",
 		"-c:a aac", "-ac", "2", "-b:a", "192k",
 		"scale=-2:1080",
 		"-avoid_negative_ts", "make_zero",
@@ -172,7 +174,7 @@ func TestBuildHLSArgs_Remux(t *testing.T) {
 	if !strings.Contains(argStr, "-c:a aac") {
 		t.Error("remux with copyAudio=false must transcode audio to AAC")
 	}
-	for _, forbidden := range []string{"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv", "-hwaccel", "scale="} {
+	for _, forbidden := range []string{"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv", "-hwaccel", "scale=", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {
 			t.Errorf("remux must not contain %q in args: %s", forbidden, argStr)
 		}
@@ -378,6 +380,30 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 			if !strings.Contains(argStr, tt.wantEncoder) {
 				t.Errorf("expected encoder %q in args: %s", tt.wantEncoder, argStr)
 			}
+
+			switch tt.device {
+			case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
+				if !strings.Contains(argStr, "-sc_threshold 0") {
+					t.Errorf("cpu path must include -sc_threshold 0")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+				if !strings.Contains(argStr, "-rc vbr") {
+					t.Errorf("nvidia path must include -rc vbr")
+				}
+				if !strings.Contains(argStr, "-preset p4") {
+					t.Errorf("nvidia path must include -preset p4")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+				if !strings.Contains(argStr, "-look_ahead 1") {
+					t.Errorf("intel path must include -look_ahead 1")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+				for _, unexpected := range []string{"-sc_threshold", "-rc vbr", "-look_ahead"} {
+					if strings.Contains(argStr, unexpected) {
+						t.Errorf("apple path must not contain %q", unexpected)
+					}
+				}
+			}
 		})
 	}
 }
@@ -447,7 +473,7 @@ func TestBuildHLSArgs_CopyVideoTranscodeAudio(t *testing.T) {
 	if !strings.Contains(argStr, "-b:a 192k") {
 		t.Error("audio bitrate should be 192k")
 	}
-	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize"} {
+	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {
 			t.Errorf("copy video should not contain %q in args", forbidden)
 		}
@@ -837,6 +863,7 @@ func TestBuildHLSArgs_SDR_FiltersUnchanged(t *testing.T) {
 		helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
 		helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
 		helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
 	} {
 		t.Run(device, func(t *testing.T) {
 			cfg := helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS]
@@ -862,6 +889,72 @@ func TestBuildHLSArgs_SDR_FiltersUnchanged(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildHLSArgs_ForceKeyframes(t *testing.T) {
+	wantFlag := fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC)
+
+	// All transcode paths must emit -force_key_frames.
+	transcodeDevices := []struct {
+		name   string
+		device string
+	}{
+		{"cpu", helpers.HARDWARE_ACCELERATION_DEVICE_CPU},
+		{"apple", helpers.HARDWARE_ACCELERATION_DEVICE_APPLE},
+		{"nvidia", helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA},
+		{"intel", helpers.HARDWARE_ACCELERATION_DEVICE_INTEL},
+	}
+	for _, tc := range transcodeDevices {
+		t.Run("transcode/"+tc.name, func(t *testing.T) {
+			args := hlsArgs(t, HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          helpers.HLS_PROFILE_1080P_4MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         tc.device,
+				CopyVideo:        false,
+				CopyAudio:        false,
+			})
+			argStr := strings.Join(args, " ")
+			if !strings.Contains(argStr, "-force_key_frames") {
+				t.Errorf("%s transcode path must include -force_key_frames", tc.name)
+			}
+			if !strings.Contains(argStr, wantFlag) {
+				t.Errorf("%s transcode path: -force_key_frames value = want %q, got: %s", tc.name, wantFlag, argStr)
+			}
+		})
+	}
+
+	// Copy-video and remux paths must NOT emit -force_key_frames.
+	t.Run("copy_video", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           t.TempDir(),
+			Profile:          helpers.HLS_PROFILE_1080P_4MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			CopyVideo:        true,
+			CopyAudio:        false,
+		})
+		if strings.Contains(strings.Join(args, " "), "-force_key_frames") {
+			t.Error("copy-video path must not include -force_key_frames")
+		}
+	})
+	t.Run("remux", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           t.TempDir(),
+			Profile:          helpers.HLS_PROFILE_REMUX,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		})
+		if strings.Contains(strings.Join(args, " "), "-force_key_frames") {
+			t.Error("remux path must not include -force_key_frames")
+		}
+	})
 }
 
 func contains(values []string, want string) bool {

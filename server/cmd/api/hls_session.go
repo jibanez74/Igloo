@@ -170,16 +170,12 @@ func (app *Application) createHLSSession(
 	audioCodec := strings.ToLower(selectedAudio.Codec)
 	sourceIsHDR := isHDRStream(primaryVideo)
 
-	// Don't copy H.264 when the source is HDR — it must be transcoded so the
-	// tone-mapping filter chain can convert it to BT.709 SDR.
-	copyVideo := videoCodec == "h264" && !sourceIsHDR
+	// Only copy the video stream for remux; all other profiles run through
+	// HLSProfileConfig so their encoding settings are applied. HDR sources
+	// on non-remux profiles are tone-mapped to BT.709 SDR.
+	copyVideo := profile == helpers.HLS_PROFILE_REMUX
 	copyAudio := audioCodec == "aac"
 	tonemapHDR := sourceIsHDR && profile != helpers.HLS_PROFILE_REMUX
-
-	if profile == helpers.HLS_PROFILE_REMUX {
-		copyVideo = true
-		tonemapHDR = false // remux passes the HDR stream through as-is
-	}
 
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {

@@ -100,6 +100,12 @@ export default function VideoPlayer({
       hls.loadSource(src);
       hls.attachMedia(video);
 
+      if (startSec > 0) {
+        hls.once(Hls.Events.MANIFEST_PARSED, () => {
+          onStartAppliedRef.current?.(startSec);
+        });
+      }
+
       let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (
@@ -163,6 +169,9 @@ export default function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || startSec <= 0) return;
+    // HLS.js owns the initial seek via its startPosition config and fires
+    // onStartApplied via MANIFEST_PARSED; don't compete with it.
+    if (hlsRef.current) return;
 
     const applyStart = () => {
       const duration = Number.isFinite(video.duration) ? video.duration : 0;

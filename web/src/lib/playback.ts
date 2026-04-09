@@ -15,8 +15,9 @@ export type { StreamModeId };
 export { STREAM_MODES };
 
 /**
- * Normalizes an HLS playlist URL for session-recovery rate limiting: same movie, profile,
- * audio track, and backend start offset share one key, while reload-only query changes do not.
+ * Normalizes an HLS playlist URL for session-recovery rate limiting: only the
+ * "reload" query parameter is stripped, so different "start" offsets produce
+ * distinct keys and are rate-limited independently.
  */
 export function hlsStreamRecoveryKey(src: string): string {
   try {

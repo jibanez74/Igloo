@@ -66,7 +66,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		}
 	}
 
-	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "20000000", "-probesize", "20000000"}
+	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "5000000", "-probesize", "5000000"}
 
 	hwLower := strings.ToLower(p.HWDevice)
 	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
@@ -99,8 +99,14 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	} else {
 		if hwKnown {
 			args = append(args, "-c:v", hw.Encoder)
+			switch hwLower {
+			case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+				args = append(args, "-rc", "vbr", "-preset", "p4")
+			case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+				args = append(args, "-look_ahead", "1")
+			}
 		} else {
-			args = append(args, "-c:v", "libx264", "-preset", "veryfast")
+			args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-sc_threshold", "0")
 		}
 		args = append(args,
 			"-b:v", cfg.VideoBitrate,
@@ -130,6 +136,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			vf = fmt.Sprintf("scale=-2:%d", cfg.Height)
 		}
 		args = append(args, "-vf", vf)
+		args = append(args, "-force_key_frames",
+			fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC))
 	}
 
 	if p.CopyAudio {

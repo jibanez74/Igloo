@@ -53,6 +53,23 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 		targetDuration = helpers.HLS_SEGMENT_TIME_SEC
 	}
 
+	// Sum the actual durations FFmpeg produced.
+	var sumActual float64
+	for _, d := range actualDurations {
+		sumActual += d
+	}
+
+	// Distribute the remaining time evenly across placeholder segments so that
+	// sum(placeholders) + sum(actualDurations) == totalDurationSec.
+	var placeholderPerSeg float64
+	if startSegment > 0 {
+		remaining := totalDurationSec - sumActual
+		if remaining < 0 {
+			remaining = 0
+		}
+		placeholderPerSeg = remaining / float64(startSegment)
+	}
+
 	suffix := "?audio_track=" + strconv.Itoa(audioTrack)
 
 	var b strings.Builder
@@ -67,8 +84,8 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 		var dur float64
 		if i < int(startSegment) {
 			// Placeholder segment before the session start point.
-			elapsed := float64(i) * segDur
-			dur = segDur
+			elapsed := float64(i) * placeholderPerSeg
+			dur = placeholderPerSeg
 			if elapsed+dur > totalDurationSec {
 				dur = totalDurationSec - elapsed
 			}
@@ -78,8 +95,8 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 				dur = actualDurations[actualIdx]
 			} else {
 				// Fallback: FFmpeg produced fewer segments than expected.
-				elapsed := float64(i) * segDur
-				dur = segDur
+				elapsed := float64(i) * placeholderPerSeg
+				dur = placeholderPerSeg
 				if elapsed+dur > totalDurationSec {
 					dur = totalDurationSec - elapsed
 				}
