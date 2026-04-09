@@ -2,7 +2,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Play } from "lucide-react";
 
-export const Route = createLazyFileRoute("/_auth/settings/playback")({
+export const Route = createLazyFileRoute("/_admin/settings/playback")({
   component: PlaybackSettings,
 });
 

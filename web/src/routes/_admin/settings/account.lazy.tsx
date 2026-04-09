@@ -44,7 +44,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { logout } from "@/lib/api";
 import type { AuthUser } from "@/types";
 
-export const Route = createLazyFileRoute("/_auth/settings/account")({
+export const Route = createLazyFileRoute("/_admin/settings/account")({
   component: AccountSettings,
 });
 

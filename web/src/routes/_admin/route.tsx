@@ -8,7 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-export const Route = createFileRoute("/_auth")({
+export const Route = createFileRoute("/_admin")({
   beforeLoad: async ({ context, location }) => {
     const res = await context.queryClient.ensureQueryData(authUserQueryOpts());
 
@@ -19,11 +19,15 @@ export const Route = createFileRoute("/_auth")({
         from: location.href,
       });
     }
+
+    if (!res.data.user.is_admin) {
+      throw redirect({ to: "/" });
+    }
   },
-  component: AuthLayout,
+  component: AdminLayout,
 });
 
-function AuthLayout() {
+function AdminLayout() {
   return (
     <SidebarProvider>
       {/* Skip to content link for accessibility */}

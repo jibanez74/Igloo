@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Sliders } from "lucide-react";
 
-export const Route = createLazyFileRoute("/_auth/settings/")({
+export const Route = createLazyFileRoute("/_admin/settings/")({
   component: GeneralSettings,
 });
 
