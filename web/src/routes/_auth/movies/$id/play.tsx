@@ -19,16 +19,7 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import ResumeDialog from "@/components/ResumeDialog";
 import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
@@ -973,39 +964,13 @@ function PlayMoviePage() {
       aria-label={`Video player for ${title}`}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
-      <AlertDialog open={resumeDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Resume movie?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {savedProgressSec !== null
-                ? `Resume from ${formatTimeSeconds(savedProgressSec)} or start from the beginning.`
-                : "Resume your saved progress or start from the beginning."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={(e) => {
-                e.preventDefault();
-                void handleStartFromBeginning();
-              }}
-              disabled={resumeActionPending}
-            >
-              Start from beginning
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="accent"
-              onClick={(e) => {
-                e.preventDefault();
-                handleResume();
-              }}
-              disabled={resumeActionPending}
-            >
-              Resume
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ResumeDialog
+        open={resumeDialogOpen}
+        savedProgressSec={savedProgressSec}
+        pending={resumeActionPending}
+        onResume={handleResume}
+        onStartFromBeginning={() => void handleStartFromBeginning()}
+      />
 
       <p className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind
