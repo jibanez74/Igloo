@@ -33,6 +33,7 @@ type HLSParams struct {
 	CopyVideo        bool
 	CopyAudio        bool
 	StartSec         float64
+	TonemapHDR       bool // true when source is HDR and the profile requires SDR output
 }
 
 // hlsHWTranscode maps hardware acceleration device IDs to FFmpeg -hwaccel and
@@ -70,8 +71,17 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	hwLower := strings.ToLower(p.HWDevice)
 	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
 
-	if !copyVideo && hwKnown && hw.HWAccel != "" {
-		args = append(args, "-hwaccel", hw.HWAccel)
+	// Add -hwaccel for hardware-accelerated decode when transcoding.
+	// When tone-mapping is required, only Apple VideoToolbox keeps hwaccel
+	// because scale_vt handles HDR→SDR natively on the GPU.
+	// For NVIDIA/Intel+tonemap, skip hwaccel so FFmpeg decodes in software
+	// (required by the zscale/tonemap filter pipeline); the hw encoder still applies.
+	if !copyVideo {
+		useHWAccel := hwKnown && hw.HWAccel != "" &&
+			(!p.TonemapHDR || hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE)
+		if useHWAccel {
+			args = append(args, "-hwaccel", hw.HWAccel)
+		}
 	}
 
 	if p.StartSec > 0 {
@@ -96,8 +106,30 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			"-b:v", cfg.VideoBitrate,
 			"-maxrate", cfg.VideoBitrate,
 			"-bufsize", cfg.Bufsize,
-			"-vf", fmt.Sprintf("scale=-2:%d", cfg.Height),
 		)
+
+		// Video filter: tone-map HDR→SDR when required, otherwise plain scale.
+		var vf string
+		switch {
+		case p.TonemapHDR && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+			// scale_vt performs both scaling and HDR→BT.709 tone-mapping in one GPU pass.
+			vf = fmt.Sprintf(
+				"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
+				cfg.Height,
+			)
+		case p.TonemapHDR:
+			// Software tone-mapping: linearise → apply Hable tone curve → convert to BT.709.
+			// Works for CPU, NVIDIA (sw decode + hw encode), and Intel paths.
+			vf = fmt.Sprintf(
+				"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
+					"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
+					"zscale=t=bt709:m=bt709:r=tv,format=yuv420p",
+				cfg.Height,
+			)
+		default:
+			vf = fmt.Sprintf("scale=-2:%d", cfg.Height)
+		}
+		args = append(args, "-vf", vf)
 	}
 
 	if p.CopyAudio {

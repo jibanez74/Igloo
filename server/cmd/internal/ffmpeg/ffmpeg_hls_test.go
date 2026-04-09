@@ -701,6 +701,169 @@ func TestRunHLS_ReportsStderrScannerErrors(t *testing.T) {
 	}
 }
 
+func TestBuildHLSArgs_TonemapHDR_CPU(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("CPU path must not emit -hwaccel")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("CPU tone-mapping must use zscale filter")
+	}
+	if !strings.Contains(argStr, "tonemap=tonemap=hable") {
+		t.Error("CPU tone-mapping must use hable tonemap filter")
+	}
+	if !strings.Contains(argStr, "bt709") {
+		t.Error("tone-mapping output must target bt709 color space")
+	}
+	if strings.Contains(argStr, "scale=-2:") {
+		t.Error("HDR transcode must not use plain scale= filter")
+	}
+	if !strings.Contains(argStr, "libx264") {
+		t.Error("CPU encoder must be libx264")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Apple(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	// Apple keeps hwaccel so VideoToolbox can decode before scale_vt.
+	hwIdx := indexOf(args, "-hwaccel")
+	if hwIdx < 0 {
+		t.Fatal("Apple tone-mapping must keep -hwaccel videotoolbox")
+	}
+	if args[hwIdx+1] != "videotoolbox" {
+		t.Errorf("-hwaccel = %q, want videotoolbox", args[hwIdx+1])
+	}
+	if !strings.Contains(argStr, "scale_vt") {
+		t.Error("Apple tone-mapping must use scale_vt filter")
+	}
+	if !strings.Contains(argStr, "color_transfer=bt709") {
+		t.Error("scale_vt must set color_transfer=bt709")
+	}
+	if !strings.Contains(argStr, "color_primaries=bt709") {
+		t.Error("scale_vt must set color_primaries=bt709")
+	}
+	if !strings.Contains(argStr, "color_matrix=bt709") {
+		t.Error("scale_vt must set color_matrix=bt709")
+	}
+	if strings.Contains(argStr, "zscale") || strings.Contains(argStr, "tonemap=") {
+		t.Error("Apple path must not use software zscale/tonemap filters")
+	}
+	if !strings.Contains(argStr, "h264_videotoolbox") {
+		t.Error("Apple encoder must be h264_videotoolbox")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Nvidia(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	// NVIDIA tone-map uses software decode (no -hwaccel) + hardware encode.
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("NVIDIA tone-mapping must skip -hwaccel (needs software decode for zscale)")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("NVIDIA tone-mapping must use software zscale filter")
+	}
+	if !strings.Contains(argStr, "tonemap=tonemap=hable") {
+		t.Error("NVIDIA tone-mapping must use hable tonemap filter")
+	}
+	if !strings.Contains(argStr, "h264_nvenc") {
+		t.Error("NVIDIA encoder must still be h264_nvenc")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Intel(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("Intel tone-mapping must skip -hwaccel (needs software decode for zscale)")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("Intel tone-mapping must use software zscale filter")
+	}
+	if !strings.Contains(argStr, "h264_qsv") {
+		t.Error("Intel encoder must still be h264_qsv")
+	}
+}
+
+func TestBuildHLSArgs_SDR_FiltersUnchanged(t *testing.T) {
+	// SDR sources with TonemapHDR=false must use the original plain scale= filter.
+	for _, device := range []string{
+		helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+	} {
+		t.Run(device, func(t *testing.T) {
+			cfg := helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS]
+			args := hlsArgs(t, HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         device,
+				CopyVideo:        false,
+				CopyAudio:        false,
+				TonemapHDR:       false,
+			})
+			argStr := strings.Join(args, " ")
+
+			wantScale := fmt.Sprintf("scale=-2:%d", cfg.Height)
+			if !strings.Contains(argStr, wantScale) {
+				t.Errorf("SDR path must use plain %q filter, got: %s", wantScale, argStr)
+			}
+			if strings.Contains(argStr, "zscale") || strings.Contains(argStr, "scale_vt") {
+				t.Error("SDR path must not emit tone-mapping filters")
+			}
+		})
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

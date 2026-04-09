@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
@@ -26,6 +27,16 @@ type HLSSession struct {
 	FinalPlaylist string
 	ExitMu        sync.Mutex
 	CopyVideo     bool // true when FFmpeg uses -c:v copy (remux or h264 source)
+}
+
+// isHDRStream returns true when the stream's color_transfer indicates HDR content
+// (HDR10/PQ or HLG). These sources require tone-mapping when transcoded to SDR profiles.
+func isHDRStream(stream database.VideoStream) bool {
+	if !stream.ColorTransfer.Valid {
+		return false
+	}
+	ct := strings.ToLower(strings.TrimSpace(stream.ColorTransfer.String))
+	return ct == helpers.HDR_TRANSFER_PQ || ct == helpers.HDR_TRANSFER_HLG
 }
 
 func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
@@ -157,11 +168,17 @@ func (app *Application) createHLSSession(
 
 	videoCodec := strings.ToLower(primaryVideo.Codec)
 	audioCodec := strings.ToLower(selectedAudio.Codec)
-	copyVideo := videoCodec == "h264"
+	sourceIsHDR := isHDRStream(primaryVideo)
+
+	// Don't copy H.264 when the source is HDR — it must be transcoded so the
+	// tone-mapping filter chain can convert it to BT.709 SDR.
+	copyVideo := videoCodec == "h264" && !sourceIsHDR
 	copyAudio := audioCodec == "aac"
+	tonemapHDR := sourceIsHDR && profile != helpers.HLS_PROFILE_REMUX
 
 	if profile == helpers.HLS_PROFILE_REMUX {
 		copyVideo = true
+		tonemapHDR = false // remux passes the HDR stream through as-is
 	}
 
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
@@ -198,6 +215,8 @@ func (app *Application) createHLSSession(
 		"audio_codec", audioCodec,
 		"copy_video", copyVideo,
 		"copy_audio", copyAudio,
+		"source_is_hdr", sourceIsHDR,
+		"tonemap_hdr", tonemapHDR,
 	)
 
 	startTime := time.Now()
@@ -245,6 +264,7 @@ func (app *Application) createHLSSession(
 		CopyVideo:        copyVideo,
 		CopyAudio:        copyAudio,
 		StartSec:         startSec,
+		TonemapHDR:       tonemapHDR,
 	}, onExit)
 	if err != nil {
 		cleanupHLSSession(session)
