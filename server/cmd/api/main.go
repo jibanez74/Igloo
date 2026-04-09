@@ -660,10 +660,15 @@ func (app *Application) ListenForShutdown() {
 
 	// Clean up all HLS sessions (kill FFmpeg, delete temp dirs) before FFmpeg binary cleanup.
 	if app.HLSSessionCache != nil {
+		count := 0
 		for _, item := range app.HLSSessionCache.Items() {
 			if session, ok := item.Object.(*HLSSession); ok {
 				cleanupHLSSession(session)
+				count++
 			}
+		}
+		if count > 0 {
+			app.Logger.Info("cleaned up HLS sessions", "count", count)
 		}
 		app.HLSSessionCache.Flush()
 	}

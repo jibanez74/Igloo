@@ -67,7 +67,11 @@ const (
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
 
 	// HLS transcoding
-	HLS_SEGMENT_TIME_SEC    = 4                // segment duration in seconds for fMP4 HLS
+	HLS_SEGMENT_TIME_SEC            = 4  // segment duration in seconds for fMP4 HLS
+	// HLS_COPY_VIDEO_TARGET_DURATION is the TARGETDURATION ceiling used when FFmpeg
+	// runs in -c:v copy mode. Copy mode splits only at keyframe boundaries, so
+	// segments can far exceed HLS_SEGMENT_TIME_SEC. 30s covers all practical GOPs.
+	HLS_COPY_VIDEO_TARGET_DURATION  = 30
 	HLS_STDERR_TAIL_LINES   = 20               // lines of FFmpeg stderr kept for error reporting
 	HLS_SESSION_TTL         = 30 * time.Minute // TTL for cached HLS session entries
 	HLS_SESSION_CACHE_SWEEP = 10 * time.Minute // interval for removing expired HLS session entries

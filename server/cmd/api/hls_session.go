@@ -25,6 +25,7 @@ type HLSSession struct {
 	ExitErr       error
 	FinalPlaylist string
 	ExitMu        sync.Mutex
+	CopyVideo     bool // true when FFmpeg uses -c:v copy (remux or h264 source)
 }
 
 func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
@@ -40,7 +41,26 @@ func cleanupHLSSession(session *HLSSession) {
 		return
 	}
 	if session.Cmd != nil && session.Cmd.Process != nil {
-		_ = session.Cmd.Process.Kill()
+		session.ExitMu.Lock()
+		exited := session.Exited
+		session.ExitMu.Unlock()
+
+		if !exited {
+			_ = session.Cmd.Process.Kill()
+
+			// Wait for the process to fully exit before removing the temp dir
+			// so the OS has released all file handles. Timeout after 2 seconds.
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				session.ExitMu.Lock()
+				exited = session.Exited
+				session.ExitMu.Unlock()
+				if exited {
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
 	}
 	if session.TempDir != "" {
 		_ = os.RemoveAll(session.TempDir)
@@ -160,6 +180,7 @@ func (app *Application) createHLSSession(
 		DurationSec:  durationSec,
 		StartSec:     startSec,
 		StartSegment: startSegment,
+		CopyVideo:    copyVideo,
 	}
 
 	videoStreamIndex := int(primaryVideo.StreamIndex)

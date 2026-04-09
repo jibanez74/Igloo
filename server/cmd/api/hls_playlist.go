@@ -138,7 +138,7 @@ func rewritePlaylistURLs(playlist, baseURL string, audioTrack int) string {
 //
 // FFmpeg produces the actual segment files in the background; the segment
 // handler waits for each file to appear on disk before serving.
-func generateVODPlaylist(totalDurationSec float64, baseURL string, audioTrack int) string {
+func generateVODPlaylist(totalDurationSec float64, baseURL string, audioTrack int, copyVideo bool) string {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	segCount := int(math.Ceil(totalDurationSec / segDur))
 	if segCount < 1 {
@@ -151,9 +151,13 @@ func generateVODPlaylist(totalDurationSec float64, baseURL string, audioTrack in
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:7\n")
 	// TARGETDURATION must be >= the longest segment (HLS spec).
-	// With -c:v copy, FFmpeg splits at keyframes so segments can exceed the target.
-	// Use 2x the target as a safe ceiling.
+	// Transcode: FFmpeg inserts keyframes freely, so 2x the target is a safe ceiling.
+	// Copy-video: FFmpeg splits only at existing keyframe boundaries; GOP sizes for
+	// H.265 web content are commonly 10-12s, so use HLS_COPY_VIDEO_TARGET_DURATION.
 	targetDuration := helpers.HLS_SEGMENT_TIME_SEC * 2
+	if copyVideo {
+		targetDuration = helpers.HLS_COPY_VIDEO_TARGET_DURATION
+	}
 	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", targetDuration))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	b.WriteString("#EXT-X-PLAYLIST-TYPE:VOD\n")

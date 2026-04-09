@@ -159,7 +159,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
-			got := generateVODPlaylist(tt.durationSec, baseURL, tt.audioTrack)
+			got := generateVODPlaylist(tt.durationSec, baseURL, tt.audioTrack, false)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -297,7 +297,7 @@ func TestBuildResumePlaylist_ZeroStartSegmentIsFullPlaylist(t *testing.T) {
 }
 
 func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
-	got := generateVODPlaylist(0, "/base/", 0)
+	got := generateVODPlaylist(0, "/base/", 0, false)
 
 	if !strings.Contains(got, "#EXT-X-ENDLIST") {
 		t.Error("zero-duration playlist must still be valid with ENDLIST")
@@ -307,12 +307,21 @@ func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
 	}
 }
 
-func TestGenerateVODPlaylist_TargetDurationIsDoubleSegmentTime(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", 0)
+func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testing.T) {
+	got := generateVODPlaylist(100, "/base/", 0, false)
 
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
 	if !strings.Contains(got, want) {
-		t.Errorf("expected target duration %q (2x segment time), got:\n%s", want, got)
+		t.Errorf("expected target duration %q (2x segment time) for transcode mode, got:\n%s", want, got)
+	}
+}
+
+func TestGenerateVODPlaylist_CopyVideoUsesLargerTargetDuration(t *testing.T) {
+	got := generateVODPlaylist(100, "/base/", 0, true)
+
+	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_COPY_VIDEO_TARGET_DURATION)
+	if !strings.Contains(got, want) {
+		t.Errorf("expected target duration %q for copy-video mode, got:\n%s", want, got)
 	}
 }
 
@@ -320,7 +329,7 @@ func TestGenerateVODPlaylist_LastSegmentDurationCapped(t *testing.T) {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	totalDur := segDur + 1.5
 
-	got := generateVODPlaylist(totalDur, "/base/", 0)
+	got := generateVODPlaylist(totalDur, "/base/", 0, false)
 
 	lines := strings.Split(got, "\n")
 	var infDurations []string

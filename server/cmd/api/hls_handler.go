@@ -47,7 +47,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 			playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
 		}
 	} else {
-		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack, session.CopyVideo)
 	}
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
