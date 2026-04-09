@@ -16,10 +16,6 @@ import (
 // IdentifyMovie replaces all TMDB-sourced metadata for a movie (full re-identify).
 // PUT /api/movies/:id/identify   body: { tmdb_id: int }
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
-	if app.requireAdmin(w, r) == 0 {
-		return
-	}
-
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
@@ -136,10 +132,6 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 // UpdateMovieMetadata applies a partial update to movie metadata fields.
 // PATCH /api/movies/:id   body: { title?, year?, release_date?, overview?, ... }
 func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Request) {
-	if app.requireAdmin(w, r) == 0 {
-		return
-	}
-
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
@@ -241,10 +233,6 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 // DeleteMovie deletes a movie from the database. Optionally deletes the file from disk.
 // DELETE /api/movies/:id   body: { delete_file?: bool }
 func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
-	if app.requireAdmin(w, r) == 0 {
-		return
-	}
-
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid movie id"), http.StatusBadRequest)
