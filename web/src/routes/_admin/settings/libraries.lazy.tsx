@@ -39,7 +39,7 @@ import {
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 
-export const Route = createLazyFileRoute("/_auth/settings/libraries")({
+export const Route = createLazyFileRoute("/_admin/settings/libraries")({
   component: LibrariesSettings,
 });
 

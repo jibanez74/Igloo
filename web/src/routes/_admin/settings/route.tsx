@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { Settings, User, Sliders, Library, Play } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export const Route = createFileRoute("/_auth/settings")({
+export const Route = createFileRoute("/_admin/settings")({
   component: SettingsLayout,
 });
 
@@ -27,12 +27,12 @@ function SettingsLayout() {
   // /settings/playback -> "playback"
   const getCurrentTab = (): TabId => {
     const pathParts = location.pathname.split("/").filter(Boolean);
-    
+
     // If pathname is exactly "/settings", it's the index route (general)
     if (pathParts.length === 1 && pathParts[0] === "settings") {
       return "general";
     }
-    
+
     // Otherwise, get the tab name from the second path segment
     const tabId = pathParts[1] as TabId | undefined;
     return tabId && SETTINGS_TABS.some(tab => tab.id === tabId) ? tabId : "general";

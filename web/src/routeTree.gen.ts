@@ -13,9 +13,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteRouteImport } from './routes/login/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
+import { Route as AdminRouteRouteImport } from './routes/_admin/route'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthTrailerRouteImport } from './routes/_auth/trailer'
-import { Route as AuthSettingsRouteRouteImport } from './routes/_auth/settings/route'
+import { Route as AdminSettingsRouteRouteImport } from './routes/_admin/settings/route'
 import { Route as AuthMusicIndexRouteImport } from './routes/_auth/music/index'
 import { Route as AuthMoviesIndexRouteImport } from './routes/_auth/movies/index'
 import { Route as AuthMoviesIdIndexRouteImport } from './routes/_auth/movies/$id/index'
@@ -27,16 +28,16 @@ import { Route as AuthMoviesIdPlayRouteImport } from './routes/_auth/movies/$id/
 
 const LoginIndexLazyRouteImport = createFileRoute('/login/')()
 const AuthTvShowsIndexLazyRouteImport = createFileRoute('/_auth/tv-shows/')()
-const AuthSettingsIndexLazyRouteImport = createFileRoute('/_auth/settings/')()
 const AuthPhotosIndexLazyRouteImport = createFileRoute('/_auth/photos/')()
-const AuthSettingsPlaybackLazyRouteImport = createFileRoute(
-  '/_auth/settings/playback',
+const AdminSettingsIndexLazyRouteImport = createFileRoute('/_admin/settings/')()
+const AdminSettingsPlaybackLazyRouteImport = createFileRoute(
+  '/_admin/settings/playback',
 )()
-const AuthSettingsLibrariesLazyRouteImport = createFileRoute(
-  '/_auth/settings/libraries',
+const AdminSettingsLibrariesLazyRouteImport = createFileRoute(
+  '/_admin/settings/libraries',
 )()
-const AuthSettingsAccountLazyRouteImport = createFileRoute(
-  '/_auth/settings/account',
+const AdminSettingsAccountLazyRouteImport = createFileRoute(
+  '/_admin/settings/account',
 )()
 const AuthMoviesInTheatersIdLazyRouteImport = createFileRoute(
   '/_auth/movies/in-theaters/$id',
@@ -49,6 +50,10 @@ const LoginRouteRoute = LoginRouteRouteImport.update({
 } as any)
 const AuthRouteRoute = AuthRouteRouteImport.update({
   id: '/_auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRouteRoute = AdminRouteRouteImport.update({
+  id: '/_admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginIndexLazyRoute = LoginIndexLazyRouteImport.update({
@@ -66,10 +71,10 @@ const AuthTrailerRoute = AuthTrailerRouteImport.update({
   path: '/trailer',
   getParentRoute: () => AuthRouteRoute,
 } as any)
-const AuthSettingsRouteRoute = AuthSettingsRouteRouteImport.update({
+const AdminSettingsRouteRoute = AdminSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => AuthRouteRoute,
+  getParentRoute: () => AdminRouteRoute,
 } as any)
 const AuthTvShowsIndexLazyRoute = AuthTvShowsIndexLazyRouteImport.update({
   id: '/tv-shows/',
@@ -78,19 +83,19 @@ const AuthTvShowsIndexLazyRoute = AuthTvShowsIndexLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/_auth/tv-shows/index.lazy').then((d) => d.Route),
 )
-const AuthSettingsIndexLazyRoute = AuthSettingsIndexLazyRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthSettingsRouteRoute,
-} as any).lazy(() =>
-  import('./routes/_auth/settings/index.lazy').then((d) => d.Route),
-)
 const AuthPhotosIndexLazyRoute = AuthPhotosIndexLazyRouteImport.update({
   id: '/photos/',
   path: '/photos/',
   getParentRoute: () => AuthRouteRoute,
 } as any).lazy(() =>
   import('./routes/_auth/photos/index.lazy').then((d) => d.Route),
+)
+const AdminSettingsIndexLazyRoute = AdminSettingsIndexLazyRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any).lazy(() =>
+  import('./routes/_admin/settings/index.lazy').then((d) => d.Route),
 )
 const AuthMusicIndexRoute = AuthMusicIndexRouteImport.update({
   id: '/music/',
@@ -102,29 +107,30 @@ const AuthMoviesIndexRoute = AuthMoviesIndexRouteImport.update({
   path: '/movies/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
-const AuthSettingsPlaybackLazyRoute =
-  AuthSettingsPlaybackLazyRouteImport.update({
+const AdminSettingsPlaybackLazyRoute =
+  AdminSettingsPlaybackLazyRouteImport.update({
     id: '/playback',
     path: '/playback',
-    getParentRoute: () => AuthSettingsRouteRoute,
+    getParentRoute: () => AdminSettingsRouteRoute,
   } as any).lazy(() =>
-    import('./routes/_auth/settings/playback.lazy').then((d) => d.Route),
+    import('./routes/_admin/settings/playback.lazy').then((d) => d.Route),
   )
-const AuthSettingsLibrariesLazyRoute =
-  AuthSettingsLibrariesLazyRouteImport.update({
+const AdminSettingsLibrariesLazyRoute =
+  AdminSettingsLibrariesLazyRouteImport.update({
     id: '/libraries',
     path: '/libraries',
-    getParentRoute: () => AuthSettingsRouteRoute,
+    getParentRoute: () => AdminSettingsRouteRoute,
   } as any).lazy(() =>
-    import('./routes/_auth/settings/libraries.lazy').then((d) => d.Route),
+    import('./routes/_admin/settings/libraries.lazy').then((d) => d.Route),
   )
-const AuthSettingsAccountLazyRoute = AuthSettingsAccountLazyRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => AuthSettingsRouteRoute,
-} as any).lazy(() =>
-  import('./routes/_auth/settings/account.lazy').then((d) => d.Route),
-)
+const AdminSettingsAccountLazyRoute =
+  AdminSettingsAccountLazyRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any).lazy(() =>
+    import('./routes/_admin/settings/account.lazy').then((d) => d.Route),
+  )
 const AuthMoviesIdIndexRoute = AuthMoviesIdIndexRouteImport.update({
   id: '/movies/$id/',
   path: '/movies/$id/',
@@ -167,16 +173,16 @@ const AuthMoviesIdPlayRoute = AuthMoviesIdPlayRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRouteRouteWithChildren
-  '/settings': typeof AuthSettingsRouteRouteWithChildren
+  '/settings': typeof AdminSettingsRouteRouteWithChildren
   '/trailer': typeof AuthTrailerRoute
   '/login/': typeof LoginIndexLazyRoute
-  '/settings/account': typeof AuthSettingsAccountLazyRoute
-  '/settings/libraries': typeof AuthSettingsLibrariesLazyRoute
-  '/settings/playback': typeof AuthSettingsPlaybackLazyRoute
+  '/settings/account': typeof AdminSettingsAccountLazyRoute
+  '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
+  '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
   '/movies/': typeof AuthMoviesIndexRoute
   '/music/': typeof AuthMusicIndexRoute
+  '/settings/': typeof AdminSettingsIndexLazyRoute
   '/photos/': typeof AuthPhotosIndexLazyRoute
-  '/settings/': typeof AuthSettingsIndexLazyRoute
   '/tv-shows/': typeof AuthTvShowsIndexLazyRoute
   '/movies/$id/play': typeof AuthMoviesIdPlayRoute
   '/movies/playlist/$id': typeof AuthMoviesPlaylistIdRoute
@@ -187,16 +193,16 @@ export interface FileRoutesByFullPath {
   '/movies/$id/': typeof AuthMoviesIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/trailer': typeof AuthTrailerRoute
   '/': typeof AuthIndexRoute
+  '/trailer': typeof AuthTrailerRoute
   '/login': typeof LoginIndexLazyRoute
-  '/settings/account': typeof AuthSettingsAccountLazyRoute
-  '/settings/libraries': typeof AuthSettingsLibrariesLazyRoute
-  '/settings/playback': typeof AuthSettingsPlaybackLazyRoute
+  '/settings/account': typeof AdminSettingsAccountLazyRoute
+  '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
+  '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
+  '/settings': typeof AdminSettingsIndexLazyRoute
   '/photos': typeof AuthPhotosIndexLazyRoute
-  '/settings': typeof AuthSettingsIndexLazyRoute
   '/tv-shows': typeof AuthTvShowsIndexLazyRoute
   '/movies/$id/play': typeof AuthMoviesIdPlayRoute
   '/movies/playlist/$id': typeof AuthMoviesPlaylistIdRoute
@@ -208,19 +214,20 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_admin': typeof AdminRouteRouteWithChildren
   '/_auth': typeof AuthRouteRouteWithChildren
   '/login': typeof LoginRouteRouteWithChildren
-  '/_auth/settings': typeof AuthSettingsRouteRouteWithChildren
+  '/_admin/settings': typeof AdminSettingsRouteRouteWithChildren
   '/_auth/trailer': typeof AuthTrailerRoute
   '/_auth/': typeof AuthIndexRoute
   '/login/': typeof LoginIndexLazyRoute
-  '/_auth/settings/account': typeof AuthSettingsAccountLazyRoute
-  '/_auth/settings/libraries': typeof AuthSettingsLibrariesLazyRoute
-  '/_auth/settings/playback': typeof AuthSettingsPlaybackLazyRoute
+  '/_admin/settings/account': typeof AdminSettingsAccountLazyRoute
+  '/_admin/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
+  '/_admin/settings/playback': typeof AdminSettingsPlaybackLazyRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
+  '/_admin/settings/': typeof AdminSettingsIndexLazyRoute
   '/_auth/photos/': typeof AuthPhotosIndexLazyRoute
-  '/_auth/settings/': typeof AuthSettingsIndexLazyRoute
   '/_auth/tv-shows/': typeof AuthTvShowsIndexLazyRoute
   '/_auth/movies/$id/play': typeof AuthMoviesIdPlayRoute
   '/_auth/movies/playlist/$id': typeof AuthMoviesPlaylistIdRoute
@@ -243,8 +250,8 @@ export interface FileRouteTypes {
     | '/settings/playback'
     | '/movies/'
     | '/music/'
-    | '/photos/'
     | '/settings/'
+    | '/photos/'
     | '/tv-shows/'
     | '/movies/$id/play'
     | '/movies/playlist/$id'
@@ -255,16 +262,16 @@ export interface FileRouteTypes {
     | '/movies/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/trailer'
     | '/'
+    | '/trailer'
     | '/login'
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
     | '/movies'
     | '/music'
-    | '/photos'
     | '/settings'
+    | '/photos'
     | '/tv-shows'
     | '/movies/$id/play'
     | '/movies/playlist/$id'
@@ -275,19 +282,20 @@ export interface FileRouteTypes {
     | '/movies/$id'
   id:
     | '__root__'
+    | '/_admin'
     | '/_auth'
     | '/login'
-    | '/_auth/settings'
+    | '/_admin/settings'
     | '/_auth/trailer'
     | '/_auth/'
     | '/login/'
-    | '/_auth/settings/account'
-    | '/_auth/settings/libraries'
-    | '/_auth/settings/playback'
+    | '/_admin/settings/account'
+    | '/_admin/settings/libraries'
+    | '/_admin/settings/playback'
     | '/_auth/movies/'
     | '/_auth/music/'
+    | '/_admin/settings/'
     | '/_auth/photos/'
-    | '/_auth/settings/'
     | '/_auth/tv-shows/'
     | '/_auth/movies/$id/play'
     | '/_auth/movies/playlist/$id'
@@ -299,6 +307,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   LoginRouteRoute: typeof LoginRouteRouteWithChildren
 }
@@ -317,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_admin': {
+      id: '/_admin'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login/': {
@@ -340,12 +356,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthTrailerRouteImport
       parentRoute: typeof AuthRouteRoute
     }
-    '/_auth/settings': {
-      id: '/_auth/settings'
+    '/_admin/settings': {
+      id: '/_admin/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof AuthSettingsRouteRouteImport
-      parentRoute: typeof AuthRouteRoute
+      preLoaderRoute: typeof AdminSettingsRouteRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
     '/_auth/tv-shows/': {
       id: '/_auth/tv-shows/'
@@ -354,19 +370,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthTvShowsIndexLazyRouteImport
       parentRoute: typeof AuthRouteRoute
     }
-    '/_auth/settings/': {
-      id: '/_auth/settings/'
-      path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthSettingsIndexLazyRouteImport
-      parentRoute: typeof AuthSettingsRouteRoute
-    }
     '/_auth/photos/': {
       id: '/_auth/photos/'
       path: '/photos'
       fullPath: '/photos/'
       preLoaderRoute: typeof AuthPhotosIndexLazyRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/_admin/settings/': {
+      id: '/_admin/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AdminSettingsIndexLazyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
     }
     '/_auth/music/': {
       id: '/_auth/music/'
@@ -382,26 +398,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMoviesIndexRouteImport
       parentRoute: typeof AuthRouteRoute
     }
-    '/_auth/settings/playback': {
-      id: '/_auth/settings/playback'
+    '/_admin/settings/playback': {
+      id: '/_admin/settings/playback'
       path: '/playback'
       fullPath: '/settings/playback'
-      preLoaderRoute: typeof AuthSettingsPlaybackLazyRouteImport
-      parentRoute: typeof AuthSettingsRouteRoute
+      preLoaderRoute: typeof AdminSettingsPlaybackLazyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
     }
-    '/_auth/settings/libraries': {
-      id: '/_auth/settings/libraries'
+    '/_admin/settings/libraries': {
+      id: '/_admin/settings/libraries'
       path: '/libraries'
       fullPath: '/settings/libraries'
-      preLoaderRoute: typeof AuthSettingsLibrariesLazyRouteImport
-      parentRoute: typeof AuthSettingsRouteRoute
+      preLoaderRoute: typeof AdminSettingsLibrariesLazyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
     }
-    '/_auth/settings/account': {
-      id: '/_auth/settings/account'
+    '/_admin/settings/account': {
+      id: '/_admin/settings/account'
       path: '/account'
       fullPath: '/settings/account'
-      preLoaderRoute: typeof AuthSettingsAccountLazyRouteImport
-      parentRoute: typeof AuthSettingsRouteRoute
+      preLoaderRoute: typeof AdminSettingsAccountLazyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
     }
     '/_auth/movies/$id/': {
       id: '/_auth/movies/$id/'
@@ -455,25 +471,36 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthSettingsRouteRouteChildren {
-  AuthSettingsAccountLazyRoute: typeof AuthSettingsAccountLazyRoute
-  AuthSettingsLibrariesLazyRoute: typeof AuthSettingsLibrariesLazyRoute
-  AuthSettingsPlaybackLazyRoute: typeof AuthSettingsPlaybackLazyRoute
-  AuthSettingsIndexLazyRoute: typeof AuthSettingsIndexLazyRoute
+interface AdminSettingsRouteRouteChildren {
+  AdminSettingsAccountLazyRoute: typeof AdminSettingsAccountLazyRoute
+  AdminSettingsLibrariesLazyRoute: typeof AdminSettingsLibrariesLazyRoute
+  AdminSettingsPlaybackLazyRoute: typeof AdminSettingsPlaybackLazyRoute
+  AdminSettingsIndexLazyRoute: typeof AdminSettingsIndexLazyRoute
 }
 
-const AuthSettingsRouteRouteChildren: AuthSettingsRouteRouteChildren = {
-  AuthSettingsAccountLazyRoute: AuthSettingsAccountLazyRoute,
-  AuthSettingsLibrariesLazyRoute: AuthSettingsLibrariesLazyRoute,
-  AuthSettingsPlaybackLazyRoute: AuthSettingsPlaybackLazyRoute,
-  AuthSettingsIndexLazyRoute: AuthSettingsIndexLazyRoute,
+const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
+  AdminSettingsAccountLazyRoute: AdminSettingsAccountLazyRoute,
+  AdminSettingsLibrariesLazyRoute: AdminSettingsLibrariesLazyRoute,
+  AdminSettingsPlaybackLazyRoute: AdminSettingsPlaybackLazyRoute,
+  AdminSettingsIndexLazyRoute: AdminSettingsIndexLazyRoute,
 }
 
-const AuthSettingsRouteRouteWithChildren =
-  AuthSettingsRouteRoute._addFileChildren(AuthSettingsRouteRouteChildren)
+const AdminSettingsRouteRouteWithChildren =
+  AdminSettingsRouteRoute._addFileChildren(AdminSettingsRouteRouteChildren)
+
+interface AdminRouteRouteChildren {
+  AdminSettingsRouteRoute: typeof AdminSettingsRouteRouteWithChildren
+}
+
+const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminSettingsRouteRoute: AdminSettingsRouteRouteWithChildren,
+}
+
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
 
 interface AuthRouteRouteChildren {
-  AuthSettingsRouteRoute: typeof AuthSettingsRouteRouteWithChildren
   AuthTrailerRoute: typeof AuthTrailerRoute
   AuthIndexRoute: typeof AuthIndexRoute
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
@@ -490,7 +517,6 @@ interface AuthRouteRouteChildren {
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
-  AuthSettingsRouteRoute: AuthSettingsRouteRouteWithChildren,
   AuthTrailerRoute: AuthTrailerRoute,
   AuthIndexRoute: AuthIndexRoute,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
@@ -523,6 +549,7 @@ const LoginRouteRouteWithChildren = LoginRouteRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
+  AdminRouteRoute: AdminRouteRouteWithChildren,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   LoginRouteRoute: LoginRouteRouteWithChildren,
 }
