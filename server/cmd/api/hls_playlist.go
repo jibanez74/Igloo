@@ -95,6 +95,12 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 				dur = actualDurations[actualIdx]
 			} else {
 				// Fallback: FFmpeg produced fewer segments than expected.
+				// NOTE: elapsed is approximated here as i*placeholderPerSeg,
+				// which ignores that segments [startSegment, actualIdx) had
+				// real durations that may differ from placeholderPerSeg.  The
+				// only consequence is a slightly inaccurate clamp against
+				// totalDurationSec for these tail segments; since this branch
+				// is itself an error-recovery path the imprecision is acceptable.
 				elapsed := float64(i) * placeholderPerSeg
 				dur = placeholderPerSeg
 				if elapsed+dur > totalDurationSec {
