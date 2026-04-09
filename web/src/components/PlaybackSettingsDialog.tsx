@@ -19,6 +19,7 @@ import {
   getAvailableModes,
   getPrimaryVideoStream,
   isBitmapSubtitleCodec,
+  resolvePlaybackSettings,
   type StreamModeId,
   type PlaybackSettings,
 } from "@/lib/playback";
@@ -82,40 +83,35 @@ function PlaybackSettingsDialogForm({
   onSave,
   onCancel,
 }: PlaybackSettingsDialogFormProps) {
-  const validIds = availableModes.map(m => m.id) as readonly string[];
-  const initialMode: StreamModeId | null =
-    availableModes.length === 0
-      ? null
-      : validIds.includes(settings.mode)
-        ? settings.mode
-        : availableModes[0].id;
-
-  const [mode, setMode] = useState<StreamModeId | null>(initialMode);
-  const [audioTrack, setAudioTrack] = useState(settings.audioTrack);
-  const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
-    settings.subtitleTrack,
+  const normalizedSettings = resolvePlaybackSettings(
+    settings,
+    availableModes,
+    audioStreams,
+    subtitleStreams,
   );
-  const resolvedMode =
-    mode !== null && validIds.includes(mode) ? mode : initialMode;
+
+  const [mode, setMode] = useState<StreamModeId | null>(
+    availableModes.length === 0 ? null : normalizedSettings.mode,
+  );
+  const [audioTrack, setAudioTrack] = useState(normalizedSettings.audioTrack);
+  const [subtitleTrack, setSubtitleTrack] = useState<number | null>(
+    normalizedSettings.subtitleTrack,
+  );
   const loadingSelectsDisabled = isPending && !techLoaded;
   const modeSelectDisabled = loadingSelectsDisabled || availableModes.length === 0;
-  const canSave = resolvedMode !== null;
+  const canSave = mode !== null;
 
   const handleSave = () => {
-    if (!resolvedMode) return;
-    onSave({ mode: resolvedMode, audioTrack, subtitleTrack });
+    if (!mode) return;
+    onSave({ mode, audioTrack, subtitleTrack });
   };
 
   const summaryText =
     isPending && !techLoaded
       ? PLAYBACK_SETTINGS_SUMMARY_LOADING
-      : resolvedMode === null
+      : mode === null
         ? NO_PLAYBACK_MODES_LABEL
-        : describePlaybackExperience(
-          resolvedMode,
-          audioStreams[audioTrack],
-          audioTrack,
-        );
+        : describePlaybackExperience(mode, audioStreams[audioTrack], audioTrack);
 
   return (
     <>
@@ -136,7 +132,7 @@ function PlaybackSettingsDialogForm({
             <select
               id="video-quality"
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
-              value={resolvedMode ?? ""}
+              value={mode ?? ""}
               onChange={e => setMode(e.target.value as StreamModeId)}
               disabled={modeSelectDisabled}
             >
@@ -152,7 +148,7 @@ function PlaybackSettingsDialogForm({
             </select>
           ) : (
             <Select
-              value={resolvedMode ?? undefined}
+              value={mode ?? undefined}
               onValueChange={v => setMode(v as StreamModeId)}
               disabled={modeSelectDisabled}
             >

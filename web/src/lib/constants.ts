@@ -131,8 +131,10 @@ export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
 /** hls.js: manifest / level / fragment request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
-/** hls.js: seconds of buffer to keep behind the playhead. */
-export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 30;
+/** Resume HLS sessions this far before the target so short rewinds work immediately. */
+export const HLS_RESUME_REWIND_BUFFER_SEC = 120;
+/** hls.js: seconds of buffer to keep behind the playhead. Match the resume rewind window. */
+export const HLS_JS_BACK_BUFFER_LENGTH_SEC = HLS_RESUME_REWIND_BUFFER_SEC;
 
 // playback settings dialog (movie play UI)
 export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";

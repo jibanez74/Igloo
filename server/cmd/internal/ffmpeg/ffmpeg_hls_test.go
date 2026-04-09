@@ -42,6 +42,8 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		sourcePath, outDir, "fmp4", "event", "playlist.m3u8",
 		"-map 0:0", "-map 0:1",
 		"libx264", "-preset", "veryfast",
+		"-sc_threshold", "0",
+		"-force_key_frames", "expr:gte(t,n_forced*4)",
 		"-c:a aac", "-ac", "2", "-b:a", "192k",
 		"scale=-2:1080",
 		"-avoid_negative_ts", "make_zero",
@@ -172,7 +174,7 @@ func TestBuildHLSArgs_Remux(t *testing.T) {
 	if !strings.Contains(argStr, "-c:a aac") {
 		t.Error("remux with copyAudio=false must transcode audio to AAC")
 	}
-	for _, forbidden := range []string{"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv", "-hwaccel", "scale="} {
+	for _, forbidden := range []string{"libx264", "h264_videotoolbox", "h264_nvenc", "h264_qsv", "-hwaccel", "scale=", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {
 			t.Errorf("remux must not contain %q in args: %s", forbidden, argStr)
 		}
@@ -378,6 +380,30 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 			if !strings.Contains(argStr, tt.wantEncoder) {
 				t.Errorf("expected encoder %q in args: %s", tt.wantEncoder, argStr)
 			}
+
+			switch tt.device {
+			case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
+				if !strings.Contains(argStr, "-sc_threshold 0") {
+					t.Errorf("cpu path must include -sc_threshold 0")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+				if !strings.Contains(argStr, "-rc vbr") {
+					t.Errorf("nvidia path must include -rc vbr")
+				}
+				if !strings.Contains(argStr, "-preset p4") {
+					t.Errorf("nvidia path must include -preset p4")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+				if !strings.Contains(argStr, "-look_ahead 1") {
+					t.Errorf("intel path must include -look_ahead 1")
+				}
+			case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+				for _, unexpected := range []string{"-sc_threshold", "-rc vbr", "-look_ahead"} {
+					if strings.Contains(argStr, unexpected) {
+						t.Errorf("apple path must not contain %q", unexpected)
+					}
+				}
+			}
 		})
 	}
 }
@@ -447,7 +473,7 @@ func TestBuildHLSArgs_CopyVideoTranscodeAudio(t *testing.T) {
 	if !strings.Contains(argStr, "-b:a 192k") {
 		t.Error("audio bitrate should be 192k")
 	}
-	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize"} {
+	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {
 			t.Errorf("copy video should not contain %q in args", forbidden)
 		}
@@ -699,6 +725,236 @@ func TestRunHLS_ReportsStderrScannerErrors(t *testing.T) {
 	}) {
 		t.Fatalf("stderr tail missing scanner error: %v", result.stderrTail)
 	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_CPU(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("CPU path must not emit -hwaccel")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("CPU tone-mapping must use zscale filter")
+	}
+	if !strings.Contains(argStr, "tonemap=tonemap=hable") {
+		t.Error("CPU tone-mapping must use hable tonemap filter")
+	}
+	if !strings.Contains(argStr, "bt709") {
+		t.Error("tone-mapping output must target bt709 color space")
+	}
+	if strings.Contains(argStr, "scale=-2:") {
+		t.Error("HDR transcode must not use plain scale= filter")
+	}
+	if !strings.Contains(argStr, "libx264") {
+		t.Error("CPU encoder must be libx264")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Apple(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	// Apple keeps hwaccel so VideoToolbox can decode before scale_vt.
+	hwIdx := indexOf(args, "-hwaccel")
+	if hwIdx < 0 {
+		t.Fatal("Apple tone-mapping must keep -hwaccel videotoolbox")
+	}
+	if args[hwIdx+1] != "videotoolbox" {
+		t.Errorf("-hwaccel = %q, want videotoolbox", args[hwIdx+1])
+	}
+	if !strings.Contains(argStr, "scale_vt") {
+		t.Error("Apple tone-mapping must use scale_vt filter")
+	}
+	if !strings.Contains(argStr, "color_transfer=bt709") {
+		t.Error("scale_vt must set color_transfer=bt709")
+	}
+	if !strings.Contains(argStr, "color_primaries=bt709") {
+		t.Error("scale_vt must set color_primaries=bt709")
+	}
+	if !strings.Contains(argStr, "color_matrix=bt709") {
+		t.Error("scale_vt must set color_matrix=bt709")
+	}
+	if strings.Contains(argStr, "zscale") || strings.Contains(argStr, "tonemap=") {
+		t.Error("Apple path must not use software zscale/tonemap filters")
+	}
+	if !strings.Contains(argStr, "h264_videotoolbox") {
+		t.Error("Apple encoder must be h264_videotoolbox")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Nvidia(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	// NVIDIA tone-map uses software decode (no -hwaccel) + hardware encode.
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("NVIDIA tone-mapping must skip -hwaccel (needs software decode for zscale)")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("NVIDIA tone-mapping must use software zscale filter")
+	}
+	if !strings.Contains(argStr, "tonemap=tonemap=hable") {
+		t.Error("NVIDIA tone-mapping must use hable tonemap filter")
+	}
+	if !strings.Contains(argStr, "h264_nvenc") {
+		t.Error("NVIDIA encoder must still be h264_nvenc")
+	}
+}
+
+func TestBuildHLSArgs_TonemapHDR_Intel(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_8MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+	})
+	argStr := strings.Join(args, " ")
+
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Error("Intel tone-mapping must skip -hwaccel (needs software decode for zscale)")
+	}
+	if !strings.Contains(argStr, "zscale") {
+		t.Error("Intel tone-mapping must use software zscale filter")
+	}
+	if !strings.Contains(argStr, "h264_qsv") {
+		t.Error("Intel encoder must still be h264_qsv")
+	}
+}
+
+func TestBuildHLSArgs_SDR_FiltersUnchanged(t *testing.T) {
+	// SDR sources with TonemapHDR=false must use the original plain scale= filter.
+	for _, device := range []string{
+		helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+	} {
+		t.Run(device, func(t *testing.T) {
+			cfg := helpers.HLSProfileConfigs[helpers.HLS_PROFILE_720P_3MBPS]
+			args := hlsArgs(t, HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         device,
+				CopyVideo:        false,
+				CopyAudio:        false,
+				TonemapHDR:       false,
+			})
+			argStr := strings.Join(args, " ")
+
+			wantScale := fmt.Sprintf("scale=-2:%d", cfg.Height)
+			if !strings.Contains(argStr, wantScale) {
+				t.Errorf("SDR path must use plain %q filter, got: %s", wantScale, argStr)
+			}
+			if strings.Contains(argStr, "zscale") || strings.Contains(argStr, "scale_vt") {
+				t.Error("SDR path must not emit tone-mapping filters")
+			}
+		})
+	}
+}
+
+func TestBuildHLSArgs_ForceKeyframes(t *testing.T) {
+	wantFlag := fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC)
+
+	// All transcode paths must emit -force_key_frames.
+	transcodeDevices := []struct {
+		name   string
+		device string
+	}{
+		{"cpu", helpers.HARDWARE_ACCELERATION_DEVICE_CPU},
+		{"apple", helpers.HARDWARE_ACCELERATION_DEVICE_APPLE},
+		{"nvidia", helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA},
+		{"intel", helpers.HARDWARE_ACCELERATION_DEVICE_INTEL},
+	}
+	for _, tc := range transcodeDevices {
+		t.Run("transcode/"+tc.name, func(t *testing.T) {
+			args := hlsArgs(t, HLSParams{
+				SourcePath:       "/s",
+				OutDir:           t.TempDir(),
+				Profile:          helpers.HLS_PROFILE_1080P_4MBPS,
+				VideoStreamIndex: 0,
+				AudioStreamIndex: 1,
+				HWDevice:         tc.device,
+				CopyVideo:        false,
+				CopyAudio:        false,
+			})
+			argStr := strings.Join(args, " ")
+			if !strings.Contains(argStr, "-force_key_frames") {
+				t.Errorf("%s transcode path must include -force_key_frames", tc.name)
+			}
+			if !strings.Contains(argStr, wantFlag) {
+				t.Errorf("%s transcode path: -force_key_frames value = want %q, got: %s", tc.name, wantFlag, argStr)
+			}
+		})
+	}
+
+	// Copy-video and remux paths must NOT emit -force_key_frames.
+	t.Run("copy_video", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           t.TempDir(),
+			Profile:          helpers.HLS_PROFILE_1080P_4MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			CopyVideo:        true,
+			CopyAudio:        false,
+		})
+		if strings.Contains(strings.Join(args, " "), "-force_key_frames") {
+			t.Error("copy-video path must not include -force_key_frames")
+		}
+	})
+	t.Run("remux", func(t *testing.T) {
+		args := hlsArgs(t, HLSParams{
+			SourcePath:       "/s",
+			OutDir:           t.TempDir(),
+			Profile:          helpers.HLS_PROFILE_REMUX,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 1,
+			HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		})
+		if strings.Contains(strings.Join(args, " "), "-force_key_frames") {
+			t.Error("remux path must not include -force_key_frames")
+		}
+	})
 }
 
 func contains(values []string, want string) bool {

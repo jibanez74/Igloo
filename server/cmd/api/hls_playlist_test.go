@@ -159,7 +159,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
-			got := generateVODPlaylist(tt.durationSec, baseURL, tt.audioTrack)
+			got := generateVODPlaylist(tt.durationSec, baseURL, tt.audioTrack, false)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -198,8 +198,209 @@ func TestGenerateVODPlaylist(t *testing.T) {
 	}
 }
 
+func TestBuildResumePlaylist_UsesActualDurations(t *testing.T) {
+	// Simulate a resume session starting at segment 10 (40s into a 60s movie).
+	startSegment := int64(10)
+	// FFmpeg produced 5 segments with actual durations (keyframe-aligned).
+	finalPlaylist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-VERSION:7",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		fmt.Sprintf(`#EXT-X-MAP:URI="%s"`, helpers.HLS_INIT_FILENAME),
+		"#EXTINF:6.000000,",
+		"segment_0.m4s",
+		"#EXTINF:5.000000,",
+		"segment_1.m4s",
+		"#EXTINF:4.000000,",
+		"segment_2.m4s",
+		"#EXTINF:4.000000,",
+		"segment_3.m4s",
+		"#EXTINF:2.000000,",
+		"segment_4.m4s",
+		"#EXT-X-ENDLIST",
+		"",
+	}, "\n")
+
+	baseURL := "/api/movies/5/hls/remux/"
+	audioTrack := 0
+	totalDuration := float64(helpers.HLS_SEGMENT_TIME_SEC)*15 // 60s total
+
+	got := buildResumePlaylist(finalPlaylist, totalDuration, baseURL, audioTrack, startSegment)
+
+	if !strings.HasPrefix(got, "#EXTM3U\n") {
+		t.Error("playlist must start with #EXTM3U")
+	}
+	if !strings.Contains(got, "#EXT-X-PLAYLIST-TYPE:VOD") {
+		t.Error("playlist must declare VOD type")
+	}
+	if !strings.Contains(got, "#EXT-X-ENDLIST") {
+		t.Error("playlist must include #EXT-X-ENDLIST")
+	}
+
+	// TARGETDURATION must be >= longest actual segment (6s here).
+	if !strings.Contains(got, "#EXT-X-TARGETDURATION:6") {
+		t.Errorf("TARGETDURATION should be 6 (longest actual segment), got:\n%s", got)
+	}
+
+	// Placeholder segments 0-9 must use logical indices in URLs.
+	for i := 0; i < int(startSegment); i++ {
+		want := fmt.Sprintf("%s%s%d%s?audio_track=%d", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX, audioTrack)
+		if !strings.Contains(got, want) {
+			t.Errorf("expected placeholder segment URL %q in playlist", want)
+		}
+	}
+
+	// Actual segments must use logical indices (startSegment + disk index).
+	wantDurations := []string{"6.000000", "5.000000", "4.000000", "4.000000", "2.000000"}
+	lines := strings.Split(got, "\n")
+	var infLines []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			infLines = append(infLines, line)
+		}
+	}
+	for i, wantDur := range wantDurations {
+		actualLine := infLines[int(startSegment)+i]
+		if !strings.Contains(actualLine, wantDur) {
+			t.Errorf("segment %d: expected duration %s, got line %q", int(startSegment)+i, wantDur, actualLine)
+		}
+	}
+
+	// Segment URLs for actual segments must use logical indices.
+	wantSeg10 := fmt.Sprintf("%s%s%d%s?audio_track=%d", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, 10, helpers.HLS_SEGMENT_FILENAME_SUFFIX, audioTrack)
+	if !strings.Contains(got, wantSeg10) {
+		t.Errorf("expected logical segment URL %q for first actual segment, got:\n%s", wantSeg10, got)
+	}
+
+	// Total playlist duration must equal totalDuration.
+	var totalINF float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				totalINF += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if totalINF < totalDuration-epsilon || totalINF > totalDuration+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want %.6f (±%.3f)", totalINF, totalDuration, epsilon)
+	}
+}
+
+func TestBuildResumePlaylist_PlaceholderDurationIsConsistent(t *testing.T) {
+	// Actual durations sum to 21s, not 40s (startSegment*segDur).
+	// Placeholders must cover the remaining 39s so total == 60s.
+	finalPlaylist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		"#EXTINF:6.000000,", "segment_0.m4s",
+		"#EXTINF:5.000000,", "segment_1.m4s",
+		"#EXTINF:4.000000,", "segment_2.m4s",
+		"#EXTINF:4.000000,", "segment_3.m4s",
+		"#EXTINF:2.000000,", "segment_4.m4s",
+		"#EXT-X-ENDLIST", "",
+	}, "\n")
+
+	totalDuration := 60.0
+	startSegment := int64(10)
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, startSegment)
+
+	// Sum all EXTINF durations.
+	var total float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				total += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if total < totalDuration-epsilon || total > totalDuration+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want %.6f (±%.3f)", total, totalDuration, epsilon)
+	}
+
+	// Each placeholder must be (60-21)/10 = 3.9s.
+	wantPlaceholder := (totalDuration - 21.0) / float64(startSegment)
+	lines := strings.Split(got, "\n")
+	var infLines []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			infLines = append(infLines, line)
+		}
+	}
+	for i := 0; i < int(startSegment); i++ {
+		raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(infLines[i]), "#EXTINF:"), ",")
+		var d float64
+		if _, err := fmt.Sscanf(raw, "%f", &d); err != nil {
+			t.Fatalf("could not parse EXTINF at index %d: %q", i, infLines[i])
+		}
+		if d < wantPlaceholder-epsilon || d > wantPlaceholder+epsilon {
+			t.Errorf("placeholder segment %d duration = %.6f, want %.6f (±%.3f)", i, d, wantPlaceholder, epsilon)
+		}
+	}
+}
+
+func TestBuildResumePlaylist_ZeroStartSegmentNoPlaceholders(t *testing.T) {
+	// startSegment=0: no placeholders, all durations come from actualDurations.
+	finalPlaylist := strings.Join([]string{
+		"#EXTM3U",
+		"#EXT-X-PLAYLIST-TYPE:VOD",
+		"#EXTINF:5.500000,", "segment_0.m4s",
+		"#EXTINF:4.500000,", "segment_1.m4s",
+		"#EXT-X-ENDLIST", "",
+	}, "\n")
+
+	totalDuration := 10.0
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, 0)
+
+	var total float64
+	for _, line := range strings.Split(got, "\n") {
+		if strings.HasPrefix(line, "#EXTINF:") {
+			raw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(line), "#EXTINF:"), ",")
+			var d float64
+			if _, err := fmt.Sscanf(raw, "%f", &d); err == nil {
+				total += d
+			}
+		}
+	}
+	const epsilon = 0.01
+	if total < 10.0-epsilon || total > 10.0+epsilon {
+		t.Errorf("sum of EXTINF durations = %.6f, want 10.0 (±%.3f)", total, epsilon)
+	}
+	if !strings.Contains(got, "#EXTINF:5.500000,") || !strings.Contains(got, "#EXTINF:4.500000,") {
+		t.Error("expected actual durations 5.5 and 4.5 in playlist")
+	}
+}
+
+func TestBuildResumePlaylist_TargetDurationFallsBackToEstimate(t *testing.T) {
+	// When all actual segments are <= HLS_SEGMENT_TIME_SEC, target duration
+	// should still be at least HLS_SEGMENT_TIME_SEC.
+	finalPlaylist := "#EXTM3U\n#EXTINF:3.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
+	got := buildResumePlaylist(finalPlaylist, 20, "/base/", 0, 1)
+	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC)
+	if !strings.Contains(got, want) {
+		t.Errorf("expected %q, got:\n%s", want, got)
+	}
+}
+
+func TestBuildResumePlaylist_ZeroStartSegmentIsFullPlaylist(t *testing.T) {
+	// startSegment=0 means every segment uses actual durations (no placeholders).
+	finalPlaylist := "#EXTM3U\n#EXTINF:5.000000,\nsegment_0.m4s\n#EXTINF:4.000000,\nsegment_1.m4s\n#EXT-X-ENDLIST\n"
+	got := buildResumePlaylist(finalPlaylist, float64(helpers.HLS_SEGMENT_TIME_SEC)*2, "/base/", 0, 0)
+	if !strings.Contains(got, "#EXTINF:5.000000,") {
+		t.Error("expected actual duration 5.0 for first segment")
+	}
+	if !strings.Contains(got, "#EXTINF:4.000000,") {
+		t.Error("expected actual duration 4.0 for second segment")
+	}
+}
+
 func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
-	got := generateVODPlaylist(0, "/base/", 0)
+	got := generateVODPlaylist(0, "/base/", 0, false)
 
 	if !strings.Contains(got, "#EXT-X-ENDLIST") {
 		t.Error("zero-duration playlist must still be valid with ENDLIST")
@@ -209,12 +410,21 @@ func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
 	}
 }
 
-func TestGenerateVODPlaylist_TargetDurationIsDoubleSegmentTime(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", 0)
+func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testing.T) {
+	got := generateVODPlaylist(100, "/base/", 0, false)
 
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
 	if !strings.Contains(got, want) {
-		t.Errorf("expected target duration %q (2x segment time), got:\n%s", want, got)
+		t.Errorf("expected target duration %q (2x segment time) for transcode mode, got:\n%s", want, got)
+	}
+}
+
+func TestGenerateVODPlaylist_CopyVideoUsesLargerTargetDuration(t *testing.T) {
+	got := generateVODPlaylist(100, "/base/", 0, true)
+
+	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_COPY_VIDEO_TARGET_DURATION)
+	if !strings.Contains(got, want) {
+		t.Errorf("expected target duration %q for copy-video mode, got:\n%s", want, got)
 	}
 }
 
@@ -222,7 +432,7 @@ func TestGenerateVODPlaylist_LastSegmentDurationCapped(t *testing.T) {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	totalDur := segDur + 1.5
 
-	got := generateVODPlaylist(totalDur, "/base/", 0)
+	got := generateVODPlaylist(totalDur, "/base/", 0, false)
 
 	lines := strings.Split(got, "\n")
 	var infDurations []string

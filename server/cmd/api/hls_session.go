@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffmpeg"
 	"igloo/cmd/internal/helpers"
 )
@@ -25,6 +26,17 @@ type HLSSession struct {
 	ExitErr       error
 	FinalPlaylist string
 	ExitMu        sync.Mutex
+	CopyVideo     bool // true when FFmpeg uses -c:v copy (remux or h264 source)
+}
+
+// isHDRStream returns true when the stream's color_transfer indicates HDR content
+// (HDR10/PQ or HLG). These sources require tone-mapping when transcoded to SDR profiles.
+func isHDRStream(stream database.VideoStream) bool {
+	if !stream.ColorTransfer.Valid {
+		return false
+	}
+	ct := strings.ToLower(strings.TrimSpace(stream.ColorTransfer.String))
+	return ct == helpers.HDR_TRANSFER_PQ || ct == helpers.HDR_TRANSFER_HLG
 }
 
 func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
@@ -40,7 +52,26 @@ func cleanupHLSSession(session *HLSSession) {
 		return
 	}
 	if session.Cmd != nil && session.Cmd.Process != nil {
-		_ = session.Cmd.Process.Kill()
+		session.ExitMu.Lock()
+		exited := session.Exited
+		session.ExitMu.Unlock()
+
+		if !exited {
+			_ = session.Cmd.Process.Kill()
+
+			// Wait for the process to fully exit before removing the temp dir
+			// so the OS has released all file handles. Timeout after 2 seconds.
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				session.ExitMu.Lock()
+				exited = session.Exited
+				session.ExitMu.Unlock()
+				if exited {
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
 	}
 	if session.TempDir != "" {
 		_ = os.RemoveAll(session.TempDir)
@@ -137,12 +168,14 @@ func (app *Application) createHLSSession(
 
 	videoCodec := strings.ToLower(primaryVideo.Codec)
 	audioCodec := strings.ToLower(selectedAudio.Codec)
-	copyVideo := videoCodec == "h264"
-	copyAudio := audioCodec == "aac"
+	sourceIsHDR := isHDRStream(primaryVideo)
 
-	if profile == helpers.HLS_PROFILE_REMUX {
-		copyVideo = true
-	}
+	// Only copy the video stream for remux; all other profiles run through
+	// HLSProfileConfig so their encoding settings are applied. HDR sources
+	// on non-remux profiles are tone-mapped to BT.709 SDR.
+	copyVideo := profile == helpers.HLS_PROFILE_REMUX
+	copyAudio := audioCodec == "aac"
+	tonemapHDR := sourceIsHDR && profile != helpers.HLS_PROFILE_REMUX
 
 	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {
@@ -160,6 +193,7 @@ func (app *Application) createHLSSession(
 		DurationSec:  durationSec,
 		StartSec:     startSec,
 		StartSegment: startSegment,
+		CopyVideo:    copyVideo,
 	}
 
 	videoStreamIndex := int(primaryVideo.StreamIndex)
@@ -177,6 +211,8 @@ func (app *Application) createHLSSession(
 		"audio_codec", audioCodec,
 		"copy_video", copyVideo,
 		"copy_audio", copyAudio,
+		"source_is_hdr", sourceIsHDR,
+		"tonemap_hdr", tonemapHDR,
 	)
 
 	startTime := time.Now()
@@ -224,6 +260,7 @@ func (app *Application) createHLSSession(
 		CopyVideo:        copyVideo,
 		CopyAudio:        copyAudio,
 		StartSec:         startSec,
+		TonemapHDR:       tonemapHDR,
 	}, onExit)
 	if err != nil {
 		cleanupHLSSession(session)

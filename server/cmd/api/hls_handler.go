@@ -35,19 +35,19 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
 
-	var playlist string
-	if session.StartSec == 0 {
-		session.ExitMu.Lock()
-		finalPlaylist := session.FinalPlaylist
-		session.ExitMu.Unlock()
+	session.ExitMu.Lock()
+	finalPlaylist := session.FinalPlaylist
+	session.ExitMu.Unlock()
 
-		if finalPlaylist != "" {
-			playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
+	var playlist string
+	if finalPlaylist != "" {
+		if session.StartSegment > 0 {
+			playlist = buildResumePlaylist(finalPlaylist, session.DurationSec, baseURL, audioTrack, session.StartSegment)
 		} else {
-			playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+			playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
 		}
 	} else {
-		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack)
+		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack, session.CopyVideo)
 	}
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
@@ -83,19 +83,14 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	session := raw.(*HLSSession)
 	app.RefreshHLSSessionTTL(key, session)
 
-	diskFilename := filename
-	if filename != helpers.HLS_INIT_FILENAME && session.StartSegment > 0 {
-		reqIdx, parseErr := parseSegmentIndex(filename)
-		if parseErr != nil {
+	diskFilename, err := resolveHLSDiskFilename(session, filename)
+	if err != nil {
+		if errors.Is(err, errSegmentBeforeStart) {
+			helpers.ErrorJSON(w, errors.New("segment not available"), http.StatusNotFound)
+		} else {
 			helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
-			return
 		}
-		if reqIdx < session.StartSegment {
-			helpers.ErrorJSON(w, errors.New("segment before start offset"), http.StatusNotFound)
-			return
-		}
-		mappedIdx := reqIdx - session.StartSegment
-		diskFilename = fmt.Sprintf("%s%d%s", helpers.HLS_SEGMENT_FILENAME_PREFIX, mappedIdx, helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+		return
 	}
 
 	filePath := filepath.Join(session.TempDir, diskFilename)
@@ -128,6 +123,34 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
+}
+
+// errSegmentBeforeStart is returned by resolveHLSDiskFilename when the
+// requested segment index is before the session's start segment. The caller
+// should respond with 404 so hls.js triggers its session-lost recovery path.
+var errSegmentBeforeStart = errors.New("segment before session start")
+
+func resolveHLSDiskFilename(session *HLSSession, filename string) (string, error) {
+	if filename == helpers.HLS_INIT_FILENAME || session.StartSegment <= 0 {
+		return filename, nil
+	}
+
+	reqIdx, err := parseSegmentIndex(filename)
+	if err != nil {
+		return "", err
+	}
+
+	mappedIdx := reqIdx - session.StartSegment
+	if mappedIdx < 0 {
+		return "", errSegmentBeforeStart
+	}
+
+	return fmt.Sprintf(
+		"%s%d%s",
+		helpers.HLS_SEGMENT_FILENAME_PREFIX,
+		mappedIdx,
+		helpers.HLS_SEGMENT_FILENAME_SUFFIX,
+	), nil
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, profile string, audioTrack int, startSec float64, ok bool) {

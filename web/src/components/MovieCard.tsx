@@ -98,7 +98,6 @@ export default function MovieCard({
       <Link
         to="/movies/$id/play"
         params={{ id: String(id) }}
-        search={{ mode: "direct", audio_track: 0 }}
         className="absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
         aria-label={`Play ${ariaTitle}`}
       >
