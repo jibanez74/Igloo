@@ -87,21 +87,17 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Short-lived cache for the identify operation (same pattern as the scanner).
-	cache := newMovieScannerCache()
-	defer cache.Clear()
-
-	if err = app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies, cache); err != nil {
+	if err = app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 		app.Logger.Error("failed to process production companies", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update production companies"))
 		return
 	}
-	if err = app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast, cache); err != nil {
+	if err = app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 		app.Logger.Error("failed to process cast", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update cast"))
 		return
 	}
-	if err = app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew, cache); err != nil {
+	if err = app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 		app.Logger.Error("failed to process crew", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update crew"))
 		return

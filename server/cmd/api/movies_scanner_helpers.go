@@ -23,40 +23,27 @@ func extractYearFromReleaseDate(releaseDate string) int {
 	return parsed.Year()
 }
 
-// getOrCreateArtistFromCache gets an artist from cache or creates/upserts it in the database.
+// getOrCreateArtist upserts an artist in the database and returns it.
 // Returns the database artist and an error.
-func (app *Application) getOrCreateArtistFromCache(
+func (app *Application) getOrCreateArtist(
 	ctx context.Context,
 	qtx *database.Queries,
 	tmdbID int,
 	name string,
 	profilePath string,
-	cache *movieScannerCache,
 ) (*database.Artist, error) {
-	// Check cache first
-	if cached, ok := cache.GetArtist(tmdbID); ok {
-		return cached, nil
-	}
-
-	// Store profile path only (frontend builds full URL; Phase 0)
 	profile := helpers.NullString(profilePath)
 
-	// Upsert artist
 	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{
 		Name:    name,
 		TmdbID:  int64(tmdbID),
 		Profile: profile,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("upsert artist failed: %w", err)
 	}
 
-	artist := &upserted
-	// Cache for reuse
-	cache.SetArtist(tmdbID, artist)
-
-	return artist, nil
+	return &upserted, nil
 }
 
 // manageSavepoint creates a savepoint, executes a function, and handles rollback/release.
