@@ -11,10 +11,16 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO
-  users (name, email, password, is_admin, avatar)
+INSERT INTO users (
+  name,
+  email,
+  password,
+  is_admin,
+  avatar
+)
 VALUES
-  (?, ?, ?, ?, ?) RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+  (?, ?, ?, ?, ?)
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -48,7 +54,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = ?
+DELETE FROM users
+WHERE id = ?
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
@@ -59,12 +66,9 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 const getAdminUser = `-- name: GetAdminUser :one
 SELECT
   id, name, email, password, is_admin, avatar, created_at, updated_at
-FROM
-  users
-WHERE
-  is_admin = true
-LIMIT
-  1
+FROM users
+WHERE is_admin = true
+LIMIT 1
 `
 
 func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
@@ -84,7 +88,11 @@ func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, email, password, is_admin, avatar, created_at, updated_at FROM users WHERE id = ? LIMIT 1
+SELECT
+  id, name, email, password, is_admin, avatar, created_at, updated_at
+FROM users
+WHERE id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -106,12 +114,9 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
   id, name, email, password, is_admin, avatar, created_at, updated_at
-FROM
-  users
-WHERE
-  email = ?
-LIMIT
-  1
+FROM users
+WHERE email = ?
+LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -131,7 +136,12 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const updateUserAvatar = `-- name: UpdateUserAvatar :one
-UPDATE users SET avatar = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+UPDATE users
+SET
+  avatar = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
 `
 
 type UpdateUserAvatarParams struct {
@@ -156,7 +166,12 @@ func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarPara
 }
 
 const updateUserName = `-- name: UpdateUserName :one
-UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+UPDATE users
+SET
+  name = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
 `
 
 type UpdateUserNameParams struct {
@@ -181,7 +196,11 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
-UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE users
+SET
+  password = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
 `
 
 type UpdateUserPasswordParams struct {

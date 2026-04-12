@@ -105,7 +105,7 @@ export type {
 export type {
   AlbumInfoType,
   AudioPlayerState,
-  AudioPlayerControls,
+  AudioPlayerActions,
   AudioPlayerContextType,
 } from "./audio-player";
 

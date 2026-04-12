@@ -36,7 +36,8 @@ import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
 import { convertToAudioTrack } from "@/lib/audio-utils";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { formatDuration } from "@/lib/format";
 import {
   PLAYLIST_TRACKS_KEY,
@@ -114,7 +115,7 @@ type PlaylistContentProps = {
 function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
@@ -481,7 +482,8 @@ function PlaylistTracksList({
   playlistName,
   coverUrl,
 }: PlaylistTracksListProps) {
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
+  const audioPlayerState = useAudioPlayerState();
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -607,8 +609,8 @@ function PlaylistTracksList({
             onReorder={handleReorder}
             onPlayTrack={handlePlayTrack}
             onRemoveTrack={onRemoveTrack}
-            currentTrackId={audioPlayer.currentTrack?.id}
-            isPlaying={audioPlayer.isPlaying}
+            currentTrackId={audioPlayerState.currentTrack?.id}
+            isPlaying={audioPlayerState.isPlaying}
           />
         </Suspense>
         {isFetchingNextPage && (
@@ -660,10 +662,10 @@ function PlaylistTracksList({
                 musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
                 isPlaying={
-                  audioPlayer.currentTrack?.id === track.id &&
-                  audioPlayer.isPlaying
+                  audioPlayerState.currentTrack?.id === track.id &&
+                  audioPlayerState.isPlaying
                 }
-                isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
+                isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
                 onPlay={() => handlePlayTrack(track)}
                 showActionsMenu
                 playlistId={playlistId}

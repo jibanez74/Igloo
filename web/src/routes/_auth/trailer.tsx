@@ -20,7 +20,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { toast } from "sonner";
 import {
   canRequestElementFullscreen,
@@ -58,23 +58,17 @@ function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
 
-  // Mount-only: snapshot playing state once so we do not re-run when the audio
-  // player updates. suspendKeyboard/resumeKeyboard are reference-counted in
-  // AudioPlayerProvider, so overlapping trailer pages or other players are safe.
   useEffect(() => {
-    const wasPlaying = audioPlayer.isPlaying;
-    if (wasPlaying) {
-      audioPlayer.pause();
-    }
+    audioPlayer.pause();
     audioPlayer.suspendKeyboard();
     return () => audioPlayer.resumeKeyboard();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only teardown
+  }, [audioPlayer]);
 
   // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
   const shouldFetchMovie =

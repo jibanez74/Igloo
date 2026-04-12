@@ -1,5 +1,9 @@
 -- name: GetMusicianBySpotifyID :one
-SELECT * FROM musicians WHERE spotify_id = ? LIMIT 1;
+SELECT
+  *
+FROM musicians
+WHERE spotify_id = ?
+LIMIT 1;
 
 -- name: UpsertMusician :one
 INSERT INTO musicians (
@@ -11,8 +15,10 @@ INSERT INTO musicians (
   spotify_followers,
   thumb
 )
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name) DO UPDATE SET
+VALUES
+  (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (name) DO UPDATE
+SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),
@@ -23,9 +29,13 @@ ON CONFLICT (name) DO UPDATE SET
 RETURNING *;
 
 -- name: GetMusiciansByAlbumID :many
-SELECT m.id, m.name, m.thumb
-FROM musicians m
-INNER JOIN musician_albums ma ON m.id = ma.musician_id
+SELECT
+  m.id,
+  m.name,
+  m.thumb
+FROM musicians AS m
+INNER JOIN musician_albums AS ma
+  ON m.id = ma.musician_id
 WHERE ma.album_id = ?
 ORDER BY m.name ASC;
 
@@ -37,19 +47,32 @@ SELECT
   m.name,
   m.thumb,
   m.sort_name,
-  (SELECT COUNT(*) FROM musician_albums ma WHERE ma.musician_id = m.id) AS album_count,
-  (SELECT COUNT(*) FROM tracks t WHERE t.musician_id = m.id) AS track_count
-FROM musicians m
+  (
+    SELECT COUNT(*)
+    FROM musician_albums AS ma
+    WHERE ma.musician_id = m.id
+  ) AS album_count,
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.musician_id = m.id
+  ) AS track_count
+FROM musicians AS m
 ORDER BY
   CASE
     WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(m.sort_name, 1, 1))
     ELSE '#'
   END,
   m.sort_name
-LIMIT ? OFFSET ?;
+LIMIT ?
+OFFSET ?;
 
 -- name: GetMusicianByID :one
-SELECT * FROM musicians WHERE id = ? LIMIT 1;
+SELECT
+  *
+FROM musicians
+WHERE id = ?
+LIMIT 1;
 
 -- name: GetAlbumsByMusicianID :many
 -- Sorted by release date (newest first), then by title
@@ -59,11 +82,19 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) AS track_count
-FROM albums a
-INNER JOIN musician_albums ma ON a.id = ma.album_id
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.album_id = a.id
+  ) AS track_count
+FROM albums AS a
+INNER JOIN musician_albums AS ma
+  ON a.id = ma.album_id
 WHERE ma.musician_id = ?
-ORDER BY a.release_date DESC, a.year DESC, a.sort_title ASC;
+ORDER BY
+  a.release_date DESC,
+  a.year DESC,
+  a.sort_title ASC;
 
 -- name: GetTracksByMusicianID :many
 SELECT
@@ -79,7 +110,8 @@ SELECT
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover
-FROM tracks t
-LEFT JOIN albums a ON t.album_id = a.id
+FROM tracks AS t
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
 WHERE t.musician_id = ?
 ORDER BY t.sort_title ASC;

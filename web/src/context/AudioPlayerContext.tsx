@@ -7,9 +7,8 @@ import {
   useMemo,
 } from "react";
 import type {
+  AudioPlayerActions,
   AudioPlayerState,
-  AudioPlayerControls,
-  AudioPlayerContextType,
 } from "@/types";
 import AudioPlayer from "@/components/AudioPlayer";
 import {
@@ -24,72 +23,55 @@ import {
   type PlayableTrackData,
 } from "@/lib/audio-utils";
 
-// Play tracking constants
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
 
-// Initial state - used for both default context and useState
-const initialState: AudioPlayerState = {
-  currentTrack: null,
-  tracks: [],
-  albumCover: null,
-  albumTitle: "",
-  musicianName: null,
-  isShuffleMode: false,
-  isPlayAllMode: false,
-  shufflePlayedIds: new Set(),
-};
+type QueueState = Omit<
+  AudioPlayerState,
+  "isPlaying" | "isExpanded" | "isKeyboardSuspended"
+>;
 
-const defaultContext: AudioPlayerContextType = {
-  ...initialState,
-  playTrack: () => {},
-  playAlbum: () => {},
-  shuffleAlbum: () => {},
-  startShufflePlayback: async () => {},
-  startPlayAllPlayback: async () => {},
-  setTrack: () => {},
-  stop: () => {},
-  pause: () => {},
-  togglePlay: () => {},
-  isPlaying: false,
-  isExpanded: false,
-  expand: () => {},
-  minimize: () => {},
-  isKeyboardSuspended: false,
-  suspendKeyboard: () => {},
-  resumeKeyboard: () => {},
-};
+function createInitialQueueState(): QueueState {
+  return {
+    currentTrack: null,
+    tracks: [],
+    albumCover: null,
+    albumTitle: "",
+    musicianName: null,
+    isShuffleMode: false,
+    isPlayAllMode: false,
+    shufflePlayedIds: new Set(),
+  };
+}
 
-const AudioPlayerContext =
-  createContext<AudioPlayerContextType>(defaultContext);
+const AudioPlayerStateContext = createContext<AudioPlayerState | null>(null);
+const AudioPlayerActionsContext = createContext<AudioPlayerActions | null>(null);
 
 export function AudioPlayerProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [state, setState] = useState<AudioPlayerState>(initialState);
+  const [queueState, setQueueState] = useState<QueueState>(() =>
+    createInitialQueueState(),
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [keyboardSuspendCount, setKeyboardSuspendCount] = useState(0);
   const isFetchingMoreRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Play tracking refs (using refs to avoid cascading renders)
   const playStartTimeRef = useRef<number | null>(null);
   const hasRecordedPlayRef = useRef(false);
   const currentTrackIdRef = useRef<number | null>(null);
 
-  // Maps for special playback modes - track ID to album cover and musician name
   const trackCoversRef = useRef<Map<number, string | null>>(new Map());
   const trackMusiciansRef = useRef<Map<number, string | null>>(new Map());
 
-  // Ref for play all mode pagination
-  const playAllOffsetRef = useRef<number>(0);
-  const playAllTotalRef = useRef<number>(0);
+  const playAllOffsetRef = useRef(0);
+  const playAllTotalRef = useRef(0);
 
-  // Helper to populate track metadata maps
   const populateTrackMetadata = useCallback((tracks: PlayableTrackData[]) => {
     for (const track of tracks) {
       const { cover, musician } = extractTrackMetadata(track);
@@ -98,7 +80,6 @@ export function AudioPlayerProvider({
     }
   }, []);
 
-  // Helper to clear all metadata refs
   const clearMetadataRefs = useCallback(() => {
     trackCoversRef.current.clear();
     trackMusiciansRef.current.clear();
@@ -106,118 +87,160 @@ export function AudioPlayerProvider({
     playAllTotalRef.current = 0;
   }, []);
 
-  // Get current track index for auto-fetch logic
-  const currentTrackIndex = state.currentTrack
-    ? state.tracks.findIndex(t => t.id === state.currentTrack?.id)
+  const playAudio = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      await audio.play();
+    } catch {
+      // Playback can still be blocked by the browser in some cases.
+    }
+  }, []);
+
+  const currentTrackIndex = queueState.currentTrack
+    ? queueState.tracks.findIndex(track => track.id === queueState.currentTrack?.id)
     : -1;
 
-  // Auto-fetch more shuffle tracks when queue is running low
   useEffect(() => {
-    if (
-      state.isShuffleMode &&
+    const shouldFetchMore =
+      queueState.isShuffleMode &&
       currentTrackIndex >= 0 &&
-      state.tracks.length - currentTrackIndex < 5 &&
-      !isFetchingMoreRef.current
-    ) {
-      isFetchingMoreRef.current = true;
-      getShuffleTracks(50)
-        .then(response => {
-          if (!response.error && response.data.tracks.length > 0) {
-            const rawTracks = response.data.tracks;
-            const newTracks = rawTracks
-              .filter(t => !state.shufflePlayedIds.has(t.id))
-              .map(convertToAudioTrack);
+      queueState.tracks.length - currentTrackIndex < 5 &&
+      !isFetchingMoreRef.current;
 
-            populateTrackMetadata(rawTracks);
-
-            if (newTracks.length > 0) {
-              setState(prev => ({
-                ...prev,
-                tracks: [...prev.tracks, ...newTracks],
-              }));
-            }
-          }
-        })
-        .catch(() => {
-          // Silently fail - user can continue with current queue
-        })
-        .finally(() => {
-          isFetchingMoreRef.current = false;
-        });
+    if (!shouldFetchMore) {
+      return;
     }
+
+    let isCancelled = false;
+
+    const fetchMoreShuffleTracks = async () => {
+      isFetchingMoreRef.current = true;
+
+      try {
+        const response = await getShuffleTracks(50);
+
+        if (
+          isCancelled ||
+          response.error ||
+          response.data.tracks.length === 0
+        ) {
+          return;
+        }
+
+        const rawTracks = response.data.tracks;
+        const newTracks = rawTracks
+          .filter(track => !queueState.shufflePlayedIds.has(track.id))
+          .map(convertToAudioTrack);
+
+        populateTrackMetadata(rawTracks);
+
+        if (newTracks.length > 0) {
+          setQueueState(prev => ({
+            ...prev,
+            tracks: [...prev.tracks, ...newTracks],
+          }));
+        }
+      } catch {
+        // Silently fail - user can continue with the current queue.
+      } finally {
+        isFetchingMoreRef.current = false;
+      }
+    };
+
+    void fetchMoreShuffleTracks();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
-    state.isShuffleMode,
+    queueState.isShuffleMode,
     currentTrackIndex,
-    state.tracks.length,
-    state.shufflePlayedIds,
+    queueState.tracks.length,
+    queueState.shufflePlayedIds,
     populateTrackMetadata,
   ]);
 
-  // Auto-fetch more play all tracks when queue is running low
   useEffect(() => {
-    if (
-      state.isPlayAllMode &&
+    const shouldFetchMore =
+      queueState.isPlayAllMode &&
       currentTrackIndex >= 0 &&
-      state.tracks.length - currentTrackIndex < 10 &&
+      queueState.tracks.length - currentTrackIndex < 10 &&
       !isFetchingMoreRef.current &&
-      playAllOffsetRef.current < playAllTotalRef.current
-    ) {
-      isFetchingMoreRef.current = true;
-      getTracksPaginated(50, playAllOffsetRef.current)
-        .then(response => {
-          if (!response.error && response.data.tracks.length > 0) {
-            const rawTracks = response.data.tracks;
-            const newTracks = rawTracks.map(convertToAudioTrack);
+      playAllOffsetRef.current < playAllTotalRef.current;
 
-            populateTrackMetadata(rawTracks);
-            playAllOffsetRef.current += rawTracks.length;
-
-            if (newTracks.length > 0) {
-              setState(prev => ({
-                ...prev,
-                tracks: [...prev.tracks, ...newTracks],
-              }));
-            }
-          }
-        })
-        .catch(() => {
-          // Silently fail - user can continue with current queue
-        })
-        .finally(() => {
-          isFetchingMoreRef.current = false;
-        });
+    if (!shouldFetchMore) {
+      return;
     }
+
+    let isCancelled = false;
+
+    const fetchMorePlayAllTracks = async () => {
+      isFetchingMoreRef.current = true;
+
+      try {
+        const response = await getTracksPaginated(50, playAllOffsetRef.current);
+
+        if (
+          isCancelled ||
+          response.error ||
+          response.data.tracks.length === 0
+        ) {
+          return;
+        }
+
+        const rawTracks = response.data.tracks;
+        const newTracks = rawTracks.map(convertToAudioTrack);
+
+        populateTrackMetadata(rawTracks);
+        playAllOffsetRef.current += rawTracks.length;
+
+        if (newTracks.length > 0) {
+          setQueueState(prev => ({
+            ...prev,
+            tracks: [...prev.tracks, ...newTracks],
+          }));
+        }
+      } catch {
+        // Silently fail - user can continue with the current queue.
+      } finally {
+        isFetchingMoreRef.current = false;
+      }
+    };
+
+    void fetchMorePlayAllTracks();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
-    state.isPlayAllMode,
+    queueState.isPlayAllMode,
     currentTrackIndex,
-    state.tracks.length,
+    queueState.tracks.length,
     populateTrackMetadata,
   ]);
 
-  // Play tracking effect - handles track changes, play state, and recording
   useEffect(() => {
-    const trackId = state.currentTrack?.id ?? null;
+    const trackId = queueState.currentTrack?.id ?? null;
 
-    // Reset tracking when track changes
     if (trackId !== currentTrackIdRef.current) {
       currentTrackIdRef.current = trackId;
       hasRecordedPlayRef.current = false;
       playStartTimeRef.current = isPlaying && trackId ? Date.now() : null;
     }
 
-    // Update play start time based on play state
     if (isPlaying && trackId && !playStartTimeRef.current) {
       playStartTimeRef.current = Date.now();
     } else if (!isPlaying) {
       playStartTimeRef.current = null;
     }
 
-    // Don't set up interval if not playing or already recorded
     if (!isPlaying || !trackId || hasRecordedPlayRef.current) {
       return;
     }
 
-    const checkAndRecordPlay = () => {
+    const interval = setInterval(() => {
       const audio = audioRef.current;
       const startTime = playStartTimeRef.current;
 
@@ -232,23 +255,30 @@ export function AudioPlayerProvider({
 
       if (elapsedSeconds >= MINIMUM_PLAY_SECONDS || isCompleted) {
         hasRecordedPlayRef.current = true;
-        recordPlayEvent(trackId, Math.floor(elapsedSeconds), isCompleted).catch(
-          () => {
-            // Silently fail - don't interrupt playback for stats
+
+        const sendPlayEvent = async () => {
+          try {
+            await recordPlayEvent(
+              trackId,
+              Math.floor(elapsedSeconds),
+              isCompleted,
+            );
+          } catch {
+            // Silently fail - don't interrupt playback for stats.
           }
-        );
+        };
+
+        void sendPlayEvent();
       }
-    };
+    }, PLAY_CHECK_INTERVAL_MS);
 
-    const interval = setInterval(checkAndRecordPlay, PLAY_CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isPlaying, state.currentTrack?.id]);
+  }, [isPlaying, queueState.currentTrack?.id]);
 
-  // Play a specific track with a playlist (exits shuffle/play all mode)
-  const playTrack: AudioPlayerControls["playTrack"] = useCallback(
+  const playTrack: AudioPlayerActions["playTrack"] = useCallback(
     (track, playlist, albumInfo) => {
       clearMetadataRefs();
-      setState({
+      setQueueState({
         currentTrack: track,
         tracks: playlist,
         albumCover: albumInfo.cover,
@@ -263,12 +293,12 @@ export function AudioPlayerProvider({
     [clearMetadataRefs],
   );
 
-  // Play an album starting from the first track
-  const playAlbum: AudioPlayerControls["playAlbum"] = useCallback(
+  const playAlbum: AudioPlayerActions["playAlbum"] = useCallback(
     (tracks, albumInfo) => {
       if (tracks.length === 0) return;
+
       clearMetadataRefs();
-      setState({
+      setQueueState({
         currentTrack: tracks[0],
         tracks,
         albumCover: albumInfo.cover,
@@ -283,15 +313,14 @@ export function AudioPlayerProvider({
     [clearMetadataRefs],
   );
 
-  // Shuffle and play an album
-  const shuffleAlbum: AudioPlayerControls["shuffleAlbum"] = useCallback(
+  const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = useCallback(
     (tracks, albumInfo) => {
       if (tracks.length === 0) return;
 
       const shuffled = shuffleArray(tracks);
 
       clearMetadataRefs();
-      setState({
+      setQueueState({
         currentTrack: shuffled[0],
         tracks: shuffled,
         albumCover: albumInfo.cover,
@@ -306,82 +335,78 @@ export function AudioPlayerProvider({
     [clearMetadataRefs],
   );
 
-  // Start shuffle playback for all tracks in the library
-  const startShufflePlayback: AudioPlayerControls["startShufflePlayback"] =
+  const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
     useCallback(async () => {
       const response = await getShuffleTracks(50);
-      if (!response.error && response.data.tracks.length > 0) {
-        const rawTracks = response.data.tracks;
-        const tracks = rawTracks.map(convertToAudioTrack);
-
-        clearMetadataRefs();
-        populateTrackMetadata(rawTracks);
-
-        const firstTrack = rawTracks[0];
-        const { cover, musician } = extractTrackMetadata(firstTrack);
-
-        setState({
-          currentTrack: tracks[0],
-          tracks,
-          albumCover: cover,
-          albumTitle: "Shuffle All",
-          musicianName: musician,
-          isShuffleMode: true,
-          isPlayAllMode: false,
-          shufflePlayedIds: new Set(),
-        });
-        setIsExpanded(true);
+      if (response.error || response.data.tracks.length === 0) {
+        return;
       }
+
+      const rawTracks = response.data.tracks;
+      const tracks = rawTracks.map(convertToAudioTrack);
+
+      clearMetadataRefs();
+      populateTrackMetadata(rawTracks);
+
+      const firstTrack = rawTracks[0];
+      const { cover, musician } = extractTrackMetadata(firstTrack);
+
+      setQueueState({
+        currentTrack: tracks[0],
+        tracks,
+        albumCover: cover,
+        albumTitle: "Shuffle All",
+        musicianName: musician,
+        isShuffleMode: true,
+        isPlayAllMode: false,
+        shufflePlayedIds: new Set(),
+      });
+      setIsExpanded(true);
     }, [clearMetadataRefs, populateTrackMetadata]);
 
-  // Start play all playback for all tracks in the library (in order)
-  const startPlayAllPlayback: AudioPlayerControls["startPlayAllPlayback"] =
+  const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
     useCallback(async () => {
       const response = await getTracksPaginated(50, 0);
-      if (!response.error && response.data.tracks.length > 0) {
-        const rawTracks = response.data.tracks;
-        const tracks = rawTracks.map(convertToAudioTrack);
-
-        clearMetadataRefs();
-        populateTrackMetadata(rawTracks);
-
-        // Set pagination refs
-        playAllOffsetRef.current = rawTracks.length;
-        playAllTotalRef.current = response.data.total;
-
-        const firstTrack = rawTracks[0];
-        const { cover, musician } = extractTrackMetadata(firstTrack);
-
-        setState({
-          currentTrack: tracks[0],
-          tracks,
-          albumCover: cover,
-          albumTitle: "All Tracks",
-          musicianName: musician,
-          isShuffleMode: false,
-          isPlayAllMode: true,
-          shufflePlayedIds: new Set(),
-        });
-        setIsExpanded(true);
+      if (response.error || response.data.tracks.length === 0) {
+        return;
       }
+
+      const rawTracks = response.data.tracks;
+      const tracks = rawTracks.map(convertToAudioTrack);
+
+      clearMetadataRefs();
+      populateTrackMetadata(rawTracks);
+
+      playAllOffsetRef.current = rawTracks.length;
+      playAllTotalRef.current = response.data.total;
+
+      const firstTrack = rawTracks[0];
+      const { cover, musician } = extractTrackMetadata(firstTrack);
+
+      setQueueState({
+        currentTrack: tracks[0],
+        tracks,
+        albumCover: cover,
+        albumTitle: "All Tracks",
+        musicianName: musician,
+        isShuffleMode: false,
+        isPlayAllMode: true,
+        shufflePlayedIds: new Set(),
+      });
+      setIsExpanded(true);
     }, [clearMetadataRefs, populateTrackMetadata]);
 
-  // Change to a different track (used by prev/next)
-  // Track played IDs when in shuffle mode and update album cover/musician
-  const setTrack: AudioPlayerControls["setTrack"] = useCallback(track => {
-    setState(prev => {
-      // If in shuffle mode, add the current track to played IDs
+  const setTrack: AudioPlayerActions["setTrack"] = useCallback(track => {
+    setQueueState(prev => {
       const newPlayedIds =
         prev.isShuffleMode && prev.currentTrack
           ? new Set(prev.shufflePlayedIds).add(prev.currentTrack.id)
           : prev.shufflePlayedIds;
 
-      // Update album cover and musician name in special playback modes
       const isSpecialMode = prev.isShuffleMode || prev.isPlayAllMode;
       const newAlbumCover = isSpecialMode
         ? (trackCoversRef.current.get(track.id) ?? null)
         : prev.albumCover;
-
       const newMusicianName = isSpecialMode
         ? (trackMusiciansRef.current.get(track.id) ?? null)
         : prev.musicianName;
@@ -396,10 +421,9 @@ export function AudioPlayerProvider({
     });
   }, []);
 
-  // Stop playback and clear the player
-  const stop: AudioPlayerControls["stop"] = useCallback(() => {
+  const stop: AudioPlayerActions["stop"] = useCallback(() => {
     clearMetadataRefs();
-    setState(initialState);
+    setQueueState(createInitialQueueState());
     setIsPlaying(false);
     setIsExpanded(false);
   }, [clearMetadataRefs]);
@@ -409,43 +433,51 @@ export function AudioPlayerProvider({
   }, []);
 
   const togglePlay = useCallback(() => {
-    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
+    if (audio.paused) {
+      void playAudio();
+      return;
     }
-  }, [isPlaying]);
+
+    audio.pause();
+  }, [playAudio]);
 
   const suspendKeyboard = useCallback(() => {
-    setKeyboardSuspendCount(c => c + 1);
+    setKeyboardSuspendCount(count => count + 1);
   }, []);
 
   const resumeKeyboard = useCallback(() => {
-    setKeyboardSuspendCount(c => Math.max(0, c - 1));
+    setKeyboardSuspendCount(count => Math.max(0, count - 1));
   }, []);
 
-  const isKeyboardSuspended = keyboardSuspendCount > 0;
-
-  // Expand player to fullscreen
   const expand = useCallback(() => {
     setIsExpanded(true);
   }, []);
 
-  // Minimize player to bottom bar
   const minimize = useCallback(() => {
     setIsExpanded(false);
   }, []);
 
-  // Handle play state changes from AudioPlayer
-  const handlePlayStateChange = (playing: boolean) => {
+  const handlePlayStateChange = useCallback((playing: boolean) => {
     setIsPlaying(playing);
-  };
+  }, []);
 
-  const contextValue: AudioPlayerContextType = useMemo(
+  const isKeyboardSuspended = keyboardSuspendCount > 0;
+
+  const stateValue = useMemo(
     () => ({
-      ...state,
+      ...queueState,
+      isPlaying,
+      isExpanded,
+      isKeyboardSuspended,
+    }),
+    [queueState, isPlaying, isExpanded, isKeyboardSuspended],
+  );
+
+  const actionsValue = useMemo(
+    () => ({
       playTrack,
       playAlbum,
       shuffleAlbum,
@@ -455,16 +487,12 @@ export function AudioPlayerProvider({
       stop,
       pause,
       togglePlay,
-      isPlaying,
-      isExpanded,
       expand,
       minimize,
-      isKeyboardSuspended,
       suspendKeyboard,
       resumeKeyboard,
     }),
     [
-      state,
       playTrack,
       playAlbum,
       shuffleAlbum,
@@ -474,38 +502,36 @@ export function AudioPlayerProvider({
       stop,
       pause,
       togglePlay,
-      isPlaying,
-      isExpanded,
       expand,
       minimize,
-      isKeyboardSuspended,
       suspendKeyboard,
       resumeKeyboard,
     ],
   );
 
   return (
-    <AudioPlayerContext.Provider value={contextValue}>
-      {children}
-      <AudioPlayer
-        track={state.currentTrack}
-        tracks={state.tracks}
-        albumCover={state.albumCover}
-        albumTitle={state.albumTitle}
-        musicianName={state.musicianName}
-        onTrackChange={setTrack}
-        onClose={stop}
-        audioRef={audioRef}
-        isPlaying={isPlaying}
-        onPlayStateChange={handlePlayStateChange}
-        isExpanded={isExpanded}
-        onMinimize={minimize}
-        onExpand={expand}
-        isKeyboardSuspended={isKeyboardSuspended}
-      />
-    </AudioPlayerContext.Provider>
+    <AudioPlayerStateContext.Provider value={stateValue}>
+      <AudioPlayerActionsContext.Provider value={actionsValue}>
+        {children}
+        <AudioPlayer
+          track={queueState.currentTrack}
+          tracks={queueState.tracks}
+          albumCover={queueState.albumCover}
+          albumTitle={queueState.albumTitle}
+          musicianName={queueState.musicianName}
+          onTrackChange={setTrack}
+          onClose={stop}
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          onPlayStateChange={handlePlayStateChange}
+          isExpanded={isExpanded}
+          onMinimize={minimize}
+          onExpand={expand}
+          isKeyboardSuspended={isKeyboardSuspended}
+        />
+      </AudioPlayerActionsContext.Provider>
+    </AudioPlayerStateContext.Provider>
   );
 }
 
-// Export the context for use in router and hooks
-export { AudioPlayerContext };
+export { AudioPlayerStateContext, AudioPlayerActionsContext };

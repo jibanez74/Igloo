@@ -11,24 +11,24 @@ import (
 )
 
 const createSettings = `-- name: CreateSettings :one
-INSERT INTO
-  settings (
-    tmdb_key,
-    jellyfin_token,
-    spotify_client_id,
-    spotify_client_secret,
-    hardware_acceleration_device,
-    enable_logger,
-    enable_watcher,
-    download_images,
-    movies_dir,
-    shows_dir,
-    music_dir,
-    static_dir,
-    logs_dir
-  )
+INSERT INTO settings (
+  tmdb_key,
+  jellyfin_token,
+  spotify_client_id,
+  spotify_client_secret,
+  hardware_acceleration_device,
+  enable_logger,
+  enable_watcher,
+  download_images,
+  movies_dir,
+  shows_dir,
+  music_dir,
+  static_dir,
+  logs_dir
+)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
@@ -88,10 +88,8 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 const getSettings = `-- name: GetSettings :one
 SELECT
   id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, static_dir, logs_dir, created_at, updated_at
-FROM
-  settings
-LIMIT
-  1
+FROM settings
+LIMIT 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {

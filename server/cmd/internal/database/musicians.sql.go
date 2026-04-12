@@ -17,11 +17,19 @@ SELECT
   a.cover,
   a.year,
   a.release_date,
-  (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) AS track_count
-FROM albums a
-INNER JOIN musician_albums ma ON a.id = ma.album_id
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.album_id = a.id
+  ) AS track_count
+FROM albums AS a
+INNER JOIN musician_albums AS ma
+  ON a.id = ma.album_id
 WHERE ma.musician_id = ?
-ORDER BY a.release_date DESC, a.year DESC, a.sort_title ASC
+ORDER BY
+  a.release_date DESC,
+  a.year DESC,
+  a.sort_title ASC
 `
 
 type GetAlbumsByMusicianIDRow struct {
@@ -65,7 +73,11 @@ func (q *Queries) GetAlbumsByMusicianID(ctx context.Context, musicianID int64) (
 }
 
 const getMusicianByID = `-- name: GetMusicianByID :one
-SELECT id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at FROM musicians WHERE id = ? LIMIT 1
+SELECT
+  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+FROM musicians
+WHERE id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, error) {
@@ -87,7 +99,11 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 }
 
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
-SELECT id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at FROM musicians WHERE spotify_id = ? LIMIT 1
+SELECT
+  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+FROM musicians
+WHERE spotify_id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error) {
@@ -114,16 +130,25 @@ SELECT
   m.name,
   m.thumb,
   m.sort_name,
-  (SELECT COUNT(*) FROM musician_albums ma WHERE ma.musician_id = m.id) AS album_count,
-  (SELECT COUNT(*) FROM tracks t WHERE t.musician_id = m.id) AS track_count
-FROM musicians m
+  (
+    SELECT COUNT(*)
+    FROM musician_albums AS ma
+    WHERE ma.musician_id = m.id
+  ) AS album_count,
+  (
+    SELECT COUNT(*)
+    FROM tracks AS t
+    WHERE t.musician_id = m.id
+  ) AS track_count
+FROM musicians AS m
 ORDER BY
   CASE
     WHEN UPPER(SUBSTR(m.sort_name, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(m.sort_name, 1, 1))
     ELSE '#'
   END,
   m.sort_name
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetMusiciansAlphabeticalParams struct {
@@ -173,9 +198,13 @@ func (q *Queries) GetMusiciansAlphabetical(ctx context.Context, arg GetMusicians
 }
 
 const getMusiciansByAlbumID = `-- name: GetMusiciansByAlbumID :many
-SELECT m.id, m.name, m.thumb
-FROM musicians m
-INNER JOIN musician_albums ma ON m.id = ma.musician_id
+SELECT
+  m.id,
+  m.name,
+  m.thumb
+FROM musicians AS m
+INNER JOIN musician_albums AS ma
+  ON m.id = ma.musician_id
 WHERE ma.album_id = ?
 ORDER BY m.name ASC
 `
@@ -223,8 +252,9 @@ SELECT
   a.id AS album_id,
   a.title AS album_title,
   a.cover AS album_cover
-FROM tracks t
-LEFT JOIN albums a ON t.album_id = a.id
+FROM tracks AS t
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
 WHERE t.musician_id = ?
 ORDER BY t.sort_title ASC
 `
@@ -290,8 +320,10 @@ INSERT INTO musicians (
   spotify_followers,
   thumb
 )
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name) DO UPDATE SET
+VALUES
+  (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (name) DO UPDATE
+SET
   sort_name = excluded.sort_name,
   summary = COALESCE(excluded.summary, musicians.summary),
   spotify_id = COALESCE(excluded.spotify_id, musicians.spotify_id),

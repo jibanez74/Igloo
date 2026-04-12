@@ -11,8 +11,23 @@ import (
 )
 
 const addTrackToPlaylist = `-- name: AddTrackToPlaylist :one
-INSERT INTO playlist_tracks (playlist_id, track_id, position, added_by)
-VALUES (?1, ?2, (SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks pt2 WHERE pt2.playlist_id = ?1), ?3)
+INSERT INTO playlist_tracks (
+  playlist_id,
+  track_id,
+  position,
+  added_by
+)
+VALUES
+  (
+    ?1,
+    ?2,
+    (
+      SELECT COALESCE(MAX(position), -1) + 1
+      FROM playlist_tracks AS pt2
+      WHERE pt2.playlist_id = ?1
+    ),
+    ?3
+  )
 RETURNING id, playlist_id, track_id, position, added_by, added_at
 `
 
@@ -37,7 +52,10 @@ func (q *Queries) AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylist
 }
 
 const countPlaylistTracks = `-- name: CountPlaylistTracks :one
-SELECT COUNT(*) as count FROM playlist_tracks WHERE playlist_id = ?
+SELECT
+  COUNT(*) AS count
+FROM playlist_tracks
+WHERE playlist_id = ?
 `
 
 func (q *Queries) CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error) {
@@ -48,9 +66,11 @@ func (q *Queries) CountPlaylistTracks(ctx context.Context, playlistID int64) (in
 }
 
 const getPlaylistDuration = `-- name: GetPlaylistDuration :one
-SELECT COALESCE(SUM(t.duration), 0) as total_duration
-FROM playlist_tracks pt
-JOIN tracks t ON pt.track_id = t.id
+SELECT
+  COALESCE(SUM(t.duration), 0) AS total_duration
+FROM playlist_tracks AS pt
+INNER JOIN tracks AS t
+  ON pt.track_id = t.id
 WHERE pt.playlist_id = ?
 `
 
@@ -62,29 +82,33 @@ func (q *Queries) GetPlaylistDuration(ctx context.Context, playlistID int64) (in
 }
 
 const getPlaylistTracksInfinite = `-- name: GetPlaylistTracksInfinite :many
-SELECT 
-    pt.id as playlist_track_id,
-    pt.position,
-    pt.added_at,
-    pt.added_by,
-    t.id,
-    t.title,
-    t.duration,
-    t.file_path,
-    t.codec,
-    t.bit_rate,
-    t.album_id,
-    t.musician_id,
-    a.title as album_title,
-    a.cover as album_cover,
-    m.name as musician_name
-FROM playlist_tracks pt
-JOIN tracks t ON pt.track_id = t.id
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
+SELECT
+  pt.id AS playlist_track_id,
+  pt.position,
+  pt.added_at,
+  pt.added_by,
+  t.id,
+  t.title,
+  t.duration,
+  t.file_path,
+  t.codec,
+  t.bit_rate,
+  t.album_id,
+  t.musician_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.name AS musician_name
+FROM playlist_tracks AS pt
+INNER JOIN tracks AS t
+  ON pt.track_id = t.id
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
+LEFT JOIN musicians AS m
+  ON t.musician_id = m.id
 WHERE pt.playlist_id = ?
 ORDER BY pt.position ASC
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetPlaylistTracksInfiniteParams struct {
@@ -151,7 +175,13 @@ func (q *Queries) GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylist
 }
 
 const isTrackInPlaylist = `-- name: IsTrackInPlaylist :one
-SELECT EXISTS(SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?) as is_in_playlist
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM playlist_tracks
+    WHERE playlist_id = ?
+      AND track_id = ?
+  ) AS is_in_playlist
 `
 
 type IsTrackInPlaylistParams struct {
@@ -167,7 +197,9 @@ func (q *Queries) IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistPa
 }
 
 const removeTrackFromPlaylist = `-- name: RemoveTrackFromPlaylist :exec
-DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?
+DELETE FROM playlist_tracks
+WHERE playlist_id = ?
+  AND track_id = ?
 `
 
 type RemoveTrackFromPlaylistParams struct {
@@ -181,7 +213,10 @@ func (q *Queries) RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFr
 }
 
 const updateTrackPosition = `-- name: UpdateTrackPosition :exec
-UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?
+UPDATE playlist_tracks
+SET position = ?
+WHERE playlist_id = ?
+  AND track_id = ?
 `
 
 type UpdateTrackPositionParams struct {

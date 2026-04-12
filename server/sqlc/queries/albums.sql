@@ -1,11 +1,24 @@
 -- name: GetAlbumByID :one
-SELECT * FROM albums WHERE id = ? LIMIT 1;
+SELECT
+  *
+FROM albums
+WHERE id = ?
+LIMIT 1;
 
 -- name: GetAlbumBySpotifyID :one
-SELECT * FROM albums WHERE spotify_id = ? LIMIT 1;
+SELECT
+  *
+FROM albums
+WHERE spotify_id = ?
+LIMIT 1;
 
 -- name: GetLatestAlbums :many
-SELECT id, title, cover, musician, year
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
 FROM albums
 ORDER BY created_at DESC
 LIMIT 12;
@@ -13,7 +26,12 @@ LIMIT 12;
 -- name: GetAlbumsAlphabetical :many
 -- Returns albums sorted alphabetically by title with pagination.
 -- Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
-SELECT id, title, cover, musician, year
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
 FROM albums
 ORDER BY
   CASE
@@ -21,7 +39,8 @@ ORDER BY
     ELSE '#'
   END,
   UPPER(title)
-LIMIT ? OFFSET ?;
+LIMIT ?
+OFFSET ?;
 
 -- name: UpsertAlbum :one
 INSERT INTO albums (
@@ -35,9 +54,10 @@ INSERT INTO albums (
   total_tracks,
   cover
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (title, musician) DO
-UPDATE SET
+VALUES
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (title, musician) DO UPDATE
+SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
   spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),

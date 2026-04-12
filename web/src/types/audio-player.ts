@@ -17,6 +17,9 @@ export type AudioPlayerState = {
   albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
+  isPlaying: boolean;
+  isExpanded: boolean;
+  isKeyboardSuspended: boolean;
 
   // indicates if we are playing tracks in shuffle mode
   isShuffleMode: boolean;
@@ -28,8 +31,8 @@ export type AudioPlayerState = {
   shufflePlayedIds: Set<number>;
 };
 
-// Controls and actions available for the audio player
-export type AudioPlayerControls = {
+// Actions available for the audio player
+export type AudioPlayerActions = {
   // Play a single track within a playlist context
   playTrack: (
     track: TrackType,
@@ -59,10 +62,6 @@ export type AudioPlayerControls = {
   pause: () => void;
 
   togglePlay: () => void;
-  isPlaying: boolean;
-
-  // indicates if the player is in full screen mode or not
-  isExpanded: boolean;
 
   // Expand the player to fullscreen mode
   expand: () => void;
@@ -71,10 +70,9 @@ export type AudioPlayerControls = {
   minimize: () => void;
 
   // Suspend/resume global keyboard shortcuts (used when another player has focus)
-  isKeyboardSuspended: boolean;
   suspendKeyboard: () => void;
   resumeKeyboard: () => void;
 };
 
 // Combined audio player context type
-export type AudioPlayerContextType = AudioPlayerState & AudioPlayerControls;
+export type AudioPlayerContextType = AudioPlayerState & AudioPlayerActions;

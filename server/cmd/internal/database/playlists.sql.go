@@ -11,8 +11,17 @@ import (
 )
 
 const createMoviePlaylist = `-- name: CreateMoviePlaylist :one
-INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type, movie_id)
-VALUES (?, ?, ?, ?, ?, 'movie', ?)
+INSERT INTO playlists (
+  user_id,
+  name,
+  description,
+  cover_image,
+  is_public,
+  content_type,
+  movie_id
+)
+VALUES
+  (?, ?, ?, ?, ?, 'movie', ?)
 RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
 
@@ -52,8 +61,16 @@ func (q *Queries) CreateMoviePlaylist(ctx context.Context, arg CreateMoviePlayli
 }
 
 const createPlaylist = `-- name: CreatePlaylist :one
-INSERT INTO playlists (user_id, name, description, cover_image, is_public, content_type)
-VALUES (?, ?, ?, ?, ?, 'track')
+INSERT INTO playlists (
+  user_id,
+  name,
+  description,
+  cover_image,
+  is_public,
+  content_type
+)
+VALUES
+  (?, ?, ?, ?, ?, 'track')
 RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
 
@@ -91,7 +108,9 @@ func (q *Queries) CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) 
 }
 
 const deletePlaylist = `-- name: DeletePlaylist :exec
-DELETE FROM playlists WHERE id = ? AND user_id = ?
+DELETE FROM playlists
+WHERE id = ?
+  AND user_id = ?
 `
 
 type DeletePlaylistParams struct {
@@ -117,10 +136,16 @@ SELECT
   p.content_type,
   p.created_at,
   p.updated_at,
-  (SELECT COUNT(*) FROM playlist_movies pm WHERE pm.playlist_id = p.id) AS movie_count
-FROM playlists p
-LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?) AND p.content_type = 'movie'
+  (
+    SELECT COUNT(*)
+    FROM playlist_movies AS pm
+    WHERE pm.playlist_id = p.id
+  ) AS movie_count
+FROM playlists AS p
+LEFT JOIN playlist_collaborators AS pc
+  ON p.id = pc.playlist_id
+WHERE (p.user_id = ? OR pc.user_id = ?)
+  AND p.content_type = 'movie'
 GROUP BY p.id
 ORDER BY p.updated_at DESC
 `
@@ -182,7 +207,10 @@ func (q *Queries) GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, a
 }
 
 const getPlaylistById = `-- name: GetPlaylistById :one
-SELECT id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at FROM playlists WHERE id = ?
+SELECT
+  id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
+FROM playlists
+WHERE id = ?
 `
 
 func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, error) {
@@ -207,12 +235,23 @@ func (q *Queries) GetPlaylistById(ctx context.Context, id int64) (Playlist, erro
 const getPlaylistsWithCollaboratorAccess = `-- name: GetPlaylistsWithCollaboratorAccess :many
 SELECT
   p.id, p.user_id, p.name, p.description, p.cover_image, p.is_public, p.folder_id, p.movie_id, p.content_type, p.created_at, p.updated_at,
-  (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count,
-  (SELECT COALESCE(SUM(t.duration), 0) FROM playlist_tracks pt
-   JOIN tracks t ON pt.track_id = t.id WHERE pt.playlist_id = p.id) AS total_duration
-FROM playlists p
-LEFT JOIN playlist_collaborators pc ON p.id = pc.playlist_id
-WHERE (p.user_id = ? OR pc.user_id = ?) AND p.content_type = 'track'
+  (
+    SELECT COUNT(*)
+    FROM playlist_tracks AS pt
+    WHERE pt.playlist_id = p.id
+  ) AS track_count,
+  (
+    SELECT COALESCE(SUM(t.duration), 0)
+    FROM playlist_tracks AS pt
+    INNER JOIN tracks AS t
+      ON pt.track_id = t.id
+    WHERE pt.playlist_id = p.id
+  ) AS total_duration
+FROM playlists AS p
+LEFT JOIN playlist_collaborators AS pc
+  ON p.id = pc.playlist_id
+WHERE (p.user_id = ? OR pc.user_id = ?)
+  AND p.content_type = 'track'
 GROUP BY p.id
 ORDER BY p.updated_at DESC
 `
@@ -284,7 +323,9 @@ SET
   is_public = ?,
   movie_id = ?,
   updated_at = CURRENT_TIMESTAMP
-WHERE id = ? AND user_id = ? AND content_type = 'movie'
+WHERE id = ?
+  AND user_id = ?
+  AND content_type = 'movie'
 RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
 
@@ -327,7 +368,12 @@ func (q *Queries) UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlayli
 
 const updatePlaylist = `-- name: UpdatePlaylist :one
 UPDATE playlists
-SET name = ?, description = ?, cover_image = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP
+SET
+  name = ?,
+  description = ?,
+  cover_image = ?,
+  is_public = ?,
+  updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 RETURNING id, user_id, name, description, cover_image, is_public, folder_id, movie_id, content_type, created_at, updated_at
 `
@@ -366,7 +412,9 @@ func (q *Queries) UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) 
 }
 
 const updatePlaylistTimestamp = `-- name: UpdatePlaylistTimestamp :exec
-UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+UPDATE playlists
+SET updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
 `
 
 func (q *Queries) UpdatePlaylistTimestamp(ctx context.Context, id int64) error {

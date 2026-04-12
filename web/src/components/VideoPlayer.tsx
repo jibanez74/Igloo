@@ -164,7 +164,7 @@ export default function VideoPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef]);
+  }, [src, startSec, videoRef]);
 
   useEffect(() => {
     const video = videoRef.current;

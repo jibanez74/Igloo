@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { Music, Play } from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { Spinner } from "@/components/ui/spinner";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -17,7 +17,7 @@ type AlbumCardProps = {
 export default function AlbumCard({ album }: AlbumCardProps) {
   const { id, title, cover, musician } = album;
   const queryClient = useQueryClient();
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
   const [isLoading, setIsLoading] = useState(false);
   const [coverLoadFailed, setCoverLoadFailed] = useState(false);
 

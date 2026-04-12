@@ -21,7 +21,11 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
 }
 
 const getAlbumByID = `-- name: GetAlbumByID :one
-SELECT id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at FROM albums WHERE id = ? LIMIT 1
+SELECT
+  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+FROM albums
+WHERE id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
@@ -45,7 +49,11 @@ func (q *Queries) GetAlbumByID(ctx context.Context, id int64) (Album, error) {
 }
 
 const getAlbumBySpotifyID = `-- name: GetAlbumBySpotifyID :one
-SELECT id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at FROM albums WHERE spotify_id = ? LIMIT 1
+SELECT
+  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+FROM albums
+WHERE spotify_id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error) {
@@ -69,7 +77,12 @@ func (q *Queries) GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullStr
 }
 
 const getAlbumsAlphabetical = `-- name: GetAlbumsAlphabetical :many
-SELECT id, title, cover, musician, year
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
 FROM albums
 ORDER BY
   CASE
@@ -77,7 +90,8 @@ ORDER BY
     ELSE '#'
   END,
   UPPER(title)
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetAlbumsAlphabeticalParams struct {
@@ -125,7 +139,12 @@ func (q *Queries) GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphab
 }
 
 const getLatestAlbums = `-- name: GetLatestAlbums :many
-SELECT id, title, cover, musician, year
+SELECT
+  id,
+  title,
+  cover,
+  musician,
+  year
 FROM albums
 ORDER BY created_at DESC
 LIMIT 12
@@ -180,9 +199,10 @@ INSERT INTO albums (
   total_tracks,
   cover
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (title, musician) DO
-UPDATE SET
+VALUES
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (title, musician) DO UPDATE
+SET
   sort_title = excluded.sort_title,
   spotify_id = COALESCE(excluded.spotify_id, albums.spotify_id),
   spotify_popularity = COALESCE(excluded.spotify_popularity, albums.spotify_popularity),
