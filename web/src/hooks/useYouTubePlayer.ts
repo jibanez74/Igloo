@@ -328,19 +328,19 @@ export function useYouTubePlayer(
   });
 
   useEffect(() => {
-    if (!videoId || !containerRef.current) {
-      stopProgressTracking();
-      return;
-    }
-
-    let mounted = true;
-
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting state synchronously on video change is intentional for this external integration
     setIsReady(false);
     setIsPlaying(false);
     setError(null);
     setCurrentTime(0);
     setDuration(0);
+
+    if (!videoId || !containerRef.current) {
+      stopProgressTracking();
+      return;
+    }
+
+    let mounted = true;
 
     const initPlayer = async () => {
       try {
@@ -449,8 +449,13 @@ export function useYouTubePlayer(
       return;
     }
 
-    player.seekTo(seconds, true);
-    setCurrentTime(seconds);
+    const nextTime = Number.isFinite(seconds) ? seconds : 0;
+    const duration = getCurrentPlayerDuration(player);
+    const clampedTime =
+      duration > 0 ? Math.min(duration, Math.max(0, nextTime)) : Math.max(0, nextTime);
+
+    player.seekTo(clampedTime, true);
+    setCurrentTime(getCurrentPlayerTime(player));
   };
 
   const seekForward = (seconds: number) => {

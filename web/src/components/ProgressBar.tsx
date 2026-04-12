@@ -75,7 +75,7 @@ export default function ProgressBar({
   variant,
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
-  const isDraggingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const safeDuration =
     Number.isFinite(duration) && duration > 0 ? duration : 0;
   const isSeekable = safeDuration > 0;
@@ -115,26 +115,27 @@ export default function ProgressBar({
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isSeekable) return;
 
-    isDraggingRef.current = true;
+    activePointerIdRef.current = e.pointerId;
     e.currentTarget.setPointerCapture(e.pointerId);
     seekTo(getSeekTime(e));
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || !isSeekable) return;
+    if (!isSeekable || activePointerIdRef.current !== e.pointerId) return;
 
     seekTo(getSeekTime(e));
   };
 
   const releasePointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    isDraggingRef.current = false;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+    const activePointerId = activePointerIdRef.current;
+    if (activePointerId !== null && e.currentTarget.hasPointerCapture(activePointerId)) {
+      e.currentTarget.releasePointerCapture(activePointerId);
     }
+    activePointerIdRef.current = null;
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDraggingRef.current && isSeekable) {
+    if (isSeekable && activePointerIdRef.current === e.pointerId) {
       seekTo(getSeekTime(e));
     }
 
@@ -142,6 +143,10 @@ export default function ProgressBar({
   };
 
   const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) {
+      return;
+    }
+
     releasePointerDrag(e);
   };
 
@@ -188,7 +193,7 @@ export default function ProgressBar({
       tabIndex={isSeekable ? 0 : -1}
       className={cn(
         styles.bar,
-        "touch-none",
+        isSeekable && "touch-none",
         !isSeekable && "cursor-default opacity-60",
       )}
       role="slider"

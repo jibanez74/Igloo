@@ -35,6 +35,7 @@ export default function VolumeControl({
   const controlId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const minimizedMuteButtonRef = useRef<HTMLButtonElement | null>(null);
   const sliderRef = useRef<HTMLInputElement | null>(null);
   const isExpanded = variant === "expanded";
   const currentVolume = isMuted ? 0 : volume;
@@ -135,7 +136,7 @@ export default function VolumeControl({
 
   useEffect(() => {
     if (!isExpanded && isMinimizedPanelOpen) {
-      sliderRef.current?.focus();
+      minimizedMuteButtonRef.current?.focus();
     }
   }, [isExpanded, isMinimizedPanelOpen]);
 
@@ -205,6 +206,7 @@ export default function VolumeControl({
         >
           <div className="mb-3 flex items-center justify-between gap-3">
             <button
+              ref={minimizedMuteButtonRef}
               type="button"
               onClick={toggleMute}
               className={`flex size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:outline-none ${styles.focusRing}`}
