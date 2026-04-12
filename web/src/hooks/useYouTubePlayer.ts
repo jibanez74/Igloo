@@ -127,10 +127,6 @@ function loadYouTubeAPI(): Promise<void> {
       }, YOUTUBE_API_LOAD_TIMEOUT_MS);
     }
 
-    if (apiLoadError) {
-      apiLoadError = null;
-    }
-
     if (!activeScript) {
       activeScript = document.createElement("script");
       activeScript.src = YOUTUBE_IFRAME_API_SRC;
@@ -450,16 +446,20 @@ export function useYouTubePlayer(
     }
 
     const nextTime = Number.isFinite(seconds) ? seconds : 0;
-    const duration = getCurrentPlayerDuration(player);
+    const playerDuration = getCurrentPlayerDuration(player);
     const clampedTime =
-      duration > 0 ? Math.min(duration, Math.max(0, nextTime)) : Math.max(0, nextTime);
+      playerDuration > 0 ? Math.min(playerDuration, Math.max(0, nextTime)) : Math.max(0, nextTime);
 
     player.seekTo(clampedTime, true);
-    setCurrentTime(getCurrentPlayerTime(player));
+    setCurrentTime(clampedTime);
   };
 
   const seekForward = (seconds: number) => {
     const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
     const now = getCurrentPlayerTime(player);
     const totalDuration = Math.max(duration, getCurrentPlayerDuration(player));
     const newTime = Math.min(totalDuration, now + seconds);
@@ -467,7 +467,12 @@ export function useYouTubePlayer(
   };
 
   const seekBackward = (seconds: number) => {
-    const now = getCurrentPlayerTime(playerRef.current);
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
+    const now = getCurrentPlayerTime(player);
     const newTime = Math.max(0, now - seconds);
     seekTo(newTime);
   };
@@ -489,12 +494,22 @@ export function useYouTubePlayer(
   };
 
   const mute = () => {
-    playerRef.current?.mute();
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
+    player.mute();
     setIsMuted(true);
   };
 
   const unmute = () => {
-    playerRef.current?.unMute();
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
+    player.unMute();
     setIsMuted(false);
   };
 

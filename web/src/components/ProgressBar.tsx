@@ -113,7 +113,7 @@ export default function ProgressBar({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isSeekable) return;
+    if (!isSeekable || !e.isPrimary || activePointerIdRef.current !== null) return;
 
     activePointerIdRef.current = e.pointerId;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -135,7 +135,9 @@ export default function ProgressBar({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isSeekable && activePointerIdRef.current === e.pointerId) {
+    if (activePointerIdRef.current !== e.pointerId) return;
+
+    if (isSeekable) {
       seekTo(getSeekTime(e));
     }
 
