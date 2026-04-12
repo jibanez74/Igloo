@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { formatTimeSeconds } from "@/lib/format";
 
 type ProgressBarVariant = "expanded" | "minimized" | "mobile" | "video";
@@ -66,16 +67,28 @@ export default function ProgressBar({
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const isDraggingRef = useRef(false);
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration) return;
-
+  const getSeekTime = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    return (x / rect.width) * duration;
+  };
 
-    onSeek(newTime);
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!duration) return;
+    isDraggingRef.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onSeek(getSeekTime(e));
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || !duration) return;
+    onSeek(getSeekTime(e));
+  };
+
+  const handlePointerUp = () => {
+    isDraggingRef.current = false;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -106,7 +119,10 @@ export default function ProgressBar({
         </span>
 
         <div
-          onClick={handleClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           onKeyDown={handleKeyDown}
           tabIndex={0}
           className={styles.bar}
@@ -148,7 +164,10 @@ export default function ProgressBar({
       aria-label="Playback progress"
     >
       <div
-        onClick={handleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         className={styles.bar}

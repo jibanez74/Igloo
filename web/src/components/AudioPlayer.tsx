@@ -118,6 +118,88 @@ export default function AudioPlayer({
 
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
+  // Media Session: set metadata when track/artwork/artist changes
+  useEffect(() => {
+    if (!track || !('mediaSession' in navigator)) return;
+
+    const artworkUrl = albumCover
+      ? albumCover.startsWith('http')
+        ? albumCover
+        : `${window.location.origin}${albumCover}`
+      : null;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: musicianName ?? albumTitle,
+      album: albumTitle,
+      artwork: artworkUrl ? [{ src: artworkUrl }] : [],
+    });
+  }, [track, albumCover, albumTitle, musicianName]);
+
+  // Media Session: sync playback state
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = !track
+      ? 'none'
+      : isPlaying
+        ? 'playing'
+        : 'paused';
+  }, [isPlaying, track]);
+
+  // Media Session: register action handlers for OS media controls
+  useEffect(() => {
+    if (!track || !('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.setActionHandler('play', () => audioRef.current?.play());
+    navigator.mediaSession.setActionHandler('pause', () => audioRef.current?.pause());
+    navigator.mediaSession.setActionHandler('stop', () => onClose?.());
+
+    navigator.mediaSession.setActionHandler(
+      'previoustrack',
+      hasPrevious ? () => onTrackChange(tracks[currentIndex - 1]) : null,
+    );
+    navigator.mediaSession.setActionHandler(
+      'nexttrack',
+      hasNext ? () => onTrackChange(tracks[currentIndex + 1]) : null,
+    );
+
+    navigator.mediaSession.setActionHandler('seekbackward', ({ seekOffset }) => {
+      if (!audioRef.current) return;
+      audioRef.current.currentTime = Math.max(
+        0,
+        audioRef.current.currentTime - (seekOffset ?? 10),
+      );
+    });
+
+    navigator.mediaSession.setActionHandler('seekforward', ({ seekOffset }) => {
+      if (!audioRef.current) return;
+      audioRef.current.currentTime = Math.min(
+        duration,
+        audioRef.current.currentTime + (seekOffset ?? 10),
+      );
+    });
+
+    navigator.mediaSession.setActionHandler('seekto', ({ seekTime }) => {
+      if (!audioRef.current || seekTime == null) return;
+      audioRef.current.currentTime = seekTime;
+    });
+
+    return () => {
+      for (const action of [
+        'play',
+        'pause',
+        'stop',
+        'previoustrack',
+        'nexttrack',
+        'seekbackward',
+        'seekforward',
+        'seekto',
+      ] as const) {
+        navigator.mediaSession.setActionHandler(action, null);
+      }
+    };
+  }, [track, hasPrevious, hasNext, currentIndex, tracks, duration, onTrackChange, onClose, audioRef]);
+
   const handleTogglePlay = () => {
     if (!audioRef.current) return;
 
@@ -151,8 +233,7 @@ export default function AudioPlayer({
     if (audioRef.current && streamUrl) {
       audioRef.current.load();
       audioRef.current.play().catch(() => {
-        // Autoplay might be blocked, that's okay
-        console.error("Autoplay blocked");
+        // Autoplay might be blocked by the browser, that's okay
       });
     }
   }, [audioRef, streamUrl]);
@@ -165,8 +246,26 @@ export default function AudioPlayer({
 
     const handlePlay = () => onPlayStateChange(true);
     const handlePause = () => onPlayStateChange(false);
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleDurationChange = () => setDuration(audio.duration || 0);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      if ('mediaSession' in navigator && audio.duration > 0) {
+        navigator.mediaSession.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate,
+          position: audio.currentTime,
+        });
+      }
+    };
+    const handleDurationChange = () => {
+      setDuration(audio.duration || 0);
+      if ('mediaSession' in navigator && audio.duration > 0) {
+        navigator.mediaSession.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate,
+          position: audio.currentTime,
+        });
+      }
+    };
     const handleLoadStart = () => setIsLoading(true);
     const handleCanPlay = () => setIsLoading(false);
     const handleError = () => setIsLoading(false);
@@ -454,8 +553,8 @@ export default function AudioPlayer({
         </div>
       )}
 
-      {/* Minimized (bottom bar) mode - always rendered when track exists */}
-      <div
+      {/* Minimized (bottom bar) mode - only rendered when not expanded */}
+      {!isExpanded && <div
         role='region'
         aria-label='Audio player'
         className='fixed inset-x-0 bottom-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
@@ -582,7 +681,7 @@ export default function AudioPlayer({
             variant="mobile"
           />
         </div>
-      </div>
+      </div>}
     </>
   );
 }
