@@ -2,9 +2,12 @@ import { useRef, useState, useEffect, useId, useEffectEvent } from "react";
 
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const YOUTUBE_API_LOAD_TIMEOUT_MS = 15000;
+const YOUTUBE_IFRAME_API_ERROR_ATTR = "data-yt-api-load-error";
 
 let apiLoading = false;
 let apiLoadError: Error | null = null;
+let apiLoadTimeoutId: number | null = null;
+let cleanupApiScriptListeners: (() => void) | null = null;
 const apiReadyResolvers: Array<() => void> = [];
 const apiReadyRejectors: Array<(error: Error) => void> = [];
 
@@ -12,7 +15,21 @@ function isYouTubeApiReady() {
   return typeof window !== "undefined" && Boolean(window.YT?.Player);
 }
 
+function clearApiLoadTimeout() {
+  if (apiLoadTimeoutId !== null) {
+    window.clearTimeout(apiLoadTimeoutId);
+    apiLoadTimeoutId = null;
+  }
+}
+
+function cleanupPendingApiLoad() {
+  clearApiLoadTimeout();
+  cleanupApiScriptListeners?.();
+  cleanupApiScriptListeners = null;
+}
+
 function resolveApiLoad() {
+  cleanupPendingApiLoad();
   apiLoading = false;
   apiLoadError = null;
 
@@ -25,6 +42,7 @@ function resolveApiLoad() {
 }
 
 function rejectApiLoad(error: Error) {
+  cleanupPendingApiLoad();
   apiLoading = false;
   apiLoadError = error;
 
@@ -34,6 +52,18 @@ function rejectApiLoad(error: Error) {
   for (const reject of rejectors) {
     reject(error);
   }
+}
+
+function shouldReplaceYouTubeApiScript(script: HTMLScriptElement) {
+  const scriptReadyState =
+    "readyState" in script ? script.readyState : undefined;
+
+  return (
+    script.getAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR) === "true" ||
+    Boolean(apiLoadError) ||
+    (scriptReadyState === "complete" && !isYouTubeApiReady()) ||
+    (scriptReadyState === "loaded" && !isYouTubeApiReady())
+  );
 }
 
 function loadYouTubeAPI(): Promise<void> {
@@ -58,49 +88,56 @@ function loadYouTubeAPI(): Promise<void> {
     apiReadyResolvers.push(resolve);
     apiReadyRejectors.push(reject);
 
-    const timeoutId = window.setTimeout(() => {
+    cleanupPendingApiLoad();
+
+    apiLoadTimeoutId = window.setTimeout(() => {
       rejectApiLoad(new Error("Timed out loading the YouTube player API."));
     }, YOUTUBE_API_LOAD_TIMEOUT_MS);
 
     window.onYouTubeIframeAPIReady = () => {
-      window.clearTimeout(timeoutId);
       resolveApiLoad();
     };
 
     const handleScriptError = () => {
-      window.clearTimeout(timeoutId);
+      activeScript?.setAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR, "true");
       rejectApiLoad(new Error("Failed to load the YouTube player API."));
     };
 
-    const existingScript = document.querySelector<HTMLScriptElement>(
+    const handleScriptLoad = () => {
+      if (isYouTubeApiReady()) {
+        resolveApiLoad();
+      }
+    };
+
+    let activeScript = document.querySelector<HTMLScriptElement>(
       `script[src="${YOUTUBE_IFRAME_API_SRC}"]`,
     );
 
-    if (existingScript) {
-      const scriptReadyState =
-        "readyState" in existingScript ? existingScript.readyState : undefined;
+    if (activeScript && shouldReplaceYouTubeApiScript(activeScript)) {
+      cleanupPendingApiLoad();
+      activeScript.remove();
+      activeScript = null;
 
-      if (
-        isYouTubeApiReady() ||
-        scriptReadyState === "complete" ||
-        scriptReadyState === "loaded"
-      ) {
-        window.clearTimeout(timeoutId);
-        resolveApiLoad();
-        return;
-      }
-
-      existingScript.addEventListener("error", handleScriptError, {
-        once: true,
-      });
-      return;
+      apiLoadTimeoutId = window.setTimeout(() => {
+        rejectApiLoad(new Error("Timed out loading the YouTube player API."));
+      }, YOUTUBE_API_LOAD_TIMEOUT_MS);
     }
 
-    const script = document.createElement("script");
-    script.src = YOUTUBE_IFRAME_API_SRC;
-    script.async = true;
-    script.addEventListener("error", handleScriptError, { once: true });
-    document.body.appendChild(script);
+    if (!activeScript) {
+      activeScript = document.createElement("script");
+      activeScript.src = YOUTUBE_IFRAME_API_SRC;
+      activeScript.async = true;
+      document.body.appendChild(activeScript);
+    }
+
+    activeScript.removeAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR);
+    activeScript.addEventListener("load", handleScriptLoad, { once: true });
+    activeScript.addEventListener("error", handleScriptError, { once: true });
+
+    cleanupApiScriptListeners = () => {
+      activeScript?.removeEventListener("load", handleScriptLoad);
+      activeScript?.removeEventListener("error", handleScriptError);
+    };
   });
 }
 
@@ -447,14 +484,17 @@ export function useYouTubePlayer(
 
   const toggleMute = () => {
     const player = playerRef.current;
+    if (!player) {
+      return;
+    }
 
     if (getPlayerMuted(player)) {
-      player?.unMute();
+      player.unMute();
       setIsMuted(false);
       return;
     }
 
-    player?.mute();
+    player.mute();
     setIsMuted(true);
   };
 

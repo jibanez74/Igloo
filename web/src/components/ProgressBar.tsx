@@ -43,7 +43,7 @@ const variantStyles: Record<
   },
   mobile: {
     container: "mt-2 sm:hidden",
-    bar: "h-1 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+    bar: "relative h-1 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
     thumb: "", // No thumb on mobile for cleaner look
     timeText: "text-xs text-slate-400 tabular-nums",
     showTimes: true,
