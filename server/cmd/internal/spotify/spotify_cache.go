@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	spotifyArtistCacheTTL = 24 * time.Hour
-	spotifyAlbumCacheTTL  = 24 * time.Hour
-	spotifyCacheCleanup   = 30 * time.Minute
+	spotifyArtistCacheTTL = 15 * time.Minute
+	spotifyAlbumCacheTTL  = 15 * time.Minute
+	spotifyCacheCleanup   = 5 * time.Minute
 )
 
 func (c *spotifyClient) getArtist(key string) (*spotify.FullArtist, bool) {

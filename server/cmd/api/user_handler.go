@@ -268,8 +268,8 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	defer file.Close()
 
 	// Read first 512 bytes to detect content type
-	buffer := make([]byte, 512)
-	n, err := file.Read(buffer)
+	var buffer [512]byte
+	n, err := file.Read(buffer[:])
 	if err != nil && err != io.EOF {
 		helpers.ErrorJSON(w, errors.New("failed to read file"), http.StatusBadRequest)
 		return

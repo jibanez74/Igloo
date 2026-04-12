@@ -138,10 +138,6 @@ func TestParseBitRate(t *testing.T) {
 }
 
 func TestGetOrCreateArtist(t *testing.T) {
-	// Skip test if movies table is not in schema (database.Prepare requires all tables)
-	// This test will be covered in integration tests with full schema
-	t.Skip("Skipping test - requires movies table in schema which is not in test setup")
-
 	app := setupTestApp(t)
 	defer app.DB.Close()
 

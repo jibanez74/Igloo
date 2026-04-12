@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	tmdbMovieCacheTTL     = 24 * time.Hour
-	tmdbMovieCacheCleanup = 30 * time.Minute
+	tmdbMovieCacheTTL     = 15 * time.Minute
+	tmdbMovieCacheCleanup = 5 * time.Minute
 )
 
 func (t *tmdbClient) getMovie(id int) (*TmdbMovie, bool) {
