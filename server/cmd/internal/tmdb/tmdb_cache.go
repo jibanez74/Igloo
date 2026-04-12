@@ -12,16 +12,24 @@ const (
 	tmdbMovieCacheCleanup = 5 * time.Minute
 )
 
+func movieCacheKey(id int) string {
+	return fmt.Sprintf("movie:%d", id)
+}
+
 func (t *tmdbClient) getMovie(id int) (*TmdbMovie, bool) {
-	v, found := t.movieCache.Get(fmt.Sprintf("movie:%d", id))
+	v, found := t.movieCache.Get(movieCacheKey(id))
 	if !found {
 		return nil, false
 	}
-	return v.(*TmdbMovie), true
+	val, ok := v.(*TmdbMovie)
+	if !ok {
+		return nil, false
+	}
+	return val, true
 }
 
 func (t *tmdbClient) setMovie(id int, movie *TmdbMovie) {
-	t.movieCache.Set(fmt.Sprintf("movie:%d", id), movie, cache.DefaultExpiration)
+	t.movieCache.Set(movieCacheKey(id), movie, cache.DefaultExpiration)
 }
 
 func (t *tmdbClient) ClearCache() {

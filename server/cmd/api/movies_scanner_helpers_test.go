@@ -175,10 +175,16 @@ func TestGetOrCreateArtist(t *testing.T) {
 		if err != nil {
 			t.Fatalf("First getOrCreateArtist failed: %v", err)
 		}
+		if firstArtist == nil {
+			t.Fatal("First getOrCreateArtist returned nil artist")
+		}
 
 		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("Second getOrCreateArtist failed: %v", err)
+		}
+		if secondArtist == nil {
+			t.Fatal("Second getOrCreateArtist returned nil artist")
 		}
 
 		if secondArtist.ID != firstArtist.ID {
