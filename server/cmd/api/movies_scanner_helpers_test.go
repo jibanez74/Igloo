@@ -137,25 +137,20 @@ func TestParseBitRate(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateArtistFromCache(t *testing.T) {
-	// Skip test if movies table is not in schema (database.Prepare requires all tables)
-	// This test will be covered in integration tests with full schema
-	t.Skip("Skipping test - requires movies table in schema which is not in test setup")
-	
+func TestGetOrCreateArtist(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
 	ctx := context.Background()
-	cache := newMovieScannerCache()
 
-	t.Run("artist not in cache creates new artist", func(t *testing.T) {
+	t.Run("creates new artist", func(t *testing.T) {
 		tmdbID := 12345
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := app.getOrCreateArtistFromCache(ctx, app.Queries, tmdbID, name, profilePath, cache)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
-			t.Fatalf("getOrCreateArtistFromCache failed: %v", err)
+			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
 
 		if artist == nil {
@@ -169,37 +164,31 @@ func TestGetOrCreateArtistFromCache(t *testing.T) {
 		if artist.TmdbID != int64(tmdbID) {
 			t.Errorf("Expected TMDB ID %d, got %d", tmdbID, artist.TmdbID)
 		}
-
-		// Verify artist is cached
-		cached, ok := cache.GetArtist(tmdbID)
-		if !ok {
-			t.Error("Artist should be in cache after creation")
-		}
-		if cached.ID != artist.ID {
-			t.Errorf("Cached artist ID %d doesn't match returned artist ID %d", cached.ID, artist.ID)
-		}
 	})
 
-	t.Run("artist in cache returns cached artist", func(t *testing.T) {
+	t.Run("idempotent for same TMDB ID", func(t *testing.T) {
 		tmdbID := 67890
-		name := "Cached Artist"
-		profilePath := "/cached/profile.jpg"
+		name := "Idempotent Artist"
+		profilePath := "/idempotent/profile.jpg"
 
-		// Create artist first
-		firstArtist, err := app.getOrCreateArtistFromCache(ctx, app.Queries, tmdbID, name, profilePath, cache)
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
-			t.Fatalf("First getOrCreateArtistFromCache failed: %v", err)
+			t.Fatalf("First getOrCreateArtist failed: %v", err)
+		}
+		if firstArtist == nil {
+			t.Fatal("First getOrCreateArtist returned nil artist")
 		}
 
-		// Get again - should return cached
-		secondArtist, err := app.getOrCreateArtistFromCache(ctx, app.Queries, tmdbID, name, profilePath, cache)
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
-			t.Fatalf("Second getOrCreateArtistFromCache failed: %v", err)
+			t.Fatalf("Second getOrCreateArtist failed: %v", err)
+		}
+		if secondArtist == nil {
+			t.Fatal("Second getOrCreateArtist returned nil artist")
 		}
 
-		// Should be the same pointer (cached)
 		if secondArtist.ID != firstArtist.ID {
-			t.Errorf("Expected cached artist ID %d, got %d", firstArtist.ID, secondArtist.ID)
+			t.Errorf("Expected same artist ID %d, got %d", firstArtist.ID, secondArtist.ID)
 		}
 	})
 
@@ -208,19 +197,15 @@ func TestGetOrCreateArtistFromCache(t *testing.T) {
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := app.getOrCreateArtistFromCache(ctx, app.Queries, tmdbID, name, profilePath, cache)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
-			t.Fatalf("getOrCreateArtistFromCache failed: %v", err)
+			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
 
 		if artist.Profile.Valid {
 			t.Error("Expected profile to be invalid for empty path")
 		}
 	})
-
-	// Note: Database error test skipped because database.Prepare requires all tables
-	// including movies table which isn't in the test schema. This edge case is
-	// adequately covered by integration tests.
 }
 
 func TestManageSavepoint(t *testing.T) {

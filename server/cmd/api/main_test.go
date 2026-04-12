@@ -11,6 +11,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 
+	cache "github.com/patrickmn/go-cache"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -364,6 +365,11 @@ func setupTestApp(t *testing.T) *Application {
 	if err != nil {
 		t.Fatalf("Failed to prepare queries: %v", err)
 	}
+
+	// Initialize in-memory caches without the production eviction callback
+	// (no FFmpeg processes to kill in tests).
+	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 
 	return app
 }

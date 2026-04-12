@@ -35,10 +35,6 @@ func (app *Application) ScanMoviesLibrary() {
 	moviesSkipped := 0
 	startTime := time.Now()
 
-	// Initialize in-memory cache for artists and production companies
-	cache := newMovieScannerCache()
-	defer cache.Clear()
-
 	// Batch buffer to collect movies before processing
 	batch := make([]movieFile, 0, helpers.SCANNER_BATCH_SIZE)
 
@@ -69,7 +65,7 @@ func (app *Application) ScanMoviesLibrary() {
 
 		// Process batch when full
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
-			scanned, skipped, errors := app.processMoviesBatch(ctx, batch, cache)
+			scanned, skipped, errors := app.processMoviesBatch(ctx, batch)
 			moviesScanned += scanned
 			moviesSkipped += skipped
 			errorCount += errors
@@ -86,7 +82,7 @@ func (app *Application) ScanMoviesLibrary() {
 
 	// Process remaining movies in the final batch
 	if len(batch) > 0 {
-		scanned, skipped, errors := app.processMoviesBatch(ctx, batch, cache)
+		scanned, skipped, errors := app.processMoviesBatch(ctx, batch)
 		moviesScanned += scanned
 		moviesSkipped += skipped
 		errorCount += errors
@@ -99,7 +95,7 @@ func (app *Application) ScanMoviesLibrary() {
 // processMoviesBatch processes a batch of movie files within a single transaction.
 // Uses skip-on-error strategy: failed movies don't rollback successful ones.
 // Holds ScannerDBMu so only one scanner (music or movie) writes to the DB at a time.
-func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile, cache *movieScannerCache) (scanned, skipped, errCount int) {
+func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int) {
 	app.ScannerDBMu.Lock()
 	defer app.ScannerDBMu.Unlock()
 
@@ -129,7 +125,7 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 
 		err = manageSavepoint(ctx, tx, savepointName, func() error {
 
-			return app.processMovieFile(ctx, qtx, file.path, file.ext, file.size, cache)
+			return app.processMovieFile(ctx, qtx, file.path, file.ext, file.size)
 		})
 
 		if err != nil {

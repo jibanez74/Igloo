@@ -15,10 +15,6 @@ const (
 	// media scanner
 	SCANNER_BATCH_SIZE = 54
 
-	// spotify constants
-	SPOTIFY_ARTIST_MAX_CACHE = 200
-	SPOTIFY_ALBUM_MAX_CACHE  = 200
-
 	// playlists — content_type discriminator (movies page / unified playlists table)
 	PLAYLIST_CONTENT_TYPE_TRACK = "track"
 	PLAYLIST_CONTENT_TYPE_MOVIE = "movie"

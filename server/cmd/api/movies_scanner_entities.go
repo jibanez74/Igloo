@@ -20,7 +20,6 @@ func (app *Application) processProductionCompanies(
 		Name          string `json:"name"`
 		OriginCountry string `json:"origin_country"`
 	},
-	cache *movieScannerCache,
 ) error {
 	// Delete all existing production company links
 	if err := qtx.DeleteMovieProductionCompanies(ctx, movieID); err != nil {
@@ -28,40 +27,20 @@ func (app *Application) processProductionCompanies(
 	}
 
 	for _, company := range companies {
-		// Check cache first
-		var dbCompany *database.ProductionCompany
-		cached, ok := cache.GetProductionCompany(company.ID)
-		if ok {
-			dbCompany = cached
-		} else {
-
-			// Store logo path only (frontend builds full URL; Phase 0)
-			logo := helpers.NullString(company.LogoPath)
-
-			// Upsert production company
-			upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
-				Name:    company.Name,
-				TmdbID:  int64(company.ID),
-				Logo:    logo,
-				Country: helpers.NullString(company.OriginCountry),
-			})
-
-			if err != nil {
-				return fmt.Errorf("upsert production company failed: %w", err)
-			}
-
-			dbCompany = &upserted
-
-			// Cache for reuse
-			cache.SetProductionCompany(company.ID, dbCompany)
+		upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
+			Name:    company.Name,
+			TmdbID:  int64(company.ID),
+			Logo:    helpers.NullString(company.LogoPath),
+			Country: helpers.NullString(company.OriginCountry),
+		})
+		if err != nil {
+			return fmt.Errorf("upsert production company failed: %w", err)
 		}
 
-		// Create movie-production company relationship
-		err := qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
+		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
-			ProductionCompanyID: dbCompany.ID,
+			ProductionCompanyID: upserted.ID,
 		})
-
 		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
 		}
@@ -82,11 +61,9 @@ func (app *Application) processCast(
 		ProfilePath string `json:"profile_path"`
 		Order       int    `json:"order"`
 	},
-	cache *movieScannerCache,
 ) error {
 	for _, castMember := range cast {
-		// Get or create artist from cache
-		artist, err := app.getOrCreateArtistFromCache(ctx, qtx, castMember.ID, castMember.Name, castMember.ProfilePath, cache)
+		artist, err := app.getOrCreateArtist(ctx, qtx, castMember.ID, castMember.Name, castMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
@@ -119,11 +96,9 @@ func (app *Application) processCrew(
 		Department  string `json:"department"`
 		ProfilePath string `json:"profile_path"`
 	},
-	cache *movieScannerCache,
 ) error {
 	for _, crewMember := range crew {
-		// Get or create artist from cache
-		artist, err := app.getOrCreateArtistFromCache(ctx, qtx, crewMember.ID, crewMember.Name, crewMember.ProfilePath, cache)
+		artist, err := app.getOrCreateArtist(ctx, qtx, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}

@@ -15,7 +15,7 @@ import (
 
 // processMovieFile extracts metadata from a movie file and upserts it into the database.
 // Handles TMDB lookup, FFPROBE extraction, and related entities (cast, crew, genres, etc.).
-func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64, cache *movieScannerCache) error {
+func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
 	// Step 1: Extract title and year from filename
 	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
 	if err != nil {
@@ -132,17 +132,17 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 	// Step 7: Process related entities (only if TMDB data available)
 	if tmdbMovie != nil {
 		// Process production companies
-		if err := app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies, cache); err != nil {
+		if err := app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 			return fmt.Errorf("process production companies failed: %w", err)
 		}
 
 		// Process cast
-		if err := app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast, cache); err != nil {
+		if err := app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 			return fmt.Errorf("process cast failed: %w", err)
 		}
 
 		// Process crew
-		if err := app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew, cache); err != nil {
+		if err := app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 			return fmt.Errorf("process crew failed: %w", err)
 		}
 

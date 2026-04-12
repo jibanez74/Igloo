@@ -141,6 +141,11 @@ func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
 		return errors.New("tmdb id is required")
 	}
 
+	if cached, ok := t.getMovie(movie.TmdbID); ok {
+		*movie = *cached
+		return nil
+	}
+
 	params := url.Values{}
 	params.Add("api_key", t.key)
 	params.Add("append_to_response", "credits,videos,release_dates")
@@ -178,6 +183,9 @@ func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
 	if err != nil {
 		return err
 	}
+
+	movieCopy := *movie
+	t.setMovie(movie.TmdbID, &movieCopy)
 
 	return nil
 }

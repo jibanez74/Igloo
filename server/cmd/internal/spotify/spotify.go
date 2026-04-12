@@ -3,10 +3,8 @@ package spotify
 import (
 	"context"
 	"fmt"
-	"sync"
 
-	"igloo/cmd/internal/helpers"
-
+	cache "github.com/patrickmn/go-cache"
 	"github.com/zmb3/spotify/v2"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -22,12 +20,8 @@ var _ SpotifyInterface = (*spotifyClient)(nil)
 
 type spotifyClient struct {
 	client      *spotify.Client
-	artistCache map[string]*spotify.FullArtist
-	artistKeys  []string
-	artistMu    sync.RWMutex
-	albumCache  map[string]*spotify.FullAlbum
-	albumKeys   []string
-	albumMu     sync.RWMutex
+	artistCache *cache.Cache
+	albumCache  *cache.Cache
 }
 
 func New(clientID, clientSecret string) (SpotifyInterface, error) {
@@ -48,9 +42,7 @@ func New(clientID, clientSecret string) (SpotifyInterface, error) {
 
 	return &spotifyClient{
 		client:      client,
-		artistCache: make(map[string]*spotify.FullArtist),
-		artistKeys:  make([]string, 0, helpers.SPOTIFY_ARTIST_MAX_CACHE),
-		albumCache:  make(map[string]*spotify.FullAlbum),
-		albumKeys:   make([]string, 0, helpers.SPOTIFY_ALBUM_MAX_CACHE),
+		artistCache: cache.New(spotifyArtistCacheTTL, spotifyCacheCleanup),
+		albumCache:  cache.New(spotifyAlbumCacheTTL, spotifyCacheCleanup),
 	}, nil
 }

@@ -2,6 +2,8 @@ package tmdb
 
 import (
 	"errors"
+
+	cache "github.com/patrickmn/go-cache"
 )
 
 type TmdbInterface interface {
@@ -10,10 +12,12 @@ type TmdbInterface interface {
 	SearchMoviesByTitleAndYear(title string, year ...int) ([]TmdbMovie, error)
 	GetMoviesInTheaters() ([]*TmdbMovie, error)
 	GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error)
+	ClearCache()
 }
 
 type tmdbClient struct {
-	key string
+	key        string
+	movieCache *cache.Cache
 }
 
 var _ TmdbInterface = (*tmdbClient)(nil)
@@ -24,7 +28,8 @@ func New(apiKey string) (TmdbInterface, error) {
 	}
 
 	client := tmdbClient{
-		key: apiKey,
+		key:        apiKey,
+		movieCache: cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
 	}
 
 	return &client, nil
