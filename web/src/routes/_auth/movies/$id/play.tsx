@@ -160,7 +160,7 @@ function PlayMoviePage() {
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
-  const audioPlayer = useAudioPlayerActions();
+  const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -173,10 +173,10 @@ function PlayMoviePage() {
   const sessionLostStreamKeyRef = useRef("");
 
   useEffect(() => {
-    audioPlayer.pause();
-    audioPlayer.suspendKeyboard();
-    return () => audioPlayer.resumeKeyboard();
-  }, [audioPlayer]);
+    pause();
+    suspendKeyboard();
+    return () => resumeKeyboard();
+  }, [pause, suspendKeyboard, resumeKeyboard]);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

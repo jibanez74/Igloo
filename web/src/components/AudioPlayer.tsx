@@ -367,9 +367,11 @@ export default function AudioPlayer({
         }
         break;
       case "ArrowLeft":
+        event.preventDefault();
         audio.currentTime = Math.max(0, audio.currentTime - 10);
         break;
       case "ArrowRight": {
+        event.preventDefault();
         const totalDuration = audio.duration || duration;
         audio.currentTime = Math.min(totalDuration, audio.currentTime + 10);
         break;

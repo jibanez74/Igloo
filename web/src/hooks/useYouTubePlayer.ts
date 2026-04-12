@@ -3,43 +3,44 @@ import { useRef, useState, useEffect, useId, useEffectEvent } from "react";
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const YOUTUBE_API_LOAD_TIMEOUT_MS = 15000;
 
-let apiLoaded = false;
 let apiLoading = false;
 let apiLoadError: Error | null = null;
 const apiReadyResolvers: Array<() => void> = [];
 const apiReadyRejectors: Array<(error: Error) => void> = [];
 
+function isYouTubeApiReady() {
+  return typeof window !== "undefined" && Boolean(window.YT?.Player);
+}
+
 function resolveApiLoad() {
-  apiLoaded = true;
   apiLoading = false;
   apiLoadError = null;
 
-  for (const resolve of apiReadyResolvers.splice(0)) {
+  const resolvers = apiReadyResolvers.splice(0);
+  apiReadyRejectors.length = 0;
+
+  for (const resolve of resolvers) {
     resolve();
   }
-  apiReadyRejectors.length = 0;
 }
 
 function rejectApiLoad(error: Error) {
-  apiLoaded = false;
   apiLoading = false;
   apiLoadError = error;
 
-  for (const reject of apiReadyRejectors.splice(0)) {
+  const rejectors = apiReadyRejectors.splice(0);
+  apiReadyResolvers.length = 0;
+
+  for (const reject of rejectors) {
     reject(error);
   }
-  apiReadyResolvers.length = 0;
 }
 
 function loadYouTubeAPI(): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (apiLoaded && window.YT?.Player) {
+    if (isYouTubeApiReady()) {
+      resolveApiLoad();
       resolve();
-      return;
-    }
-
-    if (apiLoadError) {
-      reject(apiLoadError);
       return;
     }
 
@@ -47,6 +48,10 @@ function loadYouTubeAPI(): Promise<void> {
       apiReadyResolvers.push(resolve);
       apiReadyRejectors.push(reject);
       return;
+    }
+
+    if (apiLoadError) {
+      apiLoadError = null;
     }
 
     apiLoading = true;
@@ -72,6 +77,19 @@ function loadYouTubeAPI(): Promise<void> {
     );
 
     if (existingScript) {
+      const scriptReadyState =
+        "readyState" in existingScript ? existingScript.readyState : undefined;
+
+      if (
+        isYouTubeApiReady() ||
+        scriptReadyState === "complete" ||
+        scriptReadyState === "loaded"
+      ) {
+        window.clearTimeout(timeoutId);
+        resolveApiLoad();
+        return;
+      }
+
       existingScript.addEventListener("error", handleScriptError, {
         once: true,
       });
@@ -362,14 +380,22 @@ export function useYouTubePlayer(
 
   const togglePlay = () => {
     const player = playerRef.current;
-    const playerState = getPlayerState(player);
-
-    if (playerState === window.YT.PlayerState.PLAYING) {
-      player?.pauseVideo();
+    const playerStateEnum = window.YT?.PlayerState;
+    if (!player || !playerStateEnum) {
       return;
     }
 
-    player?.playVideo();
+    const playerState = getPlayerState(player);
+    if (playerState === null) {
+      return;
+    }
+
+    if (playerState === playerStateEnum.PLAYING) {
+      player.pauseVideo();
+      return;
+    }
+
+    player.playVideo();
   };
 
   const seekTo = (seconds: number) => {

@@ -58,17 +58,17 @@ function TrailerPage() {
   const { mediaType, mediaId, videoKey, returnTo } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
-  const audioPlayer = useAudioPlayerActions();
+  const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
 
   useEffect(() => {
-    audioPlayer.pause();
-    audioPlayer.suspendKeyboard();
-    return () => audioPlayer.resumeKeyboard();
-  }, [audioPlayer]);
+    pause();
+    suspendKeyboard();
+    return () => resumeKeyboard();
+  }, [pause, suspendKeyboard, resumeKeyboard]);
 
   // When videoKey is provided (e.g. library extra video), use it directly; otherwise fetch TMDB details
   const shouldFetchMovie =
