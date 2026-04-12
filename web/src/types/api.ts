@@ -2,7 +2,6 @@
 // Types for API responses and router context
 
 import type { QueryClient } from "@tanstack/react-query";
-import type { AudioPlayerContextType } from "./audio-player";
 
 // Successful API response structure
 export type ApiSuccessType<T extends Record<string, unknown>> = {
@@ -28,5 +27,4 @@ export type ApiResponseType<T extends Record<string, unknown>> =
 // Context provided to TanStack Router
 export type RouterContextType = {
   queryClient: QueryClient;
-  audioPlayer: AudioPlayerContextType;
 };

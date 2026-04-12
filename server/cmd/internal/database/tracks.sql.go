@@ -11,11 +11,13 @@ import (
 )
 
 const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
-SELECT EXISTS(
-  SELECT 1
-  FROM tracks
-  WHERE file_path = ? AND size = ?
-) AS track_exists
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM tracks
+    WHERE file_path = ?
+      AND size = ?
+  ) AS track_exists
 `
 
 type CheckTrackUnchangedParams struct {
@@ -31,7 +33,9 @@ func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchang
 }
 
 const getAlbumsCount = `-- name: GetAlbumsCount :one
-SELECT COUNT(*) FROM albums
+SELECT
+  COUNT(*)
+FROM albums
 `
 
 func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
@@ -42,7 +46,9 @@ func (q *Queries) GetAlbumsCount(ctx context.Context) (int64, error) {
 }
 
 const getMusiciansCount = `-- name: GetMusiciansCount :one
-SELECT COUNT(*) FROM musicians
+SELECT
+  COUNT(*)
+FROM musicians
 `
 
 func (q *Queries) GetMusiciansCount(ctx context.Context) (int64, error) {
@@ -65,9 +71,11 @@ SELECT
   a.cover AS album_cover,
   m.id AS musician_id,
   m.name AS musician_name
-FROM tracks t
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
+FROM tracks AS t
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
+LEFT JOIN musicians AS m
+  ON t.musician_id = m.id
 ORDER BY RANDOM()
 LIMIT ?
 `
@@ -122,7 +130,11 @@ func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandom
 }
 
 const getTrack = `-- name: GetTrack :one
-SELECT id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at FROM tracks WHERE id = ? LIMIT 1
+SELECT
+  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+FROM tracks
+WHERE id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
@@ -166,22 +178,24 @@ SELECT
   t.codec,
   t.bit_rate,
   t.file_path,
-  a.id as album_id,
-  a.title as album_title,
-  a.cover as album_cover,
-  m.id as musician_id,
-  m.name as musician_name
-FROM tracks t
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.id AS musician_id,
+  m.name AS musician_name
+FROM tracks AS t
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
+LEFT JOIN musicians AS m
+  ON t.musician_id = m.id
 ORDER BY
   CASE
-    WHEN UPPER(SUBSTR(t.title, 1, 1)) BETWEEN 'A' AND 'Z'
-    THEN UPPER(SUBSTR(t.title, 1, 1))
+    WHEN UPPER(SUBSTR(t.title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(t.title, 1, 1))
     ELSE '#'
   END,
   UPPER(t.title)
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetTracksAlphabeticalParams struct {
@@ -241,10 +255,8 @@ func (q *Queries) GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphab
 const getTracksByAlbumID = `-- name: GetTracksByAlbumID :many
 SELECT
   id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
-FROM
-  tracks
-WHERE
-  album_id = ?
+FROM tracks
+WHERE album_id = ?
 ORDER BY
   disc ASC,
   track_index ASC
@@ -300,7 +312,9 @@ func (q *Queries) GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64)
 }
 
 const getTracksCount = `-- name: GetTracksCount :one
-SELECT COUNT(*) FROM tracks
+SELECT
+  COUNT(*)
+FROM tracks
 `
 
 func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
@@ -312,11 +326,33 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 
 const upsertTrack = `-- name: UpsertTrack :one
 INSERT INTO tracks (
-  title, sort_title, file_path, file_name, container, mime_type, codec, size,
-  track_index, duration, disc, channels, channel_layout, bit_rate, profile,
-  release_date, year, composer, copyright, language, album_id, musician_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (file_path) DO UPDATE SET
+  title,
+  sort_title,
+  file_path,
+  file_name,
+  container,
+  mime_type,
+  codec,
+  size,
+  track_index,
+  duration,
+  disc,
+  channels,
+  channel_layout,
+  bit_rate,
+  profile,
+  release_date,
+  year,
+  composer,
+  copyright,
+  language,
+  album_id,
+  musician_id
+)
+VALUES
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (file_path) DO UPDATE
+SET
   title = excluded.title,
   sort_title = excluded.sort_title,
   file_name = excluded.file_name,

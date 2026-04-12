@@ -11,7 +11,12 @@ import (
 )
 
 const checkMovieUnchanged = `-- name: CheckMovieUnchanged :one
-SELECT 1 FROM movies WHERE file_path = ? AND size = ? LIMIT 1
+SELECT
+  1
+FROM movies
+WHERE file_path = ?
+  AND size = ?
+LIMIT 1
 `
 
 type CheckMovieUnchangedParams struct {
@@ -28,7 +33,10 @@ func (q *Queries) CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchang
 }
 
 const countMoviesForGenre = `-- name: CountMoviesForGenre :one
-SELECT COUNT(*) FROM movie_genres WHERE genre_id = ?
+SELECT
+  COUNT(*)
+FROM movie_genres
+WHERE genre_id = ?
 `
 
 func (q *Queries) CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error) {
@@ -39,10 +47,13 @@ func (q *Queries) CountMoviesForGenre(ctx context.Context, genreID int64) (int64
 }
 
 const createMovieExtraVideo = `-- name: CreateMovieExtraVideo :exec
-INSERT INTO
-  movie_extra_videos (movie_id, extra_video_id)
+INSERT INTO movie_extra_videos (
+  movie_id,
+  extra_video_id
+)
 VALUES
-  (?, ?) ON CONFLICT (movie_id, extra_video_id) DO NOTHING
+  (?, ?)
+ON CONFLICT (movie_id, extra_video_id) DO NOTHING
 `
 
 type CreateMovieExtraVideoParams struct {
@@ -57,10 +68,13 @@ func (q *Queries) CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtr
 }
 
 const createMovieGenre = `-- name: CreateMovieGenre :exec
-INSERT INTO
-  movie_genres (movie_id, genre_id)
+INSERT INTO movie_genres (
+  movie_id,
+  genre_id
+)
 VALUES
-  (?, ?) ON CONFLICT (movie_id, genre_id) DO NOTHING
+  (?, ?)
+ON CONFLICT (movie_id, genre_id) DO NOTHING
 `
 
 type CreateMovieGenreParams struct {
@@ -75,10 +89,13 @@ func (q *Queries) CreateMovieGenre(ctx context.Context, arg CreateMovieGenrePara
 }
 
 const createMovieProductionCompany = `-- name: CreateMovieProductionCompany :exec
-INSERT INTO
-  movie_production_companies (movie_id, production_company_id)
+INSERT INTO movie_production_companies (
+  movie_id,
+  production_company_id
+)
 VALUES
-  (?, ?) ON CONFLICT (movie_id, production_company_id) DO NOTHING
+  (?, ?)
+ON CONFLICT (movie_id, production_company_id) DO NOTHING
 `
 
 type CreateMovieProductionCompanyParams struct {
@@ -94,8 +111,7 @@ func (q *Queries) CreateMovieProductionCompany(ctx context.Context, arg CreateMo
 
 const deleteMovie = `-- name: DeleteMovie :exec
 DELETE FROM movies
-WHERE
-  id = ?
+WHERE id = ?
 `
 
 // Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
@@ -106,8 +122,7 @@ func (q *Queries) DeleteMovie(ctx context.Context, id int64) error {
 
 const deleteMovieAudioStreams = `-- name: DeleteMovieAudioStreams :exec
 DELETE FROM audio_streams
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Delete all audio streams for a movie
@@ -118,8 +133,7 @@ func (q *Queries) DeleteMovieAudioStreams(ctx context.Context, movieID int64) er
 
 const deleteMovieCast = `-- name: DeleteMovieCast :exec
 DELETE FROM cast
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Remove all cast entries for a movie (used before re-identifying with TMDB).
@@ -130,8 +144,7 @@ func (q *Queries) DeleteMovieCast(ctx context.Context, movieID int64) error {
 
 const deleteMovieChapters = `-- name: DeleteMovieChapters :exec
 DELETE FROM chapters
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Delete all chapters for a movie
@@ -142,8 +155,7 @@ func (q *Queries) DeleteMovieChapters(ctx context.Context, movieID sql.NullInt64
 
 const deleteMovieCrew = `-- name: DeleteMovieCrew :exec
 DELETE FROM crew
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Remove all crew entries for a movie (used before re-identifying with TMDB).
@@ -154,8 +166,7 @@ func (q *Queries) DeleteMovieCrew(ctx context.Context, movieID int64) error {
 
 const deleteMovieExtraVideos = `-- name: DeleteMovieExtraVideos :exec
 DELETE FROM movie_extra_videos
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Remove all extra-video links for a movie (e.g. before re-scanning).
@@ -166,8 +177,7 @@ func (q *Queries) DeleteMovieExtraVideos(ctx context.Context, movieID int64) err
 
 const deleteMovieGenres = `-- name: DeleteMovieGenres :exec
 DELETE FROM movie_genres
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Remove all genre links for a movie
@@ -178,8 +188,7 @@ func (q *Queries) DeleteMovieGenres(ctx context.Context, movieID int64) error {
 
 const deleteMovieProductionCompanies = `-- name: DeleteMovieProductionCompanies :exec
 DELETE FROM movie_production_companies
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Remove all production company links for a movie
@@ -190,8 +199,7 @@ func (q *Queries) DeleteMovieProductionCompanies(ctx context.Context, movieID in
 
 const deleteMovieSubtitles = `-- name: DeleteMovieSubtitles :exec
 DELETE FROM subtitles
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Delete all subtitles for a movie
@@ -202,8 +210,7 @@ func (q *Queries) DeleteMovieSubtitles(ctx context.Context, movieID int64) error
 
 const deleteMovieVideoStreams = `-- name: DeleteMovieVideoStreams :exec
 DELETE FROM video_streams
-WHERE
-  movie_id = ?
+WHERE movie_id = ?
 `
 
 // Delete all video streams for a movie
@@ -213,7 +220,11 @@ func (q *Queries) DeleteMovieVideoStreams(ctx context.Context, movieID int64) er
 }
 
 const getAudioStreamsByMovieID = `-- name: GetAudioStreamsByMovieID :many
-SELECT id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at FROM audio_streams WHERE movie_id = ? ORDER BY stream_index
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+FROM audio_streams
+WHERE movie_id = ?
+ORDER BY stream_index
 `
 
 // Audio streams for a movie (for technical details and playback settings).
@@ -263,13 +274,11 @@ SELECT
   c.cast_order,
   a.name AS artist_name,
   a.profile AS artist_profile
-FROM
-  cast c
-  INNER JOIN artist a ON a.id = c.artist_id
-WHERE
-  c.movie_id = ?
-ORDER BY
-  c.cast_order
+FROM cast AS c
+INNER JOIN artist AS a
+  ON a.id = c.artist_id
+WHERE c.movie_id = ?
+ORDER BY c.cast_order
 `
 
 type GetCastByMovieIDRow struct {
@@ -315,7 +324,11 @@ func (q *Queries) GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCas
 }
 
 const getChaptersByMovieID = `-- name: GetChaptersByMovieID :many
-SELECT id, title, start_time, thumb, movie_id FROM chapters WHERE movie_id = ? ORDER BY start_time
+SELECT
+  id, title, start_time, thumb, movie_id
+FROM chapters
+WHERE movie_id = ?
+ORDER BY start_time
 `
 
 // Chapters for a movie (for technical details display).
@@ -357,11 +370,10 @@ SELECT
   c.department,
   a.name AS artist_name,
   a.profile AS artist_profile
-FROM
-  crew c
-  INNER JOIN artist a ON a.id = c.artist_id
-WHERE
-  c.movie_id = ?
+FROM crew AS c
+INNER JOIN artist AS a
+  ON a.id = c.artist_id
+WHERE c.movie_id = ?
 ORDER BY
   c.department,
   c.job
@@ -413,13 +425,11 @@ const getGenresByMovieID = `-- name: GetGenresByMovieID :many
 SELECT
   g.id,
   g.tag
-FROM
-  genres g
-  INNER JOIN movie_genres mg ON mg.genre_id = g.id
-WHERE
-  mg.movie_id = ?
-ORDER BY
-  g.tag
+FROM genres AS g
+INNER JOIN movie_genres AS mg
+  ON mg.genre_id = g.id
+WHERE mg.movie_id = ?
+ORDER BY g.tag
 `
 
 type GetGenresByMovieIDRow struct {
@@ -452,7 +462,12 @@ func (q *Queries) GetGenresByMovieID(ctx context.Context, movieID int64) ([]GetG
 }
 
 const getLatestMovies = `-- name: GetLatestMovies :many
-SELECT id, title, poster_path, year, certification
+SELECT
+  id,
+  title,
+  poster_path,
+  year,
+  certification
 FROM movies
 ORDER BY created_at DESC
 LIMIT 12
@@ -496,7 +511,11 @@ func (q *Queries) GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, er
 }
 
 const getMovieByID = `-- name: GetMovieByID :one
-SELECT id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at FROM movies WHERE id = ? LIMIT 1
+SELECT
+  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
+FROM movies
+WHERE id = ?
+LIMIT 1
 `
 
 func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
@@ -535,23 +554,22 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 
 const getMovieExtraVideos = `-- name: GetMovieExtraVideos :many
 SELECT
-  extra_videos.id,
-  extra_videos.title,
-  extra_videos.external_id,
-  extra_videos.key,
-  extra_videos.type,
-  extra_videos.site,
-  extra_videos.official,
-  extra_videos.created_at,
-  extra_videos.updated_at
-FROM
-  extra_videos
-  INNER JOIN movie_extra_videos ON movie_extra_videos.extra_video_id = extra_videos.id
-WHERE
-  movie_extra_videos.movie_id = ?
+  ev.id,
+  ev.title,
+  ev.external_id,
+  ev.key,
+  ev.type,
+  ev.site,
+  ev.official,
+  ev.created_at,
+  ev.updated_at
+FROM extra_videos AS ev
+INNER JOIN movie_extra_videos AS mev
+  ON mev.extra_video_id = ev.id
+WHERE mev.movie_id = ?
 ORDER BY
-  extra_videos.type,
-  extra_videos.title
+  ev.type,
+  ev.title
 `
 
 // List all extra videos (trailers, special features) linked to a movie.
@@ -589,7 +607,13 @@ func (q *Queries) GetMovieExtraVideos(ctx context.Context, movieID int64) ([]Ext
 }
 
 const getMovieForDirectStream = `-- name: GetMovieForDirectStream :one
-SELECT file_path, file_name, mime_type FROM movies WHERE id = ? LIMIT 1
+SELECT
+  file_path,
+  file_name,
+  mime_type
+FROM movies
+WHERE id = ?
+LIMIT 1
 `
 
 type GetMovieForDirectStreamRow struct {
@@ -606,7 +630,18 @@ func (q *Queries) GetMovieForDirectStream(ctx context.Context, id int64) (GetMov
 }
 
 const getMovieGenresWithCounts = `-- name: GetMovieGenresWithCounts :many
-SELECT g.id AS genre_id, g.tag AS genre_tag, COUNT(mg.movie_id) AS movie_count FROM genres g INNER JOIN movie_genres mg ON mg.genre_id = g.id WHERE g.genre_type = 'movie' GROUP BY g.id, g.tag ORDER BY LOWER(g.tag) ASC
+SELECT
+  g.id AS genre_id,
+  g.tag AS genre_tag,
+  COUNT(mg.movie_id) AS movie_count
+FROM genres AS g
+INNER JOIN movie_genres AS mg
+  ON mg.genre_id = g.id
+WHERE g.genre_type = 'movie'
+GROUP BY
+  g.id,
+  g.tag
+ORDER BY LOWER(g.tag) ASC
 `
 
 type GetMovieGenresWithCountsRow struct {
@@ -640,7 +675,21 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 }
 
 const getMoviesByGenreAsc = `-- name: GetMoviesByGenreAsc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) ASC, m.id ASC LIMIT ? OFFSET ?
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  m.certification
+FROM movies AS m
+INNER JOIN movie_genres AS mg
+  ON mg.movie_id = m.id
+WHERE mg.genre_id = ?
+ORDER BY
+  LOWER(m.title) ASC,
+  m.id ASC
+LIMIT ?
+OFFSET ?
 `
 
 type GetMoviesByGenreAscParams struct {
@@ -687,7 +736,21 @@ func (q *Queries) GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreA
 }
 
 const getMoviesByGenreDesc = `-- name: GetMoviesByGenreDesc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM movies m INNER JOIN movie_genres mg ON mg.movie_id = m.id WHERE mg.genre_id = ? ORDER BY LOWER(m.title) DESC, m.id DESC LIMIT ? OFFSET ?
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  m.certification
+FROM movies AS m
+INNER JOIN movie_genres AS mg
+  ON mg.movie_id = m.id
+WHERE mg.genre_id = ?
+ORDER BY
+  LOWER(m.title) DESC,
+  m.id DESC
+LIMIT ?
+OFFSET ?
 `
 
 type GetMoviesByGenreDescParams struct {
@@ -734,7 +797,9 @@ func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenre
 }
 
 const getMoviesCount = `-- name: GetMoviesCount :one
-SELECT COUNT(*) FROM movies
+SELECT
+  COUNT(*)
+FROM movies
 `
 
 func (q *Queries) GetMoviesCount(ctx context.Context) (int64, error) {
@@ -745,7 +810,18 @@ func (q *Queries) GetMoviesCount(ctx context.Context) (int64, error) {
 }
 
 const getMoviesLibraryAsc = `-- name: GetMoviesLibraryAsc :many
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) ASC, id ASC LIMIT ? OFFSET ?
+SELECT
+  id,
+  title,
+  poster_path,
+  year,
+  certification
+FROM movies
+ORDER BY
+  LOWER(title) ASC,
+  id ASC
+LIMIT ?
+OFFSET ?
 `
 
 type GetMoviesLibraryAscParams struct {
@@ -792,7 +868,18 @@ func (q *Queries) GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryA
 }
 
 const getMoviesLibraryDesc = `-- name: GetMoviesLibraryDesc :many
-SELECT id, title, poster_path, year, certification FROM movies ORDER BY LOWER(title) DESC, id DESC LIMIT ? OFFSET ?
+SELECT
+  id,
+  title,
+  poster_path,
+  year,
+  certification
+FROM movies
+ORDER BY
+  LOWER(title) DESC,
+  id DESC
+LIMIT ?
+OFFSET ?
 `
 
 type GetMoviesLibraryDescParams struct {
@@ -845,13 +932,11 @@ SELECT
   pc.tmdb_id,
   pc.logo,
   pc.country
-FROM
-  production_companies pc
-  INNER JOIN movie_production_companies mpc ON mpc.production_company_id = pc.id
-WHERE
-  mpc.movie_id = ?
-ORDER BY
-  pc.name
+FROM production_companies AS pc
+INNER JOIN movie_production_companies AS mpc
+  ON mpc.production_company_id = pc.id
+WHERE mpc.movie_id = ?
+ORDER BY pc.name
 `
 
 type GetProductionCompaniesByMovieIDRow struct {
@@ -893,7 +978,11 @@ func (q *Queries) GetProductionCompaniesByMovieID(ctx context.Context, movieID i
 }
 
 const getSubtitlesByMovieID = `-- name: GetSubtitlesByMovieID :many
-SELECT id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at FROM subtitles WHERE movie_id = ? ORDER BY stream_index
+SELECT
+  id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
+FROM subtitles
+WHERE movie_id = ?
+ORDER BY stream_index
 `
 
 // Subtitle tracks for a movie (for technical details display).
@@ -932,7 +1021,11 @@ func (q *Queries) GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]S
 }
 
 const getVideoStreamsByMovieID = `-- name: GetVideoStreamsByMovieID :many
-SELECT id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at FROM video_streams WHERE movie_id = ? ORDER BY stream_index
+SELECT
+  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+FROM video_streams
+WHERE movie_id = ?
+ORDER BY stream_index
 `
 
 // Video streams for a movie (for technical details display).
@@ -984,21 +1077,21 @@ func (q *Queries) GetVideoStreamsByMovieID(ctx context.Context, movieID int64) (
 }
 
 const insertAudioStream = `-- name: InsertAudioStream :one
-INSERT INTO
-  audio_streams (
-    movie_id,
-    stream_index,
-    codec,
-    codec_profile,
-    bit_rate,
-    sample_rate,
-    channels,
-    channel_layout,
-    language,
-    title
-  )
+INSERT INTO audio_streams (
+  movie_id,
+  stream_index,
+  codec,
+  codec_profile,
+  bit_rate,
+  sample_rate,
+  channels,
+  channel_layout,
+  language,
+  title
+)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, movie_id, stream_index, codec, codec_profile, bit_rate, sample_rate, channels, channel_layout, language, title, created_at, updated_at
 `
 
 type InsertAudioStreamParams struct {
@@ -1047,10 +1140,15 @@ func (q *Queries) InsertAudioStream(ctx context.Context, arg InsertAudioStreamPa
 }
 
 const insertChapter = `-- name: InsertChapter :one
-INSERT INTO
-  chapters (movie_id, title, start_time, thumb)
+INSERT INTO chapters (
+  movie_id,
+  title,
+  start_time,
+  thumb
+)
 VALUES
-  (?, ?, ?, ?) RETURNING id, title, start_time, thumb, movie_id
+  (?, ?, ?, ?)
+RETURNING id, title, start_time, thumb, movie_id
 `
 
 type InsertChapterParams struct {
@@ -1079,18 +1177,18 @@ func (q *Queries) InsertChapter(ctx context.Context, arg InsertChapterParams) (C
 }
 
 const insertSubtitle = `-- name: InsertSubtitle :one
-INSERT INTO
-  subtitles (
-    movie_id,
-    stream_index,
-    codec,
-    language,
-    title,
-    is_forced,
-    is_default
-  )
+INSERT INTO subtitles (
+  movie_id,
+  stream_index,
+  codec,
+  language,
+  title,
+  is_forced,
+  is_default
+)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?) RETURNING id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, movie_id, stream_index, codec, language, title, is_forced, is_default, created_at, updated_at
 `
 
 type InsertSubtitleParams struct {
@@ -1130,52 +1228,31 @@ func (q *Queries) InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) 
 }
 
 const insertVideoStream = `-- name: InsertVideoStream :one
-INSERT INTO
-  video_streams (
-    movie_id,
-    stream_index,
-    codec,
-    codec_profile,
-    codec_level,
-    bit_rate,
-    width,
-    height,
-    coded_width,
-    coded_height,
-    aspect_ratio,
-    frame_rate,
-    avg_frame_rate,
-    bit_depth,
-    color_range,
-    color_space,
-    color_primaries,
-    color_transfer,
-    language,
-    title
-  )
+INSERT INTO video_streams (
+  movie_id,
+  stream_index,
+  codec,
+  codec_profile,
+  codec_level,
+  bit_rate,
+  width,
+  height,
+  coded_width,
+  coded_height,
+  aspect_ratio,
+  frame_rate,
+  avg_frame_rate,
+  bit_depth,
+  color_range,
+  color_space,
+  color_primaries,
+  color_transfer,
+  language,
+  title
+)
 VALUES
-  (
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?
-  ) RETURNING id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
 `
 
 type InsertVideoStreamParams struct {
@@ -1274,8 +1351,7 @@ SET
   budget = ?,
   run_time = ?,
   updated_at = CURRENT_TIMESTAMP
-WHERE
-  id = ?
+WHERE id = ?
 RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 `
 
@@ -1356,15 +1432,19 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie
 }
 
 const upsertArtist = `-- name: UpsertArtist :one
-INSERT INTO
-  artist (name, tmdb_id, profile)
+INSERT INTO artist (
+  name,
+  tmdb_id,
+  profile
+)
 VALUES
-  (?, ?, ?) ON CONFLICT (tmdb_id) DO
-UPDATE
+  (?, ?, ?)
+ON CONFLICT (tmdb_id) DO UPDATE
 SET
   name = excluded.name,
   profile = COALESCE(excluded.profile, artist.profile),
-  updated_at = CURRENT_TIMESTAMP RETURNING id, name, tmdb_id, profile, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, name, tmdb_id, profile, created_at, updated_at
 `
 
 type UpsertArtistParams struct {
@@ -1388,14 +1468,19 @@ func (q *Queries) UpsertArtist(ctx context.Context, arg UpsertArtistParams) (Art
 }
 
 const upsertCast = `-- name: UpsertCast :one
-INSERT INTO
-  cast(movie_id, artist_id, character, cast_order)
+INSERT INTO cast (
+  movie_id,
+  artist_id,
+  character,
+  cast_order
+)
 VALUES
-  (?, ?, ?, ?) ON CONFLICT (movie_id, artist_id, cast_order) DO
-UPDATE
+  (?, ?, ?, ?)
+ON CONFLICT (movie_id, artist_id, cast_order) DO UPDATE
 SET
   character = excluded.character,
-  updated_at = CURRENT_TIMESTAMP RETURNING id, movie_id, artist_id, character, cast_order, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, movie_id, artist_id, character, cast_order, created_at, updated_at
 `
 
 type UpsertCastParams struct {
@@ -1426,13 +1511,18 @@ func (q *Queries) UpsertCast(ctx context.Context, arg UpsertCastParams) (Cast, e
 }
 
 const upsertCrew = `-- name: UpsertCrew :one
-INSERT INTO
-  crew (movie_id, artist_id, job, department)
+INSERT INTO crew (
+  movie_id,
+  artist_id,
+  job,
+  department
+)
 VALUES
-  (?, ?, ?, ?) ON CONFLICT (movie_id, artist_id, job, department) DO
-UPDATE
+  (?, ?, ?, ?)
+ON CONFLICT (movie_id, artist_id, job, department) DO UPDATE
 SET
-  updated_at = CURRENT_TIMESTAMP RETURNING id, movie_id, artist_id, job, department, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, movie_id, artist_id, job, department, created_at, updated_at
 `
 
 type UpsertCrewParams struct {
@@ -1463,18 +1553,25 @@ func (q *Queries) UpsertCrew(ctx context.Context, arg UpsertCrewParams) (Crew, e
 }
 
 const upsertExtraVideo = `-- name: UpsertExtraVideo :one
-INSERT INTO
-  extra_videos (title, external_id, key, type, site, official)
+INSERT INTO extra_videos (
+  title,
+  external_id,
+  key,
+  type,
+  site,
+  official
+)
 VALUES
-  (?, ?, ?, ?, ?, ?) ON CONFLICT (external_id) DO
-UPDATE
+  (?, ?, ?, ?, ?, ?)
+ON CONFLICT (external_id) DO UPDATE
 SET
   title = excluded.title,
   key = excluded.key,
   type = excluded.type,
   site = excluded.site,
   official = excluded.official,
-  updated_at = CURRENT_TIMESTAMP RETURNING id, title, external_id, "key", type, site, official, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, title, external_id, "key", type, site, official, created_at, updated_at
 `
 
 type UpsertExtraVideoParams struct {
@@ -1513,59 +1610,34 @@ func (q *Queries) UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoPara
 }
 
 const upsertMovie = `-- name: UpsertMovie :one
-INSERT INTO
-  movies (
-    title,
-    file_path,
-    file_name,
-    size,
-    container,
-    mime_type,
-    adult,
-    tmdb_id,
-    imdb_id,
-    poster_path,
-    backdrop_path,
-    language,
-    year,
-    release_date,
-    overview,
-    tag_line,
-    certification,
-    critic_rating,
-    audience_rating,
-    revenue,
-    budget,
-    run_time,
-    duration
-  )
+INSERT INTO movies (
+  title,
+  file_path,
+  file_name,
+  size,
+  container,
+  mime_type,
+  adult,
+  tmdb_id,
+  imdb_id,
+  poster_path,
+  backdrop_path,
+  language,
+  year,
+  release_date,
+  overview,
+  tag_line,
+  certification,
+  critic_rating,
+  audience_rating,
+  revenue,
+  budget,
+  run_time,
+  duration
+)
 VALUES
-  (
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?,
-    ?
-  ) ON CONFLICT (file_path) DO
-UPDATE
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (file_path) DO UPDATE
 SET
   title = excluded.title,
   file_name = excluded.file_name,
@@ -1588,7 +1660,8 @@ SET
   budget = COALESCE(excluded.budget, movies.budget),
   run_time = COALESCE(excluded.run_time, movies.run_time),
   duration = COALESCE(excluded.duration, movies.duration),
-  updated_at = CURRENT_TIMESTAMP RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
 `
 
 type UpsertMovieParams struct {
@@ -1676,16 +1749,21 @@ func (q *Queries) UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie
 }
 
 const upsertProductionCompany = `-- name: UpsertProductionCompany :one
-INSERT INTO
-  production_companies (name, tmdb_id, logo, country)
+INSERT INTO production_companies (
+  name,
+  tmdb_id,
+  logo,
+  country
+)
 VALUES
-  (?, ?, ?, ?) ON CONFLICT (tmdb_id) DO
-UPDATE
+  (?, ?, ?, ?)
+ON CONFLICT (tmdb_id) DO UPDATE
 SET
   name = excluded.name,
   logo = COALESCE(excluded.logo, production_companies.logo),
   country = COALESCE(excluded.country, production_companies.country),
-  updated_at = CURRENT_TIMESTAMP RETURNING id, name, tmdb_id, logo, country, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, name, tmdb_id, logo, country, created_at, updated_at
 `
 
 type UpsertProductionCompanyParams struct {

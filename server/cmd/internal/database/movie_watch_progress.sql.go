@@ -11,7 +11,8 @@ import (
 
 const deleteMovieWatchProgress = `-- name: DeleteMovieWatchProgress :exec
 DELETE FROM movie_watch_progress
-WHERE user_id = ? AND movie_id = ?
+WHERE user_id = ?
+  AND movie_id = ?
 `
 
 type DeleteMovieWatchProgressParams struct {
@@ -25,9 +26,16 @@ func (q *Queries) DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieW
 }
 
 const getMovieWatchProgress = `-- name: GetMovieWatchProgress :one
-SELECT user_id, movie_id, progress_sec, duration_sec, watched, updated_at
+SELECT
+  user_id,
+  movie_id,
+  progress_sec,
+  duration_sec,
+  watched,
+  updated_at
 FROM movie_watch_progress
-WHERE user_id = ? AND movie_id = ?
+WHERE user_id = ?
+  AND movie_id = ?
 `
 
 type GetMovieWatchProgressParams struct {
@@ -58,8 +66,10 @@ INSERT INTO movie_watch_progress (
   watched,
   updated_at
 )
-VALUES (?, ?, 0, 0, false, CURRENT_TIMESTAMP)
-ON CONFLICT (user_id, movie_id) DO UPDATE SET
+VALUES
+  (?, ?, 0, 0, false, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, movie_id) DO UPDATE
+SET
   watched = false,
   updated_at = CURRENT_TIMESTAMP
 `
@@ -83,8 +93,10 @@ INSERT INTO movie_watch_progress (
   watched,
   updated_at
 )
-VALUES (?, ?, 0, 0, true, CURRENT_TIMESTAMP)
-ON CONFLICT (user_id, movie_id) DO UPDATE SET
+VALUES
+  (?, ?, 0, 0, true, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, movie_id) DO UPDATE
+SET
   progress_sec = 0,
   watched = true,
   updated_at = CURRENT_TIMESTAMP
@@ -109,8 +121,10 @@ INSERT INTO movie_watch_progress (
   watched,
   updated_at
 )
-VALUES (?, ?, ?, ?, false, CURRENT_TIMESTAMP)
-ON CONFLICT (user_id, movie_id) DO UPDATE SET
+VALUES
+  (?, ?, ?, ?, false, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, movie_id) DO UPDATE
+SET
   progress_sec = excluded.progress_sec,
   duration_sec = excluded.duration_sec,
   watched = false,

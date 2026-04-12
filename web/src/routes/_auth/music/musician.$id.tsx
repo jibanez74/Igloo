@@ -14,7 +14,8 @@ import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import TrackItem from "@/components/TrackItem";
 import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -75,7 +76,8 @@ function MusicianDetailsContent({
   genres,
   total_duration,
 }: MusicianDetailsResponseType) {
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
+  const audioPlayerState = useAudioPlayerState();
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const summary = unwrapString(musician.summary);
@@ -155,7 +157,10 @@ function MusicianDetailsContent({
   };
 
   const isTrackPlaying = (track: MusicianTrackType) => {
-    return audioPlayer.currentTrack?.id === track.id && audioPlayer.isPlaying;
+    return (
+      audioPlayerState.currentTrack?.id === track.id &&
+      audioPlayerState.isPlaying
+    );
   };
 
   // Screen reader announcement summarizing the page
@@ -355,7 +360,7 @@ function MusicianDetailsContent({
                   albumId={unwrapInt(track.album_id)}
                   variant="musician"
                   isPlaying={isTrackPlaying(track)}
-                  isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
+                  isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
                   onPlay={() => handlePlayTrack(track)}
                 />
               ))}
@@ -424,4 +429,3 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
     </article>
   );
 }
-

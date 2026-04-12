@@ -28,7 +28,8 @@ import {
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 import { convertToAudioTrack } from "@/lib/audio-utils";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import {
   ALBUMS_PER_PAGE,
   MUSICIANS_PER_PAGE,
@@ -573,7 +574,7 @@ function TracksTabContent() {
 
 function PlayAllButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
 
   const handlePlayAll = async () => {
     setIsLoading(true);
@@ -607,7 +608,7 @@ function PlayAllButton() {
 
 function ShuffleButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
 
   const handleShuffle = async () => {
     setIsLoading(true);
@@ -648,7 +649,8 @@ function LetterHeader({ letter }: { letter: string }) {
 }
 
 function TrackListItem({ track }: { track: TrackListItemType }) {
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
+  const playerState = useAudioPlayerState();
 
   const handlePlay = () => {
     const audioTrack = convertToAudioTrack({
@@ -682,8 +684,8 @@ function TrackListItem({ track }: { track: TrackListItemType }) {
       musicianId={unwrapInt(track.musician_id)}
       musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
-      isPlaying={audioPlayer.currentTrack?.id === track.id && audioPlayer.isPlaying}
-      isCurrentTrack={audioPlayer.currentTrack?.id === track.id}
+      isPlaying={playerState.currentTrack?.id === track.id && playerState.isPlaying}
+      isCurrentTrack={playerState.currentTrack?.id === track.id}
       onPlay={handlePlay}
       showActionsMenu
     />

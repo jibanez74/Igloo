@@ -12,11 +12,15 @@ import (
 
 const getUserListeningStats = `-- name: GetUserListeningStats :one
 SELECT
-    COALESCE(SUM(uts.play_count), 0) AS total_plays,
-    COALESCE(SUM(uts.total_time_played), 0) AS total_time_listened,
-    COUNT(DISTINCT uts.track_id) AS unique_tracks_played,
-    (SELECT COUNT(*) FROM user_liked_tracks ult WHERE ult.user_id = ?) AS liked_tracks_count
-FROM user_track_stats uts
+  COALESCE(SUM(uts.play_count), 0) AS total_plays,
+  COALESCE(SUM(uts.total_time_played), 0) AS total_time_listened,
+  COUNT(DISTINCT uts.track_id) AS unique_tracks_played,
+  (
+    SELECT COUNT(*)
+    FROM user_liked_tracks AS ult
+    WHERE ult.user_id = ?
+  ) AS liked_tracks_count
+FROM user_track_stats AS uts
 WHERE uts.user_id = ?
 `
 
@@ -47,24 +51,28 @@ func (q *Queries) GetUserListeningStats(ctx context.Context, arg GetUserListenin
 
 const getUserRecentlyPlayed = `-- name: GetUserRecentlyPlayed :many
 SELECT
-    uph.played_at,
-    uph.duration_played,
-    t.id,
-    t.title,
-    t.duration,
-    t.file_path,
-    a.id AS album_id,
-    a.title AS album_title,
-    a.cover AS album_cover,
-    m.id AS musician_id,
-    m.name AS musician_name
-FROM user_play_history uph
-INNER JOIN tracks t ON uph.track_id = t.id
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
+  uph.played_at,
+  uph.duration_played,
+  t.id,
+  t.title,
+  t.duration,
+  t.file_path,
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.id AS musician_id,
+  m.name AS musician_name
+FROM user_play_history AS uph
+INNER JOIN tracks AS t
+  ON uph.track_id = t.id
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
+LEFT JOIN musicians AS m
+  ON t.musician_id = m.id
 WHERE uph.user_id = ?
 ORDER BY uph.played_at DESC
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetUserRecentlyPlayedParams struct {
@@ -125,21 +133,29 @@ func (q *Queries) GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecently
 
 const getUserTopAlbums = `-- name: GetUserTopAlbums :many
 SELECT
-    a.id,
-    a.title,
-    a.cover,
-    a.musician,
-    a.year,
-    SUM(uts.play_count) AS total_play_count,
-    SUM(uts.total_time_played) AS total_time_listened,
-    COUNT(DISTINCT t.id) AS unique_tracks_played
-FROM user_track_stats uts
-INNER JOIN tracks t ON uts.track_id = t.id
-INNER JOIN albums a ON t.album_id = a.id
+  a.id,
+  a.title,
+  a.cover,
+  a.musician,
+  a.year,
+  SUM(uts.play_count) AS total_play_count,
+  SUM(uts.total_time_played) AS total_time_listened,
+  COUNT(DISTINCT t.id) AS unique_tracks_played
+FROM user_track_stats AS uts
+INNER JOIN tracks AS t
+  ON uts.track_id = t.id
+INNER JOIN albums AS a
+  ON t.album_id = a.id
 WHERE uts.user_id = ?
-GROUP BY a.id, a.title, a.cover, a.musician, a.year
+GROUP BY
+  a.id,
+  a.title,
+  a.cover,
+  a.musician,
+  a.year
 ORDER BY total_play_count DESC
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetUserTopAlbumsParams struct {
@@ -194,17 +210,23 @@ func (q *Queries) GetUserTopAlbums(ctx context.Context, arg GetUserTopAlbumsPara
 
 const getUserTopGenres = `-- name: GetUserTopGenres :many
 SELECT
-    g.id,
-    g.tag,
-    SUM(uts.play_count) AS total_play_count,
-    SUM(uts.total_time_played) AS total_time_listened,
-    COUNT(DISTINCT t.id) AS unique_tracks_played
-FROM user_track_stats uts
-INNER JOIN tracks t ON uts.track_id = t.id
-INNER JOIN track_genres tg ON t.id = tg.track_id
-INNER JOIN genres g ON tg.genre_id = g.id
-WHERE uts.user_id = ? AND g.genre_type = 'music'
-GROUP BY g.id, g.tag
+  g.id,
+  g.tag,
+  SUM(uts.play_count) AS total_play_count,
+  SUM(uts.total_time_played) AS total_time_listened,
+  COUNT(DISTINCT t.id) AS unique_tracks_played
+FROM user_track_stats AS uts
+INNER JOIN tracks AS t
+  ON uts.track_id = t.id
+INNER JOIN track_genres AS tg
+  ON t.id = tg.track_id
+INNER JOIN genres AS g
+  ON tg.genre_id = g.id
+WHERE uts.user_id = ?
+  AND g.genre_type = 'music'
+GROUP BY
+  g.id,
+  g.tag
 ORDER BY total_play_count DESC
 LIMIT ?
 `
@@ -254,19 +276,25 @@ func (q *Queries) GetUserTopGenres(ctx context.Context, arg GetUserTopGenresPara
 
 const getUserTopMusicians = `-- name: GetUserTopMusicians :many
 SELECT
-    m.id,
-    m.name,
-    m.thumb,
-    SUM(uts.play_count) AS total_play_count,
-    SUM(uts.total_time_played) AS total_time_listened,
-    COUNT(DISTINCT t.id) AS unique_tracks_played
-FROM user_track_stats uts
-INNER JOIN tracks t ON uts.track_id = t.id
-INNER JOIN musicians m ON t.musician_id = m.id
+  m.id,
+  m.name,
+  m.thumb,
+  SUM(uts.play_count) AS total_play_count,
+  SUM(uts.total_time_played) AS total_time_listened,
+  COUNT(DISTINCT t.id) AS unique_tracks_played
+FROM user_track_stats AS uts
+INNER JOIN tracks AS t
+  ON uts.track_id = t.id
+INNER JOIN musicians AS m
+  ON t.musician_id = m.id
 WHERE uts.user_id = ?
-GROUP BY m.id, m.name, m.thumb
+GROUP BY
+  m.id,
+  m.name,
+  m.thumb
 ORDER BY total_play_count DESC
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetUserTopMusiciansParams struct {
@@ -318,25 +346,29 @@ func (q *Queries) GetUserTopMusicians(ctx context.Context, arg GetUserTopMusicia
 const getUserTopTracks = `-- name: GetUserTopTracks :many
 
 SELECT
-    uts.play_count,
-    uts.total_time_played,
-    uts.last_played_at,
-    t.id,
-    t.title,
-    t.duration,
-    t.file_path,
-    a.id AS album_id,
-    a.title AS album_title,
-    a.cover AS album_cover,
-    m.id AS musician_id,
-    m.name AS musician_name
-FROM user_track_stats uts
-INNER JOIN tracks t ON uts.track_id = t.id
-LEFT JOIN albums a ON t.album_id = a.id
-LEFT JOIN musicians m ON t.musician_id = m.id
+  uts.play_count,
+  uts.total_time_played,
+  uts.last_played_at,
+  t.id,
+  t.title,
+  t.duration,
+  t.file_path,
+  a.id AS album_id,
+  a.title AS album_title,
+  a.cover AS album_cover,
+  m.id AS musician_id,
+  m.name AS musician_name
+FROM user_track_stats AS uts
+INNER JOIN tracks AS t
+  ON uts.track_id = t.id
+LEFT JOIN albums AS a
+  ON t.album_id = a.id
+LEFT JOIN musicians AS m
+  ON t.musician_id = m.id
 WHERE uts.user_id = ?
 ORDER BY uts.play_count DESC
-LIMIT ? OFFSET ?
+LIMIT ?
+OFFSET ?
 `
 
 type GetUserTopTracksParams struct {
@@ -402,8 +434,14 @@ func (q *Queries) GetUserTopTracks(ctx context.Context, arg GetUserTopTracksPara
 
 const recordPlayEvent = `-- name: RecordPlayEvent :exec
 
-INSERT INTO user_play_history (user_id, track_id, duration_played, completed)
-VALUES (?, ?, ?, ?)
+INSERT INTO user_play_history (
+  user_id,
+  track_id,
+  duration_played,
+  completed
+)
+VALUES
+  (?, ?, ?, ?)
 `
 
 type RecordPlayEventParams struct {
@@ -428,13 +466,22 @@ func (q *Queries) RecordPlayEvent(ctx context.Context, arg RecordPlayEventParams
 }
 
 const upsertUserTrackStats = `-- name: UpsertUserTrackStats :exec
-INSERT INTO user_track_stats (user_id, track_id, play_count, total_time_played, last_played_at, first_played_at)
-VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT (user_id, track_id) DO UPDATE SET
-    play_count = user_track_stats.play_count + 1,
-    total_time_played = user_track_stats.total_time_played + excluded.total_time_played,
-    last_played_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
+INSERT INTO user_track_stats (
+  user_id,
+  track_id,
+  play_count,
+  total_time_played,
+  last_played_at,
+  first_played_at
+)
+VALUES
+  (?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, track_id) DO UPDATE
+SET
+  play_count = user_track_stats.play_count + 1,
+  total_time_played = user_track_stats.total_time_played + excluded.total_time_played,
+  last_played_at = CURRENT_TIMESTAMP,
+  updated_at = CURRENT_TIMESTAMP
 `
 
 type UpsertUserTrackStatsParams struct {

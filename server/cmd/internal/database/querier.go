@@ -86,7 +86,6 @@ type Querier interface {
 	GetGenresByMusicianID(ctx context.Context, musicianID int64) ([]GetGenresByMusicianIDRow, error)
 	GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, error)
 	GetLatestMovies(ctx context.Context) ([]GetLatestMoviesRow, error)
-	// One-line SELECT required for paginated rows (sqlc; see movies.sql).
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
@@ -116,7 +115,7 @@ type Querier interface {
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
 	GetPlaylistDuration(ctx context.Context, playlistID int64) (interface{}, error)
-	// One-line SELECT required for paginated rows (sqlc; see movies.sql). Title order matches GET /api/movies/library sort=asc.
+	// Title order matches GET /api/movies/library sort=asc.
 	GetPlaylistMoviesPaginatedAsc(ctx context.Context, arg GetPlaylistMoviesPaginatedAscParams) ([]GetPlaylistMoviesPaginatedAscRow, error)
 	GetPlaylistMoviesPaginatedDesc(ctx context.Context, arg GetPlaylistMoviesPaginatedDescParams) ([]GetPlaylistMoviesPaginatedDescRow, error)
 	GetPlaylistTracksInfinite(ctx context.Context, arg GetPlaylistTracksInfiniteParams) ([]GetPlaylistTracksInfiniteRow, error)

@@ -13,13 +13,11 @@ const getAlbumGenres = `-- name: GetAlbumGenres :many
 SELECT
   g.id,
   g.tag
-FROM
-  genres g
-  INNER JOIN album_genres ag ON g.id = ag.genre_id
-WHERE
-  ag.album_id = ?
-ORDER BY
-  g.tag ASC
+FROM genres AS g
+INNER JOIN album_genres AS ag
+  ON g.id = ag.genre_id
+WHERE ag.album_id = ?
+ORDER BY g.tag ASC
 `
 
 type GetAlbumGenresRow struct {
@@ -55,13 +53,11 @@ const getGenresByMusicianID = `-- name: GetGenresByMusicianID :many
 SELECT
   g.id,
   g.tag
-FROM
-  genres g
-  INNER JOIN musician_genres mg ON g.id = mg.genre_id
-WHERE
-  mg.musician_id = ?
-ORDER BY
-  g.tag ASC
+FROM genres AS g
+INNER JOIN musician_genres AS mg
+  ON g.id = mg.genre_id
+WHERE mg.musician_id = ?
+ORDER BY g.tag ASC
 `
 
 type GetGenresByMusicianIDRow struct {
@@ -94,13 +90,16 @@ func (q *Queries) GetGenresByMusicianID(ctx context.Context, musicianID int64) (
 }
 
 const getOrCreateGenre = `-- name: GetOrCreateGenre :one
-INSERT INTO
-  genres (tag, genre_type)
+INSERT INTO genres (
+  tag,
+  genre_type
+)
 VALUES
-  (?, ?) ON CONFLICT (tag, genre_type) DO
-UPDATE
+  (?, ?)
+ON CONFLICT (tag, genre_type) DO UPDATE
 SET
-  updated_at = CURRENT_TIMESTAMP RETURNING id, tag, genre_type, created_at, updated_at
+  updated_at = CURRENT_TIMESTAMP
+RETURNING id, tag, genre_type, created_at, updated_at
 `
 
 type GetOrCreateGenreParams struct {
@@ -122,8 +121,12 @@ func (q *Queries) GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenrePara
 }
 
 const upsertAlbumGenre = `-- name: UpsertAlbumGenre :exec
-INSERT INTO album_genres (album_id, genre_id)
-VALUES (?, ?)
+INSERT INTO album_genres (
+  album_id,
+  genre_id
+)
+VALUES
+  (?, ?)
 ON CONFLICT (album_id, genre_id) DO NOTHING
 `
 
@@ -139,8 +142,12 @@ func (q *Queries) UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenrePara
 }
 
 const upsertMusicianGenre = `-- name: UpsertMusicianGenre :exec
-INSERT INTO musician_genres (musician_id, genre_id)
-VALUES (?, ?)
+INSERT INTO musician_genres (
+  musician_id,
+  genre_id
+)
+VALUES
+  (?, ?)
 ON CONFLICT (musician_id, genre_id) DO NOTHING
 `
 

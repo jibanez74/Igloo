@@ -34,7 +34,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import TrackItem from "@/components/TrackItem";
 import { formatDate, formatDuration } from "@/lib/format";
 import type {
@@ -218,7 +219,8 @@ function AlbumDetailsContent({
   album_genres,
   total_duration,
 }: AlbumDetailsResponseType) {
-  const audioPlayer = useAudioPlayer();
+  const audioPlayer = useAudioPlayerActions();
+  const audioPlayerState = useAudioPlayerState();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
 
@@ -299,12 +301,15 @@ function AlbumDetailsContent({
 
   // Check if a specific track is currently playing
   const isTrackPlaying = (track: TrackType) => {
-    return audioPlayer.currentTrack?.id === track.id && audioPlayer.isPlaying;
+    return (
+      audioPlayerState.currentTrack?.id === track.id &&
+      audioPlayerState.isPlaying
+    );
   };
 
   // Handle playing/pausing a track
   const handleToggleTrack = (track: TrackType) => {
-    if (audioPlayer.currentTrack?.id === track.id) {
+    if (audioPlayerState.currentTrack?.id === track.id) {
       // Toggle play/pause for the current track
       audioPlayer.togglePlay();
     } else {
@@ -588,9 +593,7 @@ function AlbumDetailsContent({
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
                         isPlaying={isTrackPlaying(track)}
-                        isCurrentTrack={
-                          audioPlayer.currentTrack?.id === track.id
-                        }
+                        isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
                         onPlay={() => handleToggleTrack(track)}
                       />
                     ))}

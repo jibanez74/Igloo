@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import Hls from "hls.js";
+import { useEffect, useEffectEvent, useRef } from "react";
+import Hls, { type ErrorData } from "hls.js";
 import type { RefObject } from "react";
 import {
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
@@ -58,16 +58,53 @@ export default function VideoPlayer({
   const sessionLostAttemptsRef = useRef(0);
   const lastSessionLostAtRef = useRef(0);
 
-  // Stable refs for callbacks so the main setup effect only re-runs when the
-  // stream URL or start position actually changes, not on every parent render.
-  const onErrorRef = useRef(onError);
-  const onSessionLostRef = useRef(onSessionLost);
-  const onStartAppliedRef = useRef(onStartApplied);
-  useEffect(() => {
-    onErrorRef.current = onError;
-    onSessionLostRef.current = onSessionLost;
-    onStartAppliedRef.current = onStartApplied;
-  }, [onError, onSessionLost, onStartApplied]);
+  const handleStartApplied = useEffectEvent((time: number) => {
+    onStartApplied?.(time);
+  });
+
+  const applyStartTime = useEffectEvent((video: HTMLVideoElement) => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const nextTime = duration > 0 ? Math.min(startSec, duration) : startSec;
+    video.currentTime = nextTime;
+    handleStartApplied(nextTime);
+  });
+
+  const handleHlsError = useEffectEvent(
+    (video: HTMLVideoElement, data: ErrorData) => {
+      if (
+        data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+        data.response?.code === 404 &&
+        onSessionLost
+      ) {
+        const now = Date.now();
+        if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
+          onError(
+            "Playback session could not be recovered. Try reloading the page or choosing another quality.",
+          );
+          return;
+        }
+        const tooSoon =
+          sessionLostAttemptsRef.current > 0 &&
+          now - lastSessionLostAtRef.current < HLS_SESSION_LOST_MIN_INTERVAL_MS;
+        if (tooSoon) {
+          return;
+        }
+        sessionLostAttemptsRef.current += 1;
+        lastSessionLostAtRef.current = now;
+        onSessionLost(video.currentTime);
+        return;
+      }
+
+      const detail = data.details ?? "unknown error";
+      if (data.type === "networkError") {
+        onError(`Network error loading stream (${detail}).`);
+      } else if (data.type === "mediaError") {
+        onError(`The browser could not decode this stream (${detail}).`);
+      } else {
+        onError(`Stream error: ${detail}`);
+      }
+    },
+  );
 
   useEffect(() => {
     const video = videoRef.current;
@@ -102,34 +139,18 @@ export default function VideoPlayer({
 
       if (startSec > 0) {
         hls.once(Hls.Events.MANIFEST_PARSED, () => {
-          onStartAppliedRef.current?.(startSec);
+          handleStartApplied(startSec);
         });
       }
 
       let mediaRecoveryAttempted = false;
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (
+        const isSessionLostError =
           data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
-          data.response?.code === 404 &&
-          onSessionLostRef.current
-        ) {
-          const now = Date.now();
-          if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
-            onErrorRef.current(
-              "Playback session could not be recovered. Try reloading the page or choosing another quality.",
-            );
-            return;
-          }
-          const tooSoon =
-            sessionLostAttemptsRef.current > 0 &&
-            now - lastSessionLostAtRef.current <
-              HLS_SESSION_LOST_MIN_INTERVAL_MS;
-          if (tooSoon) {
-            return;
-          }
-          sessionLostAttemptsRef.current += 1;
-          lastSessionLostAtRef.current = now;
-          onSessionLostRef.current(video.currentTime);
+          data.response?.code === 404;
+
+        if (isSessionLostError) {
+          handleHlsError(video, data);
           return;
         }
 
@@ -141,16 +162,7 @@ export default function VideoPlayer({
           return;
         }
 
-        const detail = data.details ?? "unknown error";
-        if (data.type === "networkError") {
-          onErrorRef.current(`Network error loading stream (${detail}).`);
-        } else if (data.type === "mediaError") {
-          onErrorRef.current(
-            `The browser could not decode this stream (${detail}).`,
-          );
-        } else {
-          onErrorRef.current(`Stream error: ${detail}`);
-        }
+        handleHlsError(video, data);
       });
 
       return () => {
@@ -164,7 +176,7 @@ export default function VideoPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef]);
+  }, [src, startSec, videoRef]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -173,22 +185,18 @@ export default function VideoPlayer({
     // onStartApplied via MANIFEST_PARSED; don't compete with it.
     if (hlsRef.current) return;
 
-    const applyStart = () => {
-      const duration = Number.isFinite(video.duration) ? video.duration : 0;
-      const nextTime =
-        duration > 0 ? Math.min(startSec, duration) : startSec;
-      video.currentTime = nextTime;
-      onStartAppliedRef.current?.(nextTime);
-    };
-
     if (video.readyState >= 1) {
-      applyStart();
+      applyStartTime(video);
       return;
     }
 
-    video.addEventListener("loadedmetadata", applyStart, { once: true });
+    const handleLoadedMetadata = () => {
+      applyStartTime(video);
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
     return () => {
-      video.removeEventListener("loadedmetadata", applyStart);
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
   }, [startSec, src, videoRef]);
 

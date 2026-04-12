@@ -11,7 +11,10 @@ import (
 )
 
 const countUserLikedMovies = `-- name: CountUserLikedMovies :one
-SELECT COUNT(*) FROM user_liked_movies WHERE user_id = ?
+SELECT
+  COUNT(*)
+FROM user_liked_movies
+WHERE user_id = ?
 `
 
 func (q *Queries) CountUserLikedMovies(ctx context.Context, userID int64) (int64, error) {
@@ -22,7 +25,19 @@ func (q *Queries) CountUserLikedMovies(ctx context.Context, userID int64) (int64
 }
 
 const getLikedMoviesForUserAsc = `-- name: GetLikedMoviesForUserAsc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM user_liked_movies ulm INNER JOIN movies m ON m.id = ulm.movie_id WHERE ulm.user_id = ? ORDER BY LOWER(m.title) ASC LIMIT ? OFFSET ?
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  m.certification
+FROM user_liked_movies AS ulm
+INNER JOIN movies AS m
+  ON m.id = ulm.movie_id
+WHERE ulm.user_id = ?
+ORDER BY LOWER(m.title) ASC
+LIMIT ?
+OFFSET ?
 `
 
 type GetLikedMoviesForUserAscParams struct {
@@ -39,7 +54,6 @@ type GetLikedMoviesForUserAscRow struct {
 	Certification sql.NullString `json:"certification"`
 }
 
-// One-line SELECT required for paginated rows (sqlc; see movies.sql).
 func (q *Queries) GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error) {
 	rows, err := q.query(ctx, q.getLikedMoviesForUserAscStmt, getLikedMoviesForUserAsc, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -70,7 +84,19 @@ func (q *Queries) GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMovi
 }
 
 const getLikedMoviesForUserDesc = `-- name: GetLikedMoviesForUserDesc :many
-SELECT m.id, m.title, m.poster_path, m.year, m.certification FROM user_liked_movies ulm INNER JOIN movies m ON m.id = ulm.movie_id WHERE ulm.user_id = ? ORDER BY LOWER(m.title) DESC LIMIT ? OFFSET ?
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  m.certification
+FROM user_liked_movies AS ulm
+INNER JOIN movies AS m
+  ON m.id = ulm.movie_id
+WHERE ulm.user_id = ?
+ORDER BY LOWER(m.title) DESC
+LIMIT ?
+OFFSET ?
 `
 
 type GetLikedMoviesForUserDescParams struct {
@@ -117,7 +143,11 @@ func (q *Queries) GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMov
 }
 
 const isMovieLiked = `-- name: IsMovieLiked :one
-SELECT COUNT(*) > 0 AS is_liked FROM user_liked_movies WHERE user_id = ? AND movie_id = ?
+SELECT
+  COUNT(*) > 0 AS is_liked
+FROM user_liked_movies
+WHERE user_id = ?
+  AND movie_id = ?
 `
 
 type IsMovieLikedParams struct {
@@ -133,8 +163,12 @@ func (q *Queries) IsMovieLiked(ctx context.Context, arg IsMovieLikedParams) (boo
 }
 
 const likeMovie = `-- name: LikeMovie :exec
-INSERT INTO user_liked_movies (user_id, movie_id)
-VALUES (?, ?)
+INSERT INTO user_liked_movies (
+  user_id,
+  movie_id
+)
+VALUES
+  (?, ?)
 ON CONFLICT (user_id, movie_id) DO NOTHING
 `
 
