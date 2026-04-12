@@ -54,13 +54,16 @@ function rejectApiLoad(error: Error) {
   }
 }
 
+function markYouTubeApiScriptFailed(script: HTMLScriptElement | null) {
+  script?.setAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR, "true");
+}
+
 function shouldReplaceYouTubeApiScript(script: HTMLScriptElement) {
   const scriptReadyState =
     "readyState" in script ? script.readyState : undefined;
 
   return (
     script.getAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR) === "true" ||
-    Boolean(apiLoadError) ||
     (scriptReadyState === "complete" && !isYouTubeApiReady()) ||
     (scriptReadyState === "loaded" && !isYouTubeApiReady())
   );
@@ -90,7 +93,12 @@ function loadYouTubeAPI(): Promise<void> {
 
     cleanupPendingApiLoad();
 
+    let activeScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${YOUTUBE_IFRAME_API_SRC}"]`,
+    );
+
     apiLoadTimeoutId = window.setTimeout(() => {
+      markYouTubeApiScriptFailed(activeScript);
       rejectApiLoad(new Error("Timed out loading the YouTube player API."));
     }, YOUTUBE_API_LOAD_TIMEOUT_MS);
 
@@ -99,7 +107,7 @@ function loadYouTubeAPI(): Promise<void> {
     };
 
     const handleScriptError = () => {
-      activeScript?.setAttribute(YOUTUBE_IFRAME_API_ERROR_ATTR, "true");
+      markYouTubeApiScriptFailed(activeScript);
       rejectApiLoad(new Error("Failed to load the YouTube player API."));
     };
 
@@ -109,10 +117,6 @@ function loadYouTubeAPI(): Promise<void> {
       }
     };
 
-    let activeScript = document.querySelector<HTMLScriptElement>(
-      `script[src="${YOUTUBE_IFRAME_API_SRC}"]`,
-    );
-
     if (activeScript && shouldReplaceYouTubeApiScript(activeScript)) {
       cleanupPendingApiLoad();
       activeScript.remove();
@@ -121,6 +125,10 @@ function loadYouTubeAPI(): Promise<void> {
       apiLoadTimeoutId = window.setTimeout(() => {
         rejectApiLoad(new Error("Timed out loading the YouTube player API."));
       }, YOUTUBE_API_LOAD_TIMEOUT_MS);
+    }
+
+    if (apiLoadError) {
+      apiLoadError = null;
     }
 
     if (!activeScript) {
@@ -462,12 +470,15 @@ export function useYouTubePlayer(
   const setVolume = (vol: number) => {
     const clampedVol = Math.max(0, Math.min(100, vol));
     const player = playerRef.current;
+    if (!player) {
+      return;
+    }
 
-    player?.setVolume(clampedVol);
+    player.setVolume(clampedVol);
     setVolumeState(clampedVol);
 
     if (clampedVol > 0 && getPlayerMuted(player)) {
-      player?.unMute();
+      player.unMute();
       setIsMuted(false);
     }
   };

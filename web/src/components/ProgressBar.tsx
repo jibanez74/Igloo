@@ -205,7 +205,7 @@ export default function ProgressBar({
       }
     >
       <div
-        className={cn(fillClassName, variant === "mobile" && "h-full")}
+        className={fillClassName}
         style={{ width: `${progress}%` }}
       />
       {showThumb && (
