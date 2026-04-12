@@ -1,43 +1,87 @@
-import { useRef, useState, useEffect, useId, useLayoutEffect } from "react";
+import { useRef, useState, useEffect, useId, useEffectEvent } from "react";
 
-// Singleton to track API loading state
+const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
+const YOUTUBE_API_LOAD_TIMEOUT_MS = 15000;
+
 let apiLoaded = false;
 let apiLoading = false;
-const apiReadyCallbacks: (() => void)[] = [];
+let apiLoadError: Error | null = null;
+const apiReadyResolvers: Array<() => void> = [];
+const apiReadyRejectors: Array<(error: Error) => void> = [];
 
-/**
- * Load the YouTube IFrame API script (singleton pattern)
- */
+function resolveApiLoad() {
+  apiLoaded = true;
+  apiLoading = false;
+  apiLoadError = null;
+
+  for (const resolve of apiReadyResolvers.splice(0)) {
+    resolve();
+  }
+  apiReadyRejectors.length = 0;
+}
+
+function rejectApiLoad(error: Error) {
+  apiLoaded = false;
+  apiLoading = false;
+  apiLoadError = error;
+
+  for (const reject of apiReadyRejectors.splice(0)) {
+    reject(error);
+  }
+  apiReadyResolvers.length = 0;
+}
+
 function loadYouTubeAPI(): Promise<void> {
-  return new Promise((resolve) => {
-    // Already loaded
+  return new Promise((resolve, reject) => {
     if (apiLoaded && window.YT?.Player) {
       resolve();
       return;
     }
 
-    // Currently loading - queue the callback
-    if (apiLoading) {
-      apiReadyCallbacks.push(resolve);
+    if (apiLoadError) {
+      reject(apiLoadError);
       return;
     }
 
-    // Start loading
-    apiLoading = true;
-    apiReadyCallbacks.push(resolve);
+    if (apiLoading) {
+      apiReadyResolvers.push(resolve);
+      apiReadyRejectors.push(reject);
+      return;
+    }
 
-    // Set up the global callback
+    apiLoading = true;
+    apiReadyResolvers.push(resolve);
+    apiReadyRejectors.push(reject);
+
+    const timeoutId = window.setTimeout(() => {
+      rejectApiLoad(new Error("Timed out loading the YouTube player API."));
+    }, YOUTUBE_API_LOAD_TIMEOUT_MS);
+
     window.onYouTubeIframeAPIReady = () => {
-      apiLoaded = true;
-      apiLoading = false;
-      apiReadyCallbacks.forEach((cb) => cb());
-      apiReadyCallbacks.length = 0;
+      window.clearTimeout(timeoutId);
+      resolveApiLoad();
     };
 
-    // Create and append the script tag
+    const handleScriptError = () => {
+      window.clearTimeout(timeoutId);
+      rejectApiLoad(new Error("Failed to load the YouTube player API."));
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      `script[src="${YOUTUBE_IFRAME_API_SRC}"]`,
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("error", handleScriptError, {
+        once: true,
+      });
+      return;
+    }
+
     const script = document.createElement("script");
-    script.src = "https://www.youtube.com/iframe_api";
+    script.src = YOUTUBE_IFRAME_API_SRC;
     script.async = true;
+    script.addEventListener("error", handleScriptError, { once: true });
     document.body.appendChild(script);
   });
 }
@@ -73,25 +117,56 @@ export type UseYouTubePlayerReturn = {
   toggleMute: () => void;
 };
 
-/**
- * Hook for integrating YouTube IFrame Player API
- */
+function getCurrentPlayerTime(player: YT.Player | null) {
+  if (!player) return 0;
+
+  try {
+    return player.getCurrentTime() || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function getCurrentPlayerDuration(player: YT.Player | null) {
+  if (!player) return 0;
+
+  try {
+    return player.getDuration() || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function getPlayerState(player: YT.Player | null) {
+  if (!player) return null;
+
+  try {
+    return player.getPlayerState();
+  } catch {
+    return null;
+  }
+}
+
+function getPlayerMuted(player: YT.Player | null) {
+  if (!player) return false;
+
+  try {
+    return player.isMuted();
+  } catch {
+    return false;
+  }
+}
+
 export function useYouTubePlayer(
-  options: UseYouTubePlayerOptions
+  options: UseYouTubePlayerOptions,
 ): UseYouTubePlayerReturn {
   const { videoId, autoplay = true, controls = true } = options;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const uniqueId = useId();
-  const playerIdRef = useRef<string>(`yt-player-${uniqueId.replace(/:/g, "")}`);
+  const playerIdRef = useRef(`yt-player-${uniqueId.replace(/:/g, "")}`);
   const progressIntervalRef = useRef<number | null>(null);
-
-  // Store callbacks in refs to avoid recreating player when they change
-  const callbacksRef = useRef(options);
-  useLayoutEffect(() => {
-    callbacksRef.current = options;
-  });
 
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -101,52 +176,124 @@ export function useYouTubePlayer(
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Start progress tracking interval
-  const startProgressTracking = () => {
-    if (progressIntervalRef.current) return;
-
-    progressIntervalRef.current = window.setInterval(() => {
-      if (playerRef.current) {
-        try {
-          setCurrentTime(playerRef.current.getCurrentTime() || 0);
-          const dur = playerRef.current.getDuration();
-          if (dur > 0) {
-            setDuration(dur);
-          }
-        } catch {
-          // Player might be destroyed
-        }
-      }
-    }, 250);
-  };
-
-  // Stop progress tracking interval
-  const stopProgressTracking = () => {
+  const stopProgressTracking = useEffectEvent(() => {
     if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
+      window.clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
-  };
+  });
 
-  // Initialize player - only depends on videoId, autoplay, controls
+  const syncProgressState = useEffectEvent(() => {
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
+    const nextTime = getCurrentPlayerTime(player);
+    const nextDuration = getCurrentPlayerDuration(player);
+
+    setCurrentTime(nextTime);
+    if (nextDuration > 0) {
+      setDuration(nextDuration);
+    }
+  });
+
+  const startProgressTracking = useEffectEvent(() => {
+    if (progressIntervalRef.current) {
+      return;
+    }
+
+    progressIntervalRef.current = window.setInterval(() => {
+      syncProgressState();
+    }, 250);
+  });
+
+  const handlePlayerReady = useEffectEvent((event: YT.PlayerEvent) => {
+    setIsReady(true);
+    setError(null);
+    setDuration(event.target.getDuration() || 0);
+    setVolumeState(event.target.getVolume());
+    setIsMuted(event.target.isMuted());
+    options.onReady?.();
+  });
+
+  const handlePlayerStateChange = useEffectEvent(
+    (event: YT.OnStateChangeEvent) => {
+      const state = event.data;
+
+      setIsPlaying(state === window.YT.PlayerState.PLAYING);
+
+      if (state === window.YT.PlayerState.PLAYING) {
+        startProgressTracking();
+        syncProgressState();
+      } else {
+        stopProgressTracking();
+      }
+
+      if (state === window.YT.PlayerState.ENDED) {
+        options.onEnd?.();
+      }
+
+      options.onStateChange?.(state);
+    },
+  );
+
+  const handlePlayerError = useEffectEvent((event: YT.OnErrorEvent) => {
+    const errorCode = event.data;
+    let errorMessage = "Unable to play video.";
+
+    switch (errorCode) {
+      case window.YT.PlayerError.INVALID_PARAM:
+        errorMessage = "Invalid video ID.";
+        break;
+      case window.YT.PlayerError.HTML5_ERROR:
+        errorMessage = "Video playback error.";
+        break;
+      case window.YT.PlayerError.NOT_FOUND:
+        errorMessage = "Video not found.";
+        break;
+      case window.YT.PlayerError.NOT_ALLOWED:
+      case window.YT.PlayerError.NOT_ALLOWED_DISGUISE:
+        errorMessage = "Video is not available for embedding.";
+        break;
+    }
+
+    stopProgressTracking();
+    setIsPlaying(false);
+    setError(errorMessage);
+    options.onError?.(errorCode);
+  });
+
   useEffect(() => {
-    if (!videoId || !containerRef.current) return;
+    if (!videoId || !containerRef.current) {
+      stopProgressTracking();
+      return;
+    }
 
     let mounted = true;
 
-    // Reset state for new video
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting state synchronously on video change is intentional for this external integration
     setIsReady(false);
+    setIsPlaying(false);
     setError(null);
     setCurrentTime(0);
     setDuration(0);
 
     const initPlayer = async () => {
-      await loadYouTubeAPI();
+      try {
+        await loadYouTubeAPI();
+      } catch (apiError) {
+        if (!mounted) {
+          return;
+        }
+
+        console.error("Failed to load YouTube API:", apiError);
+        setError("Failed to load the YouTube player.");
+        return;
+      }
 
       if (!mounted || !containerRef.current) return;
 
-      // Create a div for the player inside the container
       const playerDiv = document.createElement("div");
       playerDiv.id = playerIdRef.current;
       containerRef.current.innerHTML = "";
@@ -167,81 +314,44 @@ export function useYouTubePlayer(
             origin: window.location.origin,
           },
           events: {
-            onReady: (event) => {
+            onReady: event => {
               if (!mounted) return;
-              setIsReady(true);
-              setDuration(event.target.getDuration() || 0);
-              setVolumeState(event.target.getVolume());
-              setIsMuted(event.target.isMuted());
-              callbacksRef.current.onReady?.();
+              handlePlayerReady(event);
             },
-            onStateChange: (event) => {
+            onStateChange: event => {
               if (!mounted) return;
-              const state = event.data;
-
-              setIsPlaying(state === window.YT.PlayerState.PLAYING);
-
-              if (state === window.YT.PlayerState.PLAYING) {
-                startProgressTracking();
-              } else {
-                stopProgressTracking();
-              }
-
-              if (state === window.YT.PlayerState.ENDED) {
-                callbacksRef.current.onEnd?.();
-              }
-
-              callbacksRef.current.onStateChange?.(state);
+              handlePlayerStateChange(event);
             },
-            onError: (event) => {
+            onError: event => {
               if (!mounted) return;
-              const errorCode = event.data;
-              let errorMessage = "Unable to play video.";
-
-              switch (errorCode) {
-                case window.YT.PlayerError.INVALID_PARAM:
-                  errorMessage = "Invalid video ID.";
-                  break;
-                case window.YT.PlayerError.HTML5_ERROR:
-                  errorMessage = "Video playback error.";
-                  break;
-                case window.YT.PlayerError.NOT_FOUND:
-                  errorMessage = "Video not found.";
-                  break;
-                case window.YT.PlayerError.NOT_ALLOWED:
-                case window.YT.PlayerError.NOT_ALLOWED_DISGUISE:
-                  errorMessage = "Video is not available for embedding.";
-                  break;
-              }
-
-              setError(errorMessage);
-              callbacksRef.current.onError?.(errorCode);
+              handlePlayerError(event);
             },
           },
         });
-      } catch (e) {
-        console.error("Failed to create YouTube player:", e);
+      } catch (creationError) {
+        console.error("Failed to create YouTube player:", creationError);
         setError("Failed to load video player.");
       }
     };
 
-    initPlayer();
+    void initPlayer();
 
     return () => {
       mounted = false;
       stopProgressTracking();
+      setIsPlaying(false);
+
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
         } catch {
-          // Player might already be destroyed
+          // Player might already be destroyed.
         }
         playerRef.current = null;
       }
     };
   }, [videoId, autoplay, controls]);
 
-  // Player control methods
   const play = () => {
     playerRef.current?.playVideo();
   };
@@ -251,34 +361,50 @@ export function useYouTubePlayer(
   };
 
   const togglePlay = () => {
-    if (isPlaying) {
-      pause();
-    } else {
-      play();
+    const player = playerRef.current;
+    const playerState = getPlayerState(player);
+
+    if (playerState === window.YT.PlayerState.PLAYING) {
+      player?.pauseVideo();
+      return;
     }
+
+    player?.playVideo();
   };
 
   const seekTo = (seconds: number) => {
-    playerRef.current?.seekTo(seconds, true);
+    const player = playerRef.current;
+    if (!player) {
+      return;
+    }
+
+    player.seekTo(seconds, true);
     setCurrentTime(seconds);
   };
 
   const seekForward = (seconds: number) => {
-    const newTime = Math.min(duration, currentTime + seconds);
+    const player = playerRef.current;
+    const now = getCurrentPlayerTime(player);
+    const totalDuration = Math.max(duration, getCurrentPlayerDuration(player));
+    const newTime = Math.min(totalDuration, now + seconds);
     seekTo(newTime);
   };
 
   const seekBackward = (seconds: number) => {
-    const newTime = Math.max(0, currentTime - seconds);
+    const now = getCurrentPlayerTime(playerRef.current);
+    const newTime = Math.max(0, now - seconds);
     seekTo(newTime);
   };
 
   const setVolume = (vol: number) => {
     const clampedVol = Math.max(0, Math.min(100, vol));
-    playerRef.current?.setVolume(clampedVol);
+    const player = playerRef.current;
+
+    player?.setVolume(clampedVol);
     setVolumeState(clampedVol);
-    if (clampedVol > 0 && isMuted) {
-      playerRef.current?.unMute();
+
+    if (clampedVol > 0 && getPlayerMuted(player)) {
+      player?.unMute();
       setIsMuted(false);
     }
   };
@@ -294,11 +420,16 @@ export function useYouTubePlayer(
   };
 
   const toggleMute = () => {
-    if (isMuted) {
-      unmute();
-    } else {
-      mute();
+    const player = playerRef.current;
+
+    if (getPlayerMuted(player)) {
+      player?.unMute();
+      setIsMuted(false);
+      return;
     }
+
+    player?.mute();
+    setIsMuted(true);
   };
 
   return {
