@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type tmdbMatchCandidate struct {
@@ -335,7 +336,7 @@ func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovi
 	if targetYear > 0 {
 		switch {
 		case movieYear == targetYear:
-			score += 30
+			score += helpers.TMDB_YEAR_MATCH_SCORE
 		case movieYear > 0 && absInt(movieYear-targetYear) == 1:
 			score += 12
 		case movieYear > 0:
@@ -353,7 +354,7 @@ func normalizeComparableMovieTitle(title string) string {
 	title = normalizeMovieTitleForSearch(title)
 	var b strings.Builder
 	for _, r := range title {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' {
 			b.WriteRune(r)
 		}
 	}

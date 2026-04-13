@@ -8,8 +8,18 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 )
+
+type stubMovieScannerFfprobe struct {
+	result *ffprobe.FfprobeResult
+	err    error
+}
+
+func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+	return s.result, s.err
+}
 
 func TestReconcileMissingMoviesDeletesStaleRows(t *testing.T) {
 	app := setupTestApp(t)
@@ -50,14 +60,17 @@ func TestReconcileMissingMoviesDeletesStaleRows(t *testing.T) {
 		t.Fatalf("insert deleted movie: %v", err)
 	}
 
-	reconciled, err := app.reconcileMissingMovies(ctx, moviesDir, map[string]bool{
+	deletedCount, renamedCount, err := app.reconcileMissingMovies(ctx, moviesDir, map[string]bool{
 		filepath.Clean(existingPath): true,
-	})
+	}, map[string]bool{})
 	if err != nil {
 		t.Fatalf("reconcileMissingMovies: %v", err)
 	}
-	if reconciled != 1 {
-		t.Fatalf("expected 1 reconciled movie, got %d", reconciled)
+	if deletedCount != 1 {
+		t.Fatalf("expected 1 deleted movie, got %d", deletedCount)
+	}
+	if renamedCount != 0 {
+		t.Fatalf("expected 0 renamed movies, got %d", renamedCount)
 	}
 
 	_, err = app.Queries.GetMovieByID(ctx, existingMovie.ID)
@@ -71,6 +84,192 @@ func TestReconcileMissingMoviesDeletesStaleRows(t *testing.T) {
 	}
 	if err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestReconcileMissingMoviesPreservesRenamedMovieID(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Ffprobe = &stubMovieScannerFfprobe{
+		result: &ffprobe.FfprobeResult{
+			Format: ffprobe.Format{
+				Duration:   "120",
+				Size:       "5",
+				FormatName: "matroska,webm",
+			},
+			Streams: []ffprobe.Stream{
+				{
+					Index:     0,
+					CodecName: "h264",
+					CodecType: "video",
+					Width:     1920,
+					Height:    1080,
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	moviesDir := t.TempDir()
+
+	oldPath := filepath.Join(moviesDir, "Casino.Royale.2006.mkv")
+	newPath := filepath.Join(moviesDir, "Casino Royale (2006).mkv")
+
+	err := os.WriteFile(newPath, []byte("movie"), 0o644)
+	if err != nil {
+		t.Fatalf("write renamed file: %v", err)
+	}
+
+	originalMovie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Casino Royale",
+		FilePath:  oldPath,
+		FileName:  filepath.Base(oldPath),
+		Size:      5,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		TmdbID:    helpers.NullInt64(36557),
+		Year:      helpers.NullInt64(2006),
+		Duration:  helpers.NullFloat64(120),
+	})
+	if err != nil {
+		t.Fatalf("insert original movie: %v", err)
+	}
+
+	renamedMovie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Casino Royale",
+		FilePath:  newPath,
+		FileName:  filepath.Base(newPath),
+		Size:      5,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		TmdbID:    helpers.NullInt64(36557),
+		Year:      helpers.NullInt64(2006),
+		Duration:  helpers.NullFloat64(120),
+	})
+	if err != nil {
+		t.Fatalf("insert renamed movie: %v", err)
+	}
+
+	deletedCount, renamedCount, err := app.reconcileMissingMovies(ctx, moviesDir, map[string]bool{
+		filepath.Clean(newPath): true,
+	}, map[string]bool{
+		filepath.Clean(newPath): true,
+	})
+	if err != nil {
+		t.Fatalf("reconcileMissingMovies: %v", err)
+	}
+	if deletedCount != 0 {
+		t.Fatalf("expected 0 deleted movies, got %d", deletedCount)
+	}
+	if renamedCount != 1 {
+		t.Fatalf("expected 1 renamed movie, got %d", renamedCount)
+	}
+
+	preservedMovie, err := app.Queries.GetMovieByID(ctx, originalMovie.ID)
+	if err != nil {
+		t.Fatalf("expected original movie ID to remain: %v", err)
+	}
+	if preservedMovie.FilePath != newPath {
+		t.Fatalf("expected original movie path to update to %q, got %q", newPath, preservedMovie.FilePath)
+	}
+
+	_, err = app.Queries.GetMovieByID(ctx, renamedMovie.ID)
+	if err == nil {
+		t.Fatal("expected temporary renamed movie row to be removed")
+	}
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for temporary row, got %v", err)
+	}
+}
+
+func TestReconcileMissingMoviesPreservesRenamedMovieIDWithoutTmdb(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Ffprobe = &stubMovieScannerFfprobe{
+		result: &ffprobe.FfprobeResult{
+			Format: ffprobe.Format{
+				Duration:   "121",
+				Size:       "5",
+				FormatName: "matroska,webm",
+			},
+			Streams: []ffprobe.Stream{
+				{
+					Index:     0,
+					CodecName: "h264",
+					CodecType: "video",
+					Width:     1280,
+					Height:    720,
+				},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	moviesDir := t.TempDir()
+
+	oldPath := filepath.Join(moviesDir, "Moneyball.2011.mkv")
+	newPath := filepath.Join(moviesDir, "Moneyball (2011) [Remastered].mkv")
+
+	err := os.WriteFile(newPath, []byte("movie"), 0o644)
+	if err != nil {
+		t.Fatalf("write renamed file: %v", err)
+	}
+
+	originalMovie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Moneyball",
+		FilePath:  oldPath,
+		FileName:  filepath.Base(oldPath),
+		Size:      5,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		Year:      helpers.NullInt64(2011),
+		Duration:  helpers.NullFloat64(121),
+	})
+	if err != nil {
+		t.Fatalf("insert original movie: %v", err)
+	}
+
+	_, err = app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Moneyball",
+		FilePath:  newPath,
+		FileName:  filepath.Base(newPath),
+		Size:      5,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		Year:      helpers.NullInt64(2011),
+		Duration:  helpers.NullFloat64(121),
+	})
+	if err != nil {
+		t.Fatalf("insert renamed movie: %v", err)
+	}
+
+	deletedCount, renamedCount, err := app.reconcileMissingMovies(ctx, moviesDir, map[string]bool{
+		filepath.Clean(newPath): true,
+	}, map[string]bool{
+		filepath.Clean(newPath): true,
+	})
+	if err != nil {
+		t.Fatalf("reconcileMissingMovies: %v", err)
+	}
+	if deletedCount != 0 {
+		t.Fatalf("expected 0 deleted movies, got %d", deletedCount)
+	}
+	if renamedCount != 1 {
+		t.Fatalf("expected 1 renamed movie, got %d", renamedCount)
+	}
+
+	preservedMovie, err := app.Queries.GetMovieByID(ctx, originalMovie.ID)
+	if err != nil {
+		t.Fatalf("expected original movie ID to remain: %v", err)
+	}
+	if preservedMovie.FilePath != newPath {
+		t.Fatalf("expected original movie path to update to %q, got %q", newPath, preservedMovie.FilePath)
 	}
 }
 

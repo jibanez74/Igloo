@@ -33,9 +33,23 @@ LIMIT 1;
 -- name: GetMovieScanIndex :many
 SELECT
   id,
-  file_path
+  title,
+  file_path,
+  file_name,
+  size,
+  tmdb_id,
+  year,
+  duration
 FROM movies
 ORDER BY id;
+
+-- name: ReassignMoviePath :exec
+UPDATE movies
+SET
+  file_path = ?,
+  file_name = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
 
 -- name: GetLatestMovies :many
 SELECT

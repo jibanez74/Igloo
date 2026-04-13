@@ -753,14 +753,26 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
 SELECT
   id,
-  file_path
+  title,
+  file_path,
+  file_name,
+  size,
+  tmdb_id,
+  year,
+  duration
 FROM movies
 ORDER BY id
 `
 
 type GetMovieScanIndexRow struct {
-	ID       int64  `json:"id"`
-	FilePath string `json:"file_path"`
+	ID       int64           `json:"id"`
+	Title    string          `json:"title"`
+	FilePath string          `json:"file_path"`
+	FileName string          `json:"file_name"`
+	Size     int64           `json:"size"`
+	TmdbID   sql.NullInt64   `json:"tmdb_id"`
+	Year     sql.NullInt64   `json:"year"`
+	Duration sql.NullFloat64 `json:"duration"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -772,7 +784,16 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 	items := []GetMovieScanIndexRow{}
 	for rows.Next() {
 		var i GetMovieScanIndexRow
-		if err := rows.Scan(&i.ID, &i.FilePath); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.FilePath,
+			&i.FileName,
+			&i.Size,
+			&i.TmdbID,
+			&i.Year,
+			&i.Duration,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1508,6 +1529,26 @@ func (q *Queries) LockMovieMetadataFields(ctx context.Context, arg LockMovieMeta
 		arg.UserLockedRunTime,
 		arg.ID,
 	)
+	return err
+}
+
+const reassignMoviePath = `-- name: ReassignMoviePath :exec
+UPDATE movies
+SET
+  file_path = ?,
+  file_name = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type ReassignMoviePathParams struct {
+	FilePath string `json:"file_path"`
+	FileName string `json:"file_name"`
+	ID       int64  `json:"id"`
+}
+
+func (q *Queries) ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error {
+	_, err := q.exec(ctx, q.reassignMoviePathStmt, reassignMoviePath, arg.FilePath, arg.FileName, arg.ID)
 	return err
 }
 

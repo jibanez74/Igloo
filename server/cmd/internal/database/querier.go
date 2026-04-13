@@ -167,6 +167,7 @@ type Querier interface {
 	LockMovieMetadataFields(ctx context.Context, arg LockMovieMetadataFieldsParams) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
+	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
