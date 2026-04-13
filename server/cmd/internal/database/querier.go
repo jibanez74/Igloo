@@ -90,12 +90,14 @@ type Querier interface {
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
+	GetMovieByPath(ctx context.Context, filePath string) (Movie, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
 	// Movie genres with counts per tag (genre_type movie only).
 	GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenresWithCountsRow, error)
 	GetMoviePlaylistsWithCollaboratorAccess(ctx context.Context, arg GetMoviePlaylistsWithCollaboratorAccessParams) ([]GetMoviePlaylistsWithCollaboratorAccessRow, error)
+	GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error)
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
@@ -162,6 +164,7 @@ type Querier interface {
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
+	LockMovieMetadataFields(ctx context.Context, arg LockMovieMetadataFieldsParams) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	// ============================================================================

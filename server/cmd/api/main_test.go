@@ -11,8 +11,8 @@ import (
 	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 
-	cache "github.com/patrickmn/go-cache"
 	_ "github.com/mattn/go-sqlite3"
+	cache "github.com/patrickmn/go-cache"
 )
 
 // setupTestLogger initializes a debug logger for tests.
@@ -287,6 +287,50 @@ func TestInitTables_UsersSchema(t *testing.T) {
 
 	if isAdmin != false {
 		t.Errorf("Expected is_admin to be false by default")
+	}
+}
+
+func TestInitTables_MovieMetadataLockColumns(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory database: %v", err)
+	}
+	defer db.Close()
+
+	app := &Application{DB: db}
+	setupTestLogger(t, app)
+
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	rows, err := db.Query("PRAGMA table_info(movies)")
+	if err != nil {
+		t.Fatalf("PRAGMA table_info(movies): %v", err)
+	}
+	defer rows.Close()
+
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+
+		err = rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk)
+		if err != nil {
+			t.Fatalf("scan table_info row: %v", err)
+		}
+		columns[name] = true
+	}
+
+	for _, columnName := range movieMetadataLockColumns {
+		if !columns[columnName] {
+			t.Fatalf("expected movie metadata lock column %q to exist", columnName)
+		}
 	}
 }
 

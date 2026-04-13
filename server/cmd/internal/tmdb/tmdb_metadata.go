@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TmdbVideoResult is a single video (trailer, featurette, etc.) from TMDB videos.results.
@@ -150,33 +151,14 @@ func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
 	params.Add("api_key", t.key)
 	params.Add("append_to_response", "credits,videos,release_dates")
 
-	requestURL := fmt.Sprintf("%s/movie/%d?%s", helpers.TMDB_BASE_API_URL, movie.TmdbID, params.Encode())
+	requestURL := fmt.Sprintf("%s/movie/%d?%s", t.baseURL, movie.TmdbID, params.Encode())
 
-	req, err := http.NewRequest("GET", requestURL, nil)
+	bodyBytes, statusCode, err := t.getJSON(requestURL)
 	if err != nil {
 		return err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return errors.New("rate limit exceeded for tmdb")
-		}
-		return errors.New("unable to get movie from tmdb")
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
+	if statusCode != http.StatusOK {
+		return tmdbStatusError(statusCode, "unable to get movie from tmdb")
 	}
 
 	err = json.Unmarshal(bodyBytes, movie)
@@ -200,33 +182,14 @@ func (t *tmdbClient) GetTmdbMovieByTitle(movie *TmdbMovie) error {
 	params.Add("query", movie.Title)
 	params.Add("include_adult", "false")
 
-	requestURL := fmt.Sprintf("%s/search/movie?%s", helpers.TMDB_BASE_API_URL, params.Encode())
+	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
 
-	req, err := http.NewRequest("GET", requestURL, nil)
+	bodyBytes, statusCode, err := t.getJSON(requestURL)
 	if err != nil {
 		return err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return errors.New("rate limit exceeded for tmdb")
-		}
-		return errors.New("unable to search movie by title from tmdb")
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
+	if statusCode != http.StatusOK {
+		return tmdbStatusError(statusCode, "unable to search movie by title from tmdb")
 	}
 
 	var searchResult struct {
@@ -260,34 +223,14 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(title string, year ...int) ([]Tm
 		params.Add("year", fmt.Sprintf("%d", year[0]))
 	}
 
-	requestURL := fmt.Sprintf("%s/search/movie?%s", helpers.TMDB_BASE_API_URL, params.Encode())
+	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
 
-	req, err := http.NewRequest("GET", requestURL, nil)
+	bodyBytes, statusCode, err := t.getJSON(requestURL)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return nil, errors.New("rate limit exceeded for tmdb")
-		}
-
-		return nil, errors.New("unable to search movies from tmdb")
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if statusCode != http.StatusOK {
+		return nil, tmdbStatusError(statusCode, "unable to search movies from tmdb")
 	}
 
 	var searchResult struct {
@@ -303,24 +246,6 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(title string, year ...int) ([]Tm
 		return nil, errors.New("no movies found with the given query")
 	}
 
-	if len(year) > 0 && year[0] > 0 {
-		var filteredResults []TmdbMovie
-		for _, movie := range searchResult.Results {
-			if len(movie.ReleaseDate) >= 4 {
-				movieYear, err := strconv.Atoi(movie.ReleaseDate[:4])
-				if err == nil && movieYear == year[0] {
-					filteredResults = append(filteredResults, movie)
-				}
-			}
-		}
-
-		if len(filteredResults) == 0 {
-			return nil, fmt.Errorf("no movies found with title '%s' from year %d", title, year[0])
-		}
-
-		return filteredResults, nil
-	}
-
 	return searchResult.Results, nil
 }
 
@@ -331,33 +256,14 @@ func (t *tmdbClient) GetMoviesInTheaters() ([]*TmdbMovie, error) {
 	params.Add("page", "1")
 	params.Add("region", "US")
 
-	requestURL := fmt.Sprintf("%s/movie/now_playing?%s", helpers.TMDB_BASE_API_URL, params.Encode())
+	requestURL := fmt.Sprintf("%s/movie/now_playing?%s", t.baseURL, params.Encode())
 
-	req, err := http.NewRequest("GET", requestURL, nil)
+	bodyBytes, statusCode, err := t.getJSON(requestURL)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return nil, errors.New("rate limit exceeded for tmdb")
-		}
-		return nil, errors.New("unable to get movies in theaters from tmdb")
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if statusCode != http.StatusOK {
+		return nil, tmdbStatusError(statusCode, "unable to get movies in theaters from tmdb")
 	}
 
 	var response struct {
@@ -374,8 +280,8 @@ func (t *tmdbClient) GetMoviesInTheaters() ([]*TmdbMovie, error) {
 	}
 
 	movies := make([]*TmdbMovie, len(response.Results))
-	for i, movie := range response.Results {
-		movies[i] = &movie
+	for i := range response.Results {
+		movies[i] = &response.Results[i]
 	}
 
 	return movies, nil
@@ -393,33 +299,14 @@ func (t *tmdbClient) GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error
 	}
 	params.Add("region", regionCode)
 
-	requestURL := fmt.Sprintf("%s/movie/popular?%s", helpers.TMDB_BASE_API_URL, params.Encode())
+	requestURL := fmt.Sprintf("%s/movie/popular?%s", t.baseURL, params.Encode())
 
-	req, err := http.NewRequest("GET", requestURL, nil)
+	bodyBytes, statusCode, err := t.getJSON(requestURL)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusTooManyRequests {
-			return nil, errors.New("rate limit exceeded for tmdb")
-		}
-		return nil, errors.New("unable to get popular movies from tmdb")
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if statusCode != http.StatusOK {
+		return nil, tmdbStatusError(statusCode, "unable to get popular movies from tmdb")
 	}
 
 	var response struct {
@@ -436,9 +323,105 @@ func (t *tmdbClient) GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error
 	}
 
 	movies := make([]*TmdbMovie, len(response.Results))
-	for i, movie := range response.Results {
-		movies[i] = &movie
+	for i := range response.Results {
+		movies[i] = &response.Results[i]
 	}
 
 	return movies, nil
+}
+
+func (t *tmdbClient) getJSON(requestURL string) ([]byte, int, error) {
+	maxAttempts := t.maxRetries
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		req.Header.Add("Accept", "application/json")
+		req.Header.Add("Content-Type", "application/json")
+
+		resp, err := t.httpClient.Do(req)
+		if err != nil {
+			if attempt == maxAttempts-1 {
+				return nil, 0, err
+			}
+			time.Sleep(t.retryDelay(nil, attempt))
+			continue
+		}
+
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			if attempt == maxAttempts-1 {
+				return nil, 0, readErr
+			}
+			time.Sleep(t.retryDelay(resp.Header, attempt))
+			continue
+		}
+
+		if retryableTmdbStatus(resp.StatusCode) && attempt < maxAttempts-1 {
+			time.Sleep(t.retryDelay(resp.Header, attempt))
+			continue
+		}
+
+		return bodyBytes, resp.StatusCode, nil
+	}
+
+	return nil, 0, errors.New("tmdb request failed")
+}
+
+func retryableTmdbStatus(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
+}
+
+func tmdbStatusError(statusCode int, fallback string) error {
+	if statusCode == http.StatusTooManyRequests {
+		return errors.New("rate limit exceeded for tmdb")
+	}
+	return errors.New(fallback)
+}
+
+func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration {
+	if headers != nil {
+		retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
+		if retryAfter != "" {
+			if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
+				delay := time.Duration(seconds) * time.Second
+				if delay > helpers.TMDB_HTTP_RETRY_MAX_DELAY {
+					return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+				}
+				return delay
+			}
+
+			if retryTime, err := http.ParseTime(retryAfter); err == nil {
+				delay := time.Until(retryTime)
+				if delay < 0 {
+					delay = 0
+				}
+				if delay > helpers.TMDB_HTTP_RETRY_MAX_DELAY {
+					return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+				}
+				return delay
+			}
+		}
+	}
+
+	delay := t.retryBaseDelay
+	if delay <= 0 {
+		delay = helpers.TMDB_HTTP_RETRY_BASE_DELAY
+	}
+
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+		if delay >= helpers.TMDB_HTTP_RETRY_MAX_DELAY {
+			return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+		}
+	}
+
+	return delay
 }

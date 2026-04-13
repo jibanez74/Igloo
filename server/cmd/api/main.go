@@ -35,6 +35,26 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+var movieMetadataLockColumns = []string{
+	"user_locked_title",
+	"user_locked_tmdb_id",
+	"user_locked_imdb_id",
+	"user_locked_poster_path",
+	"user_locked_backdrop_path",
+	"user_locked_adult",
+	"user_locked_language",
+	"user_locked_year",
+	"user_locked_release_date",
+	"user_locked_overview",
+	"user_locked_tag_line",
+	"user_locked_certification",
+	"user_locked_critic_rating",
+	"user_locked_audience_rating",
+	"user_locked_revenue",
+	"user_locked_budget",
+	"user_locked_run_time",
+}
+
 type Application struct {
 	DB               *sql.DB
 	Queries          *database.Queries
@@ -200,7 +220,7 @@ func InitApp() (*Application, error) {
 		}
 	}
 
-	if app.Settings.TmdbKey.Valid && app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
+	if app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
 		go app.ScanMoviesLibrary()
 	}
 
@@ -255,7 +275,60 @@ func (app *Application) InitTables() error {
 		return err
 	}
 
+	err = app.ensureMovieMetadataLockColumns()
+	if err != nil {
+		return err
+	}
+
 	app.Logger.Info("database tables initialized successfully")
+
+	return nil
+}
+
+func (app *Application) ensureMovieMetadataLockColumns() error {
+	rows, err := app.DB.Query("PRAGMA table_info(movies)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	existingColumns := make(map[string]bool)
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+
+		err = rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk)
+		if err != nil {
+			return err
+		}
+
+		existingColumns[name] = true
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return err
+	}
+
+	for _, columnName := range movieMetadataLockColumns {
+		if existingColumns[columnName] {
+			continue
+		}
+
+		statement := fmt.Sprintf(
+			"ALTER TABLE movies ADD COLUMN %s BOOLEAN NOT NULL DEFAULT false",
+			columnName,
+		)
+		_, err = app.DB.Exec(statement)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

@@ -11,7 +11,7 @@ import (
 func TestSelectBestTmdbMatch(t *testing.T) {
 	t.Run("empty results returns nil", func(t *testing.T) {
 		results := []tmdb.TmdbMovie{}
-		result := selectBestTmdbMatch(results, 2023)
+		result := selectBestTmdbMatch(results, "test movie", 2023)
 		if result != nil {
 			t.Errorf("Expected nil for empty results, got %v", result)
 		}
@@ -27,241 +27,175 @@ func TestSelectBestTmdbMatch(t *testing.T) {
 				VoteAverage: 7.5,
 			},
 		}
-		result := selectBestTmdbMatch(results, 2023)
+		result := selectBestTmdbMatch(results, "Test Movie", 2023)
 		if result == nil {
 			t.Fatal("Expected non-nil result")
 		}
-		if result.TmdbID != 1 {
-			t.Errorf("Expected TMDB ID 1, got %d", result.TmdbID)
+		if result.Movie.TmdbID != 1 {
+			t.Errorf("Expected TMDB ID 1, got %d", result.Movie.TmdbID)
 		}
 	})
 
-	t.Run("exact year match preferred", func(t *testing.T) {
+	t.Run("exact title and year beats popularity", func(t *testing.T) {
 		results := []tmdb.TmdbMovie{
 			{
 				TmdbID:      1,
-				Title:       "Movie 2020",
+				Title:       "Casino Royale",
 				ReleaseDate: "2020-01-01",
-				Popularity:  10.0,
-				VoteAverage: 5.0,
+				Popularity:  90.0,
+				VoteAverage: 8.5,
 			},
 			{
 				TmdbID:      2,
-				Title:       "Movie 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  5.0,
-				VoteAverage: 4.0,
+				Title:       "Casino Royale",
+				ReleaseDate: "2006-11-14",
+				Popularity:  30.0,
+				VoteAverage: 7.6,
 			},
 		}
-		result := selectBestTmdbMatch(results, 2023)
+		result := selectBestTmdbMatch(results, "Casino Royale", 2006)
 		if result == nil {
 			t.Fatal("Expected non-nil result")
 		}
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (year match), got %d", result.TmdbID)
+		if result.Movie.TmdbID != 2 {
+			t.Errorf("Expected TMDB ID 2 (title/year match), got %d", result.Movie.TmdbID)
 		}
 	})
 
-	t.Run("multiple year matches prefers highest popularity", func(t *testing.T) {
+	t.Run("clean title beats noisy similar candidate", func(t *testing.T) {
 		results := []tmdb.TmdbMovie{
 			{
 				TmdbID:      1,
-				Title:       "Movie A 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  20.0,
+				Title:       "Moneyball",
+				ReleaseDate: "2011-09-22",
+				Popularity:  35.0,
+				VoteAverage: 7.6,
+			},
+			{
+				TmdbID:      2,
+				Title:       "Balls of Fury",
+				ReleaseDate: "2007-08-29",
+				Popularity:  50.0,
+				VoteAverage: 7.0,
+			},
+		}
+		result := selectBestTmdbMatch(results, "Moneyball", 2011)
+		if result == nil {
+			t.Fatal("Expected non-nil result")
+		}
+		if result.Movie.TmdbID != 1 {
+			t.Errorf("Expected TMDB ID 1 (best title match), got %d", result.Movie.TmdbID)
+		}
+	})
+
+	t.Run("missing year still chooses strongest title match", func(t *testing.T) {
+		results := []tmdb.TmdbMovie{
+			{
+				TmdbID:      1,
+				Title:       "Train Dreams",
+				ReleaseDate: "",
+				Popularity:  5.0,
 				VoteAverage: 6.0,
 			},
 			{
 				TmdbID:      2,
-				Title:       "Movie B 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  50.0,
-				VoteAverage: 7.0,
-			},
-			{
-				TmdbID:      3,
-				Title:       "Movie C 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  30.0,
-				VoteAverage: 8.0,
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Movie 2 has highest popularity (50.0) among year matches
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (highest popularity), got %d", result.TmdbID)
-		}
-	})
-
-	t.Run("no year match prefers highest popularity and vote average", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Movie 2020",
-				ReleaseDate: "2020-01-01",
-				Popularity:  10.0,
-				VoteAverage: 5.0,
-			},
-			{
-				TmdbID:      2,
-				Title:       "Movie 2021",
-				ReleaseDate: "2021-01-01",
-				Popularity:  20.0,
-				VoteAverage: 7.0,
-			},
-			{
-				TmdbID:      3,
-				Title:       "Movie 2022",
-				ReleaseDate: "2022-01-01",
-				Popularity:  15.0,
-				VoteAverage: 8.0,
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023) // Target year doesn't match any
-		if result != nil {
-			t.Errorf("Expected nil when no year match (caller falls back to first result with title match), got TMDB ID %d", result.TmdbID)
-		}
-	})
-
-	t.Run("year match always wins over popularity", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Popular Movie 2020",
-				ReleaseDate: "2020-01-01",
-				Popularity:  100.0, // Very popular
-				VoteAverage: 10.0,  // Perfect rating
-				// Score: 100 + 100 = 200
-			},
-			{
-				TmdbID:      2,
-				Title:       "Less Popular Movie 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  1.0, // Not popular
-				VoteAverage: 1.0, // Low rating
-				// Score: 10000 (year match) + 1 + 10 = 10011
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Year match should win even with lower popularity
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (year match), got %d", result.TmdbID)
-		}
-	})
-
-	t.Run("same popularity prefers higher vote average", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Movie A 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  50.0,
-				VoteAverage: 6.0, // Score: 10000 + 50 + 60 = 100110
-			},
-			{
-				TmdbID:      2,
-				Title:       "Movie B 2023",
-				ReleaseDate: "2023-01-01",
-				Popularity:  50.0,
-				VoteAverage: 8.0, // Score: 10000 + 50 + 80 = 100130
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Movie 2 has higher vote average
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (higher vote average), got %d", result.TmdbID)
-		}
-	})
-
-	t.Run("missing release date handles gracefully", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Movie No Date",
-				ReleaseDate: "",
-				Popularity:  50.0,
-				VoteAverage: 7.0,
-			},
-			{
-				TmdbID:      2,
-				Title:       "Movie With Date",
-				ReleaseDate: "2023-01-01",
-				Popularity:  10.0,
-				VoteAverage: 5.0,
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Movie 2 should win due to year match
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (year match), got %d", result.TmdbID)
-		}
-	})
-
-	t.Run("short release date handles gracefully", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Movie Short Date",
-				ReleaseDate: "20",
-				Popularity:  50.0,
-				VoteAverage: 7.0,
-			},
-			{
-				TmdbID:      2,
-				Title:       "Movie Valid Date",
-				ReleaseDate: "2023-01-01",
-				Popularity:  10.0,
-				VoteAverage: 5.0,
-			},
-		}
-		result := selectBestTmdbMatch(results, 2023)
-		if result == nil {
-			t.Fatal("Expected non-nil result")
-		}
-		// Movie 2 should win due to year match
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (year match), got %d", result.TmdbID)
-		}
-	})
-
-	t.Run("target year zero ignores year matching", func(t *testing.T) {
-		results := []tmdb.TmdbMovie{
-			{
-				TmdbID:      1,
-				Title:       "Movie 2020",
-				ReleaseDate: "2020-01-01",
-				Popularity:  10.0,
-				VoteAverage: 5.0,
-			},
-			{
-				TmdbID:      2,
-				Title:       "Movie 2023",
+				Title:       "Dream Scenario",
 				ReleaseDate: "2023-01-01",
 				Popularity:  20.0,
 				VoteAverage: 7.0,
 			},
 		}
-		result := selectBestTmdbMatch(results, 0) // No target year
+		result := selectBestTmdbMatch(results, "Train Dreams", 2025)
 		if result == nil {
 			t.Fatal("Expected non-nil result")
 		}
-		// Movie 2 should win due to higher popularity + vote average
-		if result.TmdbID != 2 {
-			t.Errorf("Expected TMDB ID 2 (higher score), got %d", result.TmdbID)
+		if result.Movie.TmdbID != 1 {
+			t.Errorf("Expected TMDB ID 1 (best title match), got %d", result.Movie.TmdbID)
 		}
 	})
+
+	t.Run("confidence stays bounded", func(t *testing.T) {
+		results := []tmdb.TmdbMovie{
+			{
+				TmdbID:      1,
+				Title:       "Goldfinger",
+				ReleaseDate: "1964-09-20",
+				Popularity:  200.0,
+				VoteAverage: 10.0,
+			},
+		}
+		result := selectBestTmdbMatch(results, "Goldfinger", 1964)
+		if result == nil {
+			t.Fatal("Expected non-nil result")
+		}
+		if result.Confidence < 0 || result.Confidence > 100 {
+			t.Errorf("Expected bounded confidence, got %f", result.Confidence)
+		}
+	})
+}
+
+func TestRankTmdbMatches_SortsBestCandidateFirst(t *testing.T) {
+	results := []tmdb.TmdbMovie{
+		{
+			TmdbID:      1,
+			Title:       "Casino Royale",
+			ReleaseDate: "1967-04-13",
+			Popularity:  40.0,
+			VoteAverage: 6.1,
+		},
+		{
+			TmdbID:      2,
+			Title:       "Casino Royale",
+			ReleaseDate: "2006-11-14",
+			Popularity:  35.0,
+			VoteAverage: 7.6,
+		},
+		{
+			TmdbID:      3,
+			Title:       "Quantum of Solace",
+			ReleaseDate: "2008-10-29",
+			Popularity:  50.0,
+			VoteAverage: 6.3,
+		},
+	}
+
+	ranked := rankTmdbMatches(results, "Casino Royale", 2006)
+	if len(ranked) != 3 {
+		t.Fatalf("expected 3 ranked results, got %d", len(ranked))
+	}
+	if ranked[0].Movie.TmdbID != 2 {
+		t.Fatalf("expected 2006 Casino Royale first, got TMDB ID %d", ranked[0].Movie.TmdbID)
+	}
+	if ranked[1].Movie.TmdbID != 1 {
+		t.Fatalf("expected 1967 Casino Royale second, got TMDB ID %d", ranked[1].Movie.TmdbID)
+	}
+}
+
+func TestNormalizeMovieTitleForSearch(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{
+			input: "Moneyball.2011.REMASTERED.2160p.4K.WEB.x265.10bit.AAC5.1-[YTS.MX]",
+			want:  "moneyball 2011",
+		},
+		{
+			input: "Mary.Queen.of.Scots",
+			want:  "mary queen of scots",
+		},
+		{
+			input: "If.I.Had.Legs.Id.Kick.You",
+			want:  "if i had legs id kick you",
+		},
+	}
+
+	for _, tt := range tests {
+		got := normalizeMovieTitleForSearch(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeMovieTitleForSearch(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
 }
 
 // TestFfprobeFormatDurationToRunTimeMinutes mirrors processMovieFile: parse Format.Duration,

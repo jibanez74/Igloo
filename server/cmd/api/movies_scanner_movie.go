@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -9,13 +11,36 @@ import (
 	"math"
 	"mime"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
 
+type tmdbMatchCandidate struct {
+	Movie      *tmdb.TmdbMovie
+	Score      float64
+	Confidence float64
+}
+
+var movieReleaseNoiseTokens = map[string]bool{
+	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
+	"bluray": true, "brrip": true, "webrip": true, "web": true, "webdl": true, "web-dl": true,
+	"dvdrip": true, "hdrip": true, "remux": true, "repack": true, "proper": true, "remastered": true,
+	"x264": true, "x265": true, "h264": true, "h265": true, "hevc": true, "av1": true,
+	"10bit": true, "8bit": true, "hdr": true, "sdr": true,
+	"aac": true, "aac5": true, "aac51": true, "ddp": true, "ac3": true, "dts": true, "dtshd": true,
+	"atmos": true, "truehd": true,
+	"yts": true, "ytsmx": true, "mx": true,
+}
+
 // processMovieFile extracts metadata from a movie file and upserts it into the database.
 // Handles TMDB lookup, FFPROBE extraction, and related entities (cast, crew, genres, etc.).
 func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
+	existingMovie, err := qtx.GetMovieByPath(ctx, path)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("get existing movie failed: %w", err)
+	}
+
 	// Step 1: Extract title and year from filename
 	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
 	if err != nil {
@@ -28,25 +53,43 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
+	searchTitle := normalizeMovieTitleForSearch(titleYear.Title)
+	if searchTitle == "" {
+		searchTitle = titleYear.Title
+	}
+
 	// Step 2: TMDB Search (if TMDB is configured)
 	var tmdbMovie *tmdb.TmdbMovie
 
 	if app.Tmdb != nil {
-		searchResults, err := app.Tmdb.SearchMoviesByTitleAndYear(titleYear.Title, titleYear.Year)
-		if err == nil && len(searchResults) > 0 {
-			bestMatch := selectBestTmdbMatch(searchResults, titleYear.Year)
-			if bestMatch == nil {
-				// No year match: use first result only if title is a plausible match (avoid wrong film)
-				first := &searchResults[0]
-				if titleMatchConfidence(titleYear.Title, first.Title) {
-					bestMatch = first
-				}
+		if existingMovie.UserLockedTmdbID && existingMovie.TmdbID.Valid {
+			lockedMovie := &tmdb.TmdbMovie{TmdbID: int(existingMovie.TmdbID.Int64)}
+			err = app.Tmdb.GetTmdbMovieByID(lockedMovie)
+			if err == nil {
+				tmdbMovie = lockedMovie
 			}
-
-			if bestMatch != nil {
-				err = app.Tmdb.GetTmdbMovieByID(bestMatch)
-				if err == nil {
-					tmdbMovie = bestMatch
+		} else {
+			searchResults, searchErr := app.Tmdb.SearchMoviesByTitleAndYear(searchTitle)
+			if searchErr == nil && len(searchResults) > 0 {
+				bestMatch := selectBestTmdbMatch(searchResults, searchTitle, titleYear.Year)
+				if bestMatch != nil {
+					err = app.Tmdb.GetTmdbMovieByID(bestMatch.Movie)
+					if err == nil {
+						tmdbMovie = bestMatch.Movie
+						if bestMatch.Confidence < 70 {
+							app.Logger.Warn(
+								"low-confidence TMDB movie match",
+								"path", path,
+								"parsed_title", searchTitle,
+								"parsed_year", titleYear.Year,
+								"tmdb_id", bestMatch.Movie.TmdbID,
+								"tmdb_title", bestMatch.Movie.Title,
+								"tmdb_release_date", bestMatch.Movie.ReleaseDate,
+								"confidence", fmt.Sprintf("%.1f", bestMatch.Confidence),
+								"alternatives", summarizeTmdbCandidates(searchResults, searchTitle, titleYear.Year),
+							)
+						}
+					}
 				}
 			}
 		}
@@ -131,6 +174,16 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 
 	// Step 7: Process related entities (only if TMDB data available)
 	if tmdbMovie != nil {
+		err = qtx.DeleteMovieCast(ctx, movie.ID)
+		if err != nil {
+			return fmt.Errorf("delete existing cast failed: %w", err)
+		}
+
+		err = qtx.DeleteMovieCrew(ctx, movie.ID)
+		if err != nil {
+			return fmt.Errorf("delete existing crew failed: %w", err)
+		}
+
 		// Process production companies
 		if err := app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 			return fmt.Errorf("process production companies failed: %w", err)
@@ -174,69 +227,223 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 	return nil
 }
 
-// titleMatchConfidence returns true if the search title (from filename) plausibly
-// matches the TMDB movie title (e.g. one contains the other after normalizing),
-// to avoid assigning the wrong film when falling back to "first result".
-func titleMatchConfidence(searchTitle, movieTitle string) bool {
-	norm := func(s string) string {
-		s = strings.ToLower(strings.TrimSpace(s))
-		var b strings.Builder
-		for _, r := range s {
-			if r == ' ' || r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				if r == ' ' || r == '.' || r == '-' {
-					b.WriteRune(' ')
-				} else {
-					b.WriteRune(r)
-				}
-			}
-		}
-		return strings.Join(strings.Fields(b.String()), " ")
+func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *tmdbMatchCandidate {
+	scoredMatches := rankTmdbMatches(results, targetTitle, targetYear)
+	if len(scoredMatches) == 0 {
+		return nil
 	}
-	s, m := norm(searchTitle), norm(movieTitle)
-	if len(s) < 2 || len(m) < 2 {
-		return true
-	}
-	return strings.Contains(s, m) || strings.Contains(m, s)
+	return scoredMatches[0]
 }
 
-// selectBestTmdbMatch selects the best matching movie from TMDB search results.
-// When targetYear > 0: only results whose release year matches are considered; if none
-// match, returns nil so the caller can fall back to the first search hit with a title
-// confidence check. When targetYear == 0, picks the best candidate by popularity and vote average.
-func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetYear int) *tmdb.TmdbMovie {
+func rankTmdbMatches(results []tmdb.TmdbMovie, targetTitle string, targetYear int) []*tmdbMatchCandidate {
 	if len(results) == 0 {
 		return nil
 	}
 
-	// When we have a target year, only year-matching results qualify
-	if targetYear > 0 {
-		var bestMatch *tmdb.TmdbMovie
-		var bestScore float64 = -1
-		for i := range results {
-			movie := &results[i]
-			movieYear := extractYearFromReleaseDate(movie.ReleaseDate)
-			if movieYear != targetYear {
-				continue
-			}
-			score := helpers.TMDB_YEAR_MATCH_SCORE + movie.Popularity + movie.VoteAverage*10
-			if score > bestScore {
-				bestScore = score
-				bestMatch = movie
-			}
-		}
-		return bestMatch
-	}
-
-	// No target year: pick best by popularity and vote average
-	var bestMatch *tmdb.TmdbMovie
-	var bestScore float64 = -1
+	scoredMatches := make([]*tmdbMatchCandidate, 0, len(results))
 	for i := range results {
 		movie := &results[i]
-		score := movie.Popularity + movie.VoteAverage*10
-		if score > bestScore {
-			bestScore = score
-			bestMatch = movie
+		score := scoreTmdbCandidate(targetTitle, targetYear, movie)
+		scoredMatches = append(scoredMatches, &tmdbMatchCandidate{
+			Movie:      movie,
+			Score:      score,
+			Confidence: clampTmdbConfidence(score),
+		})
+	}
+
+	slices.SortFunc(scoredMatches, func(a, b *tmdbMatchCandidate) int {
+		switch {
+		case a.Score > b.Score:
+			return -1
+		case a.Score < b.Score:
+			return 1
+		default:
+			return strings.Compare(a.Movie.Title, b.Movie.Title)
+		}
+	})
+
+	return scoredMatches
+}
+
+func normalizeMovieTitleForSearch(title string) string {
+	title = strings.NewReplacer("5.1", " ", "7.1", " ", "2.0", " ").Replace(title)
+	replacer := strings.NewReplacer(".", " ", "_", " ", "-", " ", "(", " ", ")", " ", "[", " ", "]", " ")
+	normalized := replacer.Replace(strings.ToLower(strings.TrimSpace(title)))
+	tokens := strings.Fields(normalized)
+	cleaned := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		token = strings.Trim(token, ".,!?:;'+\"")
+		token = strings.ReplaceAll(token, "'", "")
+		token = strings.ReplaceAll(token, "-", "")
+		if token == "" {
+			continue
+		}
+		if movieReleaseNoiseTokens[token] {
+			continue
+		}
+		if isBracketedReleaseGroupToken(token) {
+			continue
+		}
+		if isTechnicalToken(token) {
+			continue
+		}
+		cleaned = append(cleaned, token)
+	}
+	return strings.Join(cleaned, " ")
+}
+
+func isBracketedReleaseGroupToken(token string) bool {
+	return strings.HasPrefix(token, "yts") || strings.HasPrefix(token, "rarbg")
+}
+
+func isTechnicalToken(token string) bool {
+	if strings.Contains(token, "aac") || strings.Contains(token, "x26") || strings.Contains(token, "h26") {
+		return true
+	}
+	if strings.HasSuffix(token, "bit") {
+		return true
+	}
+	return false
+}
+
+func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovie) float64 {
+	normalizedTarget := normalizeComparableMovieTitle(targetTitle)
+	normalizedTitle := normalizeComparableMovieTitle(movie.Title)
+	normalizedOriginalTitle := normalizeComparableMovieTitle(movie.OriginalTitle)
+
+	score := 0.0
+
+	switch {
+	case normalizedTitle == normalizedTarget:
+		score += 60
+	case normalizedOriginalTitle == normalizedTarget:
+		score += 56
+	case normalizedTarget != "" && (strings.Contains(normalizedTitle, normalizedTarget) || strings.Contains(normalizedTarget, normalizedTitle)):
+		score += 38
+	}
+
+	score += tokenOverlapScore(normalizedTarget, normalizedTitle) * 35
+	score += tokenOverlapScore(normalizedTarget, normalizedOriginalTitle) * 20
+
+	if sequelIndicator(normalizedTarget) == sequelIndicator(normalizedTitle) {
+		score += 8
+	} else if sequelIndicator(normalizedTarget) != "" {
+		score -= 12
+	}
+
+	movieYear := extractYearFromReleaseDate(movie.ReleaseDate)
+	if targetYear > 0 {
+		switch {
+		case movieYear == targetYear:
+			score += 30
+		case movieYear > 0 && absInt(movieYear-targetYear) == 1:
+			score += 12
+		case movieYear > 0:
+			score -= 15
 		}
 	}
-	return bestMatch
+
+	score += minFloat(movie.Popularity/25, 8)
+	score += minFloat(movie.VoteAverage/2, 5)
+
+	return score
+}
+
+func normalizeComparableMovieTitle(title string) string {
+	title = normalizeMovieTitleForSearch(title)
+	var b strings.Builder
+	for _, r := range title {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+func tokenOverlapScore(a, b string) float64 {
+	if a == "" || b == "" {
+		return 0
+	}
+
+	aTokens := strings.Fields(a)
+	bTokens := strings.Fields(b)
+	if len(aTokens) == 0 || len(bTokens) == 0 {
+		return 0
+	}
+
+	seen := make(map[string]bool)
+	for _, token := range aTokens {
+		seen[token] = true
+	}
+
+	matches := 0
+	for _, token := range bTokens {
+		if seen[token] {
+			matches++
+		}
+	}
+
+	denominator := maxInt(len(aTokens), len(bTokens))
+	return float64(matches) / float64(denominator)
+}
+
+func clampTmdbConfidence(score float64) float64 {
+	switch {
+	case score < 0:
+		return 0
+	case score > 100:
+		return 100
+	default:
+		return score
+	}
+}
+
+func summarizeTmdbCandidates(results []tmdb.TmdbMovie, targetTitle string, targetYear int) string {
+	scored := rankTmdbMatches(results, targetTitle, targetYear)
+	limit := minInt(len(scored), 3)
+	parts := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		parts = append(parts, fmt.Sprintf("%s (%s, %.1f)", scored[i].Movie.Title, scored[i].Movie.ReleaseDate, scored[i].Confidence))
+	}
+
+	return strings.Join(parts, "; ")
+}
+
+func sequelIndicator(title string) string {
+	tokens := strings.Fields(title)
+	for _, token := range tokens {
+		switch token {
+		case "2", "ii", "3", "iii", "4", "iv", "5", "v":
+			return token
+		}
+	}
+	return ""
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

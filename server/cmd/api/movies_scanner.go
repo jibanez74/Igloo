@@ -6,7 +6,9 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -34,6 +36,7 @@ func (app *Application) ScanMoviesLibrary() {
 	moviesScanned := 0
 	moviesSkipped := 0
 	startTime := time.Now()
+	scannedPaths := make(map[string]bool)
 
 	// Batch buffer to collect movies before processing
 	batch := make([]movieFile, 0, helpers.SCANNER_BATCH_SIZE)
@@ -53,6 +56,9 @@ func (app *Application) ScanMoviesLibrary() {
 		if !helpers.ValidVideoExtensions[ext] {
 			return nil
 		}
+
+		cleanPath := filepath.Clean(path)
+		scannedPaths[cleanPath] = true
 
 		info, err := entry.Info()
 		if err != nil {
@@ -86,6 +92,14 @@ func (app *Application) ScanMoviesLibrary() {
 		moviesScanned += scanned
 		moviesSkipped += skipped
 		errorCount += errors
+	}
+
+	reconciled, err := app.reconcileMissingMovies(ctx, filepath.Clean(app.Settings.MoviesDir.String), scannedPaths)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to reconcile deleted movies: %s", err.Error()))
+		errorCount++
+	} else if reconciled > 0 {
+		app.Logger.Info(fmt.Sprintf("removed %d deleted movie entries from database", reconciled))
 	}
 
 	app.Logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s",
@@ -144,4 +158,72 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 	}
 
 	return scanned, skipped, errCount
+}
+
+func (app *Application) reconcileMissingMovies(ctx context.Context, moviesRoot string, scannedPaths map[string]bool) (int, error) {
+	app.ScannerDBMu.Lock()
+	defer app.ScannerDBMu.Unlock()
+
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	movies, err := qtx.GetMovieScanIndex(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	deletedCount := 0
+	for _, movie := range movies {
+		cleanPath := filepath.Clean(movie.FilePath)
+		if !isMovieUnderRoot(cleanPath, moviesRoot) {
+			continue
+		}
+		if scannedPaths[cleanPath] {
+			continue
+		}
+
+		_, statErr := os.Stat(cleanPath)
+		if statErr == nil {
+			continue
+		}
+		if !os.IsNotExist(statErr) {
+			app.Logger.Warn("failed to stat movie during reconciliation", "path", cleanPath, "error", statErr)
+			continue
+		}
+
+		app.invalidateSubtitleVTTCache(movie.ID)
+
+		err = qtx.DeleteMovie(ctx, movie.ID)
+		if err != nil {
+			return deletedCount, err
+		}
+
+		deletedCount++
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return deletedCount, err
+	}
+
+	return deletedCount, nil
+}
+
+func isMovieUnderRoot(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if rel == "" || rel == ".." {
+		return false
+	}
+	return !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

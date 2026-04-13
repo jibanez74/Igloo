@@ -23,6 +23,20 @@ FROM movies
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetMovieByPath :one
+SELECT
+  *
+FROM movies
+WHERE file_path = ?
+LIMIT 1;
+
+-- name: GetMovieScanIndex :many
+SELECT
+  id,
+  file_path
+FROM movies
+ORDER BY id;
+
 -- name: GetLatestMovies :many
 SELECT
   id,
@@ -64,26 +78,78 @@ VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (file_path) DO UPDATE
 SET
-  title = excluded.title,
+  title = CASE
+    WHEN movies.user_locked_title THEN movies.title
+    ELSE excluded.title
+  END,
   file_name = excluded.file_name,
   size = excluded.size,
   container = excluded.container,
   mime_type = excluded.mime_type,
-  adult = excluded.adult,
-  tmdb_id = COALESCE(excluded.tmdb_id, movies.tmdb_id),
-  imdb_id = COALESCE(excluded.imdb_id, movies.imdb_id),
-  poster_path = COALESCE(excluded.poster_path, movies.poster_path),
-  language = COALESCE(excluded.language, movies.language),
-  year = COALESCE(excluded.year, movies.year),
-  release_date = COALESCE(excluded.release_date, movies.release_date),
-  overview = COALESCE(excluded.overview, movies.overview),
-  tag_line = COALESCE(excluded.tag_line, movies.tag_line),
-  certification = COALESCE(excluded.certification, movies.certification),
-  critic_rating = COALESCE(excluded.critic_rating, movies.critic_rating),
-  audience_rating = COALESCE(excluded.audience_rating, movies.audience_rating),
-  revenue = COALESCE(excluded.revenue, movies.revenue),
-  budget = COALESCE(excluded.budget, movies.budget),
-  run_time = COALESCE(excluded.run_time, movies.run_time),
+  adult = CASE
+    WHEN movies.user_locked_adult THEN movies.adult
+    ELSE excluded.adult
+  END,
+  tmdb_id = CASE
+    WHEN movies.user_locked_tmdb_id THEN movies.tmdb_id
+    ELSE COALESCE(excluded.tmdb_id, movies.tmdb_id)
+  END,
+  imdb_id = CASE
+    WHEN movies.user_locked_imdb_id THEN movies.imdb_id
+    ELSE COALESCE(excluded.imdb_id, movies.imdb_id)
+  END,
+  poster_path = CASE
+    WHEN movies.user_locked_poster_path THEN movies.poster_path
+    ELSE COALESCE(excluded.poster_path, movies.poster_path)
+  END,
+  backdrop_path = CASE
+    WHEN movies.user_locked_backdrop_path THEN movies.backdrop_path
+    ELSE COALESCE(excluded.backdrop_path, movies.backdrop_path)
+  END,
+  language = CASE
+    WHEN movies.user_locked_language THEN movies.language
+    ELSE COALESCE(excluded.language, movies.language)
+  END,
+  year = CASE
+    WHEN movies.user_locked_year THEN movies.year
+    ELSE COALESCE(excluded.year, movies.year)
+  END,
+  release_date = CASE
+    WHEN movies.user_locked_release_date THEN movies.release_date
+    ELSE COALESCE(excluded.release_date, movies.release_date)
+  END,
+  overview = CASE
+    WHEN movies.user_locked_overview THEN movies.overview
+    ELSE COALESCE(excluded.overview, movies.overview)
+  END,
+  tag_line = CASE
+    WHEN movies.user_locked_tag_line THEN movies.tag_line
+    ELSE COALESCE(excluded.tag_line, movies.tag_line)
+  END,
+  certification = CASE
+    WHEN movies.user_locked_certification THEN movies.certification
+    ELSE COALESCE(excluded.certification, movies.certification)
+  END,
+  critic_rating = CASE
+    WHEN movies.user_locked_critic_rating THEN movies.critic_rating
+    ELSE COALESCE(excluded.critic_rating, movies.critic_rating)
+  END,
+  audience_rating = CASE
+    WHEN movies.user_locked_audience_rating THEN movies.audience_rating
+    ELSE COALESCE(excluded.audience_rating, movies.audience_rating)
+  END,
+  revenue = CASE
+    WHEN movies.user_locked_revenue THEN movies.revenue
+    ELSE COALESCE(excluded.revenue, movies.revenue)
+  END,
+  budget = CASE
+    WHEN movies.user_locked_budget THEN movies.budget
+    ELSE COALESCE(excluded.budget, movies.budget)
+  END,
+  run_time = CASE
+    WHEN movies.user_locked_run_time THEN movies.run_time
+    ELSE COALESCE(excluded.run_time, movies.run_time)
+  END,
   duration = COALESCE(excluded.duration, movies.duration),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
@@ -410,6 +476,29 @@ SET
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 RETURNING *;
+
+-- name: LockMovieMetadataFields :exec
+UPDATE movies
+SET
+  user_locked_title = user_locked_title OR ?,
+  user_locked_tmdb_id = user_locked_tmdb_id OR ?,
+  user_locked_imdb_id = user_locked_imdb_id OR ?,
+  user_locked_poster_path = user_locked_poster_path OR ?,
+  user_locked_backdrop_path = user_locked_backdrop_path OR ?,
+  user_locked_adult = user_locked_adult OR ?,
+  user_locked_language = user_locked_language OR ?,
+  user_locked_year = user_locked_year OR ?,
+  user_locked_release_date = user_locked_release_date OR ?,
+  user_locked_overview = user_locked_overview OR ?,
+  user_locked_tag_line = user_locked_tag_line OR ?,
+  user_locked_certification = user_locked_certification OR ?,
+  user_locked_critic_rating = user_locked_critic_rating OR ?,
+  user_locked_audience_rating = user_locked_audience_rating OR ?,
+  user_locked_revenue = user_locked_revenue OR ?,
+  user_locked_budget = user_locked_budget OR ?,
+  user_locked_run_time = user_locked_run_time OR ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
 
 -- name: DeleteMovieCast :exec
 -- Remove all cast entries for a movie (used before re-identifying with TMDB).

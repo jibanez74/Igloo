@@ -50,23 +50,22 @@ func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var results []tmdb.TmdbMovie
-
-	if payload.Year > 0 {
-		results, err = app.Tmdb.SearchMoviesByTitleAndYear(payload.Title, payload.Year)
-	} else {
-		results, err = app.Tmdb.SearchMoviesByTitleAndYear(payload.Title)
+	searchTitle := normalizeMovieTitleForSearch(payload.Title)
+	if searchTitle == "" {
+		searchTitle = payload.Title
 	}
 
+	results, err := app.Tmdb.SearchMoviesByTitleAndYear(searchTitle)
 	if err != nil {
-		app.Logger.Error("tmdb search failed", "error", err, "title", payload.Title)
+		app.Logger.Error("tmdb search failed", "error", err, "title", payload.Title, "normalized_title", searchTitle)
 		helpers.ErrorJSON(w, errors.New("TMDB search failed"))
 		return
 	}
 
+	ranked := rankTmdbMatches(results, searchTitle, payload.Year)
 	mapped := make([]tmdb.TmdbMovieSearchResult, 0, len(results))
-	for i := range results {
-		mapped = append(mapped, tmdb.NewTmdbMovieSearchResult(&results[i]))
+	for _, candidate := range ranked {
+		mapped = append(mapped, tmdb.NewTmdbMovieSearchResult(candidate.Movie))
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
