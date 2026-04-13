@@ -14,6 +14,12 @@ const (
 
 	// media scanner
 	SCANNER_BATCH_SIZE = 54
+	MOVIE_RENAME_MATCH_THRESHOLD = 50.0
+	MOVIE_RENAME_TMDB_ID_SCORE   = 40.0
+	MOVIE_RENAME_TITLE_SCORE     = 18.0
+	MOVIE_RENAME_YEAR_SCORE      = 10.0
+	MOVIE_RENAME_SIZE_SCORE      = 14.0
+	MOVIE_RENAME_DURATION_SCORE  = 12.0
 
 	// playlists — content_type discriminator (movies page / unified playlists table)
 	PLAYLIST_CONTENT_TYPE_TRACK = "track"
@@ -43,13 +49,17 @@ const (
 	INVALID_CREDENTIALS_MESSAGE = "invalid email or password provided"
 
 	// constants for tmdb
-	TMDB_BASE_API_URL   = "https://api.themoviedb.org/3"
-	TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
-	TMDB_IMAGE_SIZE     = "original"
-	TMDB_POSTER_SIZE    = "w500"
-	TMDB_PROFILE_SIZE   = "w185"
-	TMDB_LOGO_SIZE      = "w92"
-	TMDB_MAX_ITEMS      = 12
+	TMDB_BASE_API_URL          = "https://api.themoviedb.org/3"
+	TMDB_IMAGE_BASE_URL        = "https://image.tmdb.org/t/p"
+	TMDB_IMAGE_SIZE            = "original"
+	TMDB_POSTER_SIZE           = "w500"
+	TMDB_PROFILE_SIZE          = "w185"
+	TMDB_LOGO_SIZE             = "w92"
+	TMDB_MAX_ITEMS             = 12
+	TMDB_HTTP_TIMEOUT          = 10 * time.Second
+	TMDB_HTTP_MAX_RETRIES      = 3
+	TMDB_HTTP_RETRY_BASE_DELAY = 250 * time.Millisecond
+	TMDB_HTTP_RETRY_MAX_DELAY  = 2 * time.Second
 	// TMDB_YEAR_MATCH_SCORE is the score bonus for exact year matches in TMDB search results.
 	// This ensures exact year matches are prioritized over popularity/vote average.
 	TMDB_YEAR_MATCH_SCORE = 10000.0
@@ -63,7 +73,7 @@ const (
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
 
 	// HLS transcoding
-	HLS_SEGMENT_TIME_SEC           = 4  // segment duration in seconds for fMP4 HLS
+	HLS_SEGMENT_TIME_SEC = 4 // segment duration in seconds for fMP4 HLS
 	// HLS_COPY_VIDEO_TARGET_DURATION is the TARGETDURATION ceiling used when FFmpeg
 	// runs in -c:v copy mode. Copy mode splits only at keyframe boundaries, so
 	// segments can far exceed HLS_SEGMENT_TIME_SEC. 30s covers all practical GOPs.
@@ -71,8 +81,8 @@ const (
 
 	// HDR transfer characteristics as reported by ffprobe (color_transfer field).
 	// Used to detect HDR sources that require tone-mapping when transcoding to SDR.
-	HDR_TRANSFER_PQ  = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
-	HDR_TRANSFER_HLG = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
+	HDR_TRANSFER_PQ         = "smpte2084"      // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
+	HDR_TRANSFER_HLG        = "arib-std-b67"   // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
 	HLS_STDERR_TAIL_LINES   = 20               // lines of FFmpeg stderr kept for error reporting
 	HLS_SESSION_TTL         = 30 * time.Minute // TTL for cached HLS session entries
 	HLS_SESSION_CACHE_SWEEP = 10 * time.Minute // interval for removing expired HLS session entries
