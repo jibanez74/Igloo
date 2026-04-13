@@ -13,6 +13,8 @@ import (
 // TmdbSearchMovies searches TMDB by title/year or fetches a single movie by TMDB ID.
 // POST /api/movies/:id/tmdb-search   body: { title, year?, tmdb_id? }
 func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var payload struct {
 		Title  string `json:"title"`
 		Year   int    `json:"year"`
@@ -28,7 +30,7 @@ func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request)
 	if payload.TmdbID > 0 {
 		movie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
 
-		err = app.Tmdb.GetTmdbMovieByID(movie)
+		err = app.Tmdb.GetTmdbMovieByID(ctx, movie)
 		if err != nil {
 			app.Logger.Error("tmdb get by id failed", "error", err, "tmdb_id", payload.TmdbID)
 			helpers.ErrorJSON(w, errors.New("failed to fetch movie from TMDB"))
@@ -55,7 +57,7 @@ func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request)
 		searchTitle = payload.Title
 	}
 
-	results, err := app.Tmdb.SearchMoviesByTitleAndYear(searchTitle)
+	results, err := app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
 	if err != nil {
 		app.Logger.Error("tmdb search failed", "error", err, "title", payload.Title, "normalized_title", searchTitle)
 		helpers.ErrorJSON(w, errors.New("TMDB search failed"))
@@ -77,7 +79,7 @@ func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request)
 // GetMoviesInTheaters returns the latest movies currently playing in theaters.
 // The response is limited to a maximum of 12 movies.
 func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Request) {
-	movies, err := app.Tmdb.GetMoviesInTheaters()
+	movies, err := app.Tmdb.GetMoviesInTheaters(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to get movies in theaters", "error", err)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movies in theaters"))
@@ -108,7 +110,7 @@ func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request)
 	}
 
 	movie := &tmdb.TmdbMovie{TmdbID: id}
-	err = app.Tmdb.GetTmdbMovieByID(movie)
+	err = app.Tmdb.GetTmdbMovieByID(r.Context(), movie)
 	if err != nil {
 		app.Logger.Error("failed to get movie from tmdb", "error", err, "tmdb_id", id)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from tmdb"))

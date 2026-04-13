@@ -64,16 +64,16 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 	if app.Tmdb != nil {
 		if existingMovie.UserLockedTmdbID && existingMovie.TmdbID.Valid {
 			lockedMovie := &tmdb.TmdbMovie{TmdbID: int(existingMovie.TmdbID.Int64)}
-			err = app.Tmdb.GetTmdbMovieByID(lockedMovie)
+			err = app.Tmdb.GetTmdbMovieByID(ctx, lockedMovie)
 			if err == nil {
 				tmdbMovie = lockedMovie
 			}
 		} else {
-			searchResults, searchErr := app.Tmdb.SearchMoviesByTitleAndYear(searchTitle)
+			searchResults, searchErr := app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
 			if searchErr == nil && len(searchResults) > 0 {
 				bestMatch := selectBestTmdbMatch(searchResults, searchTitle, titleYear.Year)
 				if bestMatch != nil {
-					err = app.Tmdb.GetTmdbMovieByID(bestMatch.Movie)
+					err = app.Tmdb.GetTmdbMovieByID(ctx, bestMatch.Movie)
 					if err == nil {
 						tmdbMovie = bestMatch.Movie
 						if bestMatch.Confidence < 70 {

@@ -107,14 +107,14 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+
 	tmdbMovie := &tmdb.TmdbMovie{TmdbID: payload.TmdbID}
-	if err := app.Tmdb.GetTmdbMovieByID(tmdbMovie); err != nil {
+	if err := app.Tmdb.GetTmdbMovieByID(ctx, tmdbMovie); err != nil {
 		app.Logger.Error("tmdb get by id failed", "error", err, "tmdb_id", payload.TmdbID)
 		helpers.ErrorJSON(w, errors.New("failed to fetch movie from TMDB"))
 		return
 	}
-
-	ctx := r.Context()
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {

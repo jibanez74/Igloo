@@ -1,6 +1,7 @@
 package tmdb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,7 +138,7 @@ func (m *TmdbMovie) Certification() string {
 	return firstCert
 }
 
-func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
+func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) error {
 	if movie.TmdbID == 0 {
 		return errors.New("tmdb id is required")
 	}
@@ -153,7 +154,7 @@ func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
 
 	requestURL := fmt.Sprintf("%s/movie/%d?%s", t.baseURL, movie.TmdbID, params.Encode())
 
-	bodyBytes, statusCode, err := t.getJSON(requestURL)
+	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func (t *tmdbClient) GetTmdbMovieByID(movie *TmdbMovie) error {
 	return nil
 }
 
-func (t *tmdbClient) GetTmdbMovieByTitle(movie *TmdbMovie) error {
+func (t *tmdbClient) GetTmdbMovieByTitle(ctx context.Context, movie *TmdbMovie) error {
 	if movie.Title == "" {
 		return errors.New("movie title is required")
 	}
@@ -184,7 +185,7 @@ func (t *tmdbClient) GetTmdbMovieByTitle(movie *TmdbMovie) error {
 
 	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
 
-	bodyBytes, statusCode, err := t.getJSON(requestURL)
+	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return err
 	}
@@ -209,7 +210,7 @@ func (t *tmdbClient) GetTmdbMovieByTitle(movie *TmdbMovie) error {
 	return nil
 }
 
-func (t *tmdbClient) SearchMoviesByTitleAndYear(title string, year ...int) ([]TmdbMovie, error) {
+func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error) {
 	if title == "" {
 		return nil, errors.New("movie title is required")
 	}
@@ -225,7 +226,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(title string, year ...int) ([]Tm
 
 	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
 
-	bodyBytes, statusCode, err := t.getJSON(requestURL)
+	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +250,7 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(title string, year ...int) ([]Tm
 	return searchResult.Results, nil
 }
 
-func (t *tmdbClient) GetMoviesInTheaters() ([]*TmdbMovie, error) {
+func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
 	params := url.Values{}
 	params.Add("api_key", t.key)
 	params.Add("language", "en-US")
@@ -258,7 +259,7 @@ func (t *tmdbClient) GetMoviesInTheaters() ([]*TmdbMovie, error) {
 
 	requestURL := fmt.Sprintf("%s/movie/now_playing?%s", t.baseURL, params.Encode())
 
-	bodyBytes, statusCode, err := t.getJSON(requestURL)
+	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +288,7 @@ func (t *tmdbClient) GetMoviesInTheaters() ([]*TmdbMovie, error) {
 	return movies, nil
 }
 
-func (t *tmdbClient) GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error) {
+func (t *tmdbClient) GetTmdbPopularMovies(ctx context.Context, region ...string) ([]*TmdbMovie, error) {
 	params := url.Values{}
 	params.Add("api_key", t.key)
 	params.Add("language", "en-US")
@@ -301,7 +302,7 @@ func (t *tmdbClient) GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error
 
 	requestURL := fmt.Sprintf("%s/movie/popular?%s", t.baseURL, params.Encode())
 
-	bodyBytes, statusCode, err := t.getJSON(requestURL)
+	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
@@ -330,14 +331,26 @@ func (t *tmdbClient) GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error
 	return movies, nil
 }
 
-func (t *tmdbClient) getJSON(requestURL string) ([]byte, int, error) {
+func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, int, error) {
 	maxAttempts := t.maxRetries
 	if maxAttempts < 1 {
 		maxAttempts = 1
 	}
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+		if ctx != nil {
+			err := ctx.Err()
+			if err != nil {
+				return nil, 0, err
+			}
+		}
+
+		reqCtx := ctx
+		if reqCtx == nil {
+			reqCtx = context.Background()
+		}
+
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, requestURL, nil)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -350,7 +363,10 @@ func (t *tmdbClient) getJSON(requestURL string) ([]byte, int, error) {
 			if attempt == maxAttempts-1 {
 				return nil, 0, err
 			}
-			time.Sleep(t.retryDelay(nil, attempt))
+			err = sleepWithContext(ctx, t.retryDelay(nil, attempt))
+			if err != nil {
+				return nil, 0, err
+			}
 			continue
 		}
 
@@ -360,12 +376,18 @@ func (t *tmdbClient) getJSON(requestURL string) ([]byte, int, error) {
 			if attempt == maxAttempts-1 {
 				return nil, 0, readErr
 			}
-			time.Sleep(t.retryDelay(resp.Header, attempt))
+			err = sleepWithContext(ctx, t.retryDelay(resp.Header, attempt))
+			if err != nil {
+				return nil, 0, err
+			}
 			continue
 		}
 
 		if retryableTmdbStatus(resp.StatusCode) && attempt < maxAttempts-1 {
-			time.Sleep(t.retryDelay(resp.Header, attempt))
+			err = sleepWithContext(ctx, t.retryDelay(resp.Header, attempt))
+			if err != nil {
+				return nil, 0, err
+			}
 			continue
 		}
 
@@ -373,6 +395,29 @@ func (t *tmdbClient) getJSON(requestURL string) ([]byte, int, error) {
 	}
 
 	return nil, 0, errors.New("tmdb request failed")
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		if ctx != nil {
+			return ctx.Err()
+		}
+		return nil
+	}
+	if ctx == nil {
+		time.Sleep(delay)
+		return nil
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func retryableTmdbStatus(statusCode int) bool {

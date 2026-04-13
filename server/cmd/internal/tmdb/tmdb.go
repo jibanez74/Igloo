@@ -1,6 +1,7 @@
 package tmdb
 
 import (
+	"context"
 	"errors"
 	"igloo/cmd/internal/helpers"
 	"net/http"
@@ -10,11 +11,11 @@ import (
 )
 
 type TmdbInterface interface {
-	GetTmdbMovieByID(movie *TmdbMovie) error
-	GetTmdbMovieByTitle(movie *TmdbMovie) error
-	SearchMoviesByTitleAndYear(title string, year ...int) ([]TmdbMovie, error)
-	GetMoviesInTheaters() ([]*TmdbMovie, error)
-	GetTmdbPopularMovies(region ...string) ([]*TmdbMovie, error)
+	GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) error
+	GetTmdbMovieByTitle(ctx context.Context, movie *TmdbMovie) error
+	SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error)
+	GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error)
+	GetTmdbPopularMovies(ctx context.Context, region ...string) ([]*TmdbMovie, error)
 	ClearCache()
 }
 
