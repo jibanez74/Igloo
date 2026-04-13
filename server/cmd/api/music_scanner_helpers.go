@@ -190,7 +190,7 @@ func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *data
 func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, error) {
 	// Try Spotify lookup first if configured
 	if app.Spotify != nil {
-		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title)
+		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
 		if err == nil && albumDetails != nil {
 			// Check if we already have this Spotify album
 			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
