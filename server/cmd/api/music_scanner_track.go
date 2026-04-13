@@ -174,18 +174,22 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	}
 	params.AlbumID = albumID
 
-	// Create musician-album relationships for all credited musicians
-	if albumID.Valid {
-		for _, mID := range allMusicianIDs {
-			err := qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
-				MusicianID: mID,
-				AlbumID:    albumID.Int64,
-			})
-			if err != nil {
-				return fmt.Errorf("musician-album relationship failed: %w", err)
+		// Create musician-album relationships for all credited musicians
+		if albumID.Valid {
+			for _, mID := range allMusicianIDs {
+				err := qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
+					MusicianID: mID,
+					AlbumID:    albumID.Int64,
+				})
+				if err != nil {
+					app.Logger.Warn("failed to create musician-album relationship",
+						"error", err,
+						"musician_id", mID,
+						"album_id", albumID.Int64,
+					)
+				}
 			}
 		}
-	}
 
 	// Extract audio stream info (codec, channels, profile, language)
 	for _, stream := range info.Streams {
