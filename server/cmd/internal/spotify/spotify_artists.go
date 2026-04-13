@@ -3,6 +3,7 @@ package spotify
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/zmb3/spotify/v2"
 )
@@ -12,8 +13,9 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 		return nil, fmt.Errorf("artist name cannot be empty")
 	}
 
-	// Check cache first
-	if cached, exists := s.getArtist(artistName); exists {
+	cacheKey := strings.ToLower(strings.TrimSpace(artistName))
+
+	if cached, exists := s.getArtist(cacheKey); exists {
 		return cached, nil
 	}
 
@@ -26,10 +28,12 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 		return nil, fmt.Errorf("no artists found for name '%s'", artistName)
 	}
 
-	artist := &results.Artists.Artists[0]
+	returned := &results.Artists.Artists[0]
+	if !strings.Contains(strings.ToLower(returned.Name), strings.ToLower(strings.TrimSpace(artistName))) {
+		return nil, fmt.Errorf("spotify result '%s' does not match requested artist '%s'", returned.Name, artistName)
+	}
 
-	// Store in cache
-	s.setArtist(artistName, artist)
+	s.setArtist(cacheKey, returned)
 
-	return artist, nil
+	return returned, nil
 }

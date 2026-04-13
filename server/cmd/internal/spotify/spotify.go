@@ -10,7 +10,7 @@ import (
 )
 
 type SpotifyInterface interface {
-	SearchAndGetAlbumDetails(ctx context.Context, query string) (*spotify.FullAlbum, error)
+	SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error)
 	SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error)
 	ClearAllCaches()
 }
@@ -24,9 +24,7 @@ type spotifyClient struct {
 	albumCache  *cache.Cache
 }
 
-func New(clientID, clientSecret string) (SpotifyInterface, error) {
-	ctx := context.Background()
-
+func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, error) {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,

@@ -188,6 +188,7 @@ func InitApp() (*Application, error) {
 	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
 		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
 		spotifyClient, err := spotify.New(
+			ctx,
 			app.Settings.SpotifyClientID.String,
 			app.Settings.SpotifyClientSecret.String,
 		)

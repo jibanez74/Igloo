@@ -122,7 +122,12 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 			sortAlbum = info.Format.Tags.Album
 		}
 
-		album, err := app.getOrCreateAlbum(ctx, qtx, info.Format.Tags.Album, sortAlbum, info.Format.Tags.AlbumArtist)
+		effectiveAlbumArtist := info.Format.Tags.AlbumArtist
+		if effectiveAlbumArtist == "" {
+			effectiveAlbumArtist = info.Format.Tags.Artist
+		}
+
+		album, err := app.getOrCreateAlbum(ctx, qtx, info.Format.Tags.Album, sortAlbum, effectiveAlbumArtist)
 		if err != nil {
 			return fmt.Errorf("album failed: %w", err)
 		}
