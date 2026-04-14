@@ -769,6 +769,31 @@ func TestDeleteWatchRoom_HTTP_SuccessForOwner(t *testing.T) {
 	}
 }
 
+func TestDeleteWatchRoom_HTTP_CleansUpRoomHLSSession(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID, nil)
+	handler := mountWatchRoomRouter(app, ownerID)
+
+	app.HLSSessionCache.SetDefault(RoomHLSSessionKey(room.ID), &HLSSession{
+		TempDir: "",
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if _, ok := app.HLSSessionCache.Get(RoomHLSSessionKey(room.ID)); ok {
+		t.Fatal("expected room HLS session cache entry to be removed after delete")
+	}
+}
+
 func TestDeleteWatchRoom_HTTP_ForbiddenForInvitedMember(t *testing.T) {
 	app := setupWatchRoomHTTPTestApp(t)
 	defer app.DB.Close()

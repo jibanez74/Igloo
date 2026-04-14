@@ -43,6 +43,13 @@ func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
 	return fmt.Sprintf("%d:%s:%d", movieID, profile, audioTrack)
 }
 
+// RoomHLSSessionKey returns the HLS session cache key for a watch room.
+// The "room:" prefix ensures it never collides with a regular HLSSessionKey,
+// which has the form "movieID:profile:audioTrack".
+func RoomHLSSessionKey(roomID int64) string {
+	return fmt.Sprintf("room:%d", roomID)
+}
+
 func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
 	app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
 }
@@ -123,6 +130,73 @@ func (app *Application) GetOrCreateHLSSession(
 		return nil, err
 	}
 	return v.(*HLSSession), nil
+}
+
+// WarmUpRoomHLSSession starts an HLS session for a watch room immediately after creation.
+// It uses RoomHLSSessionKey so the session is isolated from personal playback sessions.
+// If a session for this room already exists in the cache, it is a no-op.
+// Always warms up from startSec=0 so participants start from the beginning.
+func (app *Application) WarmUpRoomHLSSession(
+	ctx context.Context,
+	roomID int64,
+	movieID int64,
+	profile string,
+	audioTrack int,
+) error {
+	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack)
+	return err
+}
+
+// GetOrCreateRoomHLSSession returns a cached room-scoped HLS session or
+// creates a new one using the room-specific cache key.
+func (app *Application) GetOrCreateRoomHLSSession(
+	ctx context.Context,
+	roomID int64,
+	movieID int64,
+	profile string,
+	audioTrack int,
+) (*HLSSession, error) {
+	key := RoomHLSSessionKey(roomID)
+
+	if _, ok := app.HLSSessionCache.Get(key); ok {
+		raw, _ := app.HLSSessionCache.Get(key)
+		session := raw.(*HLSSession)
+		app.RefreshHLSSessionTTL(key, session)
+		return session, nil
+	}
+
+	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
+		if raw, ok := app.HLSSessionCache.Get(key); ok {
+			existing := raw.(*HLSSession)
+			app.RefreshHLSSessionTTL(key, existing)
+			return existing, nil
+		}
+		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, 0)
+		if createErr != nil {
+			return nil, createErr
+		}
+		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+		return session, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return v.(*HLSSession), nil
+}
+
+// CleanupRoomHLSSession stops and removes the HLS session for a watch room.
+// It is a no-op if no session exists for the room.
+func (app *Application) CleanupRoomHLSSession(roomID int64) {
+	key := RoomHLSSessionKey(roomID)
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		return
+	}
+	app.HLSSessionCache.Delete(key)
+	if session, ok := raw.(*HLSSession); ok {
+		cleanupHLSSession(session)
+	}
 }
 
 // createHLSSession loads stream metadata from the database, creates a temp dir,

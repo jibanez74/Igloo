@@ -1,0 +1,482 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"sync"
+	"time"
+
+	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
+
+	"github.com/gorilla/websocket"
+)
+
+const watchRoomPositionDriftFloor = 0.0
+
+type watchRoomPlaybackState struct {
+	Paused      bool      `json:"paused"`
+	PositionSec float64   `json:"position_sec"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type watchRoomClientEvent struct {
+	Type        string   `json:"type"`
+	PositionSec *float64 `json:"position_sec,omitempty"`
+}
+
+type watchRoomServerEvent struct {
+	Type             string                  `json:"type"`
+	RoomID           int64                   `json:"room_id"`
+	Playback         *watchRoomPlaybackState `json:"playback,omitempty"`
+	Member           *watchRoomMemberSummary `json:"member,omitempty"`
+	ConnectedUserIDs []int64                 `json:"connected_user_ids,omitempty"`
+}
+
+type watchRoomClient struct {
+	conn   *websocket.Conn
+	roomID int64
+	user   watchRoomMemberSummary
+	mu     sync.Mutex
+}
+
+type watchRoomSession struct {
+	roomID       int64
+	clients      map[*watchRoomClient]bool
+	connectedIDs map[int64]bool
+	state        watchRoomPlaybackState
+}
+
+type WatchRoomHub struct {
+	mu       sync.Mutex
+	sessions map[int64]*watchRoomSession
+}
+
+func NewWatchRoomHub() *WatchRoomHub {
+	return &WatchRoomHub{
+		sessions: make(map[int64]*watchRoomSession),
+	}
+}
+
+func (state watchRoomPlaybackState) currentPosition(now time.Time) float64 {
+	position := state.PositionSec
+	if !state.Paused {
+		position += now.Sub(state.UpdatedAt).Seconds()
+	}
+	if position < watchRoomPositionDriftFloor {
+		return watchRoomPositionDriftFloor
+	}
+	return position
+}
+
+func (state watchRoomPlaybackState) snapshot(now time.Time) watchRoomPlaybackState {
+	return watchRoomPlaybackState{
+		Paused:      state.Paused,
+		PositionSec: state.currentPosition(now),
+		UpdatedAt:   now.UTC(),
+	}
+}
+
+func (hub *WatchRoomHub) getOrCreateSession(roomID int64) *watchRoomSession {
+	session, ok := hub.sessions[roomID]
+	if ok {
+		return session
+	}
+
+	now := time.Now().UTC()
+	session = &watchRoomSession{
+		roomID:       roomID,
+		clients:      make(map[*watchRoomClient]bool),
+		connectedIDs: make(map[int64]bool),
+		state: watchRoomPlaybackState{
+			Paused:      true,
+			PositionSec: 0,
+			UpdatedAt:   now,
+		},
+	}
+	hub.sessions[roomID] = session
+	return session
+}
+
+func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) watchRoomServerEvent {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session := hub.getOrCreateSession(roomID)
+	session.clients[client] = true
+	session.connectedIDs[client.user.ID] = true
+
+	return watchRoomServerEvent{
+		Type:             "room_snapshot",
+		RoomID:           roomID,
+		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
+func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[client.roomID]
+	if !ok {
+		return nil
+	}
+
+	delete(session.clients, client)
+	stillConnected := false
+	for existing := range session.clients {
+		if existing.user.ID == client.user.ID {
+			stillConnected = true
+			break
+		}
+	}
+	if !stillConnected {
+		delete(session.connectedIDs, client.user.ID)
+	}
+
+	if len(session.clients) == 0 {
+		delete(hub.sessions, client.roomID)
+		return nil
+	}
+
+	return &watchRoomServerEvent{
+		Type:             "member_left",
+		RoomID:           client.roomID,
+		Member:           &client.user,
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
+func (hub *WatchRoomHub) memberJoinedEvent(roomID int64, member watchRoomMemberSummary) *watchRoomServerEvent {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return nil
+	}
+
+	return &watchRoomServerEvent{
+		Type:             "member_joined",
+		RoomID:           roomID,
+		Member:           &member,
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
+func (hub *WatchRoomHub) applyPlaybackEvent(roomID int64, eventType string, positionSec float64) (*watchRoomServerEvent, bool) {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return nil, false
+	}
+
+	now := time.Now().UTC()
+	currentPosition := session.state.currentPosition(now)
+
+	switch eventType {
+	case "play":
+		if positionSec < 0 {
+			positionSec = currentPosition
+		}
+		session.state = watchRoomPlaybackState{
+			Paused:      false,
+			PositionSec: positionSec,
+			UpdatedAt:   now,
+		}
+	case "pause":
+		if positionSec < 0 {
+			positionSec = currentPosition
+		}
+		session.state = watchRoomPlaybackState{
+			Paused:      true,
+			PositionSec: positionSec,
+			UpdatedAt:   now,
+		}
+	case "seek":
+		if positionSec < 0 {
+			positionSec = currentPosition
+		}
+		session.state = watchRoomPlaybackState{
+			Paused:      session.state.Paused,
+			PositionSec: positionSec,
+			UpdatedAt:   now,
+		}
+	default:
+		return nil, false
+	}
+
+	snapshot := session.state.snapshot(now)
+	return &watchRoomServerEvent{
+		Type:     "playback_changed",
+		RoomID:   roomID,
+		Playback: &snapshot,
+	}, true
+}
+
+func (hub *WatchRoomHub) broadcast(roomID int64, payload watchRoomServerEvent) {
+	hub.mu.Lock()
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		hub.mu.Unlock()
+		return
+	}
+
+	clients := make([]*watchRoomClient, 0, len(session.clients))
+	for client := range session.clients {
+		clients = append(clients, client)
+	}
+	hub.mu.Unlock()
+
+	for _, client := range clients {
+		client.writeJSON(payload)
+	}
+}
+
+func (hub *WatchRoomHub) broadcastToOthers(roomID int64, sender *watchRoomClient, payload watchRoomServerEvent) {
+	hub.mu.Lock()
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		hub.mu.Unlock()
+		return
+	}
+
+	clients := make([]*watchRoomClient, 0, len(session.clients))
+	for client := range session.clients {
+		if client != sender {
+			clients = append(clients, client)
+		}
+	}
+	hub.mu.Unlock()
+
+	for _, client := range clients {
+		client.writeJSON(payload)
+	}
+}
+
+func (hub *WatchRoomHub) snapshotAndClearClients(roomID int64) []*watchRoomClient {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return nil
+	}
+
+	clients := make([]*watchRoomClient, 0, len(session.clients))
+	for client := range session.clients {
+		clients = append(clients, client)
+	}
+	delete(hub.sessions, roomID)
+	return clients
+}
+
+func (hub *WatchRoomHub) deleteRoom(roomID int64) {
+	clients := hub.snapshotAndClearClients(roomID)
+	if len(clients) == 0 {
+		return
+	}
+
+	event := watchRoomServerEvent{
+		Type:   "room_deleted",
+		RoomID: roomID,
+	}
+
+	for _, client := range clients {
+		client.writeJSON(event)
+		_ = client.conn.Close()
+	}
+}
+
+func (hub *WatchRoomHub) Shutdown() {
+	hub.mu.Lock()
+	clients := make([]*watchRoomClient, 0)
+	for _, session := range hub.sessions {
+		for client := range session.clients {
+			clients = append(clients, client)
+		}
+	}
+	hub.sessions = make(map[int64]*watchRoomSession)
+	hub.mu.Unlock()
+
+	for _, client := range clients {
+		_ = client.conn.Close()
+	}
+}
+
+func (client *watchRoomClient) writeJSON(payload watchRoomServerEvent) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	_ = client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_ = client.conn.WriteJSON(payload)
+}
+
+func pointerToPlaybackState(state watchRoomPlaybackState) *watchRoomPlaybackState {
+	copy := state
+	return &copy
+}
+
+func connectedUserIDs(ids map[int64]bool) []int64 {
+	userIDs := make([]int64, 0, len(ids))
+	for id := range ids {
+		userIDs = append(userIDs, id)
+	}
+	return userIDs
+}
+
+var watchRoomUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+func (app *Application) loadAuthorizedWatchRoom(ctx context.Context, roomID, userID int64) (database.WatchRoom, error) {
+	room, err := app.Queries.GetWatchRoomByID(ctx, roomID)
+	if err != nil {
+		return database.WatchRoom{}, err
+	}
+
+	_, err = app.Queries.IsWatchRoomMember(ctx, database.IsWatchRoomMemberParams{
+		RoomID: roomID,
+		UserID: userID,
+	})
+	if err != nil {
+		return database.WatchRoom{}, err
+	}
+
+	return room, nil
+}
+
+func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter, r *http.Request) (database.WatchRoom, int64, bool) {
+	userID, ok := app.requireSessionUserID(w, r)
+	if !ok {
+		return database.WatchRoom{}, 0, false
+	}
+
+	roomID, err := parseRoomID(r)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return database.WatchRoom{}, 0, false
+	}
+
+	room, err := app.loadAuthorizedWatchRoom(r.Context(), roomID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("access denied"), http.StatusForbidden)
+			return database.WatchRoom{}, 0, false
+		}
+		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return database.WatchRoom{}, 0, false
+	}
+
+	return room, userID, true
+}
+
+func (app *Application) loadRoomMemberSummary(ctx context.Context, roomID, userID int64) (watchRoomMemberSummary, error) {
+	members, err := app.loadRoomMembers(ctx, roomID)
+	if err != nil {
+		return watchRoomMemberSummary{}, err
+	}
+
+	member, ok := findMemberByID(members, userID)
+	if !ok {
+		return watchRoomMemberSummary{}, errors.New("member not found")
+	}
+
+	return member, nil
+}
+
+// WatchRoomWebSocket serves GET /api/watch-rooms/{id}/ws.
+// Only authenticated room members may upgrade.
+func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Request) {
+	room, userID, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
+	if !ok {
+		return
+	}
+
+	member, err := app.loadRoomMemberSummary(r.Context(), room.ID, userID)
+	if err != nil {
+		app.Logger.Error("failed to load room member summary for websocket", "error", err, "room_id", room.ID, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	conn, err := watchRoomUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		app.Logger.Error("failed to upgrade watch room websocket", "error", err, "room_id", room.ID, "user_id", userID)
+		return
+	}
+
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+
+	client := &watchRoomClient{
+		conn:   conn,
+		roomID: room.ID,
+		user:   member,
+	}
+
+	snapshot := app.WatchRoomHub.connect(room.ID, client)
+	client.writeJSON(snapshot)
+	if event := app.WatchRoomHub.memberJoinedEvent(room.ID, member); event != nil {
+		app.WatchRoomHub.broadcastToOthers(room.ID, client, *event)
+	}
+
+	defer func() {
+		if app.Wait != nil {
+			app.Wait.Done()
+		}
+		if event := app.WatchRoomHub.disconnect(client); event != nil {
+			app.WatchRoomHub.broadcast(room.ID, *event)
+		}
+		_ = conn.Close()
+	}()
+
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(_ string) error {
+		return conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	})
+
+	for {
+		_, rawMessage, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		var event watchRoomClientEvent
+		err = json.Unmarshal(rawMessage, &event)
+		if err != nil {
+			continue
+		}
+
+		switch event.Type {
+		case "join":
+			client.writeJSON(snapshot)
+		case "ping":
+			client.mu.Lock()
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			err = conn.WriteJSON(watchRoomServerEvent{Type: "pong", RoomID: room.ID})
+			client.mu.Unlock()
+			if err != nil {
+				return
+			}
+		case "play", "pause", "seek":
+			positionSec := -1.0
+			if event.PositionSec != nil {
+				positionSec = *event.PositionSec
+			}
+			update, ok := app.WatchRoomHub.applyPlaybackEvent(room.ID, event.Type, positionSec)
+			if ok && update != nil {
+				app.WatchRoomHub.broadcast(room.ID, *update)
+			}
+		}
+	}
+}

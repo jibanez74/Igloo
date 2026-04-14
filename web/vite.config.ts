@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -53,6 +53,12 @@ export default defineConfig({
         },
       },
     },
+  },
+
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    include: ["src/test/**/*.test.{ts,tsx}"],
   },
 
   plugins: [

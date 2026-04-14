@@ -1,5 +1,8 @@
 // keys for queries
 export const AUTH_USER_KEY = "auth-user";
+export const WATCH_ROOMS_KEY = "watch-rooms";
+export const WATCH_ROOM_KEY = "watch-room";
+export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";

@@ -27,6 +27,9 @@ import {
   getPlaylistTracks,
   getSettings,
   getTracksPaginated,
+  getWatchRoom,
+  getWatchRoomInviteUsers,
+  getWatchRooms,
 } from "@/lib/api";
 import {
   ALBUM_DETAILS_KEY,
@@ -57,6 +60,9 @@ import {
   PLAYLISTS_KEY,
   SETTINGS_KEY,
   TRACKS_INFINITE_KEY,
+  WATCH_ROOM_KEY,
+  WATCH_ROOM_INVITE_USERS_KEY,
+  WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 
 /**
@@ -366,6 +372,35 @@ export function moviePlaylistMoviesQueryOpts(
     queryFn: () => getMoviePlaylistMovies(playlistId, page, perPage, sort),
     enabled: playlistId > 0,
     staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function watchRoomsQueryOpts() {
+  return queryOptions({
+    queryKey: [WATCH_ROOMS_KEY],
+    queryFn: getWatchRooms,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function watchRoomQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [WATCH_ROOM_KEY, id],
+    queryFn: () => getWatchRoom(id),
+    enabled: id > 0,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
+  return queryOptions({
+    queryKey: [WATCH_ROOM_INVITE_USERS_KEY],
+    queryFn: getWatchRoomInviteUsers,
+    enabled,
+    staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
   });
 }

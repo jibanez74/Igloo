@@ -13,6 +13,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// background is a package-level background context used for operations that must
+// outlive the originating HTTP request (e.g. HLS warm-up after room creation).
+var background = context.Background()
+
 type watchRoomMemberSummary struct {
 	ID     int64   `json:"id"`
 	Name   string  `json:"name"`
@@ -368,6 +372,19 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// If the room uses HLS, start FFmpeg immediately so participants experience
+	// minimal startup latency when they join. Per plan, failure here rolls the
+	// room back: we delete it and surface the error to the caller.
+	if req.Mode != helpers.WATCH_ROOM_PLAYBACK_MODE_DIRECT {
+		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack))
+		if warmErr != nil {
+			app.Logger.Error("hls warm-up failed; rolling back watch room", "error", warmErr, "room_id", room.ID)
+			_ = app.Queries.DeleteWatchRoom(background, room.ID)
+			helpers.ErrorJSON(w, errors.New("failed to start playback session for this room"), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	helpers.WriteJSON(w, http.StatusCreated, helpers.JSONResponse{
 		Error: false,
 		Data:  map[string]any{"room_id": room.ID},
@@ -464,6 +481,11 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
 	}
+
+	// Stop and remove the room HLS session if one was running.
+	// This is a no-op for direct-play rooms or rooms that never successfully warmed up.
+	app.CleanupRoomHLSSession(roomID)
+	app.WatchRoomHub.deleteRoom(roomID)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,

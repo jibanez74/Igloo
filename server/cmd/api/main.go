@@ -73,6 +73,7 @@ type Application struct {
 	HLSSessionCache  *cache.Cache
 	HLSSessionGroup  singleflight.Group
 	SubtitleVTTCache *cache.Cache
+	WatchRoomHub     *WatchRoomHub
 }
 
 // SQL is the embedded startup schema applied by InitTables.
@@ -156,6 +157,8 @@ func InitApp() (*Application, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize settings: %v", err)
 	}
+
+	app.WatchRoomHub = NewWatchRoomHub()
 
 	// Directory paths come from settings, so this must run after InitSettings.
 	err = app.InitDirs()
@@ -648,6 +651,10 @@ func (app *Application) InitRouter() {
 				r.Post("/", app.CreateWatchRoom)
 				r.Get("/{id}", app.GetWatchRoom)
 				r.Post("/{id}/join", app.JoinWatchRoom)
+				r.Get("/{id}/ws", app.WatchRoomWebSocket)
+				r.Get("/{id}/stream", app.StreamWatchRoomMovie)
+				r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
+				r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
 				r.Delete("/{id}", app.DeleteWatchRoom)
 			})
 
@@ -751,6 +758,10 @@ func (app *Application) ListenForShutdown() {
 	}
 
 	app.Logger.Info("running clean up tasks...")
+
+	if app.WatchRoomHub != nil {
+		app.WatchRoomHub.Shutdown()
+	}
 
 	// Clean up all HLS sessions (kill FFmpeg, delete temp dirs) before FFmpeg binary cleanup.
 	if app.HLSSessionCache != nil {

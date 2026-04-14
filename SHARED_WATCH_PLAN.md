@@ -1046,6 +1046,8 @@ Validation:
 
 ## Phase 4: Create Room Dialog
 
+Before doing anything else, read web/AGENTS.md file for frontend rules.
+
 Deliverables:
 
 - real create-room dialog from movie details
@@ -1056,7 +1058,6 @@ Validation:
 
 - creation flow tests pass
 - movie details tests remain green
-
 
 ## Phase 5: Home Page Discovery
 

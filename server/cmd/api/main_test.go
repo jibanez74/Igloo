@@ -414,6 +414,7 @@ func setupTestApp(t *testing.T) *Application {
 	// (no FFmpeg processes to kill in tests).
 	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
+	app.WatchRoomHub = NewWatchRoomHub()
 
 	return app
 }
