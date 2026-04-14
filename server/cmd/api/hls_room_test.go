@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -52,6 +53,41 @@ func TestCleanupRoomHLSSession_RemovesSessionFromCache(t *testing.T) {
 
 	if _, ok := app.HLSSessionCache.Get(key); ok {
 		t.Error("expected session to be removed from cache after cleanup")
+	}
+	if !app.isRoomHLSSessionDeleted(roomID) {
+		t.Error("expected cleanup to mark the room hls session as deleted")
+	}
+}
+
+func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const roomID = int64(24)
+	key := RoomHLSSessionKey(roomID)
+
+	tempDir, err := os.MkdirTemp("", "igloo-room-hls-*")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+
+	session := &HLSSession{TempDir: tempDir}
+
+	app.CleanupRoomHLSSession(roomID)
+
+	err = app.storeRoomHLSSessionIfActive(roomID, key, session)
+	if err == nil {
+		t.Fatal("expected deleted room session storage to fail")
+	}
+	if !strings.Contains(err.Error(), "was deleted") {
+		t.Fatalf("error = %v, want deletion message", err)
+	}
+	if _, ok := app.HLSSessionCache.Get(key); ok {
+		t.Fatal("expected no cached session for deleted room")
+	}
+	_, statErr := os.Stat(tempDir)
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("expected temp dir cleanup, stat err = %v", statErr)
 	}
 }
 

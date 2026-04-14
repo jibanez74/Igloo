@@ -68,7 +68,7 @@ FROM users
 WHERE id != sqlc.arg(excluded_id)
   AND (
     sqlc.arg(search) = ''
-    OR LOWER(name) LIKE '%' || LOWER(sqlc.arg(search)) || '%'
-    OR LOWER(email) LIKE '%' || LOWER(sqlc.arg(search)) || '%'
+    OR INSTR(LOWER(name), LOWER(sqlc.arg(search))) > 0
+    OR INSTR(LOWER(email), LOWER(sqlc.arg(search))) > 0
   )
 ORDER BY name ASC;

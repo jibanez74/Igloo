@@ -350,6 +350,22 @@ func TestInitTables_MigratesNegativeWatchRoomTracks(t *testing.T) {
 	if memberCount != 1 {
 		t.Fatalf("expected migrated room member to be preserved, got %d", memberCount)
 	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
+		VALUES (1, 1, 'direct', -1)
+	`)
+	if err == nil {
+		t.Fatal("expected migrated schema to reject negative audio_track insert")
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
+		VALUES (1, 1, 'direct', 0, -1)
+	`)
+	if err == nil {
+		t.Fatal("expected migrated schema to reject negative subtitle_track insert")
+	}
 }
 
 func TestInitTables_UsersSchema(t *testing.T) {
@@ -532,6 +548,7 @@ func setupTestApp(t *testing.T) *Application {
 	// (no FFmpeg processes to kill in tests).
 	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
+	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.WatchRoomHub = NewWatchRoomHub()
 
 	return app

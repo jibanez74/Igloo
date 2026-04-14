@@ -54,6 +54,37 @@ func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
 	app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
 }
 
+func (app *Application) markRoomHLSSessionDeleted(roomID int64) {
+	if app.RoomHLSTombstone == nil {
+		return
+	}
+	app.RoomHLSTombstone.SetDefault(RoomHLSSessionKey(roomID), struct{}{})
+}
+
+func (app *Application) isRoomHLSSessionDeleted(roomID int64) bool {
+	if app.RoomHLSTombstone == nil {
+		return false
+	}
+	_, deleted := app.RoomHLSTombstone.Get(RoomHLSSessionKey(roomID))
+	return deleted
+}
+
+func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, session *HLSSession) error {
+	app.RoomHLSMu.Lock()
+	deleted := app.isRoomHLSSessionDeleted(roomID)
+	if !deleted {
+		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+	}
+	app.RoomHLSMu.Unlock()
+
+	if deleted {
+		cleanupHLSSession(session)
+		return fmt.Errorf("watch room %d was deleted during hls session creation", roomID)
+	}
+
+	return nil
+}
+
 func cleanupHLSSession(session *HLSSession) {
 	if session == nil {
 		return
@@ -188,7 +219,11 @@ func (app *Application) GetOrCreateRoomHLSSession(
 		if createErr != nil {
 			return nil, createErr
 		}
-		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+
+		storeErr := app.storeRoomHLSSessionIfActive(roomID, key, session)
+		if storeErr != nil {
+			return nil, storeErr
+		}
 		return session, nil
 	})
 
@@ -206,11 +241,17 @@ func (app *Application) GetOrCreateRoomHLSSession(
 // It is a no-op if no session exists for the room.
 func (app *Application) CleanupRoomHLSSession(roomID int64) {
 	key := RoomHLSSessionKey(roomID)
+	app.RoomHLSMu.Lock()
+	app.markRoomHLSSessionDeleted(roomID)
 	raw, ok := app.HLSSessionCache.Get(key)
+	if ok {
+		app.HLSSessionCache.Delete(key)
+	}
+	app.RoomHLSMu.Unlock()
+
 	if !ok {
 		return
 	}
-	app.HLSSessionCache.Delete(key)
 	if session, ok := raw.(*HLSSession); ok {
 		cleanupHLSSession(session)
 	}

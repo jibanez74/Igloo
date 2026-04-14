@@ -145,8 +145,8 @@ FROM users
 WHERE id != ?1
   AND (
     ?2 = ''
-    OR LOWER(name) LIKE '%' || LOWER(?2) || '%'
-    OR LOWER(email) LIKE '%' || LOWER(?2) || '%'
+    OR INSTR(LOWER(name), LOWER(?2)) > 0
+    OR INSTR(LOWER(email), LOWER(?2)) > 0
   )
 ORDER BY name ASC
 `

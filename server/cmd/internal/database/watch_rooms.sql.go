@@ -323,19 +323,3 @@ func (q *Queries) IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerPara
 	err := row.Scan(&column_1)
 	return column_1, err
 }
-
-const removeWatchRoomMember = `-- name: RemoveWatchRoomMember :exec
-DELETE FROM watch_room_members
-WHERE room_id = ?
-  AND user_id = ?
-`
-
-type RemoveWatchRoomMemberParams struct {
-	RoomID int64 `json:"room_id"`
-	UserID int64 `json:"user_id"`
-}
-
-func (q *Queries) RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) error {
-	_, err := q.exec(ctx, q.removeWatchRoomMemberStmt, removeWatchRoomMember, arg.RoomID, arg.UserID)
-	return err
-}

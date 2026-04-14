@@ -79,11 +79,6 @@ LIMIT 1;
 DELETE FROM watch_rooms
 WHERE id = ?;
 
--- name: RemoveWatchRoomMember :exec
-DELETE FROM watch_room_members
-WHERE room_id = ?
-  AND user_id = ?;
-
 -- name: CountUsersByIDs :one
 SELECT
   COUNT(*)

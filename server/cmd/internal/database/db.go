@@ -408,9 +408,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.removeTrackFromPlaylistStmt, err = db.PrepareContext(ctx, removeTrackFromPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveTrackFromPlaylist: %w", err)
 	}
-	if q.removeWatchRoomMemberStmt, err = db.PrepareContext(ctx, removeWatchRoomMember); err != nil {
-		return nil, fmt.Errorf("error preparing query RemoveWatchRoomMember: %w", err)
-	}
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
 	}
@@ -1122,11 +1119,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing removeTrackFromPlaylistStmt: %w", cerr)
 		}
 	}
-	if q.removeWatchRoomMemberStmt != nil {
-		if cerr := q.removeWatchRoomMemberStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing removeWatchRoomMemberStmt: %w", cerr)
-		}
-	}
 	if q.unlikeTrackStmt != nil {
 		if cerr := q.unlikeTrackStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing unlikeTrackStmt: %w", cerr)
@@ -1404,7 +1396,6 @@ type Queries struct {
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
-	removeWatchRoomMemberStmt                   *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
@@ -1561,7 +1552,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
-		removeWatchRoomMemberStmt:                   q.removeWatchRoomMemberStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,

@@ -102,11 +102,12 @@ func (hub *WatchRoomHub) getOrCreateSession(roomID int64) *watchRoomSession {
 	return session
 }
 
-func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) watchRoomServerEvent {
+func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) (watchRoomServerEvent, bool) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 
 	session := hub.getOrCreateSession(roomID)
+	_, alreadyConnected := session.connectedIDs[client.user.ID]
 	session.clients[client] = true
 	session.connectedIDs[client.user.ID] = true
 
@@ -115,7 +116,7 @@ func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) watchRoo
 		RoomID:           roomID,
 		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
 		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
-	}
+	}, !alreadyConnected
 }
 
 func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
@@ -448,10 +449,12 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		user:   member,
 	}
 
-	snapshot := app.WatchRoomHub.connect(room.ID, client)
+	snapshot, firstConnection := app.WatchRoomHub.connect(room.ID, client)
 	client.writeJSON(snapshot)
-	if event := app.WatchRoomHub.memberJoinedEvent(room.ID, member); event != nil {
-		app.WatchRoomHub.broadcastToOthers(room.ID, client, *event)
+	if firstConnection {
+		if event := app.WatchRoomHub.memberJoinedEvent(room.ID, member); event != nil {
+			app.WatchRoomHub.broadcastToOthers(room.ID, client, *event)
+		}
 	}
 
 	defer func() {

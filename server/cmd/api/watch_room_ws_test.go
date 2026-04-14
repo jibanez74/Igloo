@@ -112,6 +112,30 @@ func readUntilPlaybackPosition(
 	return watchRoomWSTestEvent{}
 }
 
+func expectNoEventType(t *testing.T, conn *websocket.Conn, forbiddenType string, wait time.Duration) {
+	t.Helper()
+
+	err := conn.SetReadDeadline(time.Now().Add(wait))
+	if err != nil {
+		t.Fatalf("set read deadline: %v", err)
+	}
+
+	for {
+		var event watchRoomWSTestEvent
+		err = conn.ReadJSON(&event)
+		if err != nil {
+			netErr, ok := err.(net.Error)
+			if ok && netErr.Timeout() {
+				return
+			}
+			t.Fatalf("read websocket event: %v", err)
+		}
+		if event.Type == forbiddenType {
+			t.Fatalf("unexpected %q event", forbiddenType)
+		}
+	}
+}
+
 func expectSocketToClose(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 
@@ -246,6 +270,41 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 	if !pauseEvent.Playback.Paused {
 		t.Fatal("expected pause event to set paused=true")
 	}
+}
+
+func TestWatchRoomWebSocket_DoesNotBroadcastMemberJoinedForSecondSocket(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Guest",
+		Email:    "guest-second-socket@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create guest: %v", err)
+	}
+
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+	defer server.Close()
+
+	ownerConn, _ := dialWatchRoomSocket(t, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	guestConn, _ := dialWatchRoomSocket(t, server.URL, room.ID, guest.ID)
+	defer guestConn.Close()
+
+	_ = readUntilEventType(t, ownerConn, "room_snapshot")
+	_ = readUntilEventType(t, guestConn, "room_snapshot")
+
+	ownerSecondConn, _ := dialWatchRoomSocket(t, server.URL, room.ID, ownerID)
+	defer ownerSecondConn.Close()
+
+	_ = readUntilEventType(t, ownerSecondConn, "room_snapshot")
+	expectNoEventType(t, guestConn, "member_joined", 250*time.Millisecond)
 }
 
 func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {

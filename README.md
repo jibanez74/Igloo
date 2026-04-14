@@ -22,6 +22,10 @@ APIs, features, playback workflows, and client applications are still evolving.
 
 The current focus is the server platform and the React web client contained in this repository. Dedicated TV and mobile clients are planned as separate projects.
 
+## Future Fixes
+
+- Watch room WebSocket broadcast delivery should be made resilient to slow clients. The current server-side broadcast path writes to each socket serially, so one slow connection can delay room events for everyone else. A future version should move watch room clients to dedicated buffered outbound queues with a single writer loop per client and non-blocking broadcast fan-out.
+
 ## Features
 
 - Movies and TV shows: library scanning, metadata enrichment, artwork, trailers where available, technical media details, watch progress, direct streaming, and HLS playback with hardware-accelerated transcoding where supported

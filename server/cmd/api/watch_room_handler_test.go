@@ -1013,3 +1013,105 @@ func TestGetUsers_HTTP_SearchFilter(t *testing.T) {
 		t.Errorf("expected 1 user matching 'bob', got %d", len(users))
 	}
 }
+
+func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
+	app := setupWatchRoomHTTPTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	user1, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Alice Smith",
+		Email:    "alice@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create user1: %v", err)
+	}
+	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Bob_One",
+		Email:    "bob_one@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create user2: %v", err)
+	}
+	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "BobXOne",
+		Email:    "bobxone@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create user3: %v", err)
+	}
+	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Carol%Two",
+		Email:    "carol%two@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create user4: %v", err)
+	}
+	_, err = app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "CarolTwo",
+		Email:    "caroltwo@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create user5: %v", err)
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user1.ID)
+		app.GetUsers(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users?q=carol%25", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for percent search, got %d", w.Code)
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode percent search response: %v", err)
+	}
+
+	data := resp.Data.(map[string]any)
+	users := data["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user matching literal percent, got %d", len(users))
+	}
+
+	percentMatch := users[0].(map[string]any)
+	if percentMatch["name"] != "Carol%Two" {
+		t.Fatalf("expected Carol%%Two for percent search, got %#v", percentMatch["name"])
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/users?q=bob_", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for underscore search, got %d", w.Code)
+	}
+
+	resp = helpers.JSONResponse{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode underscore search response: %v", err)
+	}
+
+	data = resp.Data.(map[string]any)
+	users = data["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user matching literal underscore, got %d", len(users))
+	}
+
+	underscoreMatch := users[0].(map[string]any)
+	if underscoreMatch["name"] != "Bob_One" {
+		t.Fatalf("expected Bob_One for underscore search, got %#v", underscoreMatch["name"])
+	}
+}

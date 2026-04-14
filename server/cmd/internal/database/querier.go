@@ -188,7 +188,6 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
-	RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).

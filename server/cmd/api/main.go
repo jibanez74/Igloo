@@ -101,6 +101,8 @@ type Application struct {
 	HLSSessionCache  *cache.Cache
 	HLSSessionGroup  singleflight.Group
 	SubtitleVTTCache *cache.Cache
+	RoomHLSTombstone *cache.Cache
+	RoomHLSMu        sync.Mutex
 	WatchRoomHub     *WatchRoomHub
 }
 
@@ -225,6 +227,7 @@ func InitApp() (*Application, error) {
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
+	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 
 	if app.Settings.TmdbKey.Valid {
 		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
@@ -343,14 +346,14 @@ func (app *Application) ensureWatchRoomTrackConstraints() error {
 		return err
 	}
 	defer conn.Close()
+	defer func() {
+		_, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	}()
 
 	_, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-	}()
 
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
