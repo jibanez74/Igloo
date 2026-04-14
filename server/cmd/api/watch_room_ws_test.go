@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -122,6 +123,10 @@ func expectSocketToClose(t *testing.T, conn *websocket.Conn) {
 	for {
 		_, _, err = conn.ReadMessage()
 		if err != nil {
+			netErr, ok := err.(net.Error)
+			if ok && netErr.Timeout() {
+				t.Fatalf("expected websocket connection to close before read deadline, got timeout: %v", err)
+			}
 			return
 		}
 	}
@@ -142,7 +147,7 @@ func TestWatchRoomWebSocket_RejectsNonMember(t *testing.T) {
 		t.Fatalf("create outsider: %v", err)
 	}
 
-	room := createTestRoom(t, app, ownerID, movieID, nil)
+	room := createTestRoom(t, app, ownerID, movieID)
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 
@@ -174,7 +179,8 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 		t.Fatalf("create guest: %v", err)
 	}
 
-	room := createTestRoom(t, app, ownerID, movieID, []int64{guest.ID})
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 
@@ -257,7 +263,8 @@ func TestWatchRoomWebSocket_ReceivesRoomDeletedOnDelete(t *testing.T) {
 		t.Fatalf("create guest: %v", err)
 	}
 
-	room := createTestRoom(t, app, ownerID, movieID, []int64{guest.ID})
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 
@@ -301,7 +308,8 @@ func TestWatchRoomHub_ShutdownClosesConnectionsAndClearsSessions(t *testing.T) {
 		t.Fatalf("create guest: %v", err)
 	}
 
-	room := createTestRoom(t, app, ownerID, movieID, []int64{guest.ID})
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 
@@ -331,7 +339,8 @@ func TestWatchRoomWebSocket_ShutdownReleasesWaitGroup(t *testing.T) {
 	defer app.DB.Close()
 
 	ownerID, movieID := createTestUserAndMovie(t, app)
-	room := createTestRoom(t, app, ownerID, movieID, nil)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
 	server := setupWatchRoomWSTestServer(t, app)
 	defer server.Close()
 

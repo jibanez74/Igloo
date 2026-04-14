@@ -55,6 +55,34 @@ var movieMetadataLockColumns = []string{
 	"user_locked_run_time",
 }
 
+const createWatchRoomsTableWithTrackChecksSQL = `
+CREATE TABLE watch_rooms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL,
+  movie_id INTEGER NOT NULL,
+  playback_mode TEXT NOT NULL CHECK (
+    playback_mode IN ('direct', 'remux', '2160p_16mbps', '1080p_8mbps', '1080p_6mbps', '1080p_4mbps', '720p_3mbps')
+  ),
+  audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
+  subtitle_track INTEGER CHECK (subtitle_track >= 0),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+);`
+
+const createWatchRoomMembersTableSQL = `
+CREATE TABLE watch_room_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (room_id, user_id),
+  FOREIGN KEY (room_id) REFERENCES watch_rooms (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+);`
+
 type Application struct {
 	DB               *sql.DB
 	Queries          *database.Queries
@@ -279,12 +307,184 @@ func (app *Application) InitTables() error {
 		return err
 	}
 
+	err = app.ensureWatchRoomTrackConstraints()
+	if err != nil {
+		return err
+	}
+
 	err = app.ensureMovieMetadataLockColumns()
 	if err != nil {
 		return err
 	}
 
 	app.Logger.Info("database tables initialized successfully")
+
+	return nil
+}
+
+func (app *Application) ensureWatchRoomTrackConstraints() error {
+	var tableSQL sql.NullString
+	err := app.DB.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='watch_rooms'",
+	).Scan(&tableSQL)
+	if err != nil {
+		return err
+	}
+
+	if tableSQL.Valid &&
+		strings.Contains(tableSQL.String, "audio_track >= 0") &&
+		strings.Contains(tableSQL.String, "subtitle_track >= 0") {
+		return nil
+	}
+
+	ctx := context.Background()
+	conn, err := app.DB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	}()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		CREATE TEMP TABLE watch_room_members_backup AS
+		SELECT id, room_id, user_id, created_at, updated_at
+		FROM watch_room_members
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `DROP TABLE watch_room_members`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `ALTER TABLE watch_rooms RENAME TO watch_rooms_old`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, createWatchRoomsTableWithTrackChecksSQL)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO watch_rooms (
+			id,
+			owner_user_id,
+			movie_id,
+			playback_mode,
+			audio_track,
+			subtitle_track,
+			created_at,
+			updated_at
+		)
+		SELECT
+			id,
+			owner_user_id,
+			movie_id,
+			playback_mode,
+			CASE
+				WHEN audio_track < 0 THEN 0
+				ELSE audio_track
+			END,
+			CASE
+				WHEN subtitle_track IS NOT NULL AND subtitle_track < 0 THEN NULL
+				ELSE subtitle_track
+			END,
+			created_at,
+			updated_at
+		FROM watch_rooms_old
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `DROP TABLE watch_rooms_old`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, createWatchRoomMembersTableSQL)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO watch_room_members (
+			id,
+			room_id,
+			user_id,
+			created_at,
+			updated_at
+		)
+		SELECT
+			id,
+			room_id,
+			user_id,
+			created_at,
+			updated_at
+		FROM watch_room_members_backup
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `DROP TABLE watch_room_members_backup`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_rooms_owner ON watch_rooms (owner_user_id)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_rooms_movie ON watch_rooms (movie_id)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_room_members_room ON watch_room_members (room_id)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_room_members_user ON watch_room_members (user_id)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

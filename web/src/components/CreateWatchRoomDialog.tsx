@@ -1,4 +1,4 @@
-import { useDeferredValue, useId, useState } from "react";
+import { useDeferredValue, useId, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Users } from "lucide-react";
@@ -43,6 +43,7 @@ type CreateWatchRoomDialogProps = {
   playbackSettings: PlaybackSettings;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 function getInitials(name: string) {
@@ -58,6 +59,7 @@ export default function CreateWatchRoomDialog({
   playbackSettings,
   open,
   onOpenChange,
+  restoreFocusRef,
 }: CreateWatchRoomDialogProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -198,7 +200,15 @@ export default function CreateWatchRoomDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-slate-700 bg-slate-900 sm:max-w-xl">
+      <DialogContent
+        className="flex max-h-[90vh] flex-col overflow-hidden border-slate-700 bg-slate-900 sm:max-w-xl"
+        onCloseAutoFocus={event => {
+          const restoreTarget = restoreFocusRef?.current;
+          if (!restoreTarget) return;
+          event.preventDefault();
+          restoreTarget.focus();
+        }}
+      >
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <DialogHeader>
             <DialogTitle className="text-white">Watch together</DialogTitle>

@@ -519,8 +519,8 @@ CREATE TABLE
     playback_mode TEXT NOT NULL CHECK (
       playback_mode IN ('direct', 'remux', '2160p_16mbps', '1080p_8mbps', '1080p_6mbps', '1080p_4mbps', '720p_3mbps')
     ),
-    audio_track INTEGER NOT NULL DEFAULT 0,
-    subtitle_track INTEGER,
+    audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
+    subtitle_track INTEGER CHECK (subtitle_track >= 0),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,

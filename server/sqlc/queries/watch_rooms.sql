@@ -46,6 +46,19 @@ INNER JOIN users AS u
 WHERE wrm.room_id = ?
 ORDER BY wrm.created_at ASC;
 
+-- name: GetWatchRoomMembersByRoomIDs :many
+SELECT
+  wrm.room_id,
+  u.id,
+  u.name,
+  u.email,
+  u.avatar
+FROM watch_room_members AS wrm
+INNER JOIN users AS u
+  ON wrm.user_id = u.id
+WHERE wrm.room_id IN (sqlc.slice(room_ids))
+ORDER BY wrm.room_id ASC, wrm.created_at ASC;
+
 -- name: IsWatchRoomOwner :one
 SELECT
   1
@@ -65,6 +78,11 @@ LIMIT 1;
 -- name: DeleteWatchRoom :exec
 DELETE FROM watch_rooms
 WHERE id = ?;
+
+-- name: RemoveWatchRoomMember :exec
+DELETE FROM watch_room_members
+WHERE room_id = ?
+  AND user_id = ?;
 
 -- name: CountUsersByIDs :one
 SELECT

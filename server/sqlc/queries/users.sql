@@ -65,5 +65,10 @@ SELECT
   email,
   avatar
 FROM users
-WHERE id != ?
+WHERE id != sqlc.arg(excluded_id)
+  AND (
+    sqlc.arg(search) = ''
+    OR LOWER(name) LIKE '%' || LOWER(sqlc.arg(search)) || '%'
+    OR LOWER(email) LIKE '%' || LOWER(sqlc.arg(search)) || '%'
+  )
 ORDER BY name ASC;

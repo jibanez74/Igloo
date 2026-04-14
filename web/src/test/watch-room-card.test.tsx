@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import WatchRoomCard from "@/components/WatchRoomCard";
 import type { WatchRoomType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
@@ -8,6 +8,12 @@ import { renderWithQueryClient } from "@/test/render";
 const deleteWatchRoomMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showSuccessMock = vi.fn();
+
+beforeEach(() => {
+  deleteWatchRoomMock.mockReset();
+  showActionFailedMock.mockReset();
+  showSuccessMock.mockReset();
+});
 
 vi.mock("@tanstack/react-router", async () => {
   const actual =

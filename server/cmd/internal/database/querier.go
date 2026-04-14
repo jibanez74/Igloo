@@ -105,6 +105,7 @@ type Querier interface {
 	GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchProgressParams) (MovieWatchProgress, error)
 	GetMoviesByGenreAsc(ctx context.Context, arg GetMoviesByGenreAscParams) ([]GetMoviesByGenreAscRow, error)
 	GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenreDescParams) ([]GetMoviesByGenreDescRow, error)
+	GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, error)
 	GetMoviesCount(ctx context.Context) (int64, error)
 	// Paginated library A-Z (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
@@ -154,11 +155,12 @@ type Querier interface {
 	// ============================================================================
 	// Returns the user's most played tracks
 	GetUserTopTracks(ctx context.Context, arg GetUserTopTracksParams) ([]GetUserTopTracksRow, error)
-	GetUsersExcluding(ctx context.Context, id int64) ([]GetUsersExcludingRow, error)
+	GetUsersExcluding(ctx context.Context, arg GetUsersExcludingParams) ([]GetUsersExcludingRow, error)
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
 	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
+	GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error)
 	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]WatchRoom, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) (AudioStream, error)
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
@@ -186,6 +188,7 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
+	RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).

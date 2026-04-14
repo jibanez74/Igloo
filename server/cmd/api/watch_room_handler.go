@@ -131,22 +131,60 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roomIDs := make([]int64, 0, len(rooms))
+	movieIDs := make([]int64, 0, len(rooms))
+	seenMovieIDs := make(map[int64]bool)
+	for _, room := range rooms {
+		roomIDs = append(roomIDs, room.ID)
+		if seenMovieIDs[room.MovieID] {
+			continue
+		}
+		seenMovieIDs[room.MovieID] = true
+		movieIDs = append(movieIDs, room.MovieID)
+	}
+
+	movies, err := app.Queries.GetMoviesByIDs(r.Context(), movieIDs)
+	if err != nil {
+		app.Logger.Error("failed to fetch movies for watch rooms", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	memberRows, err := app.Queries.GetWatchRoomMembersByRoomIDs(r.Context(), roomIDs)
+	if err != nil {
+		app.Logger.Error("failed to fetch members for watch rooms", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	movieByID := make(map[int64]database.Movie, len(movies))
+	for _, movie := range movies {
+		movieByID[movie.ID] = movie
+	}
+
+	membersByRoomID := make(map[int64][]watchRoomMemberSummary, len(roomIDs))
+	for _, row := range memberRows {
+		var avatar *string
+		if row.Avatar.Valid {
+			avatar = &row.Avatar.String
+		}
+		membersByRoomID[row.RoomID] = append(membersByRoomID[row.RoomID], watchRoomMemberSummary{
+			ID:     row.ID,
+			Name:   row.Name,
+			Avatar: avatar,
+		})
+	}
+
 	items := make([]watchRoomListItem, 0, len(rooms))
 	for _, room := range rooms {
-		movie, err := app.Queries.GetMovieByID(r.Context(), room.MovieID)
-		if err != nil {
-			app.Logger.Error("failed to fetch movie for watch room", "error", err, "room_id", room.ID, "movie_id", room.MovieID)
+		movie, movieOK := movieByID[room.MovieID]
+		if !movieOK {
+			app.Logger.Error("failed to find movie for watch room", "room_id", room.ID, "movie_id", room.MovieID)
 			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 			return
 		}
 
-		members, err := app.loadRoomMembers(r.Context(), room.ID)
-		if err != nil {
-			app.Logger.Error("failed to fetch members for watch room", "error", err, "room_id", room.ID)
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
-			return
-		}
-
+		members := membersByRoomID[room.ID]
 		owner, _ := findMemberByID(members, room.OwnerUserID)
 
 		var moviePoster *string
@@ -287,6 +325,16 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if req.AudioTrack < 0 {
+		helpers.ErrorJSON(w, errors.New("audio_track must be non-negative"), http.StatusBadRequest)
+		return
+	}
+
+	if req.SubtitleTrack != nil && *req.SubtitleTrack < 0 {
+		helpers.ErrorJSON(w, errors.New("subtitle_track must be non-negative"), http.StatusBadRequest)
+		return
+	}
+
 	_, err := app.Queries.GetMovieByID(r.Context(), req.MovieID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -378,8 +426,18 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	if req.Mode != helpers.WATCH_ROOM_PLAYBACK_MODE_DIRECT {
 		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack))
 		if warmErr != nil {
-			app.Logger.Error("hls warm-up failed; rolling back watch room", "error", warmErr, "room_id", room.ID)
-			_ = app.Queries.DeleteWatchRoom(background, room.ID)
+			deleteErr := app.Queries.DeleteWatchRoom(background, room.ID)
+			if deleteErr != nil {
+				app.Logger.Error(
+					"hls warm-up failed and watch room rollback delete failed",
+					"warm_up_error", warmErr,
+					"delete_error", deleteErr,
+					"room_id", room.ID,
+				)
+				helpers.ErrorJSON(w, errors.New("failed to start playback session for this room and failed to roll back the room"), http.StatusInternalServerError)
+				return
+			}
+			app.Logger.Error("hls warm-up failed; rolled back watch room", "warm_up_error", warmErr, "room_id", room.ID)
 			helpers.ErrorJSON(w, errors.New("failed to start playback session for this room"), http.StatusInternalServerError)
 			return
 		}

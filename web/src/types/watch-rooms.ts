@@ -45,7 +45,7 @@ export type CreateWatchRoomRequestType = {
   movie_id: number;
   mode: string;
   audio_track: number;
-  subtitle_track?: number | null;
+  subtitle_track: number | null;
   invited_user_ids: number[];
 };
 

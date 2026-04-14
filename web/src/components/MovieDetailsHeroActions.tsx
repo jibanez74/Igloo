@@ -246,6 +246,7 @@ export default function MovieDetailsHeroActions({
         playbackSettings={playbackSettings}
         open={createWatchRoomOpen}
         onOpenChange={setCreateWatchRoomOpen}
+        restoreFocusRef={moreOptionsButtonRef}
       />
 
       {user?.is_admin && (

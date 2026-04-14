@@ -142,9 +142,19 @@ SELECT
   email,
   avatar
 FROM users
-WHERE id != ?
+WHERE id != ?1
+  AND (
+    ?2 = ''
+    OR LOWER(name) LIKE '%' || LOWER(?2) || '%'
+    OR LOWER(email) LIKE '%' || LOWER(?2) || '%'
+  )
 ORDER BY name ASC
 `
+
+type GetUsersExcludingParams struct {
+	ExcludedID int64       `json:"excluded_id"`
+	Search     interface{} `json:"search"`
+}
 
 type GetUsersExcludingRow struct {
 	ID     int64          `json:"id"`
@@ -153,8 +163,8 @@ type GetUsersExcludingRow struct {
 	Avatar sql.NullString `json:"avatar"`
 }
 
-func (q *Queries) GetUsersExcluding(ctx context.Context, id int64) ([]GetUsersExcludingRow, error) {
-	rows, err := q.query(ctx, q.getUsersExcludingStmt, getUsersExcluding, id)
+func (q *Queries) GetUsersExcluding(ctx context.Context, arg GetUsersExcludingParams) ([]GetUsersExcludingRow, error) {
+	rows, err := q.query(ctx, q.getUsersExcludingStmt, getUsersExcluding, arg.ExcludedID, arg.Search)
 	if err != nil {
 		return nil, err
 	}

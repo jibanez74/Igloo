@@ -179,6 +179,67 @@ func (q *Queries) GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetW
 	return items, nil
 }
 
+const getWatchRoomMembersByRoomIDs = `-- name: GetWatchRoomMembersByRoomIDs :many
+SELECT
+  wrm.room_id,
+  u.id,
+  u.name,
+  u.email,
+  u.avatar
+FROM watch_room_members AS wrm
+INNER JOIN users AS u
+  ON wrm.user_id = u.id
+WHERE wrm.room_id IN (/*SLICE:room_ids*/?)
+ORDER BY wrm.room_id ASC, wrm.created_at ASC
+`
+
+type GetWatchRoomMembersByRoomIDsRow struct {
+	RoomID int64          `json:"room_id"`
+	ID     int64          `json:"id"`
+	Name   string         `json:"name"`
+	Email  string         `json:"email"`
+	Avatar sql.NullString `json:"avatar"`
+}
+
+func (q *Queries) GetWatchRoomMembersByRoomIDs(ctx context.Context, roomIds []int64) ([]GetWatchRoomMembersByRoomIDsRow, error) {
+	query := getWatchRoomMembersByRoomIDs
+	var queryParams []interface{}
+	if len(roomIds) > 0 {
+		for _, v := range roomIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:room_ids*/?", strings.Repeat(",?", len(roomIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:room_ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWatchRoomMembersByRoomIDsRow{}
+	for rows.Next() {
+		var i GetWatchRoomMembersByRoomIDsRow
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Avatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWatchRoomsForUser = `-- name: GetWatchRoomsForUser :many
 SELECT
   wr.id, wr.owner_user_id, wr.movie_id, wr.playback_mode, wr.audio_track, wr.subtitle_track, wr.created_at, wr.updated_at
@@ -261,4 +322,20 @@ func (q *Queries) IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerPara
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const removeWatchRoomMember = `-- name: RemoveWatchRoomMember :exec
+DELETE FROM watch_room_members
+WHERE room_id = ?
+  AND user_id = ?
+`
+
+type RemoveWatchRoomMemberParams struct {
+	RoomID int64 `json:"room_id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) RemoveWatchRoomMember(ctx context.Context, arg RemoveWatchRoomMemberParams) error {
+	_, err := q.exec(ctx, q.removeWatchRoomMemberStmt, removeWatchRoomMember, arg.RoomID, arg.UserID)
+	return err
 }

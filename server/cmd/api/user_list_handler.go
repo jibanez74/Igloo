@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
 
@@ -24,24 +25,20 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := app.Queries.GetUsersExcluding(r.Context(), userID)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	rows, err := app.Queries.GetUsersExcluding(r.Context(), database.GetUsersExcludingParams{
+		ExcludedID: userID,
+		Search:     q,
+	})
 	if err != nil {
 		app.Logger.Error("failed to fetch users", "error", err)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
 	}
 
-	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
-
 	users := make([]userListSummary, 0, len(rows))
 	for _, row := range rows {
-		if q != "" {
-			name := strings.ToLower(row.Name)
-			email := strings.ToLower(row.Email)
-			if !strings.Contains(name, q) && !strings.Contains(email, q) {
-				continue
-			}
-		}
 		var avatar *string
 		if row.Avatar.Valid {
 			avatar = &row.Avatar.String

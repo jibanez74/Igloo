@@ -23,6 +23,12 @@ FROM movies
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetMoviesByIDs :many
+SELECT
+  *
+FROM movies
+WHERE id IN (sqlc.slice(ids));
+
 -- name: GetMovieByPath :one
 SELECT
   *

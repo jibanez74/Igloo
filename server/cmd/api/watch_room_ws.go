@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -330,9 +331,32 @@ func connectedUserIDs(ids map[int64]bool) []int64 {
 	return userIDs
 }
 
+func isAllowedWatchRoomOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	if originURL.Host != r.Host {
+		return false
+	}
+
+	expectedScheme := "http"
+	if r.TLS != nil {
+		expectedScheme = "https"
+	}
+
+	return originURL.Scheme == expectedScheme
+}
+
 var watchRoomUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return isAllowedWatchRoomOrigin(r)
 	},
 }
 
@@ -450,6 +474,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
 		var event watchRoomClientEvent
 		err = json.Unmarshal(rawMessage, &event)

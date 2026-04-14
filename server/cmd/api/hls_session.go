@@ -158,16 +158,29 @@ func (app *Application) GetOrCreateRoomHLSSession(
 ) (*HLSSession, error) {
 	key := RoomHLSSessionKey(roomID)
 
-	if _, ok := app.HLSSessionCache.Get(key); ok {
-		raw, _ := app.HLSSessionCache.Get(key)
-		session := raw.(*HLSSession)
+	raw, ok := app.HLSSessionCache.Get(key)
+	if ok {
+		if raw == nil {
+			return nil, fmt.Errorf("cached HLS session %q is nil", key)
+		}
+		session, typeOK := raw.(*HLSSession)
+		if !typeOK {
+			return nil, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
+		}
 		app.RefreshHLSSessionTTL(key, session)
 		return session, nil
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
-		if raw, ok := app.HLSSessionCache.Get(key); ok {
-			existing := raw.(*HLSSession)
+		raw, ok := app.HLSSessionCache.Get(key)
+		if ok {
+			if raw == nil {
+				return nil, fmt.Errorf("cached HLS session %q is nil", key)
+			}
+			existing, typeOK := raw.(*HLSSession)
+			if !typeOK {
+				return nil, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
+			}
 			app.RefreshHLSSessionTTL(key, existing)
 			return existing, nil
 		}
@@ -182,7 +195,11 @@ func (app *Application) GetOrCreateRoomHLSSession(
 	if err != nil {
 		return nil, err
 	}
-	return v.(*HLSSession), nil
+	session, ok := v.(*HLSSession)
+	if !ok || session == nil {
+		return nil, fmt.Errorf("singleflight returned unexpected HLS session type %T for %q", v, key)
+	}
+	return session, nil
 }
 
 // CleanupRoomHLSSession stops and removes the HLS session for a watch room.

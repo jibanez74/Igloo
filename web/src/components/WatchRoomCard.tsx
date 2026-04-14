@@ -69,7 +69,6 @@ export default function WatchRoomCard({ room }: Props) {
             </h3>
 
             <p className="mt-0.5 truncate text-xs text-slate-400">
-              <span className="sr-only">Hosted by </span>
               Hosted by {room.owner.name}
               {room.is_owner && (
                 <span className="ml-1 text-amber-400">(you)</span>
@@ -92,10 +91,7 @@ export default function WatchRoomCard({ room }: Props) {
 
         {room.members.length > 0 && (
           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-            <div
-              className="flex items-center gap-2"
-              aria-label={`${room.members.length} member${room.members.length !== 1 ? "s" : ""}`}
-            >
+            <div className="flex items-center gap-2">
               <Users className="size-3.5 text-slate-500" aria-hidden="true" />
               <p className="text-xs font-medium text-slate-300">
                 {room.members.length} member{room.members.length === 1 ? "" : "s"}

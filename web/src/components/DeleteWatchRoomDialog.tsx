@@ -63,35 +63,58 @@ export default function DeleteWatchRoomDialog({
   async function handleDelete() {
     setDeleting(true);
     onDeleteStart?.();
+    let deleteSucceeded = false;
 
-    const res = await deleteWatchRoom(roomId);
-    if (res.error) {
-      setDeleting(false);
+    try {
+      const res = await deleteWatchRoom(roomId);
+      if (res.error) {
+        onDeleteError?.();
+        showActionFailed("close watch room", res.message);
+        return;
+      }
+
+      queryClient.setQueryData(
+        [WATCH_ROOMS_KEY],
+        (
+          existing:
+            | ApiResponseType<{ rooms: WatchRoomType[] }>
+            | undefined,
+        ) => removeDeletedRoomFromCache(existing, roomId),
+      );
+      queryClient.removeQueries({
+        queryKey: [WATCH_ROOM_KEY, roomId],
+        exact: true,
+      });
+      void queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
+
+      showSuccess(
+        "Watch room closed",
+        `"${movieTitle}" is no longer available.`,
+      );
+      deleteSucceeded = true;
+
+      if (onDeleted) {
+        try {
+          await onDeleted();
+        } catch (error) {
+          console.error("DeleteWatchRoomDialog onDeleted failed", error);
+          showActionFailed(
+            "finish closing watch room",
+            "The room was closed, but the follow-up action failed.",
+          );
+        }
+      }
+    } catch {
       onDeleteError?.();
-      showActionFailed("close watch room", res.message);
-      return;
-    }
-
-    queryClient.setQueryData(
-      [WATCH_ROOMS_KEY],
-      (
-        existing:
-          | ApiResponseType<{ rooms: WatchRoomType[] }>
-          | undefined,
-      ) => removeDeletedRoomFromCache(existing, roomId),
-    );
-    queryClient.removeQueries({
-      queryKey: [WATCH_ROOM_KEY, roomId],
-      exact: true,
-    });
-    void queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
-
-    setDeleting(false);
-    onOpenChange(false);
-    showSuccess("Watch room closed", `"${movieTitle}" is no longer available.`);
-
-    if (onDeleted) {
-      await onDeleted();
+      showActionFailed(
+        "close watch room",
+        "An unexpected error occurred. Please try again.",
+      );
+    } finally {
+      setDeleting(false);
+      if (deleteSucceeded) {
+        onOpenChange(false);
+      }
     }
   }
 

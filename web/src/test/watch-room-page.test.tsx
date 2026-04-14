@@ -93,6 +93,12 @@ class FakeWebSocket {
 
   constructor(public url: string) {
     FakeWebSocket.instances.push(this);
+    this.readyState = FakeWebSocket.OPEN;
+    queueMicrotask(() => {
+      if (this.readyState === FakeWebSocket.OPEN) {
+        this.dispatch("open", new Event("open"));
+      }
+    });
   }
 
   addEventListener(type: string, listener: (event: Event | MessageEvent) => void) {
