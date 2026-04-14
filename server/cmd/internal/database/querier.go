@@ -13,6 +13,7 @@ type Querier interface {
 	AddCollaborator(ctx context.Context, arg AddCollaboratorParams) (PlaylistCollaborator, error)
 	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error)
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error)
+	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
@@ -21,6 +22,7 @@ type Querier interface {
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
+	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
 	// Link a movie to an extra video (trailer/special feature). Idempotent.
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
 	// Link movie to genre via junction table
@@ -33,6 +35,7 @@ type Querier interface {
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
 	DeleteAlbum(ctx context.Context, id int64) error
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
@@ -60,6 +63,7 @@ type Querier interface {
 	// Used to efficiently update genres: only removes stale relationships.
 	DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error
 	DeleteUser(ctx context.Context, id int64) error
+	DeleteWatchRoom(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
 	GetAlbumByID(ctx context.Context, id int64) (Album, error)
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
@@ -150,8 +154,12 @@ type Querier interface {
 	// ============================================================================
 	// Returns the user's most played tracks
 	GetUserTopTracks(ctx context.Context, arg GetUserTopTracksParams) ([]GetUserTopTracksRow, error)
+	GetUsersExcluding(ctx context.Context, id int64) ([]GetUsersExcludingRow, error)
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
+	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
+	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
+	GetWatchRoomsForUser(ctx context.Context, userID int64) ([]WatchRoom, error)
 	InsertAudioStream(ctx context.Context, arg InsertAudioStreamParams) (AudioStream, error)
 	InsertChapter(ctx context.Context, arg InsertChapterParams) (Chapter, error)
 	InsertSubtitle(ctx context.Context, arg InsertSubtitleParams) (Subtitle, error)
@@ -161,6 +169,8 @@ type Querier interface {
 	IsTrackInPlaylist(ctx context.Context, arg IsTrackInPlaylistParams) (int64, error)
 	IsTrackLiked(ctx context.Context, arg IsTrackLikedParams) (bool, error)
 	IsUserCollaborator(ctx context.Context, arg IsUserCollaboratorParams) (int64, error)
+	IsWatchRoomMember(ctx context.Context, arg IsWatchRoomMemberParams) (int64, error)
+	IsWatchRoomOwner(ctx context.Context, arg IsWatchRoomOwnerParams) (int64, error)
 	// Idempotent: duplicate (user_id, movie_id) is a no-op (no error).
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error

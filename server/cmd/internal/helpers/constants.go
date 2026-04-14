@@ -96,6 +96,10 @@ const (
 	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
 
+	// Watch rooms
+	WATCH_ROOM_PLAYBACK_MODE_DIRECT = "direct"
+	MAX_WATCH_ROOM_REQUEST_SIZE     = 1024 * 1024 // 1 MB
+
 	// Watch progress
 	WATCH_COMPLETION_THRESHOLD = 0.98
 

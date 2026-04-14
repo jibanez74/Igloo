@@ -57,3 +57,13 @@ RETURNING *;
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = ?;
+
+-- name: GetUsersExcluding :many
+SELECT
+  id,
+  name,
+  email,
+  avatar
+FROM users
+WHERE id != ?
+ORDER BY name ASC;

@@ -641,6 +641,16 @@ func (app *Application) InitRouter() {
 				r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
 			})
 
+			r.Get("/users", app.GetUsers)
+
+			r.Route("/watch-rooms", func(r chi.Router) {
+				r.Get("/", app.GetWatchRooms)
+				r.Post("/", app.CreateWatchRoom)
+				r.Get("/{id}", app.GetWatchRoom)
+				r.Post("/{id}/join", app.JoinWatchRoom)
+				r.Delete("/{id}", app.DeleteWatchRoom)
+			})
+
 			r.Route("/settings", func(r chi.Router) {
 				r.Get("/", app.GetSettings)
 				// Admin-only: scan triggers mutate the library.

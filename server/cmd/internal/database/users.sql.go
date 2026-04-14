@@ -135,6 +135,52 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUsersExcluding = `-- name: GetUsersExcluding :many
+SELECT
+  id,
+  name,
+  email,
+  avatar
+FROM users
+WHERE id != ?
+ORDER BY name ASC
+`
+
+type GetUsersExcludingRow struct {
+	ID     int64          `json:"id"`
+	Name   string         `json:"name"`
+	Email  string         `json:"email"`
+	Avatar sql.NullString `json:"avatar"`
+}
+
+func (q *Queries) GetUsersExcluding(ctx context.Context, id int64) ([]GetUsersExcludingRow, error) {
+	rows, err := q.query(ctx, q.getUsersExcludingStmt, getUsersExcluding, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsersExcludingRow{}
+	for rows.Next() {
+		var i GetUsersExcludingRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Avatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserAvatar = `-- name: UpdateUserAvatar :one
 UPDATE users
 SET

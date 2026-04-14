@@ -311,3 +311,14 @@ type VideoStream struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 }
+
+type WatchRoom struct {
+	ID            int64         `json:"id"`
+	OwnerUserID   int64         `json:"owner_user_id"`
+	MovieID       int64         `json:"movie_id"`
+	PlaybackMode  string        `json:"playback_mode"`
+	AudioTrack    int64         `json:"audio_track"`
+	SubtitleTrack sql.NullInt64 `json:"subtitle_track"`
+	CreatedAt     string        `json:"created_at"`
+	UpdatedAt     string        `json:"updated_at"`
+}
