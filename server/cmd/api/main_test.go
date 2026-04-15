@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -234,6 +235,139 @@ func TestInitTables_Idempotent(t *testing.T) {
 	}
 }
 
+func TestInitTables_WatchRoomTrackConstraints(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory database: %v", err)
+	}
+	defer db.Close()
+
+	app := &Application{DB: db}
+	setupTestLogger(t, app)
+
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO users (name, email, password)
+		VALUES ('Owner', 'owner@example.com', 'hashed')
+	`)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO movies (title, file_path, file_name, size, container, mime_type, adult)
+		VALUES ('Movie', '/tmp/movie.mkv', 'movie.mkv', 1, 'mkv', 'video/x-matroska', 0)
+	`)
+	if err != nil {
+		t.Fatalf("insert movie: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
+		VALUES (1, 1, 'direct', -1)
+	`)
+	if err == nil {
+		t.Fatal("expected negative audio_track insert to fail")
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
+		VALUES (1, 1, 'direct', 0, -1)
+	`)
+	if err == nil {
+		t.Fatal("expected negative subtitle_track insert to fail")
+	}
+}
+
+func TestInitTables_MigratesNegativeWatchRoomTracks(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory database: %v", err)
+	}
+	defer db.Close()
+
+	app := &Application{DB: db}
+	setupTestLogger(t, app)
+
+	legacySQL := strings.Replace(
+		SQL,
+		"    audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),\n    subtitle_track INTEGER CHECK (subtitle_track >= 0),",
+		"    audio_track INTEGER NOT NULL DEFAULT 0,\n    subtitle_track INTEGER,",
+		1,
+	)
+
+	_, err = db.Exec(legacySQL)
+	if err != nil {
+		t.Fatalf("seed legacy schema: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO users (id, name, email, password)
+		VALUES (1, 'Owner', 'owner@example.com', 'hashed');
+		INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult)
+		VALUES (1, 'Movie', '/tmp/movie.mkv', 'movie.mkv', 1, 'mkv', 'video/x-matroska', 0);
+		INSERT INTO watch_rooms (id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
+		VALUES (1, 1, 1, 'direct', -4, -7);
+		INSERT INTO watch_room_members (id, room_id, user_id)
+		VALUES (1, 1, 1);
+	`)
+	if err != nil {
+		t.Fatalf("seed legacy data: %v", err)
+	}
+
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	var audioTrack int64
+	var subtitleTrack sql.NullInt64
+	err = db.QueryRow(`
+		SELECT audio_track, subtitle_track
+		FROM watch_rooms
+		WHERE id = 1
+	`).Scan(&audioTrack, &subtitleTrack)
+	if err != nil {
+		t.Fatalf("fetch migrated watch room: %v", err)
+	}
+
+	if audioTrack != 0 {
+		t.Fatalf("expected migrated audio_track to be 0, got %d", audioTrack)
+	}
+	if subtitleTrack.Valid {
+		t.Fatalf("expected migrated subtitle_track to be NULL, got %d", subtitleTrack.Int64)
+	}
+
+	var memberCount int64
+	err = db.QueryRow(`SELECT COUNT(*) FROM watch_room_members WHERE room_id = 1 AND user_id = 1`).Scan(&memberCount)
+	if err != nil {
+		t.Fatalf("count migrated room members: %v", err)
+	}
+	if memberCount != 1 {
+		t.Fatalf("expected migrated room member to be preserved, got %d", memberCount)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
+		VALUES (1, 1, 'direct', -1)
+	`)
+	if err == nil {
+		t.Fatal("expected migrated schema to reject negative audio_track insert")
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
+		VALUES (1, 1, 'direct', 0, -1)
+	`)
+	if err == nil {
+		t.Fatal("expected migrated schema to reject negative subtitle_track insert")
+	}
+}
+
 func TestInitTables_UsersSchema(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
@@ -414,6 +548,8 @@ func setupTestApp(t *testing.T) *Application {
 	// (no FFmpeg processes to kill in tests).
 	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
+	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.WatchRoomHub = NewWatchRoomHub()
 
 	return app
 }

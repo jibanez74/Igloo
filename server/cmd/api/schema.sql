@@ -510,6 +510,44 @@ CREATE INDEX IF NOT EXISTS idx_user_liked_movies_user ON user_liked_movies (user
 
 CREATE INDEX IF NOT EXISTS idx_user_liked_movies_movie ON user_liked_movies (movie_id);
 
+-- watch_rooms
+CREATE TABLE
+  IF NOT EXISTS watch_rooms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    movie_id INTEGER NOT NULL,
+    playback_mode TEXT NOT NULL CHECK (
+      playback_mode IN ('direct', 'remux', '2160p_16mbps', '1080p_8mbps', '1080p_6mbps', '1080p_4mbps', '720p_3mbps')
+    ),
+    audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
+    subtitle_track INTEGER CHECK (subtitle_track >= 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_watch_rooms_owner ON watch_rooms (owner_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_watch_rooms_movie ON watch_rooms (movie_id);
+
+-- watch_room_members
+CREATE TABLE
+  IF NOT EXISTS watch_room_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (room_id, user_id),
+    FOREIGN KEY (room_id) REFERENCES watch_rooms (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_watch_room_members_room ON watch_room_members (room_id);
+
+CREATE INDEX IF NOT EXISTS idx_watch_room_members_user ON watch_room_members (user_id);
+
 -- sessions
 CREATE TABLE
   IF NOT EXISTS sessions (

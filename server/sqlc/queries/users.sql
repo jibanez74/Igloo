@@ -57,3 +57,18 @@ RETURNING *;
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = ?;
+
+-- name: GetUsersExcluding :many
+SELECT
+  id,
+  name,
+  email,
+  avatar
+FROM users
+WHERE id != sqlc.arg(excluded_id)
+  AND (
+    sqlc.arg(search) = ''
+    OR INSTR(LOWER(name), LOWER(sqlc.arg(search))) > 0
+    OR INSTR(LOWER(email), LOWER(sqlc.arg(search))) > 0
+  )
+ORDER BY name ASC;

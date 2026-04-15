@@ -522,3 +522,30 @@ export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {
     method: "POST",
   });
+
+// Watch rooms API
+export const getWatchRoomInviteUsers = () =>
+  apiRequest<import("@/types").WatchRoomInviteUsersResponseType>("/api/users");
+
+export const createWatchRoom = (
+  body: import("@/types").CreateWatchRoomRequestType,
+) =>
+  apiRequest<import("@/types").CreateWatchRoomResponseType>("/api/watch-rooms", {
+    method: "POST",
+    body,
+  });
+
+export const getWatchRoom = (id: number) =>
+  apiRequest<import("@/types").WatchRoomResponseType>(`/api/watch-rooms/${id}`);
+
+export const joinWatchRoom = (id: number) =>
+  apiRequest<import("@/types").JoinWatchRoomResponseType>(
+    `/api/watch-rooms/${id}/join`,
+    { method: "POST" },
+  );
+
+export const getWatchRooms = () =>
+  apiRequest<{ rooms: import("@/types").WatchRoomType[] }>("/api/watch-rooms");
+
+export const deleteWatchRoom = (id: number) =>
+  apiRequest(`/api/watch-rooms/${id}`, { method: "DELETE" });

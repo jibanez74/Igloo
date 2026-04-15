@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const checkMovieUnchanged = `-- name: CheckMovieUnchanged :one
@@ -915,6 +916,90 @@ func (q *Queries) GetMoviesByGenreDesc(ctx context.Context, arg GetMoviesByGenre
 			&i.PosterPath,
 			&i.Year,
 			&i.Certification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesByIDs = `-- name: GetMoviesByIDs :many
+SELECT
+  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, user_locked_title, user_locked_tmdb_id, user_locked_imdb_id, user_locked_poster_path, user_locked_backdrop_path, user_locked_adult, user_locked_language, user_locked_year, user_locked_release_date, user_locked_overview, user_locked_tag_line, user_locked_certification, user_locked_critic_rating, user_locked_audience_rating, user_locked_revenue, user_locked_budget, user_locked_run_time, created_at, updated_at
+FROM movies
+WHERE id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) GetMoviesByIDs(ctx context.Context, ids []int64) ([]Movie, error) {
+	query := getMoviesByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.query(ctx, nil, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Movie{}
+	for rows.Next() {
+		var i Movie
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.FilePath,
+			&i.FileName,
+			&i.Size,
+			&i.Container,
+			&i.MimeType,
+			&i.Adult,
+			&i.TmdbID,
+			&i.ImdbID,
+			&i.PosterPath,
+			&i.BackdropPath,
+			&i.Language,
+			&i.Year,
+			&i.ReleaseDate,
+			&i.Overview,
+			&i.TagLine,
+			&i.Certification,
+			&i.CriticRating,
+			&i.AudienceRating,
+			&i.Revenue,
+			&i.Budget,
+			&i.RunTime,
+			&i.Duration,
+			&i.UserLockedTitle,
+			&i.UserLockedTmdbID,
+			&i.UserLockedImdbID,
+			&i.UserLockedPosterPath,
+			&i.UserLockedBackdropPath,
+			&i.UserLockedAdult,
+			&i.UserLockedLanguage,
+			&i.UserLockedYear,
+			&i.UserLockedReleaseDate,
+			&i.UserLockedOverview,
+			&i.UserLockedTagLine,
+			&i.UserLockedCertification,
+			&i.UserLockedCriticRating,
+			&i.UserLockedAudienceRating,
+			&i.UserLockedRevenue,
+			&i.UserLockedBudget,
+			&i.UserLockedRunTime,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

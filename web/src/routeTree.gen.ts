@@ -30,6 +30,9 @@ const LoginIndexLazyRouteImport = createFileRoute('/login/')()
 const AuthTvShowsIndexLazyRouteImport = createFileRoute('/_auth/tv-shows/')()
 const AuthPhotosIndexLazyRouteImport = createFileRoute('/_auth/photos/')()
 const AdminSettingsIndexLazyRouteImport = createFileRoute('/_admin/settings/')()
+const AuthWatchRoomsIdLazyRouteImport = createFileRoute(
+  '/_auth/watch-rooms/$id',
+)()
 const AdminSettingsPlaybackLazyRouteImport = createFileRoute(
   '/_admin/settings/playback',
 )()
@@ -70,7 +73,7 @@ const AuthTrailerRoute = AuthTrailerRouteImport.update({
   id: '/trailer',
   path: '/trailer',
   getParentRoute: () => AuthRouteRoute,
-} as any)
+} as any).lazy(() => import('./routes/_auth/trailer.lazy').then((d) => d.Route))
 const AdminSettingsRouteRoute = AdminSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -107,6 +110,13 @@ const AuthMoviesIndexRoute = AuthMoviesIndexRouteImport.update({
   path: '/movies/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const AuthWatchRoomsIdLazyRoute = AuthWatchRoomsIdLazyRouteImport.update({
+  id: '/watch-rooms/$id',
+  path: '/watch-rooms/$id',
+  getParentRoute: () => AuthRouteRoute,
+} as any).lazy(() =>
+  import('./routes/_auth/watch-rooms/$id.lazy').then((d) => d.Route),
+)
 const AdminSettingsPlaybackLazyRoute =
   AdminSettingsPlaybackLazyRouteImport.update({
     id: '/playback',
@@ -179,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AdminSettingsAccountLazyRoute
   '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/movies/': typeof AuthMoviesIndexRoute
   '/music/': typeof AuthMusicIndexRoute
   '/settings/': typeof AdminSettingsIndexLazyRoute
@@ -199,6 +210,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AdminSettingsAccountLazyRoute
   '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
   '/settings': typeof AdminSettingsIndexLazyRoute
@@ -224,6 +236,7 @@ export interface FileRoutesById {
   '/_admin/settings/account': typeof AdminSettingsAccountLazyRoute
   '/_admin/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/_admin/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/_auth/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
   '/_admin/settings/': typeof AdminSettingsIndexLazyRoute
@@ -248,6 +261,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
+    | '/watch-rooms/$id'
     | '/movies/'
     | '/music/'
     | '/settings/'
@@ -268,6 +282,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
+    | '/watch-rooms/$id'
     | '/movies'
     | '/music'
     | '/settings'
@@ -292,6 +307,7 @@ export interface FileRouteTypes {
     | '/_admin/settings/account'
     | '/_admin/settings/libraries'
     | '/_admin/settings/playback'
+    | '/_auth/watch-rooms/$id'
     | '/_auth/movies/'
     | '/_auth/music/'
     | '/_admin/settings/'
@@ -396,6 +412,13 @@ declare module '@tanstack/react-router' {
       path: '/movies'
       fullPath: '/movies/'
       preLoaderRoute: typeof AuthMoviesIndexRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/watch-rooms/$id': {
+      id: '/_auth/watch-rooms/$id'
+      path: '/watch-rooms/$id'
+      fullPath: '/watch-rooms/$id'
+      preLoaderRoute: typeof AuthWatchRoomsIdLazyRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/_admin/settings/playback': {
@@ -503,6 +526,7 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 interface AuthRouteRouteChildren {
   AuthTrailerRoute: typeof AuthTrailerRoute
   AuthIndexRoute: typeof AuthIndexRoute
+  AuthWatchRoomsIdLazyRoute: typeof AuthWatchRoomsIdLazyRoute
   AuthMoviesIndexRoute: typeof AuthMoviesIndexRoute
   AuthMusicIndexRoute: typeof AuthMusicIndexRoute
   AuthPhotosIndexLazyRoute: typeof AuthPhotosIndexLazyRoute
@@ -519,6 +543,7 @@ interface AuthRouteRouteChildren {
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthTrailerRoute: AuthTrailerRoute,
   AuthIndexRoute: AuthIndexRoute,
+  AuthWatchRoomsIdLazyRoute: AuthWatchRoomsIdLazyRoute,
   AuthMoviesIndexRoute: AuthMoviesIndexRoute,
   AuthMusicIndexRoute: AuthMusicIndexRoute,
   AuthPhotosIndexLazyRoute: AuthPhotosIndexLazyRoute,

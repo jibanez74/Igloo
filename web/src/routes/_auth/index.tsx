@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { latestMoviesQueryOpts } from "@/lib/query-opts";
-import { latestAlbumsQueryOpts } from "@/lib/query-opts";
-import { inTheatersQueryOpts } from "@/lib/query-opts";
+import {
+  latestMoviesQueryOpts,
+  latestAlbumsQueryOpts,
+  inTheatersQueryOpts,
+  watchRoomsQueryOpts,
+} from "@/lib/query-opts";
 import { Home } from "lucide-react";
 import LatestAlbums from "@/components/LatestAlbums";
 import LatestMovies from "@/components/LatestMovies";
 import MoviesInTheaters from "@/components/MoviesInTheaters";
+import WatchRooms from "@/components/WatchRooms";
 
 const pageTitle = "Home - Igloo";
 const pageDescription =
@@ -16,6 +20,7 @@ export const Route = createFileRoute("/_auth/")({
     const { queryClient } = context;
 
     await Promise.all([
+      queryClient.ensureQueryData(watchRoomsQueryOpts()),
       queryClient.ensureQueryData(latestMoviesQueryOpts()),
       queryClient.ensureQueryData(latestAlbumsQueryOpts()),
       queryClient.ensureQueryData(inTheatersQueryOpts()),
@@ -31,7 +36,7 @@ function HomePage() {
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-{/* main application header */}
+      {/* main application header */}
       <header className="mb-8">
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
           <Home className="size-6 text-amber-400" aria-hidden="true" />
@@ -43,6 +48,7 @@ function HomePage() {
           music, and more.
         </p>
       </header>
+      <WatchRooms />
       <LatestMovies />
       <LatestAlbums />
       <MoviesInTheaters />

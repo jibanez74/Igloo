@@ -11,7 +11,6 @@ import {
   Trash2,
   Check,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -25,6 +24,7 @@ import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
 import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
 import EditMovieDialog from "@/components/EditMovieDialog";
 import DeleteMovieDialog from "@/components/DeleteMovieDialog";
+import CreateWatchRoomDialog from "@/components/CreateWatchRoomDialog";
 import MovieLikeButton from "@/components/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
 import { MOVIE_WATCH_PROGRESS_KEY } from "@/lib/constants";
@@ -53,6 +53,7 @@ export default function MovieDetailsHeroActions({
   const playButtonRef = useRef<HTMLAnchorElement | null>(null);
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [playbackFormResetKey, setPlaybackFormResetKey] = useState(0);
+  const [createWatchRoomOpen, setCreateWatchRoomOpen] = useState(false);
 
   const handlePlaybackSettingsOpenChange = (next: boolean) => {
     if (next) {
@@ -198,7 +199,7 @@ export default function MovieDetailsHeroActions({
             <Settings2 className="size-4" aria-hidden="true" />
             Playback Settings
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => toast.info("Coming soon")}>
+          <DropdownMenuItem onSelect={() => setCreateWatchRoomOpen(true)}>
             <Radio className="size-4" aria-hidden="true" />
             Watch Together
           </DropdownMenuItem>
@@ -237,6 +238,15 @@ export default function MovieDetailsHeroActions({
         onSave={onPlaybackSettingsChange}
         restoreFocusRef={playButtonRef}
         formResetKey={playbackFormResetKey}
+      />
+
+      <CreateWatchRoomDialog
+        movieId={movieId}
+        movieTitle={movieTitle}
+        playbackSettings={playbackSettings}
+        open={createWatchRoomOpen}
+        onOpenChange={setCreateWatchRoomOpen}
+        restoreFocusRef={moreOptionsButtonRef}
       />
 
       {user?.is_admin && (

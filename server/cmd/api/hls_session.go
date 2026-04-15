@@ -43,8 +43,71 @@ func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
 	return fmt.Sprintf("%d:%s:%d", movieID, profile, audioTrack)
 }
 
+// RoomHLSSessionKey returns the HLS session cache key for a watch room.
+// The "room:" prefix ensures it never collides with a regular HLSSessionKey,
+// which has the form "movieID:profile:audioTrack".
+func RoomHLSSessionKey(roomID int64) string {
+	return fmt.Sprintf("room:%d", roomID)
+}
+
 func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
 	app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+}
+
+func (app *Application) markRoomHLSSessionDeleted(roomID int64) {
+	if app.RoomHLSTombstone == nil {
+		return
+	}
+	app.RoomHLSTombstone.SetDefault(RoomHLSSessionKey(roomID), struct{}{})
+}
+
+func (app *Application) isRoomHLSSessionDeleted(roomID int64) bool {
+	if app.RoomHLSTombstone == nil {
+		return false
+	}
+	_, deleted := app.RoomHLSTombstone.Get(RoomHLSSessionKey(roomID))
+	return deleted
+}
+
+func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, session *HLSSession) error {
+	app.RoomHLSMu.Lock()
+	deleted := app.isRoomHLSSessionDeleted(roomID)
+	if !deleted {
+		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+	}
+	app.RoomHLSMu.Unlock()
+
+	if deleted {
+		cleanupHLSSession(session)
+		return fmt.Errorf("watch room %d was deleted during hls session creation", roomID)
+	}
+
+	return nil
+}
+
+func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSSession, bool, error) {
+	app.RoomHLSMu.Lock()
+	defer app.RoomHLSMu.Unlock()
+
+	if app.isRoomHLSSessionDeleted(roomID) {
+		return nil, false, fmt.Errorf("watch room %d was deleted", roomID)
+	}
+
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		return nil, false, nil
+	}
+	if raw == nil {
+		return nil, false, fmt.Errorf("cached HLS session %q is nil", key)
+	}
+
+	session, typeOK := raw.(*HLSSession)
+	if !typeOK {
+		return nil, false, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
+	}
+
+	app.RefreshHLSSessionTTL(key, session)
+	return session, true, nil
 }
 
 func cleanupHLSSession(session *HLSSession) {
@@ -123,6 +186,95 @@ func (app *Application) GetOrCreateHLSSession(
 		return nil, err
 	}
 	return v.(*HLSSession), nil
+}
+
+// WarmUpRoomHLSSession starts an HLS session for a watch room immediately after creation.
+// It uses RoomHLSSessionKey so the session is isolated from personal playback sessions.
+// If a session for this room already exists in the cache, it is a no-op.
+// Always warms up from startSec=0 so participants start from the beginning.
+func (app *Application) WarmUpRoomHLSSession(
+	ctx context.Context,
+	roomID int64,
+	movieID int64,
+	profile string,
+	audioTrack int,
+) error {
+	_, err := app.GetOrCreateRoomHLSSession(ctx, roomID, movieID, profile, audioTrack)
+	return err
+}
+
+// GetOrCreateRoomHLSSession returns a cached room-scoped HLS session or
+// creates a new one using the room-specific cache key.
+func (app *Application) GetOrCreateRoomHLSSession(
+	ctx context.Context,
+	roomID int64,
+	movieID int64,
+	profile string,
+	audioTrack int,
+) (*HLSSession, error) {
+	key := RoomHLSSessionKey(roomID)
+
+	session, ok, err := app.getActiveRoomHLSSession(roomID, key)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return session, nil
+	}
+
+	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
+		existing, found, getErr := app.getActiveRoomHLSSession(roomID, key)
+		if getErr != nil {
+			return nil, getErr
+		}
+		if found {
+			return existing, nil
+		}
+
+		if app.isRoomHLSSessionDeleted(roomID) {
+			return nil, fmt.Errorf("watch room %d was deleted", roomID)
+		}
+
+		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, 0)
+		if createErr != nil {
+			return nil, createErr
+		}
+
+		storeErr := app.storeRoomHLSSessionIfActive(roomID, key, session)
+		if storeErr != nil {
+			return nil, storeErr
+		}
+		return session, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	session, ok = v.(*HLSSession)
+	if !ok || session == nil {
+		return nil, fmt.Errorf("singleflight returned unexpected HLS session type %T for %q", v, key)
+	}
+	return session, nil
+}
+
+// CleanupRoomHLSSession stops and removes the HLS session for a watch room.
+// It is a no-op if no session exists for the room.
+func (app *Application) CleanupRoomHLSSession(roomID int64) {
+	key := RoomHLSSessionKey(roomID)
+	app.RoomHLSMu.Lock()
+	app.markRoomHLSSessionDeleted(roomID)
+	raw, ok := app.HLSSessionCache.Get(key)
+	if ok {
+		app.HLSSessionCache.Delete(key)
+	}
+	app.RoomHLSMu.Unlock()
+
+	if !ok {
+		return
+	}
+	if session, ok := raw.(*HLSSession); ok {
+		cleanupHLSSession(session)
+	}
 }
 
 // createHLSSession loads stream metadata from the database, creates a temp dir,

@@ -119,3 +119,18 @@ export type {
 
 // User types
 export type { AuthUser, AuthUserResponseType } from "./user";
+
+// Watch room types
+export type {
+  WatchRoomMemberType,
+  WatchRoomType,
+  WatchRoomDetailType,
+  WatchRoomInviteUserType,
+  WatchRoomInviteUsersResponseType,
+  CreateWatchRoomRequestType,
+  CreateWatchRoomResponseType,
+  WatchRoomResponseType,
+  JoinWatchRoomResponseType,
+  WatchRoomPlaybackStateType,
+  WatchRoomServerEventType,
+} from "./watch-rooms";

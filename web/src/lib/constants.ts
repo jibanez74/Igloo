@@ -1,5 +1,8 @@
 // keys for queries
 export const AUTH_USER_KEY = "auth-user";
+export const WATCH_ROOMS_KEY = "watch-rooms";
+export const WATCH_ROOM_KEY = "watch-room";
+export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";
@@ -203,3 +206,8 @@ export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
  */
 export const MOVIE_DETAILS_CONTENT_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+
+// watch rooms
+export const WATCH_ROOM_SEEK_STEP_SEC = 10;
+export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
+export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
