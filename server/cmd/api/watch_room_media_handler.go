@@ -46,7 +46,12 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		playlist = generateVODPlaylist(session.DurationSec, baseURL, int(room.AudioTrack), session.CopyVideo)
 	}
 
-	app.RefreshHLSSessionTTL(RoomHLSSessionKey(room.ID), session)
+	_, _, err = app.getActiveRoomHLSSession(room.ID, RoomHLSSessionKey(room.ID))
+	if err != nil {
+		app.Logger.Error("watch room hls session refresh failed", "error", err, "room_id", room.ID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
 	w.Header().Set("Cache-Control", "no-cache")
@@ -68,13 +73,16 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 	}
 
 	key := RoomHLSSessionKey(room.ID)
-	raw, ok := app.HLSSessionCache.Get(key)
-	if !ok {
+	session, found, err := app.getActiveRoomHLSSession(room.ID, key)
+	if err != nil {
+		app.Logger.Error("watch room hls session fetch failed", "error", err, "room_id", room.ID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR), http.StatusInternalServerError)
+		return
+	}
+	if !found {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
-	session := raw.(*HLSSession)
-	app.RefreshHLSSessionTTL(key, session)
 
 	filePath := filepath.Join(session.TempDir, filename)
 

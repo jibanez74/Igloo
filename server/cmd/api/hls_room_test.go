@@ -91,6 +91,61 @@ func TestStoreRoomHLSSessionIfActive_RejectsDeletedRoom(t *testing.T) {
 	}
 }
 
+func TestGetActiveRoomHLSSession_RejectsDeletedRoom(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const roomID = int64(51)
+	key := RoomHLSSessionKey(roomID)
+	sentinel := &HLSSession{TempDir: "sentinel"}
+
+	app.HLSSessionCache.SetDefault(key, sentinel)
+	app.CleanupRoomHLSSession(roomID)
+
+	session, found, err := app.getActiveRoomHLSSession(roomID, key)
+	if err == nil {
+		t.Fatal("expected deleted room lookup to fail")
+	}
+	if !strings.Contains(err.Error(), "was deleted") {
+		t.Fatalf("error = %v, want deletion message", err)
+	}
+	if found {
+		t.Fatal("expected deleted room lookup to report no session")
+	}
+	if session != nil {
+		t.Fatal("expected no session for deleted room")
+	}
+	if _, ok := app.HLSSessionCache.Get(key); ok {
+		t.Fatal("expected cleanup to keep deleted room out of cache")
+	}
+}
+
+func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	const roomID = int64(52)
+	key := RoomHLSSessionKey(roomID)
+	sentinel := &HLSSession{TempDir: "sentinel"}
+
+	app.HLSSessionCache.SetDefault(key, sentinel)
+	app.CleanupRoomHLSSession(roomID)
+
+	session, err := app.GetOrCreateRoomHLSSession(background, roomID, 999, "720p_3mbps", 0)
+	if err == nil {
+		t.Fatal("expected deleted room cache hit to fail")
+	}
+	if !strings.Contains(err.Error(), "was deleted") {
+		t.Fatalf("error = %v, want deletion message", err)
+	}
+	if session != nil {
+		t.Fatal("expected no session for deleted room")
+	}
+	if _, ok := app.HLSSessionCache.Get(key); ok {
+		t.Fatal("expected deleted room cache hit to remain absent from cache")
+	}
+}
+
 // TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream verifies that warm-up
 // returns an error (and stores nothing) when the movie lacks video streams.
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {

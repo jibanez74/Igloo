@@ -85,6 +85,31 @@ func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, se
 	return nil
 }
 
+func (app *Application) getActiveRoomHLSSession(roomID int64, key string) (*HLSSession, bool, error) {
+	app.RoomHLSMu.Lock()
+	defer app.RoomHLSMu.Unlock()
+
+	if app.isRoomHLSSessionDeleted(roomID) {
+		return nil, false, fmt.Errorf("watch room %d was deleted", roomID)
+	}
+
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		return nil, false, nil
+	}
+	if raw == nil {
+		return nil, false, fmt.Errorf("cached HLS session %q is nil", key)
+	}
+
+	session, typeOK := raw.(*HLSSession)
+	if !typeOK {
+		return nil, false, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
+	}
+
+	app.RefreshHLSSessionTTL(key, session)
+	return session, true, nil
+}
+
 func cleanupHLSSession(session *HLSSession) {
 	if session == nil {
 		return
@@ -189,32 +214,27 @@ func (app *Application) GetOrCreateRoomHLSSession(
 ) (*HLSSession, error) {
 	key := RoomHLSSessionKey(roomID)
 
-	raw, ok := app.HLSSessionCache.Get(key)
+	session, ok, err := app.getActiveRoomHLSSession(roomID, key)
+	if err != nil {
+		return nil, err
+	}
 	if ok {
-		if raw == nil {
-			return nil, fmt.Errorf("cached HLS session %q is nil", key)
-		}
-		session, typeOK := raw.(*HLSSession)
-		if !typeOK {
-			return nil, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
-		}
-		app.RefreshHLSSessionTTL(key, session)
 		return session, nil
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
-		raw, ok := app.HLSSessionCache.Get(key)
-		if ok {
-			if raw == nil {
-				return nil, fmt.Errorf("cached HLS session %q is nil", key)
-			}
-			existing, typeOK := raw.(*HLSSession)
-			if !typeOK {
-				return nil, fmt.Errorf("cached HLS session %q has unexpected type %T", key, raw)
-			}
-			app.RefreshHLSSessionTTL(key, existing)
+		existing, found, getErr := app.getActiveRoomHLSSession(roomID, key)
+		if getErr != nil {
+			return nil, getErr
+		}
+		if found {
 			return existing, nil
 		}
+
+		if app.isRoomHLSSessionDeleted(roomID) {
+			return nil, fmt.Errorf("watch room %d was deleted", roomID)
+		}
+
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, 0)
 		if createErr != nil {
 			return nil, createErr
@@ -230,7 +250,7 @@ func (app *Application) GetOrCreateRoomHLSSession(
 	if err != nil {
 		return nil, err
 	}
-	session, ok := v.(*HLSSession)
+	session, ok = v.(*HLSSession)
 	if !ok || session == nil {
 		return nil, fmt.Errorf("singleflight returned unexpected HLS session type %T for %q", v, key)
 	}
