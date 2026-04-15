@@ -70,10 +70,6 @@ vi.mock("@/components/ProgressBar", () => ({
   default: () => <div data-testid="progress-bar" />,
 }));
 
-vi.mock("@/components/VolumeControl", () => ({
-  default: () => <div data-testid="volume-control" />,
-}));
-
 vi.mock("@/components/LiveAnnouncer", () => ({
   default: ({ message }: { message?: string }) => (
     <div data-testid="live-announcer">{message}</div>
@@ -231,6 +227,20 @@ describe("WatchRoomPageContent", () => {
       );
     });
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+  });
+
+  it("renders the real volume control without crashing", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    expect(
+      screen.getByRole("group", { name: /volume control/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /adjust volume/i })).toBeInTheDocument();
+    expect(screen.getByText(/arrival/i)).toBeInTheDocument();
   });
 
   it("redirects only once for owner-initiated deletion", async () => {

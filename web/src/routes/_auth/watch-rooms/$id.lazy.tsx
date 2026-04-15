@@ -512,7 +512,7 @@ export function WatchRoomPageContent({
                     <p className="text-sm font-medium text-slate-300">
                       {formatTimeSeconds(currentTime)} / {formatTimeSeconds(duration)}
                     </p>
-                    <VolumeControl videoRef={videoRef} />
+                    <VolumeControl mediaRef={videoRef} />
                   </div>
                 </div>
 
