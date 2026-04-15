@@ -25,29 +25,30 @@ export default defineConfig({
 
   build: {
     target: "esnext",
-    reportCompressedSize: false,
+    modulePreload: {
+      polyfill: false,
+    },
+    reportCompressedSize: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (/node_modules\/(react|react-dom)\//.test(id)) {
+          if (!/[\\/]node_modules[\\/]/.test(id)) {
+            return;
+          }
+
+          if (/[\\/]node_modules[\\/](react|react-dom)[\\/]/.test(id)) {
             return "vendor-react";
           }
-          if (/node_modules\/@tanstack\/(react-router|router)/.test(id)) {
+          if (/[\\/]node_modules[\\/]@tanstack[\\/](react-router|router)[\\/]/.test(id)) {
             return "vendor-router";
           }
-          if (/node_modules\/@tanstack\/(react-query|query)/.test(id)) {
+          if (/[\\/]node_modules[\\/]@tanstack[\\/](react-query|query)[\\/]/.test(id)) {
             return "vendor-query";
           }
-          if (/node_modules\/(radix-ui|@radix-ui)\//.test(id)) {
+          if (/[\\/]node_modules[\\/](radix-ui|@radix-ui)[\\/]/.test(id)) {
             return "vendor-radix";
           }
-          if (/node_modules\/@dnd-kit\//.test(id)) {
-            return "vendor-dnd";
-          }
-          if (/node_modules\/hls\.js\//.test(id)) {
-            return "vendor-hls";
-          }
-          if (/node_modules\/lucide-react\//.test(id)) {
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
             return "vendor-lucide";
           }
         },

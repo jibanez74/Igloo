@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef } from "react";
-import Hls, { type ErrorData } from "hls.js";
 import type { RefObject } from "react";
+import type Hls from "hls.js";
+import type { ErrorData } from "hls.js";
 import {
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
@@ -70,9 +71,13 @@ export default function VideoPlayer({
   });
 
   const handleHlsError = useEffectEvent(
-    (video: HTMLVideoElement, data: ErrorData) => {
+    (
+      video: HTMLVideoElement,
+      data: ErrorData,
+      sessionLostDetail: string,
+    ) => {
       if (
-        data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
+        data.details === sessionLostDetail &&
         data.response?.code === 404 &&
         onSessionLost
       ) {
@@ -112,7 +117,6 @@ export default function VideoPlayer({
 
     if (
       (src.endsWith(".m3u8") || src.includes(".m3u8?")) &&
-      Hls.isSupported() &&
       !supportsNativeHLS
     ) {
       const recoveryKey = hlsStreamRecoveryKey(src);
@@ -122,52 +126,65 @@ export default function VideoPlayer({
         lastSessionLostAtRef.current = 0;
       }
 
-      const hls = new Hls({
-        xhrSetup(xhr) {
-          xhr.withCredentials = true;
-        },
-        manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-        levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-        fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-        backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
-        startPosition: startSec > 0 ? startSec : -1,
-      });
-      hlsRef.current = hls;
+      let cancelled = false;
+      let disposeHls: (() => void) | null = null;
 
-      hls.loadSource(src);
-      hls.attachMedia(video);
+      void (async () => {
+        const { default: Hls } = await import("hls.js");
+        if (cancelled || !Hls.isSupported()) return;
 
-      if (startSec > 0) {
-        hls.once(Hls.Events.MANIFEST_PARSED, () => {
-          handleStartApplied(startSec);
+        const hls = new Hls({
+          xhrSetup(xhr) {
+            xhr.withCredentials = true;
+          },
+          manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+          levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+          fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+          backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
+          startPosition: startSec > 0 ? startSec : -1,
         });
-      }
+        const sessionLostDetail = Hls.ErrorDetails.FRAG_LOAD_ERROR;
+        hlsRef.current = hls;
+        disposeHls = () => {
+          hls.destroy();
+          hlsRef.current = null;
+        };
 
-      let mediaRecoveryAttempted = false;
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        const isSessionLostError =
-          data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR &&
-          data.response?.code === 404;
+        hls.loadSource(src);
+        hls.attachMedia(video);
 
-        if (isSessionLostError) {
-          handleHlsError(video, data);
-          return;
+        if (startSec > 0) {
+          hls.once(Hls.Events.MANIFEST_PARSED, () => {
+            handleStartApplied(startSec);
+          });
         }
 
-        if (!data.fatal) return;
+        let mediaRecoveryAttempted = false;
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          const isSessionLostError =
+            data.details === sessionLostDetail &&
+            data.response?.code === 404;
 
-        if (data.type === "mediaError" && !mediaRecoveryAttempted) {
-          mediaRecoveryAttempted = true;
-          hls.recoverMediaError();
-          return;
-        }
+          if (isSessionLostError) {
+            handleHlsError(video, data, sessionLostDetail);
+            return;
+          }
 
-        handleHlsError(video, data);
-      });
+          if (!data.fatal) return;
+
+          if (data.type === "mediaError" && !mediaRecoveryAttempted) {
+            mediaRecoveryAttempted = true;
+            hls.recoverMediaError();
+            return;
+          }
+
+          handleHlsError(video, data, sessionLostDetail);
+        });
+      })();
 
       return () => {
-        hls.destroy();
-        hlsRef.current = null;
+        cancelled = true;
+        disposeHls?.();
       };
     }
 
