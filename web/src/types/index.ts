@@ -131,4 +131,6 @@ export type {
   CreateWatchRoomResponseType,
   WatchRoomResponseType,
   JoinWatchRoomResponseType,
+  WatchRoomPlaybackStateType,
+  WatchRoomServerEventType,
 } from "./watch-rooms";

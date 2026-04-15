@@ -61,3 +61,23 @@ export type JoinWatchRoomResponseType = {
   room_id: number;
   joined: boolean;
 };
+
+export type WatchRoomPlaybackStateType = {
+  paused: boolean;
+  position_sec: number;
+  updated_at: string;
+};
+
+export type WatchRoomServerEventType = {
+  type:
+    | "room_snapshot"
+    | "playback_changed"
+    | "member_joined"
+    | "member_left"
+    | "room_deleted"
+    | "pong";
+  room_id: number;
+  playback?: WatchRoomPlaybackStateType;
+  member?: WatchRoomMemberType;
+  connected_user_ids?: number[];
+};

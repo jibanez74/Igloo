@@ -165,7 +165,7 @@ function buildRoom(overrides: Partial<WatchRoomDetailType> = {}): WatchRoomDetai
 }
 
 function renderRoomPage(room: WatchRoomDetailType) {
-  useQueryMock.mockReturnValue({
+  useQueryMock.mockImplementation(() => ({
     data: {
       error: false,
       data: {
@@ -174,14 +174,14 @@ function renderRoomPage(room: WatchRoomDetailType) {
     },
     isPending: false,
     isError: false,
-  });
-  joinWatchRoomMock.mockResolvedValue({
+  }));
+  joinWatchRoomMock.mockImplementation(async (id: number) => ({
     error: false,
     data: {
-      room_id: room.id,
+      room_id: id,
       joined: true,
     },
-  });
+  }));
 
   return renderWithQueryClient(<WatchRoomPageContent roomId={room.id} />);
 }
@@ -227,6 +227,34 @@ describe("WatchRoomPageContent", () => {
       );
     });
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+  });
+
+  it("shows a controlled error when joining the room throws", async () => {
+    useQueryMock.mockImplementation(() => ({
+      data: {
+        error: false,
+        data: {
+          room: buildRoom({ is_owner: false }),
+        },
+      },
+      isPending: false,
+      isError: false,
+    }));
+    joinWatchRoomMock.mockRejectedValue(new Error("Network offline"));
+
+    renderWithQueryClient(<WatchRoomPageContent roomId={7} />);
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    expect(await screen.findByText("Network offline")).toBeInTheDocument();
+    expect(
+      screen.getByText(/connecting realtime sync/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/arrival/i)).toBeInTheDocument();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("renders the real volume control without crashing", async () => {
@@ -287,5 +315,117 @@ describe("WatchRoomPageContent", () => {
     expect(navigateMock).toHaveBeenCalledTimes(1);
     expect(showInfoMock).not.toHaveBeenCalled();
     expect(showActionFailedMock).not.toHaveBeenCalled();
+  });
+
+  it("rejoins and replaces the realtime connection when the mounted page switches rooms", async () => {
+    let currentRoom = buildRoom({ id: 7, is_owner: false });
+
+    useQueryMock.mockImplementation(() => ({
+      data: {
+        error: false,
+        data: {
+          room: currentRoom,
+        },
+      },
+      isPending: false,
+      isError: false,
+    }));
+    joinWatchRoomMock.mockImplementation(async (id: number) => ({
+      error: false,
+      data: {
+        room_id: id,
+        joined: true,
+      },
+    }));
+
+    const view = renderWithQueryClient(
+      <WatchRoomPageContent roomId={currentRoom.id} />,
+    );
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenNthCalledWith(1, 7);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const firstSocket = FakeWebSocket.instances[0];
+    expect(firstSocket.url).toContain("/api/watch-rooms/7/ws");
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    currentRoom = buildRoom({
+      id: 8,
+      movie_title: "Blade Runner 2049",
+      is_owner: false,
+    });
+
+    view.rerender(<WatchRoomPageContent roomId={currentRoom.id} />);
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenNthCalledWith(2, 8);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    });
+
+    const secondSocket = FakeWebSocket.instances[1];
+    expect(firstSocket.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(secondSocket.url).toContain("/api/watch-rooms/8/ws");
+    expect(secondSocket.readyState).toBe(FakeWebSocket.OPEN);
+    expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not rejoin or recreate the socket when the same room gets a new object reference", async () => {
+    let currentRoom = buildRoom({ id: 7, is_owner: false });
+
+    useQueryMock.mockImplementation(() => ({
+      data: {
+        error: false,
+        data: {
+          room: currentRoom,
+        },
+      },
+      isPending: false,
+      isError: false,
+    }));
+    joinWatchRoomMock.mockImplementation(async (id: number) => ({
+      error: false,
+      data: {
+        room_id: id,
+        joined: true,
+      },
+    }));
+
+    const view = renderWithQueryClient(
+      <WatchRoomPageContent roomId={currentRoom.id} />,
+    );
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const firstSocket = FakeWebSocket.instances[0];
+
+    currentRoom = buildRoom({
+      id: 7,
+      is_owner: false,
+      movie_title: "Arrival: Director's Cut",
+    });
+
+    view.rerender(<WatchRoomPageContent roomId={currentRoom.id} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/arrival: director's cut/i)).toBeInTheDocument();
+    });
+
+    expect(joinWatchRoomMock).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0]).toBe(firstSocket);
+    expect(firstSocket.readyState).toBe(FakeWebSocket.OPEN);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,10 +13,20 @@ import {
   Users,
 } from "lucide-react";
 import { joinWatchRoom } from "@/lib/api";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import {
+  TMDB_POSTER_SIZE,
+  WATCH_ROOM_SEEK_STEP_SEC,
+  WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS,
+  WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
+} from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
+import {
+  watchRoomAnnouncement,
+  watchRoomStreamUrl,
+  watchRoomWebSocketUrl,
+} from "@/lib/watch-room";
 import { showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
@@ -26,61 +36,11 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
-import type { WatchRoomMemberType } from "@/types";
+import type { WatchRoomServerEventType } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/watch-rooms/$id")({
   component: WatchRoomPage,
 });
-
-const SEEK_STEP_SEC = 10;
-const ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
-const ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;
-
-type RoomPlaybackState = {
-  paused: boolean;
-  position_sec: number;
-  updated_at: string;
-};
-
-type RoomServerEvent = {
-  type: "room_snapshot" | "playback_changed" | "member_joined" | "member_left" | "room_deleted" | "pong";
-  room_id: number;
-  playback?: RoomPlaybackState;
-  member?: WatchRoomMemberType;
-  connected_user_ids?: number[];
-};
-
-function roomStreamUrl(roomId: number, playbackMode: string) {
-  if (playbackMode === "direct") {
-    return `/api/watch-rooms/${roomId}/stream`;
-  }
-  return `/api/watch-rooms/${roomId}/hls/playlist.m3u8`;
-}
-
-function roomWebSocketUrl(roomId: number) {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/watch-rooms/${roomId}/ws`;
-}
-
-function watchRoomAnnouncement(
-  event: RoomServerEvent,
-  title: string,
-): string | undefined {
-  switch (event.type) {
-    case "playback_changed":
-      if (!event.playback) return undefined;
-      if (event.playback.paused) {
-        return `Paused ${title}`;
-      }
-      return `Playing ${title}`;
-    case "member_joined":
-      return event.member ? `${event.member.name} joined the room` : undefined;
-    case "member_left":
-      return event.member ? `${event.member.name} left the room` : undefined;
-    default:
-      return undefined;
-  }
-}
 
 export function WatchRoomPage() {
   const { id } = Route.useParams();
@@ -111,25 +71,28 @@ export function WatchRoomPageContent({
   );
   const [connectedUserIds, setConnectedUserIds] = useState<number[]>([]);
   const [connectionReady, setConnectionReady] = useState(false);
-  const [joinReady, setJoinReady] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
   const room = data?.error === false ? data.data.room : null;
-  const streamUrl = room ? roomStreamUrl(room.id, room.playback_mode) : "";
+  const currentRoomId = room?.id ?? null;
+  const movieTitle = room?.movie_title ?? "";
+  const streamUrl = room
+    ? watchRoomStreamUrl(room.id, room.playback_mode)
+    : "";
   const posterUrl =
     room?.movie_poster != null
       ? buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE)
       : null;
 
-  const subtitleTrack = useMemo(() => {
-    if (!room || room.subtitle_track === null) return null;
-    return {
-      url: `/api/movies/${room.movie_id}/subtitles/${room.subtitle_track}/web.vtt`,
-      label: `Subtitle track ${room.subtitle_track + 1}`,
-      srclang: "",
-    };
-  }, [room]);
+  const subtitleTrack =
+    room && room.subtitle_track !== null
+      ? {
+          url: `/api/movies/${room.movie_id}/subtitles/${room.subtitle_track}/web.vtt`,
+          label: `Subtitle track ${room.subtitle_track + 1}`,
+          srclang: "",
+        }
+      : null;
 
   const closeRoomConnection = () => {
     if (heartbeatRef.current !== null) {
@@ -151,48 +114,21 @@ export function WatchRoomPageContent({
     setConnectionReady(false);
   };
 
-  useEffect(() => {
-    if (!room || joinReady) return;
-
-    let cancelled = false;
-    const joinRoom = async () => {
-      const res = await joinWatchRoom(room.id);
-      if (cancelled) return;
-
-      if (res.error) {
-        setPlaybackError(res.message || "Unable to join this watch room.");
-        return;
+  const handleSocketOpen = useEffectEvent((socket: WebSocket) => {
+    setConnectionReady(true);
+    socket.send(JSON.stringify({ type: "join" }));
+    heartbeatRef.current = window.setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "ping" }));
       }
+    }, 25_000);
+  });
 
-      setJoinReady(true);
-    };
-
-    void joinRoom();
-    return () => {
-      cancelled = true;
-    };
-  }, [joinReady, room]);
-
-  useEffect(() => {
-    if (!room || !joinReady) return;
-
-    const socket = new WebSocket(roomWebSocketUrl(room.id));
-    socketRef.current = socket;
-
-    socket.addEventListener("open", () => {
-      setConnectionReady(true);
-      socket.send(JSON.stringify({ type: "join" }));
-      heartbeatRef.current = window.setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "ping" }));
-        }
-      }, 25_000);
-    });
-
-    socket.addEventListener("message", async rawEvent => {
-      let event: RoomServerEvent;
+  const handleSocketMessage = useEffectEvent(
+    async (rawEvent: MessageEvent) => {
+      let event: WatchRoomServerEventType;
       try {
-        event = JSON.parse(rawEvent.data) as RoomServerEvent;
+        event = JSON.parse(rawEvent.data) as WatchRoomServerEventType;
       } catch {
         return;
       }
@@ -206,7 +142,7 @@ export function WatchRoomPageContent({
         closeRoomConnection();
         showInfo(
           "Watch room closed",
-          `"${room.movie_title}" is no longer available.`,
+          `"${movieTitle}" is no longer available.`,
         );
         navigate({ to: "/", replace: true });
         return;
@@ -216,7 +152,7 @@ export function WatchRoomPageContent({
         setConnectedUserIds(event.connected_user_ids);
       }
 
-      const announcement = watchRoomAnnouncement(event, room.movie_title);
+      const announcement = watchRoomAnnouncement(event, movieTitle);
       if (announcement) {
         if (announcementTimeoutRef.current !== null) {
           window.clearTimeout(announcementTimeoutRef.current);
@@ -225,7 +161,7 @@ export function WatchRoomPageContent({
         announcementTimeoutRef.current = window.setTimeout(() => {
           setSyncAnnouncement(undefined);
           announcementTimeoutRef.current = null;
-        }, ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS);
+        }, WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS);
       }
 
       if (!event.playback) return;
@@ -235,7 +171,7 @@ export function WatchRoomPageContent({
 
       const targetTime = event.playback.position_sec;
       const drift = Math.abs(video.currentTime - targetTime);
-      if (drift > ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+      if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
         video.currentTime = targetTime;
         setCurrentTime(targetTime);
       }
@@ -258,36 +194,82 @@ export function WatchRoomPageContent({
         }
         setPlaying(true);
       }
-    });
+    },
+  );
 
-    socket.addEventListener("close", () => {
-      setConnectionReady(false);
-      if (heartbeatRef.current !== null) {
-        window.clearInterval(heartbeatRef.current);
-        heartbeatRef.current = null;
+  const handleSocketClose = useEffectEvent(() => {
+    setConnectionReady(false);
+    if (heartbeatRef.current !== null) {
+      window.clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  });
+
+  const handleSocketError = useEffectEvent(() => {
+    setPlaybackError("Realtime sync connection failed for this watch room.");
+  });
+
+  useEffect(() => {
+    roomDeletionHandledRef.current = false;
+    if (!currentRoomId) return;
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+
+    const initRoomConnection = async () => {
+      let res: Awaited<ReturnType<typeof joinWatchRoom>>;
+      try {
+        res = await joinWatchRoom(currentRoomId);
+      } catch (error) {
+        if (cancelled) return;
+        setPlaybackError(
+          error instanceof Error
+            ? error.message
+            : "Unable to join this watch room.",
+        );
+        return;
       }
-    });
 
-    socket.addEventListener("error", () => {
-      setPlaybackError("Realtime sync connection failed for this watch room.");
-    });
+      if (cancelled) return;
+
+      if (res.error) {
+        setPlaybackError(res.message || "Unable to join this watch room.");
+        return;
+      }
+
+      socket = new WebSocket(watchRoomWebSocketUrl(currentRoomId));
+      socketRef.current = socket;
+
+      socket.addEventListener("open", () => handleSocketOpen(socket));
+      socket.addEventListener("message", event => {
+        void handleSocketMessage(event);
+      });
+      socket.addEventListener("close", handleSocketClose);
+      socket.addEventListener("error", handleSocketError);
+    };
+
+    void initRoomConnection();
 
     return () => {
+      cancelled = true;
       if (heartbeatRef.current !== null) {
         window.clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
+
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
+
       if (
+        socket &&
         socket.readyState !== WebSocket.CLOSING &&
         socket.readyState !== WebSocket.CLOSED
       ) {
         socket.close();
       }
     };
-  }, [joinReady, navigate, room]);
+  }, [currentRoomId]);
 
   useEffect(() => {
     return () => {
@@ -339,8 +321,10 @@ export function WatchRoomPageContent({
     sendPlaybackEvent("seek", nextTime);
   };
 
-  const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
-  const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
+  const seekBackward = () =>
+    seek(currentTime - WATCH_ROOM_SEEK_STEP_SEC);
+  const seekForward = () =>
+    seek(currentTime + WATCH_ROOM_SEEK_STEP_SEC);
   const handleOwnerDeleteSuccess = () => {
     closeRoomConnection();
     navigate({ to: "/", replace: true });

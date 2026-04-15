@@ -206,3 +206,8 @@ export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
  */
 export const MOVIE_DETAILS_CONTENT_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+
+// watch rooms
+export const WATCH_ROOM_SEEK_STEP_SEC = 10;
+export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
+export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;

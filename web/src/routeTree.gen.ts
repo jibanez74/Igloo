@@ -73,7 +73,7 @@ const AuthTrailerRoute = AuthTrailerRouteImport.update({
   id: '/trailer',
   path: '/trailer',
   getParentRoute: () => AuthRouteRoute,
-} as any)
+} as any).lazy(() => import('./routes/_auth/trailer.lazy').then((d) => d.Route))
 const AdminSettingsRouteRoute = AdminSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
