@@ -6,11 +6,15 @@ export const Route = createFileRoute("/_admin/settings")({
   component: SettingsLayout,
 });
 
-// Tab configuration - DRY principle
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Sliders, path: "/settings" },
   { id: "account", label: "Account", icon: User, path: "/settings/account" },
-  { id: "libraries", label: "Libraries", icon: Library, path: "/settings/libraries" },
+  {
+    id: "libraries",
+    label: "Libraries",
+    icon: Library,
+    path: "/settings/libraries",
+  },
   { id: "playback", label: "Playback", icon: Play, path: "/settings/playback" },
   { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
@@ -21,11 +25,6 @@ function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
 
-  // Determine current tab from pathname
-  // /settings -> "general" (index route)
-  // /settings/account -> "account"
-  // /settings/libraries -> "libraries"
-  // /settings/playback -> "playback"
   const getCurrentTab = (): TabId => {
     const pathParts = location.pathname.split("/").filter(Boolean);
 
@@ -36,7 +35,9 @@ function SettingsLayout() {
 
     // Otherwise, get the tab name from the second path segment
     const tabId = pathParts[1] as TabId | undefined;
-    return tabId && SETTINGS_TABS.some(tab => tab.id === tabId) ? tabId : "general";
+    return tabId && SETTINGS_TABS.some(tab => tab.id === tabId)
+      ? tabId
+      : "general";
   };
 
   const currentTab = getCurrentTab();
@@ -76,7 +77,7 @@ function SettingsLayout() {
         {/* Tabs */}
         <Tabs value={currentTab} onValueChange={handleTabChange}>
           <TabsList className="h-auto border border-slate-700/50 bg-slate-800/50 p-1">
-            {SETTINGS_TABS.map((tab) => {
+            {SETTINGS_TABS.map(tab => {
               const Icon = tab.icon;
               return (
                 <TabsTrigger

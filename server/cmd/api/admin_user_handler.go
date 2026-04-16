@@ -191,50 +191,65 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tx, err := app.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		app.Logger.Error("admin: failed to begin user update transaction", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	qtx := app.Queries.WithTx(tx)
+
+	existing, err := qtx.GetUser(r.Context(), targetID)
+	if err != nil {
+		_ = tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
+			return
+		}
+		app.Logger.Error("admin: failed to fetch user for update", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
 	// If demoting an admin, ensure at least one admin remains.
-	if !req.IsAdmin {
-		existing, err := app.Queries.GetUser(r.Context(), targetID)
+	if !req.IsAdmin && existing.IsAdmin {
+		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
-				return
-			}
-			app.Logger.Error("admin: failed to fetch user for update", "error", err, "target_id", targetID)
+			_ = tx.Rollback()
+			app.Logger.Error("admin: failed to count admins during update", "error", err, "target_id", targetID)
 			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 			return
 		}
 
-		if existing.IsAdmin {
-			count, err := app.Queries.CountAdmins(r.Context())
-			if err != nil {
-				app.Logger.Error("admin: failed to count admins", "error", err)
-				helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
-				return
-			}
-
-			if count <= 1 {
-				helpers.ErrorJSON(w, errors.New("cannot remove admin status from the last admin account"), http.StatusForbidden)
-				return
-			}
+		if count <= 1 {
+			_ = tx.Rollback()
+			helpers.ErrorJSON(w, errors.New("cannot remove admin status from the last admin account"), http.StatusForbidden)
+			return
 		}
 	}
 
-	user, err := app.Queries.AdminUpdateUser(r.Context(), database.AdminUpdateUserParams{
+	user, err := qtx.AdminUpdateUser(r.Context(), database.AdminUpdateUserParams{
 		Name:    req.Name,
 		Email:   req.Email,
 		IsAdmin: req.IsAdmin,
 		ID:      targetID,
 	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
-			return
-		}
+		_ = tx.Rollback()
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			helpers.ErrorJSON(w, errors.New("a user with that email already exists"), http.StatusConflict)
 			return
 		}
 		app.Logger.Error("admin: failed to update user", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		app.Logger.Error("admin: failed to commit user update transaction", "error", err, "target_id", targetID)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
 	}
@@ -267,8 +282,18 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := app.Queries.GetUser(r.Context(), targetID)
+	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
+		app.Logger.Error("admin: failed to begin user deletion transaction", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	qtx := app.Queries.WithTx(tx)
+
+	user, err := qtx.GetUser(r.Context(), targetID)
+	if err != nil {
+		_ = tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New("user not found"), http.StatusNotFound)
 			return
@@ -280,28 +305,39 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 
 	// If deleting an admin, ensure at least one admin remains.
 	if user.IsAdmin {
-		count, err := app.Queries.CountAdmins(r.Context())
+		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
-			app.Logger.Error("admin: failed to count admins", "error", err)
+			_ = tx.Rollback()
+			app.Logger.Error("admin: failed to count admins during deletion", "error", err, "target_id", targetID)
 			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 			return
 		}
 
 		if count <= 1 {
+			_ = tx.Rollback()
 			helpers.ErrorJSON(w, errors.New("cannot delete the last admin account"), http.StatusForbidden)
 			return
 		}
 	}
 
-	if user.Avatar.Valid && isUploadedAvatar(user.Avatar.String) {
-		app.deleteAvatarFile(user.Avatar.String)
-	}
-
-	err = app.Queries.DeleteUser(r.Context(), targetID)
+	err = qtx.DeleteUser(r.Context(), targetID)
 	if err != nil {
+		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to delete user", "error", err, "target_id", targetID)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		_ = tx.Rollback()
+		app.Logger.Error("admin: failed to commit user deletion transaction", "error", err, "target_id", targetID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	if user.Avatar.Valid && isUploadedAvatar(user.Avatar.String) {
+		app.deleteAvatarFile(user.Avatar.String)
 	}
 
 	app.Logger.Info("admin: user deleted", "user_id", targetID, "email", user.Email)

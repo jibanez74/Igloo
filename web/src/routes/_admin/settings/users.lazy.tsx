@@ -1,6 +1,7 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import type { FormEvent } from "react";
 import {
   Card,
   CardContent,
@@ -58,6 +59,7 @@ function UsersSettings() {
 
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
 
+  const authResolved = authData?.error === false && !!authData.data?.user?.id;
   const currentUserId =
     authData?.error === false ? authData.data?.user?.id : undefined;
 
@@ -177,7 +179,7 @@ function UsersSettings() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">
                       {user.name}
-                      {user.id === currentUserId && (
+                      {authResolved && user.id === currentUserId && (
                         <span className="ml-2 text-xs text-slate-400">(you)</span>
                       )}
                     </p>
@@ -205,7 +207,7 @@ function UsersSettings() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    {user.id === currentUserId ? (
+                    {authResolved && user.id === currentUserId ? (
                       <Link
                         to="/settings/account"
                         className="text-xs text-slate-400 underline-offset-2 hover:text-amber-400 hover:underline"
@@ -303,7 +305,7 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit({ name: name.trim(), email: email.trim(), password, is_admin: isAdmin });
   };
@@ -399,7 +401,7 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
   const [email, setEmail] = useState(user.email);
   const [isAdmin, setIsAdmin] = useState(user.is_admin);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit({ name: name.trim(), email: email.trim(), is_admin: isAdmin });
   };
@@ -534,7 +536,7 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) return;
     onSubmit(password);

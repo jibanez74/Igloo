@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -49,7 +49,7 @@ export const Route = createLazyFileRoute("/_admin/settings/account")({
 });
 
 function AccountSettings() {
-  const queryClient = useQueryClient();
+  const { queryClient } = Route.useRouteContext();
   const navigate = useNavigate();
   const { data: userData, isLoading } = useQuery(authUserQueryOpts());
   const [isDeleting, setIsDeleting] = useState(false);
@@ -62,27 +62,15 @@ function AccountSettings() {
       : null;
 
   // Form input state (controlled inputs)
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
 
-  // Seed name and email once when user data first arrives.
-  // Using refs prevents the empty-string check from re-seeding the fields
-  // while the user is actively clearing the inputs.
-  const nameInitialized = useRef(false);
-  if (user?.name && !nameInitialized.current) {
-    nameInitialized.current = true;
-    setName(user.name);
-  }
-
-  const emailInitialized = useRef(false);
-  if (user?.email && !emailInitialized.current) {
-    emailInitialized.current = true;
-    setEmail(user.email);
-  }
+  const nameValue = name ?? user?.name ?? "";
+  const emailValue = email ?? user?.email ?? "";
 
   // Name update mutation with optimistic updates
   const updateNameMutation = useMutation({
@@ -276,39 +264,39 @@ function AccountSettings() {
   });
 
   const handleUpdateName = () => {
-    if (!user || !name.trim()) {
+    if (!user || !nameValue.trim()) {
       showError("Name is required");
       return;
     }
 
-    if (name.trim() === user.name) {
+    if (nameValue.trim() === user.name) {
       return; // No change
     }
 
-    if (name.length > 100) {
+    if (nameValue.length > 100) {
       showError("Name must be 100 characters or less");
       return;
     }
 
-    updateNameMutation.mutate(name.trim());
+    updateNameMutation.mutate(nameValue.trim());
   };
 
   const handleUpdateEmail = () => {
-    if (!user || !email.trim()) {
+    if (!user || !emailValue.trim()) {
       showError("Email is required");
       return;
     }
 
-    if (email.trim() === user.email) {
+    if (emailValue.trim() === user.email) {
       return;
     }
 
-    if (email.length > 255) {
+    if (emailValue.length > 255) {
       showError("Email must be 255 characters or less");
       return;
     }
 
-    updateEmailMutation.mutate(email.trim());
+    updateEmailMutation.mutate(emailValue.trim());
   };
 
   const handleUpdatePassword = () => {
@@ -439,10 +427,10 @@ function AccountSettings() {
   // Show loading state while fetching user data
   if (isLoading) {
     return (
-      <div className='space-y-8'>
-        <Card className='border-slate-700/50 bg-slate-800/30'>
-          <CardContent className='pt-6'>
-            <p className='text-slate-300'>Loading user information...</p>
+      <div className="space-y-8">
+        <Card className="border-slate-700/50 bg-slate-800/30">
+          <CardContent className="pt-6">
+            <p className="text-slate-300">Loading user information...</p>
           </CardContent>
         </Card>
       </div>
@@ -452,10 +440,10 @@ function AccountSettings() {
   // Show error state if user data failed to load
   if (userData?.error || !user) {
     return (
-      <div className='space-y-8'>
-        <Card className='border-slate-700/50 bg-slate-800/30'>
-          <CardContent className='pt-6'>
-            <p className='text-red-400'>
+      <div className="space-y-8">
+        <Card className="border-slate-700/50 bg-slate-800/30">
+          <CardContent className="pt-6">
+            <p className="text-red-400">
               {userData?.error
                 ? userData.message || "Failed to load user information"
                 : "User information not available"}
@@ -467,42 +455,42 @@ function AccountSettings() {
   }
 
   return (
-    <div className='space-y-8'>
+    <div className="space-y-8">
       {/* Profile Information */}
-      <Card className='border-slate-700/50 bg-slate-800/30'>
+      <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-white'>
-            <User className='size-5 text-amber-400' aria-hidden='true' />
+          <CardTitle className="flex items-center gap-2 text-white">
+            <User className="size-5 text-amber-400" aria-hidden="true" />
             Profile Information
           </CardTitle>
-          <CardDescription className='text-slate-300'>
+          <CardDescription className="text-slate-300">
             Manage your account information and preferences
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-6'>
+        <CardContent className="space-y-6">
           {/* Email */}
-          <div className='space-y-2'>
-            <Label htmlFor='email' className='text-slate-300'>
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-slate-300">
               Email
             </Label>
-            <div className='flex gap-2'>
+            <div className="flex gap-2">
               <Input
-                id='email'
-                type='email'
-                value={email}
+                id="email"
+                type="email"
+                value={emailValue}
                 onChange={e => setEmail(e.target.value)}
-                placeholder='Enter your email'
-                className='flex-1'
-                aria-label='Your email address'
+                placeholder="Enter your email"
+                className="flex-1"
+                aria-label="Your email address"
               />
               <Button
                 onClick={handleUpdateEmail}
                 disabled={
                   updateEmailMutation.isPending ||
-                  email.trim() === user.email ||
-                  !email.trim()
+                  emailValue.trim() === user.email ||
+                  !emailValue.trim()
                 }
-                variant='accent'
+                variant="accent"
               >
                 {updateEmailMutation.isPending ? "Saving..." : "Save"}
               </Button>
@@ -510,34 +498,34 @@ function AccountSettings() {
           </div>
 
           {/* Name */}
-          <div className='space-y-2'>
-            <Label htmlFor='name' className='text-slate-300'>
+          <div className="space-y-2">
+            <Label htmlFor="name" className="text-slate-300">
               Name
             </Label>
-            <div className='flex gap-2'>
+            <div className="flex gap-2">
               <Input
-                id='name'
-                type='text'
-                value={name}
+                id="name"
+                type="text"
+                value={nameValue}
                 onChange={e => setName(e.target.value)}
-                placeholder='Enter your name'
+                placeholder="Enter your name"
                 maxLength={100}
-                className='flex-1'
-                aria-label='Your display name'
+                className="flex-1"
+                aria-label="Your display name"
               />
               <Button
                 onClick={handleUpdateName}
                 disabled={
                   updateNameMutation.isPending ||
-                  name.trim() === user.name ||
-                  !name.trim()
+                  nameValue.trim() === user.name ||
+                  !nameValue.trim()
                 }
-                variant='accent'
+                variant="accent"
               >
                 {updateNameMutation.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
-            <p className='text-xs text-slate-400'>
+            <p className="text-xs text-slate-400">
               Your display name (max 100 characters)
             </p>
           </div>
@@ -545,91 +533,91 @@ function AccountSettings() {
       </Card>
 
       {/* Avatar */}
-      <Card className='border-slate-700/50 bg-slate-800/30'>
+      <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-white'>
-            <ImageIcon className='size-5 text-amber-400' aria-hidden='true' />
+          <CardTitle className="flex items-center gap-2 text-white">
+            <ImageIcon className="size-5 text-amber-400" aria-hidden="true" />
             Avatar
           </CardTitle>
-          <CardDescription className='text-slate-300'>
+          <CardDescription className="text-slate-300">
             Update your profile picture
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-6'>
+        <CardContent className="space-y-6">
           {/* Current Avatar */}
-          <div className='flex items-center gap-4'>
+          <div className="flex items-center gap-4">
             {getAvatarUrl() ? (
-              <Avatar className='size-20'>
+              <Avatar className="size-20">
                 <AvatarImage
                   src={getAvatarUrl() ?? undefined}
                   alt={user.name}
                 />
-                <AvatarFallback className='bg-amber-500/20 text-lg text-amber-400'>
+                <AvatarFallback className="bg-amber-500/20 text-lg text-amber-400">
                   {getInitials()}
                 </AvatarFallback>
               </Avatar>
             ) : (
-              <div className='flex size-20 shrink-0 items-center justify-center rounded-full bg-slate-800'>
-                <User className='size-10 text-slate-600' aria-hidden='true' />
+              <div className="flex size-20 shrink-0 items-center justify-center rounded-full bg-slate-800">
+                <User className="size-10 text-slate-600" aria-hidden="true" />
               </div>
             )}
             <div>
-              <p className='text-sm font-medium text-white'>{user.name}</p>
-              <p className='text-xs text-slate-400'>{user.email}</p>
+              <p className="text-sm font-medium text-white">{user.name}</p>
+              <p className="text-xs text-slate-400">{user.email}</p>
             </div>
           </div>
 
-          <Separator className='bg-slate-700/50' />
+          <Separator className="bg-slate-700/50" />
 
           {/* Upload Avatar */}
-          <div className='space-y-2'>
-            <Label className='text-slate-300'>Upload Image</Label>
-            <div className='flex gap-2'>
+          <div className="space-y-2">
+            <Label className="text-slate-300">Upload Image</Label>
+            <div className="flex gap-2">
               <label
-                htmlFor='avatar-upload'
-                className='flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700/50'
+                htmlFor="avatar-upload"
+                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700/50"
               >
-                <Upload className='size-4' aria-hidden='true' />
+                <Upload className="size-4" aria-hidden="true" />
                 {uploadAvatarMutation.isPending
                   ? "Uploading..."
                   : "Choose File"}
               </label>
               <input
-                id='avatar-upload'
-                type='file'
-                accept='image/jpeg,image/png,image/gif,image/webp,image/avif'
+                id="avatar-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
                 onChange={handleUploadAvatar}
                 disabled={uploadAvatarMutation.isPending}
-                className='sr-only'
-                aria-label='Upload avatar image'
+                className="sr-only"
+                aria-label="Upload avatar image"
               />
             </div>
-            <p className='text-xs text-slate-400'>
+            <p className="text-xs text-slate-400">
               JPEG, PNG, GIF, WebP, or AVIF (max 20MB)
             </p>
           </div>
 
           {/* Set Avatar URL */}
-          <div className='space-y-2'>
-            <Label htmlFor='avatar-url' className='text-slate-300'>
+          <div className="space-y-2">
+            <Label htmlFor="avatar-url" className="text-slate-300">
               Or enter image URL
             </Label>
-            <div className='flex gap-2'>
+            <div className="flex gap-2">
               <Input
-                id='avatar-url'
-                type='url'
+                id="avatar-url"
+                type="url"
                 value={avatarUrl}
                 onChange={e => setAvatarUrl(e.target.value)}
-                placeholder='https://example.com/avatar.jpg'
-                className='flex-1'
-                aria-label='Avatar image URL'
+                placeholder="https://example.com/avatar.jpg"
+                className="flex-1"
+                aria-label="Avatar image URL"
               />
               <Button
                 onClick={handleUpdateAvatarUrl}
                 disabled={
                   updateAvatarUrlMutation.isPending || !avatarUrl.trim()
                 }
-                variant='accent'
+                variant="accent"
               >
                 {updateAvatarUrlMutation.isPending ? "Saving..." : "Set URL"}
               </Button>
@@ -639,59 +627,59 @@ function AccountSettings() {
       </Card>
 
       {/* Change Password */}
-      <Card className='border-slate-700/50 bg-slate-800/30'>
+      <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-white'>
-            <Lock className='size-5 text-amber-400' aria-hidden='true' />
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Lock className="size-5 text-amber-400" aria-hidden="true" />
             Change Password
           </CardTitle>
-          <CardDescription className='text-slate-300'>
+          <CardDescription className="text-slate-300">
             Update your account password
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-4'>
-          <div className='space-y-2'>
-            <Label htmlFor='current-password' className='text-slate-300'>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password" className="text-slate-300">
               Current Password
             </Label>
             <Input
-              id='current-password'
-              type='password'
+              id="current-password"
+              type="password"
               value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)}
-              placeholder='Enter current password'
-              aria-label='Current password'
+              placeholder="Enter current password"
+              aria-label="Current password"
             />
           </div>
 
-          <div className='space-y-2'>
-            <Label htmlFor='new-password' className='text-slate-300'>
+          <div className="space-y-2">
+            <Label htmlFor="new-password" className="text-slate-300">
               New Password
             </Label>
             <Input
-              id='new-password'
-              type='password'
+              id="new-password"
+              type="password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              placeholder='Enter new password'
-              aria-label='New password'
+              placeholder="Enter new password"
+              aria-label="New password"
             />
-            <p className='text-xs text-slate-400'>
+            <p className="text-xs text-slate-400">
               Must be at least 9 characters and no more than 128 characters
             </p>
           </div>
 
-          <div className='space-y-2'>
-            <Label htmlFor='confirm-password' className='text-slate-300'>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password" className="text-slate-300">
               Confirm New Password
             </Label>
             <Input
-              id='confirm-password'
-              type='password'
+              id="confirm-password"
+              type="password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
-              placeholder='Confirm new password'
-              aria-label='Confirm new password'
+              placeholder="Confirm new password"
+              aria-label="Confirm new password"
             />
           </div>
 
@@ -703,8 +691,8 @@ function AccountSettings() {
               !newPassword ||
               !confirmPassword
             }
-            variant='accent'
-            className='w-full sm:w-auto'
+            variant="accent"
+            className="w-full sm:w-auto"
           >
             {updatePasswordMutation.isPending
               ? "Updating..."
@@ -714,25 +702,25 @@ function AccountSettings() {
       </Card>
 
       {/* Danger Zone */}
-      <Card className='border-red-500/50 bg-red-950/20'>
+      <Card className="border-red-500/50 bg-red-950/20">
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-red-400'>
-            <AlertTriangle className='size-5' aria-hidden='true' />
+          <CardTitle className="flex items-center gap-2 text-red-400">
+            <AlertTriangle className="size-5" aria-hidden="true" />
             Danger Zone
           </CardTitle>
-          <CardDescription className='text-red-300/80'>
+          <CardDescription className="text-red-300/80">
             Irreversible and destructive actions
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-4'>
-          <div className='space-y-2'>
-            <p className='text-sm font-medium text-red-400'>Delete Account</p>
-            <p className='text-sm text-red-300/80'>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-red-400">Delete Account</p>
+            <p className="text-sm text-red-300/80">
               Once you delete your account, there is no going back. Please be
               certain.
             </p>
             {user.is_admin && (
-              <p className='text-sm font-medium text-amber-400'>
+              <p className="text-sm font-medium text-amber-400">
                 Note: Admin accounts cannot be deleted.
               </p>
             )}
@@ -740,11 +728,11 @@ function AccountSettings() {
           <Button
             onClick={() => setDeleteDialogOpen(true)}
             disabled={user.is_admin}
-            variant='destructive'
-            className='w-full sm:w-auto'
-            aria-label='Delete account'
+            variant="destructive"
+            className="w-full sm:w-auto"
+            aria-label="Delete account"
           >
-            <Trash2 className='size-4' aria-hidden='true' />
+            <Trash2 className="size-4" aria-hidden="true" />
             Delete Account
           </Button>
         </CardContent>
@@ -752,34 +740,34 @@ function AccountSettings() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className='border-slate-700 bg-slate-900 text-white sm:max-w-md'>
+        <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className='text-red-400'>Delete Account</DialogTitle>
-            <DialogDescription className='text-slate-300'>
+            <DialogTitle className="text-red-400">Delete Account</DialogTitle>
+            <DialogDescription className="text-slate-300">
               This action cannot be undone. This will permanently delete your
               account and remove all associated data.
             </DialogDescription>
           </DialogHeader>
-          <div className='space-y-4 py-4'>
-            <div className='space-y-2'>
-              <Label htmlFor='delete-confirm' className='text-slate-300'>
-                Type <span className='font-mono font-bold'>DELETE</span> to
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm" className="text-slate-300">
+                Type <span className="font-mono font-bold">DELETE</span> to
                 confirm:
               </Label>
               <Input
-                id='delete-confirm'
-                type='text'
+                id="delete-confirm"
+                type="text"
                 value={deleteConfirmText}
                 onChange={e => setDeleteConfirmText(e.target.value)}
-                placeholder='DELETE'
-                className='font-mono'
-                aria-label='Type DELETE to confirm account deletion'
+                placeholder="DELETE"
+                className="font-mono"
+                aria-label="Type DELETE to confirm account deletion"
               />
             </div>
           </div>
-          <DialogFooter className='gap-2 sm:gap-0'>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
-              variant='outline'
+              variant="outline"
               onClick={() => {
                 setDeleteDialogOpen(false);
                 setDeleteConfirmText("");
@@ -789,7 +777,7 @@ function AccountSettings() {
               Cancel
             </Button>
             <Button
-              variant='destructive'
+              variant="destructive"
               onClick={handleDeleteAccount}
               disabled={isDeleting || deleteConfirmText !== "DELETE"}
             >

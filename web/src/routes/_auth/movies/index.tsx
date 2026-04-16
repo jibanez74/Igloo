@@ -1,6 +1,6 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
@@ -38,15 +38,8 @@ import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 
-// ---------------------------------------------------------------------------
-// Search schema — URL-driven state for all tabs
-// ---------------------------------------------------------------------------
-
 const moviesSearchSchema = z.object({
-  tab: fallback(
-    z.enum(["all", "genres", "playlists"]),
-    "all",
-  ).default("all"),
+  tab: fallback(z.enum(["all", "genres", "playlists"]), "all").default("all"),
   allPage: fallback(z.number().int().positive(), 1).default(1),
   sort: fallback(z.enum(["asc", "desc"]), "asc").default("asc"),
   genresPage: fallback(z.number().int().positive(), 1).default(1),
@@ -56,10 +49,6 @@ const moviesSearchSchema = z.object({
 });
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
-
-// ---------------------------------------------------------------------------
-// Route definition
-// ---------------------------------------------------------------------------
 
 export const Route = createFileRoute("/_auth/movies/")({
   validateSearch: zodSearchValidator(moviesSearchSchema),
@@ -90,12 +79,7 @@ export const Route = createFileRoute("/_auth/movies/")({
       if (genreId != null && genreId > 0) {
         promises.push(
           queryClient.ensureQueryData(
-            moviesByGenreQueryOpts(
-              genreId,
-              genresPage,
-              MOVIES_PER_PAGE,
-              sort,
-            ),
+            moviesByGenreQueryOpts(genreId, genresPage, MOVIES_PER_PAGE, sort),
           ),
         );
       }
@@ -225,7 +209,9 @@ function MoviesPage() {
 // ---------------------------------------------------------------------------
 
 function MoviesStats() {
-  const { data, isError, isLoading, refetch } = useQuery(moviesStatsQueryOpts());
+  const { data, isError, isLoading, refetch } = useQuery(
+    moviesStatsQueryOpts(),
+  );
 
   if (isError || isApiFailure(data)) {
     return (
@@ -413,7 +399,11 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
           <button
             onClick={handleSortToggle}
             className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-            aria-label={sort === "asc" ? "Sorted A to Z, click to sort Z to A" : "Sorted Z to A, click to sort A to Z"}
+            aria-label={
+              sort === "asc"
+                ? "Sorted A to Z, click to sort Z to A"
+                : "Sorted Z to A, click to sort A to Z"
+            }
           >
             {sort === "asc" ? (
               <>
@@ -432,7 +422,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
 
       {/* Movie grid */}
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {movies.map((movie) => (
+        {movies.map(movie => (
           <MovieCard key={movie.id} movie={movie} />
         ))}
       </div>
@@ -487,37 +477,33 @@ type GenresTabContentProps = {
   sort: "asc" | "desc";
 };
 
-function GenresTabContent({ genreId, genresPage, sort }: GenresTabContentProps) {
+function GenresTabContent({
+  genreId,
+  genresPage,
+  sort,
+}: GenresTabContentProps) {
   const navigate = Route.useNavigate();
 
   const genresQuery = useQuery(moviesGenresQueryOpts());
   const genresRes = genresQuery.data;
   const genresLoading = genresQuery.isLoading;
 
-  const genres =
-    genresRes?.error === false ? genresRes.data.genres : [];
+  const genres = genresRes?.error === false ? genresRes.data.genres : [];
 
   const moviesQuery = useQuery({
-    ...moviesByGenreQueryOpts(
-      genreId ?? 0,
-      genresPage,
-      MOVIES_PER_PAGE,
-      sort,
-    ),
+    ...moviesByGenreQueryOpts(genreId ?? 0, genresPage, MOVIES_PER_PAGE, sort),
   });
   const moviesRes = moviesQuery.data;
   const moviesLoading = moviesQuery.isLoading;
 
-  const movies =
-    moviesRes?.error === false ? moviesRes.data.movies : [];
+  const movies = moviesRes?.error === false ? moviesRes.data.movies : [];
   const totalPages =
     moviesRes?.error === false ? moviesRes.data.total_pages : 0;
-  const total =
-    moviesRes?.error === false ? moviesRes.data.total : 0;
+  const total = moviesRes?.error === false ? moviesRes.data.total : 0;
 
   const selectedGenreTag =
     genreId != null
-      ? genres.find((g) => g.genre_id === genreId)?.genre_tag
+      ? genres.find(g => g.genre_id === genreId)?.genre_tag
       : undefined;
 
   const getAnnouncement = () => {
@@ -602,8 +588,12 @@ function GenresTabContent({ genreId, genresPage, sort }: GenresTabContentProps) 
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap gap-2" role="list" aria-label="Movie genres">
-        {genres.map((g) => {
+      <div
+        className="mb-6 flex flex-wrap gap-2"
+        role="list"
+        aria-label="Movie genres"
+      >
+        {genres.map(g => {
           const selected = genreId === g.genre_id;
           return (
             <button
@@ -706,7 +696,7 @@ function GenresTabContent({ genreId, genresPage, sort }: GenresTabContentProps) 
           ) : (
             <>
               <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {movies.map((movie) => (
+                {movies.map(movie => (
                   <MovieCard key={movie.id} movie={movie} />
                 ))}
               </div>
@@ -806,8 +796,7 @@ function PlaylistsTabContent({
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm text-slate-400">
-          {playlists.length}{" "}
-          {playlists.length === 1 ? "playlist" : "playlists"}
+          {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
         <div className="flex flex-wrap gap-2">
           <button
@@ -843,7 +832,7 @@ function PlaylistsTabContent({
         <EmptyMoviePlaylistsState onCreate={() => setShowCreate(true)} />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {playlists.map((p) => (
+          {playlists.map(p => (
             <MoviePlaylistCard key={p.id} playlist={p} />
           ))}
         </div>
@@ -994,7 +983,7 @@ function LikedMoviesInPlaylistsTab({
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {movies.map((movie) => (
+        {movies.map(movie => (
           <MovieCard key={movie.id} movie={movie} />
         ))}
       </div>
