@@ -49,6 +49,7 @@
 
 # Agent instructions
 AGENTS.md
+CLAUDE.md
 
 # Testing media files directory
 /server/media/*
