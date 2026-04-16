@@ -6,6 +6,7 @@ const linkClass =
 export default function MovieDetailsSkipLinks({
   showCrewSection,
   castNonEmpty,
+  chaptersNonEmpty,
   extrasNonEmpty,
   companiesNonEmpty,
 }: MovieDetailsSkipLinksProps) {
@@ -36,6 +37,13 @@ export default function MovieDetailsSkipLinks({
           <li>
             <a href="#cast-heading" className={linkClass}>
               Skip to cast
+            </a>
+          </li>
+        )}
+        {chaptersNonEmpty && (
+          <li>
+            <a href="#chapters-heading" className={linkClass}>
+              Skip to chapters
             </a>
           </li>
         )}

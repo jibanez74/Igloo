@@ -20,6 +20,7 @@ import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
 import ResumeDialog from "@/components/ResumeDialog";
+import ChapterMenu from "@/components/ChapterMenu";
 import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
@@ -192,6 +193,7 @@ function PlayMoviePage() {
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
+  const [chapterAnnouncement, setChapterAnnouncement] = useState("");
 
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
@@ -225,6 +227,7 @@ function PlayMoviePage() {
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
   const subtitleStreams = techData?.data?.subtitles ?? [];
+  const chapters = techData?.data?.chapters ?? [];
   const primaryVideo = techLoaded
     ? getPrimaryVideoStream(videoStreams)
     : undefined;
@@ -444,6 +447,11 @@ function PlayMoviePage() {
 
   const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
   const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
+
+  const handleChapterSelect = (startTimeSec: number, title: string) => {
+    seek(startTimeSec);
+    setChapterAnnouncement(`Jumped to chapter: ${title}`);
+  };
 
   const toggleFullscreen = async () => {
     const container = containerRef.current;
@@ -962,6 +970,7 @@ function PlayMoviePage() {
       aria-label={`Video player for ${title}`}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
+      <LiveAnnouncer message={chapterAnnouncement} politeness="assertive" />
       <ResumeDialog
         open={resumeDialogOpen}
         savedProgressSec={savedProgressSec}
@@ -1113,6 +1122,12 @@ function PlayMoviePage() {
               >
                 {qualityLabel}
               </span>
+              <ChapterMenu
+                chapters={chapters}
+                currentTimeSec={currentTime}
+                onSelectChapter={handleChapterSelect}
+                portalContainer={containerRef.current}
+              />
               <VolumeControl
                 mediaRef={videoRef}
                 variant="minimized"

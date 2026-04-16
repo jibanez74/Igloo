@@ -99,6 +99,7 @@ export type {
   MovieAdditionalDetailsSectionProps,
   MovieExtraVideosSectionProps,
   MovieProductionCompaniesSectionProps,
+  MovieChaptersSectionProps,
 } from "./movie-details-page";
 
 // Audio player types

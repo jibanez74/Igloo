@@ -1,5 +1,6 @@
 import type { PlaybackSettings } from "@/lib/playback";
 import type {
+  ChapterType,
   LibraryMovieDetailsMovieType,
   LibraryMovieCrewType,
   LibraryMovieExtraVideoType,
@@ -15,6 +16,7 @@ export type MovieDetailsBackdropProps = {
 export type MovieDetailsSkipLinksProps = {
   showCrewSection: boolean;
   castNonEmpty: boolean;
+  chaptersNonEmpty: boolean;
   extrasNonEmpty: boolean;
   companiesNonEmpty: boolean;
 };
@@ -87,4 +89,10 @@ export type MovieExtraVideosSectionProps = {
 
 export type MovieProductionCompaniesSectionProps = {
   companies: LibraryMovieProductionCompanyType[];
+};
+
+export type MovieChaptersSectionProps = {
+  chapters: ChapterType[];
+  movieId: number;
+  playbackSettings: PlaybackSettings;
 };

@@ -19,6 +19,14 @@ export default function LibraryPagination({
   totalPages,
   onPageChange,
 }: LibraryPaginationProps) {
+  const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) {
+      return;
+    }
+
+    onPageChange(page);
+  };
+
   // Generate page numbers to display
   const getPageNumbers = () => {
     const pages: (number | "ellipsis")[] = [];
@@ -63,13 +71,13 @@ export default function LibraryPagination({
       <PaginationContent className="max-w-full flex-wrap justify-center gap-y-2">
         <PaginationItem>
           <PaginationPrevious
-            onClick={() => onPageChange(currentPage - 1)}
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
             className={
               currentPage === 1
-                ? "pointer-events-none opacity-50"
+                ? "cursor-not-allowed"
                 : "cursor-pointer hover:bg-slate-800"
             }
-            aria-disabled={currentPage === 1}
           />
         </PaginationItem>
 
@@ -81,8 +89,13 @@ export default function LibraryPagination({
           ) : (
             <PaginationItem key={page}>
               <PaginationLink
-                onClick={() => onPageChange(page)}
+                onClick={() => handlePageChange(page)}
                 isActive={page === currentPage}
+                aria-label={
+                  page === currentPage
+                    ? `Page ${page}, current page`
+                    : `Go to page ${page}`
+                }
                 className={
                   page === currentPage
                     ? "bg-amber-500 text-slate-900 hover:bg-amber-400"
@@ -97,13 +110,13 @@ export default function LibraryPagination({
 
         <PaginationItem>
           <PaginationNext
-            onClick={() => onPageChange(currentPage + 1)}
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
             className={
               currentPage === totalPages
-                ? "pointer-events-none opacity-50"
+                ? "cursor-not-allowed"
                 : "cursor-pointer hover:bg-slate-800"
             }
-            aria-disabled={currentPage === totalPages}
           />
         </PaginationItem>
       </PaginationContent>
