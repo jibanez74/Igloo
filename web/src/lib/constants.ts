@@ -21,6 +21,7 @@ export const ALBUMS_PAGINATED_KEY = "albums-paginated";
 export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
+export const ADMIN_USERS_KEY = "admin-users";
 
 // tmdb (paths only from API; frontend builds full URLs inline)
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";

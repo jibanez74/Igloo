@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
-import { Settings, User, Sliders, Library, Play } from "lucide-react";
+import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/_admin/settings")({
@@ -12,6 +12,7 @@ const SETTINGS_TABS = [
   { id: "account", label: "Account", icon: User, path: "/settings/account" },
   { id: "libraries", label: "Libraries", icon: Library, path: "/settings/libraries" },
   { id: "playback", label: "Playback", icon: Play, path: "/settings/playback" },
+  { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
 
 type TabId = (typeof SETTINGS_TABS)[number]["id"];
@@ -68,7 +69,7 @@ function SettingsLayout() {
             <span>Settings</span>
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base">
-            Manage your account settings and preferences
+            Manage application settings, your account, and users
           </p>
         </header>
 

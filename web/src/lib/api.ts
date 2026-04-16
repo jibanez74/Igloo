@@ -523,6 +523,41 @@ export const triggerMusicScan = () =>
     method: "POST",
   });
 
+// Admin user management API
+export const adminGetUsers = () =>
+  apiRequest<{ users: import("@/types").AdminUserType[] }>("/api/admin/users");
+
+export const adminCreateUser = (data: {
+  name: string;
+  email: string;
+  password: string;
+  is_admin: boolean;
+}) =>
+  apiRequest<{ user: import("@/types").AdminUserType }>("/api/admin/users", {
+    method: "POST",
+    body: data,
+  });
+
+export const adminUpdateUser = (
+  id: number,
+  data: { name: string; email: string; is_admin: boolean },
+) =>
+  apiRequest<{ user: import("@/types").AdminUserType }>(`/api/admin/users/${id}`, {
+    method: "PATCH",
+    body: data,
+  });
+
+export const adminDeleteUser = (id: number) =>
+  apiRequest<Record<string, never>>(`/api/admin/users/${id}`, {
+    method: "DELETE",
+  });
+
+export const adminResetUserPassword = (id: number, password: string) =>
+  apiRequest<Record<string, never>>(`/api/admin/users/${id}/password`, {
+    method: "PUT",
+    body: { password },
+  });
+
 // Watch rooms API
 export const getWatchRoomInviteUsers = () =>
   apiRequest<import("@/types").WatchRoomInviteUsersResponseType>("/api/users");

@@ -849,6 +849,15 @@ func (app *Application) InitRouter() {
 
 			r.Get("/users", app.GetUsers)
 
+			r.Route("/admin/users", func(r chi.Router) {
+				r.Use(app.RequireAdmin)
+				r.Get("/", app.AdminGetUsers)
+				r.Post("/", app.AdminCreateUser)
+				r.Patch("/{id}", app.AdminUpdateUser)
+				r.Delete("/{id}", app.AdminDeleteUser)
+				r.Put("/{id}/password", app.AdminResetUserPassword)
+			})
+
 			r.Route("/watch-rooms", func(r chi.Router) {
 				r.Get("/", app.GetWatchRooms)
 				r.Post("/", app.CreateWatchRoom)

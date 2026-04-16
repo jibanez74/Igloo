@@ -118,7 +118,7 @@ export type {
 } from "./api";
 
 // User types
-export type { AuthUser, AuthUserResponseType } from "./user";
+export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
 
 // Watch room types
 export type {

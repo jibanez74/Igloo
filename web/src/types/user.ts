@@ -14,3 +14,13 @@ export type AuthUser = {
 export type AuthUserResponseType = {
   user: AuthUser;
 };
+
+export type AdminUserType = {
+  id: number;
+  name: string;
+  email: string;
+  is_admin: boolean;
+  avatar: string | null;
+  created_at: string;
+  updated_at: string;
+};

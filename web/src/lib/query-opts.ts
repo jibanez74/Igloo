@@ -1,5 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
+  adminGetUsers,
   getAlbumDetails,
   getAlbumsPaginated,
   getAuthUser,
@@ -32,6 +33,7 @@ import {
   getWatchRooms,
 } from "@/lib/api";
 import {
+  ADMIN_USERS_KEY,
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   AUTH_USER_KEY,
@@ -84,6 +86,15 @@ const STALE_30S = 30_000;
 
 const GC_DEFAULT = 10 * MIN;
 const GC_LONG = 30 * MIN;
+
+export function adminUsersQueryOpts() {
+  return queryOptions({
+    queryKey: [ADMIN_USERS_KEY],
+    queryFn: adminGetUsers,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
 
 export function authUserQueryOpts() {
   return queryOptions({

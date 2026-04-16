@@ -33,6 +33,9 @@ const AdminSettingsIndexLazyRouteImport = createFileRoute('/_admin/settings/')()
 const AuthWatchRoomsIdLazyRouteImport = createFileRoute(
   '/_auth/watch-rooms/$id',
 )()
+const AdminSettingsUsersLazyRouteImport = createFileRoute(
+  '/_admin/settings/users',
+)()
 const AdminSettingsPlaybackLazyRouteImport = createFileRoute(
   '/_admin/settings/playback',
 )()
@@ -117,6 +120,13 @@ const AuthWatchRoomsIdLazyRoute = AuthWatchRoomsIdLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/_auth/watch-rooms/$id.lazy').then((d) => d.Route),
 )
+const AdminSettingsUsersLazyRoute = AdminSettingsUsersLazyRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any).lazy(() =>
+  import('./routes/_admin/settings/users.lazy').then((d) => d.Route),
+)
 const AdminSettingsPlaybackLazyRoute =
   AdminSettingsPlaybackLazyRouteImport.update({
     id: '/playback',
@@ -189,6 +199,7 @@ export interface FileRoutesByFullPath {
   '/settings/account': typeof AdminSettingsAccountLazyRoute
   '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/settings/users': typeof AdminSettingsUsersLazyRoute
   '/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/movies/': typeof AuthMoviesIndexRoute
   '/music/': typeof AuthMusicIndexRoute
@@ -210,6 +221,7 @@ export interface FileRoutesByTo {
   '/settings/account': typeof AdminSettingsAccountLazyRoute
   '/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/settings/users': typeof AdminSettingsUsersLazyRoute
   '/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/movies': typeof AuthMoviesIndexRoute
   '/music': typeof AuthMusicIndexRoute
@@ -236,6 +248,7 @@ export interface FileRoutesById {
   '/_admin/settings/account': typeof AdminSettingsAccountLazyRoute
   '/_admin/settings/libraries': typeof AdminSettingsLibrariesLazyRoute
   '/_admin/settings/playback': typeof AdminSettingsPlaybackLazyRoute
+  '/_admin/settings/users': typeof AdminSettingsUsersLazyRoute
   '/_auth/watch-rooms/$id': typeof AuthWatchRoomsIdLazyRoute
   '/_auth/movies/': typeof AuthMoviesIndexRoute
   '/_auth/music/': typeof AuthMusicIndexRoute
@@ -261,6 +274,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
+    | '/settings/users'
     | '/watch-rooms/$id'
     | '/movies/'
     | '/music/'
@@ -282,6 +296,7 @@ export interface FileRouteTypes {
     | '/settings/account'
     | '/settings/libraries'
     | '/settings/playback'
+    | '/settings/users'
     | '/watch-rooms/$id'
     | '/movies'
     | '/music'
@@ -307,6 +322,7 @@ export interface FileRouteTypes {
     | '/_admin/settings/account'
     | '/_admin/settings/libraries'
     | '/_admin/settings/playback'
+    | '/_admin/settings/users'
     | '/_auth/watch-rooms/$id'
     | '/_auth/movies/'
     | '/_auth/music/'
@@ -421,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthWatchRoomsIdLazyRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/_admin/settings/users': {
+      id: '/_admin/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof AdminSettingsUsersLazyRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/_admin/settings/playback': {
       id: '/_admin/settings/playback'
       path: '/playback'
@@ -498,6 +521,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsAccountLazyRoute: typeof AdminSettingsAccountLazyRoute
   AdminSettingsLibrariesLazyRoute: typeof AdminSettingsLibrariesLazyRoute
   AdminSettingsPlaybackLazyRoute: typeof AdminSettingsPlaybackLazyRoute
+  AdminSettingsUsersLazyRoute: typeof AdminSettingsUsersLazyRoute
   AdminSettingsIndexLazyRoute: typeof AdminSettingsIndexLazyRoute
 }
 
@@ -505,6 +529,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsAccountLazyRoute: AdminSettingsAccountLazyRoute,
   AdminSettingsLibrariesLazyRoute: AdminSettingsLibrariesLazyRoute,
   AdminSettingsPlaybackLazyRoute: AdminSettingsPlaybackLazyRoute,
+  AdminSettingsUsersLazyRoute: AdminSettingsUsersLazyRoute,
   AdminSettingsIndexLazyRoute: AdminSettingsIndexLazyRoute,
 }
 

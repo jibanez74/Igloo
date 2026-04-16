@@ -677,7 +677,7 @@ function AccountSettings() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className='sm:max-w-md'>
+        <DialogContent className='border-slate-700 bg-slate-900 text-white sm:max-w-md'>
           <DialogHeader>
             <DialogTitle className='text-red-400'>Delete Account</DialogTitle>
             <DialogDescription className='text-slate-300'>

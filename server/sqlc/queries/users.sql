@@ -58,6 +58,33 @@ RETURNING *;
 DELETE FROM users
 WHERE id = ?;
 
+-- name: GetAllUsers :many
+SELECT
+  id,
+  name,
+  email,
+  is_admin,
+  avatar,
+  created_at,
+  updated_at
+FROM users
+ORDER BY name ASC;
+
+-- name: AdminUpdateUser :one
+UPDATE users
+SET
+  name = ?,
+  email = ?,
+  is_admin = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
+
+-- name: CountAdmins :one
+SELECT COUNT(*)
+FROM users
+WHERE is_admin = true;
+
 -- name: GetUsersExcluding :many
 SELECT
   id,
