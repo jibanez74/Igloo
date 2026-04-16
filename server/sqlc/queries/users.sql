@@ -39,6 +39,14 @@ SET
 WHERE id = ?
 RETURNING *;
 
+-- name: UpdateUserEmail :one
+UPDATE users
+SET
+  email = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
+
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET

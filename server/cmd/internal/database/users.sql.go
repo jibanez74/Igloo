@@ -327,6 +327,36 @@ func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarPara
 	return i, err
 }
 
+const updateUserEmail = `-- name: UpdateUserEmail :one
+UPDATE users
+SET
+  email = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+`
+
+type UpdateUserEmailParams struct {
+	Email string `json:"email"`
+	ID    int64  `json:"id"`
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserEmailStmt, updateUserEmail, arg.Email, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Password,
+		&i.IsAdmin,
+		&i.Avatar,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserName = `-- name: UpdateUserName :one
 UPDATE users
 SET

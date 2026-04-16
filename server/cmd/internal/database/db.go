@@ -438,6 +438,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateUserAvatarStmt, err = db.PrepareContext(ctx, updateUserAvatar); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserAvatar: %w", err)
 	}
+	if q.updateUserEmailStmt, err = db.PrepareContext(ctx, updateUserEmail); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserEmail: %w", err)
+	}
 	if q.updateUserNameStmt, err = db.PrepareContext(ctx, updateUserName); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserName: %w", err)
 	}
@@ -1178,6 +1181,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserAvatarStmt: %w", cerr)
 		}
 	}
+	if q.updateUserEmailStmt != nil {
+		if cerr := q.updateUserEmailStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserEmailStmt: %w", cerr)
+		}
+	}
 	if q.updateUserNameStmt != nil {
 		if cerr := q.updateUserNameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserNameStmt: %w", cerr)
@@ -1430,6 +1438,7 @@ type Queries struct {
 	updatePlaylistTimestampStmt                 *sql.Stmt
 	updateTrackPositionStmt                     *sql.Stmt
 	updateUserAvatarStmt                        *sql.Stmt
+	updateUserEmailStmt                         *sql.Stmt
 	updateUserNameStmt                          *sql.Stmt
 	updateUserPasswordStmt                      *sql.Stmt
 	upsertAlbumStmt                             *sql.Stmt
@@ -1589,6 +1598,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updatePlaylistTimestampStmt:                 q.updatePlaylistTimestampStmt,
 		updateTrackPositionStmt:                     q.updateTrackPositionStmt,
 		updateUserAvatarStmt:                        q.updateUserAvatarStmt,
+		updateUserEmailStmt:                         q.updateUserEmailStmt,
 		updateUserNameStmt:                          q.updateUserNameStmt,
 		updateUserPasswordStmt:                      q.updateUserPasswordStmt,
 		upsertAlbumStmt:                             q.upsertAlbumStmt,

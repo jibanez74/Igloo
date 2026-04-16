@@ -200,6 +200,7 @@ type Querier interface {
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
 	UpdateTrackPosition(ctx context.Context, arg UpdateTrackPositionParams) error
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (User, error)
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)

@@ -796,6 +796,7 @@ func (app *Application) InitRouter() {
 
 			r.Route("/user", func(r chi.Router) {
 				r.Put("/name", app.UpdateUserName)
+				r.Put("/email", app.UpdateUserEmail)
 				r.Put("/password", app.UpdateUserPassword)
 				r.Put("/avatar", app.UpdateUserAvatar)
 				r.Post("/avatar/upload", app.UploadUserAvatar)

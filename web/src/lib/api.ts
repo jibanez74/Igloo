@@ -104,6 +104,12 @@ export const updateUserName = (name: string) =>
     body: { name },
   });
 
+export const updateUserEmail = (email: string) =>
+  apiRequest("/api/user/email", {
+    method: "PUT",
+    body: { email },
+  });
+
 export const updateUserPassword = (
   currentPassword: string,
   newPassword: string,
@@ -520,6 +526,11 @@ export const getSettings = () => apiRequest<SettingsType>("/api/settings");
 
 export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {
+    method: "POST",
+  });
+
+export const triggerMovieScan = () =>
+  apiRequest<{ message: string }>("/api/settings/scan/movies", {
     method: "POST",
   });
 

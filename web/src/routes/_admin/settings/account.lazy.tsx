@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -23,7 +23,6 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   User,
-  Mail,
   Lock,
   Image as ImageIcon,
   Upload,
@@ -31,9 +30,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { authUserQueryOpts } from "@/lib/query-opts";
-import { AUTH_USER_KEY } from "@/lib/constants";
+import { AUTH_USER_KEY, ADMIN_USERS_KEY } from "@/lib/constants";
 import {
   updateUserName,
+  updateUserEmail,
   updateUserPassword,
   updateUserAvatar,
   uploadUserAvatar,
@@ -62,17 +62,26 @@ function AccountSettings() {
       : null;
 
   // Form input state (controlled inputs)
-  // Initialize name from user data using lazy initializer
-  const [name, setName] = useState(() => user?.name ?? "");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
 
-  // Sync name when user data loads (only if name is empty, meaning user data loaded after mount)
-  // This is a render-time check, but it's safe because setName is idempotent and only runs when needed
-  if (user?.name && !name) {
+  // Seed name and email once when user data first arrives.
+  // Using refs prevents the empty-string check from re-seeding the fields
+  // while the user is actively clearing the inputs.
+  const nameInitialized = useRef(false);
+  if (user?.name && !nameInitialized.current) {
+    nameInitialized.current = true;
     setName(user.name);
+  }
+
+  const emailInitialized = useRef(false);
+  if (user?.email && !emailInitialized.current) {
+    emailInitialized.current = true;
+    setEmail(user.email);
   }
 
   // Name update mutation with optimistic updates
@@ -116,11 +125,50 @@ function AccountSettings() {
     onSuccess: res => {
       if (res.error) {
         showActionFailed("update name", res.message);
-        // Refetch to get correct data
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         showSuccess("Name updated successfully");
-        // Name state will automatically reflect the optimistic update
+        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
+      }
+    },
+  });
+
+  // Email update mutation with optimistic updates
+  const updateEmailMutation = useMutation({
+    mutationFn: (newEmail: string) => updateUserEmail(newEmail),
+    onMutate: async newEmail => {
+      await queryClient.cancelQueries({ queryKey: [AUTH_USER_KEY] });
+      const previousData = queryClient.getQueryData([AUTH_USER_KEY]);
+
+      queryClient.setQueryData<typeof userData>([AUTH_USER_KEY], old => {
+        if (!old || old.error || !old.data?.user) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            user: { ...old.data.user, email: newEmail },
+          },
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (err, _newEmail, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData([AUTH_USER_KEY], context.previousData);
+      }
+      showActionFailed(
+        "update email",
+        err instanceof Error ? err.message : "An error occurred",
+      );
+    },
+    onSuccess: res => {
+      if (res.error) {
+        showActionFailed("update email", res.message);
+        queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
+      } else {
+        showSuccess("Email updated successfully");
+        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
@@ -188,6 +236,7 @@ function AccountSettings() {
       } else {
         showSuccess("Avatar updated successfully");
         setAvatarUrl("");
+        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
@@ -215,13 +264,13 @@ function AccountSettings() {
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
         showSuccess("Avatar uploaded successfully");
-        // Update cache with the new user data from response
         if (res.data?.user) {
           queryClient.setQueryData([AUTH_USER_KEY], {
             error: false,
             data: { user: res.data.user },
           });
         }
+        queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
     },
   });
@@ -242,6 +291,24 @@ function AccountSettings() {
     }
 
     updateNameMutation.mutate(name.trim());
+  };
+
+  const handleUpdateEmail = () => {
+    if (!user || !email.trim()) {
+      showError("Email is required");
+      return;
+    }
+
+    if (email.trim() === user.email) {
+      return;
+    }
+
+    if (email.length > 255) {
+      showError("Email must be 255 characters or less");
+      return;
+    }
+
+    updateEmailMutation.mutate(email.trim());
   };
 
   const handleUpdatePassword = () => {
@@ -413,25 +480,33 @@ function AccountSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-6'>
-          {/* Email (read-only) */}
+          {/* Email */}
           <div className='space-y-2'>
             <Label htmlFor='email' className='text-slate-300'>
               Email
             </Label>
-            <div className='relative'>
-              <Mail className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400' />
+            <div className='flex gap-2'>
               <Input
                 id='email'
                 type='email'
-                value={user.email}
-                disabled
-                className='pl-9 text-slate-400'
-                aria-label='Email address (cannot be changed)'
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder='Enter your email'
+                className='flex-1'
+                aria-label='Your email address'
               />
+              <Button
+                onClick={handleUpdateEmail}
+                disabled={
+                  updateEmailMutation.isPending ||
+                  email.trim() === user.email ||
+                  !email.trim()
+                }
+                variant='accent'
+              >
+                {updateEmailMutation.isPending ? "Saving..." : "Save"}
+              </Button>
             </div>
-            <p className='text-xs text-slate-400'>
-              Your email address cannot be changed
-            </p>
           </div>
 
           {/* Name */}
