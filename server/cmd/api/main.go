@@ -796,6 +796,7 @@ func (app *Application) InitRouter() {
 
 			r.Route("/user", func(r chi.Router) {
 				r.Put("/name", app.UpdateUserName)
+				r.Put("/email", app.UpdateUserEmail)
 				r.Put("/password", app.UpdateUserPassword)
 				r.Put("/avatar", app.UpdateUserAvatar)
 				r.Post("/avatar/upload", app.UploadUserAvatar)
@@ -848,6 +849,15 @@ func (app *Application) InitRouter() {
 			})
 
 			r.Get("/users", app.GetUsers)
+
+			r.Route("/admin/users", func(r chi.Router) {
+				r.Use(app.RequireAdmin)
+				r.Get("/", app.AdminGetUsers)
+				r.Post("/", app.AdminCreateUser)
+				r.Patch("/{id}", app.AdminUpdateUser)
+				r.Delete("/{id}", app.AdminDeleteUser)
+				r.Put("/{id}/password", app.AdminResetUserPassword)
+			})
 
 			r.Route("/watch-rooms", func(r chi.Router) {
 				r.Get("/", app.GetWatchRooms)

@@ -24,9 +24,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { musicStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
+import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showError, showSuccess, showActionFailed } from "@/lib/toast-helpers";
-import { triggerMusicScan } from "@/lib/api";
+import { triggerMusicScan, triggerMovieScan } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   MUSIC_STATS_KEY,
@@ -37,6 +37,12 @@ import {
   ALBUMS_PAGINATED_KEY,
   MUSICIANS_PAGINATED_KEY,
   TRACKS_INFINITE_KEY,
+  MOVIES_STATS_KEY,
+  MOVIES_KEY,
+  LATEST_MOVIES_KEY,
+  MOVIE_PLAYLISTS_KEY,
+  MOVIE_PLAYLIST_DETAILS_KEY,
+  MOVIE_PLAYLIST_MOVIES_KEY,
 } from "@/lib/constants";
 
 export const Route = createLazyFileRoute("/_admin/settings/libraries")({
@@ -370,15 +376,43 @@ function MusicLibrarySection() {
 
 function MoviesLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
+  const { data: statsData, isLoading: statsLoading } = useQuery(moviesStatsQueryOpts());
+  const queryClient = useQueryClient();
   const [isScanning, startTransition] = useTransition();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
+  const stats = statsData?.error === false ? statsData.data : null;
   const libraryPath: string | null = settings?.movies_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
 
   const handleScan = () => {
+    if (!libraryPath) {
+      showError("No library path", "Please configure a movies library path first");
+      return;
+    }
+
     startTransition(async () => {
-      showError("Not implemented", "Library scanning will be available soon");
+      try {
+        const res = await triggerMovieScan();
+        if (res.error) {
+          showActionFailed("scan movies library", res.message);
+        } else {
+          showSuccess("Scan started", "Movies library scan has been initiated");
+          const movieQueryKeys = [
+            MOVIES_STATS_KEY,
+            MOVIES_KEY,
+            LATEST_MOVIES_KEY,
+            MOVIE_PLAYLISTS_KEY,
+            MOVIE_PLAYLIST_DETAILS_KEY,
+            MOVIE_PLAYLIST_MOVIES_KEY,
+          ];
+          movieQueryKeys.forEach(key => {
+            queryClient.invalidateQueries({ queryKey: [key] });
+          });
+        }
+      } catch {
+        showActionFailed("scan movies library", "Failed to start scan");
+      }
     });
   };
 
@@ -477,20 +511,45 @@ function MoviesLibrarySection() {
         )}
       </div>
 
-      {/* Stats Placeholder - Only show if library is configured */}
+      {/* Stats - Only show if library is configured */}
       {hasLibrary && (
         <div
           role='region'
-          tabIndex={0}
-          aria-label='Movie library statistics: Not available yet'
-          className='rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+          aria-labelledby='movies-library-stats-label'
+          className='grid gap-4 sm:grid-cols-1'
         >
-          <div className='flex items-center gap-3 text-slate-300'>
-            <AlertCircle className='size-5' aria-hidden='true' />
-            <p className='text-sm'>
-              Movie statistics will be available after movies feature is
-              implemented
-            </p>
+          <p id='movies-library-stats-label' className='sr-only'>
+            Movies library statistics
+          </p>
+          <div
+            role='group'
+            tabIndex={0}
+            aria-label={`Total movies: ${statsLoading ? "Loading" : (stats?.total_movies?.toLocaleString() ?? 0)}`}
+            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+          >
+            <div className='flex items-center gap-3'>
+              <div
+                className='flex size-10 items-center justify-center rounded-lg bg-cyan-500/10'
+                aria-hidden='true'
+              >
+                <Film className='size-5 text-cyan-400' aria-hidden='true' />
+              </div>
+              <div>
+                {statsLoading ? (
+                  <>
+                    <Spinner className='size-5 text-cyan-400' aria-hidden='true' />
+                    <span className='sr-only'>Loading movies count</span>
+                  </>
+                ) : (
+                  <>
+                    <p className='text-2xl font-bold text-white' aria-live='polite'>
+                      {stats?.total_movies?.toLocaleString() ?? 0}
+                    </p>
+                    <p className='text-sm text-slate-300'>Movies</p>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

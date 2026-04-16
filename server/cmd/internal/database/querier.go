@@ -14,10 +14,12 @@ type Querier interface {
 	AddMovieToPlaylist(ctx context.Context, arg AddMovieToPlaylistParams) (PlaylistMovie, error)
 	AddTrackToPlaylist(ctx context.Context, arg AddTrackToPlaylistParams) (PlaylistTrack, error)
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
+	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (int64, error)
 	// Quick check if movie exists with same path and size (likely unchanged)
 	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
 	CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (int64, error)
+	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
@@ -75,6 +77,7 @@ type Querier interface {
 	// Sorted by release date (newest first), then by title
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
 	// Cast for a movie with artist name and profile (for details view).
@@ -197,6 +200,7 @@ type Querier interface {
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
 	UpdateTrackPosition(ctx context.Context, arg UpdateTrackPositionParams) error
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (User, error)
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)

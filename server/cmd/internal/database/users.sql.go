@@ -10,6 +10,58 @@ import (
 	"database/sql"
 )
 
+const adminUpdateUser = `-- name: AdminUpdateUser :one
+UPDATE users
+SET
+  name = ?,
+  email = ?,
+  is_admin = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+`
+
+type AdminUpdateUserParams struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	IsAdmin bool   `json:"is_admin"`
+	ID      int64  `json:"id"`
+}
+
+func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error) {
+	row := q.queryRow(ctx, q.adminUpdateUserStmt, adminUpdateUser,
+		arg.Name,
+		arg.Email,
+		arg.IsAdmin,
+		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Password,
+		&i.IsAdmin,
+		&i.Avatar,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const countAdmins = `-- name: CountAdmins :one
+SELECT COUNT(*)
+FROM users
+WHERE is_admin = true
+`
+
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countAdminsStmt, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
   name,
@@ -85,6 +137,60 @@ func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getAllUsers = `-- name: GetAllUsers :many
+SELECT
+  id,
+  name,
+  email,
+  is_admin,
+  avatar,
+  created_at,
+  updated_at
+FROM users
+ORDER BY name ASC
+`
+
+type GetAllUsersRow struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Email     string         `json:"email"`
+	IsAdmin   bool           `json:"is_admin"`
+	Avatar    sql.NullString `json:"avatar"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at"`
+}
+
+func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
+	rows, err := q.query(ctx, q.getAllUsersStmt, getAllUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllUsersRow{}
+	for rows.Next() {
+		var i GetAllUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.IsAdmin,
+			&i.Avatar,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUser = `-- name: GetUser :one
@@ -207,6 +313,36 @@ type UpdateUserAvatarParams struct {
 
 func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) (User, error) {
 	row := q.queryRow(ctx, q.updateUserAvatarStmt, updateUserAvatar, arg.Avatar, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Password,
+		&i.IsAdmin,
+		&i.Avatar,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserEmail = `-- name: UpdateUserEmail :one
+UPDATE users
+SET
+  email = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+`
+
+type UpdateUserEmailParams struct {
+	Email string `json:"email"`
+	ID    int64  `json:"id"`
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserEmailStmt, updateUserEmail, arg.Email, arg.ID)
 	var i User
 	err := row.Scan(
 		&i.ID,

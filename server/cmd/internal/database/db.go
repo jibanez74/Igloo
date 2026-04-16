@@ -36,6 +36,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.addWatchRoomMemberStmt, err = db.PrepareContext(ctx, addWatchRoomMember); err != nil {
 		return nil, fmt.Errorf("error preparing query AddWatchRoomMember: %w", err)
 	}
+	if q.adminUpdateUserStmt, err = db.PrepareContext(ctx, adminUpdateUser); err != nil {
+		return nil, fmt.Errorf("error preparing query AdminUpdateUser: %w", err)
+	}
 	if q.canUserEditPlaylistStmt, err = db.PrepareContext(ctx, canUserEditPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query CanUserEditPlaylist: %w", err)
 	}
@@ -44,6 +47,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.checkTrackUnchangedStmt, err = db.PrepareContext(ctx, checkTrackUnchanged); err != nil {
 		return nil, fmt.Errorf("error preparing query CheckTrackUnchanged: %w", err)
+	}
+	if q.countAdminsStmt, err = db.PrepareContext(ctx, countAdmins); err != nil {
+		return nil, fmt.Errorf("error preparing query CountAdmins: %w", err)
 	}
 	if q.countMoviesForGenreStmt, err = db.PrepareContext(ctx, countMoviesForGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMoviesForGenre: %w", err)
@@ -158,6 +164,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
+	}
+	if q.getAllUsersStmt, err = db.PrepareContext(ctx, getAllUsers); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAllUsers: %w", err)
 	}
 	if q.getAudioStreamsByMovieIDStmt, err = db.PrepareContext(ctx, getAudioStreamsByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAudioStreamsByMovieID: %w", err)
@@ -429,6 +438,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateUserAvatarStmt, err = db.PrepareContext(ctx, updateUserAvatar); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserAvatar: %w", err)
 	}
+	if q.updateUserEmailStmt, err = db.PrepareContext(ctx, updateUserEmail); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserEmail: %w", err)
+	}
 	if q.updateUserNameStmt, err = db.PrepareContext(ctx, updateUserName); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserName: %w", err)
 	}
@@ -499,6 +511,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing addWatchRoomMemberStmt: %w", cerr)
 		}
 	}
+	if q.adminUpdateUserStmt != nil {
+		if cerr := q.adminUpdateUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing adminUpdateUserStmt: %w", cerr)
+		}
+	}
 	if q.canUserEditPlaylistStmt != nil {
 		if cerr := q.canUserEditPlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing canUserEditPlaylistStmt: %w", cerr)
@@ -512,6 +529,11 @@ func (q *Queries) Close() error {
 	if q.checkTrackUnchangedStmt != nil {
 		if cerr := q.checkTrackUnchangedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing checkTrackUnchangedStmt: %w", cerr)
+		}
+	}
+	if q.countAdminsStmt != nil {
+		if cerr := q.countAdminsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countAdminsStmt: %w", cerr)
 		}
 	}
 	if q.countMoviesForGenreStmt != nil {
@@ -702,6 +724,11 @@ func (q *Queries) Close() error {
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
+		}
+	}
+	if q.getAllUsersStmt != nil {
+		if cerr := q.getAllUsersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAllUsersStmt: %w", cerr)
 		}
 	}
 	if q.getAudioStreamsByMovieIDStmt != nil {
@@ -1154,6 +1181,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserAvatarStmt: %w", cerr)
 		}
 	}
+	if q.updateUserEmailStmt != nil {
+		if cerr := q.updateUserEmailStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserEmailStmt: %w", cerr)
+		}
+	}
 	if q.updateUserNameStmt != nil {
 		if cerr := q.updateUserNameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserNameStmt: %w", cerr)
@@ -1272,9 +1304,11 @@ type Queries struct {
 	addMovieToPlaylistStmt                      *sql.Stmt
 	addTrackToPlaylistStmt                      *sql.Stmt
 	addWatchRoomMemberStmt                      *sql.Stmt
+	adminUpdateUserStmt                         *sql.Stmt
 	canUserEditPlaylistStmt                     *sql.Stmt
 	checkMovieUnchangedStmt                     *sql.Stmt
 	checkTrackUnchangedStmt                     *sql.Stmt
+	countAdminsStmt                             *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
@@ -1313,6 +1347,7 @@ type Queries struct {
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
+	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
 	getChaptersByMovieIDStmt                    *sql.Stmt
@@ -1403,6 +1438,7 @@ type Queries struct {
 	updatePlaylistTimestampStmt                 *sql.Stmt
 	updateTrackPositionStmt                     *sql.Stmt
 	updateUserAvatarStmt                        *sql.Stmt
+	updateUserEmailStmt                         *sql.Stmt
 	updateUserNameStmt                          *sql.Stmt
 	updateUserPasswordStmt                      *sql.Stmt
 	upsertAlbumStmt                             *sql.Stmt
@@ -1428,9 +1464,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addMovieToPlaylistStmt:                      q.addMovieToPlaylistStmt,
 		addTrackToPlaylistStmt:                      q.addTrackToPlaylistStmt,
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
+		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
 		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
 		checkMovieUnchangedStmt:                     q.checkMovieUnchangedStmt,
 		checkTrackUnchangedStmt:                     q.checkTrackUnchangedStmt,
+		countAdminsStmt:                             q.countAdminsStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
@@ -1469,6 +1507,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
+		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
 		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
@@ -1559,6 +1598,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updatePlaylistTimestampStmt:                 q.updatePlaylistTimestampStmt,
 		updateTrackPositionStmt:                     q.updateTrackPositionStmt,
 		updateUserAvatarStmt:                        q.updateUserAvatarStmt,
+		updateUserEmailStmt:                         q.updateUserEmailStmt,
 		updateUserNameStmt:                          q.updateUserNameStmt,
 		updateUserPasswordStmt:                      q.updateUserPasswordStmt,
 		upsertAlbumStmt:                             q.upsertAlbumStmt,

@@ -71,6 +71,69 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+// UpdateUserEmailRequest represents the request body for updating email
+type UpdateUserEmailRequest struct {
+	Email string `json:"email"`
+}
+
+// UpdateUserEmail updates the authenticated user's email address
+func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateUserEmailRequest
+	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	req.Email = strings.TrimSpace(req.Email)
+
+	if req.Email == "" {
+		helpers.ErrorJSON(w, errors.New("email is required"), http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Email) > 255 {
+		helpers.ErrorJSON(w, errors.New("email must be 255 characters or less"), http.StatusBadRequest)
+		return
+	}
+
+	user, err := app.Queries.UpdateUserEmail(r.Context(), database.UpdateUserEmailParams{
+		Email: req.Email,
+		ID:    userID,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint") {
+			helpers.ErrorJSON(w, errors.New("that email address is already in use"), http.StatusConflict)
+			return
+		}
+		app.Logger.Error("failed to update user email", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"user": map[string]any{
+				"id":         user.ID,
+				"name":       user.Name,
+				"email":      user.Email,
+				"is_admin":   user.IsAdmin,
+				"avatar":     user.Avatar,
+				"created_at": user.CreatedAt,
+				"updated_at": user.UpdatedAt,
+			},
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
 // UpdateUserPasswordRequest represents the request body for updating password
 type UpdateUserPasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
