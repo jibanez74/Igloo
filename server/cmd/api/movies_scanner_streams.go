@@ -161,14 +161,13 @@ func (app *Application) processChapters(
 	}
 
 	for _, chapter := range chapters {
-		// Parse start time (convert from seconds to milliseconds)
+		// Parse start time and store in seconds (the player and HLS start param work in seconds)
 		startTime := int64(0)
 		if chapter.Start > 0 {
-			startTime = int64(chapter.Start)
+			startTime = int64(chapter.Start) / 1000
 		} else if chapter.StartTime != "" {
-			// Parse duration string (e.g., "123.456")
 			if duration, err := helpers.ParseDurationMs(chapter.StartTime); err == nil {
-				startTime = duration
+				startTime = duration / 1000
 			}
 		}
 
