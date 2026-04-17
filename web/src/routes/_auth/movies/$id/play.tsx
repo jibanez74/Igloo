@@ -56,7 +56,7 @@ import {
   tryWebKitVideoExitFullscreen,
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
-import { unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapFloatOrUndefined, unwrapStringOrUndefined } from "@/lib/nullable";
 import type { PlaySearchParams } from "@/types";
 import { playSearchSchema } from "@/types/movie-play";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -263,6 +263,7 @@ function PlayMoviePage() {
   const hlsStartSec = isHlsPlayback
     ? Math.max(0, start - HLS_RESUME_REWIND_BUFFER_SEC)
     : 0;
+  const hlsPlaybackOffsetSec = isHlsPlayback ? Math.max(0, start - hlsStartSec) : 0;
   const streamUrl = buildStreamUrl(
     movieId,
     resolvedMode,
@@ -273,6 +274,20 @@ function PlayMoviePage() {
   const qualityLabel =
     STREAM_MODES.find(m => m.id === resolvedMode)?.label ?? resolvedMode;
   const modeUnavailable = availableModes !== null && availableModes.length === 0;
+  const movieDurationSec =
+    unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
+    unwrapFloatOrUndefined(movie?.duration);
+  const toAbsolutePlaybackTime = (timeSec: number) =>
+    isHlsPlayback ? hlsStartSec + timeSec : timeSec;
+  const toMediaTime = (timeSec: number) =>
+    isHlsPlayback ? Math.max(0, timeSec - hlsStartSec) : timeSec;
+  const toAbsoluteDuration = (durationSec: number) => {
+    if (!isHlsPlayback) return durationSec;
+    if (movieDurationSec && movieDurationSec > 0) {
+      return movieDurationSec;
+    }
+    return hlsStartSec + durationSec;
+  };
 
   const subtitleInfo = (() => {
     if (resolvedSubtitleTrack === null || !techLoaded) return null;
@@ -430,7 +445,7 @@ function PlayMoviePage() {
     const video = videoRef.current;
     if (!video) return;
     const t = clampPlaybackTime(newTime);
-    const currentVideoTime = video.currentTime;
+    const currentVideoTime = toAbsolutePlaybackTime(video.currentTime);
     const shouldRebaseHlsSession =
       isHlsPlayback &&
       (t < hlsStartSec ||
@@ -441,7 +456,7 @@ function PlayMoviePage() {
       return;
     }
 
-    video.currentTime = t;
+    video.currentTime = toMediaTime(t);
     setCurrentTime(t);
   };
 
@@ -587,6 +602,12 @@ function PlayMoviePage() {
       video.removeEventListener("canplay", resumePlayback);
     };
   }, [pendingAutoPlayOnLoad, streamUrl]);
+
+  useEffect(() => {
+    if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
+    durationRef.current = movieDurationSec;
+    setDuration(movieDurationSec);
+  }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
     if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
@@ -1033,21 +1054,24 @@ function PlayMoviePage() {
             void handleEndedSave();
           }}
           onTimeUpdate={(time) => {
-            currentTimeRef.current = time;
-            setCurrentTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time);
+            currentTimeRef.current = absoluteTime;
+            setCurrentTime(absoluteTime);
           }}
           onDurationChange={(nextDuration) => {
-            durationRef.current = nextDuration;
-            setDuration(nextDuration);
+            const absoluteDuration = toAbsoluteDuration(nextDuration);
+            durationRef.current = absoluteDuration;
+            setDuration(absoluteDuration);
           }}
           onNativeError={handleNativePlaybackError}
           subtitleTrack={subtitleInfo}
-          startSec={start}
+          startSec={isHlsPlayback ? hlsPlaybackOffsetSec : start}
           onStartApplied={(time) => {
-            currentTimeRef.current = time;
-            setCurrentTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time);
+            currentTimeRef.current = absoluteTime;
+            setCurrentTime(absoluteTime);
           }}
-          onSessionLost={handleSessionLost}
+          onSessionLost={(time) => handleSessionLost(toAbsolutePlaybackTime(time))}
         />
       </div>
 
