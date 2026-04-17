@@ -91,8 +91,6 @@ func TestStartSegmentComputation(t *testing.T) {
 }
 
 func TestResolveHLSDiskFilename(t *testing.T) {
-	session := &HLSSession{StartSegment: 69}
-
 	tests := []struct {
 		name     string
 		filename string
@@ -105,19 +103,14 @@ func TestResolveHLSDiskFilename(t *testing.T) {
 			want:     helpers.HLS_INIT_FILENAME,
 		},
 		{
-			name:     "start segment maps to first disk segment",
+			name:     "segment filename is unchanged",
 			filename: "segment_69.m4s",
-			want:     "segment_0.m4s",
+			want:     "segment_69.m4s",
 		},
 		{
-			name:     "later segment maps relative to start segment",
+			name:     "later segment filename is unchanged",
 			filename: "segment_99.m4s",
-			want:     "segment_30.m4s",
-		},
-		{
-			name:     "request before session start returns error",
-			filename: "segment_0.m4s",
-			wantErr:  true,
+			want:     "segment_99.m4s",
 		},
 		{
 			name:     "invalid segment name returns error",
@@ -128,7 +121,7 @@ func TestResolveHLSDiskFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveHLSDiskFilename(session, tt.filename)
+			got, err := resolveHLSDiskFilename(tt.filename)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("resolveHLSDiskFilename(%q) expected error", tt.filename)
@@ -140,6 +133,53 @@ func TestResolveHLSDiskFilename(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("resolveHLSDiskFilename(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSessionPlaylistDurationSec(t *testing.T) {
+	tests := []struct {
+		name    string
+		session *HLSSession
+		want    float64
+	}{
+		{
+			name:    "nil session",
+			session: nil,
+			want:    0,
+		},
+		{
+			name: "full session keeps total duration",
+			session: &HLSSession{
+				DurationSec: 7200,
+				StartSec:    0,
+			},
+			want: 7200,
+		},
+		{
+			name: "rebased session uses remaining duration",
+			session: &HLSSession{
+				DurationSec: 7200,
+				StartSec:    6591,
+			},
+			want: 609,
+		},
+		{
+			name: "start beyond duration clamps to zero",
+			session: &HLSSession{
+				DurationSec: 10,
+				StartSec:    20,
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sessionPlaylistDurationSec(tt.session)
+			if got != tt.want {
+				t.Fatalf("sessionPlaylistDurationSec() = %v, want %v", got, tt.want)
 			}
 		})
 	}

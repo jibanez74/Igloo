@@ -2,11 +2,24 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
 )
+
+func TestBuildHLSAssetQuerySuffix(t *testing.T) {
+	got := buildHLSAssetQuerySuffix(2, url.Values{
+		"start":  {"120"},
+		"reload": {"7"},
+		"other":  {"ignored"},
+	})
+
+	if got != "?audio_track=2&reload=7&start=120" {
+		t.Fatalf("buildHLSAssetQuerySuffix() = %q", got)
+	}
+}
 
 func TestFinalizeEventPlaylist(t *testing.T) {
 	tests := []struct {
@@ -16,14 +29,14 @@ func TestFinalizeEventPlaylist(t *testing.T) {
 		wantEnd  bool
 	}{
 		{
-			name: "converts EVENT to VOD and appends ENDLIST",
-			input: "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n",
+			name:     "converts EVENT to VOD and appends ENDLIST",
+			input:    "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n",
 			wantType: "#EXT-X-PLAYLIST-TYPE:VOD",
 			wantEnd:  true,
 		},
 		{
-			name: "preserves existing ENDLIST",
-			input: "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n",
+			name:     "preserves existing ENDLIST",
+			input:    "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:4.0,\nsegment_0.m4s\n#EXT-X-ENDLIST\n",
 			wantType: "#EXT-X-PLAYLIST-TYPE:VOD",
 			wantEnd:  true,
 		},
@@ -80,20 +93,21 @@ func TestRewritePlaylistURLs(t *testing.T) {
 
 	baseURL := "/api/movies/7/hls/1080p_8mbps/"
 	audioTrack := 2
+	querySuffix := buildHLSAssetQuerySuffix(audioTrack, nil)
 
-	got := rewritePlaylistURLs(playlist, baseURL, audioTrack)
+	got := rewritePlaylistURLs(playlist, baseURL, querySuffix)
 
-	wantInitURI := fmt.Sprintf(`URI="%s%s?audio_track=%d"`, baseURL, helpers.HLS_INIT_FILENAME, audioTrack)
+	wantInitURI := fmt.Sprintf(`URI="%s%s%s"`, baseURL, helpers.HLS_INIT_FILENAME, querySuffix)
 	if !strings.Contains(got, wantInitURI) {
 		t.Errorf("expected init URI %q in output, got:\n%s", wantInitURI, got)
 	}
 
-	wantSeg0 := fmt.Sprintf("%ssegment_0.m4s?audio_track=%d", baseURL, audioTrack)
+	wantSeg0 := fmt.Sprintf("%ssegment_0.m4s%s", baseURL, querySuffix)
 	if !strings.Contains(got, wantSeg0) {
 		t.Errorf("expected segment 0 URL %q in output, got:\n%s", wantSeg0, got)
 	}
 
-	wantSeg1 := fmt.Sprintf("%ssegment_1.m4s?audio_track=%d", baseURL, audioTrack)
+	wantSeg1 := fmt.Sprintf("%ssegment_1.m4s%s", baseURL, querySuffix)
 	if !strings.Contains(got, wantSeg1) {
 		t.Errorf("expected segment 1 URL %q in output, got:\n%s", wantSeg1, got)
 	}
@@ -108,7 +122,7 @@ func TestRewritePlaylistURLs(t *testing.T) {
 
 func TestRewritePlaylistURLs_PreservesMetadataLines(t *testing.T) {
 	playlist := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:8\n#EXT-X-ENDLIST\n"
-	got := rewritePlaylistURLs(playlist, "/base/", 0)
+	got := rewritePlaylistURLs(playlist, "/base/", buildHLSAssetQuerySuffix(0, nil))
 
 	for _, tag := range []string{"#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:8", "#EXT-X-ENDLIST"} {
 		if !strings.Contains(got, tag) {
@@ -119,10 +133,10 @@ func TestRewritePlaylistURLs_PreservesMetadataLines(t *testing.T) {
 
 func TestGenerateVODPlaylist(t *testing.T) {
 	tests := []struct {
-		name       string
+		name        string
 		durationSec float64
-		audioTrack int
-		wantSegs   int
+		audioTrack  int
+		wantSegs    int
 	}{
 		{
 			name:        "short movie (one segment)",
@@ -159,7 +173,8 @@ func TestGenerateVODPlaylist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL := "/api/movies/1/hls/720p_3mbps/"
-			got := generateVODPlaylist(tt.durationSec, baseURL, tt.audioTrack, false)
+			querySuffix := buildHLSAssetQuerySuffix(tt.audioTrack, nil)
+			got := generateVODPlaylist(tt.durationSec, baseURL, querySuffix, false)
 
 			if !strings.HasPrefix(got, "#EXTM3U\n") {
 				t.Error("playlist must start with #EXTM3U")
@@ -171,7 +186,7 @@ func TestGenerateVODPlaylist(t *testing.T) {
 				t.Error("VOD playlist must include #EXT-X-ENDLIST")
 			}
 
-			initURI := fmt.Sprintf(`URI="%s%s?audio_track=%d"`, baseURL, helpers.HLS_INIT_FILENAME, tt.audioTrack)
+			initURI := fmt.Sprintf(`URI="%s%s%s"`, baseURL, helpers.HLS_INIT_FILENAME, querySuffix)
 			if !strings.Contains(got, initURI) {
 				t.Errorf("expected init map URI %q", initURI)
 			}
@@ -181,14 +196,13 @@ func TestGenerateVODPlaylist(t *testing.T) {
 				t.Errorf("expected %d segments, got %d", tt.wantSegs, segCount)
 			}
 
-			suffix := fmt.Sprintf("?audio_track=%d", tt.audioTrack)
 			for i := 0; i < tt.wantSegs; i++ {
 				segLine := fmt.Sprintf("%s%s%d%s%s",
 					baseURL,
 					helpers.HLS_SEGMENT_FILENAME_PREFIX,
 					i,
 					helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-					suffix,
+					querySuffix,
 				)
 				if !strings.Contains(got, segLine) {
 					t.Errorf("expected segment line %q in playlist", segLine)
@@ -223,9 +237,13 @@ func TestBuildResumePlaylist_UsesActualDurations(t *testing.T) {
 
 	baseURL := "/api/movies/5/hls/remux/"
 	audioTrack := 0
-	totalDuration := float64(helpers.HLS_SEGMENT_TIME_SEC)*15 // 60s total
+	querySuffix := buildHLSAssetQuerySuffix(audioTrack, url.Values{
+		"start":  {"40"},
+		"reload": {"2"},
+	})
+	totalDuration := float64(helpers.HLS_SEGMENT_TIME_SEC) * 15 // 60s total
 
-	got := buildResumePlaylist(finalPlaylist, totalDuration, baseURL, audioTrack, startSegment)
+	got := buildResumePlaylist(finalPlaylist, totalDuration, baseURL, querySuffix, startSegment)
 
 	if !strings.HasPrefix(got, "#EXTM3U\n") {
 		t.Error("playlist must start with #EXTM3U")
@@ -244,7 +262,7 @@ func TestBuildResumePlaylist_UsesActualDurations(t *testing.T) {
 
 	// Placeholder segments 0-9 must use logical indices in URLs.
 	for i := 0; i < int(startSegment); i++ {
-		want := fmt.Sprintf("%s%s%d%s?audio_track=%d", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX, audioTrack)
+		want := fmt.Sprintf("%s%s%d%s%s", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX, querySuffix)
 		if !strings.Contains(got, want) {
 			t.Errorf("expected placeholder segment URL %q in playlist", want)
 		}
@@ -267,7 +285,7 @@ func TestBuildResumePlaylist_UsesActualDurations(t *testing.T) {
 	}
 
 	// Segment URLs for actual segments must use logical indices.
-	wantSeg10 := fmt.Sprintf("%s%s%d%s?audio_track=%d", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, 10, helpers.HLS_SEGMENT_FILENAME_SUFFIX, audioTrack)
+	wantSeg10 := fmt.Sprintf("%s%s%d%s%s", baseURL, helpers.HLS_SEGMENT_FILENAME_PREFIX, 10, helpers.HLS_SEGMENT_FILENAME_SUFFIX, querySuffix)
 	if !strings.Contains(got, wantSeg10) {
 		t.Errorf("expected logical segment URL %q for first actual segment, got:\n%s", wantSeg10, got)
 	}
@@ -305,7 +323,7 @@ func TestBuildResumePlaylist_PlaceholderDurationIsConsistent(t *testing.T) {
 
 	totalDuration := 60.0
 	startSegment := int64(10)
-	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, startSegment)
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", buildHLSAssetQuerySuffix(0, nil), startSegment)
 
 	// Sum all EXTINF durations.
 	var total float64
@@ -355,7 +373,7 @@ func TestBuildResumePlaylist_ZeroStartSegmentNoPlaceholders(t *testing.T) {
 	}, "\n")
 
 	totalDuration := 10.0
-	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", 0, 0)
+	got := buildResumePlaylist(finalPlaylist, totalDuration, "/base/", buildHLSAssetQuerySuffix(0, nil), 0)
 
 	var total float64
 	for _, line := range strings.Split(got, "\n") {
@@ -380,7 +398,7 @@ func TestBuildResumePlaylist_TargetDurationFallsBackToEstimate(t *testing.T) {
 	// When all actual segments are <= HLS_SEGMENT_TIME_SEC, target duration
 	// should still be at least HLS_SEGMENT_TIME_SEC.
 	finalPlaylist := "#EXTM3U\n#EXTINF:3.000000,\nsegment_0.m4s\n#EXT-X-ENDLIST\n"
-	got := buildResumePlaylist(finalPlaylist, 20, "/base/", 0, 1)
+	got := buildResumePlaylist(finalPlaylist, 20, "/base/", buildHLSAssetQuerySuffix(0, nil), 1)
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC)
 	if !strings.Contains(got, want) {
 		t.Errorf("expected %q, got:\n%s", want, got)
@@ -390,7 +408,7 @@ func TestBuildResumePlaylist_TargetDurationFallsBackToEstimate(t *testing.T) {
 func TestBuildResumePlaylist_ZeroStartSegmentIsFullPlaylist(t *testing.T) {
 	// startSegment=0 means every segment uses actual durations (no placeholders).
 	finalPlaylist := "#EXTM3U\n#EXTINF:5.000000,\nsegment_0.m4s\n#EXTINF:4.000000,\nsegment_1.m4s\n#EXT-X-ENDLIST\n"
-	got := buildResumePlaylist(finalPlaylist, float64(helpers.HLS_SEGMENT_TIME_SEC)*2, "/base/", 0, 0)
+	got := buildResumePlaylist(finalPlaylist, float64(helpers.HLS_SEGMENT_TIME_SEC)*2, "/base/", buildHLSAssetQuerySuffix(0, nil), 0)
 	if !strings.Contains(got, "#EXTINF:5.000000,") {
 		t.Error("expected actual duration 5.0 for first segment")
 	}
@@ -400,7 +418,7 @@ func TestBuildResumePlaylist_ZeroStartSegmentIsFullPlaylist(t *testing.T) {
 }
 
 func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
-	got := generateVODPlaylist(0, "/base/", 0, false)
+	got := generateVODPlaylist(0, "/base/", buildHLSAssetQuerySuffix(0, nil), false)
 
 	if !strings.Contains(got, "#EXT-X-ENDLIST") {
 		t.Error("zero-duration playlist must still be valid with ENDLIST")
@@ -411,7 +429,7 @@ func TestGenerateVODPlaylist_ZeroDuration(t *testing.T) {
 }
 
 func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", 0, false)
+	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(0, nil), false)
 
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_SEGMENT_TIME_SEC*2)
 	if !strings.Contains(got, want) {
@@ -420,7 +438,7 @@ func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testi
 }
 
 func TestGenerateVODPlaylist_CopyVideoUsesLargerTargetDuration(t *testing.T) {
-	got := generateVODPlaylist(100, "/base/", 0, true)
+	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(0, nil), true)
 
 	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_COPY_VIDEO_TARGET_DURATION)
 	if !strings.Contains(got, want) {
@@ -432,7 +450,7 @@ func TestGenerateVODPlaylist_LastSegmentDurationCapped(t *testing.T) {
 	segDur := float64(helpers.HLS_SEGMENT_TIME_SEC)
 	totalDur := segDur + 1.5
 
-	got := generateVODPlaylist(totalDur, "/base/", 0, false)
+	got := generateVODPlaylist(totalDur, "/base/", buildHLSAssetQuerySuffix(0, nil), false)
 
 	lines := strings.Split(got, "\n")
 	var infDurations []string

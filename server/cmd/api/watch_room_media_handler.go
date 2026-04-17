@@ -34,6 +34,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
+	querySuffix := buildHLSAssetQuerySuffix(int(room.AudioTrack), nil)
 
 	session.ExitMu.Lock()
 	finalPlaylist := session.FinalPlaylist
@@ -41,9 +42,9 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 
 	var playlist string
 	if finalPlaylist != "" {
-		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, int(room.AudioTrack))
+		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
 	} else {
-		playlist = generateVODPlaylist(session.DurationSec, baseURL, int(room.AudioTrack), session.CopyVideo)
+		playlist = generateVODPlaylist(session.DurationSec, baseURL, querySuffix, session.CopyVideo)
 	}
 
 	_, _, err = app.getActiveRoomHLSSession(room.ID, RoomHLSSessionKey(room.ID))
@@ -54,7 +55,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
 }
@@ -90,6 +91,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
 			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
+			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
 			return
 		}
