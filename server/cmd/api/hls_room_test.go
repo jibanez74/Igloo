@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 )
 
 // TestRoomHLSSessionKey_NoCollisionWithPersonalKey verifies that the room key
@@ -210,5 +211,74 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	}
 	if raw.(*HLSSession).TempDir != "sentinel" {
 		t.Error("expected sentinel session to be unchanged")
+	}
+}
+
+func TestGetOrCreateRoomHLSSession_RemuxUnsafeFallsBackAndCachesRoomKey(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: false,
+						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
+					})
+				},
+			},
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	roomID := int64(77)
+
+	session, err := app.GetOrCreateRoomHLSSession(
+		background,
+		roomID,
+		movieID,
+		helpers.HLS_PROFILE_REMUX,
+		0,
+	)
+	if err != nil {
+		t.Fatalf("GetOrCreateRoomHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.RequestedProfile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("RequestedProfile = %q, want remux", session.RequestedProfile)
+	}
+	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want false after room fallback")
+	}
+	if fake.CallCount() != 2 {
+		t.Fatalf("RunHLS call count = %d, want 2", fake.CallCount())
+	}
+
+	key := RoomHLSSessionKey(roomID)
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok {
+		t.Fatalf("expected room session cache entry for key %q", key)
+	}
+	cachedSession, typeOK := raw.(*HLSSession)
+	if !typeOK {
+		t.Fatalf("cached session type = %T, want *HLSSession", raw)
+	}
+	if cachedSession != session {
+		t.Fatal("expected cached room session to match returned session")
 	}
 }

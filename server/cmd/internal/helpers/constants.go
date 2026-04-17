@@ -13,7 +13,7 @@ const (
 	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
 
 	// media scanner
-	SCANNER_BATCH_SIZE = 54
+	SCANNER_BATCH_SIZE           = 54
 	MOVIE_RENAME_MATCH_THRESHOLD = 50.0
 	MOVIE_RENAME_TMDB_ID_SCORE   = 40.0
 	MOVIE_RENAME_TITLE_SCORE     = 18.0
@@ -78,6 +78,13 @@ const (
 	// runs in -c:v copy mode. Copy mode splits only at keyframe boundaries, so
 	// segments can far exceed HLS_SEGMENT_TIME_SEC. 30s covers all practical GOPs.
 	HLS_COPY_VIDEO_TARGET_DURATION = 30
+	// HLS remux preflight checks the first few complete segments before the
+	// manifest is served so copied H.264 streams can fall back to transcode
+	// before playback begins.
+	HLS_REMUX_PREVALIDATE_SEGMENTS = 4
+	HLS_REMUX_PREVALIDATE_TIMEOUT  = 30 * time.Second
+	HLS_REMUX_SAFETY_CACHE_TTL     = 24 * time.Hour
+	HLS_REMUX_SAFETY_CACHE_SWEEP   = 1 * time.Hour
 
 	// HDR transfer characteristics as reported by ffprobe (color_transfer field).
 	// Used to detect HDR sources that require tone-mapping when transcoding to SDR.

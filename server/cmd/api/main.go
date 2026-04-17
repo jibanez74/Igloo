@@ -100,6 +100,7 @@ type Application struct {
 	ScannerDBMu      sync.Mutex
 	HLSSessionCache  *cache.Cache
 	HLSSessionGroup  singleflight.Group
+	RemuxSafetyCache *cache.Cache
 	SubtitleVTTCache *cache.Cache
 	RoomHLSTombstone *cache.Cache
 	RoomHLSMu        sync.Mutex
@@ -224,6 +225,10 @@ func InitApp() (*Application, error) {
 		}
 	})
 	app.HLSSessionCache = hlsCache
+	app.RemuxSafetyCache = cache.New(
+		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
+		helpers.HLS_REMUX_SAFETY_CACHE_SWEEP,
+	)
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
@@ -994,6 +999,22 @@ func (app *Application) ListenForShutdown() {
 	// Wait for any in-flight background tasks to complete.
 	// These may still need database and logger access.
 	app.Wait.Wait()
+
+	if app.RemuxSafetyCache != nil {
+		app.RemuxSafetyCache.Flush()
+	}
+	if app.SubtitleVTTCache != nil {
+		app.SubtitleVTTCache.Flush()
+	}
+	if app.RoomHLSTombstone != nil {
+		app.RoomHLSTombstone.Flush()
+	}
+	if app.Spotify != nil {
+		app.Spotify.ClearAllCaches()
+	}
+	if app.Tmdb != nil {
+		app.Tmdb.ClearCache()
+	}
 
 	// Clean up ffprobe temp directory and extracted binary.
 	err := ffprobe.Cleanup()

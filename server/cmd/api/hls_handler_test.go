@@ -2,12 +2,17 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestParseSegmentIndex(t *testing.T) {
@@ -304,4 +309,88 @@ func TestSegmentComplete(t *testing.T) {
 			t.Error("should return false for unparseable filename")
 		}
 	})
+}
+
+func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	session := &HLSSession{
+		TempDir:          t.TempDir(),
+		DurationSec:      12,
+		StartSec:         0,
+		RequestedProfile: helpers.HLS_PROFILE_REMUX,
+		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
+		CopyVideo:        false,
+	}
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/movies/5/hls/remux/playlist.m3u8?audio_track=0",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `/api/movies/5/hls/remux/init.mp4?audio_track=0`) {
+		t.Fatalf("playlist body missing remux init path: %s", body)
+	}
+	if !strings.Contains(body, `/api/movies/5/hls/remux/segment_0.m4s?audio_track=0`) {
+		t.Fatalf("playlist body missing remux segment path: %s", body)
+	}
+	if strings.Contains(body, helpers.HLS_PROFILE_1080P_8MBPS) {
+		t.Fatalf("playlist body should not expose effective profile path: %s", body)
+	}
+}
+
+func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	segmentPath := filepath.Join(dir, "segment_0.m4s")
+	writeErr := os.WriteFile(segmentPath, []byte("segment-bytes"), 0644)
+	if writeErr != nil {
+		t.Fatalf("write segment: %v", writeErr)
+	}
+
+	session := &HLSSession{
+		TempDir:          dir,
+		StartSec:         0,
+		RequestedProfile: helpers.HLS_PROFILE_REMUX,
+		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
+		CopyVideo:        false,
+		Exited:           true,
+		ExitMu:           sync.Mutex{},
+	}
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/{filename}", app.HLSSegment)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/movies/5/hls/remux/segment_0.m4s?audio_track=0",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder.Body.String() != "segment-bytes" {
+		t.Fatalf("segment body = %q, want %q", recorder.Body.String(), "segment-bytes")
+	}
 }

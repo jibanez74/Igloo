@@ -161,15 +161,7 @@ func (app *Application) processChapters(
 	}
 
 	for _, chapter := range chapters {
-		// Parse start time and store in seconds (the player and HLS start param work in seconds)
-		startTime := int64(0)
-		if chapter.Start > 0 {
-			startTime = int64(chapter.Start) / 1000
-		} else if chapter.StartTime != "" {
-			if duration, err := helpers.ParseDurationMs(chapter.StartTime); err == nil {
-				startTime = duration / 1000
-			}
-		}
+		startTime := chapterStartTimeSeconds(chapter)
 
 		// Leave thumb empty (chapter thumbnail generation will be implemented later)
 		_, err := qtx.InsertChapter(ctx, database.InsertChapterParams{

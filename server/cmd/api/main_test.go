@@ -547,6 +547,10 @@ func setupTestApp(t *testing.T) *Application {
 	// Initialize in-memory caches without the production eviction callback
 	// (no FFmpeg processes to kill in tests).
 	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.RemuxSafetyCache = cache.New(
+		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
+		helpers.HLS_REMUX_SAFETY_CACHE_SWEEP,
+	)
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.WatchRoomHub = NewWatchRoomHub()
