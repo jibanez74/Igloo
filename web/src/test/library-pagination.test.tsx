@@ -4,7 +4,39 @@ import { describe, expect, it, vi } from "vitest";
 import LibraryPagination from "@/components/LibraryPagination";
 
 describe("LibraryPagination", () => {
-  it("keeps pagination controls keyboard focusable and actionable", async () => {
+  it("keeps pagination controls in a predictable tab order", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LibraryPagination
+        currentPage={2}
+        totalPages={5}
+        onPageChange={vi.fn()}
+      />,
+    );
+
+    const previousButton = screen.getByRole("button", {
+      name: /go to previous page/i,
+    });
+    const pageOneButton = screen.getByRole("button", {
+      name: /go to page 1/i,
+    });
+    const currentPageButton = screen.getByRole("button", {
+      name: /page 2, current page/i,
+    });
+
+    await user.tab();
+    expect(previousButton).toHaveFocus();
+
+    await user.tab();
+    expect(pageOneButton).toHaveFocus();
+
+    await user.tab();
+    expect(currentPageButton).toHaveFocus();
+    expect(currentPageButton).toHaveAttribute("aria-current", "page");
+  });
+
+  it("activates the focused pagination control with Enter", async () => {
     const onPageChange = vi.fn();
     const user = userEvent.setup();
 
@@ -29,22 +61,14 @@ describe("LibraryPagination", () => {
       name: /go to page 3/i,
     });
 
-    await user.tab();
-    expect(previousButton).toHaveFocus();
-
-    await user.tab();
-    expect(pageOneButton).toHaveFocus();
-
-    await user.tab();
-    expect(currentPageButton).toHaveFocus();
+    currentPageButton.focus();
     expect(currentPageButton).toHaveAttribute("aria-current", "page");
 
     await user.keyboard("{Enter}");
     expect(onPageChange).not.toHaveBeenCalled();
 
-    await user.tab();
+    pageThreeButton.focus();
     expect(pageThreeButton).toHaveFocus();
-
     await user.keyboard("{Enter}");
     expect(onPageChange).toHaveBeenCalledWith(3);
   });

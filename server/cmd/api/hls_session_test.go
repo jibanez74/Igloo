@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -301,6 +302,76 @@ func TestCreateHLSSession_CachedUnsafeSkipsRemux(t *testing.T) {
 	}
 	if secondSession.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
 		t.Fatalf("second session EffectiveProfile = %q, want %q", secondSession.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+}
+
+func TestCreateHLSSession_RemuxPreflightFailureDoesNotCacheUnsafe(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				ExitErr: errors.New("ffmpeg exited before writing remux preflight output"),
+			},
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
+					})
+				},
+			},
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	firstSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, 0, 0)
+	if err != nil {
+		t.Fatalf("first createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(firstSession)
+
+	if firstSession.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("first session EffectiveProfile = %q, want %q", firstSession.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+
+	secondSession, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, 0, 0)
+	if err != nil {
+		t.Fatalf("second createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(secondSession)
+
+	if secondSession.EffectiveProfile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("second session EffectiveProfile = %q, want %q", secondSession.EffectiveProfile, helpers.HLS_PROFILE_REMUX)
+	}
+	if !secondSession.CopyVideo {
+		t.Fatal("second session CopyVideo = false, want true after retrying remux")
+	}
+
+	calls := fake.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("RunHLS call count = %d, want 3", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("first RunHLS profile = %q, want remux", calls[0].Profile)
+	}
+	if calls[1].Profile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("second RunHLS profile = %q, want %q", calls[1].Profile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+	if calls[2].Profile != helpers.HLS_PROFILE_REMUX {
+		t.Fatalf("third RunHLS profile = %q, want remux retry", calls[2].Profile)
 	}
 }
 

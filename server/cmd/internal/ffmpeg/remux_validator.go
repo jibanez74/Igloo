@@ -40,6 +40,8 @@ type fragmentSample struct {
 	Flags uint32
 }
 
+const avcSampleEntryHeaderSize = 78
+
 // ValidateRemuxSafety inspects FFmpeg-generated fMP4 HLS fragments and
 // verifies that every sync sample in the video track starts with an IDR frame.
 func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummary, error) {
@@ -114,7 +116,7 @@ func parseVideoTrackConfig(data []byte) (uint32, int, error) {
 			continue
 		}
 
-		avcC, found, findErr := findNamedBoxWithinRange(data, trak.PayloadStart, trak.End, "avcC")
+		avcC, found, findErr := findAVCConfigBox(data, trak)
 		if findErr != nil {
 			return 0, 0, findErr
 		}
@@ -206,6 +208,78 @@ func parseHandlerType(data []byte, mdia mp4Box) (string, error) {
 	}
 
 	return string(payload[8:12]), nil
+}
+
+func findAVCConfigBox(data []byte, trak mp4Box) (mp4Box, bool, error) {
+	mdia, ok, err := findDirectChildBox(data, trak.PayloadStart, trak.End, "mdia")
+	if err != nil {
+		return mp4Box{}, false, err
+	}
+	if !ok {
+		return mp4Box{}, false, fmt.Errorf("missing mdia box")
+	}
+
+	minf, ok, err := findDirectChildBox(data, mdia.PayloadStart, mdia.End, "minf")
+	if err != nil {
+		return mp4Box{}, false, err
+	}
+	if !ok {
+		return mp4Box{}, false, fmt.Errorf("missing minf box")
+	}
+
+	stbl, ok, err := findDirectChildBox(data, minf.PayloadStart, minf.End, "stbl")
+	if err != nil {
+		return mp4Box{}, false, err
+	}
+	if !ok {
+		return mp4Box{}, false, fmt.Errorf("missing stbl box")
+	}
+
+	stsd, ok, err := findDirectChildBox(data, stbl.PayloadStart, stbl.End, "stsd")
+	if err != nil {
+		return mp4Box{}, false, err
+	}
+	if !ok {
+		return mp4Box{}, false, fmt.Errorf("missing stsd box")
+	}
+
+	return findAVCConfigInSampleDescriptions(data, stsd)
+}
+
+func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, error) {
+	payload := data[stsd.PayloadStart:stsd.End]
+	if len(payload) < 8 {
+		return mp4Box{}, false, fmt.Errorf("invalid stsd payload")
+	}
+
+	entryCount := int(binary.BigEndian.Uint32(payload[4:8]))
+	offset := stsd.PayloadStart + 8
+
+	for i := 0; i < entryCount; i++ {
+		entry, nextOffset, err := readBox(data, offset, stsd.End)
+		if err != nil {
+			return mp4Box{}, false, err
+		}
+
+		if entry.Type == "avc1" || entry.Type == "avc3" {
+			childStart := entry.PayloadStart + avcSampleEntryHeaderSize
+			if childStart > entry.End {
+				return mp4Box{}, false, fmt.Errorf("invalid %s sample entry", entry.Type)
+			}
+
+			avcC, ok, findErr := findDirectChildBox(data, childStart, entry.End, "avcC")
+			if findErr != nil {
+				return mp4Box{}, false, findErr
+			}
+			if ok {
+				return avcC, true, nil
+			}
+		}
+
+		offset = nextOffset
+	}
+
+	return mp4Box{}, false, nil
 }
 
 func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize int) (int, error) {
@@ -607,38 +681,4 @@ func readBox(data []byte, start int, end int) (mp4Box, int, error) {
 	box.End = boxEnd
 	box.PayloadStart = start + headerSize
 	return box, boxEnd, nil
-}
-
-func findNamedBoxWithinRange(data []byte, start int, end int, typ string) (mp4Box, bool, error) {
-	if len(typ) != 4 {
-		return mp4Box{}, false, fmt.Errorf("invalid box type %q", typ)
-	}
-	if start < 0 || end > len(data) || start >= end {
-		return mp4Box{}, false, fmt.Errorf("invalid scan range")
-	}
-
-	for offset := start; offset+8 <= end; offset++ {
-		if string(data[offset+4:offset+8]) != typ {
-			continue
-		}
-
-		size := int(binary.BigEndian.Uint32(data[offset : offset+4]))
-		if size < 8 {
-			continue
-		}
-
-		boxEnd := offset + size
-		if boxEnd > end {
-			continue
-		}
-
-		return mp4Box{
-			Type:         typ,
-			Start:        offset,
-			End:          boxEnd,
-			PayloadStart: offset + 8,
-		}, true, nil
-	}
-
-	return mp4Box{}, false, nil
 }

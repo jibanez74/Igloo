@@ -90,18 +90,18 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diskFilename, err := resolveHLSDiskFilename(filename)
+	err := validateHLSFilename(filename)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
 
-	filePath := filepath.Join(session.TempDir, diskFilename)
+	filePath := filepath.Join(session.TempDir, filename)
 
 	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
 	pollCount := 0
 	for time.Now().Before(deadline) {
-		if segmentComplete(session, diskFilename) {
+		if segmentComplete(session, filename) {
 			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
 			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
@@ -146,16 +146,16 @@ func sessionPlaylistDurationSec(session *HLSSession) float64 {
 	return 0
 }
 
-func resolveHLSDiskFilename(filename string) (string, error) {
+func validateHLSFilename(filename string) error {
 	if filename == helpers.HLS_INIT_FILENAME {
-		return filename, nil
+		return nil
 	}
 
 	if _, err := parseSegmentIndex(filename); err != nil {
-		return "", err
+		return err
 	}
 
-	return filename, nil
+	return nil
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, profile string, audioTrack int, startSec float64, ok bool) {

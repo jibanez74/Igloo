@@ -17,6 +17,8 @@ import { useEffect, useState, useRef } from "react";
 type LiveAnnouncerProps = {
   /** The message to announce. Empty string or undefined means no announcement. */
   message: string | undefined;
+  /** Optional key to force re-announcement when the visible message text repeats. */
+  announcementKey?: string | number;
   /**
    * The politeness level of the announcement.
    * - "polite": Wait for current speech to finish (default, use for most cases)
@@ -32,6 +34,7 @@ type LiveAnnouncerProps = {
 
 export default function LiveAnnouncer({
   message,
+  announcementKey,
   politeness = "polite",
   delay = 100,
 }: LiveAnnouncerProps) {
@@ -62,7 +65,7 @@ export default function LiveAnnouncer({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [message, delay]);
+  }, [message, announcementKey, delay]);
 
   // Render two live regions, alternating between them
   // This ensures screen readers always announce even if the text is the same

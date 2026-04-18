@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AppBoot from "@/AppBoot";
+import AppBoot, { SPLASH_REMOVE_DELAY_MS } from "@/AppBoot";
 import RouterPending from "@/components/RouterPending";
 
 vi.mock("@/App", () => ({
@@ -25,7 +25,7 @@ describe("App boot loading", () => {
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers();
+    vi.clearAllTimers();
     vi.useRealTimers();
     document.documentElement.removeAttribute("data-app-ready");
     document.body.innerHTML = "";
@@ -58,7 +58,7 @@ describe("App boot loading", () => {
     expect(document.getElementById("initial-splash")).toBeInTheDocument();
 
     act(() => {
-      vi.advanceTimersByTime(259);
+      vi.advanceTimersByTime(SPLASH_REMOVE_DELAY_MS - 1);
     });
 
     expect(document.getElementById("initial-splash")).toBeInTheDocument();
@@ -81,5 +81,31 @@ describe("App boot loading", () => {
     expect(
       screen.getByText("Loading your media library..."),
     ).toBeInTheDocument();
+  });
+
+  it("defers router pending live-region semantics while the initial splash is present", () => {
+    document.body.innerHTML = `
+      <div
+        id="initial-splash"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="initial-splash__content">
+          <p class="initial-splash__title">Igloo</p>
+          <p class="initial-splash__message">Loading your media library...</p>
+        </div>
+      </div>
+      <div id="test-root"></div>
+    `;
+
+    render(<RouterPending />, {
+      container: document.getElementById("test-root")!,
+    });
+
+    const statuses = screen.getAllByRole("status");
+
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toHaveAttribute("id", "initial-splash");
   });
 });

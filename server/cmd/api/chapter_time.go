@@ -28,7 +28,7 @@ func normalizeChapterStartTimeSeconds(startTime int64, durationSec float64) int6
 		return 0
 	}
 
-	if !(durationSec > 0) {
+	if durationSec <= 0 {
 		return startTime
 	}
 
@@ -37,17 +37,11 @@ func normalizeChapterStartTimeSeconds(startTime int64, durationSec float64) int6
 		return startTime
 	}
 
-	scaleThreshold := limit * 10
-	normalized := startTime
-	for normalized > scaleThreshold && normalized >= 1000 {
-		normalized /= 1000
-	}
-
-	if normalized > limit {
+	if startTime > limit {
 		return limit
 	}
 
-	return normalized
+	return startTime
 }
 
 func normalizeChaptersStartTimes(

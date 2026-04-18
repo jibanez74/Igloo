@@ -73,11 +73,7 @@ export default function LibraryPagination({
           <PaginationPrevious
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className={
-              currentPage === 1
-                ? "cursor-not-allowed"
-                : "cursor-pointer hover:bg-slate-800"
-            }
+            className={currentPage === 1 ? undefined : "hover:bg-slate-800"}
           />
         </PaginationItem>
 
@@ -113,9 +109,7 @@ export default function LibraryPagination({
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             className={
-              currentPage === totalPages
-                ? "cursor-not-allowed"
-                : "cursor-pointer hover:bg-slate-800"
+              currentPage === totalPages ? undefined : "hover:bg-slate-800"
             }
           />
         </PaginationItem>

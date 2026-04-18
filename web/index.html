@@ -8,66 +8,10 @@
   <meta name="description"
     content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
   <meta name="theme-color" content="#0f172a" />
-  <style>
-    html,
-    body,
-    #app {
-      min-height: 100%;
-    }
-
-    html {
-      background: #020617;
-      color: #f8fafc;
-    }
-
-    body {
-      margin: 0;
-      background:
-        radial-gradient(circle at top, rgba(251, 191, 36, 0.14), transparent 32%),
-        linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(2, 6, 23, 1) 100%);
-      color: #f8fafc;
-    }
-
-    #initial-splash {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      text-align: center;
-      transition: opacity 180ms ease, visibility 180ms ease;
-    }
-
-    html[data-app-ready="true"] #initial-splash {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
-
-    .initial-splash__content {
-      max-width: 18rem;
-    }
-
-    .initial-splash__title {
-      margin: 0;
-      font-size: 1.125rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-
-    .initial-splash__message {
-      margin: 0.25rem 0 0;
-      max-width: 18rem;
-      font-size: 0.875rem;
-      color: #94a3b8;
-    }
-  </style>
+  <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>
 
-<body
-  class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
+<body>
   <div id="initial-splash" role="status" aria-live="polite" aria-atomic="true">
     <div class="initial-splash__content">
       <p class="initial-splash__title">Igloo</p>

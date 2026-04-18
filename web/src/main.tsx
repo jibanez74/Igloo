@@ -1,4 +1,4 @@
-import "./assets/styles.css";
+    import "./assets/styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient } from "@tanstack/react-query";

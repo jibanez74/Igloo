@@ -72,6 +72,10 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
 		return
 	}
+	if err := validateHLSFilename(filename); err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
+		return
+	}
 
 	key := RoomHLSSessionKey(room.ID)
 	session, found, err := app.getActiveRoomHLSSession(room.ID, key)

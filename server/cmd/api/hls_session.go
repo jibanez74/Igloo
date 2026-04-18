@@ -517,12 +517,13 @@ func (app *Application) createHLSSession(
 	)
 	if waitErr != nil {
 		fallbackReason := waitErr.Error()
-		app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
+		// Preflight wait failures can be transient (timeout, early exit, partial output),
+		// so fall back without persisting an unsafe remux verdict.
 		app.Logger.Warn("remux safety fallback engaged",
 			"movie_id", movieID,
 			"requested_profile", requestedProfile,
 			"effective_profile", fallbackProfile,
-			"validation_result", "unsafe",
+			"validation_result", "preflight_failed",
 			"fallback_reason", fallbackReason,
 		)
 		cleanupHLSSession(session)

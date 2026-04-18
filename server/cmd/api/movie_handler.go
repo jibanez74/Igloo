@@ -73,6 +73,37 @@ func libraryRowsFromLikedDesc(rows []database.GetLikedMoviesForUserDescRow) []da
 	return out
 }
 
+func (app *Application) logNormalizedChapterStartTimes(
+	movie database.Movie,
+	original []database.Chapter,
+	normalized []database.Chapter,
+) {
+	if app.Logger == nil {
+		return
+	}
+
+	count := len(original)
+	if len(normalized) < count {
+		count = len(normalized)
+	}
+
+	for i := 0; i < count; i++ {
+		if original[i].StartTime == normalized[i].StartTime {
+			continue
+		}
+
+		app.Logger.Debug(
+			"normalized chapter start time",
+			"movie_id", movie.ID,
+			"movie_title", movie.Title,
+			"chapter_id", normalized[i].ID,
+			"chapter_index", i,
+			"original_start_time", original[i].StartTime,
+			"normalized_start_time", normalized[i].StartTime,
+		)
+	}
+}
+
 // parseMoviesLibraryQuery reads page, per_page, and sort for library- and liked-list endpoints.
 func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
 	page = 1
@@ -641,7 +672,9 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	if movie.Duration.Valid {
 		durationSec = movie.Duration.Float64
 	}
-	chapters = normalizeChaptersStartTimes(chapters, durationSec)
+	normalizedChapters := normalizeChaptersStartTimes(chapters, durationSec)
+	app.logNormalizedChapterStartTimes(movie, chapters, normalizedChapters)
+	chapters = normalizedChapters
 
 	res := helpers.JSONResponse{
 		Error: false,

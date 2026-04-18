@@ -95,49 +95,47 @@ func TestStartSegmentComputation(t *testing.T) {
 	}
 }
 
-func TestResolveHLSDiskFilename(t *testing.T) {
+func TestValidateHLSFilename(t *testing.T) {
 	tests := []struct {
 		name     string
 		filename string
-		want     string
 		wantErr  bool
 	}{
 		{
-			name:     "init file is unchanged",
+			name:     "init file is allowed",
 			filename: helpers.HLS_INIT_FILENAME,
-			want:     helpers.HLS_INIT_FILENAME,
 		},
 		{
-			name:     "segment filename is unchanged",
+			name:     "segment filename is allowed",
 			filename: "segment_69.m4s",
-			want:     "segment_69.m4s",
 		},
 		{
-			name:     "later segment filename is unchanged",
+			name:     "later segment filename is allowed",
 			filename: "segment_99.m4s",
-			want:     "segment_99.m4s",
 		},
 		{
 			name:     "invalid segment name returns error",
 			filename: "bad_name.m4s",
 			wantErr:  true,
 		},
+		{
+			name:     "out of range segment index returns error",
+			filename: "segment_18446744073709551615.m4s",
+			wantErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveHLSDiskFilename(tt.filename)
+			err := validateHLSFilename(tt.filename)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("resolveHLSDiskFilename(%q) expected error", tt.filename)
+					t.Fatalf("validateHLSFilename(%q) expected error", tt.filename)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("resolveHLSDiskFilename(%q) unexpected error: %v", tt.filename, err)
-			}
-			if got != tt.want {
-				t.Fatalf("resolveHLSDiskFilename(%q) = %q, want %q", tt.filename, got, tt.want)
+				t.Fatalf("validateHLSFilename(%q) unexpected error: %v", tt.filename, err)
 			}
 		})
 	}

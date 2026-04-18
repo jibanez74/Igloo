@@ -87,6 +87,11 @@ const WATCH_PROGRESS_MIN_SECONDS = 180;
 const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 
+type ChapterAnnouncement = {
+  key: number;
+  text: string;
+};
+
 function buildStreamUrl(
   movieId: number,
   mode: StreamModeId,
@@ -193,7 +198,10 @@ function PlayMoviePage() {
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
-  const [chapterAnnouncement, setChapterAnnouncement] = useState("");
+  const [chapterAnnouncement, setChapterAnnouncement] = useState<ChapterAnnouncement>({
+    key: 0,
+    text: "",
+  });
 
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
@@ -465,7 +473,10 @@ function PlayMoviePage() {
 
   const handleChapterSelect = (startTimeSec: number, title: string) => {
     seek(startTimeSec);
-    setChapterAnnouncement(`Jumped to chapter: ${title}`);
+    setChapterAnnouncement((prev) => ({
+      key: prev.key + 1,
+      text: `Jumped to chapter: ${title}`,
+    }));
   };
 
   const toggleFullscreen = async () => {
@@ -991,7 +1002,11 @@ function PlayMoviePage() {
       aria-label={`Video player for ${title}`}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
-      <LiveAnnouncer message={chapterAnnouncement} politeness="assertive" />
+      <LiveAnnouncer
+        message={chapterAnnouncement.text}
+        announcementKey={chapterAnnouncement.key}
+        politeness="assertive"
+      />
       <ResumeDialog
         open={resumeDialogOpen}
         savedProgressSec={savedProgressSec}

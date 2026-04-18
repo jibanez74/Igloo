@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import App from "./App";
 import { AudioPlayerProvider } from "./context/AudioPlayerContext";
 
-const SPLASH_REMOVE_DELAY_MS = 260;
+export const SPLASH_REMOVE_DELAY_MS = 260;
 
 type AppBootProps = {
   queryClient: QueryClient;

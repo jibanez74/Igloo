@@ -7,12 +7,14 @@ type AppLoadingScreenProps = {
 export default function AppLoadingScreen({
   message = "Loading your media library...",
 }: AppLoadingScreenProps) {
+  const hasInitialSplash = document.getElementById("initial-splash") !== null;
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden bg-slate-900 text-slate-100"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
+      role={hasInitialSplash ? undefined : "status"}
+      aria-live={hasInitialSplash ? undefined : "polite"}
+      aria-atomic={hasInitialSplash ? undefined : "true"}
     >
       <div className="absolute inset-0 bg-slate-950/70" aria-hidden="true" />
 
