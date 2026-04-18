@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+        import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
@@ -296,6 +296,10 @@ function PlayMoviePage() {
     }
     return hlsStartSec + durationSec;
   };
+  const displayedDuration =
+    isHlsPlayback && movieDurationSec && movieDurationSec > 0
+      ? movieDurationSec
+      : duration;
 
   const subtitleInfo = (() => {
     if (resolvedSubtitleTrack === null || !techLoaded) return null;
@@ -617,7 +621,6 @@ function PlayMoviePage() {
   useEffect(() => {
     if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
     durationRef.current = movieDurationSec;
-    setDuration(movieDurationSec);
   }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
@@ -1118,7 +1121,7 @@ function PlayMoviePage() {
               </span>
               <span className="text-slate-600">/</span>
               <span className="text-sm text-slate-400 tabular-nums">
-                {formatTimeSeconds(duration)}
+                {formatTimeSeconds(displayedDuration)}
               </span>
             </div>
 
@@ -1165,7 +1168,6 @@ function PlayMoviePage() {
                 chapters={chapters}
                 currentTimeSec={currentTime}
                 onSelectChapter={handleChapterSelect}
-                portalContainer={containerRef.current}
               />
               <VolumeControl
                 mediaRef={videoRef}

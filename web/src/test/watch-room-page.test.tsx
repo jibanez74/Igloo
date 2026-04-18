@@ -13,6 +13,116 @@ const showActionFailedMock = vi.fn();
 const showInfoMock = vi.fn();
 const showSuccessMock = vi.fn();
 
+type MockVideoPlayerProps = {
+  videoRef: { current: HTMLVideoElement | null };
+  title: string;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onTimeUpdate?: (time: number) => void;
+  onDurationChange?: (duration: number) => void;
+};
+
+const mockVideoController = {
+  element: null as HTMLVideoElement | null,
+  readyState: 4,
+  duration: 120,
+  currentTime: 0,
+  paused: true,
+  playCalls: 0,
+  pauseCalls: 0,
+  onPlay: undefined as (() => void) | undefined,
+  onPause: undefined as (() => void) | undefined,
+  onTimeUpdate: undefined as ((time: number) => void) | undefined,
+  onDurationChange: undefined as ((duration: number) => void) | undefined,
+
+  reset() {
+    this.element = null;
+    this.readyState = 4;
+    this.duration = 120;
+    this.currentTime = 0;
+    this.paused = true;
+    this.playCalls = 0;
+    this.pauseCalls = 0;
+    this.onPlay = undefined;
+    this.onPause = undefined;
+    this.onTimeUpdate = undefined;
+    this.onDurationChange = undefined;
+  },
+
+  attach(node: HTMLVideoElement | null, props: MockVideoPlayerProps) {
+    props.videoRef.current = node;
+
+    if (!node) {
+      this.element = null;
+      return;
+    }
+
+    this.element = node;
+    this.onPlay = props.onPlay;
+    this.onPause = props.onPause;
+    this.onTimeUpdate = props.onTimeUpdate;
+    this.onDurationChange = props.onDurationChange;
+
+    Object.defineProperty(node, "readyState", {
+      configurable: true,
+      get: () => this.readyState,
+    });
+    Object.defineProperty(node, "duration", {
+      configurable: true,
+      get: () => this.duration,
+    });
+    Object.defineProperty(node, "currentTime", {
+      configurable: true,
+      get: () => this.currentTime,
+      set: (value: number) => {
+        if (this.readyState < 1) {
+          return;
+        }
+        this.currentTime = value;
+        this.onTimeUpdate?.(value);
+      },
+    });
+    Object.defineProperty(node, "paused", {
+      configurable: true,
+      get: () => this.paused,
+    });
+    Object.defineProperty(node, "play", {
+      configurable: true,
+      value: vi.fn(async () => {
+        this.playCalls += 1;
+        if (this.readyState < 3) {
+          throw new Error("media not ready");
+        }
+        this.paused = false;
+        this.onPlay?.();
+      }),
+    });
+    Object.defineProperty(node, "pause", {
+      configurable: true,
+      value: vi.fn(() => {
+        this.pauseCalls += 1;
+        this.paused = true;
+        this.onPause?.();
+      }),
+    });
+  },
+
+  setReadyState(nextReadyState: number) {
+    this.readyState = nextReadyState;
+    if (!this.element) {
+      return;
+    }
+
+    if (nextReadyState >= 1) {
+      this.onDurationChange?.(this.duration);
+      this.element.dispatchEvent(new Event("loadedmetadata"));
+    }
+    if (nextReadyState >= 3) {
+      this.element.dispatchEvent(new Event("canplay"));
+    }
+  },
+};
+
 vi.mock("@tanstack/react-router", async () => {
   const actual =
     await vi.importActual<typeof import("@tanstack/react-router")>(
@@ -63,7 +173,15 @@ vi.mock("@/lib/toast-helpers", async () => {
 });
 
 vi.mock("@/components/VideoPlayer", () => ({
-  default: () => <div data-testid="video-player" />,
+  default: (props: MockVideoPlayerProps) => (
+    <video
+      data-testid="video-player"
+      aria-label={`Video player for ${props.title}`}
+      ref={node => {
+        mockVideoController.attach(node, props);
+      }}
+    />
+  ),
 }));
 
 vi.mock("@/components/ProgressBar", () => ({
@@ -191,6 +309,7 @@ describe("WatchRoomPageContent", () => {
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
+    mockVideoController.reset();
     navigateMock.mockReset();
     useQueryMock.mockReset();
     joinWatchRoomMock.mockReset();
@@ -203,6 +322,58 @@ describe("WatchRoomPageContent", () => {
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
+  });
+
+  it("does not send a redundant join message when the websocket opens", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    expect(FakeWebSocket.instances[0].sentMessages).toEqual([]);
+  });
+
+  it("waits for the media to be ready before applying synced playback", async () => {
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    FakeWebSocket.instances[0].emitMessage({
+      type: "room_snapshot",
+      room_id: 7,
+      playback: {
+        paused: false,
+        position_sec: 37,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+      connected_user_ids: [1, 2],
+    });
+
+    expect(mockVideoController.currentTime).toBe(0);
+    expect(mockVideoController.playCalls).toBe(0);
+    expect(
+      screen.getByRole("button", { name: /play playback/i }),
+    ).toBeInTheDocument();
+
+    mockVideoController.setReadyState(4);
+
+    await waitFor(() => {
+      expect(mockVideoController.currentTime).toBe(37);
+      expect(mockVideoController.playCalls).toBe(1);
+      expect(
+        screen.getByRole("button", { name: /pause playback/i }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("redirects invited members gracefully when the room_deleted event arrives", async () => {

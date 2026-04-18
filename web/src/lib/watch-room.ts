@@ -9,8 +9,14 @@ export function watchRoomStreamUrl(roomId: number, playbackMode: string) {
 }
 
 export function watchRoomWebSocketUrl(roomId: number) {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/watch-rooms/${roomId}/ws`;
+  const baseUrl = new URL(window.location.origin);
+  baseUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+  if (import.meta.env.DEV) {
+    baseUrl.port = "8080";
+  }
+
+  return new URL(`/api/watch-rooms/${roomId}/ws`, baseUrl).toString();
 }
 
 export function watchRoomAnnouncement(

@@ -36,7 +36,10 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
-import type { WatchRoomServerEventType } from "@/types";
+import type {
+  WatchRoomPlaybackStateType,
+  WatchRoomServerEventType,
+} from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/watch-rooms/$id")({
   component: WatchRoomPage,
@@ -61,6 +64,7 @@ export function WatchRoomPageContent({
   const heartbeatRef = useRef<number | null>(null);
   const announcementTimeoutRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
+  const pendingPlaybackRef = useRef<WatchRoomPlaybackStateType | null>(null);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -116,12 +120,64 @@ export function WatchRoomPageContent({
 
   const handleSocketOpen = useEffectEvent((socket: WebSocket) => {
     setConnectionReady(true);
-    socket.send(JSON.stringify({ type: "join" }));
     heartbeatRef.current = window.setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "ping" }));
       }
     }, 25_000);
+  });
+
+  const applyPlaybackState = useEffectEvent(
+    async (playback: WatchRoomPlaybackStateType) => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 1) {
+        return false;
+      }
+
+      const targetTime = playback.position_sec;
+      const drift = Math.abs(video.currentTime - targetTime);
+      if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+        video.currentTime = targetTime;
+      }
+
+      if (playback.paused) {
+        setCurrentTime(targetTime);
+        if (!video.paused) {
+          video.pause();
+        }
+        setPlaying(false);
+        setPlaybackError(null);
+        return true;
+      }
+
+      if (video.readyState < 3) {
+        return false;
+      }
+
+      try {
+        if (video.paused) {
+          await video.play();
+        }
+        setPlaybackError(null);
+        setPlaying(true);
+        return true;
+      } catch {
+        setPlaybackError(
+          "Playback sync is waiting for browser permission. Press play to continue syncing with the room.",
+        );
+        return false;
+      }
+    },
+  );
+
+  const flushPendingPlayback = useEffectEvent(async () => {
+    const playback = pendingPlaybackRef.current;
+    if (!playback) return;
+
+    const applied = await applyPlaybackState(playback);
+    if (applied && pendingPlaybackRef.current === playback) {
+      pendingPlaybackRef.current = null;
+    }
   });
 
   const handleSocketMessage = useEffectEvent(
@@ -166,34 +222,8 @@ export function WatchRoomPageContent({
 
       if (!event.playback) return;
 
-      const video = videoRef.current;
-      if (!video) return;
-
-      const targetTime = event.playback.position_sec;
-      const drift = Math.abs(video.currentTime - targetTime);
-      if (drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
-        video.currentTime = targetTime;
-        setCurrentTime(targetTime);
-      }
-
-      if (event.playback.paused) {
-        if (!video.paused) {
-          video.pause();
-        }
-        setPlaying(false);
-      } else {
-        if (video.paused) {
-          try {
-            await video.play();
-          } catch {
-            setPlaybackError(
-              "Playback failed while syncing with the room. Try reloading the room.",
-            );
-            return;
-          }
-        }
-        setPlaying(true);
-      }
+      pendingPlaybackRef.current = event.playback;
+      await flushPendingPlayback();
     },
   );
 
@@ -279,6 +309,22 @@ export function WatchRoomPageContent({
     };
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleReady = () => {
+      void flushPendingPlayback();
+    };
+
+    video.addEventListener("loadedmetadata", handleReady);
+    video.addEventListener("canplay", handleReady);
+    return () => {
+      video.removeEventListener("loadedmetadata", handleReady);
+      video.removeEventListener("canplay", handleReady);
+    };
+  }, [streamUrl]);
+
   const sendPlaybackEvent = (type: "play" | "pause" | "seek", positionSec: number) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -295,8 +341,19 @@ export function WatchRoomPageContent({
     if (!video) return;
 
     if (video.paused) {
+      const pendingPlayback = pendingPlaybackRef.current;
+      if (pendingPlayback && !pendingPlayback.paused) {
+        const drift = Math.abs(video.currentTime - pendingPlayback.position_sec);
+        if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+          video.currentTime = pendingPlayback.position_sec;
+          setCurrentTime(pendingPlayback.position_sec);
+        }
+      }
+
       try {
         await video.play();
+        setPlaybackError(null);
+        pendingPlaybackRef.current = null;
         sendPlaybackEvent("play", video.currentTime);
       } catch {
         setPlaybackError("Playback failed — the browser could not play this stream.");
@@ -305,6 +362,7 @@ export function WatchRoomPageContent({
     }
 
     video.pause();
+    pendingPlaybackRef.current = null;
     sendPlaybackEvent("pause", video.currentTime);
   };
 
@@ -318,6 +376,7 @@ export function WatchRoomPageContent({
     const nextTime = Math.max(0, Math.min(newTime, safeDuration || newTime));
     video.currentTime = nextTime;
     setCurrentTime(nextTime);
+    pendingPlaybackRef.current = null;
     sendPlaybackEvent("seek", nextTime);
   };
 

@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,6 +120,23 @@ func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) (watchRo
 		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
 		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
 	}, !alreadyConnected
+}
+
+func (hub *WatchRoomHub) snapshot(roomID int64) (watchRoomServerEvent, bool) {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return watchRoomServerEvent{}, false
+	}
+
+	return watchRoomServerEvent{
+		Type:             "room_snapshot",
+		RoomID:           roomID,
+		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}, true
 }
 
 func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
@@ -332,6 +352,58 @@ func connectedUserIDs(ids map[int64]bool) []int64 {
 	return userIDs
 }
 
+func sameWatchRoomOrigin(originURL *url.URL, expectedScheme string, expectedHost string) bool {
+	return strings.EqualFold(originURL.Scheme, expectedScheme) &&
+		strings.EqualFold(originURL.Host, expectedHost)
+}
+
+func isLocalWatchRoomDevHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedWatchRoomDevOrigin(originURL *url.URL) bool {
+	viteURL := strings.TrimSpace(os.Getenv("VITE_DEV_SERVER"))
+	if viteURL == "" {
+		return false
+	}
+
+	viteOrigin, err := url.Parse(viteURL)
+	if err != nil {
+		return false
+	}
+
+	if viteOrigin.Scheme == "" || viteOrigin.Host == "" {
+		return false
+	}
+
+	return sameWatchRoomOrigin(originURL, viteOrigin.Scheme, viteOrigin.Host)
+}
+
+func isAllowedWatchRoomLocalDevOrigin(originURL *url.URL, requestHost string) bool {
+	if originURL.Scheme != "http" {
+		return false
+	}
+
+	if originURL.Port() != "3000" {
+		return false
+	}
+
+	requestHostName := requestHost
+	parsedHost, _, err := net.SplitHostPort(requestHost)
+	if err == nil {
+		requestHostName = parsedHost
+	}
+
+	return isLocalWatchRoomDevHost(originURL.Hostname()) &&
+		isLocalWatchRoomDevHost(requestHostName) &&
+		strings.EqualFold(originURL.Hostname(), requestHostName)
+}
+
 func isAllowedWatchRoomOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -344,7 +416,8 @@ func isAllowedWatchRoomOrigin(r *http.Request) bool {
 	}
 
 	if originURL.Host != r.Host {
-		return false
+		return isAllowedWatchRoomDevOrigin(originURL) ||
+			isAllowedWatchRoomLocalDevOrigin(originURL, r.Host)
 	}
 
 	expectedScheme := "http"
@@ -352,7 +425,12 @@ func isAllowedWatchRoomOrigin(r *http.Request) bool {
 		expectedScheme = "https"
 	}
 
-	return originURL.Scheme == expectedScheme
+	if sameWatchRoomOrigin(originURL, expectedScheme, r.Host) {
+		return true
+	}
+
+	return isAllowedWatchRoomDevOrigin(originURL) ||
+		isAllowedWatchRoomLocalDevOrigin(originURL, r.Host)
 }
 
 var watchRoomUpgrader = websocket.Upgrader{
@@ -487,7 +565,10 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 
 		switch event.Type {
 		case "join":
-			client.writeJSON(snapshot)
+			currentSnapshot, ok := app.WatchRoomHub.snapshot(room.ID)
+			if ok {
+				client.writeJSON(currentSnapshot)
+			}
 		case "ping":
 			client.mu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))

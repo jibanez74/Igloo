@@ -487,13 +487,17 @@ function PlaylistTracksList({
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
-  // Local state for optimistic reordering
-  const [orderedTracks, setOrderedTracks] = useState(tracks);
-
-  // Sync with server data when tracks change
-  useEffect(() => {
-    setOrderedTracks(tracks);
-  }, [tracks]);
+  // Local optimistic order override keyed by track ids.
+  const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
+  const trackMap = new Map(tracks.map((track) => [track.id, track]));
+  const orderedTracks =
+    optimisticTrackIds !== null &&
+    optimisticTrackIds.length === tracks.length &&
+    optimisticTrackIds.every((trackId) => trackMap.has(trackId))
+      ? optimisticTrackIds
+          .map((trackId) => trackMap.get(trackId))
+          .filter((track): track is PlaylistTrackType => track !== undefined)
+      : tracks;
 
   // Measure scroll margin after mount
   useEffect(() => {
@@ -574,14 +578,8 @@ function PlaylistTracksList({
 
   // Handle reorder with optimistic update
   const handleReorder = (newTrackIds: number[]) => {
-    // Create new ordered array based on track IDs
-    const trackMap = new Map(orderedTracks.map((t) => [t.id, t]));
-    const newOrderedTracks = newTrackIds
-      .map((id) => trackMap.get(id))
-      .filter((t): t is PlaylistTrackType => t !== undefined);
-
     // Optimistic update
-    setOrderedTracks(newOrderedTracks);
+    setOptimisticTrackIds(newTrackIds);
 
     // Call the API
     onReorderTracks(newTrackIds);

@@ -2,7 +2,8 @@ import type { PropsWithChildren } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AppBoot, { SPLASH_REMOVE_DELAY_MS } from "@/AppBoot";
+import AppBoot from "@/AppBoot";
+import { SPLASH_REMOVE_DELAY_MS } from "@/lib/app-boot";
 import RouterPending from "@/components/RouterPending";
 
 vi.mock("@/App", () => ({

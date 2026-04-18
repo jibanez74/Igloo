@@ -5,7 +5,7 @@ import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { AUTH_USER_KEY } from "@/lib/constants";
-import loginBg from "@/assets/images/login-bg.jpg";
+import loginBg from "@/assets/images/login-bg.webp";
 import {
   Card,
   CardContent,
@@ -81,10 +81,13 @@ function LoginPage() {
       <meta name="description" content={pageDescription} />
 
       <div className="relative min-h-screen">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${loginBg})` }}
+        <img
+          src={loginBg}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 size-full object-cover"
+          decoding="async"
+          fetchPriority="high"
         />
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-slate-950/70" />

@@ -48,12 +48,6 @@ describe("LibraryPagination", () => {
       />,
     );
 
-    const previousButton = screen.getByRole("button", {
-      name: /go to previous page/i,
-    });
-    const pageOneButton = screen.getByRole("button", {
-      name: /go to page 1/i,
-    });
     const currentPageButton = screen.getByRole("button", {
       name: /page 2, current page/i,
     });

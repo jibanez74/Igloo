@@ -367,7 +367,7 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded border-slate-600 bg-slate-800 accent-amber-500"
+              className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
               aria-label="Grant admin privileges"
             />
             <Label htmlFor="create-is-admin" className="cursor-pointer text-slate-300">
@@ -449,7 +449,7 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded border-slate-600 bg-slate-800 accent-amber-500"
+              className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
               aria-label="Admin privileges"
             />
             <Label htmlFor="edit-is-admin" className="cursor-pointer text-slate-300">

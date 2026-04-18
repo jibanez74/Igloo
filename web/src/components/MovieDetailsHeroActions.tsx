@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -20,11 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
-import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
-import EditMovieDialog from "@/components/EditMovieDialog";
-import DeleteMovieDialog from "@/components/DeleteMovieDialog";
-import CreateWatchRoomDialog from "@/components/CreateWatchRoomDialog";
 import MovieLikeButton from "@/components/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
 import { MOVIE_WATCH_PROGRESS_KEY } from "@/lib/constants";
@@ -32,6 +27,18 @@ import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, MovieDetailsHeroActionsProps, MovieWatchProgressType } from "@/types";
+
+const loadPlaybackSettingsDialog = () => import("@/components/PlaybackSettingsDialog");
+const loadTechnicalDetailsDialog = () => import("@/components/TechnicalDetailsDialog");
+const loadEditMovieDialog = () => import("@/components/EditMovieDialog");
+const loadDeleteMovieDialog = () => import("@/components/DeleteMovieDialog");
+const loadCreateWatchRoomDialog = () => import("@/components/CreateWatchRoomDialog");
+
+const PlaybackSettingsDialog = lazy(loadPlaybackSettingsDialog);
+const TechnicalDetailsDialog = lazy(loadTechnicalDetailsDialog);
+const EditMovieDialog = lazy(loadEditMovieDialog);
+const DeleteMovieDialog = lazy(loadDeleteMovieDialog);
+const CreateWatchRoomDialog = lazy(loadCreateWatchRoomDialog);
 
 export default function MovieDetailsHeroActions({
   movieId,
@@ -54,6 +61,16 @@ export default function MovieDetailsHeroActions({
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [playbackFormResetKey, setPlaybackFormResetKey] = useState(0);
   const [createWatchRoomOpen, setCreateWatchRoomOpen] = useState(false);
+
+  const preloadMoreOptionsDialogs = () => {
+    void loadPlaybackSettingsDialog();
+    void loadTechnicalDetailsDialog();
+    void loadCreateWatchRoomDialog();
+    if (user?.is_admin) {
+      void loadEditMovieDialog();
+      void loadDeleteMovieDialog();
+    }
+  };
 
   const handlePlaybackSettingsOpenChange = (next: boolean) => {
     if (next) {
@@ -189,6 +206,9 @@ export default function MovieDetailsHeroActions({
             "min-h-11 touch-manipulation",
           )}
           aria-label="More options"
+          onFocus={preloadMoreOptionsDialogs}
+          onPointerDown={preloadMoreOptionsDialogs}
+          onPointerEnter={preloadMoreOptionsDialogs}
         >
           <MoreVertical className="size-4" aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -230,48 +250,64 @@ export default function MovieDetailsHeroActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <PlaybackSettingsDialog
-        movieId={movieId}
-        open={playbackSettingsOpen}
-        onOpenChange={handlePlaybackSettingsOpenChange}
-        settings={playbackSettings}
-        onSave={onPlaybackSettingsChange}
-        restoreFocusRef={playButtonRef}
-        formResetKey={playbackFormResetKey}
-      />
-
-      <CreateWatchRoomDialog
-        movieId={movieId}
-        movieTitle={movieTitle}
-        playbackSettings={playbackSettings}
-        open={createWatchRoomOpen}
-        onOpenChange={setCreateWatchRoomOpen}
-        restoreFocusRef={moreOptionsButtonRef}
-      />
-
-      {user?.is_admin && (
-        <EditMovieDialog
-          movieId={movieId}
-          movie={movie}
-          open={editOpen}
-          onOpenChange={onEditOpenChange}
-          restoreFocusRef={moreOptionsButtonRef}
-        />
+      {playbackSettingsOpen && (
+        <Suspense fallback={null}>
+          <PlaybackSettingsDialog
+            movieId={movieId}
+            open={playbackSettingsOpen}
+            onOpenChange={handlePlaybackSettingsOpenChange}
+            settings={playbackSettings}
+            onSave={onPlaybackSettingsChange}
+            restoreFocusRef={playButtonRef}
+            formResetKey={playbackFormResetKey}
+          />
+        </Suspense>
       )}
 
-      <TechnicalDetailsDialog
-        movieId={movieId}
-        open={technicalDetailsOpen}
-        onOpenChange={onTechnicalDetailsOpenChange}
-      />
+      {createWatchRoomOpen && (
+        <Suspense fallback={null}>
+          <CreateWatchRoomDialog
+            movieId={movieId}
+            movieTitle={movieTitle}
+            playbackSettings={playbackSettings}
+            open={createWatchRoomOpen}
+            onOpenChange={setCreateWatchRoomOpen}
+            restoreFocusRef={moreOptionsButtonRef}
+          />
+        </Suspense>
+      )}
 
-      {user?.is_admin && (
-        <DeleteMovieDialog
-          movieId={movieId}
-          movieTitle={movieTitle}
-          open={deleteOpen}
-          onOpenChange={onDeleteOpenChange}
-        />
+      {user?.is_admin && editOpen && (
+        <Suspense fallback={null}>
+          <EditMovieDialog
+            movieId={movieId}
+            movie={movie}
+            open={editOpen}
+            onOpenChange={onEditOpenChange}
+            restoreFocusRef={moreOptionsButtonRef}
+          />
+        </Suspense>
+      )}
+
+      {technicalDetailsOpen && (
+        <Suspense fallback={null}>
+          <TechnicalDetailsDialog
+            movieId={movieId}
+            open={technicalDetailsOpen}
+            onOpenChange={onTechnicalDetailsOpenChange}
+          />
+        </Suspense>
+      )}
+
+      {user?.is_admin && deleteOpen && (
+        <Suspense fallback={null}>
+          <DeleteMovieDialog
+            movieId={movieId}
+            movieTitle={movieTitle}
+            open={deleteOpen}
+            onOpenChange={onDeleteOpenChange}
+          />
+        </Suspense>
       )}
     </div>
   );
