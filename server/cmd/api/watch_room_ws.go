@@ -115,12 +115,7 @@ func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) (watchRo
 	session.clients[client] = true
 	session.connectedIDs[client.user.ID] = true
 
-	return watchRoomServerEvent{
-		Type:             "room_snapshot",
-		RoomID:           roomID,
-		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
-		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
-	}, !alreadyConnected
+	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), !alreadyConnected
 }
 
 func (hub *WatchRoomHub) snapshot(roomID int64) (watchRoomServerEvent, bool) {
@@ -132,12 +127,7 @@ func (hub *WatchRoomHub) snapshot(roomID int64) (watchRoomServerEvent, bool) {
 		return watchRoomServerEvent{}, false
 	}
 
-	return watchRoomServerEvent{
-		Type:             "room_snapshot",
-		RoomID:           roomID,
-		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
-		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
-	}, true
+	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), true
 }
 
 func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
@@ -345,6 +335,15 @@ func pointerToPlaybackState(state watchRoomPlaybackState) *watchRoomPlaybackStat
 	return &copy
 }
 
+func (hub *WatchRoomHub) buildSnapshotLocked(roomID int64, session *watchRoomSession, now time.Time) watchRoomServerEvent {
+	return watchRoomServerEvent{
+		Type:             "room_snapshot",
+		RoomID:           roomID,
+		Playback:         pointerToPlaybackState(session.state.snapshot(now)),
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
 func (hub *WatchRoomHub) currentSnapshot(roomID int64) *watchRoomServerEvent {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
@@ -354,12 +353,8 @@ func (hub *WatchRoomHub) currentSnapshot(roomID int64) *watchRoomServerEvent {
 		return nil
 	}
 
-	return &watchRoomServerEvent{
-		Type:             "room_snapshot",
-		RoomID:           roomID,
-		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
-		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
-	}
+	snapshot := hub.buildSnapshotLocked(roomID, session, time.Now().UTC())
+	return &snapshot
 }
 
 func connectedUserIDs(ids map[int64]bool) []int64 {
