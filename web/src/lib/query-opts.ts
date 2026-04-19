@@ -7,6 +7,8 @@ import {
   getLatestAlbums,
   getLatestMovies,
   getLikedMovies,
+  getLikedTracks,
+  getLikedTrackIds,
   getMovieDetails,
   getMovieInTheaterDetails,
   getMoviePlaylistDetails,
@@ -57,6 +59,8 @@ import {
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
   MUSIC_STATS_KEY,
+  LIKED_TRACK_IDS_KEY,
+  LIKED_TRACKS_KEY,
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
@@ -383,6 +387,24 @@ export function moviePlaylistMoviesQueryOpts(
     queryFn: () => getMoviePlaylistMovies(playlistId, page, perPage, sort),
     enabled: playlistId > 0,
     staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function likedTrackIdsQueryOpts() {
+  return queryOptions({
+    queryKey: [LIKED_TRACK_IDS_KEY],
+    queryFn: getLikedTrackIds,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function likedTracksQueryOpts(page: number, perPage: number = 50) {
+  return queryOptions({
+    queryKey: [LIKED_TRACKS_KEY, page, perPage],
+    queryFn: () => getLikedTracks(page, perPage),
+    staleTime: STALE_1M,
     gcTime: GC_DEFAULT,
   });
 }

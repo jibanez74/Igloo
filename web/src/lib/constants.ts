@@ -73,6 +73,8 @@ export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 export const PLAYLISTS_KEY = "playlists";
 export const PLAYLIST_DETAILS_KEY = "playlist-details";
 export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
+export const LIKED_TRACKS_KEY = "liked-tracks";
+export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
 
 // playback — single source of truth for stream modes (ids + labels + metadata)
 export const STREAM_MODES = [

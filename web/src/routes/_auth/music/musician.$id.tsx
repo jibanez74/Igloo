@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   User,
@@ -10,7 +11,7 @@ import {
   ListOrdered,
   ArrowLeft,
 } from "lucide-react";
-import { musicianDetailsQueryOpts } from "@/lib/query-opts";
+import { likedTrackIdsQueryOpts, musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -78,6 +79,11 @@ function MusicianDetailsContent({
 }: MusicianDetailsResponseType) {
   const audioPlayer = useAudioPlayerActions();
   const audioPlayerState = useAudioPlayerState();
+
+  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
+  const likedSet = new Set<number>(
+    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : []
+  );
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const summary = unwrapString(musician.summary);
@@ -359,6 +365,7 @@ function MusicianDetailsContent({
                   subtitle={unwrapString(track.album_title) ?? "Unknown Album"}
                   albumId={unwrapInt(track.album_id)}
                   variant="musician"
+                  isLiked={likedSet.has(track.id)}
                   isPlaying={isTrackPlaying(track)}
                   isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
                   onPlay={() => handlePlayTrack(track)}

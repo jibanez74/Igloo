@@ -510,6 +510,8 @@ export function WatchRoomPageContent({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
+    // React Compiler memoizes toggleFullscreen; ESLint cannot see that, so suppress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isImmersiveViewport]);
 
   const handleOwnerDeleteSuccess = () => {
@@ -644,7 +646,7 @@ export function WatchRoomPageContent({
             <div
               className={cn(
                 "flex min-h-[50vh] flex-col",
-                playerFullscreenMode && "min-h-[100dvh]",
+                playerFullscreenMode && "min-h-dvh",
               )}
             >
               <VideoPlayer

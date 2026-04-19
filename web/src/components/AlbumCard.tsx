@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { showActionFailed } from "@/lib/toast-helpers";
@@ -19,12 +19,14 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
   const [isLoading, setIsLoading] = useState(false);
+  const [prevId, setPrevId] = useState(id);
   const [coverLoadFailed, setCoverLoadFailed] = useState(false);
 
   const coverUrl = getMediaImageUrl(unwrapString(cover));
-  useEffect(() => {
+  if (prevId !== id) {
+    setPrevId(id);
     setCoverLoadFailed(false);
-  }, [id, coverUrl]);
+  }
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(albumDetailsQueryOpts(id));

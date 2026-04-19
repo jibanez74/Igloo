@@ -24,6 +24,16 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/TrackItem";
 import EditPlaylistDialog from "@/components/EditPlaylistDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -117,6 +127,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
   const coverUrl = getMediaImageUrl(
@@ -245,13 +256,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   };
 
   const handleDeletePlaylist = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`
-      )
-    ) {
-      deleteMutation.mutate();
-    }
+    setShowDeleteDialog(true);
   };
 
   // Page announcement for screen readers
@@ -449,6 +454,31 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           playlist={playlist}
         />
       )}
+
+      {/* Delete Playlist Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete playlist</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{playlist.name}&rdquo;? This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDeleteDialog(false);
+                deleteMutation.mutate();
+              }}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </article>
   );
 }
@@ -488,12 +518,12 @@ function PlaylistTracksList({
   const [scrollMargin, setScrollMargin] = useState(0);
 
   // Local state for optimistic reordering
+  const [prevTracks, setPrevTracks] = useState(tracks);
   const [orderedTracks, setOrderedTracks] = useState(tracks);
-
-  // Sync with server data when tracks change
-  useEffect(() => {
+  if (prevTracks !== tracks) {
+    setPrevTracks(tracks);
     setOrderedTracks(tracks);
-  }, [tracks]);
+  }
 
   // Measure scroll margin after mount
   useEffect(() => {

@@ -900,7 +900,8 @@ func (app *Application) InitRouter() {
 					r.Get("/details/{id}", app.GetTrackByID)
 					r.Get("/{id}/stream", app.StreamTrack)
 					r.Post("/{id}/like", app.ToggleLikeTrack)
-					r.Get("/liked", app.GetLikedTrackIDs)
+					r.Get("/liked", app.GetLikedTracks)
+					r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
 				})
 
 				r.Route("/playlists", func(r chi.Router) {

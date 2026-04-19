@@ -63,6 +63,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countUserLikedMoviesStmt, err = db.PrepareContext(ctx, countUserLikedMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUserLikedMovies: %w", err)
 	}
+	if q.countUserLikedTracksStmt, err = db.PrepareContext(ctx, countUserLikedTracks); err != nil {
+		return nil, fmt.Errorf("error preparing query CountUserLikedTracks: %w", err)
+	}
 	if q.countUsersByIDsStmt, err = db.PrepareContext(ctx, countUsersByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUsersByIDs: %w", err)
 	}
@@ -203,6 +206,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getLikedTrackIDsByUserIDStmt, err = db.PrepareContext(ctx, getLikedTrackIDsByUserID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLikedTrackIDsByUserID: %w", err)
+	}
+	if q.getLikedTracksForUserStmt, err = db.PrepareContext(ctx, getLikedTracksForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLikedTracksForUser: %w", err)
 	}
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
@@ -556,6 +562,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing countUserLikedMoviesStmt: %w", cerr)
 		}
 	}
+	if q.countUserLikedTracksStmt != nil {
+		if cerr := q.countUserLikedTracksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countUserLikedTracksStmt: %w", cerr)
+		}
+	}
 	if q.countUsersByIDsStmt != nil {
 		if cerr := q.countUsersByIDsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countUsersByIDsStmt: %w", cerr)
@@ -789,6 +800,11 @@ func (q *Queries) Close() error {
 	if q.getLikedTrackIDsByUserIDStmt != nil {
 		if cerr := q.getLikedTrackIDsByUserIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLikedTrackIDsByUserIDStmt: %w", cerr)
+		}
+	}
+	if q.getLikedTracksForUserStmt != nil {
+		if cerr := q.getLikedTracksForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLikedTracksForUserStmt: %w", cerr)
 		}
 	}
 	if q.getMovieByIDStmt != nil {
@@ -1313,6 +1329,7 @@ type Queries struct {
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
 	countUserLikedMoviesStmt                    *sql.Stmt
+	countUserLikedTracksStmt                    *sql.Stmt
 	countUsersByIDsStmt                         *sql.Stmt
 	createMovieExtraVideoStmt                   *sql.Stmt
 	createMovieGenreStmt                        *sql.Stmt
@@ -1360,6 +1377,7 @@ type Queries struct {
 	getLikedMoviesForUserAscStmt                *sql.Stmt
 	getLikedMoviesForUserDescStmt               *sql.Stmt
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
+	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
 	getMovieByPathStmt                          *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
@@ -1473,6 +1491,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
 		countUserLikedMoviesStmt:                    q.countUserLikedMoviesStmt,
+		countUserLikedTracksStmt:                    q.countUserLikedTracksStmt,
 		countUsersByIDsStmt:                         q.countUsersByIDsStmt,
 		createMovieExtraVideoStmt:                   q.createMovieExtraVideoStmt,
 		createMovieGenreStmt:                        q.createMovieGenreStmt,
@@ -1520,6 +1539,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
 		getLikedMoviesForUserDescStmt:               q.getLikedMoviesForUserDescStmt,
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
+		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
 		getMovieByPathStmt:                          q.getMovieByPathStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,

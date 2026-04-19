@@ -24,6 +24,7 @@ type Querier interface {
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
+	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
 	// Link a movie to an extra video (trailer/special feature). Idempotent.
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
@@ -96,6 +97,7 @@ type Querier interface {
 	GetLikedMoviesForUserAsc(ctx context.Context, arg GetLikedMoviesForUserAscParams) ([]GetLikedMoviesForUserAscRow, error)
 	GetLikedMoviesForUserDesc(ctx context.Context, arg GetLikedMoviesForUserDescParams) ([]GetLikedMoviesForUserDescRow, error)
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
+	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
 	GetMovieByPath(ctx context.Context, filePath string) (Movie, error)
 	// List all extra videos (trailers, special features) linked to a movie.
