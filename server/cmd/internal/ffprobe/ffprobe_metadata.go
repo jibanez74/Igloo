@@ -2,8 +2,10 @@ package ffprobe
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 type FfprobeResult struct {
@@ -60,31 +62,36 @@ type Format struct {
 }
 
 type FormatTags struct {
-	Title        string `json:"title"`
-	Artist       string `json:"artist"`
-	AlbumArtist  string `json:"album_artist"`
-	Composer     string `json:"composer"`
-	Album        string `json:"album"`
-	Genre        string `json:"genre"`
-	Track        string `json:"track"`
-	Disc         string `json:"disc"`
-	Date         string `json:"date"`
-	Copyright string `json:"copyright"`
-	SortName  string `json:"sort_name"`
-	SortAlbum    string `json:"sort_album"`
-	SortArtist   string `json:"sort_artist"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	AlbumArtist string `json:"album_artist"`
+	Composer    string `json:"composer"`
+	Album       string `json:"album"`
+	Genre       string `json:"genre"`
+	Track       string `json:"track"`
+	Disc        string `json:"disc"`
+	Date        string `json:"date"`
+	Copyright   string `json:"copyright"`
+	SortName    string `json:"sort_name"`
+	SortAlbum   string `json:"sort_album"`
+	SortArtist  string `json:"sort_artist"`
+}
+
+type ChapterTags struct {
+	Title string `json:"title"`
 }
 
 type Chapter struct {
-	StartTime string `json:"start_time"`
-	Start     int    `json:"start"`
-
-	Tags struct {
-		Title string `json:"title"`
-	} `json:"tags"`
+	StartTime string      `json:"start_time"`
+	Start     int         `json:"start"`
+	Tags      ChapterTags `json:"tags"`
 }
 
 func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
+	if strings.TrimSpace(filePath) == "" {
+		return nil, fmt.Errorf("file path is required")
+	}
+
 	cmd := exec.Command(f.bin,
 		"-v", "quiet",
 		"-print_format", "json",
@@ -95,6 +102,10 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("ffprobe failed for %s: %w: %s", filePath, err, exitErr.Stderr)
+		}
 		return nil, fmt.Errorf("ffprobe failed for %s: %w", filePath, err)
 	}
 
