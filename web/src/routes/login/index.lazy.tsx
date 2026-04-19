@@ -30,6 +30,11 @@ function LoginPage() {
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
+  const inputClassName =
+    "border-white/25 bg-slate-50/92 text-slate-950 placeholder:text-slate-500 shadow-sm backdrop-blur-sm " +
+    "focus-visible:border-amber-400/70 focus-visible:ring-amber-400/20";
+  const inputIconClassName =
+    "absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-500";
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -116,7 +121,7 @@ function LoginPage() {
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail
-                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      className={inputIconClassName}
                       aria-hidden="true"
                     />
                     <Input
@@ -127,7 +132,7 @@ function LoginPage() {
                       inputMode="email"
                       autoComplete="username"
                       required
-                      className="pl-10"
+                      className={`pl-10 ${inputClassName}`}
                       disabled={isSubmitting}
                     />
                   </div>
@@ -138,7 +143,7 @@ function LoginPage() {
                   <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Lock
-                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      className={inputIconClassName}
                       aria-hidden="true"
                     />
                     <Input
@@ -148,13 +153,13 @@ function LoginPage() {
                       id="password"
                       name="password"
                       required
-                      className="px-10"
+                      className={`px-10 ${inputClassName}`}
                       disabled={isSubmitting}
                     />
                     <button
                       type="button"
                       className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
-                               text-slate-400 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                               text-slate-500 hover:text-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }

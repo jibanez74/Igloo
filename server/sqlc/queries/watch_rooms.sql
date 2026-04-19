@@ -34,6 +34,18 @@ INNER JOIN watch_room_members AS wrm
 WHERE wrm.user_id = ?
 ORDER BY wr.created_at DESC;
 
+-- name: GetWatchRoomMemberByUserID :one
+SELECT
+  u.id,
+  u.name,
+  u.avatar
+FROM watch_room_members AS wrm
+INNER JOIN users AS u
+  ON wrm.user_id = u.id
+WHERE wrm.room_id = ?
+  AND wrm.user_id = ?
+LIMIT 1;
+
 -- name: GetWatchRoomMembers :many
 SELECT
   u.id,

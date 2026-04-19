@@ -351,6 +351,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getWatchRoomByIDStmt, err = db.PrepareContext(ctx, getWatchRoomByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomByID: %w", err)
 	}
+	if q.getWatchRoomMemberByUserIDStmt, err = db.PrepareContext(ctx, getWatchRoomMemberByUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetWatchRoomMemberByUserID: %w", err)
+	}
 	if q.getWatchRoomMembersStmt, err = db.PrepareContext(ctx, getWatchRoomMembers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomMembers: %w", err)
 	}
@@ -1042,6 +1045,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getWatchRoomByIDStmt: %w", cerr)
 		}
 	}
+	if q.getWatchRoomMemberByUserIDStmt != nil {
+		if cerr := q.getWatchRoomMemberByUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getWatchRoomMemberByUserIDStmt: %w", cerr)
+		}
+	}
 	if q.getWatchRoomMembersStmt != nil {
 		if cerr := q.getWatchRoomMembersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getWatchRoomMembersStmt: %w", cerr)
@@ -1425,6 +1433,7 @@ type Queries struct {
 	getUsersExcludingStmt                       *sql.Stmt
 	getVideoStreamsByMovieIDStmt                *sql.Stmt
 	getWatchRoomByIDStmt                        *sql.Stmt
+	getWatchRoomMemberByUserIDStmt              *sql.Stmt
 	getWatchRoomMembersStmt                     *sql.Stmt
 	getWatchRoomMembersByRoomIDsStmt            *sql.Stmt
 	getWatchRoomsForUserStmt                    *sql.Stmt
@@ -1587,6 +1596,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUsersExcludingStmt:                       q.getUsersExcludingStmt,
 		getVideoStreamsByMovieIDStmt:                q.getVideoStreamsByMovieIDStmt,
 		getWatchRoomByIDStmt:                        q.getWatchRoomByIDStmt,
+		getWatchRoomMemberByUserIDStmt:              q.getWatchRoomMemberByUserIDStmt,
 		getWatchRoomMembersStmt:                     q.getWatchRoomMembersStmt,
 		getWatchRoomMembersByRoomIDsStmt:            q.getWatchRoomMembersByRoomIDsStmt,
 		getWatchRoomsForUserStmt:                    q.getWatchRoomsForUserStmt,

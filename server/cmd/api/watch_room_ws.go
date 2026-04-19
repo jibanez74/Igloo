@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -324,11 +325,29 @@ func pointerToPlaybackState(state watchRoomPlaybackState) *watchRoomPlaybackStat
 	return &copy
 }
 
+func (hub *WatchRoomHub) currentSnapshot(roomID int64) *watchRoomServerEvent {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return nil
+	}
+
+	return &watchRoomServerEvent{
+		Type:             "room_snapshot",
+		RoomID:           roomID,
+		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
 func connectedUserIDs(ids map[int64]bool) []int64 {
 	userIDs := make([]int64, 0, len(ids))
 	for id := range ids {
 		userIDs = append(userIDs, id)
 	}
+	slices.Sort(userIDs)
 	return userIDs
 }
 
@@ -405,17 +424,27 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 }
 
 func (app *Application) loadRoomMemberSummary(ctx context.Context, roomID, userID int64) (watchRoomMemberSummary, error) {
-	members, err := app.loadRoomMembers(ctx, roomID)
+	row, err := app.Queries.GetWatchRoomMemberByUserID(ctx, database.GetWatchRoomMemberByUserIDParams{
+		RoomID: roomID,
+		UserID: userID,
+	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return watchRoomMemberSummary{}, errors.New("member not found")
+		}
 		return watchRoomMemberSummary{}, err
 	}
 
-	member, ok := findMemberByID(members, userID)
-	if !ok {
-		return watchRoomMemberSummary{}, errors.New("member not found")
+	var avatar *string
+	if row.Avatar.Valid {
+		avatar = &row.Avatar.String
 	}
 
-	return member, nil
+	return watchRoomMemberSummary{
+		ID:     row.ID,
+		Name:   row.Name,
+		Avatar: avatar,
+	}, nil
 }
 
 // WatchRoomWebSocket serves GET /api/watch-rooms/{id}/ws.
@@ -468,9 +497,6 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 	}()
 
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(_ string) error {
-		return conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	})
 
 	for {
 		_, rawMessage, err := conn.ReadMessage()
@@ -487,7 +513,9 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 
 		switch event.Type {
 		case "join":
-			client.writeJSON(snapshot)
+			if fresh := app.WatchRoomHub.currentSnapshot(room.ID); fresh != nil {
+				client.writeJSON(*fresh)
+			}
 		case "ping":
 			client.mu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))

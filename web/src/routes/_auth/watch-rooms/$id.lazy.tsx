@@ -72,6 +72,10 @@ export function WatchRoomPageContent({
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const announcementTimeoutRef = useRef<number | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const intentionalCloseRef = useRef(false);
+  const prevRoomIdRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
   const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
     "none",
@@ -86,6 +90,7 @@ export function WatchRoomPageContent({
   );
   const [connectedUserIds, setConnectedUserIds] = useState<number[]>([]);
   const [connectionReady, setConnectionReady] = useState(false);
+  const [reconnectKey, setReconnectKey] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isImmersiveViewport, setIsImmersiveViewport] = useState(false);
@@ -112,6 +117,13 @@ export function WatchRoomPageContent({
       : null;
 
   const closeRoomConnection = () => {
+    intentionalCloseRef.current = true;
+
+    if (reconnectTimeoutRef.current !== null) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     if (heartbeatRef.current !== null) {
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
@@ -214,11 +226,25 @@ export function WatchRoomPageContent({
     },
   );
 
+  const MAX_RECONNECT_ATTEMPTS = 5;
+
   const handleSocketClose = useEffectEvent(() => {
     setConnectionReady(false);
     if (heartbeatRef.current !== null) {
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
+    }
+    if (
+      !intentionalCloseRef.current &&
+      reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+    ) {
+      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
+      reconnectAttemptsRef.current += 1;
+      setPlaybackError(null);
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectTimeoutRef.current = null;
+        setReconnectKey(k => k + 1);
+      }, delay);
     }
   });
 
@@ -228,6 +254,11 @@ export function WatchRoomPageContent({
 
   useEffect(() => {
     roomDeletionHandledRef.current = false;
+    intentionalCloseRef.current = false;
+    if (prevRoomIdRef.current !== currentRoomId) {
+      prevRoomIdRef.current = currentRoomId;
+      reconnectAttemptsRef.current = 0;
+    }
     if (!currentRoomId) return;
 
     let cancelled = false;
@@ -269,6 +300,13 @@ export function WatchRoomPageContent({
 
     return () => {
       cancelled = true;
+      intentionalCloseRef.current = true;
+
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (heartbeatRef.current !== null) {
         window.clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
@@ -286,7 +324,7 @@ export function WatchRoomPageContent({
         socket.close();
       }
     };
-  }, [currentRoomId]);
+  }, [currentRoomId, reconnectKey]);
 
   useEffect(() => {
     return () => {
@@ -659,7 +697,8 @@ export function WatchRoomPageContent({
                 onPause={() => setPlaying(false)}
                 onEnded={() => {
                   setPlaying(false);
-                  sendPlaybackEvent("pause", duration);
+                  const video = videoRef.current;
+                  sendPlaybackEvent("pause", video ? video.currentTime : duration);
                 }}
                 onTimeUpdate={setCurrentTime}
                 onDurationChange={setDuration}

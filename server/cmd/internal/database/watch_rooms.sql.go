@@ -131,6 +131,37 @@ func (q *Queries) GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, er
 	return i, err
 }
 
+const getWatchRoomMemberByUserID = `-- name: GetWatchRoomMemberByUserID :one
+SELECT
+  u.id,
+  u.name,
+  u.avatar
+FROM watch_room_members AS wrm
+INNER JOIN users AS u
+  ON wrm.user_id = u.id
+WHERE wrm.room_id = ?
+  AND wrm.user_id = ?
+LIMIT 1
+`
+
+type GetWatchRoomMemberByUserIDParams struct {
+	RoomID int64 `json:"room_id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetWatchRoomMemberByUserIDRow struct {
+	ID     int64          `json:"id"`
+	Name   string         `json:"name"`
+	Avatar sql.NullString `json:"avatar"`
+}
+
+func (q *Queries) GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error) {
+	row := q.queryRow(ctx, q.getWatchRoomMemberByUserIDStmt, getWatchRoomMemberByUserID, arg.RoomID, arg.UserID)
+	var i GetWatchRoomMemberByUserIDRow
+	err := row.Scan(&i.ID, &i.Name, &i.Avatar)
+	return i, err
+}
+
 const getWatchRoomMembers = `-- name: GetWatchRoomMembers :many
 SELECT
   u.id,
