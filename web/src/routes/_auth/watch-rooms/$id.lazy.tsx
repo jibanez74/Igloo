@@ -5,6 +5,8 @@ import {
   AlertCircle,
   ArrowLeft,
   FastForward,
+  Maximize,
+  Minimize,
   Pause,
   Play,
   Radio,
@@ -22,6 +24,15 @@ import {
 import { formatTimeSeconds } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
+import {
+  canRequestElementFullscreen,
+  exitDocumentFullscreen,
+  getFullscreenElement,
+  isDocumentFullscreenEntryLikely,
+  requestElementFullscreen,
+  tryWebKitVideoEnterFullscreen,
+  tryWebKitVideoExitFullscreen,
+} from "@/lib/fullscreen";
 import {
   watchRoomAnnouncement,
   watchRoomStreamUrl,
@@ -59,12 +70,20 @@ export function WatchRoomPageContent({
   roomId,
 }: WatchRoomPageContentProps) {
   const navigate = useNavigate();
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const announcementTimeoutRef = useRef<number | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const intentionalCloseRef = useRef(false);
+  const prevRoomIdRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
   const pendingPlaybackRef = useRef<WatchRoomPlaybackStateType | null>(null);
+  const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
+    "none",
+  );
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -75,7 +94,10 @@ export function WatchRoomPageContent({
   );
   const [connectedUserIds, setConnectedUserIds] = useState<number[]>([]);
   const [connectionReady, setConnectionReady] = useState(false);
+  const [reconnectKey, setReconnectKey] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isImmersiveViewport, setIsImmersiveViewport] = useState(false);
 
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
   const room = data?.error === false ? data.data.room : null;
@@ -99,6 +121,13 @@ export function WatchRoomPageContent({
       : null;
 
   const closeRoomConnection = () => {
+    intentionalCloseRef.current = true;
+
+    if (reconnectTimeoutRef.current !== null) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     if (heartbeatRef.current !== null) {
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
@@ -227,11 +256,25 @@ export function WatchRoomPageContent({
     },
   );
 
+  const MAX_RECONNECT_ATTEMPTS = 5;
+
   const handleSocketClose = useEffectEvent(() => {
     setConnectionReady(false);
     if (heartbeatRef.current !== null) {
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
+    }
+    if (
+      !intentionalCloseRef.current &&
+      reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+    ) {
+      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
+      reconnectAttemptsRef.current += 1;
+      setPlaybackError(null);
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectTimeoutRef.current = null;
+        setReconnectKey(k => k + 1);
+      }, delay);
     }
   });
 
@@ -241,6 +284,11 @@ export function WatchRoomPageContent({
 
   useEffect(() => {
     roomDeletionHandledRef.current = false;
+    intentionalCloseRef.current = false;
+    if (prevRoomIdRef.current !== currentRoomId) {
+      prevRoomIdRef.current = currentRoomId;
+      reconnectAttemptsRef.current = 0;
+    }
     if (!currentRoomId) return;
 
     let cancelled = false;
@@ -282,6 +330,13 @@ export function WatchRoomPageContent({
 
     return () => {
       cancelled = true;
+      intentionalCloseRef.current = true;
+
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (heartbeatRef.current !== null) {
         window.clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
@@ -299,7 +354,7 @@ export function WatchRoomPageContent({
         socket.close();
       }
     };
-  }, [currentRoomId]);
+  }, [currentRoomId, reconnectKey]);
 
   useEffect(() => {
     return () => {
@@ -324,6 +379,67 @@ export function WatchRoomPageContent({
       video.removeEventListener("canplay", handleReady);
     };
   }, [streamUrl]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const entering = !!getFullscreenElement();
+      if (entering) {
+        fullscreenSourceRef.current = "document";
+        setIsFullscreen(true);
+        setIsImmersiveViewport(false);
+      } else {
+        if (fullscreenSourceRef.current === "document") {
+          fullscreenSourceRef.current = "none";
+        }
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        onFullscreenChange,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onWebKitBegin = () => {
+      fullscreenSourceRef.current = "webkitVideo";
+      setIsFullscreen(true);
+      setIsImmersiveViewport(false);
+    };
+    const onWebKitEnd = () => {
+      fullscreenSourceRef.current = "none";
+      setIsFullscreen(false);
+    };
+
+    video.addEventListener("webkitbeginfullscreen", onWebKitBegin);
+    video.addEventListener("webkitendfullscreen", onWebKitEnd);
+
+    return () => {
+      video.removeEventListener("webkitbeginfullscreen", onWebKitBegin);
+      video.removeEventListener("webkitendfullscreen", onWebKitEnd);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isImmersiveViewport) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isImmersiveViewport]);
 
   const sendPlaybackEvent = (type: "play" | "pause" | "seek", positionSec: number) => {
     const socket = socketRef.current;
@@ -384,6 +500,117 @@ export function WatchRoomPageContent({
     seek(currentTime - WATCH_ROOM_SEEK_STEP_SEC);
   const seekForward = () =>
     seek(currentTime + WATCH_ROOM_SEEK_STEP_SEC);
+
+  const toggleFullscreen = async () => {
+    const container = containerRef.current;
+    const video = videoRef.current;
+    if (!container || !video) return;
+
+    if (getFullscreenElement()) {
+      void exitDocumentFullscreen();
+      return;
+    }
+
+    if (fullscreenSourceRef.current === "webkitVideo") {
+      tryWebKitVideoExitFullscreen(video);
+      return;
+    }
+
+    if (isImmersiveViewport) {
+      setIsImmersiveViewport(false);
+      return;
+    }
+
+    const enterFallback = () => {
+      if (tryWebKitVideoEnterFullscreen(video)) {
+        return;
+      }
+
+      setIsImmersiveViewport(true);
+    };
+
+    if (
+      !canRequestElementFullscreen(container) ||
+      !isDocumentFullscreenEntryLikely()
+    ) {
+      enterFallback();
+      return;
+    }
+
+    try {
+      await requestElementFullscreen(container);
+    } catch {
+      enterFallback();
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const container = containerRef.current;
+      const targetInsidePlayer = container?.contains(target) ?? false;
+      const targetIsPageBody =
+        target === document.body || target === document.documentElement;
+
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (!targetInsidePlayer && !targetIsPageBody) {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      switch (event.key) {
+        case "f":
+        case "F":
+          event.preventDefault();
+          event.stopPropagation();
+          void toggleFullscreen();
+          break;
+        case "Escape":
+          if (getFullscreenElement()) {
+            event.preventDefault();
+            event.stopPropagation();
+            void exitDocumentFullscreen();
+            break;
+          }
+
+          if (
+            fullscreenSourceRef.current === "webkitVideo" &&
+            tryWebKitVideoExitFullscreen(videoRef.current)
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            break;
+          }
+
+          if (isImmersiveViewport) {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsImmersiveViewport(false);
+          }
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+    // React Compiler memoizes toggleFullscreen; ESLint cannot see that, so suppress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isImmersiveViewport]);
+
   const handleOwnerDeleteSuccess = () => {
     closeRoomConnection();
     navigate({ to: "/", replace: true });
@@ -392,6 +619,7 @@ export function WatchRoomPageContent({
   const connectedMembers = room
     ? room.members.filter(member => connectedUserIds.includes(member.id))
     : [];
+  const playerFullscreenMode = isFullscreen || isImmersiveViewport;
 
   if (isPending) {
     return (
@@ -429,7 +657,14 @@ export function WatchRoomPageContent({
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div
+      ref={containerRef}
+      className={cn(
+        "min-h-screen bg-slate-950 text-white [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        isImmersiveViewport &&
+          "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-slate-950",
+      )}
+    >
       <title>{room.movie_title} Watch Room - Igloo</title>
       <meta
         name="description"
@@ -437,8 +672,16 @@ export function WatchRoomPageContent({
       />
 
       <LiveAnnouncer message={syncAnnouncement} />
+      <p className="sr-only">
+        Keyboard shortcuts: F for fullscreen and Escape to exit fullscreen.
+      </p>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8",
+          playerFullscreenMode && "max-w-none",
+        )}
+      >
         <header className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -490,19 +733,31 @@ export function WatchRoomPageContent({
           </div>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div
+          className={cn(
+            "grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]",
+            playerFullscreenMode && "grid-cols-1",
+          )}
+        >
           <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90">
-            <div className="flex min-h-[50vh] flex-col">
+            <div
+              className={cn(
+                "flex min-h-[50vh] flex-col",
+                playerFullscreenMode && "min-h-dvh",
+              )}
+            >
               <VideoPlayer
                 videoRef={videoRef}
                 src={streamUrl}
                 title={room.movie_title}
+                isFullscreen={playerFullscreenMode}
                 onError={setPlaybackError}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onEnded={() => {
                   setPlaying(false);
-                  sendPlaybackEvent("pause", duration);
+                  const video = videoRef.current;
+                  sendPlaybackEvent("pause", video ? video.currentTime : duration);
                 }}
                 onTimeUpdate={setCurrentTime}
                 onDurationChange={setDuration}
@@ -556,6 +811,25 @@ export function WatchRoomPageContent({
                       {formatTimeSeconds(currentTime)} / {formatTimeSeconds(duration)}
                     </p>
                     <VolumeControl mediaRef={videoRef} />
+                    <button
+                      type="button"
+                      onClick={() => void toggleFullscreen()}
+                      className="inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 transition-colors hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                      aria-label={
+                        playerFullscreenMode
+                          ? isImmersiveViewport && !isFullscreen
+                            ? "Exit expanded view"
+                            : "Exit fullscreen"
+                          : "Fullscreen"
+                      }
+                      aria-pressed={playerFullscreenMode}
+                    >
+                      {playerFullscreenMode ? (
+                        <Minimize className="size-5" aria-hidden="true" />
+                      ) : (
+                        <Maximize className="size-5" aria-hidden="true" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -568,7 +842,8 @@ export function WatchRoomPageContent({
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5">
+          {!playerFullscreenMode ? (
+            <aside className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
               <Users className="size-5 text-amber-400" aria-hidden="true" />
               People in this room
@@ -612,7 +887,8 @@ export function WatchRoomPageContent({
                 );
               })}
             </ul>
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </div>
 

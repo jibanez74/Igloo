@@ -122,6 +122,16 @@ export type TracksListResponseType = {
   has_more: boolean;
 };
 
+// Page-based paginated response for liked tracks
+export type LikedTracksResponseType = {
+  tracks: TrackListItemType[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  has_more: boolean;
+};
+
 // Music library statistics for the dashboard
 export type MusicStatsType = {
   total_albums: number;

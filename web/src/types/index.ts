@@ -14,6 +14,7 @@ export type {
   AlbumDetailsResponseType,
   TrackListItemType,
   TracksListResponseType,
+  LikedTracksResponseType,
   MusicStatsType,
   ShuffleTracksResponseType,
   AlbumsListResponseType,

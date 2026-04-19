@@ -1,7 +1,9 @@
 import { useState, useEffect, forwardRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
 import { toggleLikeTrack } from "@/lib/api";
+import { LIKED_TRACK_IDS_KEY, LIKED_TRACKS_KEY } from "@/lib/constants";
 import TrackActionsMenu from "@/components/TrackActionsMenu";
 
 export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
@@ -69,6 +71,7 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
   isDragging = false,
   dragHandleProps,
 }, ref) {
+  const queryClient = useQueryClient();
   const [liked, setLiked] = useState(isLiked);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
 
@@ -90,6 +93,8 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
       if (!response.error && response.data) {
         setLiked(response.data.is_liked);
         onLikeToggle?.(id, response.data.is_liked);
+        queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
+        queryClient.invalidateQueries({ queryKey: [LIKED_TRACK_IDS_KEY] });
       }
     } catch (error) {
       console.error("Failed to toggle like:", error);

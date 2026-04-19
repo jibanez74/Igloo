@@ -23,6 +23,7 @@ import type {
   PlaylistSummaryType,
   PlaylistTracksResponseType,
   RecentlyPlayedResponseType,
+  LikedTracksResponseType,
   ShuffleTracksResponseType,
   SimpleAlbumType,
   TheaterMovieType,
@@ -381,8 +382,13 @@ export const toggleLikeTrack = (trackId: number) =>
     { method: "POST" },
   );
 
+export const getLikedTracks = (page: number, perPage: number = 50) =>
+  apiRequest<LikedTracksResponseType>(
+    `/api/music/tracks/liked?page=${page}&per_page=${perPage}`,
+  );
+
 export const getLikedTrackIds = () =>
-  apiRequest<{ liked_track_ids: number[] }>("/api/music/tracks/liked");
+  apiRequest<{ liked_track_ids: number[] }>("/api/music/tracks/liked-ids");
 
 // ============================================================================
 // Music API - Musicians

@@ -130,7 +130,7 @@ export default function VideoPlayer({
       let disposeHls: (() => void) | null = null;
 
       void (async () => {
-        const { default: Hls } = await import("hls.js");
+        const { default: Hls } = await import("hls.js/light");
         if (cancelled || !Hls.isSupported()) return;
 
         const hls = new Hls({

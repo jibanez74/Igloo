@@ -16,7 +16,7 @@ import {
   User,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { albumDetailsQueryOpts } from "@/lib/query-opts";
+import { albumDetailsQueryOpts, likedTrackIdsQueryOpts } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -223,6 +223,11 @@ function AlbumDetailsContent({
   const audioPlayerState = useAudioPlayerState();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
+
+  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
+  const likedSet = new Set<number>(
+    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : []
+  );
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -592,6 +597,7 @@ function AlbumDetailsContent({
                         trackIndex={track.track_index}
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
+                        isLiked={likedSet.has(track.id)}
                         isPlaying={isTrackPlaying(track)}
                         isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
                         onPlay={() => handleToggleTrack(track)}

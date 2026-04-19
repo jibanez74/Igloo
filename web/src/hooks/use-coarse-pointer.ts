@@ -1,16 +1,12 @@
-import * as React from "react";
+import { useState, useEffect } from "react";
 
-/**
- * True when the primary input is touch (e.g. phones, many tablets).
- * Prefer native form controls in these environments for reliable VoiceOver / TalkBack behavior.
- */
 export function usePrefersCoarsePointer() {
-  const [coarse, setCoarse] = React.useState(() => {
+  const [coarse, setCoarse] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const mql = window.matchMedia("(hover: none) and (pointer: coarse)");
     const sync = () => {
       setCoarse(mql.matches);
@@ -24,3 +20,4 @@ export function usePrefersCoarsePointer() {
 
   return coarse;
 }
+  

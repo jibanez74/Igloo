@@ -63,6 +63,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countUserLikedMoviesStmt, err = db.PrepareContext(ctx, countUserLikedMovies); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUserLikedMovies: %w", err)
 	}
+	if q.countUserLikedTracksStmt, err = db.PrepareContext(ctx, countUserLikedTracks); err != nil {
+		return nil, fmt.Errorf("error preparing query CountUserLikedTracks: %w", err)
+	}
 	if q.countUsersByIDsStmt, err = db.PrepareContext(ctx, countUsersByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUsersByIDs: %w", err)
 	}
@@ -204,6 +207,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLikedTrackIDsByUserIDStmt, err = db.PrepareContext(ctx, getLikedTrackIDsByUserID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLikedTrackIDsByUserID: %w", err)
 	}
+	if q.getLikedTracksForUserStmt, err = db.PrepareContext(ctx, getLikedTracksForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLikedTracksForUser: %w", err)
+	}
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
 	}
@@ -344,6 +350,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getWatchRoomByIDStmt, err = db.PrepareContext(ctx, getWatchRoomByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomByID: %w", err)
+	}
+	if q.getWatchRoomMemberByUserIDStmt, err = db.PrepareContext(ctx, getWatchRoomMemberByUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetWatchRoomMemberByUserID: %w", err)
 	}
 	if q.getWatchRoomMembersStmt, err = db.PrepareContext(ctx, getWatchRoomMembers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetWatchRoomMembers: %w", err)
@@ -554,6 +563,11 @@ func (q *Queries) Close() error {
 	if q.countUserLikedMoviesStmt != nil {
 		if cerr := q.countUserLikedMoviesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countUserLikedMoviesStmt: %w", cerr)
+		}
+	}
+	if q.countUserLikedTracksStmt != nil {
+		if cerr := q.countUserLikedTracksStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countUserLikedTracksStmt: %w", cerr)
 		}
 	}
 	if q.countUsersByIDsStmt != nil {
@@ -791,6 +805,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLikedTrackIDsByUserIDStmt: %w", cerr)
 		}
 	}
+	if q.getLikedTracksForUserStmt != nil {
+		if cerr := q.getLikedTracksForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLikedTracksForUserStmt: %w", cerr)
+		}
+	}
 	if q.getMovieByIDStmt != nil {
 		if cerr := q.getMovieByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieByIDStmt: %w", cerr)
@@ -1024,6 +1043,11 @@ func (q *Queries) Close() error {
 	if q.getWatchRoomByIDStmt != nil {
 		if cerr := q.getWatchRoomByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getWatchRoomByIDStmt: %w", cerr)
+		}
+	}
+	if q.getWatchRoomMemberByUserIDStmt != nil {
+		if cerr := q.getWatchRoomMemberByUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getWatchRoomMemberByUserIDStmt: %w", cerr)
 		}
 	}
 	if q.getWatchRoomMembersStmt != nil {
@@ -1313,6 +1337,7 @@ type Queries struct {
 	countPlaylistMoviesStmt                     *sql.Stmt
 	countPlaylistTracksStmt                     *sql.Stmt
 	countUserLikedMoviesStmt                    *sql.Stmt
+	countUserLikedTracksStmt                    *sql.Stmt
 	countUsersByIDsStmt                         *sql.Stmt
 	createMovieExtraVideoStmt                   *sql.Stmt
 	createMovieGenreStmt                        *sql.Stmt
@@ -1360,6 +1385,7 @@ type Queries struct {
 	getLikedMoviesForUserAscStmt                *sql.Stmt
 	getLikedMoviesForUserDescStmt               *sql.Stmt
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
+	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
 	getMovieByPathStmt                          *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
@@ -1407,6 +1433,7 @@ type Queries struct {
 	getUsersExcludingStmt                       *sql.Stmt
 	getVideoStreamsByMovieIDStmt                *sql.Stmt
 	getWatchRoomByIDStmt                        *sql.Stmt
+	getWatchRoomMemberByUserIDStmt              *sql.Stmt
 	getWatchRoomMembersStmt                     *sql.Stmt
 	getWatchRoomMembersByRoomIDsStmt            *sql.Stmt
 	getWatchRoomsForUserStmt                    *sql.Stmt
@@ -1473,6 +1500,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
 		countPlaylistTracksStmt:                     q.countPlaylistTracksStmt,
 		countUserLikedMoviesStmt:                    q.countUserLikedMoviesStmt,
+		countUserLikedTracksStmt:                    q.countUserLikedTracksStmt,
 		countUsersByIDsStmt:                         q.countUsersByIDsStmt,
 		createMovieExtraVideoStmt:                   q.createMovieExtraVideoStmt,
 		createMovieGenreStmt:                        q.createMovieGenreStmt,
@@ -1520,6 +1548,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedMoviesForUserAscStmt:                q.getLikedMoviesForUserAscStmt,
 		getLikedMoviesForUserDescStmt:               q.getLikedMoviesForUserDescStmt,
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
+		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
 		getMovieByPathStmt:                          q.getMovieByPathStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
@@ -1567,6 +1596,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUsersExcludingStmt:                       q.getUsersExcludingStmt,
 		getVideoStreamsByMovieIDStmt:                q.getVideoStreamsByMovieIDStmt,
 		getWatchRoomByIDStmt:                        q.getWatchRoomByIDStmt,
+		getWatchRoomMemberByUserIDStmt:              q.getWatchRoomMemberByUserIDStmt,
 		getWatchRoomMembersStmt:                     q.getWatchRoomMembersStmt,
 		getWatchRoomMembersByRoomIDsStmt:            q.getWatchRoomMembersByRoomIDsStmt,
 		getWatchRoomsForUserStmt:                    q.getWatchRoomsForUserStmt,

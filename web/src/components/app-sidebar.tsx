@@ -112,6 +112,7 @@ export default function AppSidebar({
         <Link
           to="/"
           onClick={handleNavClick}
+          aria-label="Igloo – Home"
           className="flex items-center gap-3 transition-opacity hover:opacity-80"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20">
@@ -124,7 +125,11 @@ export default function AppSidebar({
       </SidebarHeader>
 
       {/* Main Navigation */}
-      <SidebarContent className="px-2 py-4">
+      <SidebarContent
+        role="navigation"
+        aria-label="Main navigation"
+        className="px-2 py-4"
+      >
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -150,6 +155,7 @@ export default function AppSidebar({
                             : undefined
                         }
                         onClick={handleNavClick}
+                        aria-current={active ? "page" : undefined}
                       >
                         <SidebarItemContent
                           icon={item.icon}
