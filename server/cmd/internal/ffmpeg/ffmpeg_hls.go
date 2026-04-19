@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -52,6 +53,10 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		return nil, fmt.Errorf("invalid HLS profile: %s", p.Profile)
 	}
 
+	if strings.TrimSpace(p.SourcePath) == "" {
+		return nil, fmt.Errorf("source path is required")
+	}
+
 	copyVideo := p.CopyVideo
 	if p.Profile == helpers.HLS_PROFILE_REMUX {
 		copyVideo = true
@@ -66,7 +71,11 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		}
 	}
 
-	args := []string{"-y", "-fflags", "+genpts", "-analyzeduration", "5000000", "-probesize", "5000000"}
+	args := []string{
+		"-y", "-fflags", "+genpts",
+		"-analyzeduration", "5000000", "-probesize", "5000000",
+		"-threads", fmt.Sprintf("%d", max(1, runtime.NumCPU()/2)),
+	}
 
 	hwLower := strings.ToLower(p.HWDevice)
 	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
@@ -209,11 +218,9 @@ func (f *ffmpeg) RunHLS(
 
 	ring := make([]string, helpers.HLS_STDERR_TAIL_LINES)
 	var ringIdx int
-	var ringCount int
 	appendTail := func(line string) {
 		ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = line
 		ringIdx++
-		ringCount++
 	}
 
 	var stderrWg sync.WaitGroup
@@ -233,6 +240,7 @@ func (f *ffmpeg) RunHLS(
 
 	startErr := cmd.Start()
 	if startErr != nil {
+		stderrWg.Wait()
 		return nil, startErr
 	}
 
@@ -241,8 +249,8 @@ func (f *ffmpeg) RunHLS(
 		stderrWg.Wait()
 		if onExit != nil {
 			n := helpers.HLS_STDERR_TAIL_LINES
-			if ringCount < n {
-				n = ringCount
+			if ringIdx < n {
+				n = ringIdx
 			}
 			tail := make([]string, 0, n)
 			start := ringIdx - n

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -52,6 +54,25 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		if !strings.Contains(argStr, want) {
 			t.Errorf("expected %q in args: %s", want, argStr)
 		}
+	}
+
+	threadsIdx := indexOf(args, "-threads")
+	if threadsIdx < 0 {
+		t.Fatal("-threads flag missing from args")
+	}
+	if threadsIdx+1 >= len(args) {
+		t.Fatal("-threads flag has no value")
+	}
+	threadsVal, err := strconv.Atoi(args[threadsIdx+1])
+	if err != nil {
+		t.Fatalf("-threads value %q is not an integer: %v", args[threadsIdx+1], err)
+	}
+	if threadsVal < 1 {
+		t.Errorf("-threads = %d, want >= 1", threadsVal)
+	}
+	wantThreads := max(1, runtime.NumCPU()/2)
+	if threadsVal != wantThreads {
+		t.Errorf("-threads = %d, want %d (max(1, NumCPU/2))", threadsVal, wantThreads)
 	}
 }
 
@@ -217,6 +238,22 @@ func TestBuildHLSArgs_InvalidProfile(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("expected error for disallowed profile")
+	}
+}
+
+func TestBuildHLSArgs_EmptySourcePath(t *testing.T) {
+	for _, src := range []string{"", "   "} {
+		_, err := buildHLSArgs(HLSParams{
+			SourcePath:       src,
+			OutDir:           t.TempDir(),
+			Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+			VideoStreamIndex: 0,
+			AudioStreamIndex: 0,
+			HWDevice:         "cpu",
+		})
+		if err == nil {
+			t.Errorf("expected error for empty SourcePath %q", src)
+		}
 	}
 }
 
