@@ -126,7 +126,7 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 			continue
 		}
 
-		if unchanged != 0 {
+		if unchanged {
 			skipped++
 			continue
 		}

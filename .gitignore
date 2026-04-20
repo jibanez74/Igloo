@@ -47,7 +47,9 @@
 # OS files
 .DS_Store
 
-# Agent instructions
+# Agent instructions and Claude Code config
+.claude/
+.codex/
 AGENTS.md
 CLAUDE.md
 
