@@ -169,6 +169,10 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize logger: %v", err)
 	}
 
+	// Remove any leftover HLS temp directories from a previous run that did not
+	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
+	cleanupStaleHLSTempDirs(app.Logger)
+
 	err = app.InitDB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
@@ -943,6 +947,27 @@ func (app *Application) InitRouter() {
 	router.Get("/*", app.ServeFrontend)
 
 	app.Router = router
+}
+
+// cleanupStaleHLSTempDirs removes leftover igloo-hls-* directories from the
+// system temp directory. These accumulate when the server is killed without a
+// graceful shutdown (e.g., systemd SIGKILL escalation, crash, power loss).
+func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface) {
+	pattern := filepath.Join(os.TempDir(), "igloo-hls-*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		logger.Warn("failed to glob stale HLS temp dirs", "error", err)
+		return
+	}
+	for _, dir := range matches {
+		err = os.RemoveAll(dir)
+		if err != nil {
+			logger.Warn("failed to remove stale HLS temp dir", "path", dir, "error", err)
+		}
+	}
+	if len(matches) > 0 {
+		logger.Info("cleaned up stale HLS temp dirs from previous run", "count", len(matches))
+	}
 }
 
 // ListenForShutdown handles graceful shutdown when SIGINT or SIGTERM is received.

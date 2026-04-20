@@ -162,7 +162,7 @@ function LoginPage() {
                     <button
                       type="button"
                       className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
-                               text-slate-500 hover:text-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                               text-slate-700 hover:text-slate-900 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }

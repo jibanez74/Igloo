@@ -80,7 +80,10 @@ export function WatchRoomPageContent({
   const intentionalCloseRef = useRef(false);
   const prevRoomIdRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
-  const pendingPlaybackRef = useRef<WatchRoomPlaybackStateType | null>(null);
+  const pendingPlaybackRef = useRef<{
+    state: WatchRoomPlaybackStateType;
+    receivedAt: number;
+  } | null>(null);
   const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
     "none",
   );
@@ -200,11 +203,19 @@ export function WatchRoomPageContent({
   );
 
   const flushPendingPlayback = useEffectEvent(async () => {
-    const playback = pendingPlaybackRef.current;
-    if (!playback) return;
+    const pending = pendingPlaybackRef.current;
+    if (!pending) return;
 
-    const applied = await applyPlaybackState(playback);
-    if (applied && pendingPlaybackRef.current === playback) {
+    const elapsed = !pending.state.paused
+      ? (Date.now() - pending.receivedAt) / 1000
+      : 0;
+    const adjustedPlayback: WatchRoomPlaybackStateType = {
+      ...pending.state,
+      position_sec: pending.state.position_sec + elapsed,
+    };
+
+    const applied = await applyPlaybackState(adjustedPlayback);
+    if (applied && pendingPlaybackRef.current === pending) {
       pendingPlaybackRef.current = null;
     }
   });
@@ -251,7 +262,7 @@ export function WatchRoomPageContent({
 
       if (!event.playback) return;
 
-      pendingPlaybackRef.current = event.playback;
+      pendingPlaybackRef.current = { state: event.playback, receivedAt: Date.now() };
       await flushPendingPlayback();
     },
   );
@@ -457,12 +468,14 @@ export function WatchRoomPageContent({
     if (!video) return;
 
     if (video.paused) {
-      const pendingPlayback = pendingPlaybackRef.current;
-      if (pendingPlayback && !pendingPlayback.paused) {
-        const drift = Math.abs(video.currentTime - pendingPlayback.position_sec);
+      const pending = pendingPlaybackRef.current;
+      if (pending && !pending.state.paused) {
+        const elapsed = (Date.now() - pending.receivedAt) / 1000;
+        const adjustedPos = pending.state.position_sec + elapsed;
+        const drift = Math.abs(video.currentTime - adjustedPos);
         if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
-          video.currentTime = pendingPlayback.position_sec;
-          setCurrentTime(pendingPlayback.position_sec);
+          video.currentTime = adjustedPos;
+          setCurrentTime(adjustedPos);
         }
       }
 
