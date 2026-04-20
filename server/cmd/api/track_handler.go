@@ -90,9 +90,9 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetLikedTrackIDs returns a list of track IDs that the authenticated user has liked.
-// This is useful for checking like status on multiple tracks at once (e.g., album page).
-func (app *Application) GetLikedTrackIDs(w http.ResponseWriter, r *http.Request) {
+// GetLikedTrackIDsForUser returns the IDs of every track the authenticated user has liked.
+// Used by the frontend to initialize liked-heart state on page load without a paginated fetch.
+func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
@@ -110,6 +110,75 @@ func (app *Application) GetLikedTrackIDs(w http.ResponseWriter, r *http.Request)
 		Error: false,
 		Data: map[string]any{
 			"liked_track_ids": trackIDs,
+		},
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, res)
+}
+
+// GetLikedTracks returns the current user's liked tracks as a paginated list,
+// ordered by most recently liked first. Query params: page (default 1), per_page (default 50, max 100).
+func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	page := int64(1)
+	if p := r.URL.Query().Get("page"); p != "" {
+		parsed, err := strconv.ParseInt(p, 10, 64)
+		if err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	perPage := int64(50)
+	if pp := r.URL.Query().Get("per_page"); pp != "" {
+		parsed, err := strconv.ParseInt(pp, 10, 64)
+		if err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+
+	offset := (page - 1) * perPage
+	ctx := r.Context()
+
+	total, err := app.Queries.CountUserLikedTracks(ctx, userID)
+	if err != nil {
+		app.Logger.Error("failed to count liked tracks", "error", err, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch liked tracks count"))
+		return
+	}
+
+	tracks, err := app.Queries.GetLikedTracksForUser(ctx, database.GetLikedTracksForUserParams{
+		UserID: userID,
+		Limit:  perPage,
+		Offset: offset,
+	})
+	if err != nil {
+		app.Logger.Error("failed to get liked tracks", "error", err, "userID", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch liked tracks"))
+		return
+	}
+
+	totalPages := total / perPage
+	if total%perPage > 0 {
+		totalPages++
+	}
+
+	res := helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"tracks":      tracks,
+			"total":       total,
+			"page":        page,
+			"per_page":    perPage,
+			"total_pages": totalPages,
+			"has_more":    page < totalPages,
 		},
 	}
 

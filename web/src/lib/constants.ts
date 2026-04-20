@@ -73,6 +73,8 @@ export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 export const PLAYLISTS_KEY = "playlists";
 export const PLAYLIST_DETAILS_KEY = "playlist-details";
 export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
+export const LIKED_TRACKS_KEY = "liked-tracks";
+export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
 
 // playback — single source of truth for stream modes (ids + labels + metadata)
 export const STREAM_MODES = [
@@ -135,10 +137,10 @@ export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
 /** hls.js: manifest / level / fragment request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
-/** Resume HLS sessions this far before the target so short rewinds work immediately. */
-export const HLS_RESUME_REWIND_BUFFER_SEC = 120;
-/** hls.js: seconds of buffer to keep behind the playhead. Match the resume rewind window. */
-export const HLS_JS_BACK_BUFFER_LENGTH_SEC = HLS_RESUME_REWIND_BUFFER_SEC;
+/** Resume HLS sessions this far before the target so short rewinds work without rebasing. */
+export const HLS_RESUME_REWIND_BUFFER_SEC = 10;
+/** hls.js: seconds of already-played buffer to keep behind the playhead. */
+export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 120;
 
 // playback settings dialog (movie play UI)
 export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";

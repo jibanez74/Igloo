@@ -1,6 +1,5 @@
-import { useRef, useEffect, useState } from "react";
+        import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -20,6 +19,7 @@ import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
 import ResumeDialog from "@/components/ResumeDialog";
+import ChapterMenu from "@/components/ChapterMenu";
 import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
@@ -55,13 +55,13 @@ import {
   tryWebKitVideoExitFullscreen,
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
-import { unwrapStringOrUndefined } from "@/lib/nullable";
+import { unwrapFloatOrUndefined, unwrapStringOrUndefined } from "@/lib/nullable";
 import type { PlaySearchParams } from "@/types";
 import { playSearchSchema } from "@/types/movie-play";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
-  validateSearch: zodSearchValidator(playSearchSchema),
+  validateSearch: playSearchSchema,
   loader: async ({ context, params }) => {
     const movieId = parseInt(params.id, 10);
     if (!Number.isNaN(movieId) && movieId > 0) {
@@ -85,6 +85,11 @@ const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 const WATCH_PROGRESS_MIN_SECONDS = 180;
 const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+
+type ChapterAnnouncement = {
+  key: number;
+  text: string;
+};
 
 function buildStreamUrl(
   movieId: number,
@@ -192,6 +197,10 @@ function PlayMoviePage() {
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
+  const [chapterAnnouncement, setChapterAnnouncement] = useState<ChapterAnnouncement>({
+    key: 0,
+    text: "",
+  });
 
   const chromeFullscreenMode = isFullscreen || isImmersiveViewport;
 
@@ -225,6 +234,7 @@ function PlayMoviePage() {
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
   const subtitleStreams = techData?.data?.subtitles ?? [];
+  const chapters = techData?.data?.chapters ?? [];
   const primaryVideo = techLoaded
     ? getPrimaryVideoStream(videoStreams)
     : undefined;
@@ -260,6 +270,7 @@ function PlayMoviePage() {
   const hlsStartSec = isHlsPlayback
     ? Math.max(0, start - HLS_RESUME_REWIND_BUFFER_SEC)
     : 0;
+  const hlsPlaybackOffsetSec = isHlsPlayback ? Math.max(0, start - hlsStartSec) : 0;
   const streamUrl = buildStreamUrl(
     movieId,
     resolvedMode,
@@ -270,6 +281,24 @@ function PlayMoviePage() {
   const qualityLabel =
     STREAM_MODES.find(m => m.id === resolvedMode)?.label ?? resolvedMode;
   const modeUnavailable = availableModes !== null && availableModes.length === 0;
+  const movieDurationSec =
+    unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
+    unwrapFloatOrUndefined(movie?.duration);
+  const toAbsolutePlaybackTime = (timeSec: number) =>
+    isHlsPlayback ? hlsStartSec + timeSec : timeSec;
+  const toMediaTime = (timeSec: number) =>
+    isHlsPlayback ? Math.max(0, timeSec - hlsStartSec) : timeSec;
+  const toAbsoluteDuration = (durationSec: number) => {
+    if (!isHlsPlayback) return durationSec;
+    if (movieDurationSec && movieDurationSec > 0) {
+      return movieDurationSec;
+    }
+    return hlsStartSec + durationSec;
+  };
+  const displayedDuration =
+    isHlsPlayback && movieDurationSec && movieDurationSec > 0
+      ? movieDurationSec
+      : duration;
 
   const subtitleInfo = (() => {
     if (resolvedSubtitleTrack === null || !techLoaded) return null;
@@ -427,7 +456,7 @@ function PlayMoviePage() {
     const video = videoRef.current;
     if (!video) return;
     const t = clampPlaybackTime(newTime);
-    const currentVideoTime = video.currentTime;
+    const currentVideoTime = toAbsolutePlaybackTime(video.currentTime);
     const shouldRebaseHlsSession =
       isHlsPlayback &&
       (t < hlsStartSec ||
@@ -438,12 +467,20 @@ function PlayMoviePage() {
       return;
     }
 
-    video.currentTime = t;
+    video.currentTime = toMediaTime(t);
     setCurrentTime(t);
   };
 
   const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
   const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
+
+  const handleChapterSelect = (startTimeSec: number, title: string) => {
+    seek(startTimeSec);
+    setChapterAnnouncement((prev) => ({
+      key: prev.key + 1,
+      text: `Jumped to chapter: ${title}`,
+    }));
+  };
 
   const toggleFullscreen = async () => {
     const container = containerRef.current;
@@ -579,6 +616,11 @@ function PlayMoviePage() {
       video.removeEventListener("canplay", resumePlayback);
     };
   }, [pendingAutoPlayOnLoad, streamUrl]);
+
+  useEffect(() => {
+    if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
+    durationRef.current = movieDurationSec;
+  }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
     if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
@@ -962,6 +1004,11 @@ function PlayMoviePage() {
       aria-label={`Video player for ${title}`}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
+      <LiveAnnouncer
+        message={chapterAnnouncement.text}
+        announcementKey={chapterAnnouncement.key}
+        politeness="assertive"
+      />
       <ResumeDialog
         open={resumeDialogOpen}
         savedProgressSec={savedProgressSec}
@@ -1024,21 +1071,24 @@ function PlayMoviePage() {
             void handleEndedSave();
           }}
           onTimeUpdate={(time) => {
-            currentTimeRef.current = time;
-            setCurrentTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time);
+            currentTimeRef.current = absoluteTime;
+            setCurrentTime(absoluteTime);
           }}
           onDurationChange={(nextDuration) => {
-            durationRef.current = nextDuration;
-            setDuration(nextDuration);
+            const absoluteDuration = toAbsoluteDuration(nextDuration);
+            durationRef.current = absoluteDuration;
+            setDuration(absoluteDuration);
           }}
           onNativeError={handleNativePlaybackError}
           subtitleTrack={subtitleInfo}
-          startSec={start}
+          startSec={isHlsPlayback ? hlsPlaybackOffsetSec : start}
           onStartApplied={(time) => {
-            currentTimeRef.current = time;
-            setCurrentTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time);
+            currentTimeRef.current = absoluteTime;
+            setCurrentTime(absoluteTime);
           }}
-          onSessionLost={handleSessionLost}
+          onSessionLost={(time) => handleSessionLost(toAbsolutePlaybackTime(time))}
         />
       </div>
 
@@ -1070,7 +1120,7 @@ function PlayMoviePage() {
               </span>
               <span className="text-slate-600">/</span>
               <span className="text-sm text-slate-400 tabular-nums">
-                {formatTimeSeconds(duration)}
+                {formatTimeSeconds(displayedDuration)}
               </span>
             </div>
 
@@ -1113,6 +1163,11 @@ function PlayMoviePage() {
               >
                 {qualityLabel}
               </span>
+              <ChapterMenu
+                chapters={chapters}
+                currentTimeSec={currentTime}
+                onSelectChapter={handleChapterSelect}
+              />
               <VolumeControl
                 mediaRef={videoRef}
                 variant="minimized"

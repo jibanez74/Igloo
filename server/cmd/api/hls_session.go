@@ -17,16 +17,29 @@ import (
 
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
-	TempDir       string
-	Cmd           *exec.Cmd
-	DurationSec   float64
-	StartSec      float64
-	StartSegment  int64
-	Exited        bool
-	ExitErr       error
-	FinalPlaylist string
-	ExitMu        sync.Mutex
-	CopyVideo     bool // true when FFmpeg uses -c:v copy (remux or h264 source)
+	TempDir          string
+	Cmd              *exec.Cmd
+	DurationSec      float64
+	StartSec         float64
+	StartSegment     int64
+	Exited           bool
+	ExitErr          error
+	FinalPlaylist    string
+	ExitMu           sync.Mutex
+	RequestedProfile string
+	EffectiveProfile string
+	CopyVideo        bool // true when FFmpeg uses -c:v copy for the effective session profile
+}
+
+type hlsSessionStartParams struct {
+	Movie            database.Movie
+	PrimaryVideo     database.VideoStream
+	SelectedAudio    database.AudioStream
+	RequestedProfile string
+	EffectiveProfile string
+	AudioTrack       int
+	StartSec         float64
+	DurationSec      float64
 }
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
@@ -139,6 +152,116 @@ func cleanupHLSSession(session *HLSSession) {
 	if session.TempDir != "" {
 		_ = os.RemoveAll(session.TempDir)
 	}
+}
+
+func (app *Application) startHLSSession(params hlsSessionStartParams) (*HLSSession, error) {
+	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
+	audioCodec := strings.ToLower(params.SelectedAudio.Codec)
+	sourceIsHDR := isHDRStream(params.PrimaryVideo)
+	copyVideo := params.EffectiveProfile == helpers.HLS_PROFILE_REMUX
+	copyAudio := audioCodec == "aac"
+	tonemapHDR := sourceIsHDR && params.EffectiveProfile != helpers.HLS_PROFILE_REMUX
+
+	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
+	if app.Settings != nil &&
+		app.Settings.HardwareAccelerationDevice.Valid &&
+		app.Settings.HardwareAccelerationDevice.String != "" {
+		hwDevice = app.Settings.HardwareAccelerationDevice.String
+	}
+
+	tempDir, err := os.MkdirTemp("", "igloo-hls-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	startSegment := int64(params.StartSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
+	session := &HLSSession{
+		TempDir:          tempDir,
+		DurationSec:      params.DurationSec,
+		StartSec:         params.StartSec,
+		StartSegment:     startSegment,
+		RequestedProfile: params.RequestedProfile,
+		EffectiveProfile: params.EffectiveProfile,
+		CopyVideo:        copyVideo,
+	}
+
+	videoStreamIndex := int(params.PrimaryVideo.StreamIndex)
+	audioStreamIndex := int(params.SelectedAudio.StreamIndex)
+
+	app.Logger.Info("hls session starting",
+		"movie_id", params.Movie.ID,
+		"requested_profile", params.RequestedProfile,
+		"effective_profile", params.EffectiveProfile,
+		"audio_track", params.AudioTrack,
+		"start_sec", params.StartSec,
+		"start_segment", startSegment,
+		"video_stream_index", videoStreamIndex,
+		"audio_stream_index", audioStreamIndex,
+		"video_codec", videoCodec,
+		"audio_codec", audioCodec,
+		"copy_video", copyVideo,
+		"copy_audio", copyAudio,
+		"source_is_hdr", sourceIsHDR,
+		"tonemap_hdr", tonemapHDR,
+	)
+
+	startTime := time.Now()
+	onExit := func(exitErr error, stderrTail []string) {
+		if exitErr == nil {
+			raw, readErr := os.ReadFile(filepath.Join(tempDir, "playlist.m3u8"))
+			if readErr == nil {
+				session.ExitMu.Lock()
+				session.FinalPlaylist = finalizeEventPlaylist(string(raw))
+				session.ExitMu.Unlock()
+			}
+		}
+
+		session.ExitMu.Lock()
+		session.Exited = true
+		session.ExitErr = exitErr
+		session.ExitMu.Unlock()
+
+		elapsed := time.Since(startTime).Round(time.Second)
+
+		if exitErr != nil {
+			app.Logger.Error("hls session failed",
+				"movie_id", params.Movie.ID,
+				"requested_profile", params.RequestedProfile,
+				"effective_profile", params.EffectiveProfile,
+				"elapsed", elapsed.String(),
+				"error", exitErr.Error(),
+				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
+			)
+			return
+		}
+
+		app.Logger.Info("hls session finished",
+			"movie_id", params.Movie.ID,
+			"requested_profile", params.RequestedProfile,
+			"effective_profile", params.EffectiveProfile,
+			"elapsed", elapsed.String(),
+		)
+	}
+
+	cmd, err := app.FFmpeg.RunHLS(context.Background(), ffmpeg.HLSParams{
+		SourcePath:       params.Movie.FilePath,
+		OutDir:           tempDir,
+		Profile:          params.EffectiveProfile,
+		VideoStreamIndex: videoStreamIndex,
+		AudioStreamIndex: audioStreamIndex,
+		HWDevice:         hwDevice,
+		CopyVideo:        copyVideo,
+		CopyAudio:        copyAudio,
+		StartSec:         params.StartSec,
+		TonemapHDR:       tonemapHDR,
+	}, onExit)
+	if err != nil {
+		cleanupHLSSession(session)
+		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	session.Cmd = cmd
+	return session, nil
 }
 
 // GetOrCreateHLSSession returns a cached session or creates a new one.
@@ -317,108 +440,143 @@ func (app *Application) createHLSSession(
 
 	primaryVideo := videoStreams[0]
 	selectedAudio := audioStreams[audioTrack]
+	requestedProfile := profile
+	effectiveProfile := profile
+	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
+	videoCodec := strings.ToLower(strings.TrimSpace(primaryVideo.Codec))
+	safetyCacheKey := remuxSafetyFingerprint(movie, primaryVideo)
+	needsRemuxPreflight := false
 
-	videoCodec := strings.ToLower(primaryVideo.Codec)
-	audioCodec := strings.ToLower(selectedAudio.Codec)
-	sourceIsHDR := isHDRStream(primaryVideo)
-
-	// Only copy the video stream for remux; all other profiles run through
-	// HLSProfileConfig so their encoding settings are applied. HDR sources
-	// on non-remux profiles are tone-mapped to BT.709 SDR.
-	copyVideo := profile == helpers.HLS_PROFILE_REMUX
-	copyAudio := audioCodec == "aac"
-	tonemapHDR := sourceIsHDR && profile != helpers.HLS_PROFILE_REMUX
-
-	hwDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
-	if app.Settings.HardwareAccelerationDevice.Valid && app.Settings.HardwareAccelerationDevice.String != "" {
-		hwDevice = app.Settings.HardwareAccelerationDevice.String
-	}
-
-	tempDir, err := os.MkdirTemp("", "igloo-hls-*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp dir: %w", err)
-	}
-
-	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
-	session := &HLSSession{
-		TempDir:      tempDir,
-		DurationSec:  durationSec,
-		StartSec:     startSec,
-		StartSegment: startSegment,
-		CopyVideo:    copyVideo,
-	}
-
-	videoStreamIndex := int(primaryVideo.StreamIndex)
-	audioStreamIndex := int(selectedAudio.StreamIndex)
-
-	app.Logger.Info("hls session starting",
-		"movie_id", movieID,
-		"profile", profile,
-		"audio_track", audioTrack,
-		"start_sec", startSec,
-		"start_segment", startSegment,
-		"video_stream_index", videoStreamIndex,
-		"audio_stream_index", audioStreamIndex,
-		"video_codec", videoCodec,
-		"audio_codec", audioCodec,
-		"copy_video", copyVideo,
-		"copy_audio", copyAudio,
-		"source_is_hdr", sourceIsHDR,
-		"tonemap_hdr", tonemapHDR,
-	)
-
-	startTime := time.Now()
-	onExit := func(exitErr error, stderrTail []string) {
-		if exitErr == nil {
-			raw, readErr := os.ReadFile(filepath.Join(tempDir, "playlist.m3u8"))
-			if readErr == nil {
-				session.ExitMu.Lock()
-				session.FinalPlaylist = finalizeEventPlaylist(string(raw))
-				session.ExitMu.Unlock()
-			}
-		}
-
-		session.ExitMu.Lock()
-		session.Exited = true
-		session.ExitErr = exitErr
-		session.ExitMu.Unlock()
-
-		elapsed := time.Since(startTime).Round(time.Second)
-
-		if exitErr != nil {
-			app.Logger.Error("hls session failed",
+	if requestedProfile == helpers.HLS_PROFILE_REMUX {
+		if !helpers.IsBrowserCompatibleH264(videoCodec) {
+			fallbackReason := fmt.Sprintf(
+				"requested remux is not supported for codec %q",
+				primaryVideo.Codec,
+			)
+			effectiveProfile = fallbackProfile
+			app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
+			app.Logger.Warn("remux safety fallback engaged",
 				"movie_id", movieID,
-				"profile", profile,
-				"elapsed", elapsed.String(),
-				"error", exitErr.Error(),
-				"ffmpeg_tail", strings.Join(stderrTail, "\n"),
+				"requested_profile", requestedProfile,
+				"effective_profile", effectiveProfile,
+				"validation_result", "unsafe",
+				"fallback_reason", fallbackReason,
 			)
 		} else {
-			app.Logger.Info("hls session finished",
-				"movie_id", movieID,
-				"profile", profile,
-				"elapsed", elapsed.String(),
-			)
+			verdict, ok := app.getRemuxSafetyVerdict(safetyCacheKey)
+			if ok {
+				if verdict.Safe {
+					app.Logger.Info("remux safety cache hit",
+						"movie_id", movieID,
+						"requested_profile", requestedProfile,
+						"effective_profile", requestedProfile,
+						"validation_result", "safe",
+					)
+				} else {
+					effectiveProfile = fallbackProfile
+					fallbackReason := verdict.Reason
+					if fallbackReason == "" {
+						fallbackReason = "cached unsafe remux"
+					}
+					app.Logger.Warn("remux safety fallback engaged",
+						"movie_id", movieID,
+						"requested_profile", requestedProfile,
+						"effective_profile", effectiveProfile,
+						"validation_result", "unsafe",
+						"fallback_reason", fallbackReason,
+					)
+				}
+			} else {
+				needsRemuxPreflight = true
+			}
 		}
 	}
 
-	cmd, err := app.FFmpeg.RunHLS(context.Background(), ffmpeg.HLSParams{
-		SourcePath:       movie.FilePath,
-		OutDir:           tempDir,
-		Profile:          profile,
-		VideoStreamIndex: videoStreamIndex,
-		AudioStreamIndex: audioStreamIndex,
-		HWDevice:         hwDevice,
-		CopyVideo:        copyVideo,
-		CopyAudio:        copyAudio,
+	session, err := app.startHLSSession(hlsSessionStartParams{
+		Movie:            movie,
+		PrimaryVideo:     primaryVideo,
+		SelectedAudio:    selectedAudio,
+		RequestedProfile: requestedProfile,
+		EffectiveProfile: effectiveProfile,
+		AudioTrack:       audioTrack,
 		StartSec:         startSec,
-		TonemapHDR:       tonemapHDR,
-	}, onExit)
+		DurationSec:      durationSec,
+	})
 	if err != nil {
-		cleanupHLSSession(session)
-		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
+		return nil, err
 	}
 
-	session.Cmd = cmd
+	if !needsRemuxPreflight {
+		return session, nil
+	}
+
+	waitErr := waitForRemuxPreflight(
+		session,
+		helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
+		helpers.HLS_REMUX_PREVALIDATE_TIMEOUT,
+	)
+	if waitErr != nil {
+		fallbackReason := waitErr.Error()
+		// Preflight wait failures can be transient (timeout, early exit, partial output),
+		// so fall back without persisting an unsafe remux verdict.
+		app.Logger.Warn("remux safety fallback engaged",
+			"movie_id", movieID,
+			"requested_profile", requestedProfile,
+			"effective_profile", fallbackProfile,
+			"validation_result", "preflight_failed",
+			"fallback_reason", fallbackReason,
+		)
+		cleanupHLSSession(session)
+		return app.startHLSSession(hlsSessionStartParams{
+			Movie:            movie,
+			PrimaryVideo:     primaryVideo,
+			SelectedAudio:    selectedAudio,
+			RequestedProfile: requestedProfile,
+			EffectiveProfile: fallbackProfile,
+			AudioTrack:       audioTrack,
+			StartSec:         startSec,
+			DurationSec:      durationSec,
+		})
+	}
+
+	validationSummary, err := ffmpeg.ValidateRemuxSafety(
+		session.TempDir,
+		helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
+	)
+	if err != nil {
+		fallbackReason := err.Error()
+		app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
+		app.Logger.Warn("remux safety fallback engaged",
+			"movie_id", movieID,
+			"requested_profile", requestedProfile,
+			"effective_profile", fallbackProfile,
+			"validation_result", "unsafe",
+			"checked_segments", validationSummary.CheckedSegments,
+			"checked_sync_samples", validationSummary.CheckedSyncSamples,
+			"fallback_reason", fallbackReason,
+		)
+		cleanupHLSSession(session)
+		return app.startHLSSession(hlsSessionStartParams{
+			Movie:            movie,
+			PrimaryVideo:     primaryVideo,
+			SelectedAudio:    selectedAudio,
+			RequestedProfile: requestedProfile,
+			EffectiveProfile: fallbackProfile,
+			AudioTrack:       audioTrack,
+			StartSec:         startSec,
+			DurationSec:      durationSec,
+		})
+	}
+
+	app.setRemuxSafetyVerdict(safetyCacheKey, true, "validated safe remux")
+	app.Logger.Info("remux safety validated",
+		"movie_id", movieID,
+		"requested_profile", requestedProfile,
+		"effective_profile", requestedProfile,
+		"validation_result", "safe",
+		"checked_segments", validationSummary.CheckedSegments,
+		"checked_sync_samples", validationSummary.CheckedSyncSamples,
+	)
+
 	return session, nil
 }

@@ -161,16 +161,7 @@ func (app *Application) processChapters(
 	}
 
 	for _, chapter := range chapters {
-		// Parse start time (convert from seconds to milliseconds)
-		startTime := int64(0)
-		if chapter.Start > 0 {
-			startTime = int64(chapter.Start)
-		} else if chapter.StartTime != "" {
-			// Parse duration string (e.g., "123.456")
-			if duration, err := helpers.ParseDurationMs(chapter.StartTime); err == nil {
-				startTime = duration
-			}
-		}
+		startTime := chapterStartTimeSeconds(chapter)
 
 		// Leave thumb empty (chapter thumbnail generation will be implemented later)
 		_, err := qtx.InsertChapter(ctx, database.InsertChapterParams{

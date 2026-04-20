@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { showActionFailed } from "@/lib/toast-helpers";
@@ -19,12 +19,9 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
   const [isLoading, setIsLoading] = useState(false);
-  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
+  const [failedCoverUrl, setFailedCoverUrl] = useState<string | null>(null);
 
   const coverUrl = getMediaImageUrl(unwrapString(cover));
-  useEffect(() => {
-    setCoverLoadFailed(false);
-  }, [id, coverUrl]);
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(albumDetailsQueryOpts(id));
@@ -54,7 +51,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   };
 
   const musicianName = unwrapString(musician);
-  const showCover = coverUrl && !coverLoadFailed;
+  const showCover = coverUrl && failedCoverUrl !== coverUrl;
 
   return (
     <article
@@ -81,7 +78,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
               fetchPriority="low"
               sizes="(min-width: 1024px) 16.66vw, (min-width: 768px) 25vw, (min-width: 640px) 33.33vw, 50vw"
               className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-              onError={() => setCoverLoadFailed(true)}
+              onError={() => setFailedCoverUrl(coverUrl)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

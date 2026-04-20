@@ -15,11 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// HLSManifest serves GET /api/movies/:id/hls/:profile/playlist.m3u8
-// Returns a complete VOD M3U8 immediately (generated from known duration).
-// All segments are listed upfront with #EXT-X-ENDLIST, so hls.js treats it
-// as on-demand: starts from 0, shows full duration bar, allows seeking.
-// FFmpeg produces the actual segment files in the background.
+// HLSManifest serves GET /api/movies/:id/hls/:profile/playlist.m3u8.
+//
+// Rebased HLS sessions are exposed as session-local VOD playlists that start
+// at segment_0 on disk. The web player keeps absolute movie time in the UI and
+// converts seeks to session-relative media time client-side.
 func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	movieID, profile, audioTrack, startSec, ok := parseHLSParams(w, r)
 	if !ok {
@@ -34,6 +34,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
+	querySuffix := buildHLSAssetQuerySuffix(audioTrack, r.URL.Query())
 
 	session.ExitMu.Lock()
 	finalPlaylist := session.FinalPlaylist
@@ -41,19 +42,20 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 	var playlist string
 	if finalPlaylist != "" {
-		if session.StartSegment > 0 {
-			playlist = buildResumePlaylist(finalPlaylist, session.DurationSec, baseURL, audioTrack, session.StartSegment)
-		} else {
-			playlist = rewritePlaylistURLs(finalPlaylist, baseURL, audioTrack)
-		}
+		playlist = rewritePlaylistURLs(finalPlaylist, baseURL, querySuffix)
 	} else {
-		playlist = generateVODPlaylist(session.DurationSec, baseURL, audioTrack, session.CopyVideo)
+		playlist = generateVODPlaylist(
+			sessionPlaylistDurationSec(session),
+			baseURL,
+			querySuffix,
+			session.CopyVideo,
+		)
 	}
 
 	app.RefreshHLSSessionTTL(HLSSessionKey(movieID, profile, audioTrack), session)
 
 	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
 }
@@ -63,7 +65,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 // Waits for the requested segment file to appear on disk (FFmpeg produces
 // them sequentially in the background), then serves it.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
-	movieID, profile, audioTrack, _, ok := parseHLSParams(w, r)
+	movieID, profile, audioTrack, startSec, ok := parseHLSParams(w, r)
 	if !ok {
 		return
 	}
@@ -83,23 +85,25 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	session := raw.(*HLSSession)
 	app.RefreshHLSSessionTTL(key, session)
 
-	diskFilename, err := resolveHLSDiskFilename(session, filename)
-	if err != nil {
-		if errors.Is(err, errSegmentBeforeStart) {
-			helpers.ErrorJSON(w, errors.New("segment not available"), http.StatusNotFound)
-		} else {
-			helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
-		}
+	if session.StartSec != startSec {
+		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
 
-	filePath := filepath.Join(session.TempDir, diskFilename)
+	err := validateHLSFilename(filename)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid segment filename"), http.StatusBadRequest)
+		return
+	}
+
+	filePath := filepath.Join(session.TempDir, filename)
 
 	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
 	pollCount := 0
 	for time.Now().Before(deadline) {
-		if segmentComplete(session, diskFilename) {
+		if segmentComplete(session, filename) {
 			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
+			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
 			return
 		}
@@ -125,32 +129,33 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
 }
 
-// errSegmentBeforeStart is returned by resolveHLSDiskFilename when the
-// requested segment index is before the session's start segment. The caller
-// should respond with 404 so hls.js triggers its session-lost recovery path.
-var errSegmentBeforeStart = errors.New("segment before session start")
-
-func resolveHLSDiskFilename(session *HLSSession, filename string) (string, error) {
-	if filename == helpers.HLS_INIT_FILENAME || session.StartSegment <= 0 {
-		return filename, nil
+func sessionPlaylistDurationSec(session *HLSSession) float64 {
+	if session == nil {
+		return 0
 	}
 
-	reqIdx, err := parseSegmentIndex(filename)
-	if err != nil {
-		return "", err
+	if session.StartSec <= 0 {
+		return session.DurationSec
 	}
 
-	mappedIdx := reqIdx - session.StartSegment
-	if mappedIdx < 0 {
-		return "", errSegmentBeforeStart
+	remaining := session.DurationSec - session.StartSec
+	if remaining > 0 {
+		return remaining
 	}
 
-	return fmt.Sprintf(
-		"%s%d%s",
-		helpers.HLS_SEGMENT_FILENAME_PREFIX,
-		mappedIdx,
-		helpers.HLS_SEGMENT_FILENAME_SUFFIX,
-	), nil
+	return 0
+}
+
+func validateHLSFilename(filename string) error {
+	if filename == helpers.HLS_INIT_FILENAME {
+		return nil
+	}
+
+	if _, err := parseSegmentIndex(filename); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request) (movieID int64, profile string, audioTrack int, startSec float64, ok bool) {

@@ -5,7 +5,7 @@ import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { AUTH_USER_KEY } from "@/lib/constants";
-import loginBg from "@/assets/images/login-bg.jpg";
+import loginBg from "@/assets/images/login-bg.webp";
 import {
   Card,
   CardContent,
@@ -30,6 +30,11 @@ function LoginPage() {
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
+  const inputClassName =
+    "border-white/25 bg-slate-50/92 text-slate-950 placeholder:text-slate-500 shadow-sm backdrop-blur-sm " +
+    "focus-visible:border-amber-400/70 focus-visible:ring-amber-400/20";
+  const inputIconClassName =
+    "absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-500";
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,10 +86,13 @@ function LoginPage() {
       <meta name="description" content={pageDescription} />
 
       <div className="relative min-h-screen">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${loginBg})` }}
+        <img
+          src={loginBg}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 size-full object-cover"
+          decoding="async"
+          fetchPriority="high"
         />
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-slate-950/70" />
@@ -116,7 +124,7 @@ function LoginPage() {
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail
-                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      className={inputIconClassName}
                       aria-hidden="true"
                     />
                     <Input
@@ -127,7 +135,7 @@ function LoginPage() {
                       inputMode="email"
                       autoComplete="username"
                       required
-                      className="pl-10"
+                      className={`pl-10 ${inputClassName}`}
                       disabled={isSubmitting}
                     />
                   </div>
@@ -138,7 +146,7 @@ function LoginPage() {
                   <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Lock
-                      className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+                      className={inputIconClassName}
                       aria-hidden="true"
                     />
                     <Input
@@ -148,13 +156,13 @@ function LoginPage() {
                       id="password"
                       name="password"
                       required
-                      className="px-10"
+                      className={`px-10 ${inputClassName}`}
                       disabled={isSubmitting}
                     />
                     <button
                       type="button"
                       className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
-                               text-slate-400 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                               text-slate-700 hover:text-slate-900 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }

@@ -22,6 +22,8 @@ APIs, features, playback workflows, and client applications are still evolving.
 
 The current focus is the server platform and the React web client contained in this repository. Dedicated TV and mobile clients are planned as separate projects.
 
+The goal is for the project to release a beta version by the end of May 2026, and a v1 stable release by fall of the same year.
+
 ## Future Fixes
 
 - Watch room WebSocket broadcast delivery should be made resilient to slow clients. The current server-side broadcast path writes to each socket serially, so one slow connection can delay room events for everyone else. A future version should move watch room clients to dedicated buffered outbound queues with a single writer loop per client and non-blocking broadcast fan-out.
@@ -208,8 +210,8 @@ The server **requires** a valid `server/.env` file for normal startup: `server/c
 | `STATIC_DIR`                             | Static file directory for avatars, downloaded images, and related assets |
 | `LOGS_DIR`                               | Log directory when not running in debug mode                             |
 | `TMDB_API_KEY`                           | TMDB API v3 key                                                          |
-| `SPOTIFY_CLIENT_ID`                     | Spotify client ID for optional music metadata enrichment                 |
-| `SPOTIFY_CLIENT_SECRET`                 | Spotify client secret for optional music metadata enrichment             |
+| `SPOTIFY_CLIENT_ID`                      | Spotify client ID for optional music metadata enrichment                 |
+| `SPOTIFY_CLIENT_SECRET`                  | Spotify client secret for optional music metadata enrichment             |
 | `JELLYFIN_TOKEN`                         | Optional Jellyfin integration token                                      |
 | `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories                                           |
 | `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded                            |

@@ -34,6 +34,9 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 		tail := strings.TrimSpace(stderr.String())
 		if len(tail) > 4096 {
 			tail = tail[len(tail)-4096:]
+			for len(tail) > 0 && tail[0]&0xC0 == 0x80 {
+				tail = tail[1:]
+			}
 		}
 		if tail != "" {
 			return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w: %s", err, tail)

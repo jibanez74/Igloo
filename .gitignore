@@ -8,9 +8,6 @@
 /server/cmd/internal/ffmpeg/ffmpeg_mac_arm
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
 
-# Local movie fixtures for manual/ffmpeg testing (often multi-GB; never commit)
-/server/cmd/internal/ffmpeg/*.mkv
-
 # IDE and editor
 .idea/
 .vscode/
@@ -20,14 +17,12 @@
 .env
 .env.local
 
-# Database files
+# Database files and directories created by app at start up
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
-
-# Directories created by the server at startup
-/server/logs/*
+/server/cmd/internal/database
 /server/static/*
 
 # Embedded frontend assets (generated during build)
@@ -41,14 +36,19 @@
 /server/cmd/api/webdist
 
 # Frontend (web)
-/web/node_modules/*
+/web/node_modules/
 /web/dist
+/web/.tanstack/
+/web/src/routeTree.gen.ts
 
 # OS files
 .DS_Store
 
-# Agent instructions
+# AU files or directories
+.claude/
+.codex/
 AGENTS.md
+CLAUDE.md
 
 # Testing media files directory
 /server/media/*

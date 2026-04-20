@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-app-ready="false">
 
 <head>
   <meta charset="UTF-8" />
@@ -8,10 +8,16 @@
   <meta name="description"
     content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
   <meta name="theme-color" content="#0f172a" />
+  <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>
 
-<body
-  class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-amber-400 selection:text-slate-900">
+<body>
+  <div id="initial-splash" role="status" aria-live="polite" aria-atomic="true">
+    <div class="initial-splash__content">
+      <p class="initial-splash__title">Igloo</p>
+      <p class="initial-splash__message">Loading your media library...</p>
+    </div>
+  </div>
   <div id="app"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

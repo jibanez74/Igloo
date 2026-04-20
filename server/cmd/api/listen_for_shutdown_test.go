@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -15,7 +16,11 @@ import (
 	"testing"
 	"time"
 
+	spotifyapi "igloo/cmd/internal/spotify"
+	tmdbapi "igloo/cmd/internal/tmdb"
+
 	"github.com/gorilla/websocket"
+	"github.com/zmb3/spotify/v2"
 )
 
 const (
@@ -24,9 +29,58 @@ const (
 	listenForShutdownLoggerMarkerEnv     = "IGLOO_LISTEN_FOR_SHUTDOWN_LOGGER_MARKER"
 	listenForShutdownSocketMarkerEnv     = "IGLOO_LISTEN_FOR_SHUTDOWN_SOCKET_MARKER"
 	listenForShutdownHLSMarkerEnv        = "IGLOO_LISTEN_FOR_SHUTDOWN_HLS_MARKER"
+	listenForShutdownCacheMarkerEnv      = "IGLOO_LISTEN_FOR_SHUTDOWN_CACHE_MARKER"
 )
 
-func TestListenForShutdown_ShutsDownWebSocketsLoggerAndHLSSessions(t *testing.T) {
+type shutdownTestSpotify struct {
+	cleared bool
+}
+
+func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotify.FullAlbum, error) {
+	return nil, nil
+}
+
+func (s *shutdownTestSpotify) SearchArtistByName(_ context.Context, _ string) (*spotify.FullArtist, error) {
+	return nil, nil
+}
+
+func (s *shutdownTestSpotify) ClearAllCaches() {
+	s.cleared = true
+}
+
+var _ spotifyapi.SpotifyInterface = (*shutdownTestSpotify)(nil)
+
+type shutdownTestTmdb struct {
+	cleared bool
+}
+
+func (t *shutdownTestTmdb) GetTmdbMovieByID(_ context.Context, _ *tmdbapi.TmdbMovie) error {
+	return nil
+}
+
+func (t *shutdownTestTmdb) GetTmdbMovieByTitle(_ context.Context, _ *tmdbapi.TmdbMovie) error {
+	return nil
+}
+
+func (t *shutdownTestTmdb) SearchMoviesByTitleAndYear(_ context.Context, _ string, _ ...int) ([]tmdbapi.TmdbMovie, error) {
+	return nil, nil
+}
+
+func (t *shutdownTestTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdbapi.TmdbMovie, error) {
+	return nil, nil
+}
+
+func (t *shutdownTestTmdb) GetTmdbPopularMovies(_ context.Context, _ ...string) ([]*tmdbapi.TmdbMovie, error) {
+	return nil, nil
+}
+
+func (t *shutdownTestTmdb) ClearCache() {
+	t.cleared = true
+}
+
+var _ tmdbapi.TmdbInterface = (*shutdownTestTmdb)(nil)
+
+func TestListenForShutdown_CleansUpCachesWebSocketsLoggerAndHLSSessions(t *testing.T) {
 	if os.Getenv(listenForShutdownHelperEnv) == "1" {
 		runListenForShutdownHelper(t)
 		return
@@ -36,14 +90,16 @@ func TestListenForShutdown_ShutsDownWebSocketsLoggerAndHLSSessions(t *testing.T)
 	loggerMarker := filepath.Join(tempDir, "logger-closed.txt")
 	socketMarker := filepath.Join(tempDir, "socket-closed.txt")
 	hlsMarker := filepath.Join(tempDir, "hls-cleanup.txt")
+	cacheMarker := filepath.Join(tempDir, "cache-cleanup.txt")
 
-	cmd := exec.Command(os.Args[0], "-test.run=^TestListenForShutdown_ShutsDownWebSocketsLoggerAndHLSSessions$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestListenForShutdown_CleansUpCachesWebSocketsLoggerAndHLSSessions$")
 	cmd.Env = append(
 		os.Environ(),
 		listenForShutdownHelperEnv+"=1",
 		listenForShutdownLoggerMarkerEnv+"="+loggerMarker,
 		listenForShutdownSocketMarkerEnv+"="+socketMarker,
 		listenForShutdownHLSMarkerEnv+"="+hlsMarker,
+		listenForShutdownCacheMarkerEnv+"="+cacheMarker,
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -84,6 +140,25 @@ func TestListenForShutdown_ShutsDownWebSocketsLoggerAndHLSSessions(t *testing.T)
 	if !strings.Contains(hlsResult, "process_exited=true") {
 		t.Fatalf("expected HLS cleanup marker to confirm process exit, got %q", hlsResult)
 	}
+
+	cacheData, err := os.ReadFile(cacheMarker)
+	if err != nil {
+		t.Fatalf("read cache marker: %v", err)
+	}
+
+	cacheResult := strings.TrimSpace(string(cacheData))
+	for _, expected := range []string{
+		"hls_cache_empty=true",
+		"remux_cache_empty=true",
+		"subtitle_cache_empty=true",
+		"room_tombstone_empty=true",
+		"spotify_cache_cleared=true",
+		"tmdb_cache_cleared=true",
+	} {
+		if !strings.Contains(cacheResult, expected) {
+			t.Fatalf("expected cache marker to contain %q, got %q", expected, cacheResult)
+		}
+	}
 }
 
 func runListenForShutdownHelper(t *testing.T) {
@@ -92,12 +167,22 @@ func runListenForShutdownHelper(t *testing.T) {
 	loggerMarker := os.Getenv(listenForShutdownLoggerMarkerEnv)
 	socketMarker := os.Getenv(listenForShutdownSocketMarkerEnv)
 	hlsMarker := os.Getenv(listenForShutdownHLSMarkerEnv)
-	if loggerMarker == "" || socketMarker == "" || hlsMarker == "" {
+	cacheMarker := os.Getenv(listenForShutdownCacheMarkerEnv)
+	if loggerMarker == "" || socketMarker == "" || hlsMarker == "" || cacheMarker == "" {
 		t.Fatal("missing shutdown helper marker paths")
 	}
 
 	app := setupTestApp(t)
 	app.Wait = &sync.WaitGroup{}
+	app.RemuxSafetyCache.SetDefault("shutdown-test-remux", struct{}{})
+	app.SubtitleVTTCache.SetDefault("shutdown-test-subtitle", []byte("subtitle"))
+	app.RoomHLSTombstone.SetDefault("room:shutdown-test", struct{}{})
+
+	spotifyClient := &shutdownTestSpotify{}
+	tmdbClient := &shutdownTestTmdb{}
+	app.Spotify = spotifyClient
+	app.Tmdb = tmdbClient
+
 	session, err := attachShutdownTestHLSSession(t, app)
 	if err != nil {
 		t.Fatalf("attach shutdown HLS session: %v", err)
@@ -105,10 +190,17 @@ func runListenForShutdownHelper(t *testing.T) {
 	app.LoggerCloser = func() error {
 		loggerErr := os.WriteFile(loggerMarker, []byte("closed\n"), 0o644)
 		hlsErr := writeShutdownHLSMarker(hlsMarker, session)
+		cacheErr := writeShutdownCacheMarker(cacheMarker, app)
 		if loggerErr != nil {
 			return loggerErr
 		}
-		return hlsErr
+		if hlsErr != nil {
+			return hlsErr
+		}
+		if cacheErr != nil {
+			return cacheErr
+		}
+		return nil
 	}
 
 	err = attachShutdownTestWatchRoomClient(app, socketMarker)
@@ -289,6 +381,37 @@ func writeShutdownHLSMarker(markerPath string, session *HLSSession) error {
 	)
 
 	return os.WriteFile(markerPath, []byte(content), 0o644)
+}
+
+func writeShutdownCacheMarker(markerPath string, app *Application) error {
+	spotifyCleared := false
+	if spotifyClient, ok := app.Spotify.(*shutdownTestSpotify); ok {
+		spotifyCleared = spotifyClient.cleared
+	}
+
+	tmdbCleared := false
+	if tmdbClient, ok := app.Tmdb.(*shutdownTestTmdb); ok {
+		tmdbCleared = tmdbClient.cleared
+	}
+
+	content := fmt.Sprintf(
+		"hls_cache_empty=%t remux_cache_empty=%t subtitle_cache_empty=%t room_tombstone_empty=%t spotify_cache_cleared=%t tmdb_cache_cleared=%t\n",
+		cacheIsEmpty(app.HLSSessionCache),
+		cacheIsEmpty(app.RemuxSafetyCache),
+		cacheIsEmpty(app.SubtitleVTTCache),
+		cacheIsEmpty(app.RoomHLSTombstone),
+		spotifyCleared,
+		tmdbCleared,
+	)
+
+	return os.WriteFile(markerPath, []byte(content), 0o644)
+}
+
+func cacheIsEmpty(c interface{ ItemCount() int }) bool {
+	if c == nil {
+		return true
+	}
+	return c.ItemCount() == 0
 }
 
 func isExpectedShutdownProcessExit(err error) bool {

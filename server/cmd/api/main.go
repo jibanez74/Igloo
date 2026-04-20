@@ -100,6 +100,7 @@ type Application struct {
 	ScannerDBMu      sync.Mutex
 	HLSSessionCache  *cache.Cache
 	HLSSessionGroup  singleflight.Group
+	RemuxSafetyCache *cache.Cache
 	SubtitleVTTCache *cache.Cache
 	RoomHLSTombstone *cache.Cache
 	RoomHLSMu        sync.Mutex
@@ -168,6 +169,10 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize logger: %v", err)
 	}
 
+	// Remove any leftover HLS temp directories from a previous run that did not
+	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
+	cleanupStaleHLSTempDirs(app.Logger)
+
 	err = app.InitDB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
@@ -224,6 +229,10 @@ func InitApp() (*Application, error) {
 		}
 	})
 	app.HLSSessionCache = hlsCache
+	app.RemuxSafetyCache = cache.New(
+		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
+		helpers.HLS_REMUX_SAFETY_CACHE_SWEEP,
+	)
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
@@ -900,7 +909,8 @@ func (app *Application) InitRouter() {
 					r.Get("/details/{id}", app.GetTrackByID)
 					r.Get("/{id}/stream", app.StreamTrack)
 					r.Post("/{id}/like", app.ToggleLikeTrack)
-					r.Get("/liked", app.GetLikedTrackIDs)
+					r.Get("/liked", app.GetLikedTracks)
+					r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
 				})
 
 				r.Route("/playlists", func(r chi.Router) {
@@ -937,6 +947,27 @@ func (app *Application) InitRouter() {
 	router.Get("/*", app.ServeFrontend)
 
 	app.Router = router
+}
+
+// cleanupStaleHLSTempDirs removes leftover igloo-hls-* directories from the
+// system temp directory. These accumulate when the server is killed without a
+// graceful shutdown (e.g., systemd SIGKILL escalation, crash, power loss).
+func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface) {
+	pattern := filepath.Join(os.TempDir(), "igloo-hls-*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		logger.Warn("failed to glob stale HLS temp dirs", "error", err)
+		return
+	}
+	for _, dir := range matches {
+		err = os.RemoveAll(dir)
+		if err != nil {
+			logger.Warn("failed to remove stale HLS temp dir", "path", dir, "error", err)
+		}
+	}
+	if len(matches) > 0 {
+		logger.Info("cleaned up stale HLS temp dirs from previous run", "count", len(matches))
+	}
 }
 
 // ListenForShutdown handles graceful shutdown when SIGINT or SIGTERM is received.
@@ -994,6 +1025,22 @@ func (app *Application) ListenForShutdown() {
 	// Wait for any in-flight background tasks to complete.
 	// These may still need database and logger access.
 	app.Wait.Wait()
+
+	if app.RemuxSafetyCache != nil {
+		app.RemuxSafetyCache.Flush()
+	}
+	if app.SubtitleVTTCache != nil {
+		app.SubtitleVTTCache.Flush()
+	}
+	if app.RoomHLSTombstone != nil {
+		app.RoomHLSTombstone.Flush()
+	}
+	if app.Spotify != nil {
+		app.Spotify.ClearAllCaches()
+	}
+	if app.Tmdb != nil {
+		app.Tmdb.ClearCache()
+	}
 
 	// Clean up ffprobe temp directory and extracted binary.
 	err := ffprobe.Cleanup()

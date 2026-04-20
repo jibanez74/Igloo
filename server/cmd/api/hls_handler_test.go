@@ -2,12 +2,17 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestParseSegmentIndex(t *testing.T) {
@@ -90,56 +95,94 @@ func TestStartSegmentComputation(t *testing.T) {
 	}
 }
 
-func TestResolveHLSDiskFilename(t *testing.T) {
-	session := &HLSSession{StartSegment: 69}
-
+func TestValidateHLSFilename(t *testing.T) {
 	tests := []struct {
 		name     string
 		filename string
-		want     string
 		wantErr  bool
 	}{
 		{
-			name:     "init file is unchanged",
+			name:     "init file is allowed",
 			filename: helpers.HLS_INIT_FILENAME,
-			want:     helpers.HLS_INIT_FILENAME,
 		},
 		{
-			name:     "start segment maps to first disk segment",
+			name:     "segment filename is allowed",
 			filename: "segment_69.m4s",
-			want:     "segment_0.m4s",
 		},
 		{
-			name:     "later segment maps relative to start segment",
+			name:     "later segment filename is allowed",
 			filename: "segment_99.m4s",
-			want:     "segment_30.m4s",
-		},
-		{
-			name:     "request before session start returns error",
-			filename: "segment_0.m4s",
-			wantErr:  true,
 		},
 		{
 			name:     "invalid segment name returns error",
 			filename: "bad_name.m4s",
 			wantErr:  true,
 		},
+		{
+			name:     "out of range segment index returns error",
+			filename: "segment_18446744073709551615.m4s",
+			wantErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveHLSDiskFilename(session, tt.filename)
+			err := validateHLSFilename(tt.filename)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("resolveHLSDiskFilename(%q) expected error", tt.filename)
+					t.Fatalf("validateHLSFilename(%q) expected error", tt.filename)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("resolveHLSDiskFilename(%q) unexpected error: %v", tt.filename, err)
+				t.Fatalf("validateHLSFilename(%q) unexpected error: %v", tt.filename, err)
 			}
+		})
+	}
+}
+
+func TestSessionPlaylistDurationSec(t *testing.T) {
+	tests := []struct {
+		name    string
+		session *HLSSession
+		want    float64
+	}{
+		{
+			name:    "nil session",
+			session: nil,
+			want:    0,
+		},
+		{
+			name: "full session keeps total duration",
+			session: &HLSSession{
+				DurationSec: 7200,
+				StartSec:    0,
+			},
+			want: 7200,
+		},
+		{
+			name: "rebased session uses remaining duration",
+			session: &HLSSession{
+				DurationSec: 7200,
+				StartSec:    6591,
+			},
+			want: 609,
+		},
+		{
+			name: "start beyond duration clamps to zero",
+			session: &HLSSession{
+				DurationSec: 10,
+				StartSec:    20,
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sessionPlaylistDurationSec(tt.session)
 			if got != tt.want {
-				t.Fatalf("resolveHLSDiskFilename(%q) = %q, want %q", tt.filename, got, tt.want)
+				t.Fatalf("sessionPlaylistDurationSec() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -264,4 +307,88 @@ func TestSegmentComplete(t *testing.T) {
 			t.Error("should return false for unparseable filename")
 		}
 	})
+}
+
+func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	session := &HLSSession{
+		TempDir:          t.TempDir(),
+		DurationSec:      12,
+		StartSec:         0,
+		RequestedProfile: helpers.HLS_PROFILE_REMUX,
+		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
+		CopyVideo:        false,
+	}
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/movies/5/hls/remux/playlist.m3u8?audio_track=0",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `/api/movies/5/hls/remux/init.mp4?audio_track=0`) {
+		t.Fatalf("playlist body missing remux init path: %s", body)
+	}
+	if !strings.Contains(body, `/api/movies/5/hls/remux/segment_0.m4s?audio_track=0`) {
+		t.Fatalf("playlist body missing remux segment path: %s", body)
+	}
+	if strings.Contains(body, helpers.HLS_PROFILE_1080P_8MBPS) {
+		t.Fatalf("playlist body should not expose effective profile path: %s", body)
+	}
+}
+
+func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	dir := t.TempDir()
+	segmentPath := filepath.Join(dir, "segment_0.m4s")
+	writeErr := os.WriteFile(segmentPath, []byte("segment-bytes"), 0644)
+	if writeErr != nil {
+		t.Fatalf("write segment: %v", writeErr)
+	}
+
+	session := &HLSSession{
+		TempDir:          dir,
+		StartSec:         0,
+		RequestedProfile: helpers.HLS_PROFILE_REMUX,
+		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
+		CopyVideo:        false,
+		Exited:           true,
+		ExitMu:           sync.Mutex{},
+	}
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/{filename}", app.HLSSegment)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/movies/5/hls/remux/segment_0.m4s?audio_track=0",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder.Body.String() != "segment-bytes" {
+		t.Fatalf("segment body = %q, want %q", recorder.Body.String(), "segment-bytes")
+	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -188,6 +189,81 @@ func TestWatchRoomWebSocket_RejectsNonMember(t *testing.T) {
 	}
 }
 
+func TestIsAllowedWatchRoomOrigin(t *testing.T) {
+	tests := []struct {
+		name          string
+		requestURL    string
+		host          string
+		origin        string
+		viteDevServer string
+		tls           bool
+		want          bool
+	}{
+		{
+			name:       "allows same origin request",
+			requestURL: "http://localhost:8080/api/watch-rooms/2/ws",
+			host:       "localhost:8080",
+			origin:     "http://localhost:8080",
+			want:       true,
+		},
+		{
+			name:       "rejects unrelated origin by default",
+			requestURL: "http://localhost:8080/api/watch-rooms/2/ws",
+			host:       "localhost:8080",
+			origin:     "http://evil.example",
+			want:       false,
+		},
+		{
+			name:          "allows configured vite dev origin",
+			requestURL:    "http://localhost:8080/api/watch-rooms/2/ws",
+			host:          "localhost:8080",
+			origin:        "http://localhost:3000",
+			viteDevServer: "http://localhost:3000",
+			want:          true,
+		},
+		{
+			name:          "requires exact configured vite dev origin",
+			requestURL:    "http://localhost:8080/api/watch-rooms/2/ws",
+			host:          "localhost:8080",
+			origin:        "http://127.0.0.1:3000",
+			viteDevServer: "http://localhost:3000",
+			want:          false,
+		},
+		{
+			name:       "allows local dev origin without vite env",
+			requestURL: "http://localhost:8080/api/watch-rooms/2/ws",
+			host:       "localhost:8080",
+			origin:     "http://localhost:3000",
+			want:       true,
+		},
+		{
+			name:       "allows same origin https request",
+			requestURL: "https://igloo.tailnet/api/watch-rooms/2/ws",
+			host:       "igloo.tailnet",
+			origin:     "https://igloo.tailnet",
+			tls:        true,
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.requestURL, nil)
+			req.Host = tt.host
+			req.Header.Set("Origin", tt.origin)
+			if tt.tls {
+				req.TLS = &tls.ConnectionState{}
+			}
+			t.Setenv("VITE_DEV_SERVER", tt.viteDevServer)
+
+			got := isAllowedWatchRoomOrigin(req)
+			if got != tt.want {
+				t.Fatalf("isAllowedWatchRoomOrigin() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -269,6 +345,66 @@ func TestWatchRoomWebSocket_BroadcastsPlaybackChanges(t *testing.T) {
 	}
 	if !pauseEvent.Playback.Paused {
 		t.Fatal("expected pause event to set paused=true")
+	}
+}
+
+func TestWatchRoomWebSocket_JoinSnapshotReflectsCurrentPlaybackState(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	guest, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Guest",
+		Email:    "guest-join-snapshot@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("create guest: %v", err)
+	}
+
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
+	server := setupWatchRoomWSTestServer(t, app)
+	defer server.Close()
+
+	ownerConn, _ := dialWatchRoomSocket(t, server.URL, room.ID, ownerID)
+	defer ownerConn.Close()
+	guestConn, _ := dialWatchRoomSocket(t, server.URL, room.ID, guest.ID)
+	defer guestConn.Close()
+
+	_ = readUntilEventType(t, ownerConn, "room_snapshot")
+	_ = readUntilEventType(t, guestConn, "room_snapshot")
+
+	err = ownerConn.WriteJSON(map[string]any{
+		"type":         "play",
+		"position_sec": 18.5,
+	})
+	if err != nil {
+		t.Fatalf("owner send play event: %v", err)
+	}
+
+	playEvent := readUntilPlaybackPosition(t, guestConn, "playback_changed", 18.0, 19.5)
+	if playEvent.Playback == nil || playEvent.Playback.Paused {
+		t.Fatalf("expected guest play event to reflect active playback, got %+v", playEvent.Playback)
+	}
+
+	err = guestConn.WriteJSON(map[string]any{
+		"type": "join",
+	})
+	if err != nil {
+		t.Fatalf("guest send join event: %v", err)
+	}
+
+	joinSnapshot := readUntilEventType(t, guestConn, "room_snapshot")
+	if joinSnapshot.Playback == nil {
+		t.Fatal("expected room snapshot playback on join")
+	}
+	if joinSnapshot.Playback.Paused {
+		t.Fatalf("expected join snapshot to keep playback running, got %+v", joinSnapshot.Playback)
+	}
+	if joinSnapshot.Playback.PositionSec < 18.0 || joinSnapshot.Playback.PositionSec > 20.0 {
+		t.Fatalf("expected join snapshot position near active playback, got %.3f", joinSnapshot.Playback.PositionSec)
 	}
 }
 

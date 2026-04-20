@@ -1,12 +1,14 @@
 package helpers
 
+import "strings"
+
 // HLSProfileConfig holds encoding parameters for one HLS profile.
 type HLSProfileConfig struct {
-	ID         string // profile id (e.g. 1080p_4mbps)
-	Width      int    // target width (0 = use height and preserve aspect)
-	Height     int    // target height
+	ID           string // profile id (e.g. 1080p_4mbps)
+	Width        int    // target width (0 = use height and preserve aspect)
+	Height       int    // target height
 	VideoBitrate string // e.g. "8M", "4M"
-	Bufsize    string // e.g. "16M", "8M"
+	Bufsize      string // e.g. "16M", "8M"
 }
 
 // HLSAllowedProfiles is the ordered list of profile IDs allowed in requests.
@@ -38,4 +40,35 @@ func IsAllowedHLSProfile(profile string) bool {
 		}
 	}
 	return false
+}
+
+// BestFitHLSFallbackProfile returns the highest transcode profile whose max
+// height fits within the source height. If the source height is smaller than
+// every configured transcode profile, it falls back to the lowest-bitrate
+// profile so remux-unsafe sources still have a reliable playback option.
+func BestFitHLSFallbackProfile(sourceHeight int64) string {
+	for _, profileID := range HLSAllowedProfiles {
+		if profileID == HLS_PROFILE_REMUX {
+			continue
+		}
+
+		cfg, ok := HLSProfileConfigs[profileID]
+		if !ok {
+			continue
+		}
+		if sourceHeight >= int64(cfg.Height) {
+			return profileID
+		}
+	}
+
+	return HLS_PROFILE_720P_3MBPS
+}
+
+func IsBrowserCompatibleH264(codec string) bool {
+	switch strings.ToLower(strings.TrimSpace(codec)) {
+	case "h264", "h.264", "avc", "avc1":
+		return true
+	default:
+		return false
+	}
 }

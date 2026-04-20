@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -111,12 +115,19 @@ func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) (watchRo
 	session.clients[client] = true
 	session.connectedIDs[client.user.ID] = true
 
-	return watchRoomServerEvent{
-		Type:             "room_snapshot",
-		RoomID:           roomID,
-		Playback:         pointerToPlaybackState(session.state.snapshot(time.Now().UTC())),
-		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
-	}, !alreadyConnected
+	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), !alreadyConnected
+}
+
+func (hub *WatchRoomHub) snapshot(roomID int64) (watchRoomServerEvent, bool) {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return watchRoomServerEvent{}, false
+	}
+
+	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), true
 }
 
 func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
@@ -324,12 +335,87 @@ func pointerToPlaybackState(state watchRoomPlaybackState) *watchRoomPlaybackStat
 	return &copy
 }
 
+func (hub *WatchRoomHub) buildSnapshotLocked(roomID int64, session *watchRoomSession, now time.Time) watchRoomServerEvent {
+	return watchRoomServerEvent{
+		Type:             "room_snapshot",
+		RoomID:           roomID,
+		Playback:         pointerToPlaybackState(session.state.snapshot(now)),
+		ConnectedUserIDs: connectedUserIDs(session.connectedIDs),
+	}
+}
+
+func (hub *WatchRoomHub) currentSnapshot(roomID int64) *watchRoomServerEvent {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+
+	session, ok := hub.sessions[roomID]
+	if !ok {
+		return nil
+	}
+
+	snapshot := hub.buildSnapshotLocked(roomID, session, time.Now().UTC())
+	return &snapshot
+}
+
 func connectedUserIDs(ids map[int64]bool) []int64 {
 	userIDs := make([]int64, 0, len(ids))
 	for id := range ids {
 		userIDs = append(userIDs, id)
 	}
+	slices.Sort(userIDs)
 	return userIDs
+}
+
+func sameWatchRoomOrigin(originURL *url.URL, expectedScheme string, expectedHost string) bool {
+	return strings.EqualFold(originURL.Scheme, expectedScheme) &&
+		strings.EqualFold(originURL.Host, expectedHost)
+}
+
+func isLocalWatchRoomDevHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedWatchRoomDevOrigin(originURL *url.URL) bool {
+	viteURL := strings.TrimSpace(os.Getenv("VITE_DEV_SERVER"))
+	if viteURL == "" {
+		return false
+	}
+
+	viteOrigin, err := url.Parse(viteURL)
+	if err != nil {
+		return false
+	}
+
+	if viteOrigin.Scheme == "" || viteOrigin.Host == "" {
+		return false
+	}
+
+	return sameWatchRoomOrigin(originURL, viteOrigin.Scheme, viteOrigin.Host)
+}
+
+func isAllowedWatchRoomLocalDevOrigin(originURL *url.URL, requestHost string) bool {
+	if originURL.Scheme != "http" {
+		return false
+	}
+
+	if originURL.Port() != "3000" {
+		return false
+	}
+
+	requestHostName := requestHost
+	parsedHost, _, err := net.SplitHostPort(requestHost)
+	if err == nil {
+		requestHostName = parsedHost
+	}
+
+	return isLocalWatchRoomDevHost(originURL.Hostname()) &&
+		isLocalWatchRoomDevHost(requestHostName) &&
+		strings.EqualFold(originURL.Hostname(), requestHostName)
 }
 
 func isAllowedWatchRoomOrigin(r *http.Request) bool {
@@ -344,7 +430,8 @@ func isAllowedWatchRoomOrigin(r *http.Request) bool {
 	}
 
 	if originURL.Host != r.Host {
-		return false
+		return isAllowedWatchRoomDevOrigin(originURL) ||
+			isAllowedWatchRoomLocalDevOrigin(originURL, r.Host)
 	}
 
 	expectedScheme := "http"
@@ -352,7 +439,12 @@ func isAllowedWatchRoomOrigin(r *http.Request) bool {
 		expectedScheme = "https"
 	}
 
-	return originURL.Scheme == expectedScheme
+	if sameWatchRoomOrigin(originURL, expectedScheme, r.Host) {
+		return true
+	}
+
+	return isAllowedWatchRoomDevOrigin(originURL) ||
+		isAllowedWatchRoomLocalDevOrigin(originURL, r.Host)
 }
 
 var watchRoomUpgrader = websocket.Upgrader{
@@ -405,17 +497,27 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 }
 
 func (app *Application) loadRoomMemberSummary(ctx context.Context, roomID, userID int64) (watchRoomMemberSummary, error) {
-	members, err := app.loadRoomMembers(ctx, roomID)
+	row, err := app.Queries.GetWatchRoomMemberByUserID(ctx, database.GetWatchRoomMemberByUserIDParams{
+		RoomID: roomID,
+		UserID: userID,
+	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return watchRoomMemberSummary{}, errors.New("member not found")
+		}
 		return watchRoomMemberSummary{}, err
 	}
 
-	member, ok := findMemberByID(members, userID)
-	if !ok {
-		return watchRoomMemberSummary{}, errors.New("member not found")
+	var avatar *string
+	if row.Avatar.Valid {
+		avatar = &row.Avatar.String
 	}
 
-	return member, nil
+	return watchRoomMemberSummary{
+		ID:     row.ID,
+		Name:   row.Name,
+		Avatar: avatar,
+	}, nil
 }
 
 // WatchRoomWebSocket serves GET /api/watch-rooms/{id}/ws.
@@ -468,9 +570,6 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 	}()
 
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(_ string) error {
-		return conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	})
 
 	for {
 		_, rawMessage, err := conn.ReadMessage()
@@ -487,7 +586,9 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 
 		switch event.Type {
 		case "join":
-			client.writeJSON(snapshot)
+			if fresh := app.WatchRoomHub.currentSnapshot(room.ID); fresh != nil {
+				client.writeJSON(*fresh)
+			}
 		case "ping":
 			client.mu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))

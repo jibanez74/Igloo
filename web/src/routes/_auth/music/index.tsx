@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { z } from "zod";
 import {
-  Music,
-  Users,
+  ArrowLeft,
   Disc3,
+  Heart,
   List,
   ListMusic,
-  User,
+  Music,
   Play,
-  Shuffle,
   Plus,
+  Shuffle,
+  User,
+  Users,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
@@ -22,6 +23,8 @@ import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import {
   albumsPaginatedQueryOpts,
+  likedTrackIdsQueryOpts,
+  likedTracksQueryOpts,
   musiciansPaginatedQueryOpts,
   musicStatsQueryOpts,
   playlistsQueryOpts,
@@ -36,6 +39,7 @@ import {
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+
 import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
 import LibraryPagination from "@/components/LibraryPagination";
@@ -45,18 +49,17 @@ import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 
 const musicSearchSchema = z.object({
-  tab: fallback(
-    z.enum(["musicians", "albums", "tracks", "playlists"]),
-    "albums"
-  ).default("albums"),
-  albumsPage: fallback(z.number().int().positive(), 1).default(1),
-  musiciansPage: fallback(z.number().int().positive(), 1).default(1),
+  tab: z.enum(["musicians", "albums", "tracks", "playlists"]).catch("albums").default("albums"),
+  albumsPage: z.number().int().positive().catch(1).default(1),
+  musiciansPage: z.number().int().positive().catch(1).default(1),
+  playlistsView: z.enum(["playlists", "liked"]).catch("playlists").default("playlists"),
+  likedTracksPage: z.number().int().positive().catch(1).default(1),
 });
 
 type MusicSearchParams = z.infer<typeof musicSearchSchema>;
 
 export const Route = createFileRoute("/_auth/music/")({
-  validateSearch: zodSearchValidator(musicSearchSchema),
+  validateSearch: musicSearchSchema,
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
     albumsPage,
     musiciansPage,
@@ -79,7 +82,7 @@ export const Route = createFileRoute("/_auth/music/")({
 
 function MusicPage() {
   const navigate = Route.useNavigate();
-  const { tab, albumsPage, musiciansPage } = Route.useSearch();
+  const { tab, albumsPage, musiciansPage, playlistsView, likedTracksPage } = Route.useSearch();
 
   // React 19 document metadata
   const pageTitle = "Music Library - Igloo";
@@ -175,7 +178,7 @@ function MusicPage() {
         </TabsContent>
 
         <TabsContent value="playlists" className="mt-6">
-          <PlaylistsTabContent />
+          <PlaylistsTabContent playlistsView={playlistsView} likedTracksPage={likedTracksPage} />
         </TabsContent>
       </Tabs>
     </div>
@@ -416,6 +419,11 @@ function TracksTabContent() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery(tracksInfiniteQueryOpts());
 
+  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
+  const likedSet = new Set<number>(
+    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
+  );
+
   // Ref to measure offset from top of page for scrollMargin
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -555,7 +563,7 @@ function TracksTabContent() {
                 {item.type === "letter" ? (
                   <LetterHeader letter={item.letter} />
                 ) : (
-                  <TrackListItem track={item.track} />
+                  <TrackListItem track={item.track} isLiked={likedSet.has(item.track.id)} />
                 )}
               </div>
             );
@@ -648,7 +656,7 @@ function LetterHeader({ letter }: { letter: string }) {
   );
 }
 
-function TrackListItem({ track }: { track: TrackListItemType }) {
+function TrackListItem({ track, isLiked }: { track: TrackListItemType; isLiked: boolean }) {
   const audioPlayer = useAudioPlayerActions();
   const playerState = useAudioPlayerState();
 
@@ -686,6 +694,7 @@ function TrackListItem({ track }: { track: TrackListItemType }) {
       variant="library"
       isPlaying={playerState.currentTrack?.id === track.id && playerState.isPlaying}
       isCurrentTrack={playerState.currentTrack?.id === track.id}
+      isLiked={isLiked}
       onPlay={handlePlay}
       showActionsMenu
     />
@@ -713,12 +722,52 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
   return items;
 }
 
+type PlaylistsTabContentProps = {
+  playlistsView: "playlists" | "liked";
+  likedTracksPage: number;
+};
+
 // Playlists tab content
-function PlaylistsTabContent() {
+function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabContentProps) {
+  const navigate = Route.useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const { data, isLoading } = useQuery(playlistsQueryOpts());
+  const { data, isLoading } = useQuery({
+    ...playlistsQueryOpts(),
+    enabled: playlistsView !== "liked",
+  });
 
   const playlists = data?.error === false ? data.data.playlists : [];
+
+  const handleShowLiked = () =>
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        playlistsView: "liked",
+        likedTracksPage: 1,
+      }),
+      replace: true,
+    });
+
+  const handleExitLiked = () =>
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        playlistsView: "playlists",
+        likedTracksPage: 1,
+      }),
+      replace: true,
+    });
+
+  if (playlistsView === "liked") {
+    return (
+      <LikedTracksInPlaylistsTab
+        likedTracksPage={likedTracksPage}
+        onExit={handleExitLiked}
+      />
+    );
+  }
 
   // Generate announcement for screen readers
   const getAnnouncement = () => {
@@ -736,18 +785,30 @@ function PlaylistsTabContent() {
       {/* Announce content changes to screen readers */}
       <LiveAnnouncer message={getAnnouncement()} />
       {/* Header with count and create button */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm text-slate-400">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-          aria-label="Create new playlist"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          New Playlist
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleShowLiked}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            aria-label="View liked tracks"
+          >
+            <Heart className="size-4 shrink-0" aria-hidden="true" />
+            Liked tracks
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreateDialog(true)}
+            className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            aria-label="Create new playlist"
+          >
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            New Playlist
+          </button>
+        </div>
       </div>
 
       {/* Playlists grid or empty state */}
@@ -765,6 +826,162 @@ function PlaylistsTabContent() {
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
       />
+    </div>
+  );
+}
+
+type LikedTracksInPlaylistsTabProps = {
+  likedTracksPage: number;
+  onExit: () => void;
+};
+
+function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPlaylistsTabProps) {
+  const navigate = Route.useNavigate();
+  const audioPlayer = useAudioPlayerActions();
+  const audioPlayerState = useAudioPlayerState();
+
+  const { data, isLoading } = useQuery(likedTracksQueryOpts(likedTracksPage));
+
+  const tracks = data?.error === false ? data.data.tracks : [];
+  const total = data?.error === false ? data.data.total : 0;
+  const totalPages = data?.error === false ? data.data.total_pages : 0;
+
+  const getAnnouncement = () => {
+    if (isLoading) return undefined;
+    if (tracks.length === 0) return "No liked tracks";
+    return `${total} liked track${total !== 1 ? "s" : ""}, page ${likedTracksPage} of ${totalPages}`;
+  };
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      to: "/music",
+      search: (prev: MusicSearchParams) => ({
+        ...prev,
+        likedTracksPage: newPage,
+      }),
+      replace: true,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePlayTrack = (track: TrackListItemType) => {
+    const audioTrack = convertToAudioTrack({
+      id: track.id,
+      title: track.title,
+      file_path: track.file_path,
+      duration: track.duration,
+      codec: track.codec,
+      bit_rate: track.bit_rate,
+      album_id: track.album_id,
+      musician_id: track.musician_id,
+      album_cover: track.album_cover,
+      musician_name: track.musician_name,
+    });
+    const allAudioTracks = tracks.map((t) =>
+      convertToAudioTrack({
+        id: t.id,
+        title: t.title,
+        file_path: t.file_path,
+        duration: t.duration,
+        codec: t.codec,
+        bit_rate: t.bit_rate,
+        album_id: t.album_id,
+        musician_id: t.musician_id,
+        album_cover: t.album_cover,
+        musician_name: t.musician_name,
+      })
+    );
+    audioPlayer.playTrack(audioTrack, allAudioTracks, {
+      cover: null,
+      title: "Liked Tracks",
+      musician: null,
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12" role="status" aria-label="Loading liked tracks">
+        <Spinner className="size-8 text-amber-400" />
+        <span className="sr-only">Loading liked tracks...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <LiveAnnouncer message={getAnnouncement()} />
+
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            aria-label="Back to playlists"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            Playlists
+          </button>
+          <span className="text-slate-600" aria-hidden="true">/</span>
+          <h2 className="flex items-center gap-2 font-semibold text-white">
+            <Heart className="size-4 fill-current text-red-400" aria-hidden="true" />
+            Liked Tracks
+          </h2>
+        </div>
+        <span className="text-sm text-slate-400">
+          {total} {total === 1 ? "track" : "tracks"}
+        </span>
+      </div>
+
+      {/* Track list or empty state */}
+      {tracks.length === 0 ? (
+        <div className="rounded-xl border border-amber-500/10 bg-slate-800/30 py-12 text-center">
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40">
+            <Heart className="size-6 text-slate-500" aria-hidden="true" />
+          </div>
+          <p className="text-slate-300">No liked tracks yet.</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Tap the heart icon on any track to add it here.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+          {tracks.map((track) => (
+            <TrackItem
+              key={track.id}
+              id={track.id}
+              title={track.title}
+              duration={track.duration}
+              subtitle={unwrapString(track.musician_name) ?? "Unknown Artist"}
+              albumId={unwrapInt(track.album_id)}
+              albumTitle={unwrapStringOrUndefined(track.album_title)}
+              musicianId={unwrapInt(track.musician_id)}
+              musicianName={unwrapStringOrUndefined(track.musician_name)}
+              variant="library"
+              isLiked
+              isPlaying={
+                audioPlayerState.currentTrack?.id === track.id &&
+                audioPlayerState.isPlaying
+              }
+              isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
+              onPlay={() => handlePlayTrack(track)}
+              showActionsMenu
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6">
+          <LibraryPagination
+            currentPage={likedTracksPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

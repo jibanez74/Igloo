@@ -59,6 +59,10 @@ export default function VideoPlayer({
   const sessionLostAttemptsRef = useRef(0);
   const lastSessionLostAtRef = useRef(0);
 
+  const reportError = useEffectEvent((message: string) => {
+    onError(message);
+  });
+
   const handleStartApplied = useEffectEvent((time: number) => {
     onStartApplied?.(time);
   });
@@ -83,7 +87,7 @@ export default function VideoPlayer({
       ) {
         const now = Date.now();
         if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
-          onError(
+          reportError(
             "Playback session could not be recovered. Try reloading the page or choosing another quality.",
           );
           return;
@@ -102,11 +106,11 @@ export default function VideoPlayer({
 
       const detail = data.details ?? "unknown error";
       if (data.type === "networkError") {
-        onError(`Network error loading stream (${detail}).`);
+        reportError(`Network error loading stream (${detail}).`);
       } else if (data.type === "mediaError") {
-        onError(`The browser could not decode this stream (${detail}).`);
+        reportError(`The browser could not decode this stream (${detail}).`);
       } else {
-        onError(`Stream error: ${detail}`);
+        reportError(`Stream error: ${detail}`);
       }
     },
   );
@@ -130,56 +134,62 @@ export default function VideoPlayer({
       let disposeHls: (() => void) | null = null;
 
       void (async () => {
-        const { default: Hls } = await import("hls.js");
-        if (cancelled || !Hls.isSupported()) return;
+        try {
+          const { default: Hls } = await import("hls.js/light");
+          if (cancelled || !Hls.isSupported()) return;
 
-        const hls = new Hls({
-          xhrSetup(xhr) {
-            xhr.withCredentials = true;
-          },
-          manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-          levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-          fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
-          backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
-          startPosition: startSec > 0 ? startSec : -1,
-        });
-        const sessionLostDetail = Hls.ErrorDetails.FRAG_LOAD_ERROR;
-        hlsRef.current = hls;
-        disposeHls = () => {
-          hls.destroy();
-          hlsRef.current = null;
-        };
-
-        hls.loadSource(src);
-        hls.attachMedia(video);
-
-        if (startSec > 0) {
-          hls.once(Hls.Events.MANIFEST_PARSED, () => {
-            handleStartApplied(startSec);
+          const hls = new Hls({
+            xhrSetup(xhr: XMLHttpRequest) {
+              xhr.withCredentials = true;
+            },
+            manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
+            startPosition: startSec > 0 ? startSec : -1,
           });
-        }
+          const sessionLostDetail = Hls.ErrorDetails.FRAG_LOAD_ERROR;
+          hlsRef.current = hls;
+          disposeHls = () => {
+            hls.destroy();
+            hlsRef.current = null;
+          };
 
-        let mediaRecoveryAttempted = false;
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          const isSessionLostError =
-            data.details === sessionLostDetail &&
-            data.response?.code === 404;
+          hls.loadSource(src);
+          hls.attachMedia(video);
 
-          if (isSessionLostError) {
+          if (startSec > 0) {
+            hls.once(Hls.Events.MANIFEST_PARSED, () => {
+              handleStartApplied(startSec);
+            });
+          }
+
+          let mediaRecoveryAttempted = false;
+          hls.on(Hls.Events.ERROR, (_event, data: ErrorData) => {
+            const isSessionLostError =
+              data.details === sessionLostDetail &&
+              data.response?.code === 404;
+
+            if (isSessionLostError) {
+              handleHlsError(video, data, sessionLostDetail);
+              return;
+            }
+
+            if (!data.fatal) return;
+
+            if (data.type === "mediaError" && !mediaRecoveryAttempted) {
+              mediaRecoveryAttempted = true;
+              hls.recoverMediaError();
+              return;
+            }
+
             handleHlsError(video, data, sessionLostDetail);
-            return;
+          });
+        } catch {
+          if (!cancelled) {
+            reportError("Failed to load the video playback engine.");
           }
-
-          if (!data.fatal) return;
-
-          if (data.type === "mediaError" && !mediaRecoveryAttempted) {
-            mediaRecoveryAttempted = true;
-            hls.recoverMediaError();
-            return;
-          }
-
-          handleHlsError(video, data, sessionLostDetail);
-        });
+        }
       })();
 
       return () => {
@@ -288,11 +298,34 @@ export default function VideoPlayer({
               ? (e) => onDurationChange(e.currentTarget.duration)
               : undefined
           }
-          onError={
-            onNativeError
-              ? (e) => onNativeError(e.currentTarget.error?.code)
-              : undefined
-          }
+          onError={(e) => {
+            const errorCode = e.currentTarget.error?.code;
+
+            onNativeError?.(errorCode);
+
+            switch (errorCode) {
+              case MediaError.MEDIA_ERR_ABORTED:
+                onError(
+                  "Playback was interrupted before the stream finished loading.",
+                );
+                return;
+              case MediaError.MEDIA_ERR_NETWORK:
+                onError("A network error interrupted video playback.");
+                return;
+              case MediaError.MEDIA_ERR_DECODE:
+                onError("The browser could not decode this video stream.");
+                return;
+              case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                onError(
+                  "This video format or stream is not supported by the browser.",
+                );
+                return;
+              default:
+                onError(
+                  "Playback failed — the browser could not play this stream.",
+                );
+            }
+          }}
         />
       </div>
     </div>

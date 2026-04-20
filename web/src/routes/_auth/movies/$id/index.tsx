@@ -30,6 +30,7 @@ import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
 import MovieAdditionalDetailsSection from "@/components/MovieAdditionalDetailsSection";
 import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
 import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
+import MovieChaptersSection from "@/components/MovieChaptersSection";
 import {
   DEFAULT_PLAYBACK_SETTINGS,
   getAvailableModes,
@@ -130,6 +131,7 @@ function LibraryMovieDetailsContent({
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
+  const chapters = techData?.data?.chapters ?? [];
   const subtitleStreams = techData?.data?.subtitles ?? [];
   const videoStream = getPrimaryVideoStream(videoStreams);
   const mimeType = techData?.data?.movie?.mime_type;
@@ -217,6 +219,7 @@ function LibraryMovieDetailsContent({
       <MovieDetailsSkipLinks
         showCrewSection={showCrewSection}
         castNonEmpty={castForSection.length > 0}
+        chaptersNonEmpty={chapters.length > 0}
         extrasNonEmpty={youtubeExtraVideos.length > 0}
         companiesNonEmpty={production_companies.length > 0}
       />
@@ -292,6 +295,12 @@ function LibraryMovieDetailsContent({
           )}
         >
           {castForSection.length > 0 && <CastSection cast={castForSection} />}
+
+          <MovieChaptersSection
+            chapters={chapters}
+            movieId={movieId}
+            playbackSettings={playbackSettings}
+          />
 
           <MovieAdditionalDetailsSection
             language={language}

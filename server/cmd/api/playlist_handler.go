@@ -90,7 +90,7 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 		return PermissionNone, err
 	}
 
-	if canEdit == 1 {
+	if canEdit {
 		return PermissionEdit, nil
 	}
 
@@ -103,7 +103,7 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 		return PermissionNone, err
 	}
 
-	if isCollaborator == 1 {
+	if isCollaborator {
 		return PermissionView, nil
 	}
 
@@ -167,7 +167,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 				UserID:   userID,
 				UserID_2: userID,
 			})
-			canEdit = canEditResult == 1
+			canEdit = canEditResult
 		}
 		response[i] = PlaylistResponse{
 			GetPlaylistsWithCollaboratorAccessRow: p,
@@ -608,7 +608,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 			PlaylistID: playlistId,
 			TrackID:    trackId,
 		})
-		if inPlaylist == 1 {
+		if inPlaylist {
 			skippedCount++
 			continue
 		}
@@ -1072,7 +1072,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 				UserID:   userID,
 				UserID_2: userID,
 			})
-			canEdit = canEditResult == 1
+			canEdit = canEditResult
 		}
 		response[i] = moviePlaylistResponse{
 			GetMoviePlaylistsWithCollaboratorAccessRow: p,
@@ -1569,7 +1569,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 			helpers.ErrorJSON(w, errors.New("failed to update playlist"), http.StatusInternalServerError)
 			return
 		}
-		if inPl == 1 {
+		if inPl {
 			skippedCount++
 			continue
 		}

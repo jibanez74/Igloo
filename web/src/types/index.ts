@@ -14,6 +14,7 @@ export type {
   AlbumDetailsResponseType,
   TrackListItemType,
   TracksListResponseType,
+  LikedTracksResponseType,
   MusicStatsType,
   ShuffleTracksResponseType,
   AlbumsListResponseType,
@@ -99,6 +100,7 @@ export type {
   MovieAdditionalDetailsSectionProps,
   MovieExtraVideosSectionProps,
   MovieProductionCompaniesSectionProps,
+  MovieChaptersSectionProps,
 } from "./movie-details-page";
 
 // Audio player types
