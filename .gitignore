@@ -36,8 +36,10 @@
 /server/cmd/api/webdist
 
 # Frontend (web)
-/web/node_modules/*
+/web/node_modules/
 /web/dist
+/web/.tanstack/
+/web/src/routeTree.gen.ts
 
 # OS files
 .DS_Store
