@@ -150,15 +150,6 @@ export function WatchRoomPageContent({
     setConnectionReady(false);
   };
 
-  const handleSocketOpen = useEffectEvent((socket: WebSocket) => {
-    setConnectionReady(true);
-    heartbeatRef.current = window.setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "ping" }));
-      }
-    }, 25_000);
-  });
-
   const applyPlaybackState = useEffectEvent(
     async (playback: WatchRoomPlaybackStateType) => {
       const video = videoRef.current;
@@ -269,41 +260,50 @@ export function WatchRoomPageContent({
 
   const MAX_RECONNECT_ATTEMPTS = 5;
 
-  const handleSocketClose = useEffectEvent(() => {
-    setConnectionReady(false);
-    if (heartbeatRef.current !== null) {
-      window.clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
-    if (
-      !intentionalCloseRef.current &&
-      reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
-    ) {
-      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
-      reconnectAttemptsRef.current += 1;
-      setPlaybackError(null);
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        reconnectTimeoutRef.current = null;
-        setReconnectKey(k => k + 1);
-      }, delay);
-    }
-  });
-
-  const handleSocketError = useEffectEvent(() => {
-    setPlaybackError("Realtime sync connection failed for this watch room.");
-  });
-
   useEffect(() => {
     roomDeletionHandledRef.current = false;
     intentionalCloseRef.current = false;
     if (prevRoomIdRef.current !== currentRoomId) {
       prevRoomIdRef.current = currentRoomId;
       reconnectAttemptsRef.current = 0;
+      pendingPlaybackRef.current = null;
     }
     if (!currentRoomId) return;
 
     let cancelled = false;
     let socket: WebSocket | null = null;
+    let socketIntentionalClose = false;
+    let socketHeartbeat: number | null = null;
+
+    const handleSocketOpen = useEffectEvent((socket: WebSocket) => {
+      setConnectionReady(true);
+      reconnectAttemptsRef.current = 0;
+      socketHeartbeat = window.setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "ping" }));
+        }
+      }, 25_000);
+    });
+
+    const handleSocketClose = useEffectEvent(() => {
+      setConnectionReady(false);
+      if (
+        !socketIntentionalClose &&
+        reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+      ) {
+        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
+        reconnectAttemptsRef.current += 1;
+        setPlaybackError(null);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          setReconnectKey(k => k + 1);
+        }, delay);
+      }
+    });
+
+    const handleSocketError = useEffectEvent(() => {
+      setPlaybackError("Realtime sync connection failed for this watch room.");
+    });
 
     const initRoomConnection = async () => {
       let res: Awaited<ReturnType<typeof joinWatchRoom>>;
@@ -341,16 +341,16 @@ export function WatchRoomPageContent({
 
     return () => {
       cancelled = true;
-      intentionalCloseRef.current = true;
+      socketIntentionalClose = true;
 
       if (reconnectTimeoutRef.current !== null) {
         window.clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
 
-      if (heartbeatRef.current !== null) {
-        window.clearInterval(heartbeatRef.current);
-        heartbeatRef.current = null;
+      if (socketHeartbeat !== null) {
+        window.clearInterval(socketHeartbeat);
+        socketHeartbeat = null;
       }
 
       if (socketRef.current === socket) {
@@ -379,8 +379,11 @@ export function WatchRoomPageContent({
     const video = videoRef.current;
     if (!video) return;
 
+    const roomIdAtEffectTime = currentRoomId;
     const handleReady = () => {
-      void flushPendingPlayback();
+      if (prevRoomIdRef.current === roomIdAtEffectTime) {
+        void flushPendingPlayback();
+      }
     };
 
     video.addEventListener("loadedmetadata", handleReady);
@@ -389,7 +392,7 @@ export function WatchRoomPageContent({
       video.removeEventListener("loadedmetadata", handleReady);
       video.removeEventListener("canplay", handleReady);
     };
-  }, [streamUrl]);
+  }, [streamUrl, currentRoomId]);
 
   useEffect(() => {
     const onFullscreenChange = () => {

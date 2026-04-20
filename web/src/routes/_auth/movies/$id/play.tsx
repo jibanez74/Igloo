@@ -1,6 +1,5 @@
         import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -62,7 +61,7 @@ import { playSearchSchema } from "@/types/movie-play";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
-  validateSearch: zodSearchValidator(playSearchSchema),
+  validateSearch: playSearchSchema,
   loader: async ({ context, params }) => {
     const movieId = parseInt(params.id, 10);
     if (!Number.isNaN(movieId) && movieId > 0) {

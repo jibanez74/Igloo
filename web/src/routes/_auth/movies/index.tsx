@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
@@ -39,19 +38,19 @@ import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 
 const moviesSearchSchema = z.object({
-  tab: fallback(z.enum(["all", "genres", "playlists"]), "all").default("all"),
-  allPage: fallback(z.number().int().positive(), 1).default(1),
-  sort: fallback(z.enum(["asc", "desc"]), "asc").default("asc"),
-  genresPage: fallback(z.number().int().positive(), 1).default(1),
-  genreId: fallback(z.number().int().positive().optional(), undefined),
-  playlistsPage: fallback(z.number().int().positive(), 1).default(1),
-  view: fallback(z.enum(["liked"]).optional(), undefined),
+  tab: z.enum(["all", "genres", "playlists"]).catch("all").default("all"),
+  allPage: z.number().int().positive().catch(1).default(1),
+  sort: z.enum(["asc", "desc"]).catch("asc").default("asc"),
+  genresPage: z.number().int().positive().catch(1).default(1),
+  genreId: z.number().int().positive().optional().catch(undefined).default(undefined),
+  playlistsPage: z.number().int().positive().catch(1).default(1),
+  view: z.enum(["liked"]).optional().catch(undefined).default(undefined),
 });
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
 
 export const Route = createFileRoute("/_auth/movies/")({
-  validateSearch: zodSearchValidator(moviesSearchSchema),
+  validateSearch: moviesSearchSchema,
   loaderDeps: ({
     search: { allPage, sort, tab, genreId, genresPage, view, playlistsPage },
   }) => ({

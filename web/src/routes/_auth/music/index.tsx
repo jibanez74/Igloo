@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { fallback, zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { z } from "zod";
@@ -50,20 +49,17 @@ import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 
 const musicSearchSchema = z.object({
-  tab: fallback(
-    z.enum(["musicians", "albums", "tracks", "playlists"]),
-    "albums"
-  ).default("albums"),
-  albumsPage: fallback(z.number().int().positive(), 1).default(1),
-  musiciansPage: fallback(z.number().int().positive(), 1).default(1),
-  playlistsView: fallback(z.enum(["playlists", "liked"]), "playlists").default("playlists"),
-  likedTracksPage: fallback(z.number().int().positive(), 1).default(1),
+  tab: z.enum(["musicians", "albums", "tracks", "playlists"]).catch("albums").default("albums"),
+  albumsPage: z.number().int().positive().catch(1).default(1),
+  musiciansPage: z.number().int().positive().catch(1).default(1),
+  playlistsView: z.enum(["playlists", "liked"]).catch("playlists").default("playlists"),
+  likedTracksPage: z.number().int().positive().catch(1).default(1),
 });
 
 type MusicSearchParams = z.infer<typeof musicSearchSchema>;
 
 export const Route = createFileRoute("/_auth/music/")({
-  validateSearch: zodSearchValidator(musicSearchSchema),
+  validateSearch: musicSearchSchema,
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
     albumsPage,
     musiciansPage,

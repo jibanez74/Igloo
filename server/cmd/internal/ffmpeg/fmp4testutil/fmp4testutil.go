@@ -10,7 +10,10 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const mp4TestBoxHeaderSize = 8
+const (
+	mp4TestBoxHeaderSize      = 8
+	mp4TestNonSyncSampleFlag  = 0x00000001
+)
 
 type Fixture struct {
 	SafeVideo  bool
@@ -87,7 +90,8 @@ func BuildInitMP4() []byte {
 		mp4TestBox("mdia", mp4TestHDLR("soun")),
 	)
 
-	return mp4TestBox("moov", videoTrack, audioTrack)
+	moov := mp4TestBox("moov", mp4TestMVHD(), videoTrack, audioTrack)
+	return append(mp4TestFTYP(), moov...)
 }
 
 func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
@@ -110,12 +114,13 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		trackID: 1,
 		sample: sampleSpec{
 			Data:  videoSample,
-			Flags: 0,
+			Flags: mp4TestVideoSampleFlags(videoSample),
 		},
 	})
 	mdatPayload = append(mdatPayload, videoSample...)
 
-	moofSize := mp4TestBoxHeaderSize
+	mfhd := mp4TestMFHD(0)
+	moofSize := mp4TestBoxHeaderSize + len(mfhd)
 	for range tracks {
 		moofSize += mp4TestTrafSize(1)
 	}
@@ -128,12 +133,13 @@ func BuildSegment(videoSample []byte, includeAudioNoise bool) []byte {
 		trafsWithOffsets = append(trafsWithOffsets, mp4TestBox(
 			"traf",
 			mp4TestTFHD(track.trackID),
+			mp4TestTFDT(0),
 			mp4TestTRUN([]sampleSpec{sample}),
 		))
 		currentOffset += len(sample.Data)
 	}
 
-	moof := mp4TestBox("moof", trafsWithOffsets...)
+	moof := mp4TestBox("moof", append([][]byte{mfhd}, trafsWithOffsets...)...)
 	mdat := mp4TestBox("mdat", mdatPayload)
 
 	return append(moof, mdat...)
@@ -160,10 +166,10 @@ func buildEventPlaylist(segments int) string {
 	builder.WriteString("#EXT-X-TARGETDURATION:4\n")
 	builder.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 	builder.WriteString("#EXT-X-PLAYLIST-TYPE:EVENT\n")
-	builder.WriteString("#EXT-X-MAP:URI=\"init.mp4\"\n")
+	builder.WriteString(fmt.Sprintf("#EXT-X-MAP:URI=\"%s\"\n", helpers.HLS_INIT_FILENAME))
 	for i := 0; i < segments; i++ {
 		builder.WriteString("#EXTINF:4.000000,\n")
-		builder.WriteString(fmt.Sprintf("segment_%d.m4s\n", i))
+		builder.WriteString(fmt.Sprintf("%s%d%s\n", helpers.HLS_SEGMENT_FILENAME_PREFIX, i, helpers.HLS_SEGMENT_FILENAME_SUFFIX))
 	}
 	return builder.String()
 }
@@ -199,10 +205,71 @@ func mp4TestAVCSampleEntry(typ string, childBoxes ...[]byte) []byte {
 	return mp4TestBox(typ, append([][]byte{header}, childBoxes...)...)
 }
 
+func mp4TestFTYP() []byte {
+	payload := make([]byte, 16)
+	copy(payload[0:4], []byte("isom"))
+	binary.BigEndian.PutUint32(payload[4:8], 512)
+	copy(payload[8:12], []byte("iso2"))
+	copy(payload[12:16], []byte("avc1"))
+	return mp4TestBox("ftyp", payload)
+}
+
+func mp4TestMVHD() []byte {
+	payload := make([]byte, 84)
+	payload[0] = 0
+	binary.BigEndian.PutUint32(payload[4:8], 1000)
+	binary.BigEndian.PutUint32(payload[12:16], 0x00010000)
+	binary.BigEndian.PutUint16(payload[16:18], 0x0100)
+	binary.BigEndian.PutUint32(payload[28:32], 0x00010000)
+	binary.BigEndian.PutUint32(payload[36:40], 0x00010000)
+	binary.BigEndian.PutUint32(payload[44:48], 0x40000000)
+	binary.BigEndian.PutUint32(payload[80:84], 3)
+	return mp4TestBox("mvhd", payload)
+}
+
+func mp4TestMFHD(sequenceNumber uint32) []byte {
+	payload := make([]byte, 8)
+	payload[0] = 0
+	binary.BigEndian.PutUint32(payload[4:8], sequenceNumber)
+	return mp4TestBox("mfhd", payload)
+}
+
+func mp4TestTFDT(baseMediaDecodeTime uint32) []byte {
+	payload := make([]byte, 8)
+	payload[0] = 0
+	binary.BigEndian.PutUint32(payload[4:8], baseMediaDecodeTime)
+	return mp4TestBox("tfdt", payload)
+}
+
 func mp4TestTFHD(trackID uint32) []byte {
 	payload := make([]byte, 8)
 	binary.BigEndian.PutUint32(payload[4:8], trackID)
 	return mp4TestBox("tfhd", payload)
+}
+
+func mp4TestVideoSampleFlags(sample []byte) uint32 {
+	offset := 0
+	for offset < len(sample) {
+		if offset+4 > len(sample) {
+			return mp4TestNonSyncSampleFlag
+		}
+
+		naluLen := int(binary.BigEndian.Uint32(sample[offset : offset+4]))
+		offset += 4
+
+		if naluLen == 0 || offset+naluLen > len(sample) {
+			return mp4TestNonSyncSampleFlag
+		}
+
+		nalType := sample[offset] & 0x1F
+		if nalType == 5 {
+			return 0
+		}
+
+		offset += naluLen
+	}
+
+	return mp4TestNonSyncSampleFlag
 }
 
 func mp4TestTRUN(samples []sampleSpec) []byte {
@@ -239,7 +306,7 @@ func mp4TestTRUNSize(sampleCount int) int {
 }
 
 func mp4TestTrafSize(sampleCount int) int {
-	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + mp4TestTRUNSize(sampleCount)
+	return mp4TestBoxHeaderSize + len(mp4TestTFHD(0)) + len(mp4TestTFDT(0)) + mp4TestTRUNSize(sampleCount)
 }
 
 func mp4TestBox(typ string, payloadParts ...[]byte) []byte {
