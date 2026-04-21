@@ -5,6 +5,14 @@ FROM tracks
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetTrackScanIndex :many
+SELECT
+  id,
+  file_path,
+  album_id,
+  musician_id
+FROM tracks;
+
 -- name: CheckTrackUnchanged :one
 SELECT
   EXISTS (
@@ -67,6 +75,10 @@ SET
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
+-- name: DeleteTrack :exec
+DELETE FROM tracks
+WHERE id = ?;
+
 -- name: GetTracksByAlbumID :many
 SELECT
   *
@@ -107,6 +119,18 @@ OFFSET ?;
 SELECT
   COUNT(*)
 FROM tracks;
+
+-- name: CountTracksByAlbumID :one
+SELECT
+  COUNT(*)
+FROM tracks
+WHERE album_id = ?;
+
+-- name: CountTracksByMusicianID :one
+SELECT
+  COUNT(*)
+FROM tracks
+WHERE musician_id = ?;
 
 -- name: GetAlbumsCount :one
 SELECT

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	spotifyapi "igloo/cmd/internal/spotify"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -113,12 +114,17 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		// If Spotify confirms it as a real artist (e.g. "Hall & Oates"), fall through to
 		// the normal single-artist path. If not, split into individuals without ever
 		// creating the compound record.
-		splitArtists := isCompound && app.Spotify != nil
+		splitArtists := false
 		if isCompound && app.Spotify != nil {
 			_, err := app.Spotify.SearchArtistByName(ctx, artistTag)
-			if err == nil {
-				splitArtists = false
+			if err != nil {
+				splitArtists = shouldSplitCompoundArtistCredits(err)
 			}
+		}
+
+		parts := splitCompoundArtistCredits(artistTag)
+		if len(parts) < 2 {
+			splitArtists = false
 		}
 
 		if !splitArtists {
@@ -129,14 +135,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 			musicianID = sql.NullInt64{Int64: musician.ID, Valid: true}
 			allMusicianIDs = append(allMusicianIDs, musician.ID)
 		} else {
-			normalized := strings.ReplaceAll(artistTag, " & ", ", ")
-			parts := strings.Split(normalized, ", ")
-
 			for _, part := range parts {
-				part = strings.TrimSpace(part)
-				if part == "" {
-					continue
-				}
 				m, err := app.getOrCreateMusician(ctx, qtx, part, part)
 				if err != nil {
 					app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
@@ -174,22 +173,22 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	}
 	params.AlbumID = albumID
 
-		// Create musician-album relationships for all credited musicians
-		if albumID.Valid {
-			for _, mID := range allMusicianIDs {
-				err := qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
-					MusicianID: mID,
-					AlbumID:    albumID.Int64,
-				})
-				if err != nil {
-					app.Logger.Warn("failed to create musician-album relationship",
-						"error", err,
-						"musician_id", mID,
-						"album_id", albumID.Int64,
-					)
-				}
+	// Create musician-album relationships for all credited musicians
+	if albumID.Valid {
+		for _, mID := range allMusicianIDs {
+			err := qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
+				MusicianID: mID,
+				AlbumID:    albumID.Int64,
+			})
+			if err != nil {
+				app.Logger.Warn("failed to create musician-album relationship",
+					"error", err,
+					"musician_id", mID,
+					"album_id", albumID.Int64,
+				)
 			}
 		}
+	}
 
 	// Extract audio stream info (codec, channels, profile, language)
 	for _, stream := range info.Streams {
@@ -285,4 +284,36 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	}
 
 	return nil
+}
+
+func shouldSplitCompoundArtistCredits(err error) bool {
+	matchErr, ok := spotifyapi.AsMatchError(err)
+	if !ok {
+		return false
+	}
+
+	return matchErr.Info.Reason == "no_results" || matchErr.Info.Reason == "score_below_threshold"
+}
+
+func splitCompoundArtistCredits(artistTag string) []string {
+	normalized := strings.ReplaceAll(artistTag, " & ", ", ")
+	rawParts := strings.Split(normalized, ", ")
+	parts := make([]string, 0, len(rawParts))
+	seen := make(map[string]struct{}, len(rawParts))
+
+	for _, rawPart := range rawParts {
+		part := strings.TrimSpace(rawPart)
+		if part == "" {
+			continue
+		}
+
+		if _, exists := seen[part]; exists {
+			continue
+		}
+
+		seen[part] = struct{}{}
+		parts = append(parts, part)
+	}
+
+	return parts
 }

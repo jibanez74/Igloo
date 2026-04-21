@@ -2,35 +2,55 @@ package spotify
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/zmb3/spotify/v2"
 )
 
 func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error) {
+	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
-		return nil, fmt.Errorf("artist name cannot be empty")
+		return nil, newMatchError(MatchDebugInfo{
+			Lookup:    "artist",
+			Input:     artistName,
+			Strategy:  "artist_search",
+			Reason:    "empty_query",
+			Threshold: spotifyArtistThreshold,
+		}, nil)
 	}
 
-	cacheKey := strings.ToLower(strings.TrimSpace(artistName))
+	cacheKey := strings.ToLower(artistName)
 
 	if cached, exists := s.getArtist(cacheKey); exists {
 		return cached, nil
 	}
 
-	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(1))
+	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(spotifyArtistSearchLimit))
 	if err != nil {
-		return nil, err
+		return nil, newMatchError(MatchDebugInfo{
+			Lookup:      "artist",
+			Input:       artistName,
+			SearchQuery: artistName,
+			Strategy:    "artist_search",
+			Reason:      "search_failed",
+			Threshold:   spotifyArtistThreshold,
+		}, err)
 	}
 
-	if len(results.Artists.Artists) == 0 {
-		return nil, fmt.Errorf("no artists found for name '%s'", artistName)
+	if results.Artists == nil {
+		return nil, newMatchError(MatchDebugInfo{
+			Lookup:      "artist",
+			Input:       artistName,
+			SearchQuery: artistName,
+			Strategy:    "artist_search",
+			Reason:      "no_results",
+			Threshold:   spotifyArtistThreshold,
+		}, nil)
 	}
 
-	returned := &results.Artists.Artists[0]
-	if !strings.Contains(strings.ToLower(returned.Name), strings.ToLower(strings.TrimSpace(artistName))) {
-		return nil, fmt.Errorf("spotify result '%s' does not match requested artist '%s'", returned.Name, artistName)
+	returned, info := selectBestArtistMatch(artistName, results.Artists.Artists, "artist_search")
+	if returned == nil {
+		return nil, newMatchError(info, nil)
 	}
 
 	s.setArtist(cacheKey, returned)

@@ -74,6 +74,16 @@ FROM musicians
 WHERE id = ?
 LIMIT 1;
 
+-- name: CountAlbumsByMusicianID :one
+SELECT
+  COUNT(*)
+FROM musician_albums
+WHERE musician_id = ?;
+
+-- name: DeleteMusician :exec
+DELETE FROM musicians
+WHERE id = ?;
+
 -- name: GetAlbumsByMusicianID :many
 -- Sorted by release date (newest first), then by title
 SELECT
