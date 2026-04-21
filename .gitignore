@@ -13,7 +13,7 @@
 .vscode/
 .cursor/
 
-# Environment files
+  # Environment files
 .env
 .env.local
 
@@ -22,7 +22,6 @@
 *.db-journal
 *.db-shm
 *.db-wal
-/server/cmd/internal/database
 /server/static/*
 
 # Embedded frontend assets (generated during build)
