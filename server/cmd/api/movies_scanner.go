@@ -56,6 +56,9 @@ func (app *Application) ScanMoviesLibrary() {
 
 	err := filepath.WalkDir(app.Settings.MoviesDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
+			if path == app.Settings.MoviesDir.String {
+				return err
+			}
 			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
 			errorCount++
 			return nil

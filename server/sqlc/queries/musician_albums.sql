@@ -6,3 +6,6 @@ INSERT INTO musician_albums (
 VALUES
   (?, ?)
 ON CONFLICT (musician_id, album_id) DO NOTHING;
+
+-- name: GetMusicianIDsByAlbumID :many
+SELECT musician_id FROM musician_albums WHERE album_id = ?;

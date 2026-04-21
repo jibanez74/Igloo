@@ -393,6 +393,28 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 	})
 
+	t.Run("preserves internal '- EP' text when it is not a suffix", func(t *testing.T) {
+		var capturedQuery string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				capturedQuery = r.URL.Query().Get("q")
+				writeJSON(w, albumSearchJSON("eps123", "Foo - EP Sessions"))
+			} else {
+				writeJSON(w, fullAlbumJSON("eps123", "Foo - EP Sessions"))
+			}
+		}))
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Foo - EP Sessions", "Some Artist")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(capturedQuery, "Foo - EP Sessions") {
+			t.Errorf("query must preserve internal '- EP' text, got: %s", capturedQuery)
+		}
+		if strings.Contains(capturedQuery, `album:"Foo"`) {
+			t.Errorf("query must not truncate title to prefix, got: %s", capturedQuery)
+		}
+	})
+
 	t.Run("validation accepts when result name is contained in query title", func(t *testing.T) {
 		// Spotify returns "Abbey Road" but the file tag says "Abbey Road (Remastered)".
 		// Bidirectional check: "abbey road" is contained in "abbey road remastered" -> passes.

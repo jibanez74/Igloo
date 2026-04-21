@@ -8,12 +8,12 @@ import (
 	"igloo/cmd/internal/helpers"
 	"strings"
 
-	"github.com/zmb3/spotify/v2"
+	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 // generateMusicianSummary creates a rich, descriptive summary for a musician
 // based on their Spotify data including genres, popularity, and follower count.
-func generateMusicianSummary(artist *spotify.FullArtist) string {
+func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 	var parts []string
 
 	// Base info - artist name
