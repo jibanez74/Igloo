@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	spotifylib "github.com/zmb3/spotify/v2"
 )
 
 func artistItemJSON(id, name string) map[string]interface{} {
@@ -135,7 +137,14 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 				return
 			}
 
-			writeJSON(w, fullAlbumJSON("right123", "Greatest Hits"))
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/albums/right123"):
+				writeJSON(w, fullAlbumJSON("right123", "Greatest Hits"))
+			case strings.HasSuffix(r.URL.Path, "/albums/wrong123"):
+				writeJSON(w, fullAlbumJSON("wrong123", "Greatest Hits"))
+			default:
+				http.NotFound(w, r)
+			}
 		}))
 
 		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Greatest Hits", "Artist B")
@@ -193,6 +202,39 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 		}
 		if string(album.ID) != "meteora123" {
 			t.Fatalf("album.ID = %q, want %q", album.ID, "meteora123")
+		}
+	})
+
+	t.Run("selectBestAlbumMatch handles all-negative candidate scores without panicking", func(t *testing.T) {
+		albums := []spotifylib.SimpleAlbum{
+			{
+				ID:   "bad123",
+				Name: "Completely Different",
+				Artists: []spotifylib.SimpleArtist{
+					{Name: "Wrong Artist"},
+				},
+			},
+			{
+				ID:   "worse123",
+				Name: "Nothing Related",
+				Artists: []spotifylib.SimpleArtist{
+					{Name: "Another Artist"},
+				},
+			},
+		}
+
+		album, info := selectBestAlbumMatch("Target Title", "Expected Artist", albums, "query", "album_field_search")
+		if album != nil {
+			t.Fatalf("album = %#v, want nil", album)
+		}
+		if info.Reason != "score_below_threshold" {
+			t.Fatalf("reason = %q, want %q", info.Reason, "score_below_threshold")
+		}
+		if info.CandidateName != "Completely Different" {
+			t.Fatalf("candidate = %q, want %q", info.CandidateName, "Completely Different")
+		}
+		if info.Score >= 0 {
+			t.Fatalf("score = %d, want negative score", info.Score)
 		}
 	})
 }

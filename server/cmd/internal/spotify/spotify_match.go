@@ -365,13 +365,13 @@ func scoreAlbumArtist(queryArtist string, candidateArtists []spotifylib.SimpleAr
 
 func trimAlbumSearchTitle(title string) string {
 	searchTitle := strings.TrimSpace(title)
+	lowerSearchTitle := strings.ToLower(searchTitle)
 	for _, suffix := range []string{" - single", " - ep", " - lp", " - album"} {
-		index := strings.Index(strings.ToLower(searchTitle), suffix)
-		if index == -1 {
+		if !strings.HasSuffix(lowerSearchTitle, suffix) {
 			continue
 		}
 
-		searchTitle = strings.TrimSpace(searchTitle[:index])
+		searchTitle = strings.TrimSpace(searchTitle[:len(searchTitle)-len(suffix)])
 		break
 	}
 
@@ -432,13 +432,19 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 		return nil, info
 	}
 
-	bestIndex := -1
-	bestScore := -1
-	bestArtistName := ""
+	titleScore := scoreAlbumTitle(title, albums[0].Name)
+	artistScore, candidateArtistName := scoreAlbumArtist(artist, albums[0].Artists)
+	bestScore := (titleScore*3 + artistScore) / 4
+	if strings.TrimSpace(artist) != "" && artistScore < 60 {
+		bestScore -= 12
+	}
 
-	for index := range albums {
-		titleScore := scoreAlbumTitle(title, albums[index].Name)
-		artistScore, candidateArtistName := scoreAlbumArtist(artist, albums[index].Artists)
+	bestIndex := 0
+	bestArtistName := candidateArtistName
+
+	for index := 1; index < len(albums); index++ {
+		titleScore = scoreAlbumTitle(title, albums[index].Name)
+		artistScore, candidateArtistName = scoreAlbumArtist(artist, albums[index].Artists)
 		score := (titleScore*3 + artistScore) / 4
 		if strings.TrimSpace(artist) != "" && artistScore < 60 {
 			score -= 12

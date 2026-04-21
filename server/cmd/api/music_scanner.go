@@ -48,7 +48,7 @@ func (app *Application) ScanMusicLibrary() {
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
 			errorCount++
-			return nil
+			return err
 		}
 
 		if entry.IsDir() {

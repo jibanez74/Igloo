@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -252,5 +253,49 @@ func TestProcessTrackFile_SplitsCompoundCreditsOnMatchRejection(t *testing.T) {
 		if names[index] != wantNames[index] {
 			t.Fatalf("names[%d] = %q, want %q", index, names[index], wantNames[index])
 		}
+	}
+}
+
+func TestProcessTrackFile_ReturnsErrorWhenSplitArtistPersistenceFails(t *testing.T) {
+	probe := &stubMusicScannerFfprobe{
+		result: newTestTrackMetadata("Charlie Puth & Coco Jones"),
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		artistLookups: map[string]stubSpotifyLookup{
+			"Charlie Puth & Coco Jones": {
+				err: &spotifyapi.MatchError{
+					Info: spotifyapi.MatchDebugInfo{
+						Lookup:        "artist",
+						Input:         "Charlie Puth & Coco Jones",
+						SearchQuery:   "Charlie Puth & Coco Jones",
+						Strategy:      "artist_search",
+						CandidateName: "Charlie Puth",
+						Score:         34,
+						Threshold:     78,
+						Reason:        "score_below_threshold",
+					},
+				},
+			},
+		},
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatalf("rollback tx: %v", err)
+	}
+
+	err = app.processTrackFile(context.Background(), qtx, "/music/charlie-coco.mp3", "mp3")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), `compound musician failed for "Charlie Puth"`) {
+		t.Fatalf("error = %q, want compound musician failure", err)
 	}
 }

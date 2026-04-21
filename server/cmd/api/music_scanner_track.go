@@ -139,7 +139,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 				m, err := app.getOrCreateMusician(ctx, qtx, part, part)
 				if err != nil {
 					app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
-					continue
+					return fmt.Errorf("compound musician failed for %q: %w", part, err)
 				}
 				if !musicianID.Valid {
 					musicianID = sql.NullInt64{Int64: m.ID, Valid: true}
