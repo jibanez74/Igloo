@@ -46,9 +46,12 @@ func (app *Application) ScanMusicLibrary() {
 
 	err := filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
+			if path == app.Settings.MusicDir.String {
+				return err
+			}
 			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
 			errorCount++
-			return err
+			return nil
 		}
 
 		if entry.IsDir() {
@@ -240,13 +243,32 @@ func (app *Application) reconcileMissingTracks(
 			}
 
 			if track.AlbumID.Valid {
+				albumMusicianIDs, queryErr := qtx.GetMusicianIDsByAlbumID(ctx, track.AlbumID.Int64)
+				if queryErr != nil {
+					return queryErr
+				}
+
 				deleteErr = app.deleteAlbumIfEmpty(ctx, qtx, track.AlbumID.Int64)
 				if deleteErr != nil {
 					return deleteErr
 				}
-			}
 
-			if track.MusicianID.Valid {
+				seen := make(map[int64]bool)
+				if track.MusicianID.Valid {
+					seen[track.MusicianID.Int64] = true
+				}
+				for _, mID := range albumMusicianIDs {
+					if !seen[mID] {
+						seen[mID] = true
+					}
+				}
+				for mID := range seen {
+					deleteErr = app.deleteMusicianIfUnused(ctx, qtx, mID)
+					if deleteErr != nil {
+						return deleteErr
+					}
+				}
+			} else if track.MusicianID.Valid {
 				deleteErr = app.deleteMusicianIfUnused(ctx, qtx, track.MusicianID.Int64)
 				if deleteErr != nil {
 					return deleteErr
