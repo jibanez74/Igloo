@@ -24,7 +24,7 @@
 *.db-wal
 /server/static/*
 
-# Embedded frontend assets (generated during build)
+  # Embedded frontend assets (generated during build)
 # These are copied from web/dist by the root Makefile
 # A placeholder index.html exists for backend-only builds
 /server/cmd/api/web/dist/*.html

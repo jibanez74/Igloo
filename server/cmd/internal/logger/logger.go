@@ -24,6 +24,7 @@ var _ LoggerInterface = (*logger)(nil)
 
 type LoggerConfig struct {
 	Debug   bool
+	Stdout  bool
 	LogDir  string
 	LogFile string
 }
@@ -37,6 +38,24 @@ type LoggerConfig struct {
 func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	var w io.Writer
 	var closer func() error = func() error { return nil }
+
+	if cfg.Stdout {
+		w = os.Stdout
+
+		if cfg.Debug {
+			handler := slog.NewTextHandler(w, &slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			})
+
+			return &logger{Logger: slog.New(handler)}, closer, nil
+		}
+
+		handler := slog.NewJSONHandler(w, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		})
+
+		return &logger{Logger: slog.New(handler)}, closer, nil
+	}
 
 	if cfg.Debug {
 		w = os.Stdout

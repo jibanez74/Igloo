@@ -2,7 +2,7 @@
 
 The goal of this project is to build a modern, inclusive media system that prioritizes accessible interfaces and dependable local media playback. It is designed to deliver a high-quality experience for users who value reliability, flexibility, and full control over their media.
 At its core, this system is hyper-focused on media playback, supporting a wide range of codecs while maintaining a strong commitment to accessibility—especially for blind users. As a blind developer, I created this system to ensure that I can fully manage and enjoy my own media environment without missing out on any features or relying on others. Accessibility is not treated as an afterthought, but as a fundamental requirement.
-This project is also deeply personal. In my family, we value the experience of watching movies together, enjoying music, and revisiting photos and videos that hold meaningful memories. As the person responsible for managing our technology, I need tools that are both powerful and accessible—tools that won’t fail because of inaccessible interfaces or overlooked details. This system is built to meet that need, empowering not only me but other blind users to independently manage and enjoy their own media ecosystems.
+This project is also deeply personal. In my family, we value the experience of watching movies together, enjoying music, and revisiting photos and videos that hold meaningful memories. As the person responsible for managing our technology, I need tools that are both powerful and accessible—tools that won't fail because of inaccessible interfaces or overlooked details. This system is built to meet that need, empowering not only me but other blind users to independently manage and enjoy their own media ecosystems.
 
 Igloo is currently in active development and has not yet reached its first stable release. It is being built as a focused media server platform for movies, TV shows, personal videos, and music, with multiple clients planned over time.
 
@@ -47,33 +47,97 @@ The goal is for the project to release a beta version by the end of May 2026, an
 | `server/sqlc/` | SQL schema and queries; generated Go code lives in `server/cmd/internal/database/` |
 | `web/`         | React-based web client built and served by the Igloo server                        |
 
-## Prerequisites
+## Docker Deployment
+
+The recommended way to run Igloo in production is with Docker Compose. A pre-built image is published to GitHub Container Registry on every versioned release and can be pulled without cloning the repository.
+
+### Quick start
+
+```bash
+# Download the two required files
+curl -O https://raw.githubusercontent.com/jibanez74/Igloo/main/compose.yaml
+curl -O https://raw.githubusercontent.com/jibanez74/Igloo/main/.env.example
+
+# Create your environment file
+cp .env.example .env
+```
+
+Edit `.env` and set at minimum:
+
+- `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` — absolute paths to your media on the host
+- `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` — credentials for the first login
+
+Then prepare the data directories and start the server:
+
+```bash
+mkdir -p ./config ./transcode
+chown -R 1000:1000 ./config ./transcode
+
+docker compose --profile cpu up -d
+```
+
+The server will be available on port `8080` by default. On a fresh database it creates one admin account using the credentials from your `.env` file.
+
+### Hardware acceleration profiles
+
+The compose file ships three profiles. Pick the one that matches your host:
+
+| Profile  | Command                                 | Requirements                                                                                                                              |
+| -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `cpu`    | `docker compose --profile cpu up -d`    | No GPU required                                                                                                                           |
+| `nvidia` | `docker compose --profile nvidia up -d` | [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed on host |
+| `intel`  | `docker compose --profile intel up -d`  | Set `RENDER_GROUP_ID` in `.env` first (see below)                                                                                         |
+
+For Intel QSV, find your render group ID and add it to `.env`:
+
+```bash
+getent group render | cut -d: -f3
+# Add the result to .env: RENDER_GROUP_ID=<number>
+```
+
+### Updating to a new release
+
+```bash
+docker compose --profile cpu pull
+docker compose --profile cpu up -d
+```
+
+Replace `cpu` with whichever profile you use.
+
+### Volume permissions
+
+The container runs as a non-root user (`igloo`, UID/GID 1000). The `config` and `transcode`
+directories on the host must be owned by that UID before first start:
+
+```bash
+chown -R 1000:1000 ./config ./transcode
+```
+
+Media directories are mounted read-only and do not need this change.
+
+---
+
+## Development Setup
+
+### Prerequisites
 
 - Go: version aligned with `server/go.mod`
 - CGO: required for `github.com/mattn/go-sqlite3` (`CGO_ENABLED=1`)
 - SQLite development libraries: required for CGO linking
 - Bun: for installing and running the web client in `web/`
 - sqlc: for generating database code from SQL
-- `server/.env`: the server loads `server/.env` on startup and exits if it is missing
 
-## FFmpeg and ffprobe
+### FFmpeg and ffprobe
 
-Large FFmpeg and ffprobe binaries are not committed to the repository. You need platform-specific binaries under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` that match the `//go:embed` files expected by the build tags, such as `ffmpeg_darwin_arm64.go` and `ffprobe_darwin_arm64.go`.
+The Docker build downloads and embeds the correct Jellyfin FFmpeg binaries automatically. For local development you need to supply them manually.
 
-At the moment, this project uses FFmpeg binaries provided by the Jellyfin project because they include features that are useful for media transcoding. Add the appropriate binaries to those directories before building.
+Platform-specific binaries belong under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/`, named to match the `//go:embed` directives in the corresponding build tag files (e.g. `ffmpeg_darwin_arm64` for `ffmpeg_darwin_arm64.go`).
 
-## Quick Start for Development
-
-Development uses two processes:
-
-- Backend: Go server on port `8080` by default
-- Frontend: Vite development server on port `3000` by default
-
-During development, Vite proxies `/api` requests to `http://localhost:8080`.
+This project uses the [Jellyfin FFmpeg builds](https://github.com/jellyfin/jellyfin-ffmpeg/releases) because they include codec and hardware acceleration support beyond what standard FFmpeg distributions provide.
 
 ### 1. Create `server/.env`
 
-Minimal example:
+The server calls `godotenv.Load()` on startup to read `server/.env`. If the file is missing it logs a warning and continues, relying on environment variables already present in the process. For local development, create the file:
 
 ```env
 PORT=8080
@@ -108,9 +172,7 @@ From `server/`:
 make dev
 ```
 
-This runs sqlc generation, syncs the schema into `cmd/api`, and starts the server with `VITE_DEV_SERVER=http://localhost:3000` so the backend can hand browser requests off to the Vite app during development.
-
-Before running this, make sure the required FFmpeg and ffprobe binaries are present under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` as described above.
+This runs sqlc generation, syncs the schema into `cmd/api`, and starts the server with `VITE_DEV_SERVER=http://localhost:3000` so the backend hands browser requests off to the Vite app during development.
 
 ### 3. Start the web client
 
@@ -123,16 +185,18 @@ bun run dev
 
 Open the URL printed by Vite, usually `http://localhost:3000`.
 
-### Default admin user
+### Default admin account
 
-On a fresh database, if no admin exists, the server creates:
+On a fresh database the server creates one admin account:
 
 - Email: `admin@sample.com`
 - Password: `AdminPassword`
 
-Change this password immediately after first login. These credentials are only intended as a bootstrap account for local setup.
+Change this password immediately after first login. These credentials are only intended as a bootstrap account for local setup. In Docker, override them with `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` in `.env`.
 
-## Production Build
+---
+
+## Production Build (without Docker)
 
 In production, the web client is built and embedded into the server binary.
 
@@ -149,8 +213,6 @@ This process:
 2. Builds the web client into `web/dist`
 3. Copies the built assets into `server/cmd/api/webdist/`
 4. Builds the `igloo-server` binary
-
-This is the recommended build for deployment when you want the server to deliver the web application directly.
 
 Backend-only build:
 
@@ -176,8 +238,8 @@ Use this only if you are handling web assets separately or copying them yourself
 
 ## Database and SQL
 
-- Engine: SQLite
-- Database path: controlled by `DB_PATH`, default `igloo.db`
+- Engine: SQLite with WAL journaling
+- Database path: controlled by `DB_PATH` (default `igloo.db` in development, `/config/igloo.db` in Docker)
 - Schema source of truth: `server/sqlc/schema.sql`
 - Embedded schema copy: `server/cmd/api/schema.sql`
 - Query files: `server/sqlc/queries/*.sql`
@@ -200,7 +262,7 @@ make generate
 
 ## Configuration Reference
 
-The server **requires** a valid `server/.env` file for normal startup: `server/cmd/api/main.go` calls `godotenv.Load()`, and if that call returns an error (for example when the file is missing or cannot be read), the process exits immediately with `log.Fatal(err)`. After a successful load, variables may still be overridden by the process environment where your deployment sets them.
+All configuration is read from environment variables. In local development these are loaded from `server/.env`. In Docker they are passed through `compose.yaml` (see `.env.example` for the full list with descriptions).
 
 | Variable                                 | Role                                                                     |
 | ---------------------------------------- | ------------------------------------------------------------------------ |
@@ -214,10 +276,47 @@ The server **requires** a valid `server/.env` file for normal startup: `server/c
 | `SPOTIFY_CLIENT_SECRET`                  | Spotify client secret for optional music metadata enrichment             |
 | `JELLYFIN_TOKEN`                         | Optional Jellyfin integration token                                      |
 | `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories                                           |
-| `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded                            |
-| `ENABLE_LOGGER` / `ENABLE_WATCHER`       | Feature flags for logging and watchers                                   |
+| `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded during scanning            |
+| `ENABLE_LOGGER` / `ENABLE_WATCHER`       | Feature flags for file logging and filesystem watchers                   |
 | `HARDWARE_ACCELERATION_DEVICE`           | Transcoding target: `cpu`, `apple`, `nvidia`, or `intel`                 |
-| `VITE_DEV_SERVER`                        | Development URL used to hand off browser requests to the Vite app        |
+| `SESSION_COOKIE_SECURE`                  | Set `true` when running behind HTTPS (e.g. Tailscale)                    |
+| `LOG_TO_STDOUT`                          | Force log output to stdout regardless of other settings                  |
+| `VITE_DEV_SERVER`                        | Development only — proxies browser requests to the Vite dev server       |
+| `DEFAULT_ADMIN_NAME`                     | Name for the bootstrap admin account (used only on first run)            |
+| `DEFAULT_ADMIN_EMAIL`                    | Email for the bootstrap admin account (used only on first run)           |
+| `DEFAULT_ADMIN_PASSWORD`                 | Password for the bootstrap admin account (used only on first run)        |
+
+## CI/CD
+
+Two GitHub Actions workflows run on every push:
+
+### CI (`ci.yml`)
+
+Runs on every branch push and on pull requests to `main`. Never publishes anything.
+
+- `test-backend` — runs `go test -v ./...` against the Go server
+- `test-frontend` — runs ESLint and a full TypeScript + Vite build of the web client
+
+### Publish (`docker-publish.yml`)
+
+Runs only when a `v*` tag is pushed. Tests must pass before the image is built.
+
+```
+test-backend  ┐
+              ├── build-and-push → ghcr.io/jibanez74/igloo
+test-frontend ┘
+```
+
+Pushing `v1.2.3` produces three image tags: `:v1.2.3`, `:1.2`, and `:latest`.
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The published image appears at `ghcr.io/jibanez74/igloo` under the repository's Packages tab.
 
 ## Testing
 
@@ -228,5 +327,3 @@ make test
 ```
 
 This runs `go test -v ./...`.
-
-Some tests may rely on fixtures or external APIs depending on the package being tested.

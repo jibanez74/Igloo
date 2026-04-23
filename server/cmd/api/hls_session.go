@@ -32,9 +32,9 @@ type HLSSession struct {
 }
 
 type hlsSessionStartParams struct {
-	Movie            database.Movie
-	PrimaryVideo     database.VideoStream
-	SelectedAudio    database.AudioStream
+	Movie            *database.Movie
+	PrimaryVideo     *database.VideoStream
+	SelectedAudio    *database.AudioStream
 	RequestedProfile string
 	EffectiveProfile string
 	AudioTrack       int
@@ -44,7 +44,7 @@ type hlsSessionStartParams struct {
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
 // (HDR10/PQ or HLG). These sources require tone-mapping when transcoded to SDR profiles.
-func isHDRStream(stream database.VideoStream) bool {
+func isHDRStream(stream *database.VideoStream) bool {
 	if !stream.ColorTransfer.Valid {
 		return false
 	}
@@ -154,7 +154,7 @@ func cleanupHLSSession(session *HLSSession) {
 	}
 }
 
-func (app *Application) startHLSSession(params hlsSessionStartParams) (*HLSSession, error) {
+func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := strings.ToLower(params.SelectedAudio.Codec)
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
@@ -444,7 +444,7 @@ func (app *Application) createHLSSession(
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
 	videoCodec := strings.ToLower(strings.TrimSpace(primaryVideo.Codec))
-	safetyCacheKey := remuxSafetyFingerprint(movie, primaryVideo)
+	safetyCacheKey := remuxSafetyFingerprint(&movie, &primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
@@ -492,10 +492,10 @@ func (app *Application) createHLSSession(
 		}
 	}
 
-	session, err := app.startHLSSession(hlsSessionStartParams{
-		Movie:            movie,
-		PrimaryVideo:     primaryVideo,
-		SelectedAudio:    selectedAudio,
+	session, err := app.startHLSSession(&hlsSessionStartParams{
+		Movie:            &movie,
+		PrimaryVideo:     &primaryVideo,
+		SelectedAudio:    &selectedAudio,
 		RequestedProfile: requestedProfile,
 		EffectiveProfile: effectiveProfile,
 		AudioTrack:       audioTrack,
@@ -527,10 +527,10 @@ func (app *Application) createHLSSession(
 			"fallback_reason", fallbackReason,
 		)
 		cleanupHLSSession(session)
-		return app.startHLSSession(hlsSessionStartParams{
-			Movie:            movie,
-			PrimaryVideo:     primaryVideo,
-			SelectedAudio:    selectedAudio,
+		return app.startHLSSession(&hlsSessionStartParams{
+			Movie:            &movie,
+			PrimaryVideo:     &primaryVideo,
+			SelectedAudio:    &selectedAudio,
 			RequestedProfile: requestedProfile,
 			EffectiveProfile: fallbackProfile,
 			AudioTrack:       audioTrack,
@@ -556,10 +556,10 @@ func (app *Application) createHLSSession(
 			"fallback_reason", fallbackReason,
 		)
 		cleanupHLSSession(session)
-		return app.startHLSSession(hlsSessionStartParams{
-			Movie:            movie,
-			PrimaryVideo:     primaryVideo,
-			SelectedAudio:    selectedAudio,
+		return app.startHLSSession(&hlsSessionStartParams{
+			Movie:            &movie,
+			PrimaryVideo:     &primaryVideo,
+			SelectedAudio:    &selectedAudio,
 			RequestedProfile: requestedProfile,
 			EffectiveProfile: fallbackProfile,
 			AudioTrack:       audioTrack,

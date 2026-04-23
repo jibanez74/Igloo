@@ -35,6 +35,18 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+const (
+	envSessionCookieSecure = "SESSION_COOKIE_SECURE"
+	envLogToStdout         = "LOG_TO_STDOUT"
+	defaultAppPort         = 8080
+	defaultDBPath          = "/config/igloo.db"
+	defaultStaticDir       = "/config/static"
+	defaultLogsDir         = "/config/logs"
+	defaultMoviesDir       = "/media/movies"
+	defaultShowsDir        = "/media/shows"
+	defaultMusicDir        = "/media/music"
+)
+
 var movieMetadataLockColumns = []string{
 	"user_locked_title",
 	"user_locked_tmdb_id",
@@ -127,7 +139,7 @@ func main() {
 	// Load local development settings from server/.env before startup.
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("warning: failed to load .env: %v", err)
 	}
 
 	app, err := InitApp()
@@ -135,19 +147,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	port, err := strconv.Atoi(os.Getenv("PORT"))
-	if err != nil {
-		port = 8080
-	}
-
 	app.Server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", defaultAppPort),
 		Handler: app.Router,
 	}
 
 	go app.ListenForShutdown()
 
-	log.Printf("server listening on port %d", port)
+	log.Printf("server listening on port %d", defaultAppPort)
 
 	err = app.Server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -280,7 +287,7 @@ func InitApp() (*Application, error) {
 func (app *Application) InitDB() error {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "igloo.db"
+		dbPath = defaultDBPath
 	}
 
 	_, err := os.Stat(dbPath)
@@ -553,6 +560,7 @@ func (app *Application) ensureMovieMetadataLockColumns() error {
 func (app *Application) InitSettings(ctx context.Context) error {
 	settings, err := app.Queries.GetSettings(ctx)
 	if err == nil {
+		applyRuntimeSettingOverrides(&settings)
 		app.Logger.Info("loaded existing settings from database")
 		app.Settings = &settings
 		return nil
@@ -570,17 +578,32 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = "logs"
+		logsDir = defaultLogsDir
 	}
 
 	staticDir := os.Getenv("STATIC_DIR")
 	if staticDir == "" {
-		staticDir = "static"
+		staticDir = defaultStaticDir
 	}
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {
 		hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
+	}
+
+	moviesDir := os.Getenv("MOVIES_DIR")
+	if moviesDir == "" {
+		moviesDir = defaultMoviesDir
+	}
+
+	showsDir := os.Getenv("SHOWS_DIR")
+	if showsDir == "" {
+		showsDir = defaultShowsDir
+	}
+
+	musicDir := os.Getenv("MUSIC_DIR")
+	if musicDir == "" {
+		musicDir = defaultMusicDir
 	}
 
 	params := database.CreateSettingsParams{
@@ -592,9 +615,9 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,
 		DownloadImages:             downloadImages,
-		MoviesDir:                  helpers.NullString(os.Getenv("MOVIES_DIR")),
-		ShowsDir:                   helpers.NullString(os.Getenv("SHOWS_DIR")),
-		MusicDir:                   helpers.NullString(os.Getenv("MUSIC_DIR")),
+		MoviesDir:                  helpers.NullString(moviesDir),
+		ShowsDir:                   helpers.NullString(showsDir),
+		MusicDir:                   helpers.NullString(musicDir),
 		StaticDir:                  staticDir,
 		LogsDir:                    logsDir,
 	}
@@ -606,6 +629,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	app.Logger.Info("default settings created successfully")
 
+	applyRuntimeSettingOverrides(&settings)
 	app.Settings = &settings
 
 	return nil
@@ -685,13 +709,14 @@ func (app *Application) InitDirs() error {
 // InitLogger configures stdout logging for debug mode and file-backed logging otherwise.
 func (app *Application) InitLogger() error {
 	debug := os.Getenv("DEBUG") == "true"
+	logToStdout := envBool(envLogToStdout, debug)
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = "logs"
+		logsDir = defaultLogsDir
 	}
 
-	if !debug {
+	if !logToStdout {
 		_, err := helpers.GetOrCreateDir(logsDir)
 		if err != nil {
 			return fmt.Errorf("failed to create logs directory: %w", err)
@@ -700,6 +725,7 @@ func (app *Application) InitLogger() error {
 
 	logger, closer, err := applogger.New(&applogger.LoggerConfig{
 		Debug:   debug,
+		Stdout:  logToStdout,
 		LogDir:  logsDir,
 		LogFile: "igloo.log",
 	})
@@ -774,11 +800,89 @@ func (app *Application) InitSession() {
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = os.Getenv("DEBUG") != "true"
+	sessionManager.Cookie.Secure = envBool(envSessionCookieSecure, false)
 
 	app.SessionManager = sessionManager
 
 	app.Logger.Info("session manager initialized successfully")
+}
+
+func applyRuntimeSettingOverrides(settings *database.Setting) {
+	if settings == nil {
+		return
+	}
+
+	overrideNullStringSetting(&settings.TmdbKey, "TMDB_API_KEY")
+	overrideNullStringSetting(&settings.JellyfinToken, "JELLYFIN_TOKEN")
+	overrideNullStringSetting(&settings.SpotifyClientID, "SPOTIFY_CLIENT_ID")
+	overrideNullStringSetting(&settings.SpotifyClientSecret, "SPOTIFY_CLIENT_SECRET")
+	overrideNullStringSetting(&settings.HardwareAccelerationDevice, "HARDWARE_ACCELERATION_DEVICE")
+	overrideBoolSetting(&settings.EnableLogger, "ENABLE_LOGGER")
+	overrideBoolSetting(&settings.EnableWatcher, "ENABLE_WATCHER")
+	overrideBoolSetting(&settings.DownloadImages, "DOWNLOAD_IMAGES")
+	overrideNullStringSetting(&settings.MoviesDir, "MOVIES_DIR")
+	overrideNullStringSetting(&settings.ShowsDir, "SHOWS_DIR")
+	overrideNullStringSetting(&settings.MusicDir, "MUSIC_DIR")
+	overrideStringSetting(&settings.StaticDir, "STATIC_DIR")
+	overrideStringSetting(&settings.LogsDir, "LOGS_DIR")
+}
+
+func overrideNullStringSetting(target *sql.NullString, envName string) {
+	if target == nil {
+		return
+	}
+
+	value, ok := os.LookupEnv(envName)
+	if !ok || strings.TrimSpace(value) == "" {
+		return
+	}
+
+	*target = helpers.NullString(value)
+}
+
+func overrideStringSetting(target *string, envName string) {
+	if target == nil {
+		return
+	}
+
+	value, ok := os.LookupEnv(envName)
+	if !ok || strings.TrimSpace(value) == "" {
+		return
+	}
+
+	*target = value
+}
+
+func overrideBoolSetting(target *bool, envName string) {
+	if target == nil {
+		return
+	}
+
+	value, ok := os.LookupEnv(envName)
+	if !ok || strings.TrimSpace(value) == "" {
+		return
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return
+	}
+
+	*target = parsed
+}
+
+func envBool(name string, fallback bool) bool {
+	value, ok := os.LookupEnv(name)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
 }
 
 func (app *Application) InitRouter() {

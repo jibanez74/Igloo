@@ -14,7 +14,7 @@ type remuxSafetyVerdict struct {
 	Reason string
 }
 
-func remuxSafetyFingerprint(movie database.Movie, video database.VideoStream) string {
+func remuxSafetyFingerprint(movie *database.Movie, video *database.VideoStream) string {
 	return fmt.Sprintf(
 		"%d:%d:%d:%s",
 		movie.ID,
