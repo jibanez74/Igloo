@@ -62,6 +62,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && groupadd --gid 1000 igloo \
   && useradd  --uid 1000 --gid igloo --no-create-home igloo
 
+RUN mkdir -p /transcode /config \
+  && chown igloo:igloo /transcode /config \
+  && chmod 750 /transcode /config
+
 ENV PORT=8080
 ENV TMPDIR=/transcode
 ENV LOG_TO_STDOUT=true

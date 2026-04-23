@@ -290,7 +290,13 @@ func (app *Application) InitDB() error {
 		dbPath = defaultDBPath
 	}
 
-	_, err := os.Stat(dbPath)
+	dir := filepath.Dir(dbPath)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(dbPath)
 	if err == nil {
 		app.Logger.Info("opening existing database", "path", dbPath)
 	} else if os.IsNotExist(err) {

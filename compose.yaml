@@ -10,6 +10,7 @@ x-igloo-env: &igloo-env
   DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-}
   DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-}
   DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+  LOG_TO_STDOUT: ${LOG_TO_STDOUT:-true}
 
 x-igloo-volumes: &igloo-volumes
   - ${CONFIG_DIR:-./config}:/config
@@ -39,10 +40,9 @@ x-igloo-base: &igloo-base
 
 services:
   # CPU software transcoding (default)
-  # docker compose --profile cpu up -d
+  # docker compose up -d
   igloo:
     <<: *igloo-base
-    profiles: [cpu]
     environment:
       <<: *igloo-env
       HARDWARE_ACCELERATION_DEVICE: cpu

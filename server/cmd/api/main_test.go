@@ -554,22 +554,33 @@ func setupTestApp(t *testing.T) *Application {
 	return app
 }
 
+func clearSettingsEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"TMDB_API_KEY",
+		"JELLYFIN_TOKEN",
+		"SPOTIFY_CLIENT_ID",
+		"SPOTIFY_CLIENT_SECRET",
+		"HARDWARE_ACCELERATION_DEVICE",
+		"ENABLE_LOGGER",
+		"ENABLE_WATCHER",
+		"DOWNLOAD_IMAGES",
+		"STATIC_DIR",
+		"LOGS_DIR",
+		"MOVIES_DIR",
+		"SHOWS_DIR",
+		"MUSIC_DIR",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	clearSettingsEnv(t)
 	ctx := context.Background()
-
-	// Clear any env vars that might affect the test.
-	// These match the env vars read by InitSettings in main.go.
-	envVars := []string{
-		"TMDB_API_KEY", "JELLYFIN_TOKEN",
-		"HARDWARE_ACCELERATION_DEVICE",
-		"ENABLE_LOGGER", "ENABLE_WATCHER", "DOWNLOAD_IMAGES",
-	}
-	for _, v := range envVars {
-		os.Unsetenv(v)
-	}
 
 	err := app.InitSettings(ctx)
 	if err != nil {
@@ -629,6 +640,8 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 func TestInitSettings_UsesEnvVars(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
+
+	clearSettingsEnv(t)
 
 	// Set all environment variables that InitSettings reads
 	os.Setenv("TMDB_API_KEY", "test-tmdb-key")
@@ -760,6 +773,7 @@ func TestInitSettings_ExistingSettingsAllowRuntimeOverrides(t *testing.T) {
 		t.Fatalf("Failed to create test settings: %v", err)
 	}
 
+	clearSettingsEnv(t)
 	t.Setenv("TMDB_API_KEY", "override-key")
 	t.Setenv("JELLYFIN_TOKEN", "override-jellyfin")
 	t.Setenv("SPOTIFY_CLIENT_ID", "override-spotify-id")
