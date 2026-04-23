@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
@@ -47,7 +47,7 @@ type TrackItemProps = {
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 };
 
-const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem({
+export default function TrackItem({
   id,
   title,
   duration,
@@ -70,7 +70,7 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
   isDraggable = false,
   isDragging = false,
   dragHandleProps,
-}, ref) {
+}: TrackItemProps) {
   const queryClient = useQueryClient();
   const [liked, setLiked] = useState(isLiked);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
@@ -132,7 +132,6 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
 
   return (
     <div
-      ref={ref}
       className={`group flex items-center gap-3 p-3 transition-all duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
         isCurrentTrack ? "bg-slate-800/40" : ""
       } ${isDragging ? "opacity-50 shadow-lg ring-2 ring-amber-400/50" : ""}`}
@@ -233,6 +232,4 @@ const TrackItem = forwardRef<HTMLDivElement, TrackItemProps>(function TrackItem(
       </button>
     </div>
   );
-});
-
-export default TrackItem;
+}

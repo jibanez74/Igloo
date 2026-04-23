@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -230,14 +230,14 @@ export default function TechnicalDetailsDialog({
   const runTime = details ? unwrapInt(details.movie.run_time) : null;
   const durationSec = details ? unwrapFloat(details.movie.duration) : null;
 
-  const handleOpenAutoFocus = useCallback((e: Event) => {
+  const handleOpenAutoFocus = (e: Event) => {
     e.preventDefault();
     // Focus the title first so SR starts at the top (Close is last in DOM).
     // Do not focus body content here: its ref is missing while data is loading.
     queueMicrotask(() => {
       titleRef.current?.focus();
     });
-  }, []);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

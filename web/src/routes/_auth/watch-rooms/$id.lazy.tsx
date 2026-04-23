@@ -260,6 +260,38 @@ export function WatchRoomPageContent({
 
   const MAX_RECONNECT_ATTEMPTS = 5;
 
+  const handleSocketOpen = useEffectEvent(() => {
+    setConnectionReady(true);
+    reconnectAttemptsRef.current = 0;
+    const ws = socketRef.current;
+    if (!ws) return;
+    heartbeatRef.current = window.setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 25_000);
+  });
+
+  const handleSocketClose = useEffectEvent(() => {
+    setConnectionReady(false);
+    if (
+      !intentionalCloseRef.current &&
+      reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+    ) {
+      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
+      reconnectAttemptsRef.current += 1;
+      setPlaybackError(null);
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectTimeoutRef.current = null;
+        setReconnectKey(k => k + 1);
+      }, delay);
+    }
+  });
+
+  const handleSocketError = useEffectEvent(() => {
+    setPlaybackError("Realtime sync connection failed for this watch room.");
+  });
+
   useEffect(() => {
     roomDeletionHandledRef.current = false;
     intentionalCloseRef.current = false;
@@ -272,38 +304,6 @@ export function WatchRoomPageContent({
 
     let cancelled = false;
     let socket: WebSocket | null = null;
-    let socketIntentionalClose = false;
-    let socketHeartbeat: number | null = null;
-
-    const handleSocketOpen = useEffectEvent((socket: WebSocket) => {
-      setConnectionReady(true);
-      reconnectAttemptsRef.current = 0;
-      socketHeartbeat = window.setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "ping" }));
-        }
-      }, 25_000);
-    });
-
-    const handleSocketClose = useEffectEvent(() => {
-      setConnectionReady(false);
-      if (
-        !socketIntentionalClose &&
-        reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
-      ) {
-        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
-        reconnectAttemptsRef.current += 1;
-        setPlaybackError(null);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          setReconnectKey(k => k + 1);
-        }, delay);
-      }
-    });
-
-    const handleSocketError = useEffectEvent(() => {
-      setPlaybackError("Realtime sync connection failed for this watch room.");
-    });
 
     const initRoomConnection = async () => {
       let res: Awaited<ReturnType<typeof joinWatchRoom>>;
@@ -329,7 +329,7 @@ export function WatchRoomPageContent({
       socket = new WebSocket(watchRoomWebSocketUrl(currentRoomId));
       socketRef.current = socket;
 
-      socket.addEventListener("open", () => handleSocketOpen(socket));
+      socket.addEventListener("open", handleSocketOpen);
       socket.addEventListener("message", event => {
         void handleSocketMessage(event);
       });
@@ -341,16 +341,16 @@ export function WatchRoomPageContent({
 
     return () => {
       cancelled = true;
-      socketIntentionalClose = true;
+      intentionalCloseRef.current = true;
 
       if (reconnectTimeoutRef.current !== null) {
         window.clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
 
-      if (socketHeartbeat !== null) {
-        window.clearInterval(socketHeartbeat);
-        socketHeartbeat = null;
+      if (heartbeatRef.current !== null) {
+        window.clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
       }
 
       if (socketRef.current === socket) {

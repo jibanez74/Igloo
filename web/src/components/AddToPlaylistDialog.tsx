@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { showAdded, showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { ListMusic, Check } from "lucide-react";
@@ -43,23 +43,14 @@ export default function AddToPlaylistDialog({
     enabled: open,
   });
 
-  // Filter playlists that user can edit
-  const editablePlaylists = useMemo(
-    () => {
-      const playlists = data?.error === false ? data.data.playlists : [];
-      return playlists.filter((p) => p.can_edit);
-    },
-    [data]
-  );
+  const playlists = data?.error === false ? data.data.playlists : [];
+  const editablePlaylists = playlists.filter((p) => p.can_edit);
 
-  // Filter by search query
-  const filteredPlaylists = useMemo(() => {
-    if (!searchQuery.trim()) return editablePlaylists;
-    const query = searchQuery.toLowerCase();
-    return editablePlaylists.filter((p) =>
-      p.name.toLowerCase().includes(query)
-    );
-  }, [editablePlaylists, searchQuery]);
+  const filteredPlaylists = !searchQuery.trim()
+    ? editablePlaylists
+    : editablePlaylists.filter((p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
   const mutation = useMutation({
     mutationFn: async (playlistIds: number[]) => {
