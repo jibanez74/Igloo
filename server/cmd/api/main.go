@@ -137,10 +137,13 @@ var FrontendFS embed.FS
 func main() {
 	log.Println("igloo server starting up...")
 
-	// Load local development settings from server/.env before startup.
+	// Load .env for local development. Try server/.env first, then the repo root.
 	err := godotenv.Load()
 	if err != nil {
-		log.Printf("warning: failed to load .env: %v", err)
+		err = godotenv.Load("../.env")
+		if err != nil {
+			log.Printf("warning: no .env file found")
+		}
 	}
 
 	app, err := InitApp()

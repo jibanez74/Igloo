@@ -45,10 +45,8 @@ RUN cd server && go mod download
 
 COPY server/ ./server/
 COPY --from=web-builder /app/web/dist ./server/cmd/api/webdist
-COPY --from=ffmpeg-artifacts /artifacts/ffmpeg_linux_amd64 ./server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
-COPY --from=ffmpeg-artifacts /artifacts/ffprobe_linux_amd64 ./server/cmd/internal/ffprobe/ffprobe_linux_amd64
 
-RUN cd server && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o /out/igloo-server ./cmd/api
+RUN cd server && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags systembin -ldflags="-s -w" -trimpath -o /out/igloo-server ./cmd/api
 
 FROM debian:bookworm-slim AS runtime
 

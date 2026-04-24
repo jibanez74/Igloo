@@ -64,8 +64,9 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` — absolute paths to your media on the host
 - `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` — credentials for the first login
+
+Media library paths (`MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR`) are optional. The server starts without them and libraries will appear empty until paths are configured.
 
 Then prepare the data directories and start the server:
 
@@ -138,31 +139,39 @@ Platform-specific binaries belong under `server/cmd/internal/ffmpeg/` and `serve
 
 This project uses the [Jellyfin FFmpeg builds](https://github.com/jellyfin/jellyfin-ffmpeg/releases) because they include codec and hardware acceleration support beyond what standard FFmpeg distributions provide.
 
-### 1. Create `server/.env`
+### 1. Create `.env`
 
-The server calls `godotenv.Load()` on startup to read `server/.env`. If the file is missing it logs a warning and continues, relying on environment variables already present in the process. For local development, create the file:
+Copy `.env.example` to `.env` at the repository root and fill in your values. The server automatically reads this file on startup — both `make dev` and `docker compose` use it, so you only need one file.
+
+```bash
+cp .env.example .env
+```
+
+The developer-relevant settings to uncomment and adjust:
 
 ```env
-PORT=8080
+# Required for dev
 DEBUG=true
-DB_PATH=igloo.db
-STATIC_DIR=static
-LOGS_DIR=logs
+DB_PATH=/path/to/igloo.db
+
+# Optional: point at your local media
+MOVIES_DIR=/path/to/movies
+SHOWS_DIR=/path/to/shows
+MUSIC_DIR=/path/to/music
+
+# Optional: metadata providers
 TMDB_API_KEY=your_tmdb_v3_key
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-MOVIES_DIR=/path/to/movies
-MUSIC_DIR=/path/to/music
-SHOWS_DIR=/path/to/shows
-DOWNLOAD_IMAGES=true
-ENABLE_LOGGER=true
-ENABLE_WATCHER=false
-HARDWARE_ACCELERATION_DEVICE=cpu
+
+# Hardware acceleration for make dev (Docker uses profiles instead)
+# apple — Apple VideoToolbox (Mac); intel/nvidia — Linux GPU; cpu — default
+HARDWARE_ACCELERATION_DEVICE=apple
 ```
 
 Notes:
 
-- `HARDWARE_ACCELERATION_DEVICE`: `cpu`, `apple`, `nvidia`, or `intel`
+- In Docker, `HARDWARE_ACCELERATION_DEVICE` is set automatically by the compose profile you run — you do not set it in `.env` for Docker deployments
 - `TMDB_API_KEY`: enables movie matching, in-theaters data, and background movie scanning when `MOVIES_DIR` is configured
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`: optional, but required if you want Spotify-based music metadata and cover enrichment
 - `JELLYFIN_TOKEN`: optional and only relevant if you are using Jellyfin-related integrations
@@ -190,12 +199,12 @@ Open the URL printed by Vite, usually `http://localhost:3000`.
 
 ### Default admin account
 
-On a fresh database the server creates one admin account:
+On a fresh database the server creates one admin account using the credentials from your `.env` file (`DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`). The `.env.example` defaults are:
 
-- Email: `admin@sample.com`
-- Password: `AdminPassword`
+- Email: `admin@example.com`
+- Password: `ChangeMe123!`
 
-Change this password immediately after first login. These credentials are only intended as a bootstrap account for local setup. In Docker, override them with `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` in `.env`.
+Change these before first launch. They are only used once — if an admin account already exists, these values are ignored.
 
 ---
 
@@ -265,7 +274,7 @@ make generate
 
 ## Configuration Reference
 
-All configuration is read from environment variables. In local development these are loaded from `server/.env`. In Docker they are passed through `compose.yaml` (see `.env.example` for the full list with descriptions).
+All configuration is read from environment variables. In local development these are loaded from `.env` at the repository root (with fallback to `server/.env`). In Docker they are passed through `compose.yaml`. See `.env.example` for the full list with descriptions.
 
 | Variable                                 | Role                                                                     |
 | ---------------------------------------- | ------------------------------------------------------------------------ |

@@ -15,16 +15,16 @@ x-igloo-env: &igloo-env
 x-igloo-volumes: &igloo-volumes
   - ${CONFIG_DIR:-./config}:/config
   - ${TRANSCODE_DIR:-./transcode}:/transcode
-  - ${MOVIES_DIR:?MOVIES_DIR must be set in .env}:/media/movies:ro
-  - ${SHOWS_DIR:?SHOWS_DIR must be set in .env}:/media/shows:ro
-  - ${MUSIC_DIR:?MUSIC_DIR must be set in .env}:/media/music:ro
+  - ${MOVIES_DIR:-./media/movies}:/media/movies:ro
+  - ${SHOWS_DIR:-./media/shows}:/media/shows:ro
+  - ${MUSIC_DIR:-./media/music}:/media/music:ro
 
 x-igloo-base: &igloo-base
   platform: linux/amd64
   build:
     context: .
     dockerfile: Dockerfile
-  image: ghcr.io/jibanez74/igloo:latest
+  image: ghcr.io/jibanez74/igloo:${IMAGE_TAG:-latest}
   init: true
   restart: unless-stopped
   volumes: *igloo-volumes
@@ -80,4 +80,4 @@ services:
     devices:
       - /dev/dri/renderD128:/dev/dri/renderD128
     group_add:
-      - "${RENDER_GROUP_ID:?RENDER_GROUP_ID must be set in .env — run: getent group render | cut -d: -f3}"
+      - "${RENDER_GROUP_ID:-0}"

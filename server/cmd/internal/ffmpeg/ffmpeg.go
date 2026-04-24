@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 )
 
@@ -27,8 +26,8 @@ var (
 )
 
 // New returns a singleton FFmpeg implementation.
-// The embedded binary is extracted to a temp directory on first call.
-// Subsequent calls return the same instance without re-extracting.
+// resolveBinaryPath is defined in build-tag-specific files:
+// embed mode extracts to a temp directory, systembin mode returns a fixed path.
 func New() (FFmpegInterface, error) {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
@@ -37,7 +36,7 @@ func New() (FFmpegInterface, error) {
 		return instance, nil
 	}
 
-	binPath, err := extractBinary()
+	binPath, err := resolveBinaryPath()
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +54,7 @@ func Cleanup() error {
 	defer instanceMu.Unlock()
 
 	if extractedDir == "" {
+		instance = nil
 		return nil
 	}
 
@@ -66,27 +66,4 @@ func Cleanup() error {
 	extractedDir = ""
 	instance = nil
 	return nil
-}
-
-// extractBinary writes the embedded ffmpeg binary to a temporary directory
-// and returns the path to the executable.
-// embeddedBinary is defined in platform-specific files (ffmpeg_darwin_arm64.go,
-// ffmpeg_linux_amd64.go) and is populated at compile time via //go:embed.
-func extractBinary() (string, error) {
-	tempDir, err := os.MkdirTemp("", "igloo-ffmpeg-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	extractedDir = tempDir
-
-	binPath := filepath.Join(tempDir, "ffmpeg")
-	writeErr := os.WriteFile(binPath, embeddedBinary, 0755)
-	if writeErr != nil {
-		os.RemoveAll(tempDir)
-		extractedDir = ""
-		return "", fmt.Errorf("failed to write ffmpeg binary: %w", writeErr)
-	}
-
-	return binPath, nil
 }
