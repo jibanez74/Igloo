@@ -644,21 +644,12 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	clearSettingsEnv(t)
 
 	// Set all environment variables that InitSettings reads
-	os.Setenv("TMDB_API_KEY", "test-tmdb-key")
-	os.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
-	os.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
-	os.Setenv("ENABLE_LOGGER", "true")
-	os.Setenv("ENABLE_WATCHER", "true")
-	os.Setenv("DOWNLOAD_IMAGES", "true")
-
-	defer func() {
-		os.Unsetenv("TMDB_API_KEY")
-		os.Unsetenv("JELLYFIN_TOKEN")
-		os.Unsetenv("HARDWARE_ACCELERATION_DEVICE")
-		os.Unsetenv("ENABLE_LOGGER")
-		os.Unsetenv("ENABLE_WATCHER")
-		os.Unsetenv("DOWNLOAD_IMAGES")
-	}()
+	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
+	t.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
+	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
+	t.Setenv("ENABLE_LOGGER", "true")
+	t.Setenv("ENABLE_WATCHER", "true")
+	t.Setenv("DOWNLOAD_IMAGES", "true")
 
 	ctx := context.Background()
 	err := app.InitSettings(ctx)

@@ -157,7 +157,6 @@ export function AudioPlayerProvider({
     currentTrackIndex,
     queueState.tracks.length,
     queueState.shufflePlayedIds,
-    populateTrackMetadata,
   ]);
 
   useEffect(() => {
@@ -216,7 +215,6 @@ export function AudioPlayerProvider({
     queueState.isPlayAllMode,
     currentTrackIndex,
     queueState.tracks.length,
-    populateTrackMetadata,
   ]);
 
   useEffect(() => {

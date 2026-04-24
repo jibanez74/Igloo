@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -810,7 +811,7 @@ func (app *Application) InitSession() {
 
 	app.SessionManager = sessionManager
 
-	app.Logger.Info("session manager initialized successfully")
+	app.Logger.Info("session manager initialized successfully", "cookie_secure", sessionManager.Cookie.Secure)
 }
 
 func applyRuntimeSettingOverrides(settings *database.Setting) {
@@ -871,6 +872,7 @@ func overrideBoolSetting(target *bool, envName string) {
 
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		slog.Warn("invalid boolean value for env var, keeping current value", "env", envName, "value", value)
 		return
 	}
 
@@ -885,6 +887,7 @@ func envBool(name string, fallback bool) bool {
 
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		slog.Warn("invalid boolean value for env var, using fallback", "env", name, "value", value, "fallback", fallback)
 		return fallback
 	}
 

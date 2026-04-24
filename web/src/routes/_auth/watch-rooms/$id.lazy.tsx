@@ -78,6 +78,7 @@ export function WatchRoomPageContent({
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
+  const socketInstanceIdRef = useRef(0);
   const prevRoomIdRef = useRef<number | null>(null);
   const roomDeletionHandledRef = useRef(false);
   const pendingPlaybackRef = useRef<{
@@ -272,8 +273,9 @@ export function WatchRoomPageContent({
     }, 25_000);
   });
 
-  const handleSocketClose = useEffectEvent(() => {
+  const handleSocketClose = useEffectEvent((closedInstanceId: number) => {
     setConnectionReady(false);
+    if (closedInstanceId !== socketInstanceIdRef.current) return;
     if (
       !intentionalCloseRef.current &&
       reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
@@ -304,6 +306,8 @@ export function WatchRoomPageContent({
 
     let cancelled = false;
     let socket: WebSocket | null = null;
+    socketInstanceIdRef.current += 1;
+    const instanceId = socketInstanceIdRef.current;
 
     const initRoomConnection = async () => {
       let res: Awaited<ReturnType<typeof joinWatchRoom>>;
@@ -333,7 +337,7 @@ export function WatchRoomPageContent({
       socket.addEventListener("message", event => {
         void handleSocketMessage(event);
       });
-      socket.addEventListener("close", handleSocketClose);
+      socket.addEventListener("close", () => handleSocketClose(instanceId));
       socket.addEventListener("error", handleSocketError);
     };
 

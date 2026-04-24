@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
@@ -72,13 +72,7 @@ export default function TrackItem({
   dragHandleProps,
 }: TrackItemProps) {
   const queryClient = useQueryClient();
-  const [liked, setLiked] = useState(isLiked);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
-
-  // Sync liked state with prop when it changes externally
-  useEffect(() => {
-    setLiked(isLiked);
-  }, [isLiked]);
 
   // Determine if actions menu should show based on variant or explicit prop
   const shouldShowActions = showActionsMenu ?? variant === "library";
@@ -91,7 +85,6 @@ export default function TrackItem({
     try {
       const response = await toggleLikeTrack(id);
       if (!response.error && response.data) {
-        setLiked(response.data.is_liked);
         onLikeToggle?.(id, response.data.is_liked);
         queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
         queryClient.invalidateQueries({ queryKey: [LIKED_TRACK_IDS_KEY] });
@@ -190,15 +183,15 @@ export default function TrackItem({
         onClick={handleLikeClick}
         disabled={isLikeLoading}
         className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-all ${
-          liked
+          isLiked
             ? "text-red-500 hover:text-red-400"
             : "text-slate-400 hover:text-red-400"
         } ${isLikeLoading ? "opacity-50" : ""}`}
-        title={liked ? "Remove from liked" : "Add to liked"}
-        aria-label={liked ? `Remove ${title} from liked` : `Add ${title} to liked`}
+        title={isLiked ? "Remove from liked" : "Add to liked"}
+        aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
       >
         <Heart
-          className={`size-4 ${liked ? "fill-current" : ""}`}
+          className={`size-4 ${isLiked ? "fill-current" : ""}`}
           aria-hidden="true"
         />
       </button>

@@ -3,39 +3,14 @@ name: Publish Docker image
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 jobs:
-  test-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.2'
-          cache-dependency-path: server/go.sum
-
-      - name: Run Go tests
-        run: cd server && go test -v ./...
-
-  test-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: cd web && bun install --frozen-lockfile
-
-      - name: Lint
-        run: cd web && bun run lint
-
-      - name: Type-check and build
-        run: cd web && bun run build
+  ci:
+    uses: ./.github/workflows/ci.yml
 
   build-and-push:
-    needs: [test-backend, test-frontend]
+    needs: [ci]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,6 +36,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=sha,enable={{is_default_branch}},prefix=sha-
 
       - name: Build and push
         uses: docker/build-push-action@v6

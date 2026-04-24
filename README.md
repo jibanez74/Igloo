@@ -73,7 +73,7 @@ Then prepare the data directories and start the server:
 mkdir -p ./config ./transcode
 chown -R 1000:1000 ./config ./transcode
 
-docker compose --profile cpu up -d
+docker compose up -d
 ```
 
 The server will be available on port `8080` by default. On a fresh database it creates one admin account using the credentials from your `.env` file.
@@ -84,7 +84,7 @@ The compose file ships three profiles. Pick the one that matches your host:
 
 | Profile  | Command                                 | Requirements                                                                                                                              |
 | -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `cpu`    | `docker compose --profile cpu up -d`    | No GPU required                                                                                                                           |
+| (default)| `docker compose up -d`                  | No GPU required — uses CPU software transcoding                                                                                           |
 | `nvidia` | `docker compose --profile nvidia up -d` | [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed on host |
 | `intel`  | `docker compose --profile intel up -d`  | Set `RENDER_GROUP_ID` in `.env` first (see below)                                                                                         |
 
@@ -98,11 +98,14 @@ getent group render | cut -d: -f3
 ### Updating to a new release
 
 ```bash
-docker compose --profile cpu pull
-docker compose --profile cpu up -d
-```
+# CPU (default)
+docker compose pull
+docker compose up -d
 
-Replace `cpu` with whichever profile you use.
+# Or for a GPU profile (replace nvidia with your profile)
+docker compose --profile nvidia pull
+docker compose --profile nvidia up -d
+```
 
 ### Volume permissions
 
@@ -288,23 +291,21 @@ All configuration is read from environment variables. In local development these
 
 ## CI/CD
 
-Two GitHub Actions workflows run on every push:
+Two GitHub Actions workflows are defined:
 
 ### CI (`ci.yml`)
 
-Runs on every branch push and on pull requests to `main`. Never publishes anything.
+Runs on every branch push, on pull requests to `main`, and can be called as a reusable workflow. Never publishes anything.
 
 - `test-backend` — runs `go test -v ./...` against the Go server
 - `test-frontend` — runs ESLint and a full TypeScript + Vite build of the web client
 
 ### Publish (`docker-publish.yml`)
 
-Runs only when a `v*` tag is pushed. Tests must pass before the image is built.
+Runs when a `v*` tag is pushed or when triggered manually via `workflow_dispatch`. Calls `ci.yml` as a reusable workflow, and the image is only built after all CI checks pass.
 
 ```
-test-backend  ┐
-              ├── build-and-push → ghcr.io/jibanez74/igloo
-test-frontend ┘
+ci (reusable ci.yml) → build-and-push → ghcr.io/jibanez74/igloo
 ```
 
 Pushing `v1.2.3` produces three image tags: `:v1.2.3`, `:1.2`, and `:latest`.
