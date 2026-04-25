@@ -5,7 +5,7 @@
 # ffprobe and ffmpeg binaries (large files, distribute separately)
 /server/cmd/internal/ffprobe/ffprobe_darwin_arm64
 /server/cmd/internal/ffprobe/ffprobe_linux_amd64
-/server/cmd/internal/ffmpeg/ffmpeg_mac_arm
+/server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
 
 # IDE and editor
@@ -24,7 +24,7 @@
 *.db-wal
 /server/static/*
 
-# Embedded frontend assets (generated during build)
+  # Embedded frontend assets (generated during build)
 # These are copied from web/dist by the root Makefile
 # A placeholder index.html exists for backend-only builds
 /server/cmd/api/web/dist/*.html

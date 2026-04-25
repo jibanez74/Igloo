@@ -1,0 +1,83 @@
+x-igloo-env: &igloo-env
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+  ENABLE_LOGGER: ${ENABLE_LOGGER:-false}
+  ENABLE_WATCHER: ${ENABLE_WATCHER:-false}
+  DOWNLOAD_IMAGES: ${DOWNLOAD_IMAGES:-false}
+  TMDB_API_KEY: ${TMDB_API_KEY:-}
+  JELLYFIN_TOKEN: ${JELLYFIN_TOKEN:-}
+  SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+  SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+  DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-}
+  DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-}
+  DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+  LOG_TO_STDOUT: ${LOG_TO_STDOUT:-true}
+
+x-igloo-volumes: &igloo-volumes
+  - ${CONFIG_DIR:-./config}:/config
+  - ${TRANSCODE_DIR:-./transcode}:/transcode
+  - ${MOVIES_DIR:-./media/movies}:/media/movies:ro
+  - ${SHOWS_DIR:-./media/shows}:/media/shows:ro
+  - ${MUSIC_DIR:-./media/music}:/media/music:ro
+
+x-igloo-base: &igloo-base
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ghcr.io/jibanez74/igloo:${IMAGE_TAG:-latest}
+  init: true
+  restart: unless-stopped
+  volumes: *igloo-volumes
+  ports:
+    - "${HOST_PORT:-8080}:8080"
+  healthcheck:
+    test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health >/dev/null || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+  stop_grace_period: 45s
+
+services:
+  # CPU software transcoding (default)
+  # docker compose up -d
+  igloo:
+    <<: *igloo-base
+    environment:
+      <<: *igloo-env
+      HARDWARE_ACCELERATION_DEVICE: cpu
+
+  # NVIDIA GPU transcoding — requires nvidia-container-toolkit on the host
+  # Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+  # docker compose --profile nvidia up -d
+  igloo-nvidia:
+    <<: *igloo-base
+    profiles: [nvidia]
+    runtime: nvidia
+    environment:
+      <<: *igloo-env
+      HARDWARE_ACCELERATION_DEVICE: nvidia
+      NVIDIA_DRIVER_CAPABILITIES: all
+      NVIDIA_VISIBLE_DEVICES: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Intel QSV transcoding — requires the render group GID from the host
+  # Find your render GID: getent group render | cut -d: -f3
+  # Set RENDER_GROUP_ID in your .env file before starting
+  # docker compose --profile intel up -d
+  igloo-intel:
+    <<: *igloo-base
+    profiles: [intel]
+    environment:
+      <<: *igloo-env
+      HARDWARE_ACCELERATION_DEVICE: intel
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - "${RENDER_GROUP_ID:-0}"

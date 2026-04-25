@@ -1,8 +1,8 @@
-//go:build darwin && arm64
+//go:build darwin && arm64 && !systembin
 
 package ffmpeg
 
 import _ "embed"
 
-//go:embed ffmpeg_mac_arm
+//go:embed ffmpeg_darwin_arm64
 var embeddedBinary []byte

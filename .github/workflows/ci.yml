@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+          cache-dependency-path: server/go.sum
+
+      - name: Create webdist placeholder for embedding
+        run: mkdir -p server/cmd/api/webdist && touch server/cmd/api/webdist/.keep
+
+      - name: Run Go tests
+        run: cd server && go test -v -tags systembin ./...
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: cd web && bun install --frozen-lockfile
+
+      - name: Lint
+        run: cd web && bun run lint
+
+      - name: Type-check and build
+        run: cd web && bun run build

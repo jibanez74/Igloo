@@ -89,28 +89,24 @@ func TestInitDB(t *testing.T) {
 }
 
 func TestInitDB_DefaultPath(t *testing.T) {
-	// Ensure DB_PATH is not set
-	os.Unsetenv("DB_PATH")
-
-	// Change to temp directory so default igloo.db is created there
-	originalDir, _ := os.Getwd()
+	// The production default (/config/igloo.db) is a Docker container path and
+	// cannot be created in a test environment.  Verify instead that InitDB
+	// honours DB_PATH and creates the database at the specified location.
 	tmpDir := t.TempDir()
-	os.Chdir(tmpDir)
-	defer os.Chdir(originalDir)
+	dbFile := filepath.Join(tmpDir, "igloo.db")
+	t.Setenv("DB_PATH", dbFile)
 
 	app := &Application{}
 	setupTestLogger(t, app)
 
 	err := app.InitDB()
 	if err != nil {
-		t.Fatalf("InitDB with default path failed: %v", err)
+		t.Fatalf("InitDB failed: %v", err)
 	}
 	defer app.DB.Close()
 
-	// Verify the default database file was created
-	_, err = os.Stat(filepath.Join(tmpDir, "igloo.db"))
-	if os.IsNotExist(err) {
-		t.Error("Default database file 'igloo.db' was not created")
+	if _, statErr := os.Stat(dbFile); os.IsNotExist(statErr) {
+		t.Errorf("Database file was not created at %s", dbFile)
 	}
 }
 
@@ -558,24 +554,33 @@ func setupTestApp(t *testing.T) *Application {
 	return app
 }
 
+func clearSettingsEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"TMDB_API_KEY",
+		"JELLYFIN_TOKEN",
+		"SPOTIFY_CLIENT_ID",
+		"SPOTIFY_CLIENT_SECRET",
+		"HARDWARE_ACCELERATION_DEVICE",
+		"ENABLE_LOGGER",
+		"ENABLE_WATCHER",
+		"DOWNLOAD_IMAGES",
+		"STATIC_DIR",
+		"LOGS_DIR",
+		"MOVIES_DIR",
+		"SHOWS_DIR",
+		"MUSIC_DIR",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	clearSettingsEnv(t)
 	ctx := context.Background()
-
-	// Clear any env vars that might affect the test.
-	// These match the env vars read by InitSettings in main.go.
-	envVars := []string{
-		"TMDB_API_KEY", "JELLYFIN_TOKEN",
-		"HARDWARE_ACCELERATION_DEVICE",
-		"ENABLE_LOGGER", "ENABLE_WATCHER", "DOWNLOAD_IMAGES",
-		"MOVIES_DIR", "SHOWS_DIR", "MUSIC_DIR",
-		"STATIC_DIR", "LOGS_DIR",
-	}
-	for _, v := range envVars {
-		os.Unsetenv(v)
-	}
 
 	err := app.InitSettings(ctx)
 	if err != nil {
@@ -588,11 +593,11 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	}
 
 	// Verify default values for required string fields
-	if app.Settings.StaticDir != "static" {
-		t.Errorf("Expected StaticDir 'static', got '%s'", app.Settings.StaticDir)
+	if app.Settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != "logs" {
-		t.Errorf("Expected LogsDir 'logs', got '%s'", app.Settings.LogsDir)
+	if app.Settings.LogsDir != defaultLogsDir {
+		t.Errorf("Expected LogsDir %q, got %q", defaultLogsDir, app.Settings.LogsDir)
 	}
 
 	// Verify default value for HardwareAccelerationDevice (defaults to "cpu")
@@ -621,14 +626,14 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.JellyfinToken.Valid {
 		t.Error("Expected JellyfinToken to be invalid when not set")
 	}
-	if app.Settings.MoviesDir.Valid {
-		t.Error("Expected MoviesDir to be invalid when not set")
+	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != defaultMoviesDir {
+		t.Errorf("Expected MoviesDir %q, got %q (valid=%v)", defaultMoviesDir, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.Valid {
-		t.Error("Expected ShowsDir to be invalid when not set")
+	if !app.Settings.ShowsDir.Valid || app.Settings.ShowsDir.String != defaultShowsDir {
+		t.Errorf("Expected ShowsDir %q, got %q (valid=%v)", defaultShowsDir, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
 	}
-	if app.Settings.MusicDir.Valid {
-		t.Error("Expected MusicDir to be invalid when not set")
+	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String != defaultMusicDir {
+		t.Errorf("Expected MusicDir %q, got %q (valid=%v)", defaultMusicDir, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 }
 
@@ -636,32 +641,15 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	// Set all environment variables that InitSettings reads
-	os.Setenv("TMDB_API_KEY", "test-tmdb-key")
-	os.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
-	os.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
-	os.Setenv("ENABLE_LOGGER", "true")
-	os.Setenv("ENABLE_WATCHER", "true")
-	os.Setenv("DOWNLOAD_IMAGES", "true")
-	os.Setenv("MOVIES_DIR", "/movies")
-	os.Setenv("SHOWS_DIR", "/shows")
-	os.Setenv("MUSIC_DIR", "/music")
-	os.Setenv("STATIC_DIR", "custom-static")
-	os.Setenv("LOGS_DIR", "custom-logs")
+	clearSettingsEnv(t)
 
-	defer func() {
-		os.Unsetenv("TMDB_API_KEY")
-		os.Unsetenv("JELLYFIN_TOKEN")
-		os.Unsetenv("HARDWARE_ACCELERATION_DEVICE")
-		os.Unsetenv("ENABLE_LOGGER")
-		os.Unsetenv("ENABLE_WATCHER")
-		os.Unsetenv("DOWNLOAD_IMAGES")
-		os.Unsetenv("MOVIES_DIR")
-		os.Unsetenv("SHOWS_DIR")
-		os.Unsetenv("MUSIC_DIR")
-		os.Unsetenv("STATIC_DIR")
-		os.Unsetenv("LOGS_DIR")
-	}()
+	// Set all environment variables that InitSettings reads
+	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
+	t.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
+	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
+	t.Setenv("ENABLE_LOGGER", "true")
+	t.Setenv("ENABLE_WATCHER", "true")
+	t.Setenv("DOWNLOAD_IMAGES", "true")
 
 	ctx := context.Background()
 	err := app.InitSettings(ctx)
@@ -679,22 +667,22 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
 	}
-	if app.Settings.MoviesDir.String != "/movies" || !app.Settings.MoviesDir.Valid {
-		t.Errorf("Expected MoviesDir '/movies' (valid), got '%s' (valid=%v)", app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if app.Settings.MoviesDir.String != defaultMoviesDir || !app.Settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", defaultMoviesDir, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.String != "/shows" || !app.Settings.ShowsDir.Valid {
-		t.Errorf("Expected ShowsDir '/shows' (valid), got '%s' (valid=%v)", app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if app.Settings.ShowsDir.String != defaultShowsDir || !app.Settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", defaultShowsDir, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
 	}
-	if app.Settings.MusicDir.String != "/music" || !app.Settings.MusicDir.Valid {
-		t.Errorf("Expected MusicDir '/music' (valid), got '%s' (valid=%v)", app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
+	if app.Settings.MusicDir.String != defaultMusicDir || !app.Settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", defaultMusicDir, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 
-	// Verify required string fields from env vars
-	if app.Settings.StaticDir != "custom-static" {
-		t.Errorf("Expected StaticDir 'custom-static', got '%s'", app.Settings.StaticDir)
+	// Verify required string fields use fixed container defaults
+	if app.Settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != "custom-logs" {
-		t.Errorf("Expected LogsDir 'custom-logs', got '%s'", app.Settings.LogsDir)
+	if app.Settings.LogsDir != defaultLogsDir {
+		t.Errorf("Expected LogsDir %q, got %q", defaultLogsDir, app.Settings.LogsDir)
 	}
 
 	// Verify boolean fields from env vars
@@ -752,6 +740,86 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 	}
 }
 
+func TestInitSettings_ExistingSettingsAllowRuntimeOverrides(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	params := database.CreateSettingsParams{
+		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
+		JellyfinToken:              sql.NullString{String: "existing-jellyfin", Valid: true},
+		SpotifyClientID:            sql.NullString{String: "existing-spotify-id", Valid: true},
+		SpotifyClientSecret:        sql.NullString{String: "existing-spotify-secret", Valid: true},
+		HardwareAccelerationDevice: sql.NullString{String: "cpu", Valid: true},
+		EnableLogger:               true,
+		EnableWatcher:              false,
+		DownloadImages:             false,
+		MoviesDir:                  sql.NullString{String: defaultMoviesDir, Valid: true},
+		ShowsDir:                   sql.NullString{String: defaultShowsDir, Valid: true},
+		MusicDir:                   sql.NullString{String: defaultMusicDir, Valid: true},
+		StaticDir:                  defaultStaticDir,
+		LogsDir:                    defaultLogsDir,
+	}
+	_, err := app.Queries.CreateSettings(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Failed to create test settings: %v", err)
+	}
+
+	clearSettingsEnv(t)
+	t.Setenv("TMDB_API_KEY", "override-key")
+	t.Setenv("JELLYFIN_TOKEN", "override-jellyfin")
+	t.Setenv("SPOTIFY_CLIENT_ID", "override-spotify-id")
+	t.Setenv("SPOTIFY_CLIENT_SECRET", "override-spotify-secret")
+	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
+	t.Setenv("ENABLE_LOGGER", "false")
+	t.Setenv("ENABLE_WATCHER", "true")
+	t.Setenv("DOWNLOAD_IMAGES", "true")
+
+	err = app.InitSettings(context.Background())
+	if err != nil {
+		t.Fatalf("InitSettings failed: %v", err)
+	}
+
+	if app.Settings.TmdbKey.String != "override-key" {
+		t.Errorf("Expected override tmdb key, got %q", app.Settings.TmdbKey.String)
+	}
+	if app.Settings.JellyfinToken.String != "override-jellyfin" {
+		t.Errorf("Expected override jellyfin token, got %q", app.Settings.JellyfinToken.String)
+	}
+	if app.Settings.SpotifyClientID.String != "override-spotify-id" {
+		t.Errorf("Expected override spotify client id, got %q", app.Settings.SpotifyClientID.String)
+	}
+	if app.Settings.SpotifyClientSecret.String != "override-spotify-secret" {
+		t.Errorf("Expected override spotify client secret, got %q", app.Settings.SpotifyClientSecret.String)
+	}
+	if app.Settings.HardwareAccelerationDevice.String != "nvidia" {
+		t.Errorf("Expected override hardware mode, got %q", app.Settings.HardwareAccelerationDevice.String)
+	}
+	if app.Settings.EnableLogger {
+		t.Error("Expected ENABLE_LOGGER override to set false")
+	}
+	if !app.Settings.EnableWatcher {
+		t.Error("Expected ENABLE_WATCHER override to set true")
+	}
+	if !app.Settings.DownloadImages {
+		t.Error("Expected DOWNLOAD_IMAGES override to set true")
+	}
+	if app.Settings.MoviesDir.String != defaultMoviesDir {
+		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", defaultMoviesDir, app.Settings.MoviesDir.String)
+	}
+	if app.Settings.ShowsDir.String != defaultShowsDir {
+		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", defaultShowsDir, app.Settings.ShowsDir.String)
+	}
+	if app.Settings.MusicDir.String != defaultMusicDir {
+		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", defaultMusicDir, app.Settings.MusicDir.String)
+	}
+	if app.Settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	}
+	if app.Settings.LogsDir != defaultLogsDir {
+		t.Errorf("Expected LogsDir to remain fixed at %q, got %q", defaultLogsDir, app.Settings.LogsDir)
+	}
+}
+
 func TestInitSettings_Idempotent(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -774,6 +842,30 @@ func TestInitSettings_Idempotent(t *testing.T) {
 	// Should load the same settings, not create a new one
 	if app.Settings.ID != firstSettingsID {
 		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.Settings.ID)
+	}
+}
+
+func TestInitSession_DefaultCookieSecureDisabled(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	t.Setenv(envSessionCookieSecure, "")
+	app.InitSession()
+
+	if app.SessionManager.Cookie.Secure {
+		t.Fatal("expected secure cookies to be disabled by default")
+	}
+}
+
+func TestInitSession_UsesSessionCookieSecureEnv(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	t.Setenv(envSessionCookieSecure, "true")
+	app.InitSession()
+
+	if !app.SessionManager.Cookie.Secure {
+		t.Fatal("expected secure cookies to honor SESSION_COOKIE_SECURE=true")
 	}
 }
 

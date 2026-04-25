@@ -32,9 +32,9 @@ type HLSSession struct {
 }
 
 type hlsSessionStartParams struct {
-	Movie            database.Movie
-	PrimaryVideo     database.VideoStream
-	SelectedAudio    database.AudioStream
+	Movie            *database.Movie
+	PrimaryVideo     *database.VideoStream
+	SelectedAudio    *database.AudioStream
 	RequestedProfile string
 	EffectiveProfile string
 	AudioTrack       int
@@ -44,7 +44,7 @@ type hlsSessionStartParams struct {
 
 // isHDRStream returns true when the stream's color_transfer indicates HDR content
 // (HDR10/PQ or HLG). These sources require tone-mapping when transcoded to SDR profiles.
-func isHDRStream(stream database.VideoStream) bool {
+func isHDRStream(stream *database.VideoStream) bool {
 	if !stream.ColorTransfer.Valid {
 		return false
 	}
@@ -154,7 +154,7 @@ func cleanupHLSSession(session *HLSSession) {
 	}
 }
 
-func (app *Application) startHLSSession(params hlsSessionStartParams) (*HLSSession, error) {
+func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
 	videoCodec := strings.ToLower(params.PrimaryVideo.Codec)
 	audioCodec := strings.ToLower(params.SelectedAudio.Codec)
 	sourceIsHDR := isHDRStream(params.PrimaryVideo)
@@ -279,21 +279,27 @@ func (app *Application) GetOrCreateHLSSession(
 	key := HLSSessionKey(movieID, profile, audioTrack)
 
 	if raw, ok := app.HLSSessionCache.Get(key); ok {
-		session := raw.(*HLSSession)
-		if session.StartSec == startSec {
+		session, typeOK := raw.(*HLSSession)
+		if !typeOK || session == nil {
+			app.HLSSessionCache.Delete(key)
+		} else if session.StartSec == startSec {
 			app.RefreshHLSSessionTTL(key, session)
 			return session, nil
+		} else {
+			app.HLSSessionCache.Delete(key)
 		}
-		app.HLSSessionCache.Delete(key)
 	}
 
 	v, err, _ := app.HLSSessionGroup.Do(key, func() (interface{}, error) {
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
-			existing := raw.(*HLSSession)
-			if existing.StartSec == startSec {
+			existing, typeOK := raw.(*HLSSession)
+			if !typeOK || existing == nil {
+				app.HLSSessionCache.Delete(key)
+			} else if existing.StartSec == startSec {
 				return existing, nil
+			} else {
+				app.HLSSessionCache.Delete(key)
 			}
-			app.HLSSessionCache.Delete(key)
 		}
 
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, startSec)
@@ -444,7 +450,7 @@ func (app *Application) createHLSSession(
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
 	videoCodec := strings.ToLower(strings.TrimSpace(primaryVideo.Codec))
-	safetyCacheKey := remuxSafetyFingerprint(movie, primaryVideo)
+	safetyCacheKey := remuxSafetyFingerprint(&movie, &primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
@@ -492,16 +498,18 @@ func (app *Application) createHLSSession(
 		}
 	}
 
-	session, err := app.startHLSSession(hlsSessionStartParams{
-		Movie:            movie,
-		PrimaryVideo:     primaryVideo,
-		SelectedAudio:    selectedAudio,
+	hlsParams := hlsSessionStartParams{
+		Movie:            &movie,
+		PrimaryVideo:     &primaryVideo,
+		SelectedAudio:    &selectedAudio,
 		RequestedProfile: requestedProfile,
 		EffectiveProfile: effectiveProfile,
 		AudioTrack:       audioTrack,
 		StartSec:         startSec,
 		DurationSec:      durationSec,
-	})
+	}
+
+	session, err := app.startHLSSession(&hlsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -527,16 +535,9 @@ func (app *Application) createHLSSession(
 			"fallback_reason", fallbackReason,
 		)
 		cleanupHLSSession(session)
-		return app.startHLSSession(hlsSessionStartParams{
-			Movie:            movie,
-			PrimaryVideo:     primaryVideo,
-			SelectedAudio:    selectedAudio,
-			RequestedProfile: requestedProfile,
-			EffectiveProfile: fallbackProfile,
-			AudioTrack:       audioTrack,
-			StartSec:         startSec,
-			DurationSec:      durationSec,
-		})
+		fp := hlsParams
+		fp.EffectiveProfile = fallbackProfile
+		return app.startHLSSession(&fp)
 	}
 
 	validationSummary, err := ffmpeg.ValidateRemuxSafety(
@@ -556,16 +557,9 @@ func (app *Application) createHLSSession(
 			"fallback_reason", fallbackReason,
 		)
 		cleanupHLSSession(session)
-		return app.startHLSSession(hlsSessionStartParams{
-			Movie:            movie,
-			PrimaryVideo:     primaryVideo,
-			SelectedAudio:    selectedAudio,
-			RequestedProfile: requestedProfile,
-			EffectiveProfile: fallbackProfile,
-			AudioTrack:       audioTrack,
-			StartSec:         startSec,
-			DurationSec:      durationSec,
-		})
+		fp := hlsParams
+		fp.EffectiveProfile = fallbackProfile
+		return app.startHLSSession(&fp)
 	}
 
 	app.setRemuxSafetyVerdict(safetyCacheKey, true, "validated safe remux")

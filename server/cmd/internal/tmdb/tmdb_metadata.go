@@ -220,7 +220,8 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 	params.Add("query", title)
 	params.Add("include_adult", "false")
 
-	if len(year) > 0 && year[0] > 0 {
+	hasYear := len(year) > 0 && year[0] > 0
+	if hasYear {
 		params.Add("year", fmt.Sprintf("%d", year[0]))
 	}
 
@@ -241,6 +242,25 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 	err = json.Unmarshal(bodyBytes, &searchResult)
 	if err != nil {
 		return nil, err
+	}
+
+	// If the year-filtered search returned nothing, retry without the year constraint.
+	if len(searchResult.Results) == 0 && hasYear {
+		params.Del("year")
+		broadURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
+
+		bodyBytes, statusCode, err = t.getJSON(ctx, broadURL)
+		if err != nil {
+			return nil, err
+		}
+		if statusCode != http.StatusOK {
+			return nil, tmdbStatusError(statusCode, "unable to search movies from tmdb")
+		}
+
+		err = json.Unmarshal(bodyBytes, &searchResult)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(searchResult.Results) == 0 {
