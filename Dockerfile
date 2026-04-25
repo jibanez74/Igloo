@@ -6,8 +6,6 @@ ARG JELLYFIN_FFMPEG_DEB_SHA256=a94683ba2bda79454792aacec26d1ff17a1d42afc46586a29
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    xz-utils \
-    binutils \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp/jellyfin-ffmpeg
@@ -15,12 +13,7 @@ WORKDIR /tmp/jellyfin-ffmpeg
 RUN curl -fsSL \
     "https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v${JELLYFIN_FFMPEG_VERSION}/jellyfin-ffmpeg7_${JELLYFIN_FFMPEG_VERSION}-bookworm_amd64.deb" \
     -o jellyfin-ffmpeg.deb \
-  && echo "${JELLYFIN_FFMPEG_DEB_SHA256}  jellyfin-ffmpeg.deb" | sha256sum -c - \
-  && ar x jellyfin-ffmpeg.deb data.tar.xz \
-  && mkdir -p /artifacts \
-  && tar -xJf data.tar.xz -C /artifacts \
-  && install -m 0755 /artifacts/usr/lib/jellyfin-ffmpeg/ffmpeg /artifacts/ffmpeg_linux_amd64 \
-  && install -m 0755 /artifacts/usr/lib/jellyfin-ffmpeg/ffprobe /artifacts/ffprobe_linux_amd64
+  && echo "${JELLYFIN_FFMPEG_DEB_SHA256}  jellyfin-ffmpeg.deb" | sha256sum -c -
 
 FROM oven/bun:1 AS web-builder
 
@@ -64,11 +57,8 @@ RUN mkdir -p /transcode /config \
   && chown igloo:igloo /transcode /config \
   && chmod 750 /transcode /config
 
-ENV PORT=8080
 ENV TMPDIR=/transcode
 ENV LOG_TO_STDOUT=true
-
-WORKDIR /app
 
 COPY --from=server-builder /out/igloo-server /usr/local/bin/igloo-server
 

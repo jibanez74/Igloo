@@ -19,7 +19,7 @@ jobs:
           cache-dependency-path: server/go.sum
 
       - name: Run Go tests
-        run: cd server && go test -v ./...
+        run: cd server && go test -v -tags systembin ./...
 
   test-frontend:
     runs-on: ubuntu-latest

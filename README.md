@@ -152,6 +152,7 @@ The developer-relevant settings to uncomment and adjust:
 ```env
 # Required for dev
 DEBUG=true
+PORT=8080
 DB_PATH=/path/to/igloo.db
 
 # Optional: point at your local media
@@ -278,7 +279,7 @@ All configuration is read from environment variables. In local development these
 
 | Variable                                 | Role                                                                     |
 | ---------------------------------------- | ------------------------------------------------------------------------ |
-| `PORT`                                   | HTTP listen port                                                         |
+| `PORT`                                   | HTTP listen port (dev only — Docker always uses 8080)                    |
 | `DB_PATH`                                | SQLite database file path                                                |
 | `DEBUG`                                  | Enables debug-friendly behavior such as stdout logging                   |
 | `STATIC_DIR`                             | Static file directory for avatars, downloaded images, and related assets |

@@ -39,6 +39,7 @@ import (
 const (
 	envSessionCookieSecure = "SESSION_COOKIE_SECURE"
 	envLogToStdout         = "LOG_TO_STDOUT"
+	envPort                = "PORT"
 	defaultAppPort         = 8080
 	defaultDBPath          = "/config/igloo.db"
 	defaultStaticDir       = "/config/static"
@@ -137,12 +138,16 @@ var FrontendFS embed.FS
 func main() {
 	log.Println("igloo server starting up...")
 
-	// Load .env for local development. Try server/.env first, then the repo root.
+	// Load .env for local development. Missing files are silently ignored;
+	// only real read or parse failures are logged.
 	err := godotenv.Load()
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("warning: failed to load .env: %v", err)
+	}
 	if err != nil {
 		err = godotenv.Load("../.env")
-		if err != nil {
-			log.Printf("warning: no .env file found")
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("warning: failed to load ../.env: %v", err)
 		}
 	}
 
@@ -151,14 +156,27 @@ func main() {
 		log.Fatal(err)
 	}
 
+	port := defaultAppPort
+	debug := os.Getenv("DEBUG") == "true"
+	if debug {
+		portStr := os.Getenv(envPort)
+		if portStr != "" {
+			p, err := strconv.Atoi(portStr)
+			if err != nil {
+				log.Fatalf("invalid PORT value %q: %v", portStr, err)
+			}
+			port = p
+		}
+	}
+
 	app.Server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", defaultAppPort),
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: app.Router,
 	}
 
 	go app.ListenForShutdown()
 
-	log.Printf("server listening on port %d", defaultAppPort)
+	log.Printf("server listening on port %d", port)
 
 	err = app.Server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
