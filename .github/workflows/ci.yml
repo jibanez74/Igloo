@@ -18,6 +18,9 @@ jobs:
           go-version: '1.26.2'
           cache-dependency-path: server/go.sum
 
+      - name: Create webdist placeholder for embedding
+        run: mkdir -p server/cmd/api/webdist && touch server/cmd/api/webdist/.keep
+
       - name: Run Go tests
         run: cd server && go test -v -tags systembin ./...
 
