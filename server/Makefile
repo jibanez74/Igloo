@@ -84,3 +84,9 @@ restart: stop start
 ## test: runs all tests
 test:
 	go test -v ./...
+
+## test-ci: runs the deterministic backend test suite used by GitHub Actions
+test-ci:
+	mkdir -p cmd/api/webdist
+	touch cmd/api/webdist/.keep
+	go test -count=1 -v -tags systembin ./...
