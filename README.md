@@ -133,7 +133,7 @@ Media directories are mounted read-only and do not need this change.
 
 ### FFmpeg and ffprobe
 
-The Docker build downloads and embeds the correct Jellyfin FFmpeg binaries automatically. For local development you need to supply them manually.
+The Docker image installs Jellyfin FFmpeg in the runtime container. For local development you need to supply the platform-specific binaries manually.
 
 Platform-specific binaries belong under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/`, named to match the `//go:embed` directives in the corresponding build tag files (e.g. `ffmpeg_darwin_arm64` for `ffmpeg_darwin_arm64.go`).
 
@@ -247,12 +247,13 @@ Use this only if you are handling web assets separately or copying them yourself
 | `make build-full`                     | Build the web client and embed it into the server binary             |
 | `make build-mac` / `make build-linux` | Cross-compile the backend                                            |
 | `make test`                           | Run `go test -v ./...`                                               |
+| `make test-ci`                        | Run the deterministic backend test suite used by GitHub Actions      |
 | `make clean`                          | Remove generated binaries and `web/dist`                             |
 
 ## Database and SQL
 
 - Engine: SQLite with WAL journaling
-- Database path: controlled by `DB_PATH` (default `igloo.db` in development, `/config/igloo.db` in Docker)
+- Database path: controlled by `DB_PATH` (default `/config/igloo.db`; set `DB_PATH` for local development)
 - Schema source of truth: `server/sqlc/schema.sql`
 - Embedded schema copy: `server/cmd/api/schema.sql`
 - Query files: `server/sqlc/queries/*.sql`
@@ -307,7 +308,7 @@ Two GitHub Actions workflows are defined:
 
 Runs on every branch push, on pull requests to `main`, and can be called as a reusable workflow. Never publishes anything.
 
-- `test-backend` — runs `go test -v ./...` against the Go server
+- `test-backend` — runs `make test-ci` against the Go server
 - `test-frontend` — runs ESLint and a full TypeScript + Vite build of the web client
 
 ### Publish (`docker-publish.yml`)
@@ -318,7 +319,7 @@ Runs when a `v*` tag is pushed or when triggered manually via `workflow_dispatch
 ci (reusable ci.yml) → build-and-push → ghcr.io/jibanez74/igloo
 ```
 
-Pushing `v1.2.3` produces three image tags: `:v1.2.3`, `:1.2`, and `:latest`.
+Pushing `v1.2.3` produces image tags such as `:1.2.3`, `:1.2`, and `:latest`.
 
 To cut a release:
 
@@ -338,3 +339,15 @@ make test
 ```
 
 This runs `go test -v ./...`.
+
+To run the same deterministic backend suite that GitHub Actions runs:
+
+```bash
+make test-ci
+```
+
+Live TMDB API tests are kept out of the default suite so CI does not change behavior when a `TMDB_API_KEY` is present. To run them explicitly:
+
+```bash
+TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
+```
