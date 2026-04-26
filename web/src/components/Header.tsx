@@ -2,13 +2,14 @@ import { Search, Bell, Cast } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 export default function Header() {
   return (
     <>
       {/* Search */}
       <form
-        className="max-w-xl flex-1"
+        className="min-w-0 flex-1 sm:max-w-lg"
         role="search"
         aria-label="Search library"
       >
@@ -17,7 +18,7 @@ export default function Header() {
         </Label>
         <div className="relative">
           <Search
-            className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-400"
+            className={inputIconClassName}
             aria-hidden="true"
           />
           <Input
@@ -25,13 +26,13 @@ export default function Header() {
             name="q"
             type="search"
             placeholder="Search..."
-            className="border-slate-700 bg-slate-800/50 pl-10 text-white placeholder:text-slate-400 focus:border-amber-500/50 focus:ring-amber-500/20"
+            className={`pl-10 ${lightInputClassName}`}
           />
         </div>
       </form>
 
       {/* Utility buttons */}
-      <nav className="ml-auto flex items-center gap-1">
+      <nav className="ml-auto flex shrink-0 items-center gap-1">
         <Button
           variant="ghost"
           size="icon"

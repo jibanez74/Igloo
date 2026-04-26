@@ -127,63 +127,62 @@ function MoviesPage() {
       />
 
       {/* Page header */}
-      <header
-        className="-m-3 mb-8 rounded-lg p-3 focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-        tabIndex={0}
-        aria-label="Movie Library. Browse your collection of movies."
-      >
-        <h1
-          className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl"
-          aria-hidden="true"
-        >
-          <Film className="size-6 text-amber-400" aria-hidden="true" />
+      <header className="mb-6 sm:mb-7">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          <Film className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
           <span>Movie Library</span>
         </h1>
-        <p
-          className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base"
-          aria-hidden="true"
-        >
+        <p className="mt-1.5 max-w-2xl text-sm text-slate-400 md:text-base">
           Browse, organize, and enjoy your film collection
         </p>
       </header>
 
       {/* Stats + More dropdown */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <MoviesStats />
         <MoreMenu />
       </div>
 
       {/* Tabs — controlled by URL search param */}
       <Tabs value={tab} onValueChange={handleTabChange}>
-        <TabsList className="flex h-auto w-full max-w-full flex-wrap gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none">
+        <TabsList className="grid! h-auto w-full max-w-full grid-cols-3 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-3">
           <TabsTrigger
             value="all"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
           >
-            <Grid3X3 className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            <Grid3X3
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             All Movies
           </TabsTrigger>
           <TabsTrigger
             value="genres"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
           >
-            <Film className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            <Film
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Genres
           </TabsTrigger>
           <TabsTrigger
             value="playlists"
-            className="min-h-10 flex-1 px-3 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:flex-initial sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
           >
-            <ListVideo className="mr-2 size-4 shrink-0" aria-hidden="true" />
+            <ListVideo
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Playlists
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6">
+        <TabsContent value="all" className="mt-5 sm:mt-6">
           <AllMoviesTabContent currentPage={allPage} sort={sort} />
         </TabsContent>
 
-        <TabsContent value="genres" className="mt-6">
+        <TabsContent value="genres" className="mt-5 sm:mt-6">
           <GenresTabContent
             genreId={genreId}
             genresPage={genresPage}
@@ -191,7 +190,7 @@ function MoviesPage() {
           />
         </TabsContent>
 
-        <TabsContent value="playlists" className="mt-6">
+        <TabsContent value="playlists" className="mt-5 sm:mt-6">
           <PlaylistsTabContent
             view={view}
             playlistsPage={playlistsPage}
@@ -232,9 +231,8 @@ function MoviesStats() {
 
   return (
     <section
-      className="flex flex-wrap gap-6 rounded-lg focus:bg-slate-800/30 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+      className="flex flex-wrap gap-6"
       aria-label={label}
-      tabIndex={0}
     >
       <div className="flex items-center gap-2" aria-hidden="true">
         <Film className="size-4 text-amber-400" />
@@ -325,7 +323,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
 
   const movies = data?.error === false ? data.data.movies : [];
   const totalPages = data?.error === false ? data.data.total_pages : 0;
-  const total = data?.error === false ? data.data.total : 0;
+  const hasMultiplePages = totalPages > 1;
 
   const getAnnouncement = () => {
     if (isLoading) return undefined;
@@ -387,14 +385,19 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
       <LiveAnnouncer message={getAnnouncement()} />
 
       {/* Header with count, page info, and sort toggle */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-slate-400">
-          {total.toLocaleString()} movies
-        </span>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div
+        className={
+          hasMultiplePages
+            ? "mb-5 flex items-center justify-between gap-2"
+            : "mb-5 flex justify-end"
+        }
+      >
+        {hasMultiplePages && (
           <span className="text-sm text-slate-400">
             Page {currentPage} of {totalPages}
           </span>
+        )}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={handleSortToggle}
             className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
@@ -441,12 +444,8 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
 function AllMoviesTabSkeleton() {
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="h-4 w-20 animate-pulse rounded-sm bg-slate-800" />
-          <div className="h-8 w-16 animate-pulse rounded-full bg-slate-800" />
-        </div>
+      <div className="mb-5 flex justify-end">
+        <div className="h-8 w-16 animate-pulse rounded-full bg-slate-800" />
       </div>
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: MOVIES_PER_PAGE }).map((_, i) => (
@@ -499,6 +498,8 @@ function GenresTabContent({
   const totalPages =
     moviesRes?.error === false ? moviesRes.data.total_pages : 0;
   const total = moviesRes?.error === false ? moviesRes.data.total : 0;
+  const hasMultiplePages = totalPages > 1;
+  const hasSelectedGenre = genreId != null;
 
   const selectedGenreTag =
     genreId != null
@@ -506,7 +507,7 @@ function GenresTabContent({
       : undefined;
 
   const getAnnouncement = () => {
-    if (genreId == null) return undefined;
+    if (!hasSelectedGenre) return undefined;
     if (moviesLoading) return undefined;
     if (movies.length === 0) return "No movies in this genre";
     return `Showing ${movies.length} movies, page ${genresPage} of ${totalPages}`;
@@ -587,46 +588,51 @@ function GenresTabContent({
 
   return (
     <div>
-      <div
-        className="mb-6 flex flex-wrap gap-2"
-        role="list"
+      <ul
+        className={
+          hasSelectedGenre
+            ? "mb-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
+            : "mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+        }
         aria-label="Movie genres"
       >
         {genres.map(g => {
           const selected = genreId === g.genre_id;
           return (
-            <button
-              key={g.genre_id}
-              type="button"
-              role="listitem"
-              onClick={() => handleSelectGenre(g.genre_id)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
-                selected
-                  ? "border-amber-500 bg-amber-500 text-slate-900"
-                  : "border-slate-600 bg-slate-800/80 text-slate-300 hover:border-slate-500 hover:text-white"
-              }`}
-              aria-pressed={selected}
-            >
-              {g.genre_tag}
-              <span className="ml-1.5 text-xs opacity-80">
-                ({g.movie_count})
-              </span>
-            </button>
+            <li key={g.genre_id} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => handleSelectGenre(g.genre_id)}
+                className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                  hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3"
+                } ${
+                  selected
+                    ? "border-amber-500 bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/15"
+                    : "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-amber-500/40 hover:bg-slate-800"
+                }`}
+                aria-pressed={selected}
+              >
+                <span className="line-clamp-2 text-sm font-semibold">
+                  {g.genre_tag}
+                </span>
+                <span
+                  className={`${hasSelectedGenre ? "mt-1" : "mt-3"} text-xs ${
+                    selected ? "text-slate-900/70" : "text-slate-400"
+                  }`}
+                >
+                  {g.movie_count} {g.movie_count === 1 ? "movie" : "movies"}
+                </span>
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
-      {genreId == null && (
-        <p className="mb-8 text-center text-sm text-slate-500">
-          Select a genre to browse movies in that category.
-        </p>
-      )}
-
-      {genreId != null && (
+      {hasSelectedGenre && (
         <>
           <LiveAnnouncer message={getAnnouncement()} />
 
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-white">
                 {selectedGenreTag ?? "Genre"}
@@ -645,9 +651,11 @@ function GenresTabContent({
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="text-sm text-slate-400">
-                Page {genresPage} of {Math.max(totalPages, 1)}
-              </span>
+              {hasMultiplePages && (
+                <span className="text-sm text-slate-400">
+                  Page {genresPage} of {totalPages}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={handleSortToggle}
@@ -717,15 +725,14 @@ function GenresTabContent({
 function GenresTabSkeleton() {
   return (
     <div>
-      <div className="mb-6 flex flex-wrap gap-2">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="h-9 w-28 animate-pulse rounded-full bg-slate-800"
+            className="min-h-20 animate-pulse rounded-lg border border-slate-800 bg-slate-900"
           />
         ))}
       </div>
-      <p className="mb-8 text-center text-sm text-slate-600">Loading genres…</p>
     </div>
   );
 }
@@ -793,7 +800,7 @@ function PlaylistsTabContent({
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm text-slate-400">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
@@ -811,7 +818,7 @@ function PlaylistsTabContent({
                 replace: true,
               })
             }
-            className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
             Liked movies
@@ -819,7 +826,7 @@ function PlaylistsTabContent({
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
             New playlist
@@ -1026,21 +1033,24 @@ type EmptyMoviePlaylistsStateProps = {
 
 function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-6 flex size-24 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/30 shadow-lg shadow-amber-500/5">
-        <ListVideo className="size-10 text-amber-200/40" aria-hidden="true" />
+    <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
+      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/30 shadow-lg shadow-amber-500/5 sm:size-24">
+        <ListVideo
+          className="size-8 text-amber-200/40 sm:size-10"
+          aria-hidden="true"
+        />
       </div>
       <h3 className="mb-2 text-xl font-semibold text-white">
         No movie playlists yet
       </h3>
-      <p className="mb-6 max-w-sm text-slate-400">
+      <p className="mb-5 max-w-sm text-slate-400 sm:mb-6">
         Create a playlist to group films. Music playlists stay on the Music
         page.
       </p>
       <button
         type="button"
         onClick={onCreate}
-        className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3"
       >
         <Plus className="size-4" aria-hidden="true" />
         Create your first playlist

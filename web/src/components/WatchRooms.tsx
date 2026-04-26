@@ -28,7 +28,7 @@ export default function WatchRooms() {
     <section
       role="region"
       aria-labelledby="watch-rooms-heading"
-      className="mt-8 md:mt-10"
+      className="mt-6 md:mt-8"
     >
       <LiveAnnouncer message={announcementMessage} />
 

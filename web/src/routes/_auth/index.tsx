@@ -37,13 +37,13 @@ function HomePage() {
       <meta name="description" content={pageDescription} />
 
       {/* main application header */}
-      <header className="mb-8">
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          <Home className="size-6 text-amber-400" aria-hidden="true" />
+      <header className="mb-1 sm:mb-2">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          <Home className="size-5 text-amber-400 sm:size-6" aria-hidden="true" />
           <span>Welcome to Igloo</span>
         </h1>
 
-        <p className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base">
+        <p className="mt-2 max-w-3xl text-sm text-slate-400 sm:text-base">
           Explore your personal media library — recently added movies, TV shows,
           music, and more.
         </p>

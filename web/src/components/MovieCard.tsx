@@ -67,11 +67,11 @@ export default function MovieCard({
               aria-hidden="true"
             />
             {/* Gradient overlay for text readability */}
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
           </div>
           {/* Movie info */}
           <div className="absolute inset-x-0 bottom-0 p-3">
-            <h3 className="truncate text-sm font-semibold text-white drop-shadow-lg">
+            <h3 className="line-clamp-2 text-sm/tight font-semibold text-white drop-shadow-lg">
               {title}
             </h3>
             {year.Valid && (

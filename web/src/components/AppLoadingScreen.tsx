@@ -1,13 +1,35 @@
 import { Snowflake } from "lucide-react";
+import { useEffect, useState } from "react";
 
 type AppLoadingScreenProps = {
   message?: string;
 };
 
 export default function AppLoadingScreen({
-  message = "Loading your media library...",
+  message = "Starting Igloo...",
 }: AppLoadingScreenProps) {
-  const hasInitialSplash = document.getElementById("initial-splash") !== null;
+  const [hasInitialSplash, setHasInitialSplash] = useState(
+    () => document.getElementById("initial-splash") !== null,
+  );
+
+  useEffect(() => {
+    if (!hasInitialSplash) {
+      return;
+    }
+
+    const updateSplashState = () => {
+      setHasInitialSplash(document.getElementById("initial-splash") !== null);
+    };
+
+    updateSplashState();
+
+    const observer = new MutationObserver(updateSplashState);
+    observer.observe(document.body, { childList: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasInitialSplash]);
 
   return (
     <div

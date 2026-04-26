@@ -173,7 +173,10 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
   const trailerReturnPath = `/movies/in-theaters/${movie.id}`;
 
   return (
-    <article aria-labelledby="movie-title" className="pb-6 sm:pb-10">
+    <article
+      aria-labelledby="movie-title"
+      className="w-full min-w-0 pb-6 sm:pb-10"
+    >
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 

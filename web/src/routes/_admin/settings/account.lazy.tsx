@@ -43,6 +43,7 @@ import { showSuccess, showError, showActionFailed } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
 import { logout } from "@/lib/api";
 import type { AuthUser } from "@/types";
+import { lightInputClassName } from "@/lib/input-styles";
 
 export const Route = createLazyFileRoute("/_admin/settings/account")({
   component: AccountSettings,
@@ -467,20 +468,20 @@ function AccountSettings() {
             Manage your account information and preferences
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="max-w-2xl space-y-6">
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-slate-300">
               Email
             </Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="email"
                 type="email"
                 value={emailValue}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="flex-1"
+                className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your email address"
               />
               <Button
@@ -491,6 +492,7 @@ function AccountSettings() {
                   !emailValue.trim()
                 }
                 variant="accent"
+                className="w-full sm:w-auto"
               >
                 {updateEmailMutation.isPending ? "Saving..." : "Save"}
               </Button>
@@ -502,7 +504,7 @@ function AccountSettings() {
             <Label htmlFor="name" className="text-slate-300">
               Name
             </Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="name"
                 type="text"
@@ -510,7 +512,7 @@ function AccountSettings() {
                 onChange={e => setName(e.target.value)}
                 placeholder="Enter your name"
                 maxLength={100}
-                className="flex-1"
+                className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your display name"
               />
               <Button
@@ -521,6 +523,7 @@ function AccountSettings() {
                   !nameValue.trim()
                 }
                 variant="accent"
+                className="w-full sm:w-auto"
               >
                 {updateNameMutation.isPending ? "Saving..." : "Save"}
               </Button>
@@ -543,7 +546,7 @@ function AccountSettings() {
             Update your profile picture
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="max-w-2xl space-y-6">
           {/* Current Avatar */}
           <div className="flex items-center gap-4">
             {getAvatarUrl() ? (
@@ -561,9 +564,9 @@ function AccountSettings() {
                 <User className="size-10 text-slate-600" aria-hidden="true" />
               </div>
             )}
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-medium text-white">{user.name}</p>
-              <p className="text-xs text-slate-400">{user.email}</p>
+              <p className="text-xs break-all text-slate-400">{user.email}</p>
             </div>
           </div>
 
@@ -575,7 +578,7 @@ function AccountSettings() {
             <div className="flex gap-2">
               <label
                 htmlFor="avatar-upload"
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700/50"
+                className={`flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors hover:bg-slate-50 ${lightInputClassName}`}
               >
                 <Upload className="size-4" aria-hidden="true" />
                 {uploadAvatarMutation.isPending
@@ -602,14 +605,14 @@ function AccountSettings() {
             <Label htmlFor="avatar-url" className="text-slate-300">
               Or enter image URL
             </Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="avatar-url"
                 type="url"
                 value={avatarUrl}
                 onChange={e => setAvatarUrl(e.target.value)}
                 placeholder="https://example.com/avatar.jpg"
-                className="flex-1"
+                className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Avatar image URL"
               />
               <Button
@@ -618,6 +621,7 @@ function AccountSettings() {
                   updateAvatarUrlMutation.isPending || !avatarUrl.trim()
                 }
                 variant="accent"
+                className="w-full sm:w-auto"
               >
                 {updateAvatarUrlMutation.isPending ? "Saving..." : "Set URL"}
               </Button>
@@ -637,7 +641,7 @@ function AccountSettings() {
             Update your account password
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
             <Label htmlFor="current-password" className="text-slate-300">
               Current Password
@@ -648,6 +652,7 @@ function AccountSettings() {
               value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)}
               placeholder="Enter current password"
+              className={lightInputClassName}
               aria-label="Current password"
             />
           </div>
@@ -662,6 +667,7 @@ function AccountSettings() {
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
               placeholder="Enter new password"
+              className={lightInputClassName}
               aria-label="New password"
             />
             <p className="text-xs text-slate-400">
@@ -679,6 +685,7 @@ function AccountSettings() {
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="Confirm new password"
+              className={lightInputClassName}
               aria-label="Confirm new password"
             />
           </div>
@@ -712,7 +719,7 @@ function AccountSettings() {
             Irreversible and destructive actions
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
             <p className="text-sm font-medium text-red-400">Delete Account</p>
             <p className="text-sm text-red-300/80">
@@ -760,7 +767,7 @@ function AccountSettings() {
                 value={deleteConfirmText}
                 onChange={e => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
-                className="font-mono"
+                className={`font-mono ${lightInputClassName}`}
                 aria-label="Type DELETE to confirm account deletion"
               />
             </div>

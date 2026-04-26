@@ -42,7 +42,7 @@ describe("App boot loading", () => {
       >
         <div class="initial-splash__content">
           <p class="initial-splash__title">Igloo</p>
-          <p class="initial-splash__message">Loading your media library...</p>
+          <p class="initial-splash__message">Starting Igloo...</p>
         </div>
       </div>
       <div id="test-root"></div>
@@ -79,9 +79,7 @@ describe("App boot loading", () => {
     expect(statuses).toHaveLength(1);
     expect(statuses[0]).toHaveAttribute("aria-live", "polite");
     expect(screen.getByText("Igloo")).toBeInTheDocument();
-    expect(
-      screen.getByText("Loading your media library..."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Starting Igloo...")).toBeInTheDocument();
   });
 
   it("defers router pending live-region semantics while the initial splash is present", () => {
@@ -94,7 +92,7 @@ describe("App boot loading", () => {
       >
         <div class="initial-splash__content">
           <p class="initial-splash__title">Igloo</p>
-          <p class="initial-splash__message">Loading your media library...</p>
+          <p class="initial-splash__message">Starting Igloo...</p>
         </div>
       </div>
       <div id="test-root"></div>
@@ -108,5 +106,36 @@ describe("App boot loading", () => {
 
     expect(statuses).toHaveLength(1);
     expect(statuses[0]).toHaveAttribute("id", "initial-splash");
+  });
+
+  it("promotes router pending to the live loading surface after the splash is removed", async () => {
+    document.body.innerHTML = `
+      <div
+        id="initial-splash"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div class="initial-splash__content">
+          <p class="initial-splash__title">Igloo</p>
+          <p class="initial-splash__message">Starting Igloo...</p>
+        </div>
+      </div>
+      <div id="test-root"></div>
+    `;
+
+    render(<RouterPending />, {
+      container: document.getElementById("test-root")!,
+    });
+
+    await act(async () => {
+      document.getElementById("initial-splash")?.remove();
+    });
+
+    const statuses = screen.getAllByRole("status");
+
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toHaveTextContent("Starting Igloo...");
+    expect(statuses[0]).not.toHaveAttribute("id", "initial-splash");
   });
 });

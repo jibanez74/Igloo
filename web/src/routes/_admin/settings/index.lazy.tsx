@@ -14,7 +14,7 @@ export const Route = createLazyFileRoute("/_admin/settings/")({
 
 function GeneralSettings() {
   return (
-    <div className='space-y-8'>
+    <div className='max-w-3xl space-y-8'>
       <Card className='border-slate-700/50 bg-slate-800/30'>
         <CardHeader>
           <CardTitle className='flex items-center gap-2 text-white'>
@@ -26,7 +26,7 @@ function GeneralSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className='text-slate-300'>General settings coming soon...</p>
+          <p className='text-slate-300'>General settings coming soon.</p>
         </CardContent>
       </Card>
     </div>

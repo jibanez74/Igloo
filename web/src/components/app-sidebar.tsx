@@ -55,8 +55,11 @@ function SidebarItemContent({
 }) {
   return (
     <>
-      <Icon className={active ? "text-amber-400" : "text-slate-400"} />
-      <span>{title}</span>
+      <Icon
+        className={active ? "text-amber-400" : "text-slate-400"}
+        aria-hidden="true"
+      />
+      <span aria-hidden="true">{title}</span>
     </>
   );
 }
@@ -140,7 +143,6 @@ export default function AppSidebar({
                     <SidebarMenuButton
                       asChild
                       isActive={active}
-                      tooltip={item.title}
                       className={
                         active
                           ? "bg-slate-800 text-white hover:bg-slate-700"
@@ -155,6 +157,7 @@ export default function AppSidebar({
                             : undefined
                         }
                         onClick={handleNavClick}
+                        aria-label={item.title}
                         aria-current={active ? "page" : undefined}
                       >
                         <SidebarItemContent
@@ -178,11 +181,11 @@ export default function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={handleLogout}
-              tooltip="Logout"
+              aria-label="Logout"
               className="text-slate-300 hover:bg-slate-800/50 hover:text-white"
             >
-              <LogOut className="text-slate-400" />
-              <span>Logout</span>
+              <LogOut className="text-slate-400" aria-hidden="true" />
+              <span aria-hidden="true">Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
