@@ -47,6 +47,7 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
+import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import type {
   WatchRoomPlaybackStateType,
   WatchRoomServerEventType,
@@ -470,36 +471,50 @@ export function WatchRoomPageContent({
     );
   };
 
+  const playVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const pending = pendingPlaybackRef.current;
+    if (pending && !pending.state.paused) {
+      const elapsed = (Date.now() - pending.receivedAt) / 1000;
+      const adjustedPos = pending.state.position_sec + elapsed;
+      const drift = Math.abs(video.currentTime - adjustedPos);
+      if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+        video.currentTime = adjustedPos;
+        setCurrentTime(adjustedPos);
+      }
+    }
+
+    try {
+      await video.play();
+      setPlaybackError(null);
+      pendingPlaybackRef.current = null;
+      sendPlaybackEvent("play", video.currentTime);
+    } catch {
+      setPlaybackError("Playback failed — the browser could not play this stream.");
+    }
+  };
+
+  const pauseVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.pause();
+    pendingPlaybackRef.current = null;
+    sendPlaybackEvent("pause", video.currentTime);
+  };
+
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
 
     if (video.paused) {
-      const pending = pendingPlaybackRef.current;
-      if (pending && !pending.state.paused) {
-        const elapsed = (Date.now() - pending.receivedAt) / 1000;
-        const adjustedPos = pending.state.position_sec + elapsed;
-        const drift = Math.abs(video.currentTime - adjustedPos);
-        if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
-          video.currentTime = adjustedPos;
-          setCurrentTime(adjustedPos);
-        }
-      }
-
-      try {
-        await video.play();
-        setPlaybackError(null);
-        pendingPlaybackRef.current = null;
-        sendPlaybackEvent("play", video.currentTime);
-      } catch {
-        setPlaybackError("Playback failed — the browser could not play this stream.");
-      }
+      await playVideo();
       return;
     }
 
-    video.pause();
-    pendingPlaybackRef.current = null;
-    sendPlaybackEvent("pause", video.currentTime);
+    pauseVideo();
   };
 
   const seek = (newTime: number) => {
@@ -520,6 +535,20 @@ export function WatchRoomPageContent({
     seek(currentTime - WATCH_ROOM_SEEK_STEP_SEC);
   const seekForward = () =>
     seek(currentTime + WATCH_ROOM_SEEK_STEP_SEC);
+
+  useVideoMediaSession({
+    videoRef,
+    title: movieTitle || "Watch room",
+    artworkUrl: posterUrl,
+    currentTime,
+    duration,
+    playing,
+    seekStepSec: WATCH_ROOM_SEEK_STEP_SEC,
+    onPlay: playVideo,
+    onPause: pauseVideo,
+    onSeek: seek,
+    enabled: !!room && !playbackError,
+  });
 
   const toggleFullscreen = async () => {
     const container = containerRef.current;

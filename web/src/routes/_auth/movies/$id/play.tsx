@@ -1,8 +1,7 @@
-        import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertCircle,
   ArrowLeft,
   Film,
   Rewind,
@@ -11,40 +10,55 @@ import {
   Play,
   Maximize,
   Minimize,
-  RotateCcw,
 } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
 import ResumeDialog from "@/components/ResumeDialog";
 import ChapterMenu from "@/components/ChapterMenu";
+import MoviePlaybackStatusScreen from "@/components/MoviePlaybackStatusScreen";
 import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
   movieWatchProgressQueryOpts,
 } from "@/lib/query-opts";
 import { formatTimeSeconds } from "@/lib/format";
+import { deleteMovieWatchProgress } from "@/lib/api";
 import {
-  deleteMovieWatchProgress,
-  updateMovieWatchProgress,
-} from "@/lib/api";
-import {
-  HLS_RESUME_REWIND_BUFFER_SEC,
   HLS_SESSION_LOST_MAX_ATTEMPTS,
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
+  TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import {
   STREAM_MODES,
-  formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
   resolvePlaybackSettings,
-  type StreamModeId,
 } from "@/lib/playback";
+import {
+  MOVIE_CONTROLS_IDLE_MS,
+  MOVIE_SEEK_STEP_SEC,
+  MOVIE_VOLUME_STEP,
+  MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
+  buildMovieStreamUrl,
+  buildMovieSubtitleTrackInfo,
+  clampMoviePlaybackTime,
+  currentPlaybackTimestampMs,
+  displayedMovieDuration,
+  hasEligibleMovieResumeProgress,
+  hlsPlaybackOffsetSec,
+  hlsStartTimeSec,
+  nativeMoviePlaybackErrorMessage,
+  persistMovieWatchProgress,
+  shouldRebaseHlsMovieSession,
+  toAbsoluteDuration,
+  toAbsolutePlaybackTime,
+  toMediaPlaybackTime,
+} from "@/lib/movie-playback";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { toast } from "sonner";
+import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
   canRequestElementFullscreen,
   exitDocumentFullscreen,
@@ -55,10 +69,14 @@ import {
   tryWebKitVideoExitFullscreen,
 } from "@/lib/fullscreen";
 import { cn } from "@/lib/utils";
-import { unwrapFloatOrUndefined, unwrapStringOrUndefined } from "@/lib/nullable";
+import {
+  unwrapFloatOrUndefined,
+  unwrapString,
+} from "@/lib/nullable";
 import type { PlaySearchParams } from "@/types";
 import { playSearchSchema } from "@/types/movie-play";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: playSearchSchema,
@@ -78,86 +96,10 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
   component: PlayMoviePage,
 });
 
-const SEEK_STEP_SEC = 10;
-const VOLUME_STEP = 0.1;
-const CONTROLS_IDLE_MS = 3000;
-const WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
-const WATCH_PROGRESS_MIN_SECONDS = 180;
-const WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
-const HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
-
 type ChapterAnnouncement = {
   key: number;
   text: string;
 };
-
-function buildStreamUrl(
-  movieId: number,
-  mode: StreamModeId,
-  audioTrack: number,
-  hlsStartSec: number,
-  reloadKey: number,
-): string {
-  if (mode === "direct") return `/api/movies/${movieId}/stream`;
-  const params = new URLSearchParams({
-    audio_track: String(audioTrack),
-  });
-  if (hlsStartSec > 0) {
-    params.set("start", String(Math.floor(hlsStartSec)));
-  }
-  if (reloadKey > 0) {
-    params.set("reload", String(reloadKey));
-  }
-  return `/api/movies/${movieId}/hls/${mode}/playlist.m3u8?${params}`;
-}
-
-function shouldPersistWatchProgress(progressSec: number, durationSec: number) {
-  if (!(durationSec > 0)) return false;
-  const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
-  const completionRatio = clampedProgress / durationSec;
-
-  return (
-    completionRatio >= WATCH_PROGRESS_COMPLETION_THRESHOLD ||
-    clampedProgress >= WATCH_PROGRESS_MIN_SECONDS
-  );
-}
-
-async function persistMovieWatchProgress(
-  movieId: number,
-  progressSec: number,
-  durationSec: number,
-  options?: { keepalive?: boolean },
-) {
-  if (!(durationSec > 0)) return;
-
-  const clampedProgress = Math.max(0, Math.min(progressSec, durationSec));
-  if (!shouldPersistWatchProgress(clampedProgress, durationSec)) return;
-
-  if (options?.keepalive) {
-    try {
-      await fetch(`/api/movies/${movieId}/watch-progress`, {
-        method: "PUT",
-        credentials: "include",
-        keepalive: true,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          progress_sec: clampedProgress,
-          duration_sec: durationSec,
-        }),
-      });
-    } catch {
-      // Best-effort pagehide save; ignore network failures.
-    }
-    return;
-  }
-
-  const res = await updateMovieWatchProgress(movieId, clampedProgress, durationSec);
-  if (res.error) {
-    throw new Error(res.message);
-  }
-}
 
 function PlayMoviePage() {
   const { id } = Route.useParams();
@@ -209,7 +151,7 @@ function PlayMoviePage() {
     idleTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
       idleTimerRef.current = null;
-    }, CONTROLS_IDLE_MS);
+    }, MOVIE_CONTROLS_IDLE_MS);
   };
 
   const showControlsAndResetIdle = () => {
@@ -222,6 +164,9 @@ function PlayMoviePage() {
   );
   const movie = data && !data.error ? data.data?.movie : null;
   const title = movie?.title ?? "Movie";
+  const posterUrl = movie
+    ? buildTmdbImageUrl(unwrapString(movie.poster_path), TMDB_POSTER_SIZE)
+    : null;
   const movieNotFound = isError || (data && data.error);
 
   const { data: techData, isPending: techPending } = useQuery(
@@ -267,11 +212,13 @@ function PlayMoviePage() {
   const resolvedAudioTrack = resolvedPlaybackSettings.audioTrack;
   const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
   const isHlsPlayback = resolvedMode !== "direct";
-  const hlsStartSec = isHlsPlayback
-    ? Math.max(0, start - HLS_RESUME_REWIND_BUFFER_SEC)
-    : 0;
-  const hlsPlaybackOffsetSec = isHlsPlayback ? Math.max(0, start - hlsStartSec) : 0;
-  const streamUrl = buildStreamUrl(
+  const hlsStartSec = hlsStartTimeSec(isHlsPlayback, start);
+  const hlsPlaybackOffset = hlsPlaybackOffsetSec(
+    isHlsPlayback,
+    start,
+    hlsStartSec,
+  );
+  const streamUrl = buildMovieStreamUrl(
     movieId,
     resolvedMode,
     resolvedAudioTrack,
@@ -284,37 +231,14 @@ function PlayMoviePage() {
   const movieDurationSec =
     unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
     unwrapFloatOrUndefined(movie?.duration);
-  const toAbsolutePlaybackTime = (timeSec: number) =>
-    isHlsPlayback ? hlsStartSec + timeSec : timeSec;
-  const toMediaTime = (timeSec: number) =>
-    isHlsPlayback ? Math.max(0, timeSec - hlsStartSec) : timeSec;
-  const toAbsoluteDuration = (durationSec: number) => {
-    if (!isHlsPlayback) return durationSec;
-    if (movieDurationSec && movieDurationSec > 0) {
-      return movieDurationSec;
-    }
-    return hlsStartSec + durationSec;
-  };
-  const displayedDuration =
-    isHlsPlayback && movieDurationSec && movieDurationSec > 0
-      ? movieDurationSec
-      : duration;
-
-  const subtitleInfo = (() => {
-    if (resolvedSubtitleTrack === null || !techLoaded) return null;
-    if (
-      resolvedSubtitleTrack < 0 ||
-      resolvedSubtitleTrack >= subtitleStreams.length
-    ) {
-      return null;
-    }
-    const sub = subtitleStreams[resolvedSubtitleTrack];
-    return {
-      url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt`,
-      label: formatSubtitleLabel(sub, resolvedSubtitleTrack),
-      srclang: unwrapStringOrUndefined(sub.language) ?? "",
-    };
-  })();
+  const playbackTiming = { isHlsPlayback, hlsStartSec, movieDurationSec };
+  const displayedDuration = displayedMovieDuration(duration, playbackTiming);
+  const subtitleInfo = buildMovieSubtitleTrackInfo({
+    movieId,
+    resolvedSubtitleTrack,
+    techLoaded,
+    subtitleStreams,
+  });
   const sessionLostStreamKey = `${movieId}:${resolvedMode}:${resolvedAudioTrack}`;
   const sessionWindowKey = `${sessionLostStreamKey}:${Math.floor(hlsStartSec)}`;
 
@@ -362,12 +286,10 @@ function PlayMoviePage() {
     watchProgressData?.error === false ? watchProgressData.data : null;
   const savedProgressSec = savedProgress?.progress_sec ?? null;
   const savedDurationSec = savedProgress?.duration_sec ?? null;
-  const hasEligibleResumeProgress =
-    savedProgressSec !== null &&
-    savedDurationSec !== null &&
-    savedDurationSec > 0 &&
-    savedProgressSec >= WATCH_PROGRESS_MIN_SECONDS &&
-    savedProgressSec / savedDurationSec < WATCH_PROGRESS_COMPLETION_THRESHOLD;
+  const hasEligibleResumeProgress = hasEligibleMovieResumeProgress(
+    savedProgressSec,
+    savedDurationSec,
+  );
   const resumeDialogOpen =
     !resumeDismissed && start === 0 && !watchProgressPending && hasEligibleResumeProgress;
 
@@ -380,13 +302,7 @@ function PlayMoviePage() {
   };
 
   const clampPlaybackTime = (value: number) => {
-    const knownDuration =
-      durationRef.current > 0
-        ? durationRef.current
-        : duration > 0
-          ? duration
-          : value;
-    return Math.max(0, Math.min(value, knownDuration));
+    return clampMoviePlaybackTime(value, durationRef.current, duration);
   };
 
   const navigateToPlaybackPosition = (
@@ -418,7 +334,7 @@ function PlayMoviePage() {
   };
 
   const handleSessionLost = (currentTimeSec: number) => {
-    const now = Date.now();
+    const now = currentPlaybackTimestampMs();
     if (sessionLostNavAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
       setPlaybackError(
         "Playback session could not be recovered. Try reloading the page or choosing another quality.",
@@ -436,43 +352,62 @@ function PlayMoviePage() {
     navigateToPlaybackPosition(currentTimeSec, { forceReload: true });
   };
 
+  const playVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      await video.play();
+      setPlaybackError(null);
+    } catch {
+      setPlaybackError(
+        "Playback failed — the browser could not play this stream.",
+      );
+    }
+  };
+
+  const pauseVideo = () => {
+    videoRef.current?.pause();
+  };
+
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
+
     if (video.paused) {
-      try {
-        await video.play();
-      } catch {
-        setPlaybackError(
-          "Playback failed — the browser could not play this stream.",
-        );
-      }
-    } else {
-      video.pause();
+      await playVideo();
+      return;
     }
+
+    pauseVideo();
   };
 
   const seek = (newTime: number) => {
     const video = videoRef.current;
     if (!video) return;
     const t = clampPlaybackTime(newTime);
-    const currentVideoTime = toAbsolutePlaybackTime(video.currentTime);
-    const shouldRebaseHlsSession =
-      isHlsPlayback &&
-      (t < hlsStartSec ||
-        t > currentVideoTime + HLS_FORWARD_REBASE_THRESHOLD_SEC);
+    const currentVideoTime = toAbsolutePlaybackTime(
+      video.currentTime,
+      playbackTiming,
+    );
+    const shouldRebaseHlsSession = shouldRebaseHlsMovieSession({
+      isHlsPlayback,
+      targetTimeSec: t,
+      hlsStartSec,
+      currentVideoTimeSec: currentVideoTime,
+    });
 
     if (shouldRebaseHlsSession) {
       navigateToPlaybackPosition(t);
       return;
     }
 
-    video.currentTime = toMediaTime(t);
+    video.currentTime = toMediaPlaybackTime(t, playbackTiming);
     setCurrentTime(t);
   };
 
-  const seekForward = () => seek(currentTime + SEEK_STEP_SEC);
-  const seekBackward = () => seek(currentTime - SEEK_STEP_SEC);
+  const seekForward = () => seek(currentTime + MOVIE_SEEK_STEP_SEC);
+  const seekBackward = () => seek(currentTime - MOVIE_SEEK_STEP_SEC);
 
   const handleChapterSelect = (startTimeSec: number, title: string) => {
     seek(startTimeSec);
@@ -543,7 +478,7 @@ function PlayMoviePage() {
       } catch {
         // Silent background save failure; pause/end handlers surface failures when needed.
       }
-    }, WATCH_PROGRESS_SAVE_INTERVAL_MS);
+    }, MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS);
     return () => {
       window.clearInterval(interval);
     };
@@ -623,15 +558,7 @@ function PlayMoviePage() {
   }, [isHlsPlayback, movieDurationSec]);
 
   const handleNativePlaybackError = (code: number | null | undefined) => {
-    if (code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-      setPlaybackError("This media format is not supported by the browser.");
-    } else if (code === MediaError.MEDIA_ERR_DECODE) {
-      setPlaybackError("The stream could not be decoded.");
-    } else if (code === MediaError.MEDIA_ERR_NETWORK) {
-      setPlaybackError("A network error interrupted playback.");
-    } else {
-      setPlaybackError("Playback failed.");
-    }
+    setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
 
   useEffect(() => {
@@ -762,21 +689,21 @@ function PlayMoviePage() {
         case "ArrowUp": {
           e.preventDefault();
           e.stopPropagation();
-          const v = videoRef.current;
-          if (v) {
-            v.volume = Math.min(1, v.volume + VOLUME_STEP);
-            v.muted = false;
-          }
-          break;
+            const v = videoRef.current;
+            if (v) {
+              v.volume = Math.min(1, v.volume + MOVIE_VOLUME_STEP);
+              v.muted = false;
+            }
+            break;
         }
         case "ArrowDown": {
           e.preventDefault();
           e.stopPropagation();
-          const v = videoRef.current;
-          if (v) {
-            v.volume = Math.max(0, v.volume - VOLUME_STEP);
-            v.muted = false;
-          }
+            const v = videoRef.current;
+            if (v) {
+              v.volume = Math.max(0, v.volume - MOVIE_VOLUME_STEP);
+              v.muted = false;
+            }
           break;
         }
         case "m":
@@ -859,130 +786,110 @@ function PlayMoviePage() {
     setResumeDismissed(true);
   };
 
+  useVideoMediaSession({
+    videoRef,
+    title,
+    artworkUrl: posterUrl,
+    currentTime,
+    duration: displayedDuration,
+    playing,
+    seekStepSec: MOVIE_SEEK_STEP_SEC,
+    onPlay: playVideo,
+    onPause: pauseVideo,
+    onSeek: seek,
+    enabled: !movieNotFound && !!movie && !playbackError && !modeUnavailable,
+  });
+
   if (movieNotFound) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
-          </div>
-          <h1 className="mb-2 text-xl font-semibold text-white">
-            Movie not found
-          </h1>
-          <p className="mb-6 text-slate-400">
-            The movie could not be found or you don&apos;t have access to it.
-          </p>
-          <button
-            ref={backButtonRef}
-            onClick={handleBack}
-            className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-            aria-label="Back to previous page"
-          >
-            <ArrowLeft className="size-5" aria-hidden="true" />
-            Back
-          </button>
-        </div>
-      </div>
+      <MoviePlaybackStatusScreen
+        title="Movie not found"
+        message="The movie could not be found or you don't have access to it."
+        actions={[
+          {
+            label: "Back",
+            ariaLabel: "Back to previous page",
+            icon: "back",
+            onClick: handleBack,
+            buttonRef: backButtonRef,
+          },
+        ]}
+      />
     );
   }
 
   if (isPending || !movie) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
-        <div className="text-center">
-          <Spinner className="mx-auto mb-6 size-10 text-cyan-400" />
-          <p className="text-lg font-medium text-white">Loading movie...</p>
-        </div>
-      </div>
+      <MoviePlaybackStatusScreen
+        variant="loading"
+        message="Loading movie..."
+      />
     );
   }
 
   if (mode !== "direct" && techPending) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
-        <div className="text-center">
-          <Spinner className="mx-auto mb-6 size-10 text-cyan-400" />
-          <p className="text-lg font-medium text-white">
-            Preparing playback...
-          </p>
-        </div>
-      </div>
+      <MoviePlaybackStatusScreen
+        variant="loading"
+        message="Preparing playback..."
+      />
     );
   }
 
   if (modeUnavailable) {
     const modeLabel = STREAM_MODES.find(m => m.id === mode)?.label ?? mode;
     return (
-      <div
-        ref={containerRef}
-        className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4"
-      >
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
-          </div>
-          <h1 className="mb-2 text-xl font-semibold text-white">
-            Quality not available
-          </h1>
-          <p className="mb-6 text-slate-400">
+      <MoviePlaybackStatusScreen
+        containerRef={containerRef}
+        title="Quality not available"
+        message={
+          <>
             <strong className="text-slate-200">{modeLabel}</strong> is not
             available for this movie. Go back and choose a different quality in
             Playback Settings.
-          </p>
-          <button
-            ref={backButtonRef}
-            onClick={handleBack}
-            className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-            aria-label="Back to previous page"
-          >
-            <ArrowLeft className="size-5" aria-hidden="true" />
-            Back
-          </button>
-        </div>
-      </div>
+          </>
+        }
+        actions={[
+          {
+            label: "Back",
+            ariaLabel: "Back to previous page",
+            icon: "back",
+            onClick: handleBack,
+            buttonRef: backButtonRef,
+          },
+        ]}
+      />
     );
   }
 
   if (playbackError) {
     return (
-      <div
-        ref={containerRef}
-        className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4"
-      >
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
-          </div>
-          <h1 className="mb-2 text-xl font-semibold text-white">
-            Playback failed
-          </h1>
-          <p className="mb-6 text-slate-400">{playbackError}</p>
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                setPlaybackError(null);
-                setPlaying(false);
-                setCurrentTime(0);
-                setDuration(0);
-              }}
-              className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-              aria-label="Try again"
-            >
-              <RotateCcw className="size-5" aria-hidden="true" />
-              Try Again
-            </button>
-            <button
-              ref={backButtonRef}
-              onClick={handleBack}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-              aria-label="Back to previous page"
-            >
-              <ArrowLeft className="size-5" aria-hidden="true" />
-              Back
-            </button>
-          </div>
-        </div>
-      </div>
+      <MoviePlaybackStatusScreen
+        containerRef={containerRef}
+        title="Playback failed"
+        message={playbackError}
+        actions={[
+          {
+            label: "Try Again",
+            ariaLabel: "Try again",
+            icon: "retry",
+            onClick: () => {
+              setPlaybackError(null);
+              setPlaying(false);
+              setCurrentTime(0);
+              setDuration(0);
+            },
+          },
+          {
+            label: "Back",
+            ariaLabel: "Back to previous page",
+            icon: "back",
+            variant: "secondary",
+            onClick: handleBack,
+            buttonRef: backButtonRef,
+          },
+        ]}
+      />
     );
   }
 
@@ -1071,24 +978,29 @@ function PlayMoviePage() {
             void handleEndedSave();
           }}
           onTimeUpdate={(time) => {
-            const absoluteTime = toAbsolutePlaybackTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
             currentTimeRef.current = absoluteTime;
             setCurrentTime(absoluteTime);
           }}
           onDurationChange={(nextDuration) => {
-            const absoluteDuration = toAbsoluteDuration(nextDuration);
+            const absoluteDuration = toAbsoluteDuration(
+              nextDuration,
+              playbackTiming,
+            );
             durationRef.current = absoluteDuration;
             setDuration(absoluteDuration);
           }}
           onNativeError={handleNativePlaybackError}
           subtitleTrack={subtitleInfo}
-          startSec={isHlsPlayback ? hlsPlaybackOffsetSec : start}
+          startSec={isHlsPlayback ? hlsPlaybackOffset : start}
           onStartApplied={(time) => {
-            const absoluteTime = toAbsolutePlaybackTime(time);
+            const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
             currentTimeRef.current = absoluteTime;
             setCurrentTime(absoluteTime);
           }}
-          onSessionLost={(time) => handleSessionLost(toAbsolutePlaybackTime(time))}
+          onSessionLost={(time) =>
+            handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
+          }
         />
       </div>
 
