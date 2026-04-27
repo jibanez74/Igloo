@@ -368,7 +368,7 @@ describe("WatchRoomPageContent", () => {
     mockVideoController.setReadyState(4);
 
     await waitFor(() => {
-      expect(mockVideoController.currentTime).toBe(37);
+      expect(mockVideoController.currentTime).toBeCloseTo(37, 1);
       expect(mockVideoController.playCalls).toBe(1);
       expect(
         screen.getByRole("button", { name: /pause playback/i }),

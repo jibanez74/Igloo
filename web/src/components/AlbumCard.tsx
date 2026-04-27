@@ -94,10 +94,12 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         </div>
 
         {/* Album info */}
-        <div className="p-3">
-          <h3 className="truncate text-sm font-semibold text-white">{title}</h3>
+        <div className="min-h-17 p-3">
+          <h3 className="line-clamp-2 text-sm/tight font-semibold text-white">
+            {title}
+          </h3>
           {musicianName && (
-            <p className="mt-0.5 truncate text-xs text-slate-400">
+            <p className="mt-1 truncate text-xs text-slate-400">
               {musicianName}
             </p>
           )}

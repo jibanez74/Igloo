@@ -30,6 +30,7 @@ import {
   adminDeleteUser,
   adminResetUserPassword,
 } from "@/lib/api";
+import { lightInputClassName } from "@/lib/input-styles";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 
@@ -128,7 +129,7 @@ function UsersSettings() {
   return (
     <div className="space-y-8">
       <Card className="border-slate-700/50 bg-slate-800/30">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-white">
               <Users className="size-5 text-amber-400" aria-hidden="true" />
@@ -141,7 +142,7 @@ function UsersSettings() {
           <Button
             variant="accent"
             onClick={() => setDialog({ type: "create" })}
-            className="shrink-0"
+            className="w-full shrink-0 sm:w-auto"
           >
             <UserPlus className="size-4" aria-hidden="true" />
             Add User
@@ -166,85 +167,87 @@ function UsersSettings() {
           {!isLoading && users.length > 0 && (
             <ul className="divide-y divide-slate-700/50" role="list" aria-label="User list">
               {users.map(user => (
-                <li key={user.id} className="flex items-center gap-4 py-4">
-                  <Avatar className="size-10 shrink-0">
-                    {user.avatar && (
-                      <AvatarImage src={user.avatar} alt={user.name} />
-                    )}
-                    <AvatarFallback className="bg-amber-500/20 text-amber-400">
-                      {getInitials(user.name)}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">
-                      {user.name}
-                      {authResolved && user.id === currentUserId && (
-                        <span className="ml-2 text-xs text-slate-400">(you)</span>
+                <li key={user.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                    <Avatar className="size-10 shrink-0">
+                      {user.avatar && (
+                        <AvatarImage src={user.avatar} alt={user.name} />
                       )}
-                    </p>
-                    <p className="truncate text-xs text-slate-400">{user.email}</p>
+                      <AvatarFallback className="bg-amber-500/20 text-amber-400">
+                        {getInitials(user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">
+                        {user.name}
+                        {authResolved && user.id === currentUserId && (
+                          <span className="ml-2 text-xs text-slate-400">(you)</span>
+                        )}
+                      </p>
+                      <p className="truncate text-xs text-slate-400">{user.email}</p>
+                    </div>
                   </div>
 
-                  <div className="shrink-0">
-                    {user.is_admin ? (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400"
-                        aria-label="Admin"
-                      >
-                        <ShieldCheck className="size-3" aria-hidden="true" />
-                        Admin
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400"
-                        aria-label="User"
-                      >
-                        <ShieldOff className="size-3" aria-hidden="true" />
-                        User
-                      </span>
-                    )}
-                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 sm:shrink-0 sm:justify-end">
+                    <div className="shrink-0">
+                      {user.is_admin ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400"
+                        >
+                          <ShieldCheck className="size-3" aria-hidden="true" />
+                          Admin
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400"
+                        >
+                          <ShieldOff className="size-3" aria-hidden="true" />
+                          User
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    {authResolved && user.id === currentUserId ? (
-                      <Link
-                        to="/settings/account"
-                        className="text-xs text-slate-400 underline-offset-2 hover:text-amber-400 hover:underline"
-                      >
-                        Account settings
-                      </Link>
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDialog({ type: "reset-password", user })}
-                          aria-label={`Reset password for ${user.name}`}
-                          className="text-slate-400 hover:text-white"
+                    <div className="flex shrink-0 items-center gap-2">
+                      {authResolved && user.id === currentUserId ? (
+                        <Link
+                          to="/settings/account"
+                          className="text-xs text-slate-400 underline-offset-2 hover:text-amber-400 hover:underline"
                         >
-                          <KeyRound className="size-4" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDialog({ type: "edit", user })}
-                          aria-label={`Edit ${user.name}`}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          <Pencil className="size-4" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDialog({ type: "delete", user })}
-                          aria-label={`Delete ${user.name}`}
-                          className="text-slate-400 hover:text-red-400"
-                        >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                        </Button>
-                      </>
-                    )}
+                          Account settings
+                        </Link>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDialog({ type: "reset-password", user })}
+                            aria-label={`Reset password for ${user.name}`}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <KeyRound className="size-4" aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDialog({ type: "edit", user })}
+                            aria-label={`Edit ${user.name}`}
+                            className="text-slate-400 hover:text-white"
+                          >
+                            <Pencil className="size-4" aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDialog({ type: "delete", user })}
+                            aria-label={`Delete ${user.name}`}
+                            className="text-slate-400 hover:text-red-400"
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -330,6 +333,7 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
               placeholder="Full name"
               maxLength={100}
               required
+              className={lightInputClassName}
               aria-label="User name"
             />
           </div>
@@ -343,6 +347,7 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
               onChange={e => setEmail(e.target.value)}
               placeholder="user@example.com"
               required
+              className={lightInputClassName}
               aria-label="User email"
             />
           </div>
@@ -356,6 +361,7 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
               onChange={e => setPassword(e.target.value)}
               placeholder="At least 9 characters"
               required
+              className={lightInputClassName}
               aria-label="User password"
             />
             <p className="text-xs text-slate-400">Must be 9–128 characters</p>
@@ -426,6 +432,7 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
               placeholder="Full name"
               maxLength={100}
               required
+              className={lightInputClassName}
               aria-label="User name"
             />
           </div>
@@ -439,6 +446,7 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
               onChange={e => setEmail(e.target.value)}
               placeholder="user@example.com"
               required
+              className={lightInputClassName}
               aria-label="User email"
             />
           </div>
@@ -502,7 +510,7 @@ function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDia
               value={confirmText}
               onChange={e => setConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="font-mono"
+              className={`font-mono ${lightInputClassName}`}
               aria-label="Type DELETE to confirm user deletion"
             />
           </div>
@@ -564,6 +572,7 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
               onChange={e => setPassword(e.target.value)}
               placeholder="At least 9 characters"
               required
+              className={lightInputClassName}
               aria-label="New password"
             />
             <p className="text-xs text-slate-400">Must be 9–128 characters</p>
@@ -578,6 +587,7 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="Repeat new password"
               required
+              className={lightInputClassName}
               aria-label="Confirm new password"
               aria-invalid={mismatch}
             />

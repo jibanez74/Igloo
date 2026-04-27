@@ -8,7 +8,7 @@ export const Route = createLazyFileRoute("/_admin/settings/playback")({
 
 function PlaybackSettings() {
   return (
-    <div className="space-y-8">
+    <div className="max-w-3xl space-y-8">
       <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
@@ -20,7 +20,7 @@ function PlaybackSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-slate-400">Playback settings coming soon...</p>
+          <p className="text-slate-300">Playback settings coming soon.</p>
         </CardContent>
       </Card>
     </div>

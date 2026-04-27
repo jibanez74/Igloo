@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 const pageTitle = "Sign In - Igloo";
 const pageDescription = "Sign in to access your personal Igloo media library.";
@@ -30,11 +31,6 @@ function LoginPage() {
   const navigate = Route.useNavigate();
   const { redirect } = Route.useSearch();
   const { queryClient } = Route.useRouteContext();
-  const inputClassName =
-    "border-white/25 bg-slate-50/92 text-slate-950 placeholder:text-slate-500 shadow-sm backdrop-blur-sm " +
-    "focus-visible:border-amber-400/70 focus-visible:ring-amber-400/20";
-  const inputIconClassName =
-    "absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-slate-500";
 
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -135,7 +131,7 @@ function LoginPage() {
                       inputMode="email"
                       autoComplete="username"
                       required
-                      className={`pl-10 ${inputClassName}`}
+                      className={`pl-10 ${lightInputClassName}`}
                       disabled={isSubmitting}
                     />
                   </div>
@@ -156,7 +152,7 @@ function LoginPage() {
                       id="password"
                       name="password"
                       required
-                      className={`px-10 ${inputClassName}`}
+                      className={`px-10 ${lightInputClassName}`}
                       disabled={isSubmitting}
                     />
                     <button

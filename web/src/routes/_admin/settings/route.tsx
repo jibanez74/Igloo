@@ -62,9 +62,9 @@ function SettingsLayout() {
         content="Configure your Igloo media center settings and preferences."
       />
 
-      <div className="animate-in duration-300 fade-in">
+      <div className="min-w-0 animate-in duration-300 fade-in">
         {/* Page header */}
-        <header className="mb-8">
+        <header className="mb-6 sm:mb-7">
           <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
             <Settings className="size-6 text-amber-400" aria-hidden="true" />
             <span>Settings</span>
@@ -76,16 +76,19 @@ function SettingsLayout() {
 
         {/* Tabs */}
         <Tabs value={currentTab} onValueChange={handleTabChange}>
-          <TabsList className="h-auto border border-slate-700/50 bg-slate-800/50 p-1">
+          <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5">
             {SETTINGS_TABS.map(tab => {
               const Icon = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="px-4 py-2 text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20"
+                  className="min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1"
                 >
-                  <Icon className="mr-2 size-4" aria-hidden="true" />
+                  <Icon
+                    className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+                    aria-hidden="true"
+                  />
                   {tab.label}
                 </TabsTrigger>
               );

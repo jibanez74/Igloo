@@ -174,7 +174,7 @@ function MusicianDetailsContent({
 
   return (
     <article
-      className="animate-in overflow-x-hidden duration-300 fade-in"
+      className="w-full min-w-0 animate-in overflow-x-hidden pb-6 duration-300 fade-in sm:pb-10"
       aria-labelledby="musician-name"
     >
       {/* React 19 Document Metadata */}

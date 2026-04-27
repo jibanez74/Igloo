@@ -264,7 +264,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   return (
     <article
-      className="w-full max-w-full animate-in overflow-x-hidden duration-300 fade-in"
+      className="w-full min-w-0 animate-in overflow-x-hidden pb-6 duration-300 fade-in sm:pb-10"
       aria-labelledby="playlist-name"
     >
       {/* React 19 Document Metadata */}

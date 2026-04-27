@@ -159,8 +159,6 @@ function MusicLibrarySection() {
       {/* Library Path */}
       <div
         id={pathId}
-        role='region'
-        aria-labelledby={`${pathId}-label`}
         className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
         {hasLibrary ? (
@@ -171,10 +169,7 @@ function MusicLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -203,7 +198,7 @@ function MusicLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -225,18 +220,10 @@ function MusicLibrarySection() {
       {hasLibrary && (
         <div
           id={statsId}
-          role='region'
-          aria-labelledby={`${statsId}-label`}
           className='grid gap-4 sm:grid-cols-3'
         >
-          <p id={`${statsId}-label`} className='sr-only'>
-            Music library statistics
-          </p>
           <div
-            role='group'
-            tabIndex={0}
-            aria-label={`Total albums: ${statsLoading ? "Loading" : (stats?.total_albums?.toLocaleString() ?? 0)}`}
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
           >
             <div className='flex items-center gap-3'>
               <div
@@ -256,10 +243,7 @@ function MusicLibrarySection() {
                   </>
                 ) : (
                   <>
-                    <p
-                      className='text-2xl font-bold text-white'
-                      aria-live='polite'
-                    >
+                    <p className='text-2xl font-bold text-white'>
                       {stats?.total_albums?.toLocaleString() ?? 0}
                     </p>
                     <p className='text-sm text-slate-300'>Albums</p>
@@ -270,10 +254,7 @@ function MusicLibrarySection() {
           </div>
 
           <div
-            role='group'
-            tabIndex={0}
-            aria-label={`Total tracks: ${statsLoading ? "Loading" : (stats?.total_tracks?.toLocaleString() ?? 0)}`}
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
           >
             <div className='flex items-center gap-3'>
               <div
@@ -293,10 +274,7 @@ function MusicLibrarySection() {
                   </>
                 ) : (
                   <>
-                    <p
-                      className='text-2xl font-bold text-white'
-                      aria-live='polite'
-                    >
+                    <p className='text-2xl font-bold text-white'>
                       {stats?.total_tracks?.toLocaleString() ?? 0}
                     </p>
                     <p className='text-sm text-slate-300'>Tracks</p>
@@ -307,10 +285,7 @@ function MusicLibrarySection() {
           </div>
 
           <div
-            role='group'
-            tabIndex={0}
-            aria-label={`Total musicians: ${statsLoading ? "Loading" : (stats?.total_musicians?.toLocaleString() ?? 0)}`}
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
           >
             <div className='flex items-center gap-3'>
               <div
@@ -330,10 +305,7 @@ function MusicLibrarySection() {
                   </>
                 ) : (
                   <>
-                    <p
-                      className='text-2xl font-bold text-white'
-                      aria-live='polite'
-                    >
+                    <p className='text-2xl font-bold text-white'>
                       {stats?.total_musicians?.toLocaleString() ?? 0}
                     </p>
                     <p className='text-sm text-slate-300'>Musicians</p>
@@ -449,8 +421,6 @@ function MoviesLibrarySection() {
       {/* Library Path */}
       <div
         id={pathId}
-        role='region'
-        aria-labelledby={`${pathId}-label`}
         className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
         {hasLibrary ? (
@@ -461,10 +431,7 @@ function MoviesLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -493,7 +460,7 @@ function MoviesLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -514,18 +481,10 @@ function MoviesLibrarySection() {
       {/* Stats - Only show if library is configured */}
       {hasLibrary && (
         <div
-          role='region'
-          aria-labelledby='movies-library-stats-label'
-          className='grid gap-4 sm:grid-cols-1'
+          className='grid gap-4'
         >
-          <p id='movies-library-stats-label' className='sr-only'>
-            Movies library statistics
-          </p>
           <div
-            role='group'
-            tabIndex={0}
-            aria-label={`Total movies: ${statsLoading ? "Loading" : (stats?.total_movies?.toLocaleString() ?? 0)}`}
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
           >
             <div className='flex items-center gap-3'>
               <div
@@ -542,7 +501,7 @@ function MoviesLibrarySection() {
                   </>
                 ) : (
                   <>
-                    <p className='text-2xl font-bold text-white' aria-live='polite'>
+                    <p className='text-2xl font-bold text-white'>
                       {stats?.total_movies?.toLocaleString() ?? 0}
                     </p>
                     <p className='text-sm text-slate-300'>Movies</p>
@@ -585,16 +544,13 @@ function MoviesLibrarySection() {
 
 function TVShowsLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
-  const [isScanning, startTransition] = useTransition();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.shows_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
 
   const handleScan = () => {
-    startTransition(async () => {
-      showError("Not implemented", "Library scanning will be available soon");
-    });
+    showError("Not implemented", "Library scanning will be available soon");
   };
 
   const handleAddLibrary = () => {
@@ -632,8 +588,6 @@ function TVShowsLibrarySection() {
       {/* Library Path */}
       <div
         id={pathId}
-        role='region'
-        aria-labelledby={`${pathId}-label`}
         className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
         {hasLibrary ? (
@@ -644,10 +598,7 @@ function TVShowsLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -676,7 +627,7 @@ function TVShowsLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -697,10 +648,7 @@ function TVShowsLibrarySection() {
       {/* Stats Placeholder - Only show if library is configured */}
       {hasLibrary && (
         <div
-          role='region'
-          tabIndex={0}
-          aria-label='TV shows library statistics: Not available yet'
-          className='rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6 focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none'
+          className='rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6'
         >
           <div className='flex items-center gap-3 text-slate-300'>
             <AlertCircle className='size-5' aria-hidden='true' />
@@ -716,25 +664,11 @@ function TVShowsLibrarySection() {
       {hasLibrary && (
         <Button
           onClick={handleScan}
-          disabled={isScanning}
-          aria-label={
-            isScanning
-              ? "Scanning TV shows library, please wait"
-              : "Scan TV shows library"
-          }
+          aria-label="Scan TV shows library"
           className='w-full bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900 disabled:opacity-50'
         >
-          {isScanning ? (
-            <>
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-              <span aria-live='polite'>Scanning...</span>
-            </>
-          ) : (
-            <>
-              <Scan className='mr-2 size-4' aria-hidden='true' />
-              Scan Library
-            </>
-          )}
+          <Scan className='mr-2 size-4' aria-hidden='true' />
+          Scan Library
         </Button>
       )}
     </section>

@@ -187,7 +187,6 @@ export default function TrackItem({
             ? "text-red-500 hover:text-red-400"
             : "text-slate-400 hover:text-red-400"
         } ${isLikeLoading ? "opacity-50" : ""}`}
-        title={isLiked ? "Remove from liked" : "Add to liked"}
         aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
       >
         <Heart
@@ -214,7 +213,6 @@ export default function TrackItem({
       <button
         onClick={onPlay}
         className={getPlayButtonClasses()}
-        title={isPlaying ? "Pause track" : "Play track"}
         aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
       >
         {isPlaying ? (
