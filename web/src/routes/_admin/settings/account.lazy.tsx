@@ -577,34 +577,34 @@ function AccountSettings() {
           <div className="space-y-2">
             <Label className="text-slate-300">Upload Image</Label>
             <div className="flex gap-2">
-              <label
-                htmlFor="avatar-upload"
-                className={cn(
-                  "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors",
-                  lightInputClassName,
-                  uploadAvatarMutation.isPending
-                    ? "opacity-70"
-                    : "cursor-pointer hover:bg-slate-50",
-                )}
-                aria-disabled={uploadAvatarMutation.isPending}
-                aria-busy={uploadAvatarMutation.isPending}
-                tabIndex={uploadAvatarMutation.isPending ? -1 : 0}
-                onClick={e => uploadAvatarMutation.isPending && e.preventDefault()}
-              >
-                <Upload className="size-4" aria-hidden="true" />
-                {uploadAvatarMutation.isPending
-                  ? "Uploading..."
-                  : "Choose File"}
-              </label>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
-                onChange={handleUploadAvatar}
-                disabled={uploadAvatarMutation.isPending}
-                className="sr-only"
-                aria-label="Upload avatar image"
-              />
+              <div className="relative flex flex-1">
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+                  onChange={handleUploadAvatar}
+                  disabled={uploadAvatarMutation.isPending}
+                  className="peer absolute inset-0 z-10 h-9 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  aria-label="Upload avatar image"
+                />
+                <label
+                  htmlFor="avatar-upload"
+                  className={cn(
+                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors peer-focus-visible:border-amber-400/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-amber-400/20",
+                    lightInputClassName,
+                    uploadAvatarMutation.isPending
+                      ? "cursor-not-allowed opacity-70"
+                      : "cursor-pointer peer-hover:bg-slate-50",
+                  )}
+                  aria-disabled={uploadAvatarMutation.isPending}
+                  aria-busy={uploadAvatarMutation.isPending}
+                >
+                  <Upload className="size-4" aria-hidden="true" />
+                  {uploadAvatarMutation.isPending
+                    ? "Uploading..."
+                    : "Choose File"}
+                </label>
+              </div>
             </div>
             <p className="text-xs text-slate-400">
               JPEG, PNG, GIF, WebP, or AVIF (max 20MB)

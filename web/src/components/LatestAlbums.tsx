@@ -7,7 +7,7 @@ import HomeMediaSection from "@/components/HomeMediaSection";
 export default function LatestAlbums() {
   const { data, isPending } = useQuery(latestAlbumsQueryOpts());
 
-  const albums = data && !data.error ? data.data.albums : [];
+  const albums = data && !data.error ? (data.data?.albums ?? []) : [];
   const hasError = data && data.error;
   const errorMessage = hasError
     ? data.message || "Failed to load albums. Please try again later."

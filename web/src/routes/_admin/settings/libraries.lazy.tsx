@@ -169,10 +169,7 @@ function MusicLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -201,7 +198,7 @@ function MusicLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -434,10 +431,7 @@ function MoviesLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -466,7 +460,7 @@ function MoviesLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -550,16 +544,13 @@ function MoviesLibrarySection() {
 
 function TVShowsLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
-  const [isScanning, startTransition] = useTransition();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.shows_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
 
   const handleScan = () => {
-    startTransition(async () => {
-      showError("Not implemented", "Library scanning will be available soon");
-    });
+    showError("Not implemented", "Library scanning will be available soon");
   };
 
   const handleAddLibrary = () => {
@@ -607,10 +598,7 @@ function TVShowsLibrarySection() {
                 aria-hidden='true'
               />
               <div className='min-w-0 flex-1'>
-                <p
-                  id={`${pathId}-label`}
-                  className='text-sm font-medium text-slate-300'
-                >
+                <p className='text-sm font-medium text-slate-300'>
                   Library Path
                 </p>
                 <p
@@ -639,7 +627,7 @@ function TVShowsLibrarySection() {
           <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex items-center gap-3 text-slate-300'>
               <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p id={`${pathId}-label`} className='text-sm'>
+              <p className='text-sm'>
                 No library path configured
               </p>
             </div>
@@ -676,25 +664,11 @@ function TVShowsLibrarySection() {
       {hasLibrary && (
         <Button
           onClick={handleScan}
-          disabled={isScanning}
-          aria-label={
-            isScanning
-              ? "Scanning TV shows library, please wait"
-              : "Scan TV shows library"
-          }
+          aria-label="Scan TV shows library"
           className='w-full bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900 disabled:opacity-50'
         >
-          {isScanning ? (
-            <>
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-              <span aria-live='polite'>Scanning...</span>
-            </>
-          ) : (
-            <>
-              <Scan className='mr-2 size-4' aria-hidden='true' />
-              Scan Library
-            </>
-          )}
+          <Scan className='mr-2 size-4' aria-hidden='true' />
+          Scan Library
         </Button>
       )}
     </section>

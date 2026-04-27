@@ -13,23 +13,29 @@ export default function AppLoadingScreen({
   );
 
   useEffect(() => {
-    if (!hasInitialSplash) {
-      return;
-    }
-
     const updateSplashState = () => {
-      setHasInitialSplash(document.getElementById("initial-splash") !== null);
+      const hasSplash = document.getElementById("initial-splash") !== null;
+
+      if (!hasSplash) {
+        setHasInitialSplash(false);
+        observer.disconnect();
+      }
     };
+
+    const observer = new MutationObserver(updateSplashState);
 
     updateSplashState();
 
-    const observer = new MutationObserver(updateSplashState);
+    if (document.getElementById("initial-splash") === null) {
+      return;
+    }
+
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       observer.disconnect();
     };
-  }, [hasInitialSplash]);
+  }, []);
 
   return (
     <div
