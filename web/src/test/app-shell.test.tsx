@@ -18,11 +18,8 @@ vi.mock("@/components/Header", () => ({
 vi.mock("@/components/ui/sidebar", () => ({
   SidebarInset: ({
     children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => <div className={className}>{children}</div>,
+    ...props
+  }: React.ComponentProps<"main">) => <main {...props}>{children}</main>,
   SidebarProvider: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -46,7 +43,10 @@ describe("AppShell", () => {
       screen.getByRole("search", { name: /search library/i }),
     ).toBeInTheDocument();
 
-    const main = screen.getByRole("main");
+    const mainLandmarks = screen.getAllByRole("main");
+    expect(mainLandmarks).toHaveLength(1);
+
+    const [main] = mainLandmarks;
     expect(main).toHaveAttribute("id", "main");
     expect(
       within(main).getByRole("heading", { name: /route content/i }),

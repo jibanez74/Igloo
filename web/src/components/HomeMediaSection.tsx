@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,7 +8,6 @@ import LiveAnnouncer from "@/components/LiveAnnouncer";
 type HomeMediaSectionProps<T> = {
   title: string;
   headingId: string;
-  ariaLabel: string;
   items: T[];
   isPending: boolean;
   errorMessage: string | undefined;
@@ -19,13 +18,13 @@ type HomeMediaSectionProps<T> = {
   countLabel: string;
   gridClassName: string;
   announcementMessage?: string;
-  renderItem: (item: T) => ReactNode;
+  getKey: (item: T, index: number) => string;
+  renderItem: (item: T, index: number) => ReactNode;
 };
 
 export default function HomeMediaSection<T>({
   title,
   headingId,
-  ariaLabel,
   items,
   isPending,
   errorMessage,
@@ -36,6 +35,7 @@ export default function HomeMediaSection<T>({
   countLabel,
   gridClassName,
   announcementMessage,
+  getKey,
   renderItem,
 }: HomeMediaSectionProps<T>) {
   const hasError = Boolean(errorMessage);
@@ -44,10 +44,9 @@ export default function HomeMediaSection<T>({
     <section
       role="region"
       aria-labelledby={headingId}
-      aria-label={ariaLabel}
       className="mt-6 md:mt-8"
     >
-      {announcementMessage && <LiveAnnouncer message={announcementMessage} />}
+      <LiveAnnouncer message={announcementMessage} />
 
       <h2
         id={headingId}
@@ -63,7 +62,6 @@ export default function HomeMediaSection<T>({
           aria-label={loadingLabel}
         >
           <Spinner className="size-8 text-amber-400" />
-          <span className="sr-only">{loadingLabel}</span>
         </div>
       ) : hasError ? (
         <Alert
@@ -83,7 +81,13 @@ export default function HomeMediaSection<T>({
           >
             {title} - {items.length} {countLabel}
           </span>
-          <div className={gridClassName}>{items.map(renderItem)}</div>
+          <div className={gridClassName}>
+            {items.map((item, index) => (
+              <Fragment key={getKey(item, index)}>
+                {renderItem(item, index)}
+              </Fragment>
+            ))}
+          </div>
         </>
       ) : (
         <div className="py-12 text-center sm:py-16">

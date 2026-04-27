@@ -34,7 +34,6 @@ export default function MoviesInTheaters() {
     <HomeMediaSection
       title="Now Playing in Theaters"
       headingId="movies-in-theaters"
-      ariaLabel="Now Playing in Theaters"
       items={movies}
       isPending={isPending}
       errorMessage={errorMessage}
@@ -45,9 +44,8 @@ export default function MoviesInTheaters() {
       countLabel="movies"
       gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]"
       announcementMessage={getAnnouncementMessage()}
-      renderItem={(movie: TheaterMovieType) => (
-        <MovieCard key={movie.id} movie={movie} />
-      )}
+      getKey={(movie: TheaterMovieType) => String(movie.id)}
+      renderItem={(movie: TheaterMovieType) => <MovieCard movie={movie} />}
     />
   );
 }

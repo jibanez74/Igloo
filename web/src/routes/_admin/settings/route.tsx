@@ -83,7 +83,7 @@ function SettingsLayout() {
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-1 sm:px-4"
+                  className="min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1"
                 >
                   <Icon
                     className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"

@@ -24,7 +24,6 @@ export default function LatestMovies() {
     <HomeMediaSection
       title="Recently Added Movies"
       headingId="recent-movies"
-      ariaLabel="Recently Added Movies"
       items={movies}
       isPending={isPending}
       errorMessage={errorMessage}
@@ -35,7 +34,8 @@ export default function LatestMovies() {
       countLabel="movies"
       gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4"
       announcementMessage={getAnnouncementMessage()}
-      renderItem={movie => <MovieCard key={movie.id} movie={movie} />}
+      getKey={movie => String(movie.id)}
+      renderItem={movie => <MovieCard movie={movie} />}
     />
   );
 }

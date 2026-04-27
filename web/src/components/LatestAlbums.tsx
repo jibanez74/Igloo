@@ -24,7 +24,6 @@ export default function LatestAlbums() {
     <HomeMediaSection
       title="Recently Added Albums"
       headingId="recent-albums"
-      ariaLabel="Recently Added Albums"
       items={albums}
       isPending={isPending}
       errorMessage={errorMessage}
@@ -35,7 +34,8 @@ export default function LatestAlbums() {
       countLabel="albums"
       gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]"
       announcementMessage={getAnnouncementMessage()}
-      renderItem={album => <AlbumCard key={album.id} album={album} />}
+      getKey={album => String(album.id)}
+      renderItem={album => <AlbumCard album={album} />}
     />
   );
 }

@@ -24,7 +24,7 @@ export default function AppLoadingScreen({
     updateSplashState();
 
     const observer = new MutationObserver(updateSplashState);
-    observer.observe(document.body, { childList: true });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       observer.disconnect();

@@ -19,18 +19,17 @@ export default function AppShell({ children }: PropsWithChildren) {
 
       <AppSidebar />
 
-      <SidebarInset className="bg-slate-900">
+      <SidebarInset id="main" className="bg-slate-900">
         <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-slate-800/50 bg-slate-900/95 px-4 backdrop-blur-sm md:px-6">
           <SidebarTrigger className="-ml-1 text-slate-300 hover:bg-slate-800 hover:text-white md:hidden" />
           <Header />
         </header>
 
-        <main
-          id="main"
+        <div
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8"
         >
           {children}
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

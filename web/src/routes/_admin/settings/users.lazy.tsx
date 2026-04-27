@@ -194,7 +194,6 @@ function UsersSettings() {
                       {user.is_admin ? (
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400"
-                          aria-label="Admin"
                         >
                           <ShieldCheck className="size-3" aria-hidden="true" />
                           Admin
@@ -202,7 +201,6 @@ function UsersSettings() {
                       ) : (
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400"
-                          aria-label="User"
                         >
                           <ShieldOff className="size-3" aria-hidden="true" />
                           User

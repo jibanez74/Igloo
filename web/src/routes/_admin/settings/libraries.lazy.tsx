@@ -487,7 +487,7 @@ function MoviesLibrarySection() {
       {/* Stats - Only show if library is configured */}
       {hasLibrary && (
         <div
-          className='grid gap-4 sm:grid-cols-1'
+          className='grid gap-4'
         >
           <div
             className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'

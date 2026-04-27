@@ -44,6 +44,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { logout } from "@/lib/api";
 import type { AuthUser } from "@/types";
 import { lightInputClassName } from "@/lib/input-styles";
+import { cn } from "@/lib/utils";
 
 export const Route = createLazyFileRoute("/_admin/settings/account")({
   component: AccountSettings,
@@ -578,7 +579,17 @@ function AccountSettings() {
             <div className="flex gap-2">
               <label
                 htmlFor="avatar-upload"
-                className={`flex h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors hover:bg-slate-50 ${lightInputClassName}`}
+                className={cn(
+                  "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors",
+                  lightInputClassName,
+                  uploadAvatarMutation.isPending
+                    ? "opacity-70"
+                    : "cursor-pointer hover:bg-slate-50",
+                )}
+                aria-disabled={uploadAvatarMutation.isPending}
+                aria-busy={uploadAvatarMutation.isPending}
+                tabIndex={uploadAvatarMutation.isPending ? -1 : 0}
+                onClick={e => uploadAvatarMutation.isPending && e.preventDefault()}
               >
                 <Upload className="size-4" aria-hidden="true" />
                 {uploadAvatarMutation.isPending
