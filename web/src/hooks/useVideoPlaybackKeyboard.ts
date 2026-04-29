@@ -19,6 +19,20 @@ type VideoPlaybackKeyboardOptions = {
 };
 
 const DEFAULT_VOLUME_STEP = 0.05;
+const MIN_PLAYABLE_READY_STATE =
+  typeof HTMLMediaElement === "undefined"
+    ? 3
+    : HTMLMediaElement.HAVE_FUTURE_DATA;
+
+function isVideoReadyForShortcuts(
+  video: HTMLVideoElement | null,
+): video is HTMLVideoElement {
+  return (
+    !!video &&
+    !video.error &&
+    video.readyState >= MIN_PLAYABLE_READY_STATE
+  );
+}
 
 export function useVideoPlaybackKeyboard({
   containerRef,
@@ -56,6 +70,14 @@ export function useVideoPlaybackKeyboard({
     if (!targetInsidePlayer && !targetIsPageBody) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+    const video = videoRef.current;
+    if (!isVideoReadyForShortcuts(video)) {
+      if (e.key === "Escape" && fullscreenActive && onEscape) {
+        onEscape();
+      }
+      return;
+    }
+
     if (fullscreenActive) {
       onShowControls?.();
     }
@@ -91,11 +113,10 @@ export function useVideoPlaybackKeyboard({
         }
         break;
       case "ArrowUp": {
-        const video = videoRef.current;
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(volumeStep);
-        } else if (video) {
+        } else {
           consume();
           video.volume = Math.min(1, video.volume + volumeStep);
           video.muted = false;
@@ -103,11 +124,10 @@ export function useVideoPlaybackKeyboard({
         break;
       }
       case "ArrowDown": {
-        const video = videoRef.current;
         if (onAdjustVolume) {
           consume();
           onAdjustVolume(-volumeStep);
-        } else if (video) {
+        } else {
           consume();
           video.volume = Math.max(0, video.volume - volumeStep);
           video.muted = false;
@@ -116,11 +136,10 @@ export function useVideoPlaybackKeyboard({
       }
       case "m":
       case "M": {
-        const video = videoRef.current;
         if (onToggleMute) {
           consume();
           onToggleMute();
-        } else if (video) {
+        } else {
           consume();
           video.muted = !video.muted;
         }

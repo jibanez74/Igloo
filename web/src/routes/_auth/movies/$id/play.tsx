@@ -325,10 +325,23 @@ function PlayMoviePage() {
     setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
 
+  const status = deriveMoviePlaybackStatus({
+    movieNotFound,
+    movieIsPending,
+    hasMovie: !!movie,
+    requestedMode: mode,
+    techPending,
+    modeUnavailable,
+    playbackError,
+  });
+
+  const keyboardShortcutsEnabled =
+    status.kind === "ready" && !resumeDialogOpen;
+
   useVideoPlaybackKeyboard({
     containerRef,
     videoRef,
-    enabled: !resumeDialogOpen,
+    enabled: keyboardShortcutsEnabled,
     fullscreenActive: chromeFullscreenMode,
     volumeStep: MOVIE_VOLUME_STEP,
     onShowControls: showControlsAndResetIdle,
@@ -374,16 +387,6 @@ function PlayMoviePage() {
     onPause: pauseVideo,
     onSeek: seek,
     enabled: !movieNotFound && !!movie && !playbackError && !modeUnavailable,
-  });
-
-  const status = deriveMoviePlaybackStatus({
-    movieNotFound,
-    movieIsPending,
-    hasMovie: !!movie,
-    requestedMode: mode,
-    techPending,
-    modeUnavailable,
-    playbackError,
   });
 
   if (status.kind !== "ready") {

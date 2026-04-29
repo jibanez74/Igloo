@@ -487,6 +487,7 @@ export function WatchRoomPageContent({
   useVideoPlaybackKeyboard({
     containerRef,
     videoRef,
+    enabled: !!room,
     onTogglePlay: () => void togglePlay(),
     onSeekBackward: seekBackward,
     onSeekForward: seekForward,

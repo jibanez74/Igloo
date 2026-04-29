@@ -380,6 +380,49 @@ describe("WatchRoomPageContent", () => {
     });
   });
 
+  it("ignores playback keyboard shortcuts until the media is playable", async () => {
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockVideoController.playCalls).toBe(0);
+  });
+
+  it("allows playback keyboard shortcuts once the media can play", async () => {
+    mockVideoController.readyState = 3;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    await waitFor(() => {
+      expect(event.defaultPrevented).toBe(true);
+      expect(mockVideoController.playCalls).toBe(1);
+      expect(
+        screen.getByRole("button", { name: /pause playback/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("redirects invited members gracefully when the room_deleted event arrives", async () => {
     renderRoomPage(buildRoom({ is_owner: false }));
 

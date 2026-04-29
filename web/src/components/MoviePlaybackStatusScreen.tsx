@@ -74,6 +74,7 @@ export default function MoviePlaybackStatusScreen({
             {actions.map((action) => (
               <button
                 key={action.id}
+                type="button"
                 ref={action.buttonRef}
                 onClick={action.onClick}
                 className={
