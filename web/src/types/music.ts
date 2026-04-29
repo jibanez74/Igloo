@@ -1,23 +1,13 @@
 // MUSIC LIBRARY TYPES
 // Types for albums, tracks, artists, and related music data
 
-// Nullable types - represent nullable database columns from Go backend
-// The `Valid` boolean indicates whether the value is present (not NULL)
+import type {
+  NullableFloat64,
+  NullableInt64,
+  NullableString,
+} from "./nullable";
 
-export type NullableString = {
-  String: string;
-  Valid: boolean;
-};
-
-export type NullableInt64 = {
-  Int64: number;
-  Valid: boolean;
-};
-
-export type NullableFloat64 = {
-  Float64: number;
-  Valid: boolean;
-};
+export type { NullableFloat64, NullableInt64, NullableString } from "./nullable";
 
 // Simplified album type for list views and cards
 export type SimpleAlbumType = {
@@ -320,6 +310,14 @@ export type PlaylistDetailResponseType = {
   can_edit: boolean;
   collaborators: PlaylistCollaboratorType[] | null;
 };
+
+export type CreatePlaylistRequest = {
+  name: string;
+  description?: string;
+  is_public?: boolean;
+};
+
+export type UpdatePlaylistRequest = CreatePlaylistRequest;
 
 // ============================================================================
 // USER LISTENING STATS TYPES

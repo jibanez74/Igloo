@@ -11,13 +11,12 @@ const loginSearchValidator = z.object({
 
 export const Route = createFileRoute("/login")({
   validateSearch: loginSearchValidator,
-  beforeLoad: async ({ context, search, location }) => {
+  beforeLoad: async ({ context, search }) => {
     const res = await context.queryClient.ensureQueryData(authUserQueryOpts());
 
     if (!res.error) {
       throw redirect({
-        to: search.redirect,
-        from: location.href,
+        href: search.redirect,
       });
     }
   },

@@ -25,15 +25,6 @@ import { formatTimeSeconds } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
 import {
-  canRequestElementFullscreen,
-  exitDocumentFullscreen,
-  getFullscreenElement,
-  isDocumentFullscreenEntryLikely,
-  requestElementFullscreen,
-  tryWebKitVideoEnterFullscreen,
-  tryWebKitVideoExitFullscreen,
-} from "@/lib/fullscreen";
-import {
   watchRoomAnnouncement,
   watchRoomStreamUrl,
   watchRoomWebSocketUrl,
@@ -47,6 +38,9 @@ import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
+import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
+import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
+import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import type {
   WatchRoomPlaybackStateType,
   WatchRoomServerEventType,
@@ -85,10 +79,6 @@ export function WatchRoomPageContent({
     state: WatchRoomPlaybackStateType;
     receivedAt: number;
   } | null>(null);
-  const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
-    "none",
-  );
-
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -100,8 +90,14 @@ export function WatchRoomPageContent({
   const [connectionReady, setConnectionReady] = useState(false);
   const [reconnectKey, setReconnectKey] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isImmersiveViewport, setIsImmersiveViewport] = useState(false);
+
+  const {
+    isFullscreen,
+    isImmersiveViewport,
+    chromeFullscreenMode: playerFullscreenMode,
+    toggleFullscreen,
+    exitFullscreenIfActive,
+  } = useVideoFullscreen({ containerRef, videoRef });
 
   const { data, isPending, isError } = useQuery(watchRoomQueryOpts(roomId));
   const room = data?.error === false ? data.data.room : null;
@@ -398,67 +394,6 @@ export function WatchRoomPageContent({
     };
   }, [streamUrl, currentRoomId]);
 
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      const entering = !!getFullscreenElement();
-      if (entering) {
-        fullscreenSourceRef.current = "document";
-        setIsFullscreen(true);
-        setIsImmersiveViewport(false);
-      } else {
-        if (fullscreenSourceRef.current === "document") {
-          fullscreenSourceRef.current = "none";
-        }
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
-
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        onFullscreenChange,
-      );
-    };
-  }, []);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onWebKitBegin = () => {
-      fullscreenSourceRef.current = "webkitVideo";
-      setIsFullscreen(true);
-      setIsImmersiveViewport(false);
-    };
-    const onWebKitEnd = () => {
-      fullscreenSourceRef.current = "none";
-      setIsFullscreen(false);
-    };
-
-    video.addEventListener("webkitbeginfullscreen", onWebKitBegin);
-    video.addEventListener("webkitendfullscreen", onWebKitEnd);
-
-    return () => {
-      video.removeEventListener("webkitbeginfullscreen", onWebKitBegin);
-      video.removeEventListener("webkitendfullscreen", onWebKitEnd);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isImmersiveViewport) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isImmersiveViewport]);
-
   const sendPlaybackEvent = (type: "play" | "pause" | "seek", positionSec: number) => {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -470,36 +405,50 @@ export function WatchRoomPageContent({
     );
   };
 
+  const playVideo = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const pending = pendingPlaybackRef.current;
+    if (pending && !pending.state.paused) {
+      const elapsed = (Date.now() - pending.receivedAt) / 1000;
+      const adjustedPos = pending.state.position_sec + elapsed;
+      const drift = Math.abs(video.currentTime - adjustedPos);
+      if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
+        video.currentTime = adjustedPos;
+        setCurrentTime(adjustedPos);
+      }
+    }
+
+    try {
+      await video.play();
+      setPlaybackError(null);
+      pendingPlaybackRef.current = null;
+      sendPlaybackEvent("play", video.currentTime);
+    } catch {
+      setPlaybackError("Playback failed — the browser could not play this stream.");
+    }
+  };
+
+  const pauseVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.pause();
+    pendingPlaybackRef.current = null;
+    sendPlaybackEvent("pause", video.currentTime);
+  };
+
   const togglePlay = async () => {
     const video = videoRef.current;
     if (!video) return;
 
     if (video.paused) {
-      const pending = pendingPlaybackRef.current;
-      if (pending && !pending.state.paused) {
-        const elapsed = (Date.now() - pending.receivedAt) / 1000;
-        const adjustedPos = pending.state.position_sec + elapsed;
-        const drift = Math.abs(video.currentTime - adjustedPos);
-        if (video.readyState >= 1 && drift > WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC) {
-          video.currentTime = adjustedPos;
-          setCurrentTime(adjustedPos);
-        }
-      }
-
-      try {
-        await video.play();
-        setPlaybackError(null);
-        pendingPlaybackRef.current = null;
-        sendPlaybackEvent("play", video.currentTime);
-      } catch {
-        setPlaybackError("Playback failed — the browser could not play this stream.");
-      }
+      await playVideo();
       return;
     }
 
-    video.pause();
-    pendingPlaybackRef.current = null;
-    sendPlaybackEvent("pause", video.currentTime);
+    pauseVideo();
   };
 
   const seek = (newTime: number) => {
@@ -521,115 +470,31 @@ export function WatchRoomPageContent({
   const seekForward = () =>
     seek(currentTime + WATCH_ROOM_SEEK_STEP_SEC);
 
-  const toggleFullscreen = async () => {
-    const container = containerRef.current;
-    const video = videoRef.current;
-    if (!container || !video) return;
+  useVideoMediaSession({
+    videoRef,
+    title: movieTitle || "Watch room",
+    artworkUrl: posterUrl,
+    currentTime,
+    duration,
+    playing,
+    seekStepSec: WATCH_ROOM_SEEK_STEP_SEC,
+    onPlay: playVideo,
+    onPause: pauseVideo,
+    onSeek: seek,
+    enabled: !!room && !playbackError,
+  });
 
-    if (getFullscreenElement()) {
-      void exitDocumentFullscreen();
-      return;
-    }
-
-    if (fullscreenSourceRef.current === "webkitVideo") {
-      tryWebKitVideoExitFullscreen(video);
-      return;
-    }
-
-    if (isImmersiveViewport) {
-      setIsImmersiveViewport(false);
-      return;
-    }
-
-    const enterFallback = () => {
-      if (tryWebKitVideoEnterFullscreen(video)) {
-        return;
-      }
-
-      setIsImmersiveViewport(true);
-    };
-
-    if (
-      !canRequestElementFullscreen(container) ||
-      !isDocumentFullscreenEntryLikely()
-    ) {
-      enterFallback();
-      return;
-    }
-
-    try {
-      await requestElementFullscreen(container);
-    } catch {
-      enterFallback();
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      const container = containerRef.current;
-      const targetInsidePlayer = container?.contains(target) ?? false;
-      const targetIsPageBody =
-        target === document.body || target === document.documentElement;
-
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      if (!targetInsidePlayer && !targetIsPageBody) {
-        return;
-      }
-
-      if (event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-
-      switch (event.key) {
-        case "f":
-        case "F":
-          event.preventDefault();
-          event.stopPropagation();
-          void toggleFullscreen();
-          break;
-        case "Escape":
-          if (getFullscreenElement()) {
-            event.preventDefault();
-            event.stopPropagation();
-            void exitDocumentFullscreen();
-            break;
-          }
-
-          if (
-            fullscreenSourceRef.current === "webkitVideo" &&
-            tryWebKitVideoExitFullscreen(videoRef.current)
-          ) {
-            event.preventDefault();
-            event.stopPropagation();
-            break;
-          }
-
-          if (isImmersiveViewport) {
-            event.preventDefault();
-            event.stopPropagation();
-            setIsImmersiveViewport(false);
-          }
-          break;
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-    // React Compiler memoizes toggleFullscreen; ESLint cannot see that, so suppress.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isImmersiveViewport]);
+  useVideoPlaybackKeyboard({
+    containerRef,
+    videoRef,
+    enabled: !!room,
+    onTogglePlay: () => void togglePlay(),
+    onSeekBackward: seekBackward,
+    onSeekForward: seekForward,
+    onSeekToStart: () => seek(0),
+    onToggleFullscreen: () => void toggleFullscreen(),
+    onEscape: exitFullscreenIfActive,
+  });
 
   const handleOwnerDeleteSuccess = () => {
     closeRoomConnection();
@@ -639,7 +504,6 @@ export function WatchRoomPageContent({
   const connectedMembers = room
     ? room.members.filter(member => connectedUserIds.includes(member.id))
     : [];
-  const playerFullscreenMode = isFullscreen || isImmersiveViewport;
 
   if (isPending) {
     return (
@@ -693,7 +557,10 @@ export function WatchRoomPageContent({
 
       <LiveAnnouncer message={syncAnnouncement} />
       <p className="sr-only">
-        Keyboard shortcuts: F for fullscreen and Escape to exit fullscreen.
+        Keyboard shortcuts: Space or K to play or pause, J or Left Arrow to
+        rewind, L or Right Arrow to fast-forward, Home or 0 to restart, F for
+        fullscreen, M to mute, Up or Down Arrow to adjust volume, and Escape to
+        exit fullscreen.
       </p>
 
       <div

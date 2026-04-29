@@ -1,9 +1,9 @@
-import type { Float64Type, Int64Type, StringType } from "@/types/Sqlite";
 import type {
+  NullableFloat64,
   NullableInt64,
   NullableString,
-  PlaylistCollaboratorType,
-} from "@/types/music";
+} from "./nullable";
+import type { PlaylistCollaboratorType } from "@/types/music";
 
 // Simple movie type for basic listings
 export type SimpleMovieType = {
@@ -16,13 +16,13 @@ export type SimpleMovieType = {
 export type LatestMovieType = {
   id: number;
   title: string;
-  poster_path: StringType;
-  year: Int64Type;
+  poster_path: NullableString;
+  year: NullableInt64;
 };
 
 /** Rows from GET /api/movies/library, /liked, and playlist movie pages (includes certification). Compatible with MovieCard. */
 export type MoviesLibraryListItemType = LatestMovieType & {
-  certification: StringType;
+  certification: NullableString;
 };
 
 /** Paginated movie list payload (library, liked, playlist items). */
@@ -82,6 +82,21 @@ export type MoviePlaylistDetailResponseType = {
   collaborators: PlaylistCollaboratorType[] | null;
 };
 
+export type CreateMoviePlaylistRequest = {
+  name: string;
+  description?: string;
+  is_public?: boolean;
+  movie_id?: number;
+};
+
+export type UpdateMoviePlaylistRequest = {
+  name: string;
+  description?: string;
+  cover_image?: string;
+  is_public?: boolean;
+  movie_id?: number | null;
+};
+
 // Cast member from TMDB credits
 export type CastMemberType = {
   id: number;
@@ -118,7 +133,7 @@ export type TheaterMovieType = {
   video: boolean;
 };
 
-// Library movie details (from GET /api/movies/details/{id}) - full movie object (nullable fields use Sqlite types)
+// Library movie details (from GET /api/movies/details/{id}) - full movie object (nullable fields use Go nullable wrappers)
 export type LibraryMovieDetailsMovieType = {
   id: number;
   title: string;
@@ -128,23 +143,23 @@ export type LibraryMovieDetailsMovieType = {
   container: string;
   mime_type: string;
   adult: boolean;
-  tmdb_id: Int64Type;
-  imdb_id: StringType;
-  poster_path: StringType;
-  backdrop_path: StringType;
-  language: StringType;
-  year: Int64Type;
-  release_date: StringType;
-  overview: StringType;
-  tag_line: StringType;
-  certification: StringType;
-  critic_rating: Float64Type;
-  audience_rating: Float64Type;
-  revenue: Float64Type;
-  budget: Float64Type;
-  run_time: Int64Type;
+  tmdb_id: NullableInt64;
+  imdb_id: NullableString;
+  poster_path: NullableString;
+  backdrop_path: NullableString;
+  language: NullableString;
+  year: NullableInt64;
+  release_date: NullableString;
+  overview: NullableString;
+  tag_line: NullableString;
+  certification: NullableString;
+  critic_rating: NullableFloat64;
+  audience_rating: NullableFloat64;
+  revenue: NullableFloat64;
+  budget: NullableFloat64;
+  run_time: NullableInt64;
   /** Exact container duration in seconds (ffprobe); HLS/session use. */
-  duration: Float64Type;
+  duration: NullableFloat64;
   created_at: string;
   updated_at: string;
 };
@@ -157,7 +172,7 @@ export type LibraryMovieCastType = {
   character: string;
   cast_order: number;
   artist_name: string;
-  artist_profile: StringType;
+  artist_profile: NullableString;
 };
 
 // Library crew row (GET /api/movies/details/:id crew array)
@@ -168,7 +183,7 @@ export type LibraryMovieCrewType = {
   job: string;
   department: string;
   artist_name: string;
-  artist_profile: StringType;
+  artist_profile: NullableString;
 };
 
 // Library genre row (GET /api/movies/details/:id genres array)
@@ -182,15 +197,15 @@ export type LibraryMovieProductionCompanyType = {
   id: number;
   name: string;
   tmdb_id: number;
-  logo: StringType;
-  country: StringType;
+  logo: NullableString;
+  country: NullableString;
 };
 
 // Library extra video (GET /api/movies/details/:id extra_videos array)
 export type LibraryMovieExtraVideoType = {
   id: number;
   title: string;
-  external_id: StringType;
+  external_id: NullableString;
   key: string;
   type: string;
   site: string;
@@ -217,9 +232,9 @@ export type MovieTechnicalDetailsResponse = {
     size: number;
     container: string;
     mime_type: string;
-    run_time: Int64Type;
+    run_time: NullableInt64;
     /** Exact duration in seconds (ffprobe), when scanned. */
-    duration: Float64Type;
+    duration: NullableFloat64;
   };
   video_streams: VideoStreamType[];
   audio_streams: AudioStreamType[];
@@ -239,23 +254,23 @@ export type VideoStreamType = {
   movie_id: number;
   stream_index: number;
   codec: string;
-  codec_profile: StringType;
-  codec_level: Int64Type;
+  codec_profile: NullableString;
+  codec_level: NullableInt64;
   bit_rate: number;
   width: number;
   height: number;
-  coded_width: Int64Type;
-  coded_height: Int64Type;
-  aspect_ratio: StringType;
+  coded_width: NullableInt64;
+  coded_height: NullableInt64;
+  aspect_ratio: NullableString;
   frame_rate: number;
-  avg_frame_rate: StringType;
-  bit_depth: Int64Type;
-  color_range: StringType;
-  color_space: StringType;
-  color_primaries: StringType;
-  color_transfer: StringType;
-  language: StringType;
-  title: StringType;
+  avg_frame_rate: NullableString;
+  bit_depth: NullableInt64;
+  color_range: NullableString;
+  color_space: NullableString;
+  color_primaries: NullableString;
+  color_transfer: NullableString;
+  language: NullableString;
+  title: NullableString;
 };
 
 export type AudioStreamType = {
@@ -263,13 +278,13 @@ export type AudioStreamType = {
   movie_id: number;
   stream_index: number;
   codec: string;
-  codec_profile: StringType;
+  codec_profile: NullableString;
   bit_rate: number;
-  sample_rate: Int64Type;
+  sample_rate: NullableInt64;
   channels: number;
-  channel_layout: StringType;
-  language: StringType;
-  title: StringType;
+  channel_layout: NullableString;
+  language: NullableString;
+  title: NullableString;
 };
 
 export type SubtitleType = {
@@ -277,8 +292,8 @@ export type SubtitleType = {
   movie_id: number;
   stream_index: number;
   codec: string;
-  language: StringType;
-  title: StringType;
+  language: NullableString;
+  title: NullableString;
   is_forced: boolean;
   is_default: boolean;
 };
@@ -287,8 +302,8 @@ export type ChapterType = {
   id: number;
   title: string;
   start_time: number;
-  thumb: StringType;
-  movie_id: Int64Type;
+  thumb: NullableString;
+  movie_id: NullableInt64;
 };
 
 // TMDB search result (from POST /api/movies/:id/tmdb-search)
@@ -298,6 +313,24 @@ export type TmdbSearchResultType = {
   release_date: string;
   overview: string;
   poster_path: string;
+};
+
+export type TmdbSearchMoviesRequest = {
+  title: string;
+  year?: number;
+  tmdb_id?: number;
+};
+
+export type UpdateMovieMetadataRequest = {
+  title?: string;
+  year?: number;
+  release_date?: string;
+  overview?: string;
+  tag_line?: string;
+  certification?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  language?: string;
 };
 
 // Full movie details including credits and videos (from TMDB API)

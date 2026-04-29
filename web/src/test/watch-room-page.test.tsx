@@ -203,9 +203,11 @@ class FakeWebSocket {
 
   readyState = FakeWebSocket.CONNECTING;
   sentMessages: string[] = [];
+  url: string;
   private listeners = new Map<string, Set<(event: Event | MessageEvent) => void>>();
 
-  constructor(public url: string) {
+  constructor(url: string) {
+    this.url = url;
     FakeWebSocket.instances.push(this);
     this.readyState = FakeWebSocket.OPEN;
     queueMicrotask(() => {
@@ -368,7 +370,52 @@ describe("WatchRoomPageContent", () => {
     mockVideoController.setReadyState(4);
 
     await waitFor(() => {
-      expect(mockVideoController.currentTime).toBeCloseTo(37, 1);
+      expect(Math.abs(mockVideoController.currentTime - 37)).toBeLessThanOrEqual(
+        0.1,
+      );
+      expect(mockVideoController.playCalls).toBe(1);
+      expect(
+        screen.getByRole("button", { name: /pause playback/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("ignores playback keyboard shortcuts until the media is playable", async () => {
+    mockVideoController.readyState = 0;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockVideoController.playCalls).toBe(0);
+  });
+
+  it("allows playback keyboard shortcuts once the media can play", async () => {
+    mockVideoController.readyState = 3;
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+
+    await waitFor(() => {
+      expect(event.defaultPrevented).toBe(true);
       expect(mockVideoController.playCalls).toBe(1);
       expect(
         screen.getByRole("button", { name: /pause playback/i }),

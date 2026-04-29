@@ -32,13 +32,13 @@ import type {
   LibraryMovieProductionCompanyType,
   MovieDetailsType,
 } from "@/types";
-import type { StringType } from "@/types/Sqlite";
+import type { NullableString } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/movies/in-theaters/$id")({
   component: MovieDetailsPage,
 });
 
-function toSqliteString(value: string | null | undefined): StringType {
+function toNullableString(value: string | null | undefined): NullableString {
   if (value == null || value === "") return { String: "", Valid: false };
   return { String: value, Valid: true };
 }
@@ -54,7 +54,7 @@ function tmdbCrewToLibraryCrew(
     job: c.job,
     department: c.department,
     artist_name: c.name,
-    artist_profile: toSqliteString(c.profile_path),
+    artist_profile: toNullableString(c.profile_path),
   }));
 }
 
@@ -66,7 +66,7 @@ function tmdbYouTubeResultsToLibraryExtras(
     .map((v, index) => ({
       id: index + 1,
       title: v.name,
-      external_id: toSqliteString(v.id),
+      external_id: toNullableString(v.id),
       key: v.key,
       type: v.type,
       site: v.site,
@@ -84,8 +84,8 @@ function tmdbProductionCompaniesToLibrary(
     id: pc.id,
     name: pc.name,
     tmdb_id: pc.id,
-    logo: toSqliteString(pc.logo_path ?? undefined),
-    country: toSqliteString(pc.origin_country ?? undefined),
+    logo: toNullableString(pc.logo_path ?? undefined),
+    country: toNullableString(pc.origin_country ?? undefined),
   }));
 }
 
@@ -183,6 +183,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
       <MovieDetailsSkipLinks
         showCrewSection={showCrewSection}
         castNonEmpty={castList.length > 0}
+        chaptersNonEmpty={false}
         extrasNonEmpty={youtubeExtraVideos.length > 0}
         companiesNonEmpty={productionCompanies.length > 0}
       />

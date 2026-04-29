@@ -5,18 +5,12 @@ import { Film, Play } from "lucide-react";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { LatestMovieType } from "@/types";
-import MovieLikeButton from "@/components/MovieLikeButton";
 
 type MovieCardProps = {
   movie: LatestMovieType;
-  /** Show heart like control (library / grids). Hide for non-interactive listings if needed. */
-  showLikeButton?: boolean;
 };
 
-export default function MovieCard({
-  movie,
-  showLikeButton = true,
-}: MovieCardProps) {
+export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
 
@@ -81,17 +75,6 @@ export default function MovieCard({
             )}
           </div>
         </Link>
-        {showLikeButton && (
-          <div
-            className="pointer-events-auto absolute top-2 right-2 z-20"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <MovieLikeButton movieId={id} />
-          </div>
-        )}
       </div>
 
       {/* Play button - goes to play page without opening details */}
