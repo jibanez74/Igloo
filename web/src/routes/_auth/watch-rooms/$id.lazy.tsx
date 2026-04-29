@@ -487,6 +487,10 @@ export function WatchRoomPageContent({
   useVideoPlaybackKeyboard({
     containerRef,
     videoRef,
+    onTogglePlay: () => void togglePlay(),
+    onSeekBackward: seekBackward,
+    onSeekForward: seekForward,
+    onSeekToStart: () => seek(0),
     onToggleFullscreen: () => void toggleFullscreen(),
     onEscape: exitFullscreenIfActive,
   });
@@ -552,7 +556,10 @@ export function WatchRoomPageContent({
 
       <LiveAnnouncer message={syncAnnouncement} />
       <p className="sr-only">
-        Keyboard shortcuts: F for fullscreen and Escape to exit fullscreen.
+        Keyboard shortcuts: Space or K to play or pause, J or Left Arrow to
+        rewind, L or Right Arrow to fast-forward, Home or 0 to restart, F for
+        fullscreen, M to mute, Up or Down Arrow to adjust volume, and Escape to
+        exit fullscreen.
       </p>
 
       <div

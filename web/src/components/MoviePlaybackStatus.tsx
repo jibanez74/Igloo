@@ -18,6 +18,7 @@ export default function PlaybackStatusView({
   containerRef,
 }: PlaybackStatusViewProps) {
   const backAction = {
+    id: "back",
     label: "Back",
     ariaLabel: "Back to previous page",
     icon: "back" as const,
@@ -29,6 +30,7 @@ export default function PlaybackStatusView({
     case "notFound":
       return (
         <MoviePlaybackStatusScreen
+          containerRef={containerRef}
           title="Movie not found"
           message="The movie could not be found or you don't have access to it."
           actions={[backAction]}
@@ -64,6 +66,7 @@ export default function PlaybackStatusView({
           message={status.message}
           actions={[
             {
+              id: "retry",
               label: "Try Again",
               ariaLabel: "Try again",
               icon: "retry",

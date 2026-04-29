@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+  import { useRef, useEffect, useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";

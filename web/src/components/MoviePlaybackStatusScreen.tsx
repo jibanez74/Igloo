@@ -3,6 +3,7 @@ import { AlertCircle, ArrowLeft, RotateCcw } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 
 type StatusAction = {
+  id: string;
   label: string;
   ariaLabel: string;
   onClick: () => void;
@@ -72,7 +73,7 @@ export default function MoviePlaybackStatusScreen({
           <div className="flex items-center justify-center gap-3">
             {actions.map((action) => (
               <button
-                key={action.ariaLabel}
+                key={action.id}
                 ref={action.buttonRef}
                 onClick={action.onClick}
                 className={
