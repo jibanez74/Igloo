@@ -536,6 +536,6 @@ function PlayMoviePage() {
         onToggleFullscreen={() => void toggleFullscreen()}
         onSelectChapter={handleChapterSelect}
       />
-    </div>
+      </div>
   );
 }
