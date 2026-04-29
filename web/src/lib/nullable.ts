@@ -1,13 +1,13 @@
 /**
  * Nullable helpers: unwrap backend nullable types (Valid + value) into plain values.
- * Works with both Sqlite types (StringType, Int64Type, etc.) and music types (NullableString, etc.)
+ * Works with nullable database wrapper types from the Go backend.
  * — same shape from the backend. Also accepts already-plain values for API responses that send strings/numbers.
  */
 
-/** Shape of nullable string from backend (Sqlite StringType, NullableString, etc.) */
+/** Shape of nullable string from backend. */
 type NullableStringLike = { Valid: boolean; String: string };
 
-/** Shape of nullable int from backend (Sqlite Int64Type, NullableInt64, etc.) */
+/** Shape of nullable int from backend. */
 type NullableInt64Like = { Valid: boolean; Int64: number };
 
 /** Shape of nullable float from backend (NullableFloat64, etc.) */

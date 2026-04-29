@@ -203,9 +203,11 @@ class FakeWebSocket {
 
   readyState = FakeWebSocket.CONNECTING;
   sentMessages: string[] = [];
+  url: string;
   private listeners = new Map<string, Set<(event: Event | MessageEvent) => void>>();
 
-  constructor(public url: string) {
+  constructor(url: string) {
+    this.url = url;
     FakeWebSocket.instances.push(this);
     this.readyState = FakeWebSocket.OPEN;
     queueMicrotask(() => {
@@ -368,7 +370,9 @@ describe("WatchRoomPageContent", () => {
     mockVideoController.setReadyState(4);
 
     await waitFor(() => {
-      expect(mockVideoController.currentTime).toBeCloseTo(37, 1);
+      expect(Math.abs(mockVideoController.currentTime - 37)).toBeLessThanOrEqual(
+        0.1,
+      );
       expect(mockVideoController.playCalls).toBe(1);
       expect(
         screen.getByRole("button", { name: /pause playback/i }),

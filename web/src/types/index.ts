@@ -6,6 +6,9 @@ export type {
   NullableString,
   NullableInt64,
   NullableFloat64,
+} from "./nullable";
+
+export type {
   SimpleAlbumType,
   AlbumType,
   TrackType,
@@ -35,6 +38,8 @@ export type {
   PlaylistCollaboratorType,
   PlaylistType,
   PlaylistDetailResponseType,
+  CreatePlaylistRequest,
+  UpdatePlaylistRequest,
   // User listening stats types
   UserListeningStatsType,
   TopTrackType,
@@ -80,6 +85,10 @@ export type {
   MoviePlaylistSummaryType,
   MoviePlaylistsListResponseType,
   MoviePlaylistDetailResponseType,
+  CreateMoviePlaylistRequest,
+  UpdateMoviePlaylistRequest,
+  TmdbSearchMoviesRequest,
+  UpdateMovieMetadataRequest,
 } from "./movies";
 
 // Movie playback route (search params)
@@ -121,6 +130,9 @@ export type {
 
 // User types
 export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
+
+// Settings types
+export type { SettingsType } from "./settings";
 
 // Watch room types
 export type {

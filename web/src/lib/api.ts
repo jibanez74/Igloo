@@ -1,8 +1,15 @@
 import type {
   AlbumDetailsResponseType,
   AlbumsListResponseType,
+  AdminUserType,
   ApiFailureType,
   ApiResponseType,
+  AuthUser,
+  CreateMoviePlaylistRequest,
+  CreatePlaylistRequest,
+  CreateWatchRoomRequestType,
+  CreateWatchRoomResponseType,
+  JoinWatchRoomResponseType,
   LatestMovieType,
   LibraryMovieDetailsResponse,
   MovieDetailsType,
@@ -25,14 +32,22 @@ import type {
   RecentlyPlayedResponseType,
   LikedTracksResponseType,
   ShuffleTracksResponseType,
+  SettingsType,
   SimpleAlbumType,
   TheaterMovieType,
+  TmdbSearchMoviesRequest,
   TopAlbumsResponseType,
   TopGenresResponseType,
   TopMusiciansResponseType,
   TopTracksResponseType,
   TracksListResponseType,
+  UpdateMovieMetadataRequest,
+  UpdateMoviePlaylistRequest,
+  UpdatePlaylistRequest,
   UserListeningStatsResponseType,
+  WatchRoomInviteUsersResponseType,
+  WatchRoomResponseType,
+  WatchRoomType,
 } from "@/types";
 import { MOVIES_PER_PAGE } from "@/lib/constants";
 
@@ -96,7 +111,7 @@ export const logout = () =>
   });
 
 export const getAuthUser = () =>
-  apiRequest<{ user: import("@/types").AuthUser }>("/api/auth/user");
+  apiRequest<{ user: AuthUser }>("/api/auth/user");
 
 // User Settings API
 export const updateUserName = (name: string) =>
@@ -128,7 +143,7 @@ export const updateUserAvatar = (avatar: string) =>
 
 export const uploadUserAvatar = async (
   file: File,
-): Promise<ApiResponseType<{ user: import("@/types").AuthUser }>> => {
+): Promise<ApiResponseType<{ user: AuthUser }>> => {
   const formData = new FormData();
   formData.append("avatar", file);
 
@@ -178,7 +193,7 @@ export const getMovieTechnicalDetails = (id: number) =>
 
 export const tmdbSearchMovies = (
   movieId: number,
-  body: { title: string; year?: number; tmdb_id?: number },
+  body: TmdbSearchMoviesRequest,
 ) =>
   apiRequest<{ results: TmdbSearchResultType[] }>(
     `/api/movies/${movieId}/tmdb-search`,
@@ -193,7 +208,7 @@ export const identifyMovie = (movieId: number, tmdbId: number) =>
 
 export const updateMovieMetadata = (
   movieId: number,
-  body: Record<string, unknown>,
+  body: UpdateMovieMetadataRequest,
 ) =>
   apiRequest<Record<string, never>>(`/api/movies/${movieId}`, {
     method: "PATCH",
@@ -296,12 +311,7 @@ export const getMoviePlaylistMovies = (
     `/api/movies/playlists/${playlistId}/movies?page=${page}&per_page=${perPage}&sort=${sort}`,
   );
 
-export const createMoviePlaylist = (data: {
-  name: string;
-  description?: string;
-  is_public?: boolean;
-  movie_id?: number;
-}) =>
+export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
   apiRequest<{ playlist: MoviePlaylistRowType }>("/api/movies/playlists", {
     method: "POST",
     body: data,
@@ -309,13 +319,7 @@ export const createMoviePlaylist = (data: {
 
 export const updateMoviePlaylist = (
   id: number,
-  data: {
-    name: string;
-    description?: string;
-    cover_image?: string;
-    is_public?: boolean;
-    movie_id?: number | null;
-  },
+  data: UpdateMoviePlaylistRequest,
 ) =>
   apiRequest<{ playlist: MoviePlaylistRowType }>(`/api/movies/playlists/${id}`, {
     method: "PUT",
@@ -424,11 +428,7 @@ export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
     `/api/music/playlists/${id}/tracks?limit=${limit}&offset=${offset}`,
   );
 
-export const createPlaylist = (data: {
-  name: string;
-  description?: string;
-  is_public?: boolean;
-}) =>
+export const createPlaylist = (data: CreatePlaylistRequest) =>
   apiRequest<{ playlist: PlaylistSummaryType }>("/api/music/playlists", {
     method: "POST",
     body: data,
@@ -436,7 +436,7 @@ export const createPlaylist = (data: {
 
 export const updatePlaylist = (
   id: number,
-  data: { name: string; description?: string; is_public?: boolean },
+  data: UpdatePlaylistRequest,
 ) =>
   apiRequest<{ playlist: PlaylistSummaryType }>(`/api/music/playlists/${id}`, {
     method: "PUT",
@@ -522,12 +522,6 @@ export const getUserRecentlyPlayed = (limit: number = 20, offset: number = 0) =>
 // Settings API
 // ============================================================================
 
-export type SettingsType = {
-  music_dir: string | null;
-  movies_dir: string | null;
-  shows_dir: string | null;
-};
-
 export const getSettings = () => apiRequest<SettingsType>("/api/settings");
 
 export const triggerMusicScan = () =>
@@ -542,7 +536,7 @@ export const triggerMovieScan = () =>
 
 // Admin user management API
 export const adminGetUsers = () =>
-  apiRequest<{ users: import("@/types").AdminUserType[] }>("/api/admin/users");
+  apiRequest<{ users: AdminUserType[] }>("/api/admin/users");
 
 export const adminCreateUser = (data: {
   name: string;
@@ -550,7 +544,7 @@ export const adminCreateUser = (data: {
   password: string;
   is_admin: boolean;
 }) =>
-  apiRequest<{ user: import("@/types").AdminUserType }>("/api/admin/users", {
+  apiRequest<{ user: AdminUserType }>("/api/admin/users", {
     method: "POST",
     body: data,
   });
@@ -559,7 +553,7 @@ export const adminUpdateUser = (
   id: number,
   data: { name: string; email: string; is_admin: boolean },
 ) =>
-  apiRequest<{ user: import("@/types").AdminUserType }>(`/api/admin/users/${id}`, {
+  apiRequest<{ user: AdminUserType }>(`/api/admin/users/${id}`, {
     method: "PATCH",
     body: data,
   });
@@ -577,27 +571,27 @@ export const adminResetUserPassword = (id: number, password: string) =>
 
 // Watch rooms API
 export const getWatchRoomInviteUsers = () =>
-  apiRequest<import("@/types").WatchRoomInviteUsersResponseType>("/api/users");
+  apiRequest<WatchRoomInviteUsersResponseType>("/api/users");
 
 export const createWatchRoom = (
-  body: import("@/types").CreateWatchRoomRequestType,
+  body: CreateWatchRoomRequestType,
 ) =>
-  apiRequest<import("@/types").CreateWatchRoomResponseType>("/api/watch-rooms", {
+  apiRequest<CreateWatchRoomResponseType>("/api/watch-rooms", {
     method: "POST",
     body,
   });
 
 export const getWatchRoom = (id: number) =>
-  apiRequest<import("@/types").WatchRoomResponseType>(`/api/watch-rooms/${id}`);
+  apiRequest<WatchRoomResponseType>(`/api/watch-rooms/${id}`);
 
 export const joinWatchRoom = (id: number) =>
-  apiRequest<import("@/types").JoinWatchRoomResponseType>(
+  apiRequest<JoinWatchRoomResponseType>(
     `/api/watch-rooms/${id}/join`,
     { method: "POST" },
   );
 
 export const getWatchRooms = () =>
-  apiRequest<{ rooms: import("@/types").WatchRoomType[] }>("/api/watch-rooms");
+  apiRequest<{ rooms: WatchRoomType[] }>("/api/watch-rooms");
 
 export const deleteWatchRoom = (id: number) =>
   apiRequest(`/api/watch-rooms/${id}`, { method: "DELETE" });

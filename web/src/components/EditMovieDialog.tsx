@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   LibraryMovieDetailsMovieType,
   TmdbSearchResultType,
+  UpdateMovieMetadataRequest,
 } from "@/types";
 
 type Props = {
@@ -350,7 +351,7 @@ function ManualTab({
   async function handleSave() {
     setSaving(true);
 
-    const body: Record<string, unknown> = {};
+    const body: UpdateMovieMetadataRequest = {};
     if (title !== movie.title) body.title = title;
 
     const y = parseInt(year, 10);

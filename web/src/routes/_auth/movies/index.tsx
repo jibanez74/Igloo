@@ -42,9 +42,9 @@ const moviesSearchSchema = z.object({
   allPage: z.number().int().positive().catch(1).default(1),
   sort: z.enum(["asc", "desc"]).catch("asc").default("asc"),
   genresPage: z.number().int().positive().catch(1).default(1),
-  genreId: z.number().int().positive().optional().catch(undefined).default(undefined),
+  genreId: z.number().int().positive().optional().catch(undefined),
   playlistsPage: z.number().int().positive().catch(1).default(1),
-  view: z.enum(["liked"]).optional().catch(undefined).default(undefined),
+  view: z.enum(["liked"]).optional().catch(undefined),
 });
 
 export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;

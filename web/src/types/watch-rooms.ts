@@ -1,3 +1,5 @@
+import type { StreamModeId } from "@/lib/constants";
+
 export type WatchRoomMemberType = {
   id: number;
   name: string;
@@ -18,7 +20,7 @@ export type WatchRoomType = {
   movie_poster: string | null;
   owner: WatchRoomMemberType;
   members: WatchRoomMemberType[];
-  playback_mode: string;
+  playback_mode: StreamModeId;
   is_owner: boolean;
   created_at: string;
 };
@@ -30,7 +32,7 @@ export type WatchRoomDetailType = {
   movie_poster: string | null;
   owner: WatchRoomMemberType;
   members: WatchRoomMemberType[];
-  playback_mode: string;
+  playback_mode: StreamModeId;
   audio_track: number;
   subtitle_track: number | null;
   is_owner: boolean;
@@ -43,7 +45,7 @@ export type WatchRoomInviteUsersResponseType = {
 
 export type CreateWatchRoomRequestType = {
   movie_id: number;
-  mode: string;
+  mode: StreamModeId;
   audio_track: number;
   subtitle_track: number | null;
   invited_user_ids: number[];
