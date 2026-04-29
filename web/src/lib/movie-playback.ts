@@ -1,8 +1,45 @@
 import { updateMovieWatchProgress } from "@/lib/api";
 import { HLS_RESUME_REWIND_BUFFER_SEC } from "@/lib/constants";
-import { formatSubtitleLabel, type StreamModeId } from "@/lib/playback";
+import {
+  STREAM_MODES,
+  formatSubtitleLabel,
+  type StreamModeId,
+} from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type { SubtitleType } from "@/types/movies";
+
+export type MoviePlaybackStatus =
+  | { kind: "ready" }
+  | { kind: "notFound" }
+  | { kind: "loading"; message: string }
+  | { kind: "modeUnavailable"; modeLabel: string }
+  | { kind: "error"; message: string };
+
+export function deriveMoviePlaybackStatus(args: {
+  movieNotFound: boolean;
+  movieIsPending: boolean;
+  hasMovie: boolean;
+  requestedMode: StreamModeId;
+  techPending: boolean;
+  modeUnavailable: boolean;
+  playbackError: string | null;
+}): MoviePlaybackStatus {
+  if (args.movieNotFound) return { kind: "notFound" };
+  if (args.movieIsPending || !args.hasMovie) {
+    return { kind: "loading", message: "Loading movie..." };
+  }
+  if (args.requestedMode !== "direct" && args.techPending) {
+    return { kind: "loading", message: "Preparing playback..." };
+  }
+  if (args.modeUnavailable) {
+    const modeLabel =
+      STREAM_MODES.find((m) => m.id === args.requestedMode)?.label ??
+      args.requestedMode;
+    return { kind: "modeUnavailable", modeLabel };
+  }
+  if (args.playbackError) return { kind: "error", message: args.playbackError };
+  return { kind: "ready" };
+}
 
 export const MOVIE_SEEK_STEP_SEC = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
