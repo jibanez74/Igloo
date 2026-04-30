@@ -33,6 +33,11 @@ import {
   getWatchRoom,
   getWatchRoomInviteUsers,
   getWatchRooms,
+  searchAll,
+  searchAlbums,
+  searchMovies,
+  searchMusicians,
+  searchTracks,
 } from "@/lib/api";
 import {
   ADMIN_USERS_KEY,
@@ -69,6 +74,12 @@ import {
   WATCH_ROOM_KEY,
   WATCH_ROOM_INVITE_USERS_KEY,
   WATCH_ROOMS_KEY,
+  SEARCH_ALL_KEY,
+  SEARCH_MOVIES_KEY,
+  SEARCH_ALBUMS_KEY,
+  SEARCH_MUSICIANS_KEY,
+  SEARCH_TRACKS_KEY,
+  SEARCH_PER_PAGE,
 } from "@/lib/constants";
 
 /**
@@ -434,6 +445,80 @@ export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
     queryFn: getWatchRoomInviteUsers,
     enabled,
     staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// Library search (FTS5-backed). All factories disable themselves for empty
+// queries so the loader/component can call them unconditionally.
+
+export function searchAllQueryOpts(q: string) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_ALL_KEY, trimmed],
+    queryFn: () => searchAll(trimmed),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function searchMoviesQueryOpts(
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_MOVIES_KEY, trimmed, page, perPage],
+    queryFn: () => searchMovies(trimmed, page, perPage),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function searchAlbumsQueryOpts(
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_ALBUMS_KEY, trimmed, page, perPage],
+    queryFn: () => searchAlbums(trimmed, page, perPage),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function searchMusiciansQueryOpts(
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_MUSICIANS_KEY, trimmed, page, perPage],
+    queryFn: () => searchMusicians(trimmed, page, perPage),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function searchTracksQueryOpts(
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) {
+  const trimmed = q.trim();
+  return queryOptions({
+    queryKey: [SEARCH_TRACKS_KEY, trimmed, page, perPage],
+    queryFn: () => searchTracks(trimmed, page, perPage),
+    enabled: trimmed.length > 0,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }
