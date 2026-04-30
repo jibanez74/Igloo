@@ -393,11 +393,25 @@ func (app *Application) backfillSearchFTS() error {
 		 WHERE NOT EXISTS (SELECT 1 FROM tracks_fts WHERE rowid = tracks.id)`,
 	}
 
+	tx, err := app.DB.Begin()
+	if err != nil {
+		return err
+	}
+
 	for _, stmt := range statements {
-		_, err := app.DB.Exec(stmt)
+		_, err = tx.Exec(stmt)
 		if err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				return fmt.Errorf("backfill search FTS failed: %w; rollback failed: %v", err, rollbackErr)
+			}
 			return err
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 
 	return nil
