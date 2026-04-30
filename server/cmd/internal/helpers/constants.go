@@ -31,6 +31,11 @@ const (
 	MOVIES_LIBRARY_DEFAULT_PER_PAGE = 24
 	MOVIES_LIBRARY_MAX_PER_PAGE     = 48
 
+	// library search (FTS5-backed; used by /api/search and per-entity search endpoints)
+	SEARCH_DEFAULT_PER_PAGE = 24
+	SEARCH_MAX_PER_PAGE     = 48
+	SEARCH_ALL_TOP_N        = 8
+
 	// cookie settings
 	COOKIE_USER_ID = "user_id"
 

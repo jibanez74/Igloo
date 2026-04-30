@@ -678,3 +678,106 @@ CREATE INDEX IF NOT EXISTS idx_user_track_stats_user ON user_track_stats (user_i
 CREATE INDEX IF NOT EXISTS idx_user_track_stats_play_count ON user_track_stats (user_id, play_count DESC);
 
 CREATE INDEX IF NOT EXISTS idx_user_track_stats_last_played ON user_track_stats (user_id, last_played_at DESC);
+
+-- FTS5 virtual tables for library search.
+-- External-content tables: FTS stores the index and joins back to the source
+-- table by rowid (= primary key id). Triggers below keep them in sync.
+CREATE VIRTUAL TABLE IF NOT EXISTS movies_fts USING fts5 (
+  title,
+  overview,
+  tag_line,
+  content = 'movies',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS movies_ai AFTER INSERT ON movies BEGIN
+  INSERT INTO movies_fts (rowid, title, overview, tag_line)
+  VALUES (new.id, new.title, new.overview, new.tag_line);
+END;
+
+CREATE TRIGGER IF NOT EXISTS movies_ad AFTER DELETE ON movies BEGIN
+  INSERT INTO movies_fts (movies_fts, rowid, title, overview, tag_line)
+  VALUES ('delete', old.id, old.title, old.overview, old.tag_line);
+END;
+
+CREATE TRIGGER IF NOT EXISTS movies_au AFTER UPDATE ON movies BEGIN
+  INSERT INTO movies_fts (movies_fts, rowid, title, overview, tag_line)
+  VALUES ('delete', old.id, old.title, old.overview, old.tag_line);
+  INSERT INTO movies_fts (rowid, title, overview, tag_line)
+  VALUES (new.id, new.title, new.overview, new.tag_line);
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS albums_fts USING fts5 (
+  title,
+  musician,
+  content = 'albums',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS albums_ai AFTER INSERT ON albums BEGIN
+  INSERT INTO albums_fts (rowid, title, musician)
+  VALUES (new.id, new.title, new.musician);
+END;
+
+CREATE TRIGGER IF NOT EXISTS albums_ad AFTER DELETE ON albums BEGIN
+  INSERT INTO albums_fts (albums_fts, rowid, title, musician)
+  VALUES ('delete', old.id, old.title, old.musician);
+END;
+
+CREATE TRIGGER IF NOT EXISTS albums_au AFTER UPDATE ON albums BEGIN
+  INSERT INTO albums_fts (albums_fts, rowid, title, musician)
+  VALUES ('delete', old.id, old.title, old.musician);
+  INSERT INTO albums_fts (rowid, title, musician)
+  VALUES (new.id, new.title, new.musician);
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS musicians_fts USING fts5 (
+  name,
+  sort_name,
+  content = 'musicians',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS musicians_ai AFTER INSERT ON musicians BEGIN
+  INSERT INTO musicians_fts (rowid, name, sort_name)
+  VALUES (new.id, new.name, new.sort_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS musicians_ad AFTER DELETE ON musicians BEGIN
+  INSERT INTO musicians_fts (musicians_fts, rowid, name, sort_name)
+  VALUES ('delete', old.id, old.name, old.sort_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS musicians_au AFTER UPDATE ON musicians BEGIN
+  INSERT INTO musicians_fts (musicians_fts, rowid, name, sort_name)
+  VALUES ('delete', old.id, old.name, old.sort_name);
+  INSERT INTO musicians_fts (rowid, name, sort_name)
+  VALUES (new.id, new.name, new.sort_name);
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5 (
+  title,
+  content = 'tracks',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS tracks_ai AFTER INSERT ON tracks BEGIN
+  INSERT INTO tracks_fts (rowid, title)
+  VALUES (new.id, new.title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_ad AFTER DELETE ON tracks BEGIN
+  INSERT INTO tracks_fts (tracks_fts, rowid, title)
+  VALUES ('delete', old.id, old.title);
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_au AFTER UPDATE ON tracks BEGIN
+  INSERT INTO tracks_fts (tracks_fts, rowid, title)
+  VALUES ('delete', old.id, old.title);
+  INSERT INTO tracks_fts (rowid, title)
+  VALUES (new.id, new.title);
+END;

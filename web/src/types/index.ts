@@ -134,6 +134,17 @@ export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
 // Settings types
 export type { SettingsType } from "./settings";
 
+// Search types
+export type {
+  SearchSection,
+  SearchAllResponseType,
+  SearchMoviesResponseType,
+  SearchAlbumsResponseType,
+  SearchMusiciansResponseType,
+  SearchTracksResponseType,
+  SearchTab,
+} from "./search";
+
 // Watch room types
 export type {
   WatchRoomMemberType,

@@ -22,6 +22,14 @@ export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
 export const ADMIN_USERS_KEY = "admin-users";
+export const SEARCH_ALL_KEY = "search-all";
+export const SEARCH_MOVIES_KEY = "search-movies";
+export const SEARCH_ALBUMS_KEY = "search-albums";
+export const SEARCH_MUSICIANS_KEY = "search-musicians";
+export const SEARCH_TRACKS_KEY = "search-tracks";
+
+/** Default page size for paginated /api/search/<entity> endpoints (matches server SEARCH_DEFAULT_PER_PAGE). */
+export const SEARCH_PER_PAGE = 24;
 
 // tmdb (paths only from API; frontend builds full URLs inline)
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";

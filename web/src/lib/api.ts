@@ -48,8 +48,13 @@ import type {
   WatchRoomInviteUsersResponseType,
   WatchRoomResponseType,
   WatchRoomType,
+  SearchAllResponseType,
+  SearchMoviesResponseType,
+  SearchAlbumsResponseType,
+  SearchMusiciansResponseType,
+  SearchTracksResponseType,
 } from "@/types";
-import { MOVIES_PER_PAGE } from "@/lib/constants";
+import { MOVIES_PER_PAGE, SEARCH_PER_PAGE } from "@/lib/constants";
 
 // API Client - Generic request handler
 const ERROR_NOTFOUND: ApiFailureType = {
@@ -568,6 +573,51 @@ export const adminResetUserPassword = (id: number, password: string) =>
     method: "PUT",
     body: { password },
   });
+
+// ============================================================================
+// Search API (FTS5-backed library search across movies, albums, musicians, tracks)
+// ============================================================================
+
+export const searchAll = (q: string) =>
+  apiRequest<SearchAllResponseType>(
+    `/api/search?q=${encodeURIComponent(q)}`,
+  );
+
+export const searchMovies = (
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) =>
+  apiRequest<SearchMoviesResponseType>(
+    `/api/search/movies?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+  );
+
+export const searchAlbums = (
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) =>
+  apiRequest<SearchAlbumsResponseType>(
+    `/api/search/albums?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+  );
+
+export const searchMusicians = (
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) =>
+  apiRequest<SearchMusiciansResponseType>(
+    `/api/search/musicians?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+  );
+
+export const searchTracks = (
+  q: string,
+  page: number,
+  perPage: number = SEARCH_PER_PAGE,
+) =>
+  apiRequest<SearchTracksResponseType>(
+    `/api/search/tracks?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+  );
 
 // Watch rooms API
 export const getWatchRoomInviteUsers = () =>

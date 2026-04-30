@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Search, Bell, Cast } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,6 +7,30 @@ import { Label } from "@/components/ui/label";
 import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 export default function Header() {
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { q?: string };
+  const [value, setValue] = useState(search.q ?? "");
+
+  useEffect(() => {
+    queueMicrotask(() => setValue(search.q ?? ""));
+  }, [search.q]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const q = value.trim();
+    if (!q) {
+      navigate({
+        to: "/search",
+        search: { q: "", tab: "all", page: 1 },
+      });
+      return;
+    }
+    navigate({
+      to: "/search",
+      search: { q, tab: "all", page: 1 },
+    });
+  };
+
   return (
     <>
       {/* Search */}
@@ -12,6 +38,7 @@ export default function Header() {
         className="min-w-0 flex-1 sm:max-w-lg"
         role="search"
         aria-label="Search library"
+        onSubmit={handleSubmit}
       >
         <Label htmlFor="q" className="sr-only">
           Search
@@ -26,6 +53,8 @@ export default function Header() {
             name="q"
             type="search"
             placeholder="Search..."
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             className={`pl-10 ${lightInputClassName}`}
           />
         </div>

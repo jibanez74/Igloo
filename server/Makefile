@@ -26,13 +26,13 @@ build-web:
 dev: generate
 	@echo "Starting development server (backend only)..."
 	@echo "Note: Run frontend with 'cd ${WEB_DIR} && bun run dev' (Vite on port 3000)"
-	@env CGO_ENABLED=1 VITE_DEV_SERVER=http://localhost:3000 go run ./cmd/api
+	@env CGO_ENABLED=1 VITE_DEV_SERVER=http://localhost:3000 go run -tags sqlite_fts5 ./cmd/api
 
 ## build: Build binary for current platform (generates sqlc code and syncs schema first)
 ## Does not build web frontend - use build-web separately if needed
 build: generate
 	@echo "Building backend for current platform..."
-	@env CGO_ENABLED=1 go build -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/api
+	@env CGO_ENABLED=1 go build -tags sqlite_fts5 -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/api
 	@echo "Backend built!"
 
 ## build-full: Build both backend and frontend (copies web dist into cmd/api/webdist for embedding)
@@ -40,19 +40,19 @@ build-full: generate build-web
 	@echo "Copying frontend build to cmd/api/webdist for embedding..."
 	@mkdir -p cmd/api/webdist && cp -r ${WEB_DIR}/dist/* cmd/api/webdist/
 	@echo "Building full application..."
-	@env CGO_ENABLED=1 go build -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/api
+	@env CGO_ENABLED=1 go build -tags sqlite_fts5 -ldflags="-s -w" -o ${BINARY_NAME} ./cmd/api
 	@echo "Full application built!"
 
 ## build-mac: Build binary for macOS ARM64 (backend only)
 build-mac: generate
 	@echo "Building for macOS ARM64..."
-	@env CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_NAME}-darwin-arm64 ./cmd/api
+	@env CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -tags sqlite_fts5 -ldflags="-s -w" -o ${BINARY_NAME}-darwin-arm64 ./cmd/api
 	@echo "Built ${BINARY_NAME}-darwin-arm64!"
 
 ## build-linux: Build binary for Linux AMD64 (backend only)
 build-linux: generate
 	@echo "Building for Linux AMD64..."
-	@env CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_NAME}-linux-amd64 ./cmd/api
+	@env CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags sqlite_fts5 -ldflags="-s -w" -o ${BINARY_NAME}-linux-amd64 ./cmd/api
 	@echo "Built ${BINARY_NAME}-linux-amd64!"
 
 ## run: builds and runs the application (backend only, no web build)
@@ -83,10 +83,10 @@ restart: stop start
 
 ## test: runs all tests
 test:
-	go test -v ./...
+	go test -tags sqlite_fts5 -v ./...
 
 ## test-ci: runs the deterministic backend test suite used by GitHub Actions
 test-ci:
 	mkdir -p cmd/api/webdist
 	touch cmd/api/webdist/.keep
-	go test -count=1 -v -tags systembin ./...
+	go test -count=1 -v -tags "systembin sqlite_fts5" ./...

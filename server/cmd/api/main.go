@@ -364,7 +364,55 @@ func (app *Application) InitTables() error {
 		return err
 	}
 
+	err = app.backfillSearchFTS()
+	if err != nil {
+		return err
+	}
+
 	app.Logger.Info("database tables initialized successfully")
+
+	return nil
+}
+
+// backfillSearchFTS populates the FTS5 mirror tables from existing rows that
+// predate the FTS schema. It is idempotent: rows already mirrored (matched by
+// rowid) are skipped, so this is safe to run on every boot.
+func (app *Application) backfillSearchFTS() error {
+	statements := []string{
+		`INSERT INTO movies_fts (rowid, title, overview, tag_line)
+		 SELECT id, title, overview, tag_line FROM movies
+		 WHERE NOT EXISTS (SELECT 1 FROM movies_fts WHERE rowid = movies.id)`,
+		`INSERT INTO albums_fts (rowid, title, musician)
+		 SELECT id, title, musician FROM albums
+		 WHERE NOT EXISTS (SELECT 1 FROM albums_fts WHERE rowid = albums.id)`,
+		`INSERT INTO musicians_fts (rowid, name, sort_name)
+		 SELECT id, name, sort_name FROM musicians
+		 WHERE NOT EXISTS (SELECT 1 FROM musicians_fts WHERE rowid = musicians.id)`,
+		`INSERT INTO tracks_fts (rowid, title)
+		 SELECT id, title FROM tracks
+		 WHERE NOT EXISTS (SELECT 1 FROM tracks_fts WHERE rowid = tracks.id)`,
+	}
+
+	tx, err := app.DB.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, stmt := range statements {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				return fmt.Errorf("backfill search FTS failed: %w; rollback failed: %v", err, rollbackErr)
+			}
+			return err
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -952,6 +1000,14 @@ func (app *Application) InitRouter() {
 			r.Route("/tmdb", func(r chi.Router) {
 				r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
 				r.Get("/movies/{id}", app.GetMovieByTmdbID)
+			})
+
+			r.Route("/search", func(r chi.Router) {
+				r.Get("/", app.SearchAll)
+				r.Get("/movies", app.SearchMovies)
+				r.Get("/albums", app.SearchAlbums)
+				r.Get("/musicians", app.SearchMusicians)
+				r.Get("/tracks", app.SearchTracks)
 			})
 
 			r.Route("/movies", func(r chi.Router) {
