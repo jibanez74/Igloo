@@ -132,7 +132,14 @@ export type {
 export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
 
 // Settings types
-export type { SettingsType } from "./settings";
+export type {
+  GeneralSettingsResponseType,
+  GeneralSettingsType,
+  HardwareAccelerationDevice,
+  SettingsType,
+  UpdateGeneralSettingsRequest,
+  UpdateGeneralSettingsResponseType,
+} from "./settings";
 
 // Search types
 export type {

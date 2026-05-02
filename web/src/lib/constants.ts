@@ -21,6 +21,7 @@ export const ALBUMS_PAGINATED_KEY = "albums-paginated";
 export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
+export const GENERAL_SETTINGS_KEY = "general-settings";
 export const ADMIN_USERS_KEY = "admin-users";
 export const SEARCH_ALL_KEY = "search-all";
 export const SEARCH_MOVIES_KEY = "search-movies";

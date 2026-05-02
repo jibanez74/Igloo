@@ -190,6 +190,7 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_track_genres_genre",
 		"idx_sessions_expiry",
 		"idx_movie_watch_progress_user_updated_at",
+		"idx_settings_singleton",
 	}
 
 	for _, indexName := range expectedIndexes {
@@ -361,6 +362,47 @@ func TestInitTables_MigratesNegativeWatchRoomTracks(t *testing.T) {
 	`)
 	if err == nil {
 		t.Fatal("expected migrated schema to reject negative subtitle_track insert")
+	}
+}
+
+func TestInitTables_SettingsSingleton(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("Failed to open in-memory database: %v", err)
+	}
+	defer db.Close()
+
+	app := &Application{DB: db}
+	setupTestLogger(t, app)
+
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO settings (tmdb_key, static_dir, logs_dir)
+		VALUES ('first-key', 'first-static', 'first-logs')
+	`)
+	if err != nil {
+		t.Fatalf("insert first settings row: %v", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO settings (tmdb_key, static_dir, logs_dir)
+		VALUES ('second-key', 'second-static', 'second-logs')
+	`)
+	if err == nil {
+		t.Fatal("expected second settings insert to fail")
+	}
+
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&count)
+	if err != nil {
+		t.Fatalf("count settings: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one settings row, got %d", count)
 	}
 }
 
@@ -635,6 +677,15 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String != defaultMusicDir {
 		t.Errorf("Expected MusicDir %q, got %q (valid=%v)", defaultMusicDir, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
+
+	var settingsCount int
+	err = app.DB.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&settingsCount)
+	if err != nil {
+		t.Fatalf("Failed to count settings rows: %v", err)
+	}
+	if settingsCount != 1 {
+		t.Fatalf("Expected exactly one settings row, got %d", settingsCount)
+	}
 }
 
 func TestInitSettings_UsesEnvVars(t *testing.T) {
@@ -842,6 +893,15 @@ func TestInitSettings_Idempotent(t *testing.T) {
 	// Should load the same settings, not create a new one
 	if app.Settings.ID != firstSettingsID {
 		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.Settings.ID)
+	}
+
+	var settingsCount int
+	err = app.DB.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&settingsCount)
+	if err != nil {
+		t.Fatalf("Failed to count settings rows: %v", err)
+	}
+	if settingsCount != 1 {
+		t.Fatalf("Expected exactly one settings row after repeated InitSettings calls, got %d", settingsCount)
 	}
 }
 

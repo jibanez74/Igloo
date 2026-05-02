@@ -1,6 +1,11 @@
 import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/_admin/settings")({
   component: SettingsLayout,
@@ -95,10 +100,9 @@ function SettingsLayout() {
             })}
           </TabsList>
 
-          {/* Child route content */}
-          <div className="mt-6">
+          <TabsContent value={currentTab} className="mt-6">
             <Outlet />
-          </div>
+          </TabsContent>
         </Tabs>
       </div>
     </>

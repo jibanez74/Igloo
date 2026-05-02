@@ -1,6 +1,6 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import {
   Card,
@@ -307,6 +307,10 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const nameId = useId();
+  const emailId = useId();
+  const passwordId = useId();
+  const isAdminId = useId();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -325,42 +329,45 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="create-name" className="text-slate-300">Name</Label>
+            <Label htmlFor={nameId} className="text-slate-300">Name</Label>
             <Input
-              id="create-name"
+              id={nameId}
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Full name"
               maxLength={100}
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="User name"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="create-email" className="text-slate-300">Email</Label>
+            <Label htmlFor={emailId} className="text-slate-300">Email</Label>
             <Input
-              id="create-email"
+              id={emailId}
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="user@example.com"
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="User email"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="create-password" className="text-slate-300">Password</Label>
+            <Label htmlFor={passwordId} className="text-slate-300">Password</Label>
             <Input
-              id="create-password"
+              id={passwordId}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="At least 9 characters"
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="User password"
             />
@@ -369,14 +376,14 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
 
           <div className="flex items-center gap-3">
             <input
-              id="create-is-admin"
+              id={isAdminId}
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
               className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
               aria-label="Grant admin privileges"
             />
-            <Label htmlFor="create-is-admin" className="cursor-pointer text-slate-300">
+            <Label htmlFor={isAdminId} className="cursor-pointer text-slate-300">
               Grant admin privileges
             </Label>
           </div>
@@ -406,6 +413,9 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [isAdmin, setIsAdmin] = useState(user.is_admin);
+  const nameId = useId();
+  const emailId = useId();
+  const isAdminId = useId();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -424,28 +434,30 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="edit-name" className="text-slate-300">Name</Label>
+            <Label htmlFor={nameId} className="text-slate-300">Name</Label>
             <Input
-              id="edit-name"
+              id={nameId}
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="Full name"
               maxLength={100}
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="User name"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-email" className="text-slate-300">Email</Label>
+            <Label htmlFor={emailId} className="text-slate-300">Email</Label>
             <Input
-              id="edit-email"
+              id={emailId}
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="user@example.com"
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="User email"
             />
@@ -453,14 +465,14 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
 
           <div className="flex items-center gap-3">
             <input
-              id="edit-is-admin"
+              id={isAdminId}
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
               className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
               aria-label="Admin privileges"
             />
-            <Label htmlFor="edit-is-admin" className="cursor-pointer text-slate-300">
+            <Label htmlFor={isAdminId} className="cursor-pointer text-slate-300">
               Admin privileges
             </Label>
           </div>
@@ -488,6 +500,8 @@ type DeleteUserDialogProps = {
 
 function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDialogProps) {
   const [confirmText, setConfirmText] = useState("");
+  const confirmId = useId();
+  const invalid = confirmText.length > 0 && confirmText !== "DELETE";
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
@@ -502,16 +516,17 @@ function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDia
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="delete-confirm" className="text-slate-300">
+            <Label htmlFor={confirmId} className="text-slate-300">
               Type <span className="font-mono font-bold">DELETE</span> to confirm:
             </Label>
             <Input
-              id="delete-confirm"
+              id={confirmId}
               value={confirmText}
               onChange={e => setConfirmText(e.target.value)}
               placeholder="DELETE"
               className={`font-mono ${lightInputClassName}`}
               aria-label="Type DELETE to confirm user deletion"
+              aria-invalid={invalid}
             />
           </div>
         </div>
@@ -543,6 +558,8 @@ type ResetPasswordDialogProps = {
 function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswordDialogProps) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const passwordId = useId();
+  const confirmPasswordId = useId();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -564,14 +581,15 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="reset-password" className="text-slate-300">New Password</Label>
+            <Label htmlFor={passwordId} className="text-slate-300">New Password</Label>
             <Input
-              id="reset-password"
+              id={passwordId}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="At least 9 characters"
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="New password"
             />
@@ -579,14 +597,15 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reset-confirm-password" className="text-slate-300">Confirm Password</Label>
+            <Label htmlFor={confirmPasswordId} className="text-slate-300">Confirm Password</Label>
             <Input
-              id="reset-confirm-password"
+              id={confirmPasswordId}
               type="password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="Repeat new password"
               required
+              aria-required="true"
               className={lightInputClassName}
               aria-label="Confirm new password"
               aria-invalid={mismatch}

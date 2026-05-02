@@ -202,6 +202,7 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
+	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)

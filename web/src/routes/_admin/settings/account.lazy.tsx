@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -54,9 +54,19 @@ function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
   const navigate = useNavigate();
   const { data: userData, isLoading } = useQuery(authUserQueryOpts());
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const emailId = useId();
+  const nameId = useId();
+  const avatarUploadId = useId();
+  const avatarUrlId = useId();
+  const currentPasswordId = useId();
+  const newPasswordId = useId();
+  const confirmPasswordId = useId();
+  const deleteConfirmId = useId();
+  const deleteConfirmHelperId = useId();
 
   const user: AuthUser | null =
     userData?.error === false && userData.data?.user
@@ -365,41 +375,38 @@ function AccountSettings() {
     e.target.value = "";
   };
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = () => {
     if (deleteConfirmText !== "DELETE") {
       showError("Please type DELETE to confirm");
       return;
     }
 
-    setIsDeleting(true);
+    startDeleteTransition(async () => {
+      try {
+        const res = await deleteUserAccount();
 
-    try {
-      const res = await deleteUserAccount();
+        if (res.error) {
+          showActionFailed("delete account", res.message);
+          setDeleteDialogOpen(false);
+          setDeleteConfirmText("");
+          return;
+        }
 
-      if (res.error) {
-        showActionFailed("delete account", res.message);
-        setIsDeleting(false);
-        setDeleteDialogOpen(false);
-        setDeleteConfirmText("");
-      } else {
         showSuccess("Account deleted successfully");
-        // Logout and redirect to login
         const logoutRes = await logout();
         if (logoutRes.error) {
           showActionFailed("log out", logoutRes.message);
-          setIsDeleting(false);
           return;
         }
         queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
         queryClient.invalidateQueries();
         navigate({ to: "/login", replace: true });
+      } catch {
+        showError("Failed to delete account");
+        setDeleteDialogOpen(false);
+        setDeleteConfirmText("");
       }
-    } catch {
-      showError("Failed to delete account");
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      setDeleteConfirmText("");
-    }
+    });
   };
 
   const getAvatarUrl = () => {
@@ -472,18 +479,20 @@ function AccountSettings() {
         <CardContent className="max-w-2xl space-y-6">
           {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-300">
+            <Label htmlFor={emailId} className="text-slate-300">
               Email
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
-                id="email"
+                id={emailId}
                 type="email"
                 value={emailValue}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your email address"
+                required
+                aria-required="true"
               />
               <Button
                 onClick={handleUpdateEmail}
@@ -502,12 +511,12 @@ function AccountSettings() {
 
           {/* Name */}
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-slate-300">
+            <Label htmlFor={nameId} className="text-slate-300">
               Name
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
-                id="name"
+                id={nameId}
                 type="text"
                 value={nameValue}
                 onChange={e => setName(e.target.value)}
@@ -579,7 +588,7 @@ function AccountSettings() {
             <div className="flex gap-2">
               <div className="relative flex flex-1">
                 <input
-                  id="avatar-upload"
+                  id={avatarUploadId}
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
                   onChange={handleUploadAvatar}
@@ -588,7 +597,7 @@ function AccountSettings() {
                   aria-label="Upload avatar image"
                 />
                 <label
-                  htmlFor="avatar-upload"
+                  htmlFor={avatarUploadId}
                   className={cn(
                     "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors peer-focus-visible:border-amber-400/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-amber-400/20",
                     lightInputClassName,
@@ -613,12 +622,12 @@ function AccountSettings() {
 
           {/* Set Avatar URL */}
           <div className="space-y-2">
-            <Label htmlFor="avatar-url" className="text-slate-300">
+            <Label htmlFor={avatarUrlId} className="text-slate-300">
               Or enter image URL
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
-                id="avatar-url"
+                id={avatarUrlId}
                 type="url"
                 value={avatarUrl}
                 onChange={e => setAvatarUrl(e.target.value)}
@@ -654,26 +663,28 @@ function AccountSettings() {
         </CardHeader>
         <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="current-password" className="text-slate-300">
+            <Label htmlFor={currentPasswordId} className="text-slate-300">
               Current Password
             </Label>
             <Input
-              id="current-password"
+              id={currentPasswordId}
               type="password"
               value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)}
               placeholder="Enter current password"
               className={lightInputClassName}
               aria-label="Current password"
+              required
+              aria-required="true"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="new-password" className="text-slate-300">
+            <Label htmlFor={newPasswordId} className="text-slate-300">
               New Password
             </Label>
             <Input
-              id="new-password"
+              id={newPasswordId}
               type="password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
@@ -687,11 +698,11 @@ function AccountSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-password" className="text-slate-300">
+            <Label htmlFor={confirmPasswordId} className="text-slate-300">
               Confirm New Password
             </Label>
             <Input
-              id="confirm-password"
+              id={confirmPasswordId}
               type="password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
@@ -768,18 +779,26 @@ function AccountSettings() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="delete-confirm" className="text-slate-300">
+              <Label
+                htmlFor={deleteConfirmId}
+                id={deleteConfirmHelperId}
+                className="text-slate-300"
+              >
                 Type <span className="font-mono font-bold">DELETE</span> to
                 confirm:
               </Label>
               <Input
-                id="delete-confirm"
+                id={deleteConfirmId}
                 type="text"
                 value={deleteConfirmText}
                 onChange={e => setDeleteConfirmText(e.target.value)}
                 placeholder="DELETE"
                 className={`font-mono ${lightInputClassName}`}
                 aria-label="Type DELETE to confirm account deletion"
+                aria-describedby={deleteConfirmHelperId}
+                aria-invalid={
+                  deleteConfirmText.length > 0 && deleteConfirmText !== "DELETE"
+                }
               />
             </div>
           </div>

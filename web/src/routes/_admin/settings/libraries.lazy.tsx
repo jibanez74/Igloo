@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useTransition } from "react";
+import { useId, useTransition } from "react";
 import {
   Library,
   Music,
@@ -133,10 +133,10 @@ function MusicLibrarySection() {
     showError("Not implemented", "Removing libraries will be available soon");
   };
 
-  const sectionId = "music-library-section";
-  const headingId = "music-library-heading";
-  const pathId = "music-library-path";
-  const statsId = "music-library-stats";
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
+  const statsId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -322,6 +322,7 @@ function MusicLibrarySection() {
         <Button
           onClick={handleScan}
           disabled={isScanning}
+          aria-busy={isScanning}
           aria-label={
             isScanning
               ? "Scanning music library, please wait"
@@ -396,9 +397,9 @@ function MoviesLibrarySection() {
     showError("Not implemented", "Removing libraries will be available soon");
   };
 
-  const sectionId = "movies-library-section";
-  const headingId = "movies-library-heading";
-  const pathId = "movies-library-path";
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -518,6 +519,7 @@ function MoviesLibrarySection() {
         <Button
           onClick={handleScan}
           disabled={isScanning}
+          aria-busy={isScanning}
           aria-label={
             isScanning
               ? "Scanning movies library, please wait"
@@ -561,9 +563,9 @@ function TVShowsLibrarySection() {
     showError("Not implemented", "Removing libraries will be available soon");
   };
 
-  const sectionId = "tv-shows-library-section";
-  const headingId = "tv-shows-library-heading";
-  const pathId = "tv-shows-library-path";
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>

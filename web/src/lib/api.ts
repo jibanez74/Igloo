@@ -12,6 +12,7 @@ import type {
   JoinWatchRoomResponseType,
   LatestMovieType,
   LibraryMovieDetailsResponse,
+  GeneralSettingsResponseType,
   MovieDetailsType,
   MoviePlaylistDetailResponseType,
   MoviePlaylistRowType,
@@ -43,6 +44,8 @@ import type {
   TracksListResponseType,
   UpdateMovieMetadataRequest,
   UpdateMoviePlaylistRequest,
+  UpdateGeneralSettingsRequest,
+  UpdateGeneralSettingsResponseType,
   UpdatePlaylistRequest,
   UserListeningStatsResponseType,
   WatchRoomInviteUsersResponseType,
@@ -528,6 +531,15 @@ export const getUserRecentlyPlayed = (limit: number = 20, offset: number = 0) =>
 // ============================================================================
 
 export const getSettings = () => apiRequest<SettingsType>("/api/settings");
+
+export const getGeneralSettings = () =>
+  apiRequest<GeneralSettingsResponseType>("/api/settings/general");
+
+export const updateGeneralSettings = (data: UpdateGeneralSettingsRequest) =>
+  apiRequest<UpdateGeneralSettingsResponseType>("/api/settings/general", {
+    method: "PUT",
+    body: data,
+  });
 
 export const triggerMusicScan = () =>
   apiRequest<{ message: string }>("/api/settings/scan/music", {

@@ -36,6 +36,8 @@ CREATE TABLE
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_singleton ON settings ((1));
+
 -- musicians
 CREATE TABLE
   IF NOT EXISTS musicians (
