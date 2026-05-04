@@ -17,6 +17,7 @@ export type GeneralSettingsType = {
   download_images: boolean;
   static_dir: string;
   logs_dir: string;
+  server_upload_mbps: number | null;
   restart_required?: boolean;
 };
 
@@ -31,6 +32,7 @@ export type UpdateGeneralSettingsRequest = {
   download_images: boolean;
   static_dir: string;
   logs_dir: string;
+  server_upload_mbps: number | null;
 };
 
 export type GeneralSettingsResponseType = {
@@ -40,4 +42,41 @@ export type GeneralSettingsResponseType = {
 export type UpdateGeneralSettingsResponseType = {
   settings: GeneralSettingsType;
   restart_required: boolean;
+};
+
+export type PlaybackProfileType = {
+  id: string;
+  label: string;
+  height: number;
+  video_mbps: number;
+};
+
+export type PlaybackSettingsType = {
+  profiles: PlaybackProfileType[];
+  preferred_profile: string | null;
+  download_mbps: number | null;
+  server_upload_mbps: number | null;
+  is_admin: boolean;
+  preferred_audio_language: string | null;
+  preferred_subtitle_language: string | null;
+};
+
+export type UpdatePlaybackSettingsRequest = {
+  preferred_profile: string | null;
+  download_mbps: number | null;
+  preferred_audio_language: string | null;
+  preferred_subtitle_language: string | null;
+};
+
+export type PlaybackSettingsResponseType = {
+  settings: PlaybackSettingsType;
+};
+
+export type UpdatePlaybackSettingsResponseType = {
+  settings: {
+    preferred_profile: string | null;
+    download_mbps: number | null;
+    preferred_audio_language: string | null;
+    preferred_subtitle_language: string | null;
+  };
 };

@@ -5,6 +5,7 @@ import {
   getAlbumsPaginated,
   getAuthUser,
   getGeneralSettings,
+  getPlaybackSettings,
   getLatestAlbums,
   getLatestMovies,
   getLikedMovies,
@@ -46,6 +47,7 @@ import {
   ALBUMS_PAGINATED_KEY,
   AUTH_USER_KEY,
   GENERAL_SETTINGS_KEY,
+  PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
@@ -235,6 +237,15 @@ export function generalSettingsQueryOpts() {
   return queryOptions({
     queryKey: [GENERAL_SETTINGS_KEY],
     queryFn: getGeneralSettings,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function playbackSettingsQueryOpts() {
+  return queryOptions({
+    queryKey: [PLAYBACK_SETTINGS_KEY],
+    queryFn: getPlaybackSettings,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });

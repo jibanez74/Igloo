@@ -18,7 +18,7 @@ SET
   is_admin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 `
 
 type AdminUpdateUserParams struct {
@@ -43,6 +43,10 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -72,7 +76,7 @@ INSERT INTO users (
 )
 VALUES
   (?, ?, ?, ?, ?)
-RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -99,6 +103,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -117,7 +125,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 
 const getAdminUser = `-- name: GetAdminUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 FROM users
 WHERE is_admin = true
 LIMIT 1
@@ -133,6 +141,10 @@ func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -195,7 +207,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 
 const getUser = `-- name: GetUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 FROM users
 WHERE id = ?
 LIMIT 1
@@ -211,6 +223,10 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -219,7 +235,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, name, email, password, is_admin, avatar, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 FROM users
 WHERE email = ?
 LIMIT 1
@@ -235,8 +251,42 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserPlaybackPreferences = `-- name: GetUserPlaybackPreferences :one
+SELECT
+  preferred_hls_profile,
+  download_mbps,
+  preferred_audio_language,
+  preferred_subtitle_language
+FROM users
+WHERE id = ?
+LIMIT 1
+`
+
+type GetUserPlaybackPreferencesRow struct {
+	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
+	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
+	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
+	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
+}
+
+func (q *Queries) GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error) {
+	row := q.queryRow(ctx, q.getUserPlaybackPreferencesStmt, getUserPlaybackPreferences, id)
+	var i GetUserPlaybackPreferencesRow
+	err := row.Scan(
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 	)
 	return i, err
 }
@@ -303,7 +353,7 @@ SET
   avatar = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 `
 
 type UpdateUserAvatarParams struct {
@@ -321,6 +371,10 @@ func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarPara
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -333,7 +387,7 @@ SET
   email = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 `
 
 type UpdateUserEmailParams struct {
@@ -351,6 +405,10 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -363,7 +421,7 @@ SET
   name = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
 `
 
 type UpdateUserNameParams struct {
@@ -381,6 +439,10 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.Password,
 		&i.IsAdmin,
 		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -403,4 +465,56 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.exec(ctx, q.updateUserPasswordStmt, updateUserPassword, arg.Password, arg.ID)
 	return err
+}
+
+const updateUserPlaybackPreferences = `-- name: UpdateUserPlaybackPreferences :one
+UPDATE users
+SET
+  preferred_hls_profile = ?,
+  download_mbps = ?,
+  preferred_audio_language = ?,
+  preferred_subtitle_language = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING
+  id,
+  preferred_hls_profile,
+  download_mbps,
+  preferred_audio_language,
+  preferred_subtitle_language
+`
+
+type UpdateUserPlaybackPreferencesParams struct {
+	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
+	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
+	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
+	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
+	ID                        int64           `json:"id"`
+}
+
+type UpdateUserPlaybackPreferencesRow struct {
+	ID                        int64           `json:"id"`
+	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
+	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
+	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
+	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
+}
+
+func (q *Queries) UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error) {
+	row := q.queryRow(ctx, q.updateUserPlaybackPreferencesStmt, updateUserPlaybackPreferences,
+		arg.PreferredHlsProfile,
+		arg.DownloadMbps,
+		arg.PreferredAudioLanguage,
+		arg.PreferredSubtitleLanguage,
+		arg.ID,
+	)
+	var i UpdateUserPlaybackPreferencesRow
+	err := row.Scan(
+		&i.ID,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
+	)
+	return i, err
 }

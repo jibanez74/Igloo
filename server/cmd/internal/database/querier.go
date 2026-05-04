@@ -154,6 +154,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Returns overall listening statistics for a user
 	GetUserListeningStats(ctx context.Context, arg GetUserListeningStatsParams) (GetUserListeningStatsRow, error)
+	GetUserPlaybackPreferences(ctx context.Context, id int64) (GetUserPlaybackPreferencesRow, error)
 	// Returns the user's recently played tracks
 	GetUserRecentlyPlayed(ctx context.Context, arg GetUserRecentlyPlayedParams) ([]GetUserRecentlyPlayedRow, error)
 	// Returns the user's most listened albums
@@ -214,6 +215,7 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
 	// Creates a relationship between an album and a genre (idempotent)
 	UpsertAlbumGenre(ctx context.Context, arg UpsertAlbumGenreParams) error

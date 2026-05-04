@@ -93,6 +93,32 @@ SELECT COUNT(*)
 FROM users
 WHERE is_admin = true;
 
+-- name: GetUserPlaybackPreferences :one
+SELECT
+  preferred_hls_profile,
+  download_mbps,
+  preferred_audio_language,
+  preferred_subtitle_language
+FROM users
+WHERE id = ?
+LIMIT 1;
+
+-- name: UpdateUserPlaybackPreferences :one
+UPDATE users
+SET
+  preferred_hls_profile = ?,
+  download_mbps = ?,
+  preferred_audio_language = ?,
+  preferred_subtitle_language = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING
+  id,
+  preferred_hls_profile,
+  download_mbps,
+  preferred_audio_language,
+  preferred_subtitle_language;
+
 -- name: GetUsersExcluding :many
 SELECT
   id,

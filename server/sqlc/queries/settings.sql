@@ -38,6 +38,7 @@ SET
   download_images = ?,
   static_dir = ?,
   logs_dir = ?,
+  server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id

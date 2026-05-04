@@ -1,11 +1,14 @@
 import {
   BITMAP_SUBTITLE_CODECS,
+  ISO_639_2_TO_1,
   LANGUAGE_NAMES,
   STREAM_MODES,
   type StreamModeId,
 } from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
+import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
+import type { PlaybackSettingsType } from "@/types/settings";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
@@ -140,13 +143,74 @@ export function getDefaultMode(
   return "720p_3mbps";
 }
 
+function normalizeLang(raw: string | undefined): string | undefined {
+  const lower = raw?.trim().toLowerCase();
+  if (!lower) return undefined;
+  if (lower.length === 2) return lower;
+  if (lower.length === 3) return ISO_639_2_TO_1[lower];
+  return undefined;
+}
+
 export function getDefaultPlaybackSettings(
   availableModes: readonly PlaybackModeOption[],
+  userPrefs?: PlaybackSettingsType | null,
+  audioStreams?: AudioStreamType[],
+  subtitleStreams?: SubtitleType[],
 ): PlaybackSettings {
+  const fallbackMode =
+    availableModes[0]?.id ?? DEFAULT_PLAYBACK_SETTINGS.mode;
+
+  const isInAvailableModes = (id: string) =>
+    availableModes.some((m) => m.id === id);
+
+  let mode: StreamModeId = fallbackMode;
+  if (userPrefs) {
+    if (
+      userPrefs.preferred_profile &&
+      isInAvailableModes(userPrefs.preferred_profile)
+    ) {
+      mode = userPrefs.preferred_profile as StreamModeId;
+    } else if (userPrefs.download_mbps != null) {
+      const recommended = recommendedProfileId(
+        userPrefs.profiles,
+        userPrefs.download_mbps,
+        userPrefs.server_upload_mbps,
+      );
+      if (recommended && isInAvailableModes(recommended)) {
+        mode = recommended as StreamModeId;
+      }
+    }
+  }
+
+  let audioTrack = 0;
+  const preferredAudio = normalizeLang(
+    userPrefs?.preferred_audio_language ?? undefined,
+  );
+  if (preferredAudio && audioStreams && audioStreams.length > 0) {
+    const matchIndex = audioStreams.findIndex(
+      (s) =>
+        normalizeLang(unwrapStringOrUndefined(s.language)) === preferredAudio,
+    );
+    if (matchIndex >= 0) audioTrack = matchIndex;
+  }
+
+  let subtitleTrack: number | null = null;
+  const preferredSubtitle = userPrefs?.preferred_subtitle_language ?? null;
+  if (preferredSubtitle && preferredSubtitle !== "off") {
+    const normalized = normalizeLang(preferredSubtitle);
+    if (normalized && subtitleStreams && subtitleStreams.length > 0) {
+      const matchIndex = subtitleStreams.findIndex(
+        (s) =>
+          normalizeLang(unwrapStringOrUndefined(s.language)) === normalized,
+      );
+      if (matchIndex >= 0) subtitleTrack = matchIndex;
+    }
+  }
+
   return {
-    mode: availableModes[0]?.id ?? DEFAULT_PLAYBACK_SETTINGS.mode,
-    audioTrack: 0,
-    subtitleTrack: null,
+    mode,
+    audioTrack,
+    subtitleTrack,
   };
 }
 

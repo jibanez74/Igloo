@@ -22,6 +22,7 @@ export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
 export const SETTINGS_KEY = "settings";
 export const GENERAL_SETTINGS_KEY = "general-settings";
+export const PLAYBACK_SETTINGS_KEY = "playback-settings";
 export const ADMIN_USERS_KEY = "admin-users";
 export const SEARCH_ALL_KEY = "search-all";
 export const SEARCH_MOVIES_KEY = "search-movies";
@@ -177,6 +178,45 @@ export const BITMAP_SUBTITLE_CODECS = [
   "dvd_subtitle",
   "dvb_subtitle",
 ] as const;
+
+/** ISO 639-2 three-letter codes → ISO 639-1 two-letter codes for the supported languages.
+ * ffprobe often emits 3-letter codes; the user-facing language picker uses 2-letter codes. */
+export const ISO_639_2_TO_1: Record<string, string> = {
+  ara: "ar",
+  ces: "cs",
+  cze: "cs",
+  dan: "da",
+  deu: "de",
+  ger: "de",
+  ell: "el",
+  gre: "el",
+  eng: "en",
+  spa: "es",
+  fin: "fi",
+  fra: "fr",
+  fre: "fr",
+  heb: "he",
+  hin: "hi",
+  hun: "hu",
+  ita: "it",
+  jpn: "ja",
+  kor: "ko",
+  nld: "nl",
+  dut: "nl",
+  nor: "no",
+  pol: "pl",
+  por: "pt",
+  ron: "ro",
+  rum: "ro",
+  rus: "ru",
+  swe: "sv",
+  tha: "th",
+  tur: "tr",
+  ukr: "uk",
+  vie: "vi",
+  zho: "zh",
+  chi: "zh",
+};
 
 /** ISO 639-1 two-letter codes → English display names (audio + subtitle labels). */
 export const LANGUAGE_NAMES: Record<string, string> = {

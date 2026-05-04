@@ -34,7 +34,7 @@ import { lightInputClassName } from "@/lib/input-styles";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 
-export const Route = createLazyFileRoute("/_admin/settings/users")({
+export const Route = createLazyFileRoute("/_auth/settings/users")({
   component: UsersSettings,
 });
 

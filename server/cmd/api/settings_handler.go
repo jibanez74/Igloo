@@ -22,30 +22,32 @@ var (
 )
 
 type generalSettingsResponse struct {
-	TmdbKey                    *string `json:"tmdb_key"`
-	JellyfinToken              *string `json:"jellyfin_token"`
-	SpotifyClientID            *string `json:"spotify_client_id"`
-	SpotifyClientSecret        *string `json:"spotify_client_secret"`
-	HardwareAccelerationDevice string  `json:"hardware_acceleration_device"`
-	EnableLogger               bool    `json:"enable_logger"`
-	EnableWatcher              bool    `json:"enable_watcher"`
-	DownloadImages             bool    `json:"download_images"`
-	StaticDir                  string  `json:"static_dir"`
-	LogsDir                    string  `json:"logs_dir"`
-	RestartRequired            bool    `json:"restart_required,omitempty"`
+	TmdbKey                    *string  `json:"tmdb_key"`
+	JellyfinToken              *string  `json:"jellyfin_token"`
+	SpotifyClientID            *string  `json:"spotify_client_id"`
+	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
+	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
+	EnableLogger               bool     `json:"enable_logger"`
+	EnableWatcher              bool     `json:"enable_watcher"`
+	DownloadImages             bool     `json:"download_images"`
+	StaticDir                  string   `json:"static_dir"`
+	LogsDir                    string   `json:"logs_dir"`
+	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
+	RestartRequired            bool     `json:"restart_required,omitempty"`
 }
 
 type updateGeneralSettingsRequest struct {
-	TmdbKey                    string `json:"tmdb_key"`
-	JellyfinToken              string `json:"jellyfin_token"`
-	SpotifyClientID            string `json:"spotify_client_id"`
-	SpotifyClientSecret        string `json:"spotify_client_secret"`
-	HardwareAccelerationDevice string `json:"hardware_acceleration_device"`
-	EnableLogger               bool   `json:"enable_logger"`
-	EnableWatcher              bool   `json:"enable_watcher"`
-	DownloadImages             bool   `json:"download_images"`
-	StaticDir                  string `json:"static_dir"`
-	LogsDir                    string `json:"logs_dir"`
+	TmdbKey                    string   `json:"tmdb_key"`
+	JellyfinToken              string   `json:"jellyfin_token"`
+	SpotifyClientID            string   `json:"spotify_client_id"`
+	SpotifyClientSecret        string   `json:"spotify_client_secret"`
+	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
+	EnableLogger               bool     `json:"enable_logger"`
+	EnableWatcher              bool     `json:"enable_watcher"`
+	DownloadImages             bool     `json:"download_images"`
+	StaticDir                  string   `json:"static_dir"`
+	LogsDir                    string   `json:"logs_dir"`
+	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
 }
 
 func nullableStringValue(value sql.NullString) *string {
@@ -54,6 +56,14 @@ func nullableStringValue(value sql.NullString) *string {
 	}
 
 	return &value.String
+}
+
+func nullableFloat64Value(value sql.NullFloat64) *float64 {
+	if !value.Valid {
+		return nil
+	}
+
+	return &value.Float64
 }
 
 func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
@@ -73,6 +83,7 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		DownloadImages:             settings.DownloadImages,
 		StaticDir:                  settings.StaticDir,
 		LogsDir:                    settings.LogsDir,
+		ServerUploadMbps:           nullableFloat64Value(settings.ServerUploadMbps),
 		RestartRequired:            restartRequired,
 	}
 }
@@ -175,6 +186,13 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if req.ServerUploadMbps != nil {
+		if *req.ServerUploadMbps <= 0 || *req.ServerUploadMbps >= 100000 {
+			helpers.ErrorJSON(w, errors.New("server upload speed must be greater than 0 and less than 100000 Mbps"), http.StatusBadRequest)
+			return
+		}
+	}
+
 	_, err = helpers.GetOrCreateDir(req.StaticDir)
 	if err != nil {
 		app.Logger.Error("failed to validate static directory", "error", err, "path", req.StaticDir)
@@ -203,6 +221,11 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	serverUploadMbps := sql.NullFloat64{}
+	if req.ServerUploadMbps != nil {
+		serverUploadMbps = sql.NullFloat64{Float64: *req.ServerUploadMbps, Valid: true}
+	}
+
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 		TmdbKey:                    helpers.NullString(req.TmdbKey),
@@ -215,6 +238,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		DownloadImages:             req.DownloadImages,
 		StaticDir:                  req.StaticDir,
 		LogsDir:                    req.LogsDir,
+		ServerUploadMbps:           serverUploadMbps,
 	})
 	if err != nil {
 		app.Logger.Error("failed to update general settings", "error", err)

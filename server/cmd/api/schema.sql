@@ -7,6 +7,10 @@ CREATE TABLE
     password TEXT NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     avatar TEXT,
+    preferred_hls_profile TEXT,
+    download_mbps REAL,
+    preferred_audio_language TEXT,
+    preferred_subtitle_language TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
@@ -30,6 +34,7 @@ CREATE TABLE
     movies_dir TEXT,
     shows_dir TEXT,
     music_dir TEXT,
+    server_upload_mbps REAL,
     static_dir TEXT NOT NULL DEFAULT 'static',
     logs_dir TEXT NOT NULL DEFAULT 'logs',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

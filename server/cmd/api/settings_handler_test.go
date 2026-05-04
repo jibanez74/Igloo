@@ -42,7 +42,8 @@ func generalSettingsBody(staticDir, logsDir string) string {
 		"enable_watcher": true,
 		"download_images": true,
 		"static_dir": %q,
-		"logs_dir": %q
+		"logs_dir": %q,
+		"server_upload_mbps": 25
 	}`, staticDir, logsDir)
 }
 
@@ -90,6 +91,92 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 	if app.Settings == nil || app.Settings.StaticDir != staticDir {
 		t.Fatal("expected app.Settings to reflect the saved general settings")
+	}
+	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 25 {
+		t.Fatalf("expected server upload Mbps 25, got valid=%v value=%v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
+	}
+	if app.Settings.ServerUploadMbps.Float64 != 25 {
+		t.Fatalf("expected app.Settings.ServerUploadMbps 25, got %v", app.Settings.ServerUploadMbps.Float64)
+	}
+}
+
+func TestUpdateGeneralSettings_RejectsInvalidServerUploadMbps(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+
+	staticDir := filepath.Join(t.TempDir(), "static")
+	logsDir := filepath.Join(t.TempDir(), "logs")
+	body := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": -1`, 1)
+	w := performUpdateGeneralSettings(app, body)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateGeneralSettings_ServerUploadMbpsBoundaries(t *testing.T) {
+	cases := []struct {
+		name       string
+		value      string
+		wantStatus int
+		wantStored float64
+	}{
+		{"zero rejected", "0", http.StatusBadRequest, 0},
+		{"just above zero accepted", "0.1", http.StatusOK, 0.1},
+		{"just below ceiling accepted", "99999.99", http.StatusOK, 99999.99},
+		{"ceiling rejected", "100000", http.StatusBadRequest, 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSettingsHTTPTestApp(t)
+			defer app.DB.Close()
+
+			staticDir := filepath.Join(t.TempDir(), "static")
+			logsDir := filepath.Join(t.TempDir(), "logs")
+			body := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": `+tc.value, 1)
+			w := performUpdateGeneralSettings(app, body)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("value=%s expected status %d, got %d: %s", tc.value, tc.wantStatus, w.Code, w.Body.String())
+			}
+
+			if tc.wantStatus == http.StatusOK {
+				settings, err := app.Queries.GetSettings(context.Background())
+				if err != nil {
+					t.Fatalf("GetSettings: %v", err)
+				}
+				if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != tc.wantStored {
+					t.Fatalf("expected stored server_upload_mbps %v, got valid=%v %v", tc.wantStored, settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateGeneralSettings_ClearsServerUploadMbpsWhenNull(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+
+	staticDir := filepath.Join(t.TempDir(), "static")
+	logsDir := filepath.Join(t.TempDir(), "logs")
+	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir, logsDir))
+	if w.Code != http.StatusOK {
+		t.Fatalf("setup update: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	clearBody := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": null`, 1)
+	w = performUpdateGeneralSettings(app, clearBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("clear update: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings after clear: %v", err)
+	}
+	if settings.ServerUploadMbps.Valid {
+		t.Fatalf("expected server upload Mbps to be cleared, got %v", settings.ServerUploadMbps.Float64)
 	}
 }
 

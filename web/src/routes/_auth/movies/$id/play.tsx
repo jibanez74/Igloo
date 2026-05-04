@@ -1,5 +1,5 @@
   import { useRef, useEffect, useState } from "react";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -9,7 +9,13 @@ import PlaybackStatusView from "@/components/MoviePlaybackStatus";
 import {
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
+import {
+  getAvailableModes,
+  getDefaultPlaybackSettings,
+  getPrimaryVideoStream,
+} from "@/lib/playback";
 import { deleteMovieWatchProgress } from "@/lib/api";
 import {
   MOVIE_CONTROLS_IDLE_MS,
@@ -40,18 +46,61 @@ import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: playSearchSchema,
-  loader: async ({ context, params }) => {
+  loaderDeps: ({ search }) => ({
+    mode: search.mode,
+    audio_track: search.audio_track,
+    subtitle_track: search.subtitle_track,
+    start: search.start,
+  }),
+  loader: async ({ context, params, deps }) => {
     const movieId = parseInt(params.id, 10);
-    if (!Number.isNaN(movieId) && movieId > 0) {
-      await Promise.all([
-        context.queryClient.ensureQueryData(
-          libraryMovieDetailsQueryOpts(movieId),
-        ),
-        context.queryClient.ensureQueryData(
-          movieTechnicalDetailsQueryOpts(movieId),
-        ),
-      ]);
-    }
+    if (Number.isNaN(movieId) || movieId <= 0) return;
+
+    const [, techRes, playbackRes] = await Promise.all([
+      context.queryClient.ensureQueryData(libraryMovieDetailsQueryOpts(movieId)),
+      context.queryClient.ensureQueryData(
+        movieTechnicalDetailsQueryOpts(movieId),
+      ),
+      context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
+    ]);
+
+    if (deps.mode !== undefined) return;
+
+    const techData = techRes.error === false ? techRes.data : null;
+    if (!techData) return;
+
+    const videoStreams = techData.video_streams ?? [];
+    const audioStreams = techData.audio_streams ?? [];
+    const subtitleStreams = techData.subtitles ?? [];
+    const primaryVideo = getPrimaryVideoStream(videoStreams);
+    const availableModes = getAvailableModes(
+      primaryVideo?.height ?? 0,
+      primaryVideo?.codec,
+      audioStreams[0]?.codec,
+      techData.movie?.mime_type,
+    );
+    if (availableModes.length === 0) return;
+
+    const userPrefs =
+      playbackRes.error === false ? playbackRes.data?.settings ?? null : null;
+    const resolved = getDefaultPlaybackSettings(
+      availableModes,
+      userPrefs,
+      audioStreams,
+      subtitleStreams,
+    );
+
+    throw redirect({
+      to: "/movies/$id/play",
+      params: { id: params.id },
+      search: {
+        mode: resolved.mode,
+        audio_track: resolved.audioTrack,
+        subtitle_track: resolved.subtitleTrack ?? undefined,
+        start: deps.start ?? 0,
+      },
+      replace: true,
+    });
   },
   component: PlayMoviePage,
 });
@@ -64,7 +113,8 @@ type ChapterAnnouncement = {
 function PlayMoviePage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
-  const { mode, start } = search;
+  const { start } = search;
+  const mode = search.mode ?? "direct";
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();

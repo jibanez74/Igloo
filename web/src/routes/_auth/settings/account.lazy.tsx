@@ -46,7 +46,7 @@ import type { AuthUser } from "@/types";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 
-export const Route = createLazyFileRoute("/_admin/settings/account")({
+export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,
 });
 

@@ -1074,6 +1074,8 @@ func (app *Application) InitRouter() {
 				r.Get("/", app.GetSettings)
 				r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
 				r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
+				r.Get("/playback", app.GetPlaybackSettings)
+				r.Put("/playback", app.UpdatePlaybackSettings)
 				// Admin-only: scan triggers mutate the library.
 				r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
 				r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)

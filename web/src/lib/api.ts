@@ -13,6 +13,7 @@ import type {
   LatestMovieType,
   LibraryMovieDetailsResponse,
   GeneralSettingsResponseType,
+  PlaybackSettingsResponseType,
   MovieDetailsType,
   MoviePlaylistDetailResponseType,
   MoviePlaylistRowType,
@@ -46,6 +47,8 @@ import type {
   UpdateMoviePlaylistRequest,
   UpdateGeneralSettingsRequest,
   UpdateGeneralSettingsResponseType,
+  UpdatePlaybackSettingsRequest,
+  UpdatePlaybackSettingsResponseType,
   UpdatePlaylistRequest,
   UserListeningStatsResponseType,
   WatchRoomInviteUsersResponseType,
@@ -537,6 +540,15 @@ export const getGeneralSettings = () =>
 
 export const updateGeneralSettings = (data: UpdateGeneralSettingsRequest) =>
   apiRequest<UpdateGeneralSettingsResponseType>("/api/settings/general", {
+    method: "PUT",
+    body: data,
+  });
+
+export const getPlaybackSettings = () =>
+  apiRequest<PlaybackSettingsResponseType>("/api/settings/playback");
+
+export const updatePlaybackSettings = (data: UpdatePlaybackSettingsRequest) =>
+  apiRequest<UpdatePlaybackSettingsResponseType>("/api/settings/playback", {
     method: "PUT",
     body: data,
   });

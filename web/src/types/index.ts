@@ -136,9 +136,14 @@ export type {
   GeneralSettingsResponseType,
   GeneralSettingsType,
   HardwareAccelerationDevice,
+  PlaybackProfileType,
+  PlaybackSettingsResponseType,
+  PlaybackSettingsType,
   SettingsType,
   UpdateGeneralSettingsRequest,
   UpdateGeneralSettingsResponseType,
+  UpdatePlaybackSettingsRequest,
+  UpdatePlaybackSettingsResponseType,
 } from "./settings";
 
 // Search types

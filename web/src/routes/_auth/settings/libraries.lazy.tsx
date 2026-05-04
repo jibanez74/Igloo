@@ -45,7 +45,7 @@ import {
   MOVIE_PLAYLIST_MOVIES_KEY,
 } from "@/lib/constants";
 
-export const Route = createLazyFileRoute("/_admin/settings/libraries")({
+export const Route = createLazyFileRoute("/_auth/settings/libraries")({
   component: LibrariesSettings,
 });
 

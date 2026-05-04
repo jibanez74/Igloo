@@ -6,6 +6,7 @@ import {
   libraryMovieDetailsQueryOpts,
   movieLikeStatusQueryOpts,
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
   MOVIE_DETAILS_CONTENT_ENTER_CLASS,
@@ -129,6 +130,12 @@ function LibraryMovieDetailsContent({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const { data: playbackSettingsData } = useQuery(playbackSettingsQueryOpts());
+  const userPlaybackPrefs =
+    playbackSettingsData?.error === false &&
+    playbackSettingsData.data?.settings
+      ? playbackSettingsData.data.settings
+      : null;
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
   const chapters = techData?.data?.chapters ?? [];
@@ -142,7 +149,12 @@ function LibraryMovieDetailsContent({
     mimeType ?? undefined,
   );
   const smartDefault: PlaybackSettings = resolvePlaybackSettings(
-    getDefaultPlaybackSettings(availableModes),
+    getDefaultPlaybackSettings(
+      availableModes,
+      userPlaybackPrefs,
+      audioStreams,
+      subtitleStreams,
+    ),
     availableModes,
     audioStreams,
     subtitleStreams,

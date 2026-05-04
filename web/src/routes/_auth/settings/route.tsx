@@ -1,4 +1,6 @@
 import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
 import {
   Tabs,
@@ -6,8 +8,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { authUserQueryOpts } from "@/lib/query-opts";
+import { computeSettingsLayoutState } from "@/lib/settings-layout";
 
-export const Route = createFileRoute("/_admin/settings")({
+export const Route = createFileRoute("/_auth/settings")({
   component: SettingsLayout,
 });
 
@@ -24,32 +28,26 @@ const SETTINGS_TABS = [
   { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
 
-type TabId = (typeof SETTINGS_TABS)[number]["id"];
-
 function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
+  const { data: authData } = useSuspenseQuery(authUserQueryOpts());
+  const isAdmin = authData.data?.user.is_admin ?? false;
 
-  const getCurrentTab = (): TabId => {
-    const pathParts = location.pathname.split("/").filter(Boolean);
+  const { visibleTabs, currentTab, redirectTo } = computeSettingsLayoutState({
+    isAdmin,
+    pathname: location.pathname,
+    tabs: SETTINGS_TABS,
+  });
 
-    // If pathname is exactly "/settings", it's the index route (general)
-    if (pathParts.length === 1 && pathParts[0] === "settings") {
-      return "general";
+  useEffect(() => {
+    if (redirectTo) {
+      navigate({ to: redirectTo, replace: true });
     }
+  }, [redirectTo, navigate]);
 
-    // Otherwise, get the tab name from the second path segment
-    const tabId = pathParts[1] as TabId | undefined;
-    return tabId && SETTINGS_TABS.some(tab => tab.id === tabId)
-      ? tabId
-      : "general";
-  };
-
-  const currentTab = getCurrentTab();
-
-  // Handle tab change - navigate to the appropriate route
   const handleTabChange = (newTab: string) => {
-    const tab = SETTINGS_TABS.find(t => t.id === newTab);
+    const tab = visibleTabs.find(t => t.id === newTab);
     if (tab) {
       navigate({
         to: tab.path,
@@ -57,6 +55,14 @@ function SettingsLayout() {
       });
     }
   };
+
+  const isCompactLayout = visibleTabs.length <= 2;
+  const tabsListClassName = isCompactLayout
+    ? "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none"
+    : "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5";
+  const tabsTriggerClassName = isCompactLayout
+    ? "min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+    : "min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1";
 
   return (
     <>
@@ -81,14 +87,14 @@ function SettingsLayout() {
 
         {/* Tabs */}
         <Tabs value={currentTab} onValueChange={handleTabChange}>
-          <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5">
-            {SETTINGS_TABS.map(tab => {
+          <TabsList className={tabsListClassName}>
+            {visibleTabs.map(tab => {
               const Icon = tab.icon;
               return (
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1"
+                  className={tabsTriggerClassName}
                 >
                   <Icon
                     className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"

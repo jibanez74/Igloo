@@ -348,6 +348,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUserListeningStatsStmt, err = db.PrepareContext(ctx, getUserListeningStats); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserListeningStats: %w", err)
 	}
+	if q.getUserPlaybackPreferencesStmt, err = db.PrepareContext(ctx, getUserPlaybackPreferences); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserPlaybackPreferences: %w", err)
+	}
 	if q.getUserRecentlyPlayedStmt, err = db.PrepareContext(ctx, getUserRecentlyPlayed); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserRecentlyPlayed: %w", err)
 	}
@@ -479,6 +482,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateUserPasswordStmt, err = db.PrepareContext(ctx, updateUserPassword); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserPassword: %w", err)
+	}
+	if q.updateUserPlaybackPreferencesStmt, err = db.PrepareContext(ctx, updateUserPlaybackPreferences); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserPlaybackPreferences: %w", err)
 	}
 	if q.upsertAlbumStmt, err = db.PrepareContext(ctx, upsertAlbum); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertAlbum: %w", err)
@@ -1064,6 +1070,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserListeningStatsStmt: %w", cerr)
 		}
 	}
+	if q.getUserPlaybackPreferencesStmt != nil {
+		if cerr := q.getUserPlaybackPreferencesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserPlaybackPreferencesStmt: %w", cerr)
+		}
+	}
 	if q.getUserRecentlyPlayedStmt != nil {
 		if cerr := q.getUserRecentlyPlayedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserRecentlyPlayedStmt: %w", cerr)
@@ -1284,6 +1295,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserPasswordStmt: %w", cerr)
 		}
 	}
+	if q.updateUserPlaybackPreferencesStmt != nil {
+		if cerr := q.updateUserPlaybackPreferencesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserPlaybackPreferencesStmt: %w", cerr)
+		}
+	}
 	if q.upsertAlbumStmt != nil {
 		if cerr := q.upsertAlbumStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertAlbumStmt: %w", cerr)
@@ -1496,6 +1512,7 @@ type Queries struct {
 	getUserStmt                                 *sql.Stmt
 	getUserByEmailStmt                          *sql.Stmt
 	getUserListeningStatsStmt                   *sql.Stmt
+	getUserPlaybackPreferencesStmt              *sql.Stmt
 	getUserRecentlyPlayedStmt                   *sql.Stmt
 	getUserTopAlbumsStmt                        *sql.Stmt
 	getUserTopGenresStmt                        *sql.Stmt
@@ -1540,6 +1557,7 @@ type Queries struct {
 	updateUserEmailStmt                         *sql.Stmt
 	updateUserNameStmt                          *sql.Stmt
 	updateUserPasswordStmt                      *sql.Stmt
+	updateUserPlaybackPreferencesStmt           *sql.Stmt
 	upsertAlbumStmt                             *sql.Stmt
 	upsertAlbumGenreStmt                        *sql.Stmt
 	upsertArtistStmt                            *sql.Stmt
@@ -1667,6 +1685,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserStmt:                                 q.getUserStmt,
 		getUserByEmailStmt:                          q.getUserByEmailStmt,
 		getUserListeningStatsStmt:                   q.getUserListeningStatsStmt,
+		getUserPlaybackPreferencesStmt:              q.getUserPlaybackPreferencesStmt,
 		getUserRecentlyPlayedStmt:                   q.getUserRecentlyPlayedStmt,
 		getUserTopAlbumsStmt:                        q.getUserTopAlbumsStmt,
 		getUserTopGenresStmt:                        q.getUserTopGenresStmt,
@@ -1711,6 +1730,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateUserEmailStmt:                         q.updateUserEmailStmt,
 		updateUserNameStmt:                          q.updateUserNameStmt,
 		updateUserPasswordStmt:                      q.updateUserPasswordStmt,
+		updateUserPlaybackPreferencesStmt:           q.updateUserPlaybackPreferencesStmt,
 		upsertAlbumStmt:                             q.upsertAlbumStmt,
 		upsertAlbumGenreStmt:                        q.upsertAlbumGenreStmt,
 		upsertArtistStmt:                            q.upsertArtistStmt,
