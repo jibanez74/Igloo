@@ -30,7 +30,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { authUserQueryOpts } from "@/lib/query-opts";
-import { AUTH_USER_KEY, ADMIN_USERS_KEY } from "@/lib/constants";
+import {
+  AUTH_USER_KEY,
+  ADMIN_USERS_KEY,
+  PLAYBACK_SETTINGS_KEY,
+} from "@/lib/constants";
 import {
   updateUserName,
   updateUserEmail,
@@ -399,6 +403,7 @@ function AccountSettings() {
           return;
         }
         queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
+        queryClient.removeQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
         queryClient.invalidateQueries();
         navigate({ to: "/login", replace: true });
       } catch {

@@ -48,6 +48,8 @@ describe("computeSettingsLayoutState — non-admin", () => {
     });
     expect(state.visibleTabs.map(t => t.id)).toEqual(["account", "playback"]);
     expect(state.defaultTabPath).toBe("/settings/account");
+    expect(state.currentTab).toBe("account");
+    expect(state.redirectTo).toBe("/settings/account");
   });
 
   it("redirects to /settings/account when URL targets an admin-only tab", () => {

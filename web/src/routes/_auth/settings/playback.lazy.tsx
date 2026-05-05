@@ -33,7 +33,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { LANGUAGE_NAMES, PLAYBACK_SETTINGS_KEY } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
-import { playbackSettingsQueryOpts } from "@/lib/query-opts";
+import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showSuccess,
@@ -70,12 +70,22 @@ function formFromSettings(
 }
 
 function PlaybackSettings() {
-  const { data, isLoading } = useQuery(playbackSettingsQueryOpts());
+  const { data: authData, isLoading: authLoading } = useQuery(
+    authUserQueryOpts(),
+  );
+  const userId =
+    authData?.error === false && authData.data?.user
+      ? authData.data.user.id
+      : null;
+  const { data, isLoading } = useQuery({
+    ...playbackSettingsQueryOpts(userId ?? 0),
+    enabled: userId !== null,
+  });
 
   const settings =
     data?.error === false && data.data?.settings ? data.data.settings : null;
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return <PlaybackSettingsLoading />;
   }
 
@@ -100,14 +110,15 @@ function PlaybackSettings() {
     return null;
   }
 
-  return <PlaybackSettingsForm settings={settings} />;
+  return <PlaybackSettingsForm settings={settings} userId={userId} />;
 }
 
 type PlaybackSettingsFormProps = {
   settings: PlaybackSettingsType;
+  userId: number;
 };
 
-function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
+function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   const queryClient = useQueryClient();
   const downloadMbpsId = useId();
   const preferredProfileId = useId();
@@ -136,7 +147,9 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         showActionFailed("save playback settings", res.message);
         return;
       }
-      queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
+      queryClient.invalidateQueries({
+        queryKey: [PLAYBACK_SETTINGS_KEY, userId],
+      });
       showSuccess("Playback settings saved");
     },
     onError: () => {

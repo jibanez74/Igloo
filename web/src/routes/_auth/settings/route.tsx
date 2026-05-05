@@ -1,6 +1,10 @@
-import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
 import {
   Tabs,
@@ -10,10 +14,6 @@ import {
 } from "@/components/ui/tabs";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
-
-export const Route = createFileRoute("/_auth/settings")({
-  component: SettingsLayout,
-});
 
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Sliders, path: "/settings" },
@@ -28,23 +28,41 @@ const SETTINGS_TABS = [
   { id: "users", label: "Users", icon: Users, path: "/settings/users" },
 ] as const;
 
+export const Route = createFileRoute("/_auth/settings")({
+  beforeLoad: async ({ context, location }) => {
+    const authData = await context.queryClient.ensureQueryData(
+      authUserQueryOpts(),
+    );
+    if (authData.error) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.href },
+      });
+    }
+
+    const { redirectTo } = computeSettingsLayoutState({
+      isAdmin: authData.data.user.is_admin,
+      pathname: location.pathname,
+      tabs: SETTINGS_TABS,
+    });
+    if (redirectTo) {
+      throw redirect({ to: redirectTo, replace: true });
+    }
+  },
+  component: SettingsLayout,
+});
+
 function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
   const { data: authData } = useSuspenseQuery(authUserQueryOpts());
   const isAdmin = authData.data?.user.is_admin ?? false;
 
-  const { visibleTabs, currentTab, redirectTo } = computeSettingsLayoutState({
+  const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,
     pathname: location.pathname,
     tabs: SETTINGS_TABS,
   });
-
-  useEffect(() => {
-    if (redirectTo) {
-      navigate({ to: redirectTo, replace: true });
-    }
-  }, [redirectTo, navigate]);
 
   const handleTabChange = (newTab: string) => {
     const tab = visibleTabs.find(t => t.id === newTab);

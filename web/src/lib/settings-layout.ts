@@ -53,7 +53,7 @@ export function computeSettingsLayoutState<T extends SettingsTabDef>(
   const pathParts = pathname.split("/").filter(Boolean);
   const urlTabId =
     pathParts.length === 1 && pathParts[0] === "settings"
-      ? defaultTab
+      ? "general"
       : (pathParts[1] as SettingsTabId | undefined);
 
   const urlTabAllowed =

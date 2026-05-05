@@ -242,9 +242,9 @@ export function generalSettingsQueryOpts() {
   });
 }
 
-export function playbackSettingsQueryOpts() {
+export function playbackSettingsQueryOpts(userId: number) {
   return queryOptions({
-    queryKey: [PLAYBACK_SETTINGS_KEY],
+    queryKey: [PLAYBACK_SETTINGS_KEY, userId],
     queryFn: getPlaybackSettings,
     staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,

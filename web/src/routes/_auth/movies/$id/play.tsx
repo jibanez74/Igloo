@@ -7,6 +7,7 @@ import ResumeDialog from "@/components/ResumeDialog";
 import MoviePlayerControls from "@/components/MoviePlayerControls";
 import PlaybackStatusView from "@/components/MoviePlaybackStatus";
 import {
+  authUserQueryOpts,
   libraryMovieDetailsQueryOpts,
   movieTechnicalDetailsQueryOpts,
   playbackSettingsQueryOpts,
@@ -56,12 +57,19 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const movieId = parseInt(params.id, 10);
     if (Number.isNaN(movieId) || movieId <= 0) return;
 
+    const authRes = await context.queryClient.ensureQueryData(
+      authUserQueryOpts(),
+    );
+    if (authRes.error) return;
+
     const [, techRes, playbackRes] = await Promise.all([
       context.queryClient.ensureQueryData(libraryMovieDetailsQueryOpts(movieId)),
       context.queryClient.ensureQueryData(
         movieTechnicalDetailsQueryOpts(movieId),
       ),
-      context.queryClient.ensureQueryData(playbackSettingsQueryOpts()),
+      context.queryClient.ensureQueryData(
+        playbackSettingsQueryOpts(authRes.data.user.id),
+      ),
     ]);
 
     if (deps.mode !== undefined) return;
