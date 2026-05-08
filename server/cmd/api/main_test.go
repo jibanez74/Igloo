@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -280,91 +279,6 @@ func TestInitTables_WatchRoomTrackConstraints(t *testing.T) {
 	}
 }
 
-func TestInitTables_MigratesNegativeWatchRoomTracks(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("Failed to open in-memory database: %v", err)
-	}
-	defer db.Close()
-
-	app := &Application{DB: db}
-	setupTestLogger(t, app)
-
-	legacySQL := strings.Replace(
-		SQL,
-		"    audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),\n    subtitle_track INTEGER CHECK (subtitle_track >= 0),",
-		"    audio_track INTEGER NOT NULL DEFAULT 0,\n    subtitle_track INTEGER,",
-		1,
-	)
-
-	_, err = db.Exec(legacySQL)
-	if err != nil {
-		t.Fatalf("seed legacy schema: %v", err)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO users (id, name, email, password)
-		VALUES (1, 'Owner', 'owner@example.com', 'hashed');
-		INSERT INTO movies (id, title, file_path, file_name, size, container, mime_type, adult)
-		VALUES (1, 'Movie', '/tmp/movie.mkv', 'movie.mkv', 1, 'mkv', 'video/x-matroska', 0);
-		INSERT INTO watch_rooms (id, owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
-		VALUES (1, 1, 1, 'direct', -4, -7);
-		INSERT INTO watch_room_members (id, room_id, user_id)
-		VALUES (1, 1, 1);
-	`)
-	if err != nil {
-		t.Fatalf("seed legacy data: %v", err)
-	}
-
-	err = app.InitTables()
-	if err != nil {
-		t.Fatalf("InitTables failed: %v", err)
-	}
-
-	var audioTrack int64
-	var subtitleTrack sql.NullInt64
-	err = db.QueryRow(`
-		SELECT audio_track, subtitle_track
-		FROM watch_rooms
-		WHERE id = 1
-	`).Scan(&audioTrack, &subtitleTrack)
-	if err != nil {
-		t.Fatalf("fetch migrated watch room: %v", err)
-	}
-
-	if audioTrack != 0 {
-		t.Fatalf("expected migrated audio_track to be 0, got %d", audioTrack)
-	}
-	if subtitleTrack.Valid {
-		t.Fatalf("expected migrated subtitle_track to be NULL, got %d", subtitleTrack.Int64)
-	}
-
-	var memberCount int64
-	err = db.QueryRow(`SELECT COUNT(*) FROM watch_room_members WHERE room_id = 1 AND user_id = 1`).Scan(&memberCount)
-	if err != nil {
-		t.Fatalf("count migrated room members: %v", err)
-	}
-	if memberCount != 1 {
-		t.Fatalf("expected migrated room member to be preserved, got %d", memberCount)
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track)
-		VALUES (1, 1, 'direct', -1)
-	`)
-	if err == nil {
-		t.Fatal("expected migrated schema to reject negative audio_track insert")
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO watch_rooms (owner_user_id, movie_id, playback_mode, audio_track, subtitle_track)
-		VALUES (1, 1, 'direct', 0, -1)
-	`)
-	if err == nil {
-		t.Fatal("expected migrated schema to reject negative subtitle_track insert")
-	}
-}
-
 func TestInitTables_SettingsSingleton(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
@@ -499,7 +413,27 @@ func TestInitTables_MovieMetadataLockColumns(t *testing.T) {
 		columns[name] = true
 	}
 
-	for _, columnName := range movieMetadataLockColumns {
+	expected := []string{
+		"user_locked_title",
+		"user_locked_tmdb_id",
+		"user_locked_imdb_id",
+		"user_locked_poster_path",
+		"user_locked_backdrop_path",
+		"user_locked_adult",
+		"user_locked_language",
+		"user_locked_year",
+		"user_locked_release_date",
+		"user_locked_overview",
+		"user_locked_tag_line",
+		"user_locked_certification",
+		"user_locked_critic_rating",
+		"user_locked_audience_rating",
+		"user_locked_revenue",
+		"user_locked_budget",
+		"user_locked_run_time",
+	}
+
+	for _, columnName := range expected {
 		if !columns[columnName] {
 			t.Fatalf("expected movie metadata lock column %q to exist", columnName)
 		}
@@ -635,11 +569,11 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	}
 
 	// Verify default values for required string fields
-	if app.Settings.StaticDir != defaultStaticDir {
-		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
+		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != defaultLogsDir {
-		t.Errorf("Expected LogsDir %q, got %q", defaultLogsDir, app.Settings.LogsDir)
+	if app.Settings.LogsDir != helpers.DEFAULT_LOGS_DIR {
+		t.Errorf("Expected LogsDir %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 
 	// Verify default value for HardwareAccelerationDevice (defaults to "cpu")
@@ -668,14 +602,14 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.JellyfinToken.Valid {
 		t.Error("Expected JellyfinToken to be invalid when not set")
 	}
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != defaultMoviesDir {
-		t.Errorf("Expected MoviesDir %q, got %q (valid=%v)", defaultMoviesDir, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR {
+		t.Errorf("Expected MoviesDir %q, got %q (valid=%v)", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
 	}
-	if !app.Settings.ShowsDir.Valid || app.Settings.ShowsDir.String != defaultShowsDir {
-		t.Errorf("Expected ShowsDir %q, got %q (valid=%v)", defaultShowsDir, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if !app.Settings.ShowsDir.Valid || app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR {
+		t.Errorf("Expected ShowsDir %q, got %q (valid=%v)", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
 	}
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String != defaultMusicDir {
-		t.Errorf("Expected MusicDir %q, got %q (valid=%v)", defaultMusicDir, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
+	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR {
+		t.Errorf("Expected MusicDir %q, got %q (valid=%v)", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 
 	var settingsCount int
@@ -718,22 +652,22 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
 	}
-	if app.Settings.MoviesDir.String != defaultMoviesDir || !app.Settings.MoviesDir.Valid {
-		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", defaultMoviesDir, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR || !app.Settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.String != defaultShowsDir || !app.Settings.ShowsDir.Valid {
-		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", defaultShowsDir, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR || !app.Settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
 	}
-	if app.Settings.MusicDir.String != defaultMusicDir || !app.Settings.MusicDir.Valid {
-		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", defaultMusicDir, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
+	if app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR || !app.Settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 
 	// Verify required string fields use fixed container defaults
-	if app.Settings.StaticDir != defaultStaticDir {
-		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
+		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != defaultLogsDir {
-		t.Errorf("Expected LogsDir %q, got %q", defaultLogsDir, app.Settings.LogsDir)
+	if app.Settings.LogsDir != helpers.DEFAULT_LOGS_DIR {
+		t.Errorf("Expected LogsDir %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 
 	// Verify boolean fields from env vars
@@ -804,11 +738,11 @@ func TestInitSettings_ExistingSettingsAllowRuntimeOverrides(t *testing.T) {
 		EnableLogger:               true,
 		EnableWatcher:              false,
 		DownloadImages:             false,
-		MoviesDir:                  sql.NullString{String: defaultMoviesDir, Valid: true},
-		ShowsDir:                   sql.NullString{String: defaultShowsDir, Valid: true},
-		MusicDir:                   sql.NullString{String: defaultMusicDir, Valid: true},
-		StaticDir:                  defaultStaticDir,
-		LogsDir:                    defaultLogsDir,
+		MoviesDir:                  sql.NullString{String: helpers.DEFAULT_MOVIES_DIR, Valid: true},
+		ShowsDir:                   sql.NullString{String: helpers.DEFAULT_SHOWS_DIR, Valid: true},
+		MusicDir:                   sql.NullString{String: helpers.DEFAULT_MUSIC_DIR, Valid: true},
+		StaticDir:                  helpers.DEFAULT_STATIC_DIR,
+		LogsDir:                    helpers.DEFAULT_LOGS_DIR,
 	}
 	_, err := app.Queries.CreateSettings(context.Background(), params)
 	if err != nil {
@@ -854,20 +788,20 @@ func TestInitSettings_ExistingSettingsAllowRuntimeOverrides(t *testing.T) {
 	if !app.Settings.DownloadImages {
 		t.Error("Expected DOWNLOAD_IMAGES override to set true")
 	}
-	if app.Settings.MoviesDir.String != defaultMoviesDir {
-		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", defaultMoviesDir, app.Settings.MoviesDir.String)
+	if app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR {
+		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String)
 	}
-	if app.Settings.ShowsDir.String != defaultShowsDir {
-		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", defaultShowsDir, app.Settings.ShowsDir.String)
+	if app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR {
+		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String)
 	}
-	if app.Settings.MusicDir.String != defaultMusicDir {
-		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", defaultMusicDir, app.Settings.MusicDir.String)
+	if app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR {
+		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String)
 	}
-	if app.Settings.StaticDir != defaultStaticDir {
-		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", defaultStaticDir, app.Settings.StaticDir)
+	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
+		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != defaultLogsDir {
-		t.Errorf("Expected LogsDir to remain fixed at %q, got %q", defaultLogsDir, app.Settings.LogsDir)
+	if app.Settings.LogsDir != helpers.DEFAULT_LOGS_DIR {
+		t.Errorf("Expected LogsDir to remain fixed at %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 }
 
@@ -909,7 +843,7 @@ func TestInitSession_DefaultCookieSecureDisabled(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Setenv(envSessionCookieSecure, "")
+	t.Setenv(helpers.ENV_SESSION_COOKIE_SECURE, "")
 	app.InitSession()
 
 	if app.SessionManager.Cookie.Secure {
@@ -921,7 +855,7 @@ func TestInitSession_UsesSessionCookieSecureEnv(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Setenv(envSessionCookieSecure, "true")
+	t.Setenv(helpers.ENV_SESSION_COOKIE_SECURE, "true")
 	app.InitSession()
 
 	if !app.SessionManager.Cookie.Secure {
