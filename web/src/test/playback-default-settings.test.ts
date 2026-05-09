@@ -94,6 +94,14 @@ describe("getDefaultPlaybackSettings", () => {
     expect(getDefaultPlaybackSettings(SUB_HD_MODES, prefs).mode).toBe("remux");
   });
 
+  it("falls back when preferred_profile and download recommendation are unavailable", () => {
+    const prefs = makePrefs({
+      preferred_profile: "2160p_16mbps",
+      download_mbps: 100,
+    });
+    expect(getDefaultPlaybackSettings(SUB_HD_MODES, prefs).mode).toBe("remux");
+  });
+
   it("uses download_mbps recommendation when no preferred_profile is set", () => {
     const prefs = makePrefs({ download_mbps: 5 });
     expect(getDefaultPlaybackSettings(ALL_MODES, prefs).mode).toBe(

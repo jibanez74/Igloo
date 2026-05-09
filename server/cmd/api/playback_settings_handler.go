@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
@@ -33,14 +34,7 @@ type playbackSettingsResponse struct {
 	PreferredSubtitleLanguage *string                   `json:"preferred_subtitle_language"`
 }
 
-type updatePlaybackSettingsRequest struct {
-	PreferredProfile          *string  `json:"preferred_profile"`
-	DownloadMbps              *float64 `json:"download_mbps"`
-	PreferredAudioLanguage    *string  `json:"preferred_audio_language"`
-	PreferredSubtitleLanguage *string  `json:"preferred_subtitle_language"`
-}
-
-// updatePlaybackSettingsResponse is the PUT-only payload — the catalog,
+//updatePlaybackSettingsResponse is the PUT-only payload — the catalog,
 // server upload cap, and is_admin don't change as a result of an update,
 // so the client refetches the full GET payload via cache invalidation.
 type updatePlaybackSettingsResponse struct {
@@ -107,19 +101,12 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	user, err := app.Queries.GetUser(r.Context(), userID)
+	prefs, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 			return
 		}
-		app.Logger.Error("failed to load user for playback settings", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
-		return
-	}
-
-	prefs, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
-	if err != nil {
 		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
@@ -136,7 +123,7 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 		PreferredProfile:          nullableStringValue(prefs.PreferredHlsProfile),
 		DownloadMbps:              nullableFloat64Value(prefs.DownloadMbps),
 		ServerUploadMbps:          serverUpload,
-		IsAdmin:                   user.IsAdmin,
+		IsAdmin:                   prefs.IsAdmin,
 		PreferredAudioLanguage:    nullableStringValue(prefs.PreferredAudioLanguage),
 		PreferredSubtitleLanguage: nullableStringValue(prefs.PreferredSubtitleLanguage),
 	}
@@ -156,55 +143,94 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var req updatePlaybackSettingsRequest
-	err := helpers.ReadJSON(w, r, &req, 0)
+	var rawFields map[string]json.RawMessage
+	err := helpers.ReadJSON(w, r, &rawFields, 0)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
 
-	preferred := sql.NullString{}
-	if req.PreferredProfile != nil {
-		trimmed := strings.TrimSpace(*req.PreferredProfile)
-		if trimmed != "" {
-			if !helpers.IsAllowedHLSProfile(trimmed) || trimmed == helpers.HLS_PROFILE_REMUX {
-				helpers.ErrorJSON(w, errors.New("invalid playback profile"), http.StatusBadRequest)
-				return
-			}
-			preferred = sql.NullString{String: trimmed, Valid: true}
-		}
+	current, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
+	if err != nil {
+		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
 	}
 
-	download := sql.NullFloat64{}
-	if req.DownloadMbps != nil {
-		if *req.DownloadMbps <= 0 || *req.DownloadMbps >= 10000 {
-			helpers.ErrorJSON(w, errors.New("download speed must be greater than 0 and less than 10000 Mbps"), http.StatusBadRequest)
+	preferred := current.PreferredHlsProfile
+	if raw, ok := rawFields["preferred_profile"]; ok {
+		var val *string
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 			return
 		}
-		download = sql.NullFloat64{Float64: *req.DownloadMbps, Valid: true}
-	}
-
-	audioLang := sql.NullString{}
-	if req.PreferredAudioLanguage != nil {
-		trimmed := strings.TrimSpace(*req.PreferredAudioLanguage)
-		if trimmed != "" {
-			if trimmed == subtitleLanguageOff || !languageCodePattern.MatchString(trimmed) {
-				helpers.ErrorJSON(w, errors.New("invalid audio language code"), http.StatusBadRequest)
-				return
+		preferred = sql.NullString{}
+		if val != nil {
+			trimmed := strings.TrimSpace(*val)
+			if trimmed != "" {
+				if !helpers.IsAllowedHLSProfile(trimmed) || trimmed == helpers.HLS_PROFILE_REMUX {
+					helpers.ErrorJSON(w, errors.New("invalid playback profile"), http.StatusBadRequest)
+					return
+				}
+				preferred = sql.NullString{String: trimmed, Valid: true}
 			}
-			audioLang = sql.NullString{String: trimmed, Valid: true}
 		}
 	}
 
-	subtitleLang := sql.NullString{}
-	if req.PreferredSubtitleLanguage != nil {
-		trimmed := strings.TrimSpace(*req.PreferredSubtitleLanguage)
-		if trimmed != "" {
-			if trimmed != subtitleLanguageOff && !languageCodePattern.MatchString(trimmed) {
-				helpers.ErrorJSON(w, errors.New("invalid subtitle language code"), http.StatusBadRequest)
+	download := current.DownloadMbps
+	if raw, ok := rawFields["download_mbps"]; ok {
+		var val *float64
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			return
+		}
+		download = sql.NullFloat64{}
+		if val != nil {
+			if *val <= 0 || *val >= 10000 {
+				helpers.ErrorJSON(w, errors.New("download speed must be greater than 0 and less than 10000 Mbps"), http.StatusBadRequest)
 				return
 			}
-			subtitleLang = sql.NullString{String: trimmed, Valid: true}
+			download = sql.NullFloat64{Float64: *val, Valid: true}
+		}
+	}
+
+	audioLang := current.PreferredAudioLanguage
+	if raw, ok := rawFields["preferred_audio_language"]; ok {
+		var val *string
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			return
+		}
+		audioLang = sql.NullString{}
+		if val != nil {
+			trimmed := strings.TrimSpace(*val)
+			if trimmed != "" {
+				if trimmed == subtitleLanguageOff || !languageCodePattern.MatchString(trimmed) {
+					helpers.ErrorJSON(w, errors.New("invalid audio language code"), http.StatusBadRequest)
+					return
+				}
+				audioLang = sql.NullString{String: trimmed, Valid: true}
+			}
+		}
+	}
+
+	subtitleLang := current.PreferredSubtitleLanguage
+	if raw, ok := rawFields["preferred_subtitle_language"]; ok {
+		var val *string
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			return
+		}
+		subtitleLang = sql.NullString{}
+		if val != nil {
+			trimmed := strings.TrimSpace(*val)
+			if trimmed != "" {
+				if trimmed != subtitleLanguageOff && !languageCodePattern.MatchString(trimmed) {
+					helpers.ErrorJSON(w, errors.New("invalid subtitle language code"), http.StatusBadRequest)
+					return
+				}
+				subtitleLang = sql.NullString{String: trimmed, Valid: true}
+			}
 		}
 	}
 

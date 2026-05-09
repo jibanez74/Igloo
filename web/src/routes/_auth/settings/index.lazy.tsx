@@ -179,12 +179,14 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   );
   const [syncedSettings, setSyncedSettings] = useState(settings);
   const [validationMessage, setValidationMessage] = useState("");
+  const [validationField, setValidationField] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   if (settings !== syncedSettings) {
     setSyncedSettings(settings);
     setForm(formFromSettings(settings));
     setValidationMessage("");
+    setValidationField(null);
   }
 
   const updateMutation = useMutation({
@@ -259,37 +261,44 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const resetForm = () => {
     setForm(formFromSettings(settings));
     setValidationMessage("");
+    setValidationField(null);
   };
 
-  const validateForm = () => {
+  const validateForm = (): { field: string | null; message: string } => {
     if (form.static_dir.trim() === "") {
-      return "Static directory is required.";
+      return { field: "static_dir", message: "Static directory is required." };
     }
 
     if (form.logs_dir.trim() === "") {
-      return "Logs directory is required.";
+      return { field: "logs_dir", message: "Logs directory is required." };
     }
 
     if (
       form.server_upload_mbps != null &&
       (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
     ) {
-      return "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
+      return {
+        field: "server_upload_mbps",
+        message:
+          "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.",
+      };
     }
 
-    return "";
+    return { field: null, message: "" };
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const message = validateForm();
+    const { field, message } = validateForm();
     if (message) {
       setValidationMessage(message);
+      setValidationField(field);
       showValidationError(message);
       return;
     }
 
     setValidationMessage("");
+    setValidationField(null);
     updateMutation.mutate({
       ...form,
       tmdb_key: form.tmdb_key.trim(),
@@ -492,7 +501,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             disabled={updateMutation.isPending}
             icon={<FolderCog className="size-4" aria-hidden="true" />}
             required
-            invalid={Boolean(validationMessage)}
+            invalid={validationField === "static_dir"}
           />
           <PathInput
             id={logsDirId}
@@ -503,7 +512,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             disabled={updateMutation.isPending}
             icon={<Logs className="size-4" aria-hidden="true" />}
             required
-            invalid={Boolean(validationMessage)}
+            invalid={validationField === "logs_dir"}
           />
         </CardContent>
       </Card>
@@ -537,6 +546,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               }
               disabled={updateMutation.isPending}
               aria-describedby={`${serverUploadMbpsId}-description`}
+              aria-invalid={validationField === "server_upload_mbps"}
               className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
             />
             <p

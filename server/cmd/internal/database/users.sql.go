@@ -263,16 +263,17 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserPlaybackPreferences = `-- name: GetUserPlaybackPreferences :one
 SELECT
+  is_admin,
   preferred_hls_profile,
   download_mbps,
   preferred_audio_language,
   preferred_subtitle_language
 FROM users
 WHERE id = ?
-LIMIT 1
 `
 
 type GetUserPlaybackPreferencesRow struct {
+	IsAdmin                   bool            `json:"is_admin"`
 	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
 	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
 	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
@@ -283,6 +284,7 @@ func (q *Queries) GetUserPlaybackPreferences(ctx context.Context, id int64) (Get
 	row := q.queryRow(ctx, q.getUserPlaybackPreferencesStmt, getUserPlaybackPreferences, id)
 	var i GetUserPlaybackPreferencesRow
 	err := row.Scan(
+		&i.IsAdmin,
 		&i.PreferredHlsProfile,
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,

@@ -95,13 +95,13 @@ WHERE is_admin = true;
 
 -- name: GetUserPlaybackPreferences :one
 SELECT
+  is_admin,
   preferred_hls_profile,
   download_mbps,
   preferred_audio_language,
   preferred_subtitle_language
 FROM users
-WHERE id = ?
-LIMIT 1;
+WHERE id = ?;
 
 -- name: UpdateUserPlaybackPreferences :one
 UPDATE users

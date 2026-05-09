@@ -57,6 +57,8 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
     const movieId = parseInt(params.id, 10);
     if (Number.isNaN(movieId) || movieId <= 0) return;
 
+    if (deps.mode !== undefined) return;
+
     const authRes = await context.queryClient.ensureQueryData(
       authUserQueryOpts(),
     );
@@ -71,8 +73,6 @@ export const Route = createFileRoute("/_auth/movies/$id/play")({
         playbackSettingsQueryOpts(authRes.data.user.id),
       ),
     ]);
-
-    if (deps.mode !== undefined) return;
 
     const techData = techRes.error === false ? techRes.data : null;
     if (!techData) return;

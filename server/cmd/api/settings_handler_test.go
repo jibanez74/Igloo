@@ -176,7 +176,11 @@ func TestUpdateGeneralSettings_ClearsServerUploadMbpsWhenNull(t *testing.T) {
 		t.Fatalf("GetSettings after clear: %v", err)
 	}
 	if settings.ServerUploadMbps.Valid {
-		t.Fatalf("expected server upload Mbps to be cleared, got %v", settings.ServerUploadMbps.Float64)
+		t.Fatalf("expected server upload Mbps to be cleared in DB, got %v", settings.ServerUploadMbps.Float64)
+	}
+
+	if app.Settings.ServerUploadMbps.Valid {
+		t.Fatalf("expected app.Settings.ServerUploadMbps to be cleared, got %v", app.Settings.ServerUploadMbps.Float64)
 	}
 }
 

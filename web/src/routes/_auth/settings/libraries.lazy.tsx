@@ -82,6 +82,10 @@ function MusicLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
   const queryClient = useQueryClient();
   const [isScanning, startTransition] = useTransition();
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
+  const statsId = useId();
 
   const stats = statsData?.error === false ? statsData.data : null;
   const settings = settingsData?.error === false ? settingsData.data : null;
@@ -132,11 +136,6 @@ function MusicLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
-  const statsId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -352,6 +351,9 @@ function MoviesLibrarySection() {
   const { data: statsData, isLoading: statsLoading } = useQuery(moviesStatsQueryOpts());
   const queryClient = useQueryClient();
   const [isScanning, startTransition] = useTransition();
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const stats = statsData?.error === false ? statsData.data : null;
@@ -396,10 +398,6 @@ function MoviesLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -546,6 +544,9 @@ function MoviesLibrarySection() {
 
 function TVShowsLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.shows_dir ?? null;
@@ -562,10 +563,6 @@ function TVShowsLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>

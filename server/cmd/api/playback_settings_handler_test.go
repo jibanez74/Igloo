@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -127,7 +128,7 @@ func TestUpdatePlaybackSettings_RoundTrips(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
-	body := `{"preferred_profile": "1080p_6mbps", "download_mbps": 50}`
+	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -197,7 +198,7 @@ func TestUpdatePlaybackSettings_RejectsInvalidDownloadMbps(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
-	body := `{"preferred_profile": "1080p_6mbps", "download_mbps": -5}`
+	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": -5}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -263,7 +264,17 @@ func TestPlaybackSettings_RequiresAuth(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 401 for GET, got %d: %s", w.Code, w.Body.String())
+	}
+
+	putBody := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
+	putReq := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(putBody))
+	putReq.Header.Set("Content-Type", "application/json")
+	putW := httptest.NewRecorder()
+	handler.ServeHTTP(putW, putReq)
+
+	if putW.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for PUT, got %d: %s", putW.Code, putW.Body.String())
 	}
 }
 
@@ -274,7 +285,7 @@ func TestUpdatePlaybackSettings_PutResponseShape(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
-	body := `{"preferred_profile": "1080p_6mbps", "download_mbps": 50}`
+	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -326,7 +337,7 @@ func TestUpdatePlaybackSettings_EmptyStringPreferredProfileClearsColumn(t *testi
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
-	seedBody := `{"preferred_profile": "1080p_6mbps", "download_mbps": 50}`
+	seedBody := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	seedReq := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(seedBody))
 	seedReq.Header.Set("Content-Type", "application/json")
 	seedW := httptest.NewRecorder()
@@ -360,6 +371,15 @@ func TestUpdatePlaybackSettings_PartialUpdatePreservesOmittedField(t *testing.T)
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
+	seedBody := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
+	seedReq := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(seedBody))
+	seedReq.Header.Set("Content-Type", "application/json")
+	seedW := httptest.NewRecorder()
+	handler.ServeHTTP(seedW, seedReq)
+	if seedW.Code != http.StatusOK {
+		t.Fatalf("seed PUT: expected 200, got %d: %s", seedW.Code, seedW.Body.String())
+	}
+
 	body := `{"download_mbps": 75}`
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -374,8 +394,8 @@ func TestUpdatePlaybackSettings_PartialUpdatePreservesOmittedField(t *testing.T)
 	if err != nil {
 		t.Fatalf("GetUserPlaybackPreferences: %v", err)
 	}
-	if prefs.PreferredHlsProfile.Valid {
-		t.Fatalf("expected preferred_hls_profile NULL when omitted, got %q", prefs.PreferredHlsProfile.String)
+	if !prefs.PreferredHlsProfile.Valid || prefs.PreferredHlsProfile.String != helpers.HLS_PROFILE_1080P_6MBPS {
+		t.Fatalf("expected preferred_hls_profile %q preserved, got valid=%v %q", helpers.HLS_PROFILE_1080P_6MBPS, prefs.PreferredHlsProfile.Valid, prefs.PreferredHlsProfile.String)
 	}
 	if !prefs.DownloadMbps.Valid || prefs.DownloadMbps.Float64 != 75 {
 		t.Fatalf("expected download_mbps 75, got valid=%v %v", prefs.DownloadMbps.Valid, prefs.DownloadMbps.Float64)
@@ -389,7 +409,7 @@ func TestUpdatePlaybackSettings_NullClearsBothColumns(t *testing.T) {
 	user := createTestUser(t, app, "Regular", "regular@example.com", false)
 	handler := mountPlaybackRouter(app, user.ID)
 
-	seedBody := `{"preferred_profile": "1080p_6mbps", "download_mbps": 50}`
+	seedBody := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50}`, helpers.HLS_PROFILE_1080P_6MBPS)
 	seedReq := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(seedBody))
 	seedReq.Header.Set("Content-Type", "application/json")
 	seedW := httptest.NewRecorder()
@@ -442,8 +462,28 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 	staticDir := t.TempDir()
 	logsDir := t.TempDir()
 
-	setBody := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": 50`, 1)
-	setReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(setBody))
+	marshalBody := func(t *testing.T, serverUploadMbps any) string {
+		t.Helper()
+		b, err := json.Marshal(map[string]any{
+			"tmdb_key":                     "tmdb-key",
+			"jellyfin_token":               "jellyfin-token",
+			"spotify_client_id":            "spotify-id",
+			"spotify_client_secret":        "spotify-secret",
+			"hardware_acceleration_device": "nvidia",
+			"enable_logger":                true,
+			"enable_watcher":               true,
+			"download_images":              true,
+			"static_dir":                   staticDir,
+			"logs_dir":                     logsDir,
+			"server_upload_mbps":           serverUploadMbps,
+		})
+		if err != nil {
+			t.Fatalf("marshal general settings body: %v", err)
+		}
+		return string(b)
+	}
+
+	setReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(marshalBody(t, 50)))
 	setReq.Header.Set("Content-Type", "application/json")
 	setW := httptest.NewRecorder()
 	handler.ServeHTTP(setW, setReq)
@@ -462,8 +502,7 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 		t.Fatalf("expected server_upload_mbps 50 after admin set, got %+v", settings.ServerUploadMbps)
 	}
 
-	clearBody := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": null`, 1)
-	clearReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(clearBody))
+	clearReq := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(marshalBody(t, nil)))
 	clearReq.Header.Set("Content-Type", "application/json")
 	clearW := httptest.NewRecorder()
 	handler.ServeHTTP(clearW, clearReq)

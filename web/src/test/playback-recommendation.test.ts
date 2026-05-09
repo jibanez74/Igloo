@@ -30,8 +30,14 @@ describe("recommendedProfileId", () => {
     expect(recommendedProfileId(PROFILES, 100, 25)).toBe("1080p_8mbps");
   });
 
-  it("falls back to the lowest profile when nothing fits under the cap", () => {
+  it("selects the lowest profile when only the smallest fits under the cap", () => {
+    // cap = 2 * 0.8 = 1.6 Mbps — only the 1 Mbps profile fits
     expect(recommendedProfileId(PROFILES, 2, null)).toBe("240p_1mbps");
+  });
+
+  it("falls back to the lowest profile when no profile fits under the cap", () => {
+    // cap = 0.5 * 0.8 = 0.4 Mbps — below every profile's video_mbps
+    expect(recommendedProfileId(PROFILES, 0.5, null)).toBe("240p_1mbps");
   });
 
   it("picks the highest profile that fits under the headroom cap", () => {

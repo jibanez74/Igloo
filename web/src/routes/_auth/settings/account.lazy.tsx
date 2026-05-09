@@ -400,7 +400,6 @@ function AccountSettings() {
         const logoutRes = await logout();
         if (logoutRes.error) {
           showActionFailed("log out", logoutRes.message);
-          return;
         }
         queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
         queryClient.removeQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
