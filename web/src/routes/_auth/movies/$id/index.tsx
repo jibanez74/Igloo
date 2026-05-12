@@ -6,6 +6,7 @@ import {
   libraryMovieDetailsQueryOpts,
   movieLikeStatusQueryOpts,
   movieTechnicalDetailsQueryOpts,
+  playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
   MOVIE_DETAILS_CONTENT_ENTER_CLASS,
@@ -129,6 +130,20 @@ function LibraryMovieDetailsContent({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: techData } = useQuery(movieTechnicalDetailsQueryOpts(movieId));
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const user: AuthUser | null =
+    userData?.error === false && userData.data?.user
+      ? (userData.data.user as AuthUser)
+      : null;
+  const { data: playbackSettingsData } = useQuery({
+    ...playbackSettingsQueryOpts(user?.id ?? 0),
+    enabled: user !== null,
+  });
+  const userPlaybackPrefs =
+    playbackSettingsData?.error === false &&
+    playbackSettingsData.data?.settings
+      ? playbackSettingsData.data.settings
+      : null;
   const videoStreams = techData?.data?.video_streams ?? [];
   const audioStreams = techData?.data?.audio_streams ?? [];
   const chapters = techData?.data?.chapters ?? [];
@@ -142,7 +157,12 @@ function LibraryMovieDetailsContent({
     mimeType ?? undefined,
   );
   const smartDefault: PlaybackSettings = resolvePlaybackSettings(
-    getDefaultPlaybackSettings(availableModes),
+    getDefaultPlaybackSettings(
+      availableModes,
+      userPlaybackPrefs,
+      audioStreams,
+      subtitleStreams,
+    ),
     availableModes,
     audioStreams,
     subtitleStreams,
@@ -154,17 +174,24 @@ function LibraryMovieDetailsContent({
 
   const [prevMovieId, setPrevMovieId] = useState(movieId);
   const [prevSmartMode, setPrevSmartMode] = useState(smartDefault.mode);
-  if (movieId !== prevMovieId || smartDefault.mode !== prevSmartMode) {
+  const [prevSmartAudioTrack, setPrevSmartAudioTrack] = useState(
+    smartDefault.audioTrack,
+  );
+  const [prevSmartSubtitleTrack, setPrevSmartSubtitleTrack] = useState(
+    smartDefault.subtitleTrack,
+  );
+  if (
+    movieId !== prevMovieId ||
+    smartDefault.mode !== prevSmartMode ||
+    smartDefault.audioTrack !== prevSmartAudioTrack ||
+    smartDefault.subtitleTrack !== prevSmartSubtitleTrack
+  ) {
     setPrevMovieId(movieId);
     setPrevSmartMode(smartDefault.mode);
+    setPrevSmartAudioTrack(smartDefault.audioTrack);
+    setPrevSmartSubtitleTrack(smartDefault.subtitleTrack);
     setPlaybackSettings(smartDefault);
   }
-
-  const { data: userData } = useQuery(authUserQueryOpts());
-  const user: AuthUser | null =
-    userData?.error === false && userData.data?.user
-      ? (userData.data.user as AuthUser)
-      : null;
 
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;

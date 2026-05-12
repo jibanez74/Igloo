@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useTransition } from "react";
+import { useId, useTransition } from "react";
 import {
   Library,
   Music,
@@ -45,7 +45,7 @@ import {
   MOVIE_PLAYLIST_MOVIES_KEY,
 } from "@/lib/constants";
 
-export const Route = createLazyFileRoute("/_admin/settings/libraries")({
+export const Route = createLazyFileRoute("/_auth/settings/libraries")({
   component: LibrariesSettings,
 });
 
@@ -82,6 +82,10 @@ function MusicLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
   const queryClient = useQueryClient();
   const [isScanning, startTransition] = useTransition();
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
+  const statsId = useId();
 
   const stats = statsData?.error === false ? statsData.data : null;
   const settings = settingsData?.error === false ? settingsData.data : null;
@@ -132,11 +136,6 @@ function MusicLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = "music-library-section";
-  const headingId = "music-library-heading";
-  const pathId = "music-library-path";
-  const statsId = "music-library-stats";
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -322,6 +321,7 @@ function MusicLibrarySection() {
         <Button
           onClick={handleScan}
           disabled={isScanning}
+          aria-busy={isScanning}
           aria-label={
             isScanning
               ? "Scanning music library, please wait"
@@ -351,6 +351,9 @@ function MoviesLibrarySection() {
   const { data: statsData, isLoading: statsLoading } = useQuery(moviesStatsQueryOpts());
   const queryClient = useQueryClient();
   const [isScanning, startTransition] = useTransition();
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const stats = statsData?.error === false ? statsData.data : null;
@@ -395,10 +398,6 @@ function MoviesLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = "movies-library-section";
-  const headingId = "movies-library-heading";
-  const pathId = "movies-library-path";
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
@@ -518,6 +517,7 @@ function MoviesLibrarySection() {
         <Button
           onClick={handleScan}
           disabled={isScanning}
+          aria-busy={isScanning}
           aria-label={
             isScanning
               ? "Scanning movies library, please wait"
@@ -544,6 +544,9 @@ function MoviesLibrarySection() {
 
 function TVShowsLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
+  const sectionId = useId();
+  const headingId = useId();
+  const pathId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.shows_dir ?? null;
@@ -560,10 +563,6 @@ function TVShowsLibrarySection() {
   const handleRemoveLibrary = () => {
     showError("Not implemented", "Removing libraries will be available soon");
   };
-
-  const sectionId = "tv-shows-library-section";
-  const headingId = "tv-shows-library-heading";
-  const pathId = "tv-shows-library-path";
 
   return (
     <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>

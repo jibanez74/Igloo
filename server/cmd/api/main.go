@@ -36,67 +36,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const (
-	envSessionCookieSecure = "SESSION_COOKIE_SECURE"
-	envLogToStdout         = "LOG_TO_STDOUT"
-	envPort                = "PORT"
-	defaultAppPort         = 8080
-	defaultDBPath          = "/config/igloo.db"
-	defaultStaticDir       = "/config/static"
-	defaultLogsDir         = "/config/logs"
-	defaultMoviesDir       = "/media/movies"
-	defaultShowsDir        = "/media/shows"
-	defaultMusicDir        = "/media/music"
-)
-
-var movieMetadataLockColumns = []string{
-	"user_locked_title",
-	"user_locked_tmdb_id",
-	"user_locked_imdb_id",
-	"user_locked_poster_path",
-	"user_locked_backdrop_path",
-	"user_locked_adult",
-	"user_locked_language",
-	"user_locked_year",
-	"user_locked_release_date",
-	"user_locked_overview",
-	"user_locked_tag_line",
-	"user_locked_certification",
-	"user_locked_critic_rating",
-	"user_locked_audience_rating",
-	"user_locked_revenue",
-	"user_locked_budget",
-	"user_locked_run_time",
-}
-
-const createWatchRoomsTableWithTrackChecksSQL = `
-CREATE TABLE watch_rooms (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  owner_user_id INTEGER NOT NULL,
-  movie_id INTEGER NOT NULL,
-  playback_mode TEXT NOT NULL CHECK (
-    playback_mode IN ('direct', 'remux', '2160p_16mbps', '1080p_8mbps', '1080p_6mbps', '1080p_4mbps', '720p_3mbps')
-  ),
-  audio_track INTEGER NOT NULL DEFAULT 0 CHECK (audio_track >= 0),
-  subtitle_track INTEGER CHECK (subtitle_track >= 0),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (movie_id) REFERENCES movies (id) ON DELETE CASCADE ON UPDATE CASCADE
-);`
-
-const createWatchRoomMembersTableSQL = `
-CREATE TABLE watch_room_members (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  room_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (room_id, user_id),
-  FOREIGN KEY (room_id) REFERENCES watch_rooms (id) ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-);`
-
 type Application struct {
 	DB               *sql.DB
 	Queries          *database.Queries
@@ -156,10 +95,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	port := defaultAppPort
+	port := helpers.DEFAULT_APP_PORT
 	debug := os.Getenv("DEBUG") == "true"
 	if debug {
-		portStr := os.Getenv(envPort)
+		portStr := os.Getenv(helpers.ENV_PORT)
 		if portStr != "" {
 			p, err := strconv.Atoi(portStr)
 			if err != nil {
@@ -309,7 +248,7 @@ func InitApp() (*Application, error) {
 func (app *Application) InitDB() error {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = defaultDBPath
+		dbPath = helpers.DEFAULT_DB_PATH
 	}
 
 	dir := filepath.Dir(dbPath)
@@ -347,287 +286,14 @@ func (app *Application) InitDB() error {
 	return nil
 }
 
-// InitTables applies the embedded schema and any small startup migrations.
+// InitTables applies the embedded schema.
 func (app *Application) InitTables() error {
 	_, err := app.DB.Exec(SQL)
 	if err != nil {
 		return err
 	}
 
-	err = app.ensureWatchRoomTrackConstraints()
-	if err != nil {
-		return err
-	}
-
-	err = app.ensureMovieMetadataLockColumns()
-	if err != nil {
-		return err
-	}
-
-	err = app.backfillSearchFTS()
-	if err != nil {
-		return err
-	}
-
 	app.Logger.Info("database tables initialized successfully")
-
-	return nil
-}
-
-// backfillSearchFTS populates the FTS5 mirror tables from existing rows that
-// predate the FTS schema. It is idempotent: rows already mirrored (matched by
-// rowid) are skipped, so this is safe to run on every boot.
-func (app *Application) backfillSearchFTS() error {
-	statements := []string{
-		`INSERT INTO movies_fts (rowid, title, overview, tag_line)
-		 SELECT id, title, overview, tag_line FROM movies
-		 WHERE NOT EXISTS (SELECT 1 FROM movies_fts WHERE rowid = movies.id)`,
-		`INSERT INTO albums_fts (rowid, title, musician)
-		 SELECT id, title, musician FROM albums
-		 WHERE NOT EXISTS (SELECT 1 FROM albums_fts WHERE rowid = albums.id)`,
-		`INSERT INTO musicians_fts (rowid, name, sort_name)
-		 SELECT id, name, sort_name FROM musicians
-		 WHERE NOT EXISTS (SELECT 1 FROM musicians_fts WHERE rowid = musicians.id)`,
-		`INSERT INTO tracks_fts (rowid, title)
-		 SELECT id, title FROM tracks
-		 WHERE NOT EXISTS (SELECT 1 FROM tracks_fts WHERE rowid = tracks.id)`,
-	}
-
-	tx, err := app.DB.Begin()
-	if err != nil {
-		return err
-	}
-
-	for _, stmt := range statements {
-		_, err = tx.Exec(stmt)
-		if err != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				return fmt.Errorf("backfill search FTS failed: %w; rollback failed: %v", err, rollbackErr)
-			}
-			return err
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (app *Application) ensureWatchRoomTrackConstraints() error {
-	var tableSQL sql.NullString
-	err := app.DB.QueryRow(
-		"SELECT sql FROM sqlite_master WHERE type='table' AND name='watch_rooms'",
-	).Scan(&tableSQL)
-	if err != nil {
-		return err
-	}
-
-	if tableSQL.Valid &&
-		strings.Contains(tableSQL.String, "audio_track >= 0") &&
-		strings.Contains(tableSQL.String, "subtitle_track >= 0") {
-		return nil
-	}
-
-	ctx := context.Background()
-	conn, err := app.DB.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	defer func() {
-		_, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-	}()
-
-	_, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	if err != nil {
-		return err
-	}
-
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		CREATE TEMP TABLE watch_room_members_backup AS
-		SELECT id, room_id, user_id, created_at, updated_at
-		FROM watch_room_members
-	`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `DROP TABLE watch_room_members`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `ALTER TABLE watch_rooms RENAME TO watch_rooms_old`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, createWatchRoomsTableWithTrackChecksSQL)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO watch_rooms (
-			id,
-			owner_user_id,
-			movie_id,
-			playback_mode,
-			audio_track,
-			subtitle_track,
-			created_at,
-			updated_at
-		)
-		SELECT
-			id,
-			owner_user_id,
-			movie_id,
-			playback_mode,
-			CASE
-				WHEN audio_track < 0 THEN 0
-				ELSE audio_track
-			END,
-			CASE
-				WHEN subtitle_track IS NOT NULL AND subtitle_track < 0 THEN NULL
-				ELSE subtitle_track
-			END,
-			created_at,
-			updated_at
-		FROM watch_rooms_old
-	`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `DROP TABLE watch_rooms_old`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, createWatchRoomMembersTableSQL)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO watch_room_members (
-			id,
-			room_id,
-			user_id,
-			created_at,
-			updated_at
-		)
-		SELECT
-			id,
-			room_id,
-			user_id,
-			created_at,
-			updated_at
-		FROM watch_room_members_backup
-	`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `DROP TABLE watch_room_members_backup`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_rooms_owner ON watch_rooms (owner_user_id)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_rooms_movie ON watch_rooms (movie_id)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_room_members_room ON watch_room_members (room_id)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_watch_room_members_user ON watch_room_members (user_id)`)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (app *Application) ensureMovieMetadataLockColumns() error {
-	rows, err := app.DB.Query("PRAGMA table_info(movies)")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	existingColumns := make(map[string]bool)
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var columnType string
-		var notNull int
-		var defaultValue sql.NullString
-		var pk int
-
-		err = rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk)
-		if err != nil {
-			return err
-		}
-
-		existingColumns[name] = true
-	}
-
-	err = rows.Err()
-	if err != nil {
-		return err
-	}
-
-	for _, columnName := range movieMetadataLockColumns {
-		if existingColumns[columnName] {
-			continue
-		}
-
-		statement := fmt.Sprintf(
-			"ALTER TABLE movies ADD COLUMN %s BOOLEAN NOT NULL DEFAULT false",
-			columnName,
-		)
-		_, err = app.DB.Exec(statement)
-		if err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -654,12 +320,12 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = defaultLogsDir
+		logsDir = helpers.DEFAULT_LOGS_DIR
 	}
 
 	staticDir := os.Getenv("STATIC_DIR")
 	if staticDir == "" {
-		staticDir = defaultStaticDir
+		staticDir = helpers.DEFAULT_STATIC_DIR
 	}
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
@@ -669,17 +335,17 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	moviesDir := os.Getenv("MOVIES_DIR")
 	if moviesDir == "" {
-		moviesDir = defaultMoviesDir
+		moviesDir = helpers.DEFAULT_MOVIES_DIR
 	}
 
 	showsDir := os.Getenv("SHOWS_DIR")
 	if showsDir == "" {
-		showsDir = defaultShowsDir
+		showsDir = helpers.DEFAULT_SHOWS_DIR
 	}
 
 	musicDir := os.Getenv("MUSIC_DIR")
 	if musicDir == "" {
-		musicDir = defaultMusicDir
+		musicDir = helpers.DEFAULT_MUSIC_DIR
 	}
 
 	params := database.CreateSettingsParams{
@@ -785,11 +451,11 @@ func (app *Application) InitDirs() error {
 // InitLogger configures stdout logging for debug mode and file-backed logging otherwise.
 func (app *Application) InitLogger() error {
 	debug := os.Getenv("DEBUG") == "true"
-	logToStdout := envBool(envLogToStdout, debug)
+	logToStdout := envBool(helpers.ENV_LOG_TO_STDOUT, debug)
 
 	logsDir := os.Getenv("LOGS_DIR")
 	if logsDir == "" {
-		logsDir = defaultLogsDir
+		logsDir = helpers.DEFAULT_LOGS_DIR
 	}
 
 	if !logToStdout {
@@ -876,7 +542,7 @@ func (app *Application) InitSession() {
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = envBool(envSessionCookieSecure, false)
+	sessionManager.Cookie.Secure = envBool(helpers.ENV_SESSION_COOKIE_SECURE, false)
 
 	app.SessionManager = sessionManager
 
@@ -1072,6 +738,10 @@ func (app *Application) InitRouter() {
 
 			r.Route("/settings", func(r chi.Router) {
 				r.Get("/", app.GetSettings)
+				r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
+				r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
+				r.Get("/playback", app.GetPlaybackSettings)
+				r.Put("/playback", app.UpdatePlaybackSettings)
 				// Admin-only: scan triggers mutate the library.
 				r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
 				r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)

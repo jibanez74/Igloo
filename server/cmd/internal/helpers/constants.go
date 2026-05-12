@@ -48,6 +48,20 @@ const (
 	ENV_DEFAULT_ADMIN_EMAIL    = "DEFAULT_ADMIN_EMAIL"
 	ENV_DEFAULT_ADMIN_PASSWORD = "DEFAULT_ADMIN_PASSWORD"
 
+	// app startup defaults (used by cmd/api/main.go for InitDB / InitLogger / InitSettings)
+	DEFAULT_APP_PORT   = 8080
+	DEFAULT_DB_PATH    = "/config/igloo.db"
+	DEFAULT_STATIC_DIR = "/config/static"
+	DEFAULT_LOGS_DIR   = "/config/logs"
+	DEFAULT_MOVIES_DIR = "/media/movies"
+	DEFAULT_SHOWS_DIR  = "/media/shows"
+	DEFAULT_MUSIC_DIR  = "/media/music"
+
+	// env vars consumed at startup
+	ENV_SESSION_COOKIE_SECURE = "SESSION_COOKIE_SECURE"
+	ENV_LOG_TO_STDOUT         = "LOG_TO_STDOUT"
+	ENV_PORT                  = "PORT"
+
 	// error messages
 	INTERNAL_SERVER_ERROR       = "The server encountered an unexpected error"
 	NOT_AUTHORIZED_MESSAGE      = "not authorized"

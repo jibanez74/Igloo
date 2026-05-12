@@ -42,7 +42,12 @@ export function useMoviePlaybackData({
   streamReloadKey,
   onSyncSearch,
 }: UseMoviePlaybackDataArgs) {
-  const { mode, audio_track: audioTrack, subtitle_track: subtitleTrack, start } = search;
+  const {
+    audio_track: audioTrack,
+    subtitle_track: subtitleTrack,
+    start,
+  } = search;
+  const mode: StreamModeId = search.mode ?? "direct";
 
   const {
     data,

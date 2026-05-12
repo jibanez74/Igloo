@@ -216,22 +216,23 @@ type ProductionCompany struct {
 }
 
 type Setting struct {
-	ID                         int64          `json:"id"`
-	TmdbKey                    sql.NullString `json:"tmdb_key"`
-	JellyfinToken              sql.NullString `json:"jellyfin_token"`
-	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
-	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
-	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
-	EnableLogger               bool           `json:"enable_logger"`
-	EnableWatcher              bool           `json:"enable_watcher"`
-	DownloadImages             bool           `json:"download_images"`
-	MoviesDir                  sql.NullString `json:"movies_dir"`
-	ShowsDir                   sql.NullString `json:"shows_dir"`
-	MusicDir                   sql.NullString `json:"music_dir"`
-	StaticDir                  string         `json:"static_dir"`
-	LogsDir                    string         `json:"logs_dir"`
-	CreatedAt                  string         `json:"created_at"`
-	UpdatedAt                  string         `json:"updated_at"`
+	ID                         int64           `json:"id"`
+	TmdbKey                    sql.NullString  `json:"tmdb_key"`
+	JellyfinToken              sql.NullString  `json:"jellyfin_token"`
+	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
+	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
+	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
+	EnableLogger               bool            `json:"enable_logger"`
+	EnableWatcher              bool            `json:"enable_watcher"`
+	DownloadImages             bool            `json:"download_images"`
+	MoviesDir                  sql.NullString  `json:"movies_dir"`
+	ShowsDir                   sql.NullString  `json:"shows_dir"`
+	MusicDir                   sql.NullString  `json:"music_dir"`
+	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
+	StaticDir                  string          `json:"static_dir"`
+	LogsDir                    string          `json:"logs_dir"`
+	CreatedAt                  string          `json:"created_at"`
+	UpdatedAt                  string          `json:"updated_at"`
 }
 
 type Subtitle struct {
@@ -276,14 +277,18 @@ type Track struct {
 }
 
 type User struct {
-	ID        int64          `json:"id"`
-	Name      string         `json:"name"`
-	Email     string         `json:"email"`
-	Password  string         `json:"password"`
-	IsAdmin   bool           `json:"is_admin"`
-	Avatar    sql.NullString `json:"avatar"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt string         `json:"updated_at"`
+	ID                        int64           `json:"id"`
+	Name                      string          `json:"name"`
+	Email                     string          `json:"email"`
+	Password                  string          `json:"password"`
+	IsAdmin                   bool            `json:"is_admin"`
+	Avatar                    sql.NullString  `json:"avatar"`
+	PreferredHlsProfile       sql.NullString  `json:"preferred_hls_profile"`
+	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
+	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
+	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
+	CreatedAt                 string          `json:"created_at"`
+	UpdatedAt                 string          `json:"updated_at"`
 }
 
 type VideoStream struct {
