@@ -15,7 +15,6 @@ type SpotifyInterface interface {
 	ClearAllCaches()
 }
 
-// Compile-time check to ensure spotifyClient implements SpotifyInterface
 var _ SpotifyInterface = (*spotifyClient)(nil)
 
 type spotifyClient struct {

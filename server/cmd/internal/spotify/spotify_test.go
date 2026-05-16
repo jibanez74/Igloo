@@ -155,8 +155,6 @@ func fullAlbumJSON(id, name string) interface{} {
 	}
 }
 
-// --- SearchArtistByName ---
-
 func TestSearchArtistByName(t *testing.T) {
 	t.Run("returns error for empty artist name", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
@@ -296,8 +294,6 @@ func TestSearchArtistByName(t *testing.T) {
 		}
 	})
 }
-
-// --- SearchAndGetAlbumDetails ---
 
 func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("returns error for empty album title", func(t *testing.T) {
@@ -491,11 +487,9 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		if searchCallCount != 2 {
 			t.Errorf("expected 2 search calls (field filter + plain fallback), got %d", searchCallCount)
 		}
-		// First query must be the structured field filter
 		if !strings.Contains(queriesUsed[0], "album:") {
 			t.Errorf("first query should be a field filter, got: %s", queriesUsed[0])
 		}
-		// Second query must be the plain text fallback (no field filter syntax)
 		if strings.Contains(queriesUsed[1], "album:") {
 			t.Errorf("fallback query should not contain field filter syntax, got: %s", queriesUsed[1])
 		}
@@ -629,8 +623,6 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 	})
 }
-
-// --- ClearAllCaches ---
 
 func TestClearAllCaches(t *testing.T) {
 	t.Run("forces fresh API calls after caches are cleared", func(t *testing.T) {

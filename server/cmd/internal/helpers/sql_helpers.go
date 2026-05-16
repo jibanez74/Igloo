@@ -9,8 +9,7 @@ import (
 	"time"
 )
 
-// NullString returns a sql.NullString from a string.
-// Returns an invalid NullString if the input is empty.
+// NullString returns an invalid sql.NullString for empty input.
 func NullString(s string) sql.NullString {
 	if s == "" {
 		return sql.NullString{Valid: false}
@@ -19,8 +18,7 @@ func NullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
-// NullInt64 returns a sql.NullInt64 from an int64.
-// Returns an invalid NullInt64 if the input is 0.
+// NullInt64 returns an invalid sql.NullInt64 for 0.
 func NullInt64(i int64) sql.NullInt64 {
 	if i == 0 {
 		return sql.NullInt64{Valid: false}
@@ -29,8 +27,7 @@ func NullInt64(i int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: i, Valid: true}
 }
 
-// NullFloat64 returns a sql.NullFloat64 from a float64.
-// Returns an invalid NullFloat64 if the input is 0.
+// NullFloat64 returns an invalid sql.NullFloat64 for 0.
 func NullFloat64(f float64) sql.NullFloat64 {
 	if f == 0 {
 		return sql.NullFloat64{Valid: false}
@@ -69,8 +66,7 @@ func ParseDurationMs(s string) (int64, error) {
 	return int64(f * 1000), nil
 }
 
-// ParseBitRate parses a bitrate string to int64.
-// Returns 0 if parsing fails or string is empty.
+// ParseBitRate returns 0 if parsing fails or the input is empty.
 func ParseBitRate(bitRateStr string) int64 {
 	if bitRateStr == "" {
 		return 0
@@ -92,8 +88,7 @@ func ClampFloat64(v, min, max float64) float64 {
 	return math.Min(math.Max(v, min), max)
 }
 
-// ParseDate attempts to parse a date string in various common formats.
-// Returns the parsed time or an error if none of the formats match.
+// ParseDate attempts common audio metadata date formats.
 func ParseDate(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, fmt.Errorf("empty string")

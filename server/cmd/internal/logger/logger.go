@@ -29,12 +29,8 @@ type LoggerConfig struct {
 	LogFile string
 }
 
-// New creates a new logger based on the provided configuration.
-// In debug mode (Debug=true), logs are written to stdout with text format at debug level.
-// In production mode (Debug=false), logs are written to a file with JSON format at info level.
-// The log file is automatically rotated to never exceed maxLines.
-// Returns the logger, a cleanup function to close the log file, and any error.
-// The log directory must exist - this function will not create it.
+// New creates a configured logger and cleanup function.
+// Production file logging requires an existing LogDir.
 func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 	var w io.Writer
 	var closer func() error = func() error { return nil }

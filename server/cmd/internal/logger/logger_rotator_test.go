@@ -35,7 +35,6 @@ func TestNewRotatingWriter(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "test.log")
 
-		// Create file with 5 lines
 		content := "line1\nline2\nline3\nline4\nline5\n"
 		err := os.WriteFile(path, []byte(content), 0o644)
 		if err != nil {
@@ -54,7 +53,6 @@ func TestNewRotatingWriter(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid path", func(t *testing.T) {
-		// Try to create in a non-existent directory
 		path := "/nonexistent/directory/test.log"
 
 		_, err := newRotatingWriter(path, 100)
@@ -150,7 +148,6 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 		}
 		defer rw.Close()
 
-		// Write exactly maxLines
 		for i := 0; i < maxLines; i++ {
 			_, err := rw.Write([]byte("line\n"))
 			if err != nil {
@@ -158,18 +155,15 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 			}
 		}
 
-		// At this point we have 10 lines, next write should trigger rotation
 		if rw.lines != maxLines {
 			t.Errorf("expected %d lines before rotation trigger, got %d", maxLines, rw.lines)
 		}
 
-		// Write one more to trigger rotation
 		_, err = rw.Write([]byte("trigger rotation\n"))
 		if err != nil {
 			t.Fatalf("rotation write failed: %v", err)
 		}
 
-		// After rotation: kept 5 lines (half of 10) + 1 new = 6
 		expectedLines := (maxLines / 2) + 1
 		if rw.lines != expectedLines {
 			t.Errorf("expected %d lines after rotation, got %d", expectedLines, rw.lines)
@@ -186,16 +180,14 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 			t.Fatalf("failed to create writer: %v", err)
 		}
 
-		// Write lines with identifiable content
 		for i := 1; i <= maxLines; i++ {
-			line := strings.Repeat("x", i) + "\n" // "x", "xx", "xxx", etc.
+			line := strings.Repeat("x", i) + "\n"
 			_, err := rw.Write([]byte(line))
 			if err != nil {
 				t.Fatalf("write %d failed: %v", i, err)
 			}
 		}
 
-		// Trigger rotation with a final line
 		_, err = rw.Write([]byte("final\n"))
 		if err != nil {
 			t.Fatalf("final write failed: %v", err)
@@ -203,7 +195,6 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 
 		rw.Close()
 
-		// Read and verify content
 		content, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("failed to read file: %v", err)
@@ -211,17 +202,14 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 
 		lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
 
-		// Should have kept the newest half (3 lines: "xxxx", "xxxxx", "xxxxxx") + "final"
 		if len(lines) != 4 {
 			t.Errorf("expected 4 lines after rotation, got %d: %v", len(lines), lines)
 		}
 
-		// First kept line should be "xxxx" (the 4th original line)
 		if lines[0] != "xxxx" {
 			t.Errorf("expected first line to be 'xxxx', got %q", lines[0])
 		}
 
-		// Last line should be "final"
 		if lines[len(lines)-1] != "final" {
 			t.Errorf("expected last line to be 'final', got %q", lines[len(lines)-1])
 		}
@@ -238,7 +226,6 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 		}
 		defer rw.Close()
 
-		// Write 12 lines - should trigger rotation multiple times
 		for i := 0; i < 12; i++ {
 			_, err := rw.Write([]byte("line\n"))
 			if err != nil {
@@ -246,7 +233,6 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 			}
 		}
 
-		// Should never exceed maxLines (approximately)
 		if rw.lines > maxLines {
 			t.Errorf("expected lines <= %d, got %d", maxLines, rw.lines)
 		}
@@ -273,7 +259,6 @@ func TestRotatingWriter_Close(t *testing.T) {
 			t.Fatalf("close failed: %v", err)
 		}
 
-		// Verify data was flushed
 		content, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("failed to read file: %v", err)
@@ -359,7 +344,6 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 		}
 		defer rw.Close()
 
-		// Spawn multiple goroutines writing concurrently
 		done := make(chan bool, 10)
 		for i := 0; i < 10; i++ {
 			go func(id int) {
@@ -373,12 +357,10 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 			}(i)
 		}
 
-		// Wait for all goroutines
 		for i := 0; i < 10; i++ {
 			<-done
 		}
 
-		// Should have 100 lines (10 goroutines * 10 writes)
 		if rw.lines != 100 {
 			t.Errorf("expected 100 lines, got %d", rw.lines)
 		}
@@ -395,7 +377,6 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 		}
 		defer rw.Close()
 
-		// Spawn goroutines that will trigger rotation
 		done := make(chan bool, 5)
 		for i := 0; i < 5; i++ {
 			go func(id int) {
@@ -409,12 +390,10 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 			}(i)
 		}
 
-		// Wait for all goroutines
 		for i := 0; i < 5; i++ {
 			<-done
 		}
 
-		// Lines should be within reasonable bounds (rotation keeps it from exploding)
 		if rw.lines > maxLines {
 			t.Errorf("expected lines <= %d after rotations, got %d", maxLines, rw.lines)
 		}
