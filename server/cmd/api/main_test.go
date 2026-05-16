@@ -15,7 +15,6 @@ import (
 	cache "github.com/patrickmn/go-cache"
 )
 
-// setupTestLogger initializes a debug logger for tests.
 func setupTestLogger(t *testing.T, app *Application) {
 	t.Helper()
 
@@ -30,11 +29,9 @@ func setupTestLogger(t *testing.T, app *Application) {
 }
 
 func TestInitDB(t *testing.T) {
-	// Create a temporary directory for the test database
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	// Set the DB_PATH environment variable
 	os.Setenv("DB_PATH", dbPath)
 	defer os.Unsetenv("DB_PATH")
 
@@ -47,13 +44,11 @@ func TestInitDB(t *testing.T) {
 	}
 	defer app.DB.Close()
 
-	// Verify database is open and responsive
 	err = app.DB.Ping()
 	if err != nil {
 		t.Errorf("Database ping failed: %v", err)
 	}
 
-	// Verify WAL mode is enabled
 	var journalMode string
 	err = app.DB.QueryRow("PRAGMA journal_mode;").Scan(&journalMode)
 	if err != nil {
@@ -64,7 +59,6 @@ func TestInitDB(t *testing.T) {
 		t.Errorf("Expected journal_mode 'wal', got '%s'", journalMode)
 	}
 
-	// Verify foreign keys are enabled
 	var foreignKeys int
 	err = app.DB.QueryRow("PRAGMA foreign_keys;").Scan(&foreignKeys)
 	if err != nil {
@@ -75,7 +69,6 @@ func TestInitDB(t *testing.T) {
 		t.Errorf("Expected foreign_keys to be 1, got %d", foreignKeys)
 	}
 
-	// Verify busy timeout is set
 	var busyTimeout int
 	err = app.DB.QueryRow("PRAGMA busy_timeout;").Scan(&busyTimeout)
 	if err != nil {
@@ -110,7 +103,6 @@ func TestInitDB_DefaultPath(t *testing.T) {
 }
 
 func TestInitTables(t *testing.T) {
-	// Create an in-memory database for testing
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
@@ -125,7 +117,6 @@ func TestInitTables(t *testing.T) {
 		t.Fatalf("InitTables failed: %v", err)
 	}
 
-	// List of expected tables
 	expectedTables := []string{
 		"users",
 		"settings",
@@ -172,7 +163,6 @@ func TestInitTables_Indexes(t *testing.T) {
 		t.Fatalf("InitTables failed: %v", err)
 	}
 
-	// List of expected indexes
 	expectedIndexes := []string{
 		"idx_user_name",
 		"idx_musician_name",
@@ -219,7 +209,6 @@ func TestInitTables_Idempotent(t *testing.T) {
 	app := &Application{DB: db}
 	setupTestLogger(t, app)
 
-	// Run InitTables twice - should not fail
 	err = app.InitTables()
 	if err != nil {
 		t.Fatalf("First InitTables call failed: %v", err)
@@ -335,7 +324,6 @@ func TestInitTables_UsersSchema(t *testing.T) {
 		t.Fatalf("InitTables failed: %v", err)
 	}
 
-	// Test inserting a user to verify schema
 	result, err := db.Exec(`
 		INSERT INTO users (name, email, password) 
 		VALUES ('Test User', 'test@example.com', 'hashedpassword')
@@ -354,7 +342,6 @@ func TestInitTables_UsersSchema(t *testing.T) {
 		t.Errorf("Expected user id 1, got %d", id)
 	}
 
-	// Verify user was inserted correctly
 	var name, email string
 	var isAdmin bool
 
@@ -455,7 +442,6 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 		t.Fatalf("InitTables failed: %v", err)
 	}
 
-	// Insert a musician first
 	_, err = db.Exec(`
 		INSERT INTO musicians (name, sort_name) 
 		VALUES ('Test Artist', 'test artist')
@@ -465,7 +451,6 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 		t.Fatalf("Failed to insert musician: %v", err)
 	}
 
-	// Insert an album
 	_, err = db.Exec(`
 		INSERT INTO albums (title, sort_title) 
 		VALUES ('Test Album', 'test album')
@@ -474,7 +459,6 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 		t.Fatalf("Failed to insert album: %v", err)
 	}
 
-	// Test many-to-many relationship
 	_, err = db.Exec(`
 		INSERT INTO musician_albums (musician_id, album_id) 
 		VALUES (1, 1)
@@ -484,7 +468,6 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 		t.Fatalf("Failed to insert musician_album relationship: %v", err)
 	}
 
-	// Verify foreign key constraint - try to insert invalid reference
 	_, err = db.Exec(`
 		INSERT INTO musician_albums (musician_id, album_id) 
 		VALUES (999, 1)
@@ -494,7 +477,6 @@ func TestInitTables_ForeignKeys(t *testing.T) {
 	}
 }
 
-// Helper function to set up an Application with initialized DB, tables, queries, and logger.
 func setupTestApp(t *testing.T) *Application {
 	t.Helper()
 
@@ -516,8 +498,7 @@ func setupTestApp(t *testing.T) *Application {
 		t.Fatalf("Failed to prepare queries: %v", err)
 	}
 
-	// Initialize in-memory caches without the production eviction callback
-	// (no FFmpeg processes to kill in tests).
+	// Tests do not attach real FFmpeg processes to HLS cache entries.
 	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.RemuxSafetyCache = cache.New(
 		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
@@ -563,12 +544,10 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	// Verify settings were created and stored
 	if app.Settings == nil {
 		t.Fatal("Settings should not be nil after InitSettings")
 	}
 
-	// Verify default values for required string fields
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
@@ -576,7 +555,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Errorf("Expected LogsDir %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 
-	// Verify default value for HardwareAccelerationDevice (defaults to "cpu")
 	if app.Settings.HardwareAccelerationDevice.String != "cpu" {
 		t.Errorf("Expected HardwareAccelerationDevice 'cpu', got '%s'", app.Settings.HardwareAccelerationDevice.String)
 	}
@@ -584,7 +562,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Error("Expected HardwareAccelerationDevice to be valid")
 	}
 
-	// Verify boolean defaults (all false)
 	if app.Settings.EnableLogger != false {
 		t.Error("Expected EnableLogger to be false by default")
 	}
@@ -595,7 +572,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Error("Expected DownloadImages to be false by default")
 	}
 
-	// Verify optional NullString fields are invalid when not set
 	if app.Settings.TmdbKey.Valid {
 		t.Error("Expected TmdbKey to be invalid when not set")
 	}
@@ -628,7 +604,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 
 	clearSettingsEnv(t)
 
-	// Set all environment variables that InitSettings reads
 	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
 	t.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
@@ -642,7 +617,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	// Verify NullString fields from env vars
 	if app.Settings.TmdbKey.String != "test-tmdb-key" || !app.Settings.TmdbKey.Valid {
 		t.Errorf("Expected TmdbKey 'test-tmdb-key' (valid), got '%s' (valid=%v)", app.Settings.TmdbKey.String, app.Settings.TmdbKey.Valid)
 	}
@@ -662,7 +636,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 
-	// Verify required string fields use fixed container defaults
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
@@ -670,7 +643,6 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 		t.Errorf("Expected LogsDir %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 
-	// Verify boolean fields from env vars
 	if app.Settings.EnableLogger != true {
 		t.Error("Expected EnableLogger to be true")
 	}
@@ -704,13 +676,11 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 		t.Fatalf("Failed to create test settings: %v", err)
 	}
 
-	// Now call InitSettings - it should load existing settings, not create new ones
 	err = app.InitSettings(context.Background())
 	if err != nil {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
 
-	// Verify the existing settings were loaded
 	if app.Settings.TmdbKey.String != "existing-key" {
 		t.Errorf("Expected TmdbKey 'existing-key', got '%s'", app.Settings.TmdbKey.String)
 	}
@@ -811,7 +781,6 @@ func TestInitSettings_Idempotent(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Call InitSettings twice
 	err := app.InitSettings(ctx)
 	if err != nil {
 		t.Fatalf("First InitSettings call failed: %v", err)
@@ -824,7 +793,6 @@ func TestInitSettings_Idempotent(t *testing.T) {
 		t.Fatalf("Second InitSettings call failed: %v", err)
 	}
 
-	// Should load the same settings, not create a new one
 	if app.Settings.ID != firstSettingsID {
 		t.Errorf("Expected same settings ID %d, got %d", firstSettingsID, app.Settings.ID)
 	}

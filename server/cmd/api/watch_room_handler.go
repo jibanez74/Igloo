@@ -73,7 +73,6 @@ func isValidPlaybackMode(mode string) bool {
 	return helpers.IsAllowedHLSProfile(mode)
 }
 
-// deduplicateAndFilterUserIDs removes duplicates and the owner from invited user IDs.
 func deduplicateAndFilterUserIDs(ids []int64, ownerID int64) []int64 {
 	seen := make(map[int64]bool)
 	result := []int64{}
@@ -116,8 +115,6 @@ func findMemberByID(members []watchRoomMemberSummary, id int64) (watchRoomMember
 	return watchRoomMemberSummary{}, false
 }
 
-// GetWatchRooms serves GET /api/watch-rooms.
-// Returns all rooms the authenticated user owns or is invited to.
 func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
@@ -211,8 +208,6 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetWatchRoom serves GET /api/watch-rooms/{id}.
-// Returns room details. Only room members can access.
 func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
@@ -296,8 +291,6 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateWatchRoom serves POST /api/watch-rooms.
-// Creates a room with the caller as owner and adds all invited users as members in a transaction.
 func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
@@ -420,9 +413,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If the room uses HLS, start FFmpeg immediately so participants experience
-	// minimal startup latency when they join. Per plan, failure here rolls the
-	// room back: we delete it and surface the error to the caller.
+	// HLS rooms warm up immediately; failures roll back the room.
 	if req.Mode != helpers.WATCH_ROOM_PLAYBACK_MODE_DIRECT {
 		warmErr := app.WarmUpRoomHLSSession(background, room.ID, req.MovieID, req.Mode, int(req.AudioTrack))
 		if warmErr != nil {
@@ -449,8 +440,6 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// JoinWatchRoom serves POST /api/watch-rooms/{id}/join.
-// Validates membership and returns a join confirmation.
 func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
@@ -494,8 +483,6 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteWatchRoom serves DELETE /api/watch-rooms/{id}.
-// Only the room owner can delete. Cascade removes all member rows.
 func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
@@ -540,8 +527,7 @@ func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Stop and remove the room HLS session if one was running.
-	// This is a no-op for direct-play rooms or rooms that never successfully warmed up.
+	// No-op for direct-play rooms or rooms that never warmed up.
 	app.CleanupRoomHLSSession(roomID)
 	app.WatchRoomHub.deleteRoom(roomID)
 

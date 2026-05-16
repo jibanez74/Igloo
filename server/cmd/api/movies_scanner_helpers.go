@@ -8,8 +8,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// extractYearFromReleaseDate extracts the year from a TMDB release date string using helpers.ParseDate.
-// Returns 0 if the date string cannot be parsed.
 func extractYearFromReleaseDate(releaseDate string) int {
 	if releaseDate == "" {
 		return 0
@@ -23,8 +21,6 @@ func extractYearFromReleaseDate(releaseDate string) int {
 	return parsed.Year()
 }
 
-// getOrCreateArtist upserts an artist in the database and returns it.
-// Returns the database artist and an error.
 func (app *Application) getOrCreateArtist(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -46,25 +42,20 @@ func (app *Application) getOrCreateArtist(
 	return &upserted, nil
 }
 
-// manageSavepoint creates a savepoint, executes a function, and handles rollback/release.
-// If the function returns an error, the savepoint is rolled back.
-// Returns the error from the function, or a savepoint management error.
+// Savepoints let one scanner item fail without rolling back its batch.
 func manageSavepoint(
 	ctx context.Context,
 	tx *sql.Tx,
 	savepointName string,
 	fn func() error,
 ) error {
-	// Create savepoint
 	_, err := tx.ExecContext(ctx, fmt.Sprintf("SAVEPOINT %s", savepointName))
 	if err != nil {
 		return fmt.Errorf("failed to create savepoint %s: %w", savepointName, err)
 	}
 
-	// Execute function
 	err = fn()
 	if err != nil {
-		// Rollback to savepoint on error
 		_, rollbackErr := tx.ExecContext(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", savepointName))
 		if rollbackErr != nil {
 			return fmt.Errorf("failed to rollback savepoint %s (original error: %w): %w", savepointName, err, rollbackErr)
@@ -73,7 +64,6 @@ func manageSavepoint(
 		return err
 	}
 
-	// Release savepoint on success
 	_, err = tx.ExecContext(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s", savepointName))
 	if err != nil {
 		return fmt.Errorf("failed to release savepoint %s: %w", savepointName, err)

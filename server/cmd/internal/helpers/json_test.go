@@ -57,7 +57,6 @@ func TestWriteJSON(t *testing.T) {
 
 	t.Run("returns error for unmarshalable data", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		// Channels cannot be marshaled to JSON
 		data := make(chan int)
 
 		err := WriteJSON(w, http.StatusOK, data)
@@ -95,7 +94,6 @@ func TestWriteJSON(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := JSONResponse{
 			Error: true,
-			// Message and Data are empty
 		}
 
 		err := WriteJSON(w, http.StatusOK, data)
@@ -153,7 +151,6 @@ func TestReadJSON(t *testing.T) {
 	})
 
 	t.Run("enforces max bytes limit", func(t *testing.T) {
-		// Create a body larger than the limit
 		largeBody := `{"data":"` + strings.Repeat("x", 100) + `"}`
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(largeBody))
 		w := httptest.NewRecorder()
@@ -162,7 +159,6 @@ func TestReadJSON(t *testing.T) {
 			Data string `json:"data"`
 		}
 
-		// Set a small limit
 		err := ReadJSON(w, r, &data, 50)
 		if err == nil {
 			t.Error("expected error for body exceeding max bytes, got nil")
@@ -211,7 +207,6 @@ func TestReadJSON(t *testing.T) {
 			Name string `json:"name"`
 		}
 
-		// Pass 0 for maxBytes, should use 1MB default
 		err := ReadJSON(w, r, &data, 0)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

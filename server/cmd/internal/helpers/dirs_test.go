@@ -114,4 +114,3 @@ func TestGetOrCreateDir_TempDirItself(t *testing.T) {
 		t.Error("expected created to be false for existing temp directory")
 	}
 }
-

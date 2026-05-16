@@ -38,7 +38,6 @@ func buildHLSAssetQuerySuffix(audioTrack int, manifestQuery url.Values) string {
 // parsed from the FFmpeg-generated final playlist, eliminating the timing drift
 // that occurs with the flat 4-second estimate used during encoding.
 func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL string, querySuffix string, startSegment int64) string {
-	// Parse actual EXTINF durations from the FFmpeg final playlist.
 	var actualDurations []float64
 	for _, line := range strings.Split(finalPlaylist, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -57,8 +56,7 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 		totalSegs = 1
 	}
 
-	// TARGETDURATION must be >= the longest segment (HLS spec).
-	// Take the max of the estimated segment time and any actual duration.
+	// TARGETDURATION must be at least the longest segment.
 	maxDur := segDur
 	for _, d := range actualDurations {
 		if d > maxDur {
@@ -70,14 +68,12 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 		targetDuration = helpers.HLS_SEGMENT_TIME_SEC
 	}
 
-	// Sum the actual durations FFmpeg produced.
 	var sumActual float64
 	for _, d := range actualDurations {
 		sumActual += d
 	}
 
-	// Distribute the remaining time evenly across placeholder segments so that
-	// sum(placeholders) + sum(actualDurations) == totalDurationSec.
+	// Keep the placeholder and actual durations aligned with totalDurationSec.
 	var placeholderPerSeg float64
 	if startSegment > 0 {
 		remaining := totalDurationSec - sumActual
@@ -98,7 +94,6 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 	for i := 0; i < totalSegs; i++ {
 		var dur float64
 		if i < int(startSegment) {
-			// Placeholder segment before the session start point.
 			elapsed := float64(i) * placeholderPerSeg
 			dur = placeholderPerSeg
 			if elapsed+dur > totalDurationSec {
@@ -109,13 +104,7 @@ func buildResumePlaylist(finalPlaylist string, totalDurationSec float64, baseURL
 			if actualIdx < len(actualDurations) {
 				dur = actualDurations[actualIdx]
 			} else {
-				// Fallback: FFmpeg produced fewer segments than expected.
-				// NOTE: elapsed is approximated here as i*placeholderPerSeg,
-				// which ignores that segments [startSegment, actualIdx) had
-				// real durations that may differ from placeholderPerSeg.  The
-				// only consequence is a slightly inaccurate clamp against
-				// totalDurationSec for these tail segments; since this branch
-				// is itself an error-recovery path the imprecision is acceptable.
+				// Error-recovery path when FFmpeg produced fewer segments than expected.
 				elapsed := float64(i) * placeholderPerSeg
 				dur = placeholderPerSeg
 				if elapsed+dur > totalDurationSec {
@@ -185,10 +174,7 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, 
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	b.WriteString("#EXT-X-VERSION:7\n")
-	// TARGETDURATION must be >= the longest segment (HLS spec).
-	// Transcode: FFmpeg inserts keyframes freely, so 2x the target is a safe ceiling.
-	// Copy-video: FFmpeg splits only at existing keyframe boundaries; GOP sizes for
-	// H.265 web content are commonly 10-12s, so use HLS_COPY_VIDEO_TARGET_DURATION.
+	// Copy-video segments follow source keyframes, so they need a larger target duration.
 	targetDuration := helpers.HLS_SEGMENT_TIME_SEC * 2
 	if copyVideo {
 		targetDuration = helpers.HLS_COPY_VIDEO_TARGET_DURATION

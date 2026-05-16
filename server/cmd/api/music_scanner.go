@@ -19,8 +19,6 @@ type trackFile struct {
 	size int64
 }
 
-// ScanMusicLibrary walks through the configured music directory, extracts metadata
-// from audio files using ffprobe, and stores track information in the database.
 func (app *Application) ScanMusicLibrary() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
@@ -75,7 +73,6 @@ func (app *Application) ScanMusicLibrary() {
 
 		batch = append(batch, trackFile{path: path, ext: ext, size: info.Size()})
 
-		// Process batch when full
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
 			scanned, skipped, errors, processed := app.processMusicBatch(ctx, batch)
 			tracksScanned += scanned
@@ -95,7 +92,6 @@ func (app *Application) ScanMusicLibrary() {
 		return
 	}
 
-	// Process remaining tracks in the final batch
 	if len(batch) > 0 {
 		scanned, skipped, errors, processed := app.processMusicBatch(ctx, batch)
 		tracksScanned += scanned
@@ -127,9 +123,7 @@ func (app *Application) ScanMusicLibrary() {
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// processMusicBatch processes a batch of audio files within a single transaction.
-// Uses skip-on-error strategy: failed tracks don't rollback successful ones.
-// Holds ScannerDBMu so only one scanner (music or movie) writes to the DB at a time.
+// ScannerDBMu serializes scanner writes; savepoints keep one bad track from rolling back the batch.
 func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int, processed []string) {
 	app.ScannerDBMu.Lock()
 	defer app.ScannerDBMu.Unlock()
@@ -145,7 +139,6 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 	processed = make([]string, 0, len(files))
 
 	for _, file := range files {
-		// Check if track exists with same path and size (file unchanged)
 		unchanged, err := qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
 			FilePath: file.path,
 			Size:     file.size,
@@ -162,8 +155,6 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 			continue
 		}
 
-		// File is new or size changed - process it
-		// Use savepoint to allow per-track rollback on failure while continuing with other tracks.
 		savepointName := fmt.Sprintf("sp_track_%d", scanned+skipped+errCount)
 
 		err = manageSavepoint(ctx, tx, savepointName, func() error {

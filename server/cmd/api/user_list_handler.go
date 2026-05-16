@@ -16,9 +16,6 @@ type userListSummary struct {
 	Avatar *string `json:"avatar"`
 }
 
-// GetUsers serves GET /api/users.
-// Returns all users except the authenticated user, for use in room invite selection.
-// An optional ?q= query parameter filters results by name or email (case-insensitive substring match).
 func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {

@@ -198,8 +198,6 @@ func TestNormalizeMovieTitleForSearch(t *testing.T) {
 	}
 }
 
-// TestFfprobeFormatDurationToRunTimeMinutes mirrors processMovieFile: parse Format.Duration,
-// round to minutes for UI run_time.
 func TestFfprobeFormatDurationToRunTimeMinutes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

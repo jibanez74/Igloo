@@ -7,15 +7,12 @@ import (
 	"testing"
 )
 
-// getTestMediaPath returns the absolute path to a test media file under server/media/.
-// From server/cmd/internal/ffprobe/ we go up 4 levels to server/.
 func getTestMediaPath(filename string) string {
 	_, currentFile, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
 	return filepath.Join(projectRoot, "media", filename)
 }
 
-// requireTestMedia skips the test if the given path does not exist (e.g. server/media/track.m4a not checked in).
 func requireTestMedia(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err != nil {
@@ -42,12 +39,10 @@ func TestGetMetadata_AudioFile(t *testing.T) {
 		t.Fatal("Expected non-nil result")
 	}
 
-	// Verify we got at least one stream
 	if len(result.Streams) == 0 {
 		t.Error("Expected at least one stream")
 	}
 
-	// Verify format info is populated
 	if result.Format.Filename == "" {
 		t.Error("Expected Format.Filename to be set")
 	}
@@ -78,7 +73,6 @@ func TestGetMetadata_AudioStream(t *testing.T) {
 
 	var audioStream *Stream
 
-	// Find the audio stream
 	for i := range result.Streams {
 		if result.Streams[i].CodecType == "audio" {
 			audioStream = &result.Streams[i]
@@ -94,7 +88,6 @@ func TestGetMetadata_AudioStream(t *testing.T) {
 		t.Error("Expected audio stream to have CodecName")
 	}
 
-	// an audio track must have at least one channel
 	if audioStream.Channels == 0 {
 		t.Error("Expected audio stream to have Channels > 0")
 	}
@@ -141,7 +134,6 @@ func TestGetMetadata_FormatTags(t *testing.T) {
 		t.Fatalf("GetMetadata failed: %v", err)
 	}
 
-	// Log the tags we found (some may be empty depending on the file)
 	t.Logf("Title: %s", result.Format.Tags.Title)
 	t.Logf("Artist: %s", result.Format.Tags.Artist)
 	t.Logf("Album: %s", result.Format.Tags.Album)
@@ -149,8 +141,7 @@ func TestGetMetadata_FormatTags(t *testing.T) {
 	t.Logf("Track: %s", result.Format.Tags.Track)
 	t.Logf("Date: %s", result.Format.Tags.Date)
 
-	// Verify that at least some metadata structure is present
-	// (actual values depend on the test file's embedded metadata)
+	// Actual values depend on the test file's embedded metadata.
 	if result.Format.Tags == (FormatTags{}) {
 		t.Log("Warning: No format tags found in file - this may be expected if file has no metadata")
 	}
@@ -171,12 +162,10 @@ func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
 	}
 	defer Cleanup()
 
-	// Both should be the same singleton instance
 	if probe1 != probe2 {
 		t.Error("Expected New() to return the same singleton instance")
 	}
 
-	// Both instances should work
 	result1, err := probe1.GetMetadata(trackPath)
 	if err != nil {
 		t.Fatalf("First GetMetadata call failed: %v", err)
@@ -187,7 +176,6 @@ func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
 		t.Fatalf("Second GetMetadata call failed: %v", err)
 	}
 
-	// Results should be equivalent
 	if result1.Format.Duration != result2.Format.Duration {
 		t.Error("Expected same duration from both calls")
 	}

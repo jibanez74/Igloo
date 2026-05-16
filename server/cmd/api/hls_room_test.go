@@ -10,8 +10,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-// TestRoomHLSSessionKey_NoCollisionWithPersonalKey verifies that the room key
-// format can never collide with a regular HLSSessionKey value.
 func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	roomKey := RoomHLSSessionKey(1)
 	personalKey := HLSSessionKey(1, "720p_3mbps", 0)
@@ -27,18 +25,13 @@ func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	}
 }
 
-// TestCleanupRoomHLSSession_NoopWhenNoSession verifies that calling cleanup
-// for a room with no cached session does not panic or error.
 func TestCleanupRoomHLSSession_NoopWhenNoSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	// Must not panic
 	app.CleanupRoomHLSSession(99999)
 }
 
-// TestCleanupRoomHLSSession_RemovesSessionFromCache verifies that after cleanup
-// the session is no longer present in the HLS cache.
 func TestCleanupRoomHLSSession_RemovesSessionFromCache(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -46,7 +39,6 @@ func TestCleanupRoomHLSSession_RemovesSessionFromCache(t *testing.T) {
 	const roomID = int64(42)
 	key := RoomHLSSessionKey(roomID)
 
-	// Plant a dummy session in the cache.
 	dummy := &HLSSession{TempDir: ""}
 	app.HLSSessionCache.SetDefault(key, dummy)
 
@@ -147,8 +139,6 @@ func TestGetOrCreateRoomHLSSession_RejectsDeletedRoomCacheHit(t *testing.T) {
 	}
 }
 
-// TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream verifies that warm-up
-// returns an error (and stores nothing) when the movie lacks video streams.
 func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -169,8 +159,6 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Fatalf("select movie id: %v", err)
 	}
 
-	// WarmUpRoomHLSSession should propagate the "no playable video track" error
-	// from createHLSSession and must not cache a failed room session.
 	err = app.WarmUpRoomHLSSession(background, 1, movieID, "720p_3mbps", 0)
 	if err == nil {
 		t.Fatal("expected error from warm-up when movie has no video streams")
@@ -179,15 +167,12 @@ func TestWarmUpRoomHLSSession_FailsWhenMovieHasNoVideoStream(t *testing.T) {
 		t.Errorf("error = %v, want mention of 'no playable video track'", err)
 	}
 
-	// Nothing should have been stored in the cache.
 	key := RoomHLSSessionKey(1)
 	if _, ok := app.HLSSessionCache.Get(key); ok {
 		t.Error("expected no cache entry when warm-up failed")
 	}
 }
 
-// TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached verifies that a second
-// call to WarmUpRoomHLSSession is a no-op when a session is already cached.
 func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -195,11 +180,9 @@ func TestWarmUpRoomHLSSession_IdempotentWhenAlreadyCached(t *testing.T) {
 	const roomID = int64(7)
 	key := RoomHLSSessionKey(roomID)
 
-	// Pre-populate the cache with a sentinel session.
 	sentinel := &HLSSession{TempDir: "sentinel"}
 	app.HLSSessionCache.SetDefault(key, sentinel)
 
-	// WarmUpRoomHLSSession should return nil without touching the sentinel.
 	err := app.WarmUpRoomHLSSession(background, roomID, 999, "1080p_8mbps", 0)
 	if err != nil {
 		t.Fatalf("unexpected error on second warm-up call: %v", err)

@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-// processProductionCompanies processes production companies from TMDB data.
 func (app *Application) processProductionCompanies(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -21,7 +20,6 @@ func (app *Application) processProductionCompanies(
 		OriginCountry string `json:"origin_country"`
 	},
 ) error {
-	// Delete all existing production company links
 	if err := qtx.DeleteMovieProductionCompanies(ctx, movieID); err != nil {
 		return fmt.Errorf("delete movie production companies failed: %w", err)
 	}
@@ -49,7 +47,6 @@ func (app *Application) processProductionCompanies(
 	return nil
 }
 
-// processCast processes cast members from TMDB data.
 func (app *Application) processCast(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -68,7 +65,6 @@ func (app *Application) processCast(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		// Upsert cast record
 		_, err = qtx.UpsertCast(ctx, database.UpsertCastParams{
 			MovieID:   movieID,
 			ArtistID:  artist.ID,
@@ -84,7 +80,6 @@ func (app *Application) processCast(
 	return nil
 }
 
-// processCrew processes crew members from TMDB data.
 func (app *Application) processCrew(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -103,7 +98,6 @@ func (app *Application) processCrew(
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
 
-		// Upsert crew record
 		_, err = qtx.UpsertCrew(ctx, database.UpsertCrewParams{
 			MovieID:    movieID,
 			ArtistID:   artist.ID,
@@ -119,7 +113,6 @@ func (app *Application) processCrew(
 	return nil
 }
 
-// mapTmdbVideoType maps TMDB video type to extra_videos.type ('trailer', 'special_feature', 'other').
 func mapTmdbVideoType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "trailer", "teaser":
@@ -131,7 +124,6 @@ func mapTmdbVideoType(t string) string {
 	}
 }
 
-// mapTmdbVideoSite maps TMDB site to extra_videos.site ('youtube', 'vimeo', 'other').
 func mapTmdbVideoSite(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "youtube":
@@ -143,8 +135,6 @@ func mapTmdbVideoSite(s string) string {
 	}
 }
 
-// processExtraVideos processes trailers and special features from TMDB Videos.Results.
-// Deletes existing movie–extra links, then upserts each video and links it to the movie.
 func (app *Application) processExtraVideos(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -192,7 +182,6 @@ func (app *Application) processExtraVideos(
 	return nil
 }
 
-// processMovieGenres processes genres from TMDB data.
 func (app *Application) processMovieGenres(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -202,14 +191,12 @@ func (app *Application) processMovieGenres(
 		Name string `json:"name"`
 	},
 ) error {
-	// Delete all existing genre links
 	err := qtx.DeleteMovieGenres(ctx, movieID)
 	if err != nil {
 		return fmt.Errorf("delete movie genres failed: %w", err)
 	}
 
 	for _, genre := range genres {
-		// Get or create genre with type "movie"
 		dbGenre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
 			Tag:       genre.Name,
 			GenreType: "movie",
@@ -219,7 +206,6 @@ func (app *Application) processMovieGenres(
 			return fmt.Errorf("get or create genre failed: %w", err)
 		}
 
-		// Create movie-genre relationship
 		err = qtx.CreateMovieGenre(ctx, database.CreateMovieGenreParams{
 			MovieID: movieID,
 			GenreID: dbGenre.ID,

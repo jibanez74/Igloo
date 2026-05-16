@@ -104,7 +104,6 @@ func (app *Application) logNormalizedChapterStartTimes(
 	}
 }
 
-// parseMoviesLibraryQuery reads page, per_page, and sort for library- and liked-list endpoints.
 func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string) {
 	page = 1
 	if p := r.URL.Query().Get("page"); p != "" {
@@ -132,8 +131,6 @@ func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string)
 	return page, perPage, sort
 }
 
-// GetMoviesLibrary returns a paginated list of movies for the library grid (A–Z or Z–A).
-// Query: page (default 1), per_page (default MOVIES_LIBRARY_DEFAULT_PER_PAGE, max MOVIES_LIBRARY_MAX_PER_PAGE), sort=asc|desc (default asc).
 func (app *Application) GetMoviesLibrary(w http.ResponseWriter, r *http.Request) {
 	page, perPage, sortParam := parseMoviesLibraryQuery(r)
 
@@ -218,7 +215,6 @@ func libraryRowsFromGenreDesc(rows []database.GetMoviesByGenreDescRow) []databas
 	return out
 }
 
-// GetMovieGenresList returns movie genres that appear in the library with counts (genre_type = movie).
 func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetMovieGenresWithCounts(r.Context())
 	if err != nil {
@@ -236,8 +232,6 @@ func (app *Application) GetMovieGenresList(w http.ResponseWriter, r *http.Reques
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMoviesByGenreLibrary returns a paginated list of movies for a genre (same JSON shape as GET /api/movies/library).
-// Route: GET /api/movies/genres/{genreId}/movies — query: page, per_page, sort=asc|desc.
 func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.Request) {
 	genreIDStr := chi.URLParam(r, "genreId")
 	genreID, err := strconv.ParseInt(genreIDStr, 10, 64)
@@ -301,7 +295,6 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetLikedMovies returns the current user's liked movies as paginated rows (same shape as GET /api/movies/library).
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -365,7 +358,6 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMovieLikeStatus returns whether the signed-in user has liked this movie ({ is_liked: bool }). Guests always get false.
 func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	idParam := chi.URLParam(r, "id")
@@ -440,7 +432,6 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 	return true, nil
 }
 
-// ToggleLikeMovie toggles like for the session user on the given movie (same behavior as music track likes).
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -486,7 +477,6 @@ func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMoviesStats returns aggregate counts for the movies UI (stats row).
 func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 	total, err := app.Queries.GetMoviesCount(r.Context())
 	if err != nil {
@@ -505,8 +495,6 @@ func (app *Application) GetMoviesStats(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetLatestMovies returns the 12 most recently added movies from the database.
-// Response includes id, title, poster_path (path only; frontend builds full URL), and year.
 func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.Queries.GetLatestMovies(r.Context())
 	if err != nil {
@@ -523,8 +511,7 @@ func (app *Application) GetLatestMovies(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMovieDetails returns a movie with all related data (cast, crew, genres, production companies, extra videos).
-// Uses a read-only transaction so all data is from a single consistent snapshot.
+// Read-only transaction keeps related movie data in one snapshot.
 func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -607,8 +594,6 @@ func (app *Application) GetMovieDetails(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMovieTechnicalDetails returns video/audio streams, subtitles, and chapters
-// for a movie. All data comes from the database (populated by the scanner via ffprobe).
 func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -698,7 +683,6 @@ func (app *Application) GetMovieTechnicalDetails(w http.ResponseWriter, r *http.
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// StreamMovie streams the movie file for playback (direct stream, no transcoding).
 func (app *Application) StreamMovie(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)

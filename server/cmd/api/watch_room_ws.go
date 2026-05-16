@@ -520,8 +520,7 @@ func (app *Application) loadRoomMemberSummary(ctx context.Context, roomID, userI
 	}, nil
 }
 
-// WatchRoomWebSocket serves GET /api/watch-rooms/{id}/ws.
-// Only authenticated room members may upgrade.
+// Only room members may upgrade.
 func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Request) {
 	room, userID, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {

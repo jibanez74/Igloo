@@ -14,17 +14,14 @@ func TestHashPassword(t *testing.T) {
 		t.Fatalf("HashPassword failed: %v", err)
 	}
 
-	// Verify hash is not empty
 	if hashedPassword == "" {
 		t.Error("HashPassword returned empty string")
 	}
 
-	// Verify hash is different from original password
 	if hashedPassword == password {
 		t.Error("HashPassword returned the same string as input")
 	}
 
-	// Verify hash can be validated by bcrypt
 	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		t.Errorf("Generated hash is not valid bcrypt hash: %v", err)
@@ -44,7 +41,6 @@ func TestHashPassword_DifferentHashes(t *testing.T) {
 		t.Fatalf("Second HashPassword call failed: %v", err)
 	}
 
-	// Each hash should be unique due to random salt
 	if hash1 == hash2 {
 		t.Error("HashPassword generated identical hashes for same password (should have different salts)")
 	}

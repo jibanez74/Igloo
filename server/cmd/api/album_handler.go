@@ -11,8 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// GetAlbumsAlphabetical returns a paginated list of albums sorted alphabetically.
-// Supports query parameters: page (default 1), per_page (default 24, max 48)
 func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Request) {
 	page := int64(1)
 	if p := r.URL.Query().Get("page"); p != "" {
@@ -73,7 +71,6 @@ func (app *Application) GetAlbumsAlphabetical(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetLatestAlbums returns the 12 most recently added albums.
 func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) {
 	albums, err := app.Queries.GetLatestAlbums(r.Context())
 	if err != nil {
@@ -92,8 +89,7 @@ func (app *Application) GetLatestAlbums(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetAlbumDetails returns an album with all its tracks, artists, and genre information.
-// Uses a read-only transaction so album, tracks, artists, and genres are from a single consistent snapshot.
+// Use a read-only transaction so album details come from one snapshot.
 func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -180,7 +176,7 @@ func (app *Application) GetAlbumDetails(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// DeleteAlbum deletes an album. Associated tracks are cascade deleted by the database.
+// Track and join rows are cascade-deleted by the database.
 func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -191,7 +187,6 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Verify the album exists and get title for logging
 	album, err := app.Queries.GetAlbumByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -204,7 +199,6 @@ func (app *Application) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete the album (cascade will delete tracks, musician_albums, and album_genres)
 	err = app.Queries.DeleteAlbum(ctx, id)
 	if err != nil {
 		app.Logger.Error("failed to delete album", "error", err, "id", id)

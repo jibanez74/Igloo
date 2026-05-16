@@ -13,7 +13,6 @@ type AuthRequest struct {
 	Password string `json:"password"`
 }
 
-// RouteLogin authenticates a user with email and password.
 func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	var request AuthRequest
 
@@ -72,7 +71,6 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// Gets the current user's profile from db using the id stored in the session
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -110,7 +108,6 @@ func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Reques
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// Destroys the current session and logs out the user
 func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 	err := app.SessionManager.Destroy(r.Context())
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	mp4TestBoxHeaderSize      = 8
-	mp4TestNonSyncSampleFlag  = 0x00000001
+	mp4TestBoxHeaderSize     = 8
+	mp4TestNonSyncSampleFlag = 0x00000001
 )
 
 type Fixture struct {

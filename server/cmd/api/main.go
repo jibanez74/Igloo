@@ -638,11 +638,9 @@ func (app *Application) InitRouter() {
 	router.Use(app.LoadAndSaveSession)
 
 	router.Route("/api", func(r chi.Router) {
-		// Public endpoints — no authentication required.
 		r.Get("/health", app.HealthCheck)
 		r.Post("/auth/login", app.AuthenticateUser)
 
-		// All remaining /api routes require a valid session.
 		r.Group(func(r chi.Router) {
 			r.Use(app.IsAuth)
 
@@ -660,7 +658,6 @@ func (app *Application) InitRouter() {
 				r.Delete("/", app.DeleteUserAccount)
 			})
 
-			// Static assets include uploaded avatars and scanner-downloaded artwork.
 			r.Get("/static/*", app.ServeStaticFiles)
 
 			r.Route("/tmdb", func(r chi.Router) {
@@ -706,7 +703,6 @@ func (app *Application) InitRouter() {
 				r.Get("/{id}/stream", app.StreamMovie)
 				r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
 
-				// Admin-only: library management operations.
 				r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
 				r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
 				r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
@@ -742,7 +738,6 @@ func (app *Application) InitRouter() {
 				r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
 				r.Get("/playback", app.GetPlaybackSettings)
 				r.Put("/playback", app.UpdatePlaybackSettings)
-				// Admin-only: scan triggers mutate the library.
 				r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
 				r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
 			})
@@ -754,7 +749,6 @@ func (app *Application) InitRouter() {
 					r.Get("/", app.GetAlbumsAlphabetical)
 					r.Get("/details/{id}", app.GetAlbumDetails)
 					r.Get("/latest", app.GetLatestAlbums)
-					// Admin-only: destructive library operation.
 					r.With(app.RequireAdmin).Delete("/{id}", app.DeleteAlbum)
 				})
 
@@ -801,9 +795,7 @@ func (app *Application) InitRouter() {
 		})
 	})
 
-	// Frontend routes - serve the React SPA
-	// This must be registered after /api routes to avoid conflicts
-	// All non-API routes fall through to the SPA (client-side routing)
+	// Register SPA fallback after /api routes so API paths cannot be captured.
 	router.Get("/*", app.ServeFrontend)
 
 	app.Router = router
@@ -830,30 +822,20 @@ func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface) {
 	}
 }
 
-// ListenForShutdown handles graceful shutdown when SIGINT or SIGTERM is received.
-// This is typically triggered by Ctrl+C, `kill`, or container orchestrators.
 func (app *Application) ListenForShutdown() {
-	// Create a channel to receive OS signals.
 	quit := make(chan os.Signal, 1)
 
-	// Register for interrupt (Ctrl+C) and terminate signals.
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Block until a signal is received.
 	<-quit
 
-	// Stop receiving further signals.
 	signal.Stop(quit)
 
 	app.Logger.Info("shutting down server...")
 
-	// Create a context with timeout for graceful shutdown.
-	// Gives in-flight requests 30 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Gracefully shutdown the HTTP server.
-	// This stops accepting new requests and waits for in-flight requests to complete.
 	if app.Server != nil {
 		err := app.Server.Shutdown(ctx)
 		if err != nil {
@@ -867,7 +849,7 @@ func (app *Application) ListenForShutdown() {
 		app.WatchRoomHub.Shutdown()
 	}
 
-	// Clean up all HLS sessions (kill FFmpeg, delete temp dirs) before FFmpeg binary cleanup.
+	// Stop FFmpeg sessions before cleaning up the FFmpeg binary.
 	if app.HLSSessionCache != nil {
 		count := 0
 		for _, item := range app.HLSSessionCache.Items() {
@@ -882,8 +864,7 @@ func (app *Application) ListenForShutdown() {
 		app.HLSSessionCache.Flush()
 	}
 
-	// Wait for any in-flight background tasks to complete.
-	// These may still need database and logger access.
+	// Background tasks may still need database and logger access.
 	app.Wait.Wait()
 
 	if app.RemuxSafetyCache != nil {
@@ -902,20 +883,16 @@ func (app *Application) ListenForShutdown() {
 		app.Tmdb.ClearCache()
 	}
 
-	// Clean up ffprobe temp directory and extracted binary.
 	err := ffprobe.Cleanup()
 	if err != nil {
 		app.Logger.Error("failed to cleanup ffprobe", "error", err)
 	}
 
-	// Clean up ffmpeg temp directory and extracted binary.
 	err = ffmpeg.Cleanup()
 	if err != nil {
 		app.Logger.Error("failed to cleanup ffmpeg", "error", err)
 	}
 
-	// Close database connection to ensure all writes are flushed.
-	// Done after HTTP and background tasks are complete.
 	if app.DB != nil {
 		err = app.DB.Close()
 		if err != nil {
@@ -923,9 +900,7 @@ func (app *Application) ListenForShutdown() {
 		}
 	}
 
-	// Close the logger last to flush any remaining buffered logs.
-	// This ensures we can log errors from all previous cleanup steps.
-	// Use standard log here since app.Logger is being closed.
+	// Close the logger last so prior cleanup failures can still be logged.
 	if app.LoggerCloser != nil {
 		err = app.LoggerCloser()
 		if err != nil {

@@ -12,8 +12,6 @@ import (
 	"unicode"
 )
 
-// Search response shapes ----------------------------------------------------
-
 type movieSearchSection struct {
 	Results []database.GetMoviesLibraryAscRow `json:"results"`
 	Total   int64                             `json:"total"`
@@ -78,7 +76,6 @@ type searchTracksData struct {
 	TotalPages int64                               `json:"total_pages"`
 }
 
-// Raw FTS5 SQL -------------------------------------------------------------
 // sqlc cannot parse FTS5 MATCH expressions, so these queries are hand-written
 // and executed directly against app.DB. Result columns are scanned into the
 // existing sqlc-generated row types so the JSON shape matches the regular
@@ -138,8 +135,6 @@ LIMIT ? OFFSET ?`
 
 const searchTracksCountSQL = `
 SELECT COUNT(*) FROM tracks_fts WHERE tracks_fts MATCH ?`
-
-// Helpers ------------------------------------------------------------------
 
 // buildFTSQuery converts a user-supplied query into a safe FTS5 MATCH expression.
 // It strips characters that are not letters, digits, or whitespace so the user
@@ -216,8 +211,6 @@ func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	}
 	return page, pages
 }
-
-// Scanners -----------------------------------------------------------------
 
 func (app *Application) searchMovies(ctx context.Context, match string, limit, offset int64) ([]database.GetMoviesLibraryAscRow, error) {
 	rows, err := app.DB.QueryContext(ctx, searchMoviesSQL, match, limit, offset)
@@ -324,12 +317,6 @@ func (app *Application) searchCount(ctx context.Context, query, match string) (i
 	return total, nil
 }
 
-// Handlers -----------------------------------------------------------------
-
-// SearchAll returns the top SEARCH_ALL_TOP_N hits across each entity (with
-// per-entity totals) for the unified "All" tab.
-//
-// GET /api/search?q=<query>
 func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	match, ok := buildFTSQuery(q)
@@ -414,7 +401,6 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SearchMovies returns paginated movie results. GET /api/search/movies?q=&page=&per_page=
 func (app *Application) SearchMovies(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page, perPage := parseSearchPagination(r)
@@ -466,7 +452,6 @@ func (app *Application) SearchMovies(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SearchAlbums returns paginated album results.
 func (app *Application) SearchAlbums(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page, perPage := parseSearchPagination(r)
@@ -518,7 +503,6 @@ func (app *Application) SearchAlbums(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SearchMusicians returns paginated musician results.
 func (app *Application) SearchMusicians(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page, perPage := parseSearchPagination(r)
@@ -570,7 +554,6 @@ func (app *Application) SearchMusicians(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// SearchTracks returns paginated track results.
 func (app *Application) SearchTracks(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	page, perPage := parseSearchPagination(r)

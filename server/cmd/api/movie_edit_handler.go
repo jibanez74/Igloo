@@ -84,8 +84,6 @@ func tmdbMovieLocks() movieMetadataLocks {
 	}
 }
 
-// IdentifyMovie replaces all TMDB-sourced metadata for a movie (full re-identify).
-// PUT /api/movies/:id/identify   body: { tmdb_id: int }
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -203,8 +201,6 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UpdateMovieMetadata applies a partial update to movie metadata fields.
-// PATCH /api/movies/:id   body: { title?, year?, release_date?, overview?, ... }
 func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -342,8 +338,6 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// DeleteMovie deletes a movie from the database. Optionally deletes the file from disk.
-// DELETE /api/movies/:id   body: { delete_file?: bool }
 func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -354,7 +348,7 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		DeleteFile bool `json:"delete_file"`
 	}
-	// Body is optional — a DELETE with no body is fine (delete_file defaults to false).
+	// DELETE may omit the body; delete_file defaults to false.
 	_ = helpers.ReadJSON(w, r, &payload, 0)
 
 	ctx := r.Context()
@@ -390,8 +384,6 @@ func (app *Application) DeleteMovie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildUpdateParamsFromTmdb maps TMDB movie data to UpdateMovieParams.
-// Shared by IdentifyMovie and the scanner's processMovieFile (via inline mapping).
 func buildUpdateParamsFromTmdb(movieID int64, m *tmdb.TmdbMovie) database.UpdateMovieParams {
 	params := database.UpdateMovieParams{
 		ID:            movieID,

@@ -11,9 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// embeddedPathLooksLikeStaticAsset is true for hashed Vite chunks and other non-HTML static files.
-// If these are missing from the embedded webdist, we must not fall back to index.html (the browser
-// expects JS/CSS and would error with "MIME type text/html" for module scripts).
+// Missing embedded assets must 404; index.html fallback breaks module MIME checks.
 func embeddedPathLooksLikeStaticAsset(relPath string) bool {
 	ext := strings.ToLower(filepath.Ext(relPath))
 	switch ext {
@@ -30,31 +28,23 @@ func embeddedPathLooksLikeStaticAsset(relPath string) bool {
 	}
 }
 
-// ServeStaticFiles serves static files from the configured static directory.
-// It sets appropriate cache headers and prevents directory traversal attacks.
+// ServeStaticFiles serves configured static files with traversal protection.
 func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request) {
-	// Get the file path from the URL
 	requestedPath := chi.URLParam(r, "*")
 
-	// Prevent directory traversal attacks
 	if strings.Contains(requestedPath, "..") {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Build the full file path
 	fullPath := filepath.Join(app.Settings.StaticDir, requestedPath)
-
-	// Clean the path to prevent any remaining traversal attempts
 	fullPath = filepath.Clean(fullPath)
 
-	// Verify the path is still within the static directory
 	if !strings.HasPrefix(fullPath, filepath.Clean(app.Settings.StaticDir)) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Check if file exists
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -67,7 +57,6 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Don't serve directories
 	if info.IsDir() {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -81,7 +70,6 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
-	// Determine content type from file extension
 	ext := filepath.Ext(fullPath)
 	contentType := mime.TypeByExtension(ext)
 	if contentType == "" {
@@ -89,7 +77,7 @@ func (app *Application) ServeStaticFiles(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
@@ -108,7 +96,6 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Path under webdist/ (chi wildcard, or URL path if wildcard is empty)
 	requestedPath := chi.URLParam(r, "*")
 	if requestedPath == "" {
 		requestedPath = strings.TrimPrefix(r.URL.Path, "/")
@@ -117,21 +104,17 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		requestedPath = "index.html"
 	}
 
-	// Prevent directory traversal attacks
 	if strings.Contains(requestedPath, "..") {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Clean the path
 	requestedPath = filepath.Clean(requestedPath)
 
-	// Build the path within the embedded filesystem
-	// The embed path is webdist, so files are at webdist/... in the FS
+	// embed.FS uses webdist/... paths with forward slashes.
 	fsPath := filepath.Join("webdist", requestedPath)
-	fsPath = filepath.ToSlash(fsPath) // Use forward slashes for embed.FS
+	fsPath = filepath.ToSlash(fsPath)
 
-	// Try to open the file from embedded filesystem
 	file, err := FrontendFS.Open(fsPath)
 	if err != nil {
 		if embeddedPathLooksLikeStaticAsset(requestedPath) {
@@ -146,7 +129,7 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		// File doesn't exist - serve index.html for SPA client-side routes
+
 		indexPath := "webdist/index.html"
 		content, err := fs.ReadFile(FrontendFS, indexPath)
 		if err != nil {
@@ -163,7 +146,6 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Get file info for content type and caching
 	info, err := file.Stat()
 	if err != nil {
 		app.Logger.Error("failed to stat embedded file", "error", err, "path", fsPath)
@@ -171,45 +153,39 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Variable to hold file content and info
 	var content []byte
 	var fileInfo fs.FileInfo
 
-	// If it's a directory, serve index.html
 	if info.IsDir() {
 		indexPath := filepath.Join(fsPath, "index.html")
 		indexPath = filepath.ToSlash(indexPath)
 		indexContent, err := fs.ReadFile(FrontendFS, indexPath)
 		if err != nil {
-			// Directory doesn't have index.html, try root index.html
 			rootIndexPath := "webdist/index.html"
 			indexContent, err = fs.ReadFile(FrontendFS, rootIndexPath)
 			if err != nil {
 				http.Error(w, "Not Found", http.StatusNotFound)
 				return
 			}
-			// Get file info for the root index.html
 			indexFile, _ := FrontendFS.Open(rootIndexPath)
 			if statInfo, err := indexFile.Stat(); err == nil {
 				fileInfo = statInfo
 			} else {
-				fileInfo = info // Fallback to directory info
+				fileInfo = info
 			}
 			indexFile.Close()
 			content = indexContent
 		} else {
-			// Get file info for the directory's index.html
 			indexFile, _ := FrontendFS.Open(indexPath)
 			if statInfo, err := indexFile.Stat(); err == nil {
 				fileInfo = statInfo
 			} else {
-				fileInfo = info // Fallback to directory info
+				fileInfo = info
 			}
 			indexFile.Close()
 			content = indexContent
 		}
 	} else {
-		// Read file content (fs.File doesn't implement io.ReadSeeker)
 		content, err = fs.ReadFile(FrontendFS, fsPath)
 		if err != nil {
 			app.Logger.Error("failed to read embedded file", "error", err, "path", fsPath)
@@ -219,25 +195,22 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 		fileInfo = info
 	}
 
-	// Determine content type from file extension
 	ext := filepath.Ext(fileInfo.Name())
 	contentType := mime.TypeByExtension(ext)
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 
-	// Set appropriate cache headers based on file type
-	// Static assets (JS, CSS, images) should be cached, HTML should not
+	// Static assets should be cached; HTML should not.
 	if ext == ".html" {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	} else {
-		w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year for static assets
+		w.Header().Set("Cache-Control", "public, max-age=31536000")
 	}
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	// Serve the file content
 	w.WriteHeader(http.StatusOK)
 	w.Write(content)
 }
