@@ -39,7 +39,10 @@ function HomePage() {
       {/* main application header */}
       <header className="mb-1 sm:mb-2">
         <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-          <Home className="size-5 text-amber-400 sm:size-6" aria-hidden="true" />
+          <Home
+            className="size-5 text-amber-400 sm:size-6"
+            aria-hidden="true"
+          />
           <span>Welcome to Igloo</span>
         </h1>
 
@@ -48,6 +51,7 @@ function HomePage() {
           music, and more.
         </p>
       </header>
+
       <WatchRooms />
       <LatestMovies />
       <LatestAlbums />

@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Permission levels for playlist access
 type PlaylistPermission int
 
 const (
@@ -22,7 +21,6 @@ const (
 	PermissionOwner
 )
 
-// Request types
 type CreatePlaylistRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -68,19 +66,16 @@ type AddMoviesRequest struct {
 	MovieIds []int64 `json:"movie_ids"`
 }
 
-// getPlaylistPermission checks the user's permission level for a playlist
 func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, userId int64) (PlaylistPermission, error) {
 	playlist, err := app.Queries.GetPlaylistById(ctx, playlistId)
 	if err != nil {
 		return PermissionNone, err
 	}
 
-	// Owner has full permissions
 	if playlist.UserID == userId {
 		return PermissionOwner, nil
 	}
 
-	// Check if user can edit (owner or collaborator with edit rights)
 	canEdit, err := app.Queries.CanUserEditPlaylist(ctx, database.CanUserEditPlaylistParams{
 		ID:       playlistId,
 		UserID:   userId,
@@ -94,7 +89,6 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 		return PermissionEdit, nil
 	}
 
-	// Check if user is a view-only collaborator
 	isCollaborator, err := app.Queries.IsUserCollaborator(ctx, database.IsUserCollaboratorParams{
 		PlaylistID: playlistId,
 		UserID:     userId,
@@ -107,7 +101,6 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 		return PermissionView, nil
 	}
 
-	// Check if playlist is public
 	if playlist.IsPublic {
 		return PermissionView, nil
 	}
@@ -131,7 +124,6 @@ func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist data
 	return true
 }
 
-// GetPlaylists returns all playlists the user owns or has collaborator access to
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -149,7 +141,6 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add owner/edit info to each playlist
 	type PlaylistResponse struct {
 		database.GetPlaylistsWithCollaboratorAccessRow
 		IsOwner bool `json:"is_owner"`
@@ -161,7 +152,6 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 		isOwner := p.UserID == userID
 		canEdit := isOwner
 		if !isOwner {
-			// Check collaborator edit permission
 			canEditResult, _ := app.Queries.CanUserEditPlaylist(r.Context(), database.CanUserEditPlaylistParams{
 				ID:       p.ID,
 				UserID:   userID,
@@ -186,7 +176,6 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetPlaylist returns a single playlist's details
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -201,7 +190,6 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check permission
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -229,11 +217,9 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get track count and duration
 	trackCount, _ := app.Queries.CountPlaylistTracks(r.Context(), playlistId)
 	duration, _ := app.Queries.GetPlaylistDuration(r.Context(), playlistId)
 
-	// Get collaborators if owner
 	var collaborators []database.GetPlaylistCollaboratorsRow
 	if permission == PermissionOwner {
 		collaborators, _ = app.Queries.GetPlaylistCollaborators(r.Context(), playlistId)
@@ -254,7 +240,6 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetPlaylistTracks returns tracks in a playlist with pagination for infinite scroll
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -269,7 +254,6 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Check permission
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -296,7 +280,6 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse pagination params
 	limit := int64(50)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		parsed, err := strconv.ParseInt(l, 10, 64)
@@ -340,7 +323,6 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// CreatePlaylist creates a new playlist
 func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -354,7 +336,6 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate
 	if req.Name == "" {
 		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
 		return
@@ -394,7 +375,6 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusCreated, res)
 }
 
-// UpdatePlaylist updates a playlist's metadata (owner only)
 func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -409,7 +389,6 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only owner can update metadata
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -446,7 +425,6 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate
 	if req.Name == "" {
 		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
 		return
@@ -486,7 +464,6 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// DeletePlaylist deletes a playlist (owner only)
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -501,7 +478,6 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get playlist to verify ownership
 	playlist, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -542,7 +518,6 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// AddTracksToPlaylist adds tracks to a playlist
 func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -557,7 +532,6 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Check edit permission
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -603,7 +577,6 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 	skippedCount := 0
 
 	for _, trackId := range req.TrackIds {
-		// Check if track already in playlist
 		inPlaylist, _ := app.Queries.IsTrackInPlaylist(r.Context(), database.IsTrackInPlaylistParams{
 			PlaylistID: playlistId,
 			TrackID:    trackId,
@@ -625,7 +598,6 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 		addedCount++
 	}
 
-	// Update playlist timestamp
 	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
 
 	app.Logger.Info("tracks added to playlist", "playlist_id", playlistId, "added", addedCount, "skipped", skippedCount)
@@ -642,7 +614,6 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// RemoveTrackFromPlaylist removes a track from a playlist
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -664,7 +635,6 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Check edit permission
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -705,7 +675,6 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Update playlist timestamp
 	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
 
 	app.Logger.Info("track removed from playlist", "playlist_id", playlistId, "track_id", trackId)
@@ -718,7 +687,6 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// ReorderPlaylistTracks reorders tracks in a playlist
 func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -733,7 +701,6 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check edit permission
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -775,7 +742,6 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Update positions based on new order
 	for i, trackId := range req.TrackIds {
 		err := app.Queries.UpdateTrackPosition(r.Context(), database.UpdateTrackPositionParams{
 			Position:   int64(i),
@@ -787,7 +753,6 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Update playlist timestamp
 	_ = app.Queries.UpdatePlaylistTimestamp(r.Context(), playlistId)
 
 	app.Logger.Info("playlist tracks reordered", "playlist_id", playlistId)
@@ -800,7 +765,6 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetPlaylistCollaborators returns the collaborators for a playlist (owner only)
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -815,7 +779,6 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Only owner can view collaborators
 	permission, err := app.getPlaylistPermission(r.Context(), playlistId, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -863,7 +826,6 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// AddCollaborator adds a collaborator to a playlist (owner only)
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -878,7 +840,6 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Only owner can add collaborators
 	playlist, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -905,13 +866,11 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Can't add yourself as collaborator
 	if req.UserId == userID {
 		helpers.ErrorJSON(w, errors.New("you cannot add yourself as a collaborator"), http.StatusBadRequest)
 		return
 	}
 
-	// Verify user exists
 	_, err = app.Queries.GetUser(r.Context(), req.UserId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -947,7 +906,6 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 	helpers.WriteJSON(w, http.StatusCreated, res)
 }
 
-// RemoveCollaborator removes a collaborator from a playlist (owner only)
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -969,7 +927,6 @@ func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Only owner can remove collaborators
 	playlist, err := app.Queries.GetPlaylistById(r.Context(), playlistId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1038,7 +995,6 @@ func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescR
 	return out
 }
 
-// GetMoviePlaylists lists movie playlists (content_type = movie) for the current user (owner or collaborator).
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1091,7 +1047,6 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// CreateMoviePlaylist creates a movie playlist (content_type = movie).
 func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1159,7 +1114,6 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusCreated, res)
 }
 
-// GetMoviePlaylist returns one movie playlist with item count.
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1222,7 +1176,6 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// UpdateMoviePlaylist updates metadata for a movie playlist (owner only).
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1335,7 +1288,6 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// DeleteMoviePlaylist deletes a movie playlist (owner only).
 func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1388,7 +1340,6 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMoviePlaylistMovies returns paginated movies in a movie playlist (same item shape as GET /api/movies/library).
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1487,7 +1438,6 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// AddMoviesToMoviePlaylist adds movies to a movie playlist (edit permission).
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -1607,7 +1557,6 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// RemoveMovieFromMoviePlaylist removes a movie from a movie playlist.
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {

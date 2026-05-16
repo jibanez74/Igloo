@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// WatchRoomHLSManifest serves GET /api/watch-rooms/{id}/hls/playlist.m3u8.
 func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Request) {
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {
@@ -53,7 +52,6 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	_, _ = w.Write([]byte(playlist))
 }
 
-// WatchRoomHLSSegment serves GET /api/watch-rooms/{id}/hls/{filename}.
 func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Request) {
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {
@@ -113,7 +111,6 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
 }
 
-// StreamWatchRoomMovie serves GET /api/watch-rooms/{id}/stream.
 func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Request) {
 	room, _, ok := app.loadAuthorizedWatchRoomForRequest(w, r)
 	if !ok {

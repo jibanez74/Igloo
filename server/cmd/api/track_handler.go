@@ -13,8 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// ToggleLikeTrack toggles the like status of a track for the authenticated user.
-// If the track is already liked, it will be unliked. If not liked, it will be liked.
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
@@ -31,7 +29,6 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 
-	// Check if track exists
 	_, err = app.Queries.GetTrack(ctx, trackID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -44,7 +41,6 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Check if already liked
 	isLiked, err := app.Queries.IsTrackLiked(ctx, database.IsTrackLikedParams{
 		UserID:  userID,
 		TrackID: trackID,
@@ -56,7 +52,6 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if isLiked {
-		// Unlike the track
 		err = app.Queries.UnlikeTrack(ctx, database.UnlikeTrackParams{
 			UserID:  userID,
 			TrackID: trackID,
@@ -67,7 +62,6 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	} else {
-		// Like the track
 		err = app.Queries.LikeTrack(ctx, database.LikeTrackParams{
 			UserID:  userID,
 			TrackID: trackID,
@@ -185,7 +179,6 @@ func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetTrackByID returns a single track by its primary key ID.
 func (app *Application) GetTrackByID(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -267,10 +260,7 @@ func (app *Application) StreamTrack(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, track.FileName, stat.ModTime(), file)
 }
 
-// GetTracksAlphabetical returns a paginated list of tracks sorted alphabetically.
-// Supports query parameters: limit (default 50, max 100), offset (default 0)
 func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Request) {
-	// Parse limit with default of 50 and max of 100
 	limit := int64(50)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		parsed, err := strconv.ParseInt(l, 10, 64)
@@ -282,7 +272,6 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 		limit = 100
 	}
 
-	// Parse offset with default of 0
 	offset := int64(0)
 	if o := r.URL.Query().Get("offset"); o != "" {
 		parsed, err := strconv.ParseInt(o, 10, 64)
@@ -291,7 +280,6 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Get total count for pagination
 	total, err := app.Queries.GetTracksCount(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to get tracks count", "error", err)
@@ -299,7 +287,6 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get paginated tracks
 	tracks, err := app.Queries.GetTracksAlphabetical(r.Context(), database.GetTracksAlphabeticalParams{
 		Limit:  limit,
 		Offset: offset,
@@ -326,10 +313,7 @@ func (app *Application) GetTracksAlphabetical(w http.ResponseWriter, r *http.Req
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetShuffleTracks returns a batch of random tracks for shuffle playback.
-// Supports query parameter: limit (default 50, max 200)
 func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request) {
-	// Parse limit with default of 50 and max of 200
 	limit := int64(50)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		parsed, err := strconv.ParseInt(l, 10, 64)
@@ -341,7 +325,6 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 		limit = 200
 	}
 
-	// Get random tracks
 	tracks, err := app.Queries.GetRandomTracks(r.Context(), limit)
 	if err != nil {
 		app.Logger.Error("failed to get random tracks", "error", err)
@@ -359,7 +342,6 @@ func (app *Application) GetShuffleTracks(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMusicStats returns the total counts of albums, tracks, and musicians.
 func (app *Application) GetMusicStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

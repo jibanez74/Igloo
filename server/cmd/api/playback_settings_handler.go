@@ -34,9 +34,7 @@ type playbackSettingsResponse struct {
 	PreferredSubtitleLanguage *string                   `json:"preferred_subtitle_language"`
 }
 
-//updatePlaybackSettingsResponse is the PUT-only payload — the catalog,
-// server upload cap, and is_admin don't change as a result of an update,
-// so the client refetches the full GET payload via cache invalidation.
+// PUT returns only user-editable playback preferences; the client refetches the full catalog.
 type updatePlaybackSettingsResponse struct {
 	PreferredProfile          *string  `json:"preferred_profile"`
 	DownloadMbps              *float64 `json:"download_mbps"`
@@ -45,8 +43,7 @@ type updatePlaybackSettingsResponse struct {
 }
 
 // playbackProfileCatalog returns the transcode profiles exposed to clients.
-// HLS_PROFILE_REMUX is excluded because it has no resolution/bitrate constraints
-// and is not meaningful for a "preferred profile" selection.
+// Remux is excluded because it has no resolution or bitrate constraints.
 func playbackProfileCatalog() []playbackProfileResponse {
 	out := make([]playbackProfileResponse, 0, len(helpers.HLSAllowedProfiles))
 

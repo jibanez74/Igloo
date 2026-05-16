@@ -12,11 +12,9 @@ import (
 )
 
 var (
-	// scanMutex prevents multiple simultaneous music scans
 	scanMutex  sync.Mutex
 	isScanning bool
 
-	// movieScanMutex prevents multiple simultaneous movie scans
 	movieScanMutex  sync.Mutex
 	isMovieScanning bool
 )
@@ -100,7 +98,6 @@ func validateHardwareAccelerationDevice(value string) bool {
 	}
 }
 
-// GetSettings returns the application settings including library paths
 func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -111,8 +108,6 @@ func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response with library paths
-	// Only include paths that are configured (Valid = true)
 	responseData := map[string]any{
 		"music_dir":  nil,
 		"movies_dir": nil,
@@ -275,8 +270,6 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
 }
 
-// TriggerMusicScan triggers a new music library scan
-// The scan runs asynchronously in a goroutine and returns immediately
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
 	scanMutex.Lock()
 	if isScanning {
@@ -288,7 +281,6 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 	isScanning = true
 	scanMutex.Unlock()
 
-	// Check if music directory is configured
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
 		scanMutex.Lock()
 		isScanning = false
@@ -297,7 +289,6 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Start scan in background goroutine
 	go func() {
 		defer func() {
 			scanMutex.Lock()
@@ -318,8 +309,6 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// TriggerMovieScan triggers a new movie library scan
-// The scan runs asynchronously in a goroutine and returns immediately
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
 	movieScanMutex.Lock()
 	if isMovieScanning {
@@ -331,7 +320,6 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 	isMovieScanning = true
 	movieScanMutex.Unlock()
 
-	// Check if movies directory is configured
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
 		movieScanMutex.Lock()
 		isMovieScanning = false
@@ -340,7 +328,6 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Start scan in background goroutine
 	go func() {
 		defer func() {
 			movieScanMutex.Lock()

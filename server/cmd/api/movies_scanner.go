@@ -51,7 +51,6 @@ func (app *Application) ScanMoviesLibrary() {
 	scannedPaths := make(map[string]bool)
 	processedPaths := make(map[string]bool)
 
-	// Batch buffer to collect movies before processing
 	batch := make([]movieFile, 0, helpers.SCANNER_BATCH_SIZE)
 
 	err := filepath.WalkDir(app.Settings.MoviesDir.String, func(path string, entry fs.DirEntry, err error) error {
@@ -85,7 +84,6 @@ func (app *Application) ScanMoviesLibrary() {
 
 		batch = append(batch, movieFile{path: path, ext: ext, size: info.Size()})
 
-		// Process batch when full
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
 			scanned, skipped, errors, processed := app.processMoviesBatch(ctx, batch)
 			moviesScanned += scanned
@@ -105,7 +103,6 @@ func (app *Application) ScanMoviesLibrary() {
 		return
 	}
 
-	// Process remaining movies in the final batch
 	if len(batch) > 0 {
 		scanned, skipped, errors, processed := app.processMoviesBatch(ctx, batch)
 		moviesScanned += scanned
@@ -138,9 +135,7 @@ func (app *Application) ScanMoviesLibrary() {
 		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// processMoviesBatch processes a batch of movie files within a single transaction.
-// Uses skip-on-error strategy: failed movies don't rollback successful ones.
-// Holds ScannerDBMu so only one scanner (music or movie) writes to the DB at a time.
+// ScannerDBMu serializes scanner writes; savepoints keep one bad movie from rolling back the batch.
 func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int, processed []string) {
 	app.ScannerDBMu.Lock()
 	defer app.ScannerDBMu.Unlock()
@@ -155,7 +150,6 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 	processed = make([]string, 0, len(files))
 
 	for _, file := range files {
-		// Check if movie exists with same path and size (file unchanged)
 		_, err = qtx.CheckMovieUnchanged(ctx, database.CheckMovieUnchangedParams{
 			FilePath: file.path,
 			Size:     file.size,
@@ -166,12 +160,9 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 			continue
 		}
 
-		// File is new or size changed - process it
-		// Use savepoint to allow per-movie rollback on failure while continuing with other movies
 		savepointName := fmt.Sprintf("sp_movie_%d", scanned+skipped+errCount)
 
 		err = manageSavepoint(ctx, tx, savepointName, func() error {
-
 			return app.processMovieFile(ctx, qtx, file.path, file.ext, file.size)
 		})
 

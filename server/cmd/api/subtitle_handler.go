@@ -23,11 +23,7 @@ func (app *Application) invalidateSubtitleVTTCache(movieID int64) {
 	}
 }
 
-// SubtitleWebVTT serves GET /api/movies/:id/subtitles/:trackIndex/web.vtt
-//
-// Extracts the requested subtitle stream from the movie file and returns
-// it as WebVTT. trackIndex is the 0-based index into the movie's subtitle
-// rows (ordered by stream_index), not the raw ffprobe stream index.
+// trackIndex refers to the subtitle row order, not the raw ffprobe stream index.
 func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	movieID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || movieID <= 0 {

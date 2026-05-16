@@ -15,8 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// HLSManifest serves GET /api/movies/:id/hls/:profile/playlist.m3u8.
-//
 // Rebased HLS sessions are exposed as session-local VOD playlists that start
 // at segment_0 on disk. The web player keeps absolute movie time in the UI and
 // converts seeks to session-relative media time client-side.
@@ -60,10 +58,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(playlist))
 }
 
-// HLSSegment serves GET /api/movies/:id/hls/:profile/:filename
-//
-// Waits for the requested segment file to appear on disk (FFmpeg produces
-// them sequentially in the background), then serves it.
+// FFmpeg writes segments asynchronously; serve only once complete.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	movieID, profile, audioTrack, startSec, ok := parseHLSParams(w, r)
 	if !ok {
@@ -193,7 +188,6 @@ func parseSegmentIndex(filename string) (int64, error) {
 	return strconv.ParseInt(rest, 10, 64)
 }
 
-// fileReady returns true when the file exists and has content.
 func fileReady(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

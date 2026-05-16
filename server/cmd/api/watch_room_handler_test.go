@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// createTestRoom creates a watch room owned by ownerID for the given movie.
 func createTestRoom(t *testing.T, app *Application, ownerID, movieID int64) database.WatchRoom {
 	t.Helper()
 	ctx := context.Background()
@@ -54,8 +53,6 @@ func setupWatchRoomHTTPTestApp(t *testing.T) *Application {
 	app.InitSession()
 	return app
 }
-
-// --- Query-level tests ---
 
 func TestWatchRoom_CreateAndFetch(t *testing.T) {
 	app := setupTestApp(t)
@@ -187,7 +184,6 @@ func TestWatchRoom_DuplicateMemberRejected(t *testing.T) {
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID)
 
-	// Inserting the owner again should violate the UNIQUE (room_id, user_id) constraint.
 	err := app.Queries.AddWatchRoomMember(ctx, database.AddWatchRoomMemberParams{
 		RoomID: room.ID,
 		UserID: ownerID,
@@ -304,7 +300,6 @@ func TestWatchRoom_DeleteRemovesRoomAndMembers(t *testing.T) {
 		t.Errorf("expected room to be deleted (sql.ErrNoRows), got: %v", err)
 	}
 
-	// Member rows must be cascade-deleted.
 	members, err := app.Queries.GetWatchRoomMembers(ctx, room.ID)
 	if err != nil {
 		t.Fatalf("GetWatchRoomMembers after delete failed: %v", err)
@@ -524,8 +519,6 @@ func TestIsValidPlaybackMode(t *testing.T) {
 	}
 }
 
-// --- HTTP handler tests ---
-
 func mountWatchRoomRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/api/watch-rooms", func(w http.ResponseWriter, r *http.Request) {
@@ -675,7 +668,6 @@ func TestCreateWatchRoom_HTTP_OwnerInviteDeduplication(t *testing.T) {
 	ownerID, movieID := createTestUserAndMovie(t, app)
 	handler := mountWatchRoomRouter(app, ownerID)
 
-	// Include owner ID in invited list; it should be silently filtered.
 	body := fmt.Sprintf(`{"movie_id":%d,"mode":"direct","audio_track":0,"invited_user_ids":[%d]}`, movieID, ownerID)
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-rooms", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -698,7 +690,6 @@ func TestCreateWatchRoom_HTTP_OwnerInviteDeduplication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWatchRoomMembers: %v", err)
 	}
-	// Owner appears only once.
 	if len(members) != 1 {
 		t.Errorf("expected 1 member (owner once), got %d", len(members))
 	}
@@ -878,7 +869,6 @@ func TestDeleteWatchRoom_HTTP_ForbiddenForInvitedMember(t *testing.T) {
 
 	room := createTestRoom(t, app, ownerID, movieID)
 	addMembersToRoom(t, app, room.ID, ownerID, guest.ID)
-	// Guest tries to delete the room.
 	handler := mountWatchRoomRouter(app, guest.ID)
 
 	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/watch-rooms/%d", room.ID), nil)
@@ -958,7 +948,6 @@ func TestGetUsers_HTTP_ExcludesCurrentUser(t *testing.T) {
 		t.Fatal("expected users array")
 	}
 
-	// user1 made the request, so only Bob should appear.
 	if len(users) != 1 {
 		t.Errorf("expected 1 user in response (excluding self), got %d", len(users))
 	}

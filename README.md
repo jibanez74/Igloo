@@ -1,353 +1,291 @@
 # Igloo
 
-The goal of this project is to build a modern, inclusive media system that prioritizes accessible interfaces and dependable local media playback. It is designed to deliver a high-quality experience for users who value reliability, flexibility, and full control over their media.
-At its core, this system is hyper-focused on media playback, supporting a wide range of codecs while maintaining a strong commitment to accessibility—especially for blind users. As a blind developer, I created this system to ensure that I can fully manage and enjoy my own media environment without missing out on any features or relying on others. Accessibility is not treated as an afterthought, but as a fundamental requirement.
-This project is also deeply personal. In my family, we value the experience of watching movies together, enjoying music, and revisiting photos and videos that hold meaningful memories. As the person responsible for managing our technology, I need tools that are both powerful and accessible—tools that won't fail because of inaccessible interfaces or overlooked details. This system is built to meet that need, empowering not only me but other blind users to independently manage and enjoy their own media ecosystems.
+Igloo is a self-hosted media server for personal movie and music libraries. It is built around local ownership, reliable playback, and an interface that treats accessibility as core product work rather than a final pass.
 
-Igloo is currently in active development and has not yet reached its first stable release. It is being built as a focused media server platform for movies, TV shows, personal videos, and music, with multiple clients planned over time.
+The project started from a practical need: blind users should be able to manage and enjoy a media library independently, without inaccessible admin screens, missing keyboard paths, or playback features that only work for sighted users. Igloo is still early, but that goal shapes the architecture, the web client, and the way features are prioritized.
 
-This repository contains the Igloo server, including the Go backend, APIs, media indexing and management logic, playback and transcoding workflows, and the React-based web client. The web client is part of this repository, but it is only one client of the platform. Dedicated TV and mobile clients are planned as separate applications that will connect to the same server.
+Igloo is intended to run on user-managed hardware, usually inside a private network or Tailscale tailnet. It is not designed around managed cloud hosting or public exposure.
 
-Igloo exists in part because current media servers, while powerful, still leave important accessibility gaps.
+## Current Status
 
-Igloo is intentionally focused on personal media libraries and local playback. Rather than trying to reproduce every feature found in larger media platforms, it focuses on a smaller set of core capabilities done well. Features such as live TV, torrent integrations, and large plugin ecosystems are outside the current scope.
+Igloo is in active development and has not reached a stable v1 release. The server, API, database schema, and web client are all evolving.
 
-For video playback, Igloo supports direct streaming when a file can be played in its original format, preserving full quality. When direct playback is not possible or not ideal for the device or network, Igloo can transcode to HLS and offer multiple bitrate options to adapt to different connection speeds.
+What works today:
 
-For photos, Igloo is intended to integrate with Immich instead of duplicating functionality that Immich already handles well. Rather than building a separate photo platform from scratch, the long-term goal is to connect Igloo with Immich as part of a broader self-hosted media ecosystem.
+- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, technical details, watch progress, likes, playlists, direct streaming, HLS playback, WebVTT subtitle extraction, and admin metadata editing.
+- Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, playlists with collaborators, liked tracks, playback, and listening statistics.
+- Watch rooms for shared movie playback, including direct stream and HLS room playback.
+- Session-based accounts, admin user management, general settings, and playback preferences.
+- A React web client served by the Go server in production and by Vite during development.
+- OpenAPI documentation in `docs/openapi.json`, with a route coverage test to keep the spec aligned with the Go router.
 
-## Project Status
+Current limitations:
 
-APIs, features, playback workflows, and client applications are still evolving.
+- TV shows and photos have UI placeholders, but they are not complete library features yet.
+- APIs may still change before v1.
+- Metadata providers are optional; without TMDB or Spotify, Igloo relies on local file metadata.
+- Full backend tests require a SQLite build with FTS5 enabled.
 
-The current focus is the server platform and the React web client contained in this repository. Dedicated TV and mobile clients are planned as separate projects.
-
-The goal is for the project to release a beta version by the end of May 2026, and a v1 stable release by fall of the same year.
-
-## Future Fixes
-
-- Watch room WebSocket broadcast delivery should be made resilient to slow clients. The current server-side broadcast path writes to each socket serially, so one slow connection can delay room events for everyone else. A future version should move watch room clients to dedicated buffered outbound queues with a single writer loop per client and non-blocking broadcast fan-out.
-
-- `web/src/routes/_admin/settings/libraries.lazy.tsx` — Movies scan cache invalidation is eager: after `triggerMovieScan()` resolves, `queryClient.invalidateQueries` is called immediately for `MOVIES_STATS_KEY`, `MOVIES_KEY`, `LATEST_MOVIES_KEY`, `MOVIE_PLAYLISTS_KEY`, `MOVIE_PLAYLIST_DETAILS_KEY`, and `MOVIE_PLAYLIST_MOVIES_KEY`, before the background scan has actually finished. The fix is to remove those invalidation calls from the `triggerMovieScan` success branch and instead poll a scan-status endpoint (e.g. `checkMovieScanStatus`) until it returns completed or failed, then run the invalidations and call `showSuccess` or `showActionFailed` accordingly. Alternatively, a WebSocket or server-sent event on scan completion could trigger the same invalidation. `startTransition`, `triggerMovieScan`, and the toast helpers should remain; only the invalidation timing changes.
-
-- `web/src/routes/_admin/settings/libraries.lazy.tsx` — The movies stats section treats backend failures as an absent library: `const stats = statsData?.error === false ? statsData.data : null` silently falls back to `null`, which causes the UI to render "0 Movies" when the stats endpoint returns an error. Fix by setting `stats` to `undefined` only when `statsData?.error === false` holds, and add an explicit error/unavailable state to the stats rendering block: show a loading spinner while `statsLoading` is true, show an error message when `statsData?.error === true`, and only fall back to `0` when `stats` is a valid resolved object.
-
-## Features
-
-- Movies and TV shows: library scanning, metadata enrichment, artwork, trailers where available, technical media details, watch progress, direct streaming, and HLS playback with hardware-accelerated transcoding where supported
-- Music: albums, tracks, musicians, playlists with collaborators, liked tracks, listening statistics, and cover art; metadata and cover enrichment use Spotify when it is configured (Spotify is optional), and when Spotify is not configured the system relies on basic file metadata only
-- Accounts and settings: session-based authentication with SQLite-backed users and application settings
-- Multi-client platform: the server exposes APIs used by the built-in web client in this repository and by future dedicated TV and mobile clients
+See [docs/roadmap.md](docs/roadmap.md) for planned work and known follow-up items.
 
 ## Repository Layout
 
-| Path           | Purpose                                                                            |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `server/`      | Go server, API, embedded schema, sqlc queries, and media tooling wrappers          |
-| `server/sqlc/` | SQL schema and queries; generated Go code lives in `server/cmd/internal/database/` |
-| `web/`         | React-based web client built and served by the Igloo server                        |
+| Path | Purpose |
+| --- | --- |
+| `server/` | Go server, chi API, SQLite startup schema, media scanning, playback, HLS, and FFmpeg/ffprobe integration |
+| `server/sqlc/` | SQL schema and sqlc query files; generated Go code lives in `server/cmd/internal/database/` |
+| `web/` | React 19 web client built with Vite, TanStack Router, TanStack Query, and Bun |
+| `docs/` | OpenAPI documentation and project notes |
+| `compose.yaml` | Docker Compose deployment for CPU, NVIDIA, and Intel transcoding profiles |
+| `Dockerfile` | Multi-stage production image build with the web client embedded into the server binary |
 
-## Docker Deployment
+## Quick Start With Docker
 
-The recommended way to run Igloo in production is with Docker Compose. A pre-built image is published to GitHub Container Registry on every versioned release and can be pulled without cloning the repository.
+Docker Compose is the recommended way to run Igloo.
 
-### Quick start
+If you only want to run the published image, download the compose file and example environment file:
 
 ```bash
-# Download the two required files
-curl -O https://raw.githubusercontent.com/jibanez74/Igloo/main/compose.yaml
-curl -O https://raw.githubusercontent.com/jibanez74/Igloo/main/.env.example
-
-# Create your environment file
+curl -fsSLO https://raw.githubusercontent.com/jibanez74/Igloo/main/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/jibanez74/Igloo/main/.env.example
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
+Edit `.env` before first start:
 
-- `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` — credentials for the first login
+- Set `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
+- Set `SESSION_COOKIE_SECURE=false` if you are testing over plain HTTP, such as `http://localhost:8080`.
+- Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
+- Set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` to your host media paths, or leave the defaults in place until you are ready to point Igloo at real media folders.
 
-Media library paths (`MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR`) are optional. The server starts without them and libraries will appear empty until paths are configured.
-
-Then prepare the data directories and start the server:
+Prepare writable directories for the container user:
 
 ```bash
 mkdir -p ./config ./transcode
 chown -R 1000:1000 ./config ./transcode
-
-docker compose up -d
 ```
 
-The server will be available on port `8080` by default. On a fresh database it creates one admin account using the credentials from your `.env` file.
-
-### Hardware acceleration profiles
-
-The compose file ships three profiles. Pick the one that matches your host:
-
-| Profile  | Command                                 | Requirements                                                                                                                              |
-| -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| (default)| `docker compose up -d`                  | No GPU required — uses CPU software transcoding                                                                                           |
-| `nvidia` | `docker compose --profile nvidia up -d` | [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed on host |
-| `intel`  | `docker compose --profile intel up -d`  | Set `RENDER_GROUP_ID` in `.env` first (see below)                                                                                         |
-
-For Intel QSV, find your render group ID and add it to `.env`:
+Pull and start the service:
 
 ```bash
-getent group render | cut -d: -f3
-# Add the result to .env: RENDER_GROUP_ID=<number>
-```
-
-### Updating to a new release
-
-```bash
-# CPU (default)
 docker compose pull
 docker compose up -d
+```
 
-# Or for a GPU profile (replace nvidia with your profile)
+Igloo listens on port `8080` by default. Change the host port with `HOST_PORT` in `.env`.
+
+The compose file also includes a local build definition. If you cloned the repository instead of downloading only `compose.yaml`, Docker Compose can build the image locally from the included `Dockerfile`.
+
+## Hardware Acceleration
+
+The default Compose service uses CPU software transcoding:
+
+```bash
+docker compose up -d
+```
+
+NVIDIA transcoding requires `nvidia-container-toolkit` on the host. See NVIDIA's [Container Toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) for Docker setup instructions:
+
+```bash
 docker compose --profile nvidia pull
 docker compose --profile nvidia up -d
 ```
 
-### Volume permissions
-
-The container runs as a non-root user (`igloo`, UID/GID 1000). The `config` and `transcode`
-directories on the host must be owned by that UID before first start:
+Intel QSV transcoding requires access to `/dev/dri/renderD128` and the host render group ID:
 
 ```bash
-chown -R 1000:1000 ./config ./transcode
+getent group render | cut -d: -f3
+# Add the result to .env:
+# RENDER_GROUP_ID=<number>
+
+docker compose --profile intel pull
+docker compose --profile intel up -d
 ```
 
-Media directories are mounted read-only and do not need this change.
+Apple VideoToolbox is supported for local development builds on macOS, not through the Linux Docker image.
 
----
+For implementation details, profile decisions, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
+
+## Configuration
+
+Igloo reads configuration from environment variables. Docker passes them through `compose.yaml`; local development loads `.env` from the repository root, with a fallback to `server/.env`.
+
+The most important variables are:
+
+| Variable | Purpose |
+| --- | --- |
+| `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
+| `HOST_PORT` | Host port for Docker, default `8080` |
+| `SESSION_COOKIE_SECURE` | Set `true` behind HTTPS; set `false` for plain HTTP development |
+| `CONFIG_DIR` | Docker host directory for the database, static assets, and logs |
+| `TRANSCODE_DIR` | Docker host directory for temporary HLS transcode output |
+| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Host media directories mounted read-only into the container |
+| `TMDB_API_KEY` | Optional TMDB API key for movie metadata and in-theaters data |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional Spotify credentials for music metadata enrichment |
+| `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |
+| `HARDWARE_ACCELERATION_DEVICE` | Local development transcode target: `cpu`, `apple`, `nvidia`, or `intel`; Docker sets this through profiles |
+
+See `.env.example` for the full reference and defaults.
 
 ## Development Setup
 
-### Prerequisites
+Prerequisites:
 
-- Go: version aligned with `server/go.mod`
-- CGO: required for `github.com/mattn/go-sqlite3` (`CGO_ENABLED=1`)
-- SQLite development libraries: required for CGO linking
-- Bun: for installing and running the web client in `web/`
-- sqlc: for generating database code from SQL
+- Go `1.26.2`, matching `server/go.mod`
+- CGO enabled, with a working C compiler
+- SQLite support with FTS5 enabled; use the existing Make targets so the `sqlite_fts5` build tag is applied
+- `sqlc` on your `PATH`
+- Bun for the web client
+- Platform-specific FFmpeg and ffprobe binaries for local non-Docker builds, or a `systembin` build that points at Jellyfin FFmpeg
 
-### FFmpeg and ffprobe
-
-The Docker image installs Jellyfin FFmpeg in the runtime container. For local development you need to supply the platform-specific binaries manually.
-
-Platform-specific binaries belong under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/`, named to match the `//go:embed` directives in the corresponding build tag files (e.g. `ffmpeg_darwin_arm64` for `ffmpeg_darwin_arm64.go`).
-
-This project uses the [Jellyfin FFmpeg builds](https://github.com/jellyfin/jellyfin-ffmpeg/releases) because they include codec and hardware acceleration support beyond what standard FFmpeg distributions provide.
-
-### 1. Create `.env`
-
-Copy `.env.example` to `.env` at the repository root and fill in your values. The server automatically reads this file on startup — both `make dev` and `docker compose` use it, so you only need one file.
+Create your environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-The developer-relevant settings to uncomment and adjust:
+For local development, uncomment or set at least:
 
 ```env
-# Required for dev
 DEBUG=true
 PORT=8080
 DB_PATH=/path/to/igloo.db
-
-# Optional: point at your local media
-MOVIES_DIR=/path/to/movies
-SHOWS_DIR=/path/to/shows
-MUSIC_DIR=/path/to/music
-
-# Optional: metadata providers
-TMDB_API_KEY=your_tmdb_v3_key
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-
-# Hardware acceleration for make dev (Docker uses profiles instead)
-# apple — Apple VideoToolbox (Mac); intel/nvidia — Linux GPU; cpu — default
-HARDWARE_ACCELERATION_DEVICE=apple
+SESSION_COOKIE_SECURE=false
 ```
 
-Notes:
-
-- In Docker, `HARDWARE_ACCELERATION_DEVICE` is set automatically by the compose profile you run — you do not set it in `.env` for Docker deployments
-- `TMDB_API_KEY`: enables movie matching, in-theaters data, and background movie scanning when `MOVIES_DIR` is configured
-- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`: optional, but required if you want Spotify-based music metadata and cover enrichment
-- `JELLYFIN_TOKEN`: optional and only relevant if you are using Jellyfin-related integrations
-
-### 2. Start the backend
-
-From `server/`:
+Start the web client:
 
 ```bash
-make dev
-```
-
-This runs sqlc generation, syncs the schema into `cmd/api`, and starts the server with `VITE_DEV_SERVER=http://localhost:3000` so the backend hands browser requests off to the Vite app during development.
-
-### 3. Start the web client
-
-From `web/` in another terminal:
-
-```bash
+cd web
 bun install
 bun run dev
 ```
 
-Open the URL printed by Vite, usually `http://localhost:3000`.
+Vite runs on `http://localhost:3000` and proxies `/api` requests to the Go server.
 
-### Default admin account
+Start the backend in another terminal:
 
-On a fresh database the server creates one admin account using the credentials from your `.env` file (`DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`). The `.env.example` defaults are:
+```bash
+cd server
+make dev
+```
 
-- Email: `admin@example.com`
-- Password: `ChangeMe123!`
+`make dev` runs sqlc generation, syncs the embedded schema copy, and starts the API with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
-Change these before first launch. They are only used once — if an admin account already exists, these values are ignored.
+## Building Without Docker
 
----
-
-## Production Build (without Docker)
-
-In production, the web client is built and embedded into the server binary.
-
-Build the full server with embedded web assets:
+Build the web client and embed it into the server binary:
 
 ```bash
 cd server
 make build-full
 ```
 
-This process:
-
-1. Generates sqlc code
-2. Builds the web client into `web/dist`
-3. Copies the built assets into `server/cmd/api/webdist/`
-4. Builds the `igloo-server` binary
-
-Backend-only build:
+Build only the backend:
 
 ```bash
 cd server
 make build
 ```
 
-Use this only if you are handling web assets separately or copying them yourself.
+Backend-only builds do not include a fresh web bundle. Use them when you are running the Vite client separately or handling web assets yourself.
 
-## Useful Make Targets
+## Useful Commands
 
-| Target                                | Description                                                          |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| `make dev`                            | Generate sqlc code and run the API with Vite development URL support |
-| `make generate`                       | Run `sqlc generate` and sync `schema.sql` into `cmd/api`             |
-| `make build`                          | Build the `igloo-server` binary for the current platform             |
-| `make build-web`                      | Build the web client into `web/dist`                                 |
-| `make build-full`                     | Build the web client and embed it into the server binary             |
-| `make build-mac` / `make build-linux` | Cross-compile the backend                                            |
-| `make test`                           | Run `go test -v ./...`                                               |
-| `make test-ci`                        | Run the deterministic backend test suite used by GitHub Actions      |
-| `make clean`                          | Remove generated binaries and `web/dist`                             |
+From `server/`:
+
+| Command | Description |
+| --- | --- |
+| `make dev` | Generate sqlc code and run the API for local development |
+| `make generate` | Run `sqlc generate` and sync `server/sqlc/schema.sql` into `server/cmd/api/schema.sql` |
+| `make build-web` | Build the web client into `web/dist` |
+| `make build` | Build the backend for the current platform |
+| `make build-full` | Build the web client and embed it into the server binary |
+| `make test` | Run backend tests with the `sqlite_fts5` build tag |
+| `make test-ci` | Run the deterministic backend suite used by GitHub Actions |
+| `make clean` | Remove built binaries and `web/dist` |
+
+From `web/`:
+
+| Command | Description |
+| --- | --- |
+| `bun run dev` | Start Vite on port `3000` |
+| `bun run build` | Build the production bundle and run TypeScript checking |
+| `bun run lint` | Run ESLint |
+| `bun run test` | Run Vitest |
+| `bun run preview` | Preview the production build |
+
+## API Documentation
+
+The OpenAPI document lives at [docs/openapi.json](docs/openapi.json). It covers the registered `/api` routes, including JSON endpoints, static files, media streams, HLS playlists and segments, subtitles, and the watch-room WebSocket.
+
+When adding or changing an API route, update the OpenAPI file and run the route coverage test:
+
+```bash
+cd server
+go test -tags sqlite_fts5 ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes -count=1
+```
+
+See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenance workflow.
 
 ## Database and SQL
 
-- Engine: SQLite with WAL journaling
-- Database path: controlled by `DB_PATH` (default `/config/igloo.db`; set `DB_PATH` for local development)
-- Schema source of truth: `server/sqlc/schema.sql`
-- Embedded schema copy: `server/cmd/api/schema.sql`
-- Query files: `server/sqlc/queries/*.sql`
+- SQLite is the database engine.
+- WAL mode is enabled at startup.
+- `DB_PATH` controls the database file path; Docker defaults to `/config/igloo.db`.
+- `server/sqlc/schema.sql` is the schema source of truth.
+- `server/cmd/api/schema.sql` is the embedded startup schema copy.
+- Query files live under `server/sqlc/queries/`.
 
-After changing schema or query files, run:
+After changing schema or query files:
 
 ```bash
 cd server
 make generate
 ```
 
-## Frontend Scripts
+## Testing
 
-| Script            | Description                                |
-| ----------------- | ------------------------------------------ |
-| `bun run dev`     | Start the Vite development server          |
-| `bun run build`   | Type-check and build the production bundle |
-| `bun run lint`    | Run ESLint                                 |
-| `bun run preview` | Preview the production build               |
+Backend:
 
-## Configuration Reference
-
-All configuration is read from environment variables. In local development these are loaded from `.env` at the repository root (with fallback to `server/.env`). In Docker they are passed through `compose.yaml`. See `.env.example` for the full list with descriptions.
-
-| Variable                                 | Role                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------ |
-| `PORT`                                   | HTTP listen port (dev only — Docker always uses 8080)                    |
-| `DB_PATH`                                | SQLite database file path                                                |
-| `DEBUG`                                  | Enables debug-friendly behavior such as stdout logging                   |
-| `STATIC_DIR`                             | Static file directory for avatars, downloaded images, and related assets |
-| `LOGS_DIR`                               | Log directory when not running in debug mode                             |
-| `TMDB_API_KEY`                           | TMDB API v3 key                                                          |
-| `SPOTIFY_CLIENT_ID`                      | Spotify client ID for optional music metadata enrichment                 |
-| `SPOTIFY_CLIENT_SECRET`                  | Spotify client secret for optional music metadata enrichment             |
-| `JELLYFIN_TOKEN`                         | Optional Jellyfin integration token                                      |
-| `MOVIES_DIR` / `SHOWS_DIR` / `MUSIC_DIR` | Media library root directories                                           |
-| `DOWNLOAD_IMAGES`                        | Controls whether remote images are downloaded during scanning            |
-| `ENABLE_LOGGER` / `ENABLE_WATCHER`       | Feature flags for file logging and filesystem watchers                   |
-| `HARDWARE_ACCELERATION_DEVICE`           | Transcoding target: `cpu`, `apple`, `nvidia`, or `intel`                 |
-| `SESSION_COOKIE_SECURE`                  | Set `true` when running behind HTTPS (e.g. Tailscale)                    |
-| `LOG_TO_STDOUT`                          | Force log output to stdout regardless of other settings                  |
-| `VITE_DEV_SERVER`                        | Development only — proxies browser requests to the Vite dev server       |
-| `DEFAULT_ADMIN_NAME`                     | Name for the bootstrap admin account (used only on first run)            |
-| `DEFAULT_ADMIN_EMAIL`                    | Email for the bootstrap admin account (used only on first run)           |
-| `DEFAULT_ADMIN_PASSWORD`                 | Password for the bootstrap admin account (used only on first run)        |
-
-## CI/CD
-
-Two GitHub Actions workflows are defined:
-
-### CI (`ci.yml`)
-
-Runs on every branch push, on pull requests to `main`, and can be called as a reusable workflow. Never publishes anything.
-
-- `test-backend` — runs `make test-ci` against the Go server
-- `test-frontend` — runs ESLint and a full TypeScript + Vite build of the web client
-
-### Publish (`docker-publish.yml`)
-
-Runs when a `v*` tag is pushed or when triggered manually via `workflow_dispatch`. Calls `ci.yml` as a reusable workflow, and the image is only built after all CI checks pass.
-
-```
-ci (reusable ci.yml) → build-and-push → ghcr.io/jibanez74/igloo
+```bash
+cd server
+make test
 ```
 
-Pushing `v1.2.3` produces image tags such as `:1.2.3`, `:1.2`, and `:latest`.
+CI-equivalent backend suite:
 
-To cut a release:
+```bash
+cd server
+make test-ci
+```
+
+Frontend:
+
+```bash
+cd web
+bun run lint
+bun run build
+bun run test
+```
+
+Live TMDB integration tests are intentionally outside the default suite:
+
+```bash
+cd server
+TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
+```
+
+## CI and Releases
+
+GitHub Actions runs two main workflows:
+
+- `ci.yml`: backend tests, frontend linting, and frontend build checks.
+- `docker-publish.yml`: runs CI, then builds and publishes `ghcr.io/jibanez74/igloo` when a `v*` tag is pushed or the workflow is triggered manually.
+
+Tagging a release such as `v0.1.0` produces semver image tags and updates `latest` for tagged releases.
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
-```
-
-The published image appears at `ghcr.io/jibanez74/igloo` under the repository's Packages tab.
-
-## Testing
-
-From `server/`:
-
-```bash
-make test
-```
-
-This runs `go test -v ./...`.
-
-To run the same deterministic backend suite that GitHub Actions runs:
-
-```bash
-make test-ci
-```
-
-Live TMDB API tests are kept out of the default suite so CI does not change behavior when a `TMDB_API_KEY` is present. To run them explicitly:
-
-```bash
-TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
 ```

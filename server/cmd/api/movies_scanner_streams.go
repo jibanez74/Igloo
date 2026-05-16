@@ -10,8 +10,6 @@ import (
 	"strconv"
 )
 
-// processMovieStreams processes all video, audio, and subtitle streams from FFPROBE data
-// in a single pass. Returns the number of video streams processed and an error.
 func (app *Application) processMovieStreams(
 	ctx context.Context,
 	qtx *database.Queries,
@@ -148,14 +146,12 @@ func (app *Application) insertSubtitleStream(ctx context.Context, qtx *database.
 	return nil
 }
 
-// processChapters processes chapters from FFPROBE data.
 func (app *Application) processChapters(
 	ctx context.Context,
 	qtx *database.Queries,
 	movieID int64,
 	chapters []ffprobe.Chapter,
 ) error {
-	// Delete all existing chapters
 	if err := qtx.DeleteMovieChapters(ctx, helpers.NullInt64(movieID)); err != nil {
 		return fmt.Errorf("delete movie chapters failed: %w", err)
 	}
@@ -163,12 +159,11 @@ func (app *Application) processChapters(
 	for _, chapter := range chapters {
 		startTime := chapterStartTimeSeconds(chapter)
 
-		// Leave thumb empty (chapter thumbnail generation will be implemented later)
 		_, err := qtx.InsertChapter(ctx, database.InsertChapterParams{
 			MovieID:   helpers.NullInt64(movieID),
 			Title:     chapter.Tags.Title,
 			StartTime: startTime,
-			Thumb:     sql.NullString{}, // Empty for now
+			Thumb:     sql.NullString{},
 		})
 		if err != nil {
 			return fmt.Errorf("insert chapter failed: %w", err)

@@ -51,7 +51,7 @@ function TrailerPage() {
 
   const shouldFetchMovie =
     mediaType === "movie" && mediaId != null && mediaId > 0 && !videoKey;
-  const { data } = useQuery({
+U  const { data } = useQuery({
     ...movieDetailsQueryOpts(mediaId ?? 0),
     enabled: shouldFetchMovie,
   });

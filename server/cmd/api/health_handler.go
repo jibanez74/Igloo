@@ -6,8 +6,6 @@ import (
 	"net/http"
 )
 
-// HealthCheck returns the health status of the application.
-// It pings the database to verify connectivity.
 func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	err := app.DB.PingContext(r.Context())
 	if err != nil {

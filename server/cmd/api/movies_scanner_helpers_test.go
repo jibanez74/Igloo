@@ -11,7 +11,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Ensure database package is used (app.Queries is *database.Queries)
 func init() {
 	var _ *database.Queries
 }
@@ -113,17 +112,17 @@ func TestParseBitRate(t *testing.T) {
 		{
 			name:     "negative number",
 			input:    "-1000",
-			expected: -1000, // ParseInt correctly parses negative numbers
+			expected: -1000,
 		},
 		{
 			name:     "bitrate with decimal",
 			input:    "5000.5",
-			expected: 0, // ParseInt doesn't handle decimals
+			expected: 0,
 		},
 		{
 			name:     "bitrate with spaces",
 			input:    " 5000000 ",
-			expected: 0, // ParseInt doesn't trim spaces
+			expected: 0,
 		},
 	}
 
@@ -215,7 +214,6 @@ func TestManageSavepoint(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Create a test table
 	_, err = db.Exec("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
 	if err != nil {
 		t.Fatalf("Failed to create test table: %v", err)
@@ -247,7 +245,6 @@ func TestManageSavepoint(t *testing.T) {
 			t.Error("Function was not executed")
 		}
 
-		// Verify data was inserted
 		var count int
 		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_table").Scan(&count)
 		if err != nil {
@@ -269,12 +266,10 @@ func TestManageSavepoint(t *testing.T) {
 		testError := sql.ErrNoRows
 
 		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			// Insert a row
 			_, err := tx.ExecContext(ctx, "INSERT INTO test_table (value) VALUES ('before error')")
 			if err != nil {
 				return err
 			}
-			// Return error
 			return testError
 		})
 
@@ -286,7 +281,6 @@ func TestManageSavepoint(t *testing.T) {
 			t.Errorf("Expected error %v, got %v", testError, err)
 		}
 
-		// Verify data was rolled back (savepoint should have undone the insert)
 		var count int
 		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_table").Scan(&count)
 		if err != nil {
@@ -298,12 +292,11 @@ func TestManageSavepoint(t *testing.T) {
 	})
 
 	t.Run("savepoint creation failure returns error", func(t *testing.T) {
-		// Use a closed transaction to force savepoint creation failure
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			t.Fatalf("Failed to begin transaction: %v", err)
 		}
-		tx.Rollback() // Close the transaction
+		tx.Rollback()
 
 		savepointName := "test_savepoint_fail"
 

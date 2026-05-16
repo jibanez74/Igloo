@@ -34,18 +34,14 @@ var movieReleaseNoiseTokens = map[string]bool{
 	"yts": true, "ytsmx": true, "mx": true,
 }
 
-// processMovieFile extracts metadata from a movie file and upserts it into the database.
-// Handles TMDB lookup, FFPROBE extraction, and related entities (cast, crew, genres, etc.).
 func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
 	existingMovie, err := qtx.GetMovieByPath(ctx, path)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("get existing movie failed: %w", err)
 	}
 
-	// Step 1: Extract title and year from filename
 	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
 	if err != nil {
-		// Fallback: use filename without extension as title, year = 0
 		baseName := filepath.Base(path)
 		ext := filepath.Ext(baseName)
 		titleYear = &helpers.TitleYearResponse{
@@ -59,7 +55,6 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		searchTitle = titleYear.Title
 	}
 
-	// Step 2: TMDB Search (if TMDB is configured)
 	var tmdbMovie *tmdb.TmdbMovie
 
 	if app.Tmdb != nil {
@@ -96,13 +91,11 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	// Step 4: FFPROBE Metadata Extraction (required)
 	info, err := app.Ffprobe.GetMetadata(path)
 	if err != nil {
 		return fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	// Step 5: Build movie parameters
 	mimeType := mime.TypeByExtension("." + ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
@@ -114,10 +107,9 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		FileName:  filepath.Base(path),
 		Container: ext,
 		MimeType:  mimeType,
-		Adult:     false, // Default to false, will be set from TMDB if available
+		Adult:     false,
 	}
 
-	// Parse size from FFPROBE, fallback to fileSize from directory walk
 	params.Size = fileSize
 	if info.Format.Size != "" {
 		size, err := strconv.ParseInt(info.Format.Size, 10, 64)
@@ -126,7 +118,6 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	// Map TMDB data if available
 	if tmdbMovie != nil {
 		params.TmdbID = helpers.NullInt64(int64(tmdbMovie.TmdbID))
 		params.ImdbID = helpers.NullString(tmdbMovie.ImdbID)
@@ -142,22 +133,18 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		params.Revenue = helpers.NullFloat64(float64(tmdbMovie.Revenue))
 		params.Budget = helpers.NullFloat64(float64(tmdbMovie.Budget))
 
-		// Parse release date
 		if tmdbMovie.ReleaseDate != "" {
 			params.ReleaseDate = helpers.NullString(tmdbMovie.ReleaseDate)
-			// Extract year from release date
 			if year := extractYearFromReleaseDate(tmdbMovie.ReleaseDate); year > 0 {
 				params.Year = helpers.NullInt64(int64(year))
 			}
 		}
 	} else {
-		// Use year from filename if TMDB not available
 		if titleYear.Year > 0 {
 			params.Year = helpers.NullInt64(int64(titleYear.Year))
 		}
 	}
 
-	// Populate runtime fields from ffprobe duration
 	durationSec, err := strconv.ParseFloat(info.Format.Duration, 64)
 	if err == nil && durationSec > 0 {
 		params.Duration = helpers.NullFloat64(durationSec)
@@ -167,13 +154,11 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	// Step 6: Upsert movie
 	movie, err := qtx.UpsertMovie(ctx, params)
 	if err != nil {
 		return fmt.Errorf("upsert movie failed: %w", err)
 	}
 
-	// Step 7: Process related entities (only if TMDB data available)
 	if tmdbMovie != nil {
 		err = qtx.DeleteMovieCast(ctx, movie.ID)
 		if err != nil {
@@ -185,34 +170,27 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 			return fmt.Errorf("delete existing crew failed: %w", err)
 		}
 
-		// Process production companies
 		if err := app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 			return fmt.Errorf("process production companies failed: %w", err)
 		}
 
-		// Process cast
 		if err := app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 			return fmt.Errorf("process cast failed: %w", err)
 		}
 
-		// Process crew
 		if err := app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 			return fmt.Errorf("process crew failed: %w", err)
 		}
 
-		// Process genres
 		if err := app.processMovieGenres(ctx, qtx, movie.ID, tmdbMovie.Genres); err != nil {
 			return fmt.Errorf("process genres failed: %w", err)
 		}
 
-		// Process extra videos (trailers, special features)
 		if err := app.processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
 			return fmt.Errorf("process extra videos failed: %w", err)
 		}
 	}
 
-	// Step 8: Process streams and chapters (from FFPROBE)
-	// Video streams are required - if none found, skip movie (invalid file)
 	videoStreamCount, err := app.processMovieStreams(ctx, qtx, movie.ID, info.Streams)
 	if err != nil {
 		return fmt.Errorf("process movie streams failed: %w", err)

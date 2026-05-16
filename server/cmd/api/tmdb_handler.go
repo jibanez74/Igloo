@@ -10,8 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// TmdbSearchMovies searches TMDB by title/year or fetches a single movie by TMDB ID.
-// POST /api/movies/:id/tmdb-search   body: { title, year?, tmdb_id? }
 func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -76,8 +74,6 @@ func (app *Application) TmdbSearchMovies(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// GetMoviesInTheaters returns the latest movies currently playing in theaters.
-// The response is limited to a maximum of 12 movies.
 func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Request) {
 	movies, err := app.Tmdb.GetMoviesInTheaters(r.Context())
 	if err != nil {
@@ -100,7 +96,6 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
-// GetMovieByTmdbID returns a single movie from TMDB by its TMDB ID.
 func (app *Application) GetMovieByTmdbID(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idParam)

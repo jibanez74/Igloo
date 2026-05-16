@@ -39,8 +39,6 @@ func adminUserRow(id int64, name, email string, isAdmin bool, avatar sql.NullStr
 	}
 }
 
-// AdminGetUsers handles GET /api/admin/users.
-// Returns the full list of all users ordered by name.
 func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetAllUsers(r.Context())
 	if err != nil {
@@ -63,7 +61,6 @@ func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// AdminCreateUserRequest represents the request body for creating a user.
 type AdminCreateUserRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -71,7 +68,6 @@ type AdminCreateUserRequest struct {
 	IsAdmin  bool   `json:"is_admin"`
 }
 
-// AdminCreateUser handles POST /api/admin/users.
 func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req AdminCreateUserRequest
 	if err := helpers.ReadJSON(w, r, &req, 0); err != nil {
@@ -144,14 +140,12 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// AdminUpdateUserRequest represents the request body for updating a user.
 type AdminUpdateUserRequest struct {
 	Name    string `json:"name"`
 	Email   string `json:"email"`
 	IsAdmin bool   `json:"is_admin"`
 }
 
-// AdminUpdateUser handles PATCH /api/admin/users/{id}.
 func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	targetID, err := strconv.ParseInt(idParam, 10, 64)
@@ -184,7 +178,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Prevent admin from removing their own admin status.
+	// Do not let an admin lock themselves out.
 	currentUserID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if targetID == currentUserID && !req.IsAdmin {
 		helpers.ErrorJSON(w, errors.New("you cannot remove your own admin status"), http.StatusForbidden)
@@ -212,7 +206,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If demoting an admin, ensure at least one admin remains.
+	// Keep at least one admin account.
 	if !req.IsAdmin && existing.IsAdmin {
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
@@ -267,7 +261,6 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// AdminDeleteUser handles DELETE /api/admin/users/{id}.
 func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	targetID, err := strconv.ParseInt(idParam, 10, 64)
@@ -303,7 +296,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If deleting an admin, ensure at least one admin remains.
+	// Keep at least one admin account.
 	if user.IsAdmin {
 		count, err := qtx.CountAdmins(r.Context())
 		if err != nil {
@@ -348,12 +341,10 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// AdminResetUserPasswordRequest represents the request body for resetting a user's password.
 type AdminResetUserPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// AdminResetUserPassword handles PUT /api/admin/users/{id}/password.
 func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	targetID, err := strconv.ParseInt(idParam, 10, 64)
