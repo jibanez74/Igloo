@@ -1,0 +1,26 @@
+Verify each finding against current code. Fix only still-valid issues, skip the
+rest with a brief reason, keep changes minimal, and validate.
+
+Inline comments:
+In `@server/cmd/api/main.go`:
+- Around line 296-299: The startup currently invokes app.rebuildSearchIndexes()
+unconditionally after InitTables(), causing a full-text index rebuild on every
+boot; change this so the rebuild is only performed when needed (e.g., as a
+one-time migration or guarded by a version/flag). Update main.go to remove the
+unconditional call to app.rebuildSearchIndexes() and instead call it from a
+migration runner or behind a conditional check (for example: a persisted index
+version check, a DB/metadata marker, or an explicit env/CLI flag) so that
+InitTables() no longer triggers full rebuilds on every startup; ensure the code
+that performs the rebuild remains the same (app.rebuildSearchIndexes) but is
+only invoked by the new migration/conditional path.
+
+In `@web/src/test/search-route.test.tsx`:
+- Around line 85-86: The tests stub globals (vi.stubGlobal("fetch", fetchMock)
+and a stubbed window.scrollTo) but never restore them, risking cross-test
+contamination; add an afterEach block to clean these up—call
+vi.unstubGlobal("fetch") and vi.unstubGlobal("scrollTo") (or
+vi.unstubAllGlobals() if available) and also clear/reset the fetchMock (e.g.,
+fetchMock.resetHandlers()/resetHistory() as appropriate) so both the global
+stubs and mock state are restored between tests (place this afterEach alongside
+the tests in search-route.test.tsx where vi.stubGlobal("fetch", fetchMock") and
+window.scrollTo are used).

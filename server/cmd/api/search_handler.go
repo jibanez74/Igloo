@@ -179,6 +179,11 @@ FROM tracks AS t
 LEFT JOIN albums AS a ON a.id = t.album_id
 LEFT JOIN musicians AS m ON m.id = t.musician_id`
 
+const (
+	searchIndexMetadataKey    = "search_index_version"
+	currentSearchIndexVersion = 1
+)
+
 // buildFTSQuery converts a user-supplied query into a safe FTS5 MATCH expression.
 // It strips characters that are not letters, digits, or whitespace so the user
 // can't break out of the expression with FTS5 special syntax (quotes,
@@ -260,6 +265,60 @@ func totalPages(total, perPage int64) int64 {
 		pages++
 	}
 	return pages
+}
+
+func (app *Application) ensureSearchIndexesCurrent() error {
+	version, err := app.searchIndexVersion()
+	if err != nil {
+		return err
+	}
+	if version >= currentSearchIndexVersion {
+		return nil
+	}
+
+	app.Logger.Info("rebuilding search indexes", "from_version", version, "to_version", currentSearchIndexVersion)
+	err = app.rebuildSearchIndexes()
+	if err != nil {
+		return err
+	}
+
+	err = app.setSearchIndexVersion(currentSearchIndexVersion)
+	if err != nil {
+		return err
+	}
+
+	app.Logger.Info("search indexes rebuilt successfully", "version", currentSearchIndexVersion)
+	return nil
+}
+
+func (app *Application) searchIndexVersion() (int, error) {
+	var raw string
+	err := app.DB.QueryRow(`SELECT value FROM app_metadata WHERE key = ?`, searchIndexMetadataKey).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	version, err := strconv.Atoi(raw)
+	if err != nil {
+		app.Logger.Error("invalid search index version marker", "value", raw, "error", err)
+		return 0, nil
+	}
+
+	return version, nil
+}
+
+func (app *Application) setSearchIndexVersion(version int) error {
+	_, err := app.DB.Exec(`
+		INSERT INTO app_metadata (key, value, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT (key) DO UPDATE
+		SET value = excluded.value,
+		    updated_at = CURRENT_TIMESTAMP
+	`, searchIndexMetadataKey, strconv.Itoa(version))
+	return err
 }
 
 func (app *Application) rebuildSearchIndexes() error {

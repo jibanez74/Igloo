@@ -190,7 +190,7 @@ func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 	}
 }
 
-func TestInitTablesRebuildsSearchIndexesForExistingRows(t *testing.T) {
+func TestEnsureSearchIndexesCurrentRebuildsSearchIndexesForExistingRows(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
 	if err != nil {
 		t.Fatalf("open database: %v", err)
@@ -222,10 +222,81 @@ func TestInitTablesRebuildsSearchIndexesForExistingRows(t *testing.T) {
 
 	results, err := app.searchMovies(context.Background(), "Preexisting", match, 10, 0)
 	if err != nil {
-		t.Fatalf("searchMovies failed: %v", err)
+		t.Fatalf("searchMovies before rebuild failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected InitTables to leave existing rows unindexed, got %#v", results)
+	}
+
+	err = app.ensureSearchIndexesCurrent()
+	if err != nil {
+		t.Fatalf("ensureSearchIndexesCurrent failed: %v", err)
+	}
+
+	results, err = app.searchMovies(context.Background(), "Preexisting", match, 10, 0)
+	if err != nil {
+		t.Fatalf("searchMovies after rebuild failed: %v", err)
 	}
 	if len(results) != 1 || results[0].Title != "Preexisting Movie" {
 		t.Fatalf("expected rebuilt FTS result, got %#v", results)
+	}
+
+	var version int
+	err = db.QueryRow(`SELECT value FROM app_metadata WHERE key = ?`, searchIndexMetadataKey).Scan(&version)
+	if err != nil {
+		t.Fatalf("query search index version: %v", err)
+	}
+	if version != currentSearchIndexVersion {
+		t.Fatalf("expected search index version %d, got %d", currentSearchIndexVersion, version)
+	}
+}
+
+func TestEnsureSearchIndexesCurrentSkipsCurrentVersion(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+
+	app := &Application{DB: db}
+	setupTestLogger(t, app)
+
+	schemaBeforeFTS, _, ok := strings.Cut(SQL, "-- FTS5 virtual tables")
+	if !ok {
+		t.Fatal("expected schema to contain FTS marker")
+	}
+	_, err = db.Exec(schemaBeforeFTS)
+	if err != nil {
+		t.Fatalf("create pre-FTS schema: %v", err)
+	}
+	insertPreFTSSearchMovie(t, db, "Preexisting Movie", "/movies/preexisting.mkv")
+
+	err = app.InitTables()
+	if err != nil {
+		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	err = app.setSearchIndexVersion(currentSearchIndexVersion)
+	if err != nil {
+		t.Fatalf("set search index version: %v", err)
+	}
+
+	err = app.ensureSearchIndexesCurrent()
+	if err != nil {
+		t.Fatalf("ensureSearchIndexesCurrent failed: %v", err)
+	}
+
+	match, ok := buildFTSQuery("Preexisting")
+	if !ok {
+		t.Fatal("expected usable FTS query")
+	}
+
+	results, err := app.searchMovies(context.Background(), "Preexisting", match, 10, 0)
+	if err != nil {
+		t.Fatalf("searchMovies failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected current search index version to skip rebuild, got %#v", results)
 	}
 }
 

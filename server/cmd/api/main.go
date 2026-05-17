@@ -151,6 +151,11 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
+	err = app.ensureSearchIndexesCurrent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize search indexes: %v", err)
+	}
+
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
@@ -289,11 +294,6 @@ func (app *Application) InitDB() error {
 // InitTables applies the embedded schema.
 func (app *Application) InitTables() error {
 	_, err := app.DB.Exec(SQL)
-	if err != nil {
-		return err
-	}
-
-	err = app.rebuildSearchIndexes()
 	if err != nil {
 		return err
 	}
