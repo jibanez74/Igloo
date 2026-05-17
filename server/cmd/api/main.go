@@ -293,6 +293,11 @@ func (app *Application) InitTables() error {
 		return err
 	}
 
+	err = app.rebuildSearchIndexes()
+	if err != nil {
+		return err
+	}
+
 	app.Logger.Info("database tables initialized successfully")
 
 	return nil
@@ -665,6 +670,7 @@ func (app *Application) InitRouter() {
 				r.Get("/movies/{id}", app.GetMovieByTmdbID)
 			})
 
+			r.Get("/search", app.SearchAll)
 			r.Route("/search", func(r chi.Router) {
 				r.Get("/", app.SearchAll)
 				r.Get("/movies", app.SearchMovies)

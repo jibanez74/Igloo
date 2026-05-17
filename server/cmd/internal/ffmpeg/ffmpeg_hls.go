@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,10 @@ const (
 	hlsStderrScannerBufferSize = 64 * 1024
 	hlsStderrScannerMaxToken   = 1024 * 1024
 )
+
+func isExpectedHLSStderrClose(err error) bool {
+	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
+}
 
 // HLSParams holds inputs for HLS transcoding: argument building and RunHLS.
 //
@@ -233,6 +238,9 @@ func (f *ffmpeg) RunHLS(
 			appendTail(scanner.Text())
 		}
 		if scanErr := scanner.Err(); scanErr != nil {
+			if isExpectedHLSStderrClose(scanErr) {
+				return
+			}
 			appendTail(fmt.Sprintf("stderr scan error: %v", scanErr))
 			_, _ = io.Copy(io.Discard, stderrPipe)
 		}

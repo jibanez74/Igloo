@@ -353,7 +353,6 @@ function MoviesResultsTab({ q, page }: CategoryTabProps) {
     <CategoryTabFrame
       label="movies"
       q={q}
-      page={page}
       isLoading={isLoading}
       isError={isError}
       isApiFailure={isApiFailure(data)}
@@ -361,6 +360,8 @@ function MoviesResultsTab({ q, page }: CategoryTabProps) {
       onRetry={() => void refetch()}
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
+      page={data?.error === false ? data.data.page : page}
+      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: MoviesLibraryListItemType[]) => (
@@ -393,7 +394,6 @@ function AlbumsResultsTab({ q, page }: CategoryTabProps) {
     <CategoryTabFrame
       label="albums"
       q={q}
-      page={page}
       isLoading={isLoading}
       isError={isError}
       isApiFailure={isApiFailure(data)}
@@ -401,6 +401,8 @@ function AlbumsResultsTab({ q, page }: CategoryTabProps) {
       onRetry={() => void refetch()}
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
+      page={data?.error === false ? data.data.page : page}
+      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: SimpleAlbumType[]) => (
@@ -433,7 +435,6 @@ function MusiciansResultsTab({ q, page }: CategoryTabProps) {
     <CategoryTabFrame
       label="musicians"
       q={q}
-      page={page}
       isLoading={isLoading}
       isError={isError}
       isApiFailure={isApiFailure(data)}
@@ -441,6 +442,8 @@ function MusiciansResultsTab({ q, page }: CategoryTabProps) {
       onRetry={() => void refetch()}
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
+      page={data?.error === false ? data.data.page : page}
+      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: SimpleMusicianType[]) => (
@@ -473,7 +476,6 @@ function TracksResultsTab({ q, page }: CategoryTabProps) {
     <CategoryTabFrame
       label="tracks"
       q={q}
-      page={page}
       isLoading={isLoading}
       isError={isError}
       isApiFailure={isApiFailure(data)}
@@ -481,6 +483,8 @@ function TracksResultsTab({ q, page }: CategoryTabProps) {
       onRetry={() => void refetch()}
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
+      page={data?.error === false ? data.data.page : page}
+      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: TrackListItemType[]) => (
@@ -510,6 +514,7 @@ type CategoryTabFrameProps<T> = {
   label: "movies" | "albums" | "musicians" | "tracks";
   q: string;
   page: number;
+  requestedPage: number;
   isLoading: boolean;
   isError: boolean;
   isApiFailure: boolean;
@@ -526,6 +531,7 @@ function CategoryTabFrame<T>({
   label,
   q,
   page,
+  requestedPage,
   isLoading,
   isError,
   isApiFailure: isFailure,
@@ -542,10 +548,10 @@ function CategoryTabFrame<T>({
       return;
     }
 
-    if (page > totalPages) {
+    if (requestedPage > totalPages) {
       onPageChange(totalPages);
     }
-  }, [isLoading, isError, isFailure, onPageChange, page, totalPages]);
+  }, [isLoading, isError, isFailure, onPageChange, requestedPage, totalPages]);
 
   if (isLoading) {
     return <CategorySkeleton />;

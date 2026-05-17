@@ -788,3 +788,71 @@ CREATE TRIGGER IF NOT EXISTS tracks_au AFTER UPDATE ON tracks BEGIN
   INSERT INTO tracks_fts (rowid, title)
   VALUES (new.id, new.title);
 END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS tracks_search_fts USING fts5 (
+  title,
+  album_title,
+  musician_name,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS tracks_search_ai AFTER INSERT ON tracks BEGIN
+  INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
+  SELECT
+    new.id,
+    new.title,
+    a.title,
+    TRIM(COALESCE(m.name, '') || ' ' || COALESCE(a.musician, ''))
+  FROM (SELECT 1) AS seed
+  LEFT JOIN albums AS a ON a.id = new.album_id
+  LEFT JOIN musicians AS m ON m.id = new.musician_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_search_ad AFTER DELETE ON tracks BEGIN
+  DELETE FROM tracks_search_fts WHERE rowid = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_search_au AFTER UPDATE ON tracks BEGIN
+  DELETE FROM tracks_search_fts WHERE rowid = old.id;
+  INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
+  SELECT
+    new.id,
+    new.title,
+    a.title,
+    TRIM(COALESCE(m.name, '') || ' ' || COALESCE(a.musician, ''))
+  FROM (SELECT 1) AS seed
+  LEFT JOIN albums AS a ON a.id = new.album_id
+  LEFT JOIN musicians AS m ON m.id = new.musician_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_search_album_au AFTER UPDATE OF title, musician ON albums BEGIN
+  DELETE FROM tracks_search_fts WHERE rowid IN (
+    SELECT id FROM tracks WHERE album_id = new.id
+  );
+  INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
+  SELECT
+    t.id,
+    t.title,
+    a.title,
+    TRIM(COALESCE(m.name, '') || ' ' || COALESCE(a.musician, ''))
+  FROM tracks AS t
+  LEFT JOIN albums AS a ON a.id = t.album_id
+  LEFT JOIN musicians AS m ON m.id = t.musician_id
+  WHERE t.album_id = new.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tracks_search_musician_au AFTER UPDATE OF name ON musicians BEGIN
+  DELETE FROM tracks_search_fts WHERE rowid IN (
+    SELECT id FROM tracks WHERE musician_id = new.id
+  );
+  INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
+  SELECT
+    t.id,
+    t.title,
+    a.title,
+    TRIM(COALESCE(m.name, '') || ' ' || COALESCE(a.musician, ''))
+  FROM tracks AS t
+  LEFT JOIN albums AS a ON a.id = t.album_id
+  LEFT JOIN musicians AS m ON m.id = t.musician_id
+  WHERE t.musician_id = new.id;
+END;
