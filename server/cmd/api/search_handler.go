@@ -86,7 +86,14 @@ SELECT m.id, m.title, m.poster_path, m.year, m.certification
 FROM movies_fts
 INNER JOIN movies AS m ON m.id = movies_fts.rowid
 WHERE movies_fts MATCH ?
-ORDER BY bm25(movies_fts), m.title
+ORDER BY
+  CASE
+    WHEN LOWER(m.title) = LOWER(?) THEN 0
+    WHEN LOWER(m.title) LIKE ? ESCAPE '\' THEN 1
+    ELSE 2
+  END,
+  bm25(movies_fts),
+  m.title
 LIMIT ? OFFSET ?`
 
 const searchMoviesCountSQL = `
@@ -97,7 +104,16 @@ SELECT a.id, a.title, a.cover, a.musician, a.year
 FROM albums_fts
 INNER JOIN albums AS a ON a.id = albums_fts.rowid
 WHERE albums_fts MATCH ?
-ORDER BY bm25(albums_fts), a.title
+ORDER BY
+  CASE
+    WHEN LOWER(a.title) = LOWER(?) THEN 0
+    WHEN LOWER(a.title) LIKE ? ESCAPE '\' THEN 1
+    WHEN LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
+    WHEN LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    ELSE 4
+  END,
+  bm25(albums_fts),
+  a.title
 LIMIT ? OFFSET ?`
 
 const searchAlbumsCountSQL = `
@@ -114,33 +130,65 @@ SELECT
 FROM musicians_fts
 INNER JOIN musicians AS m ON m.id = musicians_fts.rowid
 WHERE musicians_fts MATCH ?
-ORDER BY bm25(musicians_fts), m.sort_name
+ORDER BY
+  CASE
+    WHEN LOWER(m.name) = LOWER(?) OR LOWER(m.sort_name) = LOWER(?) THEN 0
+    WHEN LOWER(m.name) LIKE ? ESCAPE '\' OR LOWER(m.sort_name) LIKE ? ESCAPE '\' THEN 1
+    ELSE 2
+  END,
+  bm25(musicians_fts),
+  m.sort_name
 LIMIT ? OFFSET ?`
 
 const searchMusiciansCountSQL = `
 SELECT COUNT(*) FROM musicians_fts WHERE musicians_fts MATCH ?`
 
-const searchTracksSQL = `
+const searchTracksCountSQL = `
+SELECT COUNT(*) FROM tracks_search_fts WHERE tracks_search_fts MATCH ?`
+
+const searchTracksJoinedSQL = `
 SELECT
   t.id, t.title, t.duration, t.codec, t.bit_rate, t.file_path,
   a.id AS album_id, a.title AS album_title, a.cover AS album_cover,
   mu.id AS musician_id, mu.name AS musician_name
-FROM tracks_fts
-INNER JOIN tracks AS t ON t.id = tracks_fts.rowid
+FROM tracks_search_fts
+INNER JOIN tracks AS t ON t.id = tracks_search_fts.rowid
 LEFT JOIN albums AS a ON t.album_id = a.id
 LEFT JOIN musicians AS mu ON t.musician_id = mu.id
-WHERE tracks_fts MATCH ?
-ORDER BY bm25(tracks_fts), t.title
+WHERE tracks_search_fts MATCH ?
+ORDER BY
+  CASE
+    WHEN LOWER(t.title) = LOWER(?) THEN 0
+    WHEN LOWER(t.title) LIKE ? ESCAPE '\' THEN 1
+    WHEN LOWER(COALESCE(a.title, '')) = LOWER(?) OR LOWER(COALESCE(mu.name, '')) = LOWER(?) OR LOWER(COALESCE(a.musician, '')) = LOWER(?) THEN 2
+    WHEN LOWER(COALESCE(a.title, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(mu.name, '')) LIKE ? ESCAPE '\' OR LOWER(COALESCE(a.musician, '')) LIKE ? ESCAPE '\' THEN 3
+    ELSE 4
+  END,
+  bm25(tracks_search_fts),
+  t.title
 LIMIT ? OFFSET ?`
 
-const searchTracksCountSQL = `
-SELECT COUNT(*) FROM tracks_fts WHERE tracks_fts MATCH ?`
+const rebuildTracksSearchFTSSQL = `
+INSERT INTO tracks_search_fts (rowid, title, album_title, musician_name)
+SELECT
+  t.id,
+  t.title,
+  a.title,
+  TRIM(COALESCE(m.name, '') || ' ' || COALESCE(a.musician, ''))
+FROM tracks AS t
+LEFT JOIN albums AS a ON a.id = t.album_id
+LEFT JOIN musicians AS m ON m.id = t.musician_id`
+
+const (
+	searchIndexMetadataKey    = "search_index_version"
+	currentSearchIndexVersion = 1
+)
 
 // buildFTSQuery converts a user-supplied query into a safe FTS5 MATCH expression.
 // It strips characters that are not letters, digits, or whitespace so the user
 // can't break out of the expression with FTS5 special syntax (quotes,
 // parentheses, AND/OR/NEAR, column filters), then appends '*' to each token for
-// prefix matching joined by implicit AND.
+// broad prefix matching.
 //
 // Returns ok=false when the sanitized input has no usable tokens.
 func buildFTSQuery(raw string) (string, bool) {
@@ -168,7 +216,25 @@ func buildFTSQuery(raw string) (string, bool) {
 	for i, t := range tokens {
 		parts[i] = t + "*"
 	}
-	return strings.Join(parts, " "), true
+	return strings.Join(parts, " OR "), true
+}
+
+func escapeLikePattern(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\\' || r == '%' || r == '_' {
+			b.WriteRune('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func searchRankArgs(raw string) (exact, prefix string) {
+	exact = strings.TrimSpace(raw)
+	prefix = escapeLikePattern(strings.ToLower(exact)) + "%"
+	return exact, prefix
 }
 
 func parseSearchPagination(r *http.Request) (page, perPage int64) {
@@ -201,6 +267,86 @@ func totalPages(total, perPage int64) int64 {
 	return pages
 }
 
+func (app *Application) ensureSearchIndexesCurrent() error {
+	version, err := app.searchIndexVersion()
+	if err != nil {
+		return err
+	}
+	if version >= currentSearchIndexVersion {
+		return nil
+	}
+
+	app.Logger.Info("rebuilding search indexes", "from_version", version, "to_version", currentSearchIndexVersion)
+	err = app.rebuildSearchIndexes()
+	if err != nil {
+		return err
+	}
+
+	err = app.setSearchIndexVersion(currentSearchIndexVersion)
+	if err != nil {
+		return err
+	}
+
+	app.Logger.Info("search indexes rebuilt successfully", "version", currentSearchIndexVersion)
+	return nil
+}
+
+func (app *Application) searchIndexVersion() (int, error) {
+	var raw string
+	err := app.DB.QueryRow(`SELECT value FROM app_metadata WHERE key = ?`, searchIndexMetadataKey).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	version, err := strconv.Atoi(raw)
+	if err != nil {
+		app.Logger.Error("invalid search index version marker", "value", raw, "error", err)
+		return 0, nil
+	}
+
+	return version, nil
+}
+
+func (app *Application) setSearchIndexVersion(version int) error {
+	_, err := app.DB.Exec(`
+		INSERT INTO app_metadata (key, value, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT (key) DO UPDATE
+		SET value = excluded.value,
+		    updated_at = CURRENT_TIMESTAMP
+	`, searchIndexMetadataKey, strconv.Itoa(version))
+	return err
+}
+
+func (app *Application) rebuildSearchIndexes() error {
+	tx, err := app.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	statements := []string{
+		`INSERT INTO movies_fts(movies_fts) VALUES('rebuild')`,
+		`INSERT INTO albums_fts(albums_fts) VALUES('rebuild')`,
+		`INSERT INTO musicians_fts(musicians_fts) VALUES('rebuild')`,
+		`INSERT INTO tracks_fts(tracks_fts) VALUES('rebuild')`,
+		`DELETE FROM tracks_search_fts`,
+		rebuildTracksSearchFTSSQL,
+	}
+
+	for _, stmt := range statements {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	pages := totalPages(total, perPage)
 	if pages == 0 {
@@ -212,8 +358,9 @@ func normalizeSearchPage(page, total, perPage int64) (int64, int64) {
 	return page, pages
 }
 
-func (app *Application) searchMovies(ctx context.Context, match string, limit, offset int64) ([]database.GetMoviesLibraryAscRow, error) {
-	rows, err := app.DB.QueryContext(ctx, searchMoviesSQL, match, limit, offset)
+func (app *Application) searchMovies(ctx context.Context, raw, match string, limit, offset int64) ([]database.GetMoviesLibraryAscRow, error) {
+	exact, prefix := searchRankArgs(raw)
+	rows, err := app.DB.QueryContext(ctx, searchMoviesSQL, match, exact, prefix, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +382,9 @@ func (app *Application) searchMovies(ctx context.Context, match string, limit, o
 	return out, nil
 }
 
-func (app *Application) searchAlbums(ctx context.Context, match string, limit, offset int64) ([]database.GetAlbumsAlphabeticalRow, error) {
-	rows, err := app.DB.QueryContext(ctx, searchAlbumsSQL, match, limit, offset)
+func (app *Application) searchAlbums(ctx context.Context, raw, match string, limit, offset int64) ([]database.GetAlbumsAlphabeticalRow, error) {
+	exact, prefix := searchRankArgs(raw)
+	rows, err := app.DB.QueryContext(ctx, searchAlbumsSQL, match, exact, prefix, exact, prefix, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -258,8 +406,9 @@ func (app *Application) searchAlbums(ctx context.Context, match string, limit, o
 	return out, nil
 }
 
-func (app *Application) searchMusicians(ctx context.Context, match string, limit, offset int64) ([]database.GetMusiciansAlphabeticalRow, error) {
-	rows, err := app.DB.QueryContext(ctx, searchMusiciansSQL, match, limit, offset)
+func (app *Application) searchMusicians(ctx context.Context, raw, match string, limit, offset int64) ([]database.GetMusiciansAlphabeticalRow, error) {
+	exact, prefix := searchRankArgs(raw)
+	rows, err := app.DB.QueryContext(ctx, searchMusiciansSQL, match, exact, exact, prefix, prefix, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -281,8 +430,9 @@ func (app *Application) searchMusicians(ctx context.Context, match string, limit
 	return out, nil
 }
 
-func (app *Application) searchTracks(ctx context.Context, match string, limit, offset int64) ([]database.GetTracksAlphabeticalRow, error) {
-	rows, err := app.DB.QueryContext(ctx, searchTracksSQL, match, limit, offset)
+func (app *Application) searchTracks(ctx context.Context, raw, match string, limit, offset int64) ([]database.GetTracksAlphabeticalRow, error) {
+	exact, prefix := searchRankArgs(raw)
+	rows, err := app.DB.QueryContext(ctx, searchTracksJoinedSQL, match, exact, prefix, exact, exact, exact, prefix, prefix, prefix, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +487,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	limit := int64(helpers.SEARCH_ALL_TOP_N)
 
-	movies, err := app.searchMovies(ctx, match, limit, 0)
+	movies, err := app.searchMovies(ctx, q, match, limit, 0)
 	if err != nil {
 		app.Logger.Error("search movies failed", "error", err)
 		helpers.ErrorJSON(w, errors.New("search failed"))
@@ -350,7 +500,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	albums, err := app.searchAlbums(ctx, match, limit, 0)
+	albums, err := app.searchAlbums(ctx, q, match, limit, 0)
 	if err != nil {
 		app.Logger.Error("search albums failed", "error", err)
 		helpers.ErrorJSON(w, errors.New("search failed"))
@@ -363,7 +513,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	musicians, err := app.searchMusicians(ctx, match, limit, 0)
+	musicians, err := app.searchMusicians(ctx, q, match, limit, 0)
 	if err != nil {
 		app.Logger.Error("search musicians failed", "error", err)
 		helpers.ErrorJSON(w, errors.New("search failed"))
@@ -376,7 +526,7 @@ func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tracks, err := app.searchTracks(ctx, match, limit, 0)
+	tracks, err := app.searchTracks(ctx, q, match, limit, 0)
 	if err != nil {
 		app.Logger.Error("search tracks failed", "error", err)
 		helpers.ErrorJSON(w, errors.New("search failed"))
@@ -431,7 +581,7 @@ func (app *Application) SearchMovies(w http.ResponseWriter, r *http.Request) {
 	results := []database.GetMoviesLibraryAscRow{}
 	if total > 0 {
 		offset := (page - 1) * perPage
-		results, err = app.searchMovies(ctx, match, perPage, offset)
+		results, err = app.searchMovies(ctx, q, match, perPage, offset)
 		if err != nil {
 			app.Logger.Error("search movies failed", "error", err)
 			helpers.ErrorJSON(w, errors.New("search failed"))
@@ -482,7 +632,7 @@ func (app *Application) SearchAlbums(w http.ResponseWriter, r *http.Request) {
 	results := []database.GetAlbumsAlphabeticalRow{}
 	if total > 0 {
 		offset := (page - 1) * perPage
-		results, err = app.searchAlbums(ctx, match, perPage, offset)
+		results, err = app.searchAlbums(ctx, q, match, perPage, offset)
 		if err != nil {
 			app.Logger.Error("search albums failed", "error", err)
 			helpers.ErrorJSON(w, errors.New("search failed"))
@@ -533,7 +683,7 @@ func (app *Application) SearchMusicians(w http.ResponseWriter, r *http.Request) 
 	results := []database.GetMusiciansAlphabeticalRow{}
 	if total > 0 {
 		offset := (page - 1) * perPage
-		results, err = app.searchMusicians(ctx, match, perPage, offset)
+		results, err = app.searchMusicians(ctx, q, match, perPage, offset)
 		if err != nil {
 			app.Logger.Error("search musicians failed", "error", err)
 			helpers.ErrorJSON(w, errors.New("search failed"))
@@ -584,7 +734,7 @@ func (app *Application) SearchTracks(w http.ResponseWriter, r *http.Request) {
 	results := []database.GetTracksAlphabeticalRow{}
 	if total > 0 {
 		offset := (page - 1) * perPage
-		results, err = app.searchTracks(ctx, match, perPage, offset)
+		results, err = app.searchTracks(ctx, q, match, perPage, offset)
 		if err != nil {
 			app.Logger.Error("search tracks failed", "error", err)
 			helpers.ErrorJSON(w, errors.New("search failed"))

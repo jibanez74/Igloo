@@ -151,6 +151,11 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
 	}
 
+	err = app.ensureSearchIndexesCurrent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize search indexes: %v", err)
+	}
+
 	app.Queries, err = database.Prepare(ctx, app.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare database queries: %v", err)
@@ -665,6 +670,7 @@ func (app *Application) InitRouter() {
 				r.Get("/movies/{id}", app.GetMovieByTmdbID)
 			})
 
+			r.Get("/search", app.SearchAll)
 			r.Route("/search", func(r chi.Router) {
 				r.Get("/", app.SearchAll)
 				r.Get("/movies", app.SearchMovies)

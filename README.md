@@ -1,10 +1,50 @@
 # Igloo
 
-Igloo is a self-hosted media server for personal movie and music libraries. It is built around local ownership, reliable playback, and an interface that treats accessibility as core product work rather than a final pass.
+Igloo is a self-hosted media center for personal movie and music libraries. It is built for people who want to own their media, run their own server, and enjoy a polished playback experience without depending on a managed cloud platform.
 
-The project started from a practical need: blind users should be able to manage and enjoy a media library independently, without inaccessible admin screens, missing keyboard paths, or playback features that only work for sighted users. Igloo is still early, but that goal shapes the architecture, the web client, and the way features are prioritized.
+Accessibility is one of Igloo's core design values, especially strong screen reader support, but Igloo is not meant to be a media platform only for blind users. The goal is to build a media center that feels excellent for everyone: fast, attractive, reliable, comfortable to navigate, and usable whether someone is browsing visually, using a keyboard, navigating with a remote, or relying on assistive technology.
+
+The project started from a practical need: blind users should be able to manage and enjoy a media library independently, without inaccessible admin screens, missing navigation paths, or playback features that only work well for sighted users. That experience shapes Igloo's priorities, but the broader vision is universal: accessibility should raise the quality of the product for all users, not narrow its audience.
 
 Igloo is intended to run on user-managed hardware, usually inside a private network or Tailscale tailnet. It is not designed around managed cloud hosting or public exposure.
+
+Igloo is pre-v1 software. Expect API, database, configuration, and client behavior to change before a stable v1 release.
+
+## What This Repository Contains
+
+This repository contains the Igloo server and browser-based web client.
+
+- `server/`: Go backend, chi API, SQLite startup schema, media scanning, playback endpoints, HLS support, database access, and FFmpeg/ffprobe integration.
+- `web/`: React web client for browser-based library management, administration, and playback.
+- `docs/`: OpenAPI documentation and project notes.
+- `compose.yaml`: Docker Compose deployment for CPU, NVIDIA, and Intel transcoding profiles.
+- `Dockerfile`: Multi-stage production image build with the web client embedded into the server binary.
+
+Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
+
+## Platform Support
+
+Current primary client:
+
+- Web browser client, served by the Go server in production.
+
+Planned clients:
+
+- Native Android TV / Google TV client.
+- Apple TV support is a future nice-to-have.
+
+The current repository focuses on the server and web client. Future TV clients may live in separate repositories and consume the same documented HTTP API.
+
+## Development Principles
+
+Igloo prioritizes:
+
+- Accessibility as a core requirement that improves the experience for everyone, not a final pass or a niche-only feature.
+- Local ownership of media and metadata.
+- Reliable playback before visual polish.
+- Clear API contracts between server and clients.
+- Self-hosted deployment over managed cloud assumptions.
+- Practical maintainability over unnecessary abstraction.
 
 ## Current Status
 
@@ -12,7 +52,8 @@ Igloo is in active development and has not reached a stable v1 release. The serv
 
 What works today:
 
-- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, technical details, watch progress, likes, playlists, direct streaming, HLS playback, WebVTT subtitle extraction, and admin metadata editing.
+- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, and technical details.
+- Movie features including watch progress, likes, playlists, direct streaming, HLS playback, WebVTT subtitle extraction, and admin metadata editing.
 - Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, playlists with collaborators, liked tracks, playback, and listening statistics.
 - Watch rooms for shared movie playback, including direct stream and HLS room playback.
 - Session-based accounts, admin user management, general settings, and playback preferences.
@@ -102,7 +143,7 @@ docker compose --profile intel pull
 docker compose --profile intel up -d
 ```
 
-Apple VideoToolbox is supported for local development builds on macOS, not through the Linux Docker image.
+Apple VideoToolbox is supported for local server development builds on macOS, not through the Linux Docker image.
 
 For implementation details, profile decisions, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
 
@@ -288,4 +329,33 @@ Tagging a release such as `v0.1.0` produces semver image tags and updates `lates
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
+```
+
+## AI Coding Agent Notes
+
+This repository may be used with AI coding agents such as Codex. Project-specific instructions should live in a root-level `AGENTS.md` file.
+
+Recommended guidance for `AGENTS.md`:
+
+```md
+# Agent Instructions
+
+This repository contains the Igloo Go server and React web client.
+
+Do not implement native TV client code in this repository unless explicitly requested.
+
+Server:
+- Use Go.
+- Use chi for routing.
+- Use sqlc for database access.
+- Keep OpenAPI documentation aligned with registered routes.
+
+Web:
+- Use React, TypeScript, Vite, TanStack Router, TanStack Query, and Bun.
+- Do not use npm, yarn, or pnpm.
+
+General:
+- Prefer explicit, readable code.
+- Treat accessibility as part of the feature, not a separate cleanup step.
+- Avoid unnecessary abstraction.
 ```

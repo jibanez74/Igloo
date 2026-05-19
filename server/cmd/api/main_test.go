@@ -120,6 +120,7 @@ func TestInitTables(t *testing.T) {
 	expectedTables := []string{
 		"users",
 		"settings",
+		"app_metadata",
 		"musicians",
 		"albums",
 		"tracks",
@@ -491,6 +492,11 @@ func setupTestApp(t *testing.T) *Application {
 	err = app.InitTables()
 	if err != nil {
 		t.Fatalf("InitTables failed: %v", err)
+	}
+
+	err = app.ensureSearchIndexesCurrent()
+	if err != nil {
+		t.Fatalf("ensureSearchIndexesCurrent failed: %v", err)
 	}
 
 	app.Queries, err = database.Prepare(context.Background(), db)
