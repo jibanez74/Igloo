@@ -21,7 +21,7 @@ import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 const pageTitle = "Sign In - Igloo";
 const pageDescription = "Sign in to access your personal Igloo media library.";
 
-export const Route = createLazyFileRoute("/login/")({
+export const Route = createLazyFileRoute("/login")({
   component: LoginPage,
 });
 

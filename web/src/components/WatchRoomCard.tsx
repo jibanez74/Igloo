@@ -131,7 +131,7 @@ export default function WatchRoomCard({ room }: Props) {
         <div className="mt-4 flex items-center gap-2">
           <Link
             to="/watch-rooms/$id"
-            params={{ id: String(room.id) }}
+            params={{ id: room.id }}
             className="inline-flex h-9 items-center rounded-md bg-amber-500 px-3 text-xs font-semibold text-slate-900 transition-colors hover:bg-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none"
             aria-label={`Join watch room for ${room.movie_title}`}
           >

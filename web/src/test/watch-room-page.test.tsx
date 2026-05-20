@@ -1,11 +1,14 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { WatchRoomPageContent } from "@/routes/_auth/watch-rooms/$id.lazy";
+import { WatchRoomPage as WatchRoomPageContent } from "@/components/watch-room/WatchRoomPage";
+import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id.lazy";
 import type { WatchRoomDetailType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
 
 const navigateMock = vi.fn();
+let routeParamId: number | null = 7;
 const useQueryMock = vi.fn();
 const joinWatchRoomMock = vi.fn();
 const deleteWatchRoomMock = vi.fn();
@@ -135,7 +138,8 @@ vi.mock("@tanstack/react-router", async () => {
       () =>
       (options: { component: unknown }) => ({
         ...options,
-        useParams: () => ({ id: "7" }),
+        useParams: () => ({ id: routeParamId }),
+        useNavigate: () => navigateMock,
       }),
     useNavigate: () => navigateMock,
   };
@@ -319,6 +323,7 @@ describe("WatchRoomPageContent", () => {
     showActionFailedMock.mockReset();
     showInfoMock.mockReset();
     showSuccessMock.mockReset();
+    routeParamId = 7;
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
   });
 
@@ -337,6 +342,21 @@ describe("WatchRoomPageContent", () => {
     });
 
     expect(FakeWebSocket.instances[0].sentMessages).toEqual([]);
+  });
+
+  it("shows the unavailable state for invalid parsed route ids", () => {
+    routeParamId = null;
+    const RouteComponent = (
+      WatchRoomRoute as unknown as { component: ComponentType }
+    ).component;
+
+    renderWithQueryClient(<RouteComponent />);
+
+    expect(screen.getByText("Watch room unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("This watch room link is invalid."),
+    ).toBeInTheDocument();
+    expect(useQueryMock).not.toHaveBeenCalled();
   });
 
   it("waits for the media to be ready before applying synced playback", async () => {

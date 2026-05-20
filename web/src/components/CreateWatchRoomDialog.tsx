@@ -150,7 +150,7 @@ export default function CreateWatchRoomDialog({
       handleOpenChange(false);
       await navigate({
         to: "/watch-rooms/$id",
-        params: { id: String(data.data.room_id) },
+        params: { id: data.data.room_id },
       });
     },
     onError: () => {
