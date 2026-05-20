@@ -259,7 +259,7 @@ func (app *Application) InitDB() error {
 	dir := filepath.Dir(dbPath)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create database directory %s for %s: %w", dir, dbPath, err)
 	}
 
 	_, err = os.Stat(dbPath)
@@ -268,25 +268,63 @@ func (app *Application) InitDB() error {
 	} else if os.IsNotExist(err) {
 		app.Logger.Info("creating new database", "path", dbPath)
 	} else {
+		return fmt.Errorf("failed to stat database path %s: %w", dbPath, err)
+	}
+
+	if err := ensureDatabasePathWritable(dbPath, err == nil); err != nil {
 		return err
 	}
 
 	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_foreign_keys=on&_busy_timeout=5000")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open database %s: %w", dbPath, err)
 	}
 
 	err = db.Ping()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to connect to database %s: %w", dbPath, err)
 	}
 
 	_, err = db.Exec("PRAGMA journal_mode=WAL;")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to enable WAL journal mode for database %s: %w", dbPath, err)
 	}
 
 	app.DB = db
+
+	return nil
+}
+
+func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {
+	dir := filepath.Dir(dbPath)
+
+	probe, err := os.CreateTemp(dir, ".igloo-db-write-test-*")
+	if err != nil {
+		return fmt.Errorf("database directory is not writable for %s (%s): %w", dbPath, dir, err)
+	}
+
+	probePath := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probePath)
+		return fmt.Errorf("failed to close database directory write check for %s (%s): %w", dbPath, dir, err)
+	}
+
+	if err := os.Remove(probePath); err != nil {
+		return fmt.Errorf("failed to remove database directory write check file for %s (%s): %w", dbPath, dir, err)
+	}
+
+	if !databaseExists {
+		return nil
+	}
+
+	f, err := os.OpenFile(dbPath, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("database file is not writable at %s: %w", dbPath, err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("failed to close database write check for %s: %w", dbPath, err)
+	}
 
 	return nil
 }

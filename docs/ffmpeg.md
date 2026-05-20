@@ -27,7 +27,7 @@ The split exists for practical reasons:
 
 - Local development binaries can be self-contained on supported platforms.
 - Docker images can use the Jellyfin FFmpeg package directly instead of embedding large media binaries into the Go binary.
-- Hardware acceleration support depends on the runtime environment, drivers, and container device access, so Docker keeps that responsibility in the image and Compose profile instead of hiding it inside embedded binaries.
+- Hardware acceleration support depends on the runtime environment, drivers, and container device access, so Docker keeps that responsibility in the image and Compose configuration instead of hiding it inside embedded binaries.
 - The wrappers give the application a stable internal interface even though the binary source differs by build mode.
 
 Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `systembin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
@@ -211,7 +211,7 @@ The hardware acceleration setting is stored as one of:
 - `nvidia`
 - `intel`
 
-Docker sets this value through Compose profiles. Local development can set `HARDWARE_ACCELERATION_DEVICE` in `.env`.
+Docker defaults this value to `cpu`. Set `HARDWARE_ACCELERATION_DEVICE` in `.env` when enabling a GPU block in `compose.yaml` or testing locally.
 
 The FFmpeg encoder mapping is:
 
@@ -234,15 +234,15 @@ Intel adds:
 -look_ahead 1
 ```
 
-CPU and unknown devices fall back to `libx264`. This is intentional. An invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, and Docker profiles provide known values, but the HLS builder still has a safe CPU fallback.
+CPU and unknown devices fall back to `libx264`. This is intentional. An invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, and Docker configuration provides known values, but the HLS builder still has a safe CPU fallback.
 
 For Docker:
 
 - The default service uses CPU software transcoding.
-- The `nvidia` profile sets `runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES=all`, and `NVIDIA_DRIVER_CAPABILITIES=all`.
-- The `intel` profile mounts `/dev/dri/renderD128` and adds the host render group ID.
+- The commented NVIDIA environment lines and runtime block set `runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES=all`, and `NVIDIA_DRIVER_CAPABILITIES=all`.
+- The commented Intel block mounts `/dev/dri/renderD128` and adds the host render group ID.
 
-NVIDIA hosts must install NVIDIA Container Toolkit before the Docker profile can use the GPU. See NVIDIA's Container Toolkit installation guide:
+NVIDIA hosts must install NVIDIA Container Toolkit before Docker can use the GPU. See NVIDIA's Container Toolkit installation guide:
 
 ```text
 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html

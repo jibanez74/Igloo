@@ -17,7 +17,7 @@ This repository contains the Igloo server and browser-based web client.
 - `server/`: Go backend, chi API, SQLite startup schema, media scanning, playback endpoints, HLS support, database access, and FFmpeg/ffprobe integration.
 - `web/`: React web client for browser-based library management, administration, and playback.
 - `docs/`: OpenAPI documentation and project notes.
-- `compose.yaml`: Docker Compose deployment for CPU, NVIDIA, and Intel transcoding profiles.
+- `compose.yaml`: Docker Compose deployment with optional NVIDIA and Intel transcoding snippets.
 - `Dockerfile`: Multi-stage production image build with the web client embedded into the server binary.
 
 Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
@@ -77,7 +77,7 @@ See [docs/roadmap.md](docs/roadmap.md) for planned work and known follow-up item
 | `server/sqlc/` | SQL schema and sqlc query files; generated Go code lives in `server/cmd/internal/database/` |
 | `web/` | React 19 web client built with Vite, TanStack Router, TanStack Query, and Bun |
 | `docs/` | OpenAPI documentation and project notes |
-| `compose.yaml` | Docker Compose deployment for CPU, NVIDIA, and Intel transcoding profiles |
+| `compose.yaml` | Docker Compose deployment with optional NVIDIA and Intel transcoding snippets |
 | `Dockerfile` | Multi-stage production image build with the web client embedded into the server binary |
 
 ## Quick Start With Docker
@@ -125,27 +125,25 @@ The default Compose service uses CPU software transcoding:
 docker compose up -d
 ```
 
-NVIDIA transcoding requires `nvidia-container-toolkit` on the host. See NVIDIA's [Container Toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) for Docker setup instructions:
+NVIDIA transcoding requires `nvidia-container-toolkit` on the host. See NVIDIA's [Container Toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) for Docker setup instructions. To use it, set `HARDWARE_ACCELERATION_DEVICE=nvidia` in `.env`, uncomment the NVIDIA environment lines and runtime block in `compose.yaml`, then run:
 
 ```bash
-docker compose --profile nvidia pull
-docker compose --profile nvidia up -d
+docker compose up -d
 ```
 
-Intel QSV transcoding requires access to `/dev/dri/renderD128` and the host render group ID:
+Intel QSV transcoding requires access to `/dev/dri/renderD128` and the host render group ID. To use it, set `HARDWARE_ACCELERATION_DEVICE=intel`, set `RENDER_GROUP_ID`, uncomment the Intel block in `compose.yaml`, then run:
 
 ```bash
 getent group render | cut -d: -f3
 # Add the result to .env:
 # RENDER_GROUP_ID=<number>
 
-docker compose --profile intel pull
-docker compose --profile intel up -d
+docker compose up -d
 ```
 
 Apple VideoToolbox is supported for local server development builds on macOS, not through the Linux Docker image.
 
-For implementation details, profile decisions, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
+For implementation details, hardware acceleration behavior, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
 
 ## Configuration
 
@@ -164,7 +162,7 @@ The most important variables are:
 | `TMDB_API_KEY` | Optional TMDB API key for movie metadata and in-theaters data |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional Spotify credentials for music metadata enrichment |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |
-| `HARDWARE_ACCELERATION_DEVICE` | Local development transcode target: `cpu`, `apple`, `nvidia`, or `intel`; Docker sets this through profiles |
+| `HARDWARE_ACCELERATION_DEVICE` | Transcode target: `cpu`, `apple`, `nvidia`, or `intel`; Docker defaults to `cpu` unless overridden |
 
 See `.env.example` for the full reference and defaults.
 

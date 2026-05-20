@@ -6,6 +6,7 @@
 .DS_Store
 .claude
 .codex
+.playwright-mcp
 .vscode
 .idea
 AGENTS.md
@@ -29,5 +30,7 @@ web/src/routeTree.gen.ts
 
 docker
 media
+server/media
+transcode
 
 README.md

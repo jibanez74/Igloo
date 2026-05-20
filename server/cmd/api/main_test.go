@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"igloo/cmd/internal/database"
@@ -99,6 +100,38 @@ func TestInitDB_DefaultPath(t *testing.T) {
 
 	if _, statErr := os.Stat(dbFile); os.IsNotExist(statErr) {
 		t.Errorf("Database file was not created at %s", dbFile)
+	}
+}
+
+func TestInitDB_ReturnsPathForUnwritableDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write to directories without user write permissions")
+	}
+
+	tmpDir := t.TempDir()
+	dbDir := filepath.Join(tmpDir, "db")
+	if err := os.Mkdir(dbDir, 0o500); err != nil {
+		t.Fatalf("failed to create database directory: %v", err)
+	}
+	defer os.Chmod(dbDir, 0o700)
+
+	dbFile := filepath.Join(dbDir, "igloo.db")
+	t.Setenv("DB_PATH", dbFile)
+
+	app := &Application{}
+	setupTestLogger(t, app)
+
+	err := app.InitDB()
+	if err == nil {
+		app.DB.Close()
+		t.Fatal("expected InitDB to fail for an unwritable database directory")
+	}
+
+	msg := err.Error()
+	for _, want := range []string{"database directory is not writable", dbDir, dbFile} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("expected error %q to contain %q", msg, want)
+		}
 	}
 }
 

@@ -46,8 +46,11 @@
 # AU files or directories
 .claude/
 .codex/
+.playwright-mcp/
 AGENTS.md
 CLAUDE.md
 
-# Testing media files directory
+# Generated media/transcoding output
 /server/media/*
+/media/
+/transcode/
