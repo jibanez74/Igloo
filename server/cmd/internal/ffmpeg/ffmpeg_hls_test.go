@@ -22,6 +22,47 @@ func hlsArgs(t *testing.T, p HLSParams) []string {
 	return args
 }
 
+func hlsTestCapabilitiesForDevice(device string) Capabilities {
+	caps := Capabilities{
+		Probed:                 true,
+		Encoders:               map[string]bool{},
+		Filters:                map[string]bool{},
+		HWAccels:               map[string]bool{},
+		FilterOptions:          map[string]map[string]bool{},
+		H264NVENCRuntimeUsable: true,
+	}
+
+	switch device {
+	case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+		caps.Encoders["h264_videotoolbox"] = true
+	case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+		caps.Encoders["h264_qsv"] = true
+	case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+		caps.Encoders["h264_nvenc"] = true
+		caps.HWAccels["cuda"] = true
+		caps.Filters["scale_cuda"] = true
+		caps.FilterOptions["scale_cuda"] = map[string]bool{"format": true}
+	}
+
+	return caps
+}
+
+func hlsTestNvidiaCapabilities(tonemap bool) Capabilities {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	if tonemap {
+		caps.Filters["tonemap_cuda"] = true
+		caps.FilterOptions["tonemap_cuda"] = map[string]bool{
+			"format":  true,
+			"p":       true,
+			"t":       true,
+			"m":       true,
+			"tonemap": true,
+			"desat":   true,
+		}
+	}
+	return caps
+}
+
 func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	sourcePath := "/safe/source.mkv"
 	outDir := t.TempDir()
@@ -46,7 +87,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		"libx264", "-preset", "veryfast",
 		"-sc_threshold", "0",
 		"-force_key_frames", "expr:gte(t,n_forced*4)",
-		"-c:a aac", "-ac", "2", "-b:a", "192k",
+		"-c:a aac", "-ac", "2", "-b:a", "256k",
 		"scale=-2:1080",
 		"-avoid_negative_ts", "make_zero",
 		"-fflags", "+genpts",
@@ -387,6 +428,11 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.device, func(t *testing.T) {
+			caps := Capabilities{}
+			if tt.device != helpers.HARDWARE_ACCELERATION_DEVICE_CPU {
+				caps = hlsTestCapabilitiesForDevice(tt.device)
+			}
+
 			args := hlsArgs(t, HLSParams{
 				SourcePath:       "/s",
 				OutDir:           t.TempDir(),
@@ -397,6 +443,7 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 				CopyVideo:        false,
 				CopyAudio:        false,
 				StartSec:         0,
+				Capabilities:     caps,
 			})
 
 			hwIdx := indexOf(args, "-hwaccel")
@@ -420,7 +467,7 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 
 			switch tt.device {
 			case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
-				if !strings.Contains(argStr, "-sc_threshold 0") {
+				if !strings.Contains(argStr, "-sc_threshold:v:0 0") {
 					t.Errorf("cpu path must include -sc_threshold 0")
 				}
 			case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
@@ -507,8 +554,8 @@ func TestBuildHLSArgs_CopyVideoTranscodeAudio(t *testing.T) {
 	if !strings.Contains(argStr, "-ac 2") {
 		t.Error("audio should be downmixed to stereo")
 	}
-	if !strings.Contains(argStr, "-b:a 192k") {
-		t.Error("audio bitrate should be 192k")
+	if !strings.Contains(argStr, "-b:a 256k") {
+		t.Error("audio bitrate should be 256k")
 	}
 	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {
@@ -869,6 +916,106 @@ func TestBuildHLSArgs_TonemapHDR_Nvidia(t *testing.T) {
 	}
 }
 
+func TestBuildHLSArgs_NvidiaSDRUsesCUDAScaleWhenProbed(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     hlsTestNvidiaCapabilities(false),
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-hwaccel cuda -hwaccel_output_format cuda") {
+		t.Fatalf("NVIDIA CUDA scale path must use CUDA hwaccel, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "scale_cuda=w=-2:h=720:format=yuv420p") {
+		t.Fatalf("NVIDIA CUDA scale path must use scale_cuda, got: %s", argStr)
+	}
+	if strings.Contains(argStr, "zscale") {
+		t.Fatal("SDR CUDA scale path must not use zscale")
+	}
+}
+
+func TestBuildHLSArgs_NvidiaHDRUsesCUDATonemapWhenProbed(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+		Capabilities:     hlsTestNvidiaCapabilities(true),
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-hwaccel cuda -hwaccel_output_format cuda") {
+		t.Fatalf("NVIDIA CUDA tone-map path must use CUDA hwaccel, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "scale_cuda=w=-2:h=720:format=p010") {
+		t.Fatalf("NVIDIA CUDA tone-map path must scale to p010 before tone-map, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0") {
+		t.Fatalf("NVIDIA CUDA tone-map path must use tonemap_cuda, got: %s", argStr)
+	}
+}
+
+func TestBuildHLSArgs_NvidiaHDRFallsBackToSoftwareTonemapWithoutCUDAFilter(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		TonemapHDR:       true,
+		Capabilities:     hlsTestNvidiaCapabilities(false),
+	})
+	argStr := strings.Join(args, " ")
+
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Fatalf("NVIDIA HDR path without tonemap_cuda must skip CUDA hwaccel, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "zscale") || !strings.Contains(argStr, "h264_nvenc") {
+		t.Fatalf("NVIDIA HDR fallback must use software tone-map with NVENC encode, got: %s", argStr)
+	}
+}
+
+func TestBuildHLSArgs_NvidiaFallsBackToCPUWhenRuntimeProbeFails(t *testing.T) {
+	caps := hlsTestNvidiaCapabilities(false)
+	caps.H264NVENCRuntimeUsable = false
+	caps.H264NVENCProbeError = "no capable devices"
+
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     caps,
+	})
+	argStr := strings.Join(args, " ")
+
+	if strings.Contains(argStr, "h264_nvenc") || indexOf(args, "-hwaccel") >= 0 {
+		t.Fatalf("failed NVENC runtime probe must fall back to CPU, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "libx264") {
+		t.Fatalf("failed NVENC runtime probe must use libx264, got: %s", argStr)
+	}
+}
+
 func TestBuildHLSArgs_TonemapHDR_Intel(t *testing.T) {
 	args := hlsArgs(t, HLSParams{
 		SourcePath:       "/s",
@@ -992,6 +1139,29 @@ func TestBuildHLSArgs_ForceKeyframes(t *testing.T) {
 			t.Error("remux path must not include -force_key_frames")
 		}
 	})
+}
+
+func TestBuildHLSArgs_HardwareFrameRateUsesFixedGOP(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_1080P_4MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		SourceFrameRate:  23.976,
+		Capabilities:     hlsTestNvidiaCapabilities(false),
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "-g:v:0 96") || !strings.Contains(argStr, "-keyint_min:v:0 96") {
+		t.Fatalf("hardware encoder should use a fixed 4-second GOP, got: %s", argStr)
+	}
+	if strings.Contains(argStr, "-force_key_frames") {
+		t.Fatalf("hardware encoder with known frame rate should not also force expression keyframes, got: %s", argStr)
+	}
 }
 
 func contains(values []string, want string) bool {

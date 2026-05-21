@@ -269,6 +269,7 @@ CREATE TABLE
     frame_rate REAL NOT NULL,
     avg_frame_rate TEXT,
     bit_depth INTEGER,
+    pixel_format TEXT,
     color_range TEXT,
     color_space TEXT,
     color_primaries TEXT,

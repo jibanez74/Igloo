@@ -307,6 +307,7 @@ type VideoStream struct {
 	FrameRate      float64        `json:"frame_rate"`
 	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
 	BitDepth       sql.NullInt64  `json:"bit_depth"`
+	PixelFormat    sql.NullString `json:"pixel_format"`
 	ColorRange     sql.NullString `json:"color_range"`
 	ColorSpace     sql.NullString `json:"color_space"`
 	ColorPrimaries sql.NullString `json:"color_primaries"`

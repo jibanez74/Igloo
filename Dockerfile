@@ -48,6 +48,7 @@ COPY --from=ffmpeg-artifacts /tmp/jellyfin-ffmpeg/jellyfin-ffmpeg.deb /tmp/jelly
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    gosu \
     /tmp/jellyfin-ffmpeg.deb \
   && rm -rf /var/lib/apt/lists/* /tmp/jellyfin-ffmpeg.deb \
   && groupadd --gid 1000 igloo \
@@ -61,9 +62,11 @@ ENV TMPDIR=/transcode
 ENV LOG_TO_STDOUT=true
 
 COPY --from=server-builder /out/igloo-server /usr/local/bin/igloo-server
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-USER igloo
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["/usr/local/bin/igloo-server"]

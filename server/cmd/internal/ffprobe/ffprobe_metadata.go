@@ -34,6 +34,7 @@ type Stream struct {
 	AvgFrameRate   string `json:"avg_frame_rate"`
 	FrameRate      string `json:"r_frame_rate"`
 	BitDepth       string `json:"bits_per_raw_sample"`
+	PixelFormat    string `json:"pix_fmt"`
 	ColorRange     string `json:"color_range"`
 	ColorTransfer  string `json:"color_transfer"`
 	ColorPrimaries string `json:"color_primaries"`

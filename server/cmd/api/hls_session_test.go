@@ -421,6 +421,57 @@ func TestCreateHLSSession_RemuxNonH264StartsDirectlyWithFallback(t *testing.T) {
 	}
 }
 
+func TestCreateHLSSession_RemuxHigh10H264FallsBackToTranscode(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  1,
+					})
+				},
+			},
+		},
+	}
+	app.FFmpeg = fake
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	_, err := app.DB.Exec(`
+		UPDATE video_streams
+		SET codec_profile = ?, bit_depth = ?, pixel_format = ?
+		WHERE movie_id = ?
+	`, "High 10", 10, "yuv420p10le", movieID)
+	if err != nil {
+		t.Fatalf("update video stream: %v", err)
+	}
+
+	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, 0, 0)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if session.EffectiveProfile != helpers.HLS_PROFILE_1080P_8MBPS {
+		t.Fatalf("EffectiveProfile = %q, want %q", session.EffectiveProfile, helpers.HLS_PROFILE_1080P_8MBPS)
+	}
+	if session.CopyVideo {
+		t.Fatal("CopyVideo = true, want false for High 10 H.264 fallback")
+	}
+
+	calls := fake.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("RunHLS call count = %d, want 1", len(calls))
+	}
+	if calls[0].Profile != helpers.HLS_PROFILE_1080P_8MBPS || calls[0].CopyVideo {
+		t.Fatalf("RunHLS call = profile %q copyVideo %v, want fallback transcode", calls[0].Profile, calls[0].CopyVideo)
+	}
+}
+
 func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -459,6 +510,10 @@ func TestCreateHLSSession_NonRemuxProfilesRemainUnchanged(t *testing.T) {
 	}
 	if fake.CallCount() != 1 {
 		t.Fatalf("RunHLS call count = %d, want 1", fake.CallCount())
+	}
+	calls := fake.Calls()
+	if calls[0].SourceFrameRate != 23.976 {
+		t.Fatalf("RunHLS SourceFrameRate = %v, want 23.976", calls[0].SourceFrameRate)
 	}
 }
 

@@ -1,0 +1,170 @@
+Moderately hard for a **private fork**. Very hard for a **public, maintained successor**.
+
+The project is not just inactive; the repository was archived on May 22, 2025, is read-only, and the README now says the library is deprecated and “no longer works properly with recent ffmpeg versions.” ([GitHub][1]) The maintainer’s phase-out issue says the core problem is architectural: fluent-ffmpeg is a command-line generator over FFmpeg, but FFmpeg’s command line evolves and the wrapper has to keep chasing it. ([GitHub][2])
+
+## Practical difficulty
+
+For your own app, I would rate it:
+
+```text
+Private compatibility fork: 4/10
+Modern TypeScript rewrite: 7/10
+Public npm replacement: 8.5/10
+```
+
+A **private fork** is realistic if your goal is narrow: make the current package work for your app, patch bugs, modernize dependency versions, and maybe add Node 20/22/24 compatibility.
+
+A **real modernization** is much more involved because fluent-ffmpeg has a broad API: inputs, outputs, stream handling, presets, filters, progress parsing, ffprobe integration, screenshots, HLS-style workflows, events, command generation, and binary path resolution. The repository has 766 commits, a test folder, examples, 52 open pull requests, and 367 open issues, so the surface area is not tiny. ([GitHub][1])
+
+## What “modernize” would actually mean
+
+The easy part is mechanical:
+
+```text
+- Update package metadata
+- Replace old build/test tooling
+- Add current Node versions to CI
+- Remove dead assumptions around old FFmpeg/libav behavior
+- Fix CommonJS/ESM interop problems
+- Update docs
+- Publish under a scoped package name
+```
+
+The hard part is behavioral:
+
+```text
+- Preserve the old fluent API without breaking users
+- Correctly generate FFmpeg arguments for modern FFmpeg
+- Handle escaping without shell-injection risks
+- Support streams and cancellation reliably
+- Parse FFmpeg progress output across versions
+- Support complex filters without hiding too much of FFmpeg
+- Avoid pretending that every FFmpeg feature should have a wrapper method
+```
+
+The maintainer explicitly called out that the library tries to create a stable API over something that is not stable: FFmpeg command-line behavior changes over time. ([GitHub][2]) That is the main reason this is more than a dependency-refresh job.
+
+## Best fork strategy
+
+I would not try to modernize the whole library at first. I would fork it into a **compatibility-maintenance branch** and remove ambition.
+
+For example:
+
+```text
+@blindpenguin/fluent-ffmpeg
+```
+
+Scope it like this:
+
+```text
+Goal:
+  Keep the existing API usable for current Node and current FFmpeg.
+
+Non-goals:
+  No broad new feature development.
+  No attempt to wrap every new FFmpeg option.
+  No legacy avconv support.
+  No FLV-era presets unless still tested.
+  No compatibility promises for obscure old APIs.
+```
+
+Then focus on the parts you actually need:
+
+```text
+1. ffmpeg binary path configuration
+2. ffprobe wrapper
+3. input/output option generation
+4. stream handling
+5. progress/error events
+6. HLS/transcoding command support
+7. screenshots/thumbnails if your app uses them
+```
+
+That would be manageable.
+
+## I would avoid a full TypeScript port at first
+
+A TypeScript rewrite sounds attractive, but it increases risk. The current package has a lot of dynamic, chainable behavior. Rewriting it in TypeScript before stabilizing the runtime behavior would turn one migration into three:
+
+```text
+Runtime modernization
+API compatibility work
+Type modeling
+```
+
+Better sequence:
+
+```text
+Phase 1: Keep JavaScript, make it work.
+Phase 2: Add bundled .d.ts types.
+Phase 3: Add tests around your actual workflows.
+Phase 4: Consider TypeScript internals later.
+```
+
+There is already a separate `@types/fluent-ffmpeg` package, with recent activity shown on npm, so you could initially use or adapt those types instead of rewriting the library immediately. ([npm][3])
+
+## For Igloo, I probably would not do it
+
+For your media-center project, a fork may be more work than it is worth.
+
+Igloo likely needs a small number of repeatable FFmpeg operations:
+
+```text
+- ffprobe media analysis
+- direct copy/remux checks
+- HLS generation
+- thumbnail extraction
+- subtitle/audio stream mapping
+- maybe audio normalization or transcode profiles
+```
+
+For that, I would build your own thin internal wrapper instead:
+
+```ts
+type FfmpegJob = {
+  input: string;
+  args: string[];
+  signal?: AbortSignal;
+};
+
+async function runFfmpeg(job: FfmpegJob) {
+  // spawn ffmpeg directly
+}
+```
+
+Then create focused builders:
+
+```ts
+buildProbeArgs(path)
+buildThumbnailArgs(input, output, timestamp)
+buildHlsArgs(input, outputDir, profile)
+buildRemuxArgs(input, output)
+```
+
+That gives you almost all the benefit without inheriting fluent-ffmpeg’s old API surface.
+
+## When forking makes sense
+
+Fork fluent-ffmpeg if:
+
+```text
+- You already have a large codebase using it
+- Replacing it would take longer than patching it
+- You only need private/internal reliability
+- You are comfortable maintaining a small compatibility fork
+```
+
+Do not fork it if:
+
+```text
+- You want to create the next general-purpose Node FFmpeg wrapper
+- You need long-term public package support
+- You are starting fresh
+- You mainly need HLS, thumbnails, ffprobe, and transcode jobs
+```
+
+For your case, my recommendation is: **do not modernize fluent-ffmpeg as a public project. Either create a narrow private fork as a temporary bridge, or skip it and write a small typed FFmpeg runner around `spawn`/`execa`.**
+
+[1]: https://github.com/fluent-ffmpeg/node-fluent-ffmpeg "GitHub - fluent-ffmpeg/node-fluent-ffmpeg: A fluent API to FFMPEG (http://www.ffmpeg.org) · GitHub"
+[2]: https://github.com/fluent-ffmpeg/node-fluent-ffmpeg/issues/1324 "Phasing out fluent-ffmpeg · Issue #1324 · fluent-ffmpeg/node-fluent-ffmpeg · GitHub"
+[3]: https://npmjs.com/package/%40types/fluent-ffmpeg?utm_source=chatgpt.com "types/fluent-ffmpeg"

@@ -1240,7 +1240,7 @@ func (q *Queries) GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]S
 
 const getVideoStreamsByMovieID = `-- name: GetVideoStreamsByMovieID :many
 SELECT
-  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+  id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, pixel_format, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
 FROM video_streams
 WHERE movie_id = ?
 ORDER BY stream_index
@@ -1272,6 +1272,7 @@ func (q *Queries) GetVideoStreamsByMovieID(ctx context.Context, movieID int64) (
 			&i.FrameRate,
 			&i.AvgFrameRate,
 			&i.BitDepth,
+			&i.PixelFormat,
 			&i.ColorRange,
 			&i.ColorSpace,
 			&i.ColorPrimaries,
@@ -1461,6 +1462,7 @@ INSERT INTO video_streams (
   frame_rate,
   avg_frame_rate,
   bit_depth,
+  pixel_format,
   color_range,
   color_space,
   color_primaries,
@@ -1469,8 +1471,8 @@ INSERT INTO video_streams (
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, movie_id, stream_index, codec, codec_profile, codec_level, bit_rate, width, height, coded_width, coded_height, aspect_ratio, frame_rate, avg_frame_rate, bit_depth, pixel_format, color_range, color_space, color_primaries, color_transfer, language, title, created_at, updated_at
 `
 
 type InsertVideoStreamParams struct {
@@ -1488,6 +1490,7 @@ type InsertVideoStreamParams struct {
 	FrameRate      float64        `json:"frame_rate"`
 	AvgFrameRate   sql.NullString `json:"avg_frame_rate"`
 	BitDepth       sql.NullInt64  `json:"bit_depth"`
+	PixelFormat    sql.NullString `json:"pixel_format"`
 	ColorRange     sql.NullString `json:"color_range"`
 	ColorSpace     sql.NullString `json:"color_space"`
 	ColorPrimaries sql.NullString `json:"color_primaries"`
@@ -1512,6 +1515,7 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 		arg.FrameRate,
 		arg.AvgFrameRate,
 		arg.BitDepth,
+		arg.PixelFormat,
 		arg.ColorRange,
 		arg.ColorSpace,
 		arg.ColorPrimaries,
@@ -1536,6 +1540,7 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 		&i.FrameRate,
 		&i.AvgFrameRate,
 		&i.BitDepth,
+		&i.PixelFormat,
 		&i.ColorRange,
 		&i.ColorSpace,
 		&i.ColorPrimaries,

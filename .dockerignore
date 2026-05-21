@@ -2,6 +2,7 @@
 .gitignore
 .env*
 !.env.example
+compose.override.yaml
 *.db-journal
 .DS_Store
 .claude

@@ -19,11 +19,14 @@ import (
 type HLSSession struct {
 	TempDir          string
 	Cmd              *exec.Cmd
+	Cancel           context.CancelFunc
+	CleanupOnce      sync.Once
 	DurationSec      float64
 	StartSec         float64
 	StartSegment     int64
 	Exited           bool
 	ExitErr          error
+	ExpectedStop     bool
 	FinalPlaylist    string
 	ExitMu           sync.Mutex
 	RequestedProfile string
@@ -50,6 +53,69 @@ func isHDRStream(stream *database.VideoStream) bool {
 	}
 	ct := strings.ToLower(strings.TrimSpace(stream.ColorTransfer.String))
 	return ct == helpers.HDR_TRANSFER_PQ || ct == helpers.HDR_TRANSFER_HLG
+}
+
+func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string) {
+	if !helpers.IsBrowserCompatibleH264(stream.Codec) {
+		return false, fmt.Sprintf("requested remux is not supported for codec %q", stream.Codec)
+	}
+
+	if stream.BitDepth.Valid && stream.BitDepth.Int64 > 8 {
+		return false, fmt.Sprintf("requested remux is not supported for %d-bit H.264", stream.BitDepth.Int64)
+	}
+
+	if stream.PixelFormat.Valid && isNonBrowserH264PixelFormat(stream.PixelFormat.String) {
+		return false, fmt.Sprintf("requested remux is not supported for pixel format %q", stream.PixelFormat.String)
+	}
+
+	if stream.CodecProfile.Valid && isNonBrowserH264Profile(stream.CodecProfile.String) {
+		return false, fmt.Sprintf("requested remux is not supported for H.264 profile %q", stream.CodecProfile.String)
+	}
+
+	return true, ""
+}
+
+func isNonBrowserH264Profile(profile string) bool {
+	profile = strings.ToLower(strings.TrimSpace(profile))
+	if profile == "" {
+		return false
+	}
+
+	unsupportedMarkers := []string{
+		"10",
+		"4:2:2",
+		"422",
+		"4:4:4",
+		"444",
+	}
+	for _, marker := range unsupportedMarkers {
+		if strings.Contains(profile, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isNonBrowserH264PixelFormat(pixelFormat string) bool {
+	pixelFormat = strings.ToLower(strings.TrimSpace(pixelFormat))
+	if pixelFormat == "" {
+		return false
+	}
+
+	unsupportedMarkers := []string{
+		"10",
+		"12",
+		"14",
+		"16",
+		"422",
+		"444",
+	}
+	for _, marker := range unsupportedMarkers {
+		if strings.Contains(pixelFormat, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func HLSSessionKey(movieID int64, profile string, audioTrack int) string {
@@ -127,31 +193,48 @@ func cleanupHLSSession(session *HLSSession) {
 	if session == nil {
 		return
 	}
-	if session.Cmd != nil && session.Cmd.Process != nil {
+
+	session.CleanupOnce.Do(func() {
+		session.ExitMu.Lock()
+		session.ExpectedStop = true
+		exited := session.Exited
+		cancel := session.Cancel
+		session.ExitMu.Unlock()
+
+		if cancel != nil {
+			cancel()
+		}
+
+		if session.Cmd != nil && session.Cmd.Process != nil && !exited {
+			exited = waitForHLSSessionExit(session, 2*time.Second)
+			if !exited {
+				_ = session.Cmd.Process.Kill()
+				_ = waitForHLSSessionExit(session, 2*time.Second)
+			}
+		}
+
+		if session.TempDir != "" {
+			_ = os.RemoveAll(session.TempDir)
+		}
+	})
+}
+
+func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
 		session.ExitMu.Lock()
 		exited := session.Exited
 		session.ExitMu.Unlock()
-
-		if !exited {
-			_ = session.Cmd.Process.Kill()
-
-			// Wait for the process to fully exit before removing the temp dir
-			// so the OS has released all file handles. Timeout after 2 seconds.
-			deadline := time.Now().Add(2 * time.Second)
-			for time.Now().Before(deadline) {
-				session.ExitMu.Lock()
-				exited = session.Exited
-				session.ExitMu.Unlock()
-				if exited {
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
+		if exited {
+			return true
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	if session.TempDir != "" {
-		_ = os.RemoveAll(session.TempDir)
-	}
+
+	session.ExitMu.Lock()
+	exited := session.Exited
+	session.ExitMu.Unlock()
+	return exited
 }
 
 func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
@@ -175,8 +258,10 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	}
 
 	startSegment := int64(params.StartSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
+	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
 		TempDir:          tempDir,
+		Cancel:           cancel,
 		DurationSec:      params.DurationSec,
 		StartSec:         params.StartSec,
 		StartSegment:     startSegment,
@@ -217,6 +302,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		}
 
 		session.ExitMu.Lock()
+		expectedStop := session.ExpectedStop
 		session.Exited = true
 		session.ExitErr = exitErr
 		session.ExitMu.Unlock()
@@ -224,6 +310,16 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		elapsed := time.Since(startTime).Round(time.Second)
 
 		if exitErr != nil {
+			if expectedStop {
+				app.Logger.Info("hls session stopped",
+					"movie_id", params.Movie.ID,
+					"requested_profile", params.RequestedProfile,
+					"effective_profile", params.EffectiveProfile,
+					"elapsed", elapsed.String(),
+				)
+				return
+			}
+
 			app.Logger.Error("hls session failed",
 				"movie_id", params.Movie.ID,
 				"requested_profile", params.RequestedProfile,
@@ -243,7 +339,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		)
 	}
 
-	cmd, err := app.FFmpeg.RunHLS(context.Background(), ffmpeg.HLSParams{
+	cmd, err := app.FFmpeg.RunHLS(runCtx, ffmpeg.HLSParams{
 		SourcePath:       params.Movie.FilePath,
 		OutDir:           tempDir,
 		Profile:          params.EffectiveProfile,
@@ -254,6 +350,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		CopyAudio:        copyAudio,
 		StartSec:         params.StartSec,
 		TonemapHDR:       tonemapHDR,
+		SourceFrameRate:  params.PrimaryVideo.FrameRate,
 	}, onExit)
 	if err != nil {
 		cleanupHLSSession(session)
@@ -449,16 +546,11 @@ func (app *Application) createHLSSession(
 	requestedProfile := profile
 	effectiveProfile := profile
 	fallbackProfile := helpers.BestFitHLSFallbackProfile(primaryVideo.Height)
-	videoCodec := strings.ToLower(strings.TrimSpace(primaryVideo.Codec))
 	safetyCacheKey := remuxSafetyFingerprint(&movie, &primaryVideo)
 	needsRemuxPreflight := false
 
 	if requestedProfile == helpers.HLS_PROFILE_REMUX {
-		if !helpers.IsBrowserCompatibleH264(videoCodec) {
-			fallbackReason := fmt.Sprintf(
-				"requested remux is not supported for codec %q",
-				primaryVideo.Codec,
-			)
+		if ok, fallbackReason := isBrowserSafeH264RemuxCandidate(&primaryVideo); !ok {
 			effectiveProfile = fallbackProfile
 			app.setRemuxSafetyVerdict(safetyCacheKey, false, fallbackReason)
 			app.Logger.Warn("remux safety fallback engaged",

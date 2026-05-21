@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +41,8 @@ type HLSParams struct {
 	CopyAudio        bool
 	StartSec         float64
 	TonemapHDR       bool // true when source is HDR and the profile requires SDR output
+	SourceFrameRate  float64
+	Capabilities     Capabilities
 }
 
 // hlsHWTranscode maps hardware acceleration device IDs to FFmpeg -hwaccel and
@@ -82,18 +85,19 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-threads", fmt.Sprintf("%d", max(1, runtime.NumCPU()/2)),
 	}
 
-	hwLower := strings.ToLower(p.HWDevice)
+	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
+	hwLower := deviceDecision.Effective
 	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
+	useNvidiaCUDAFilters := !copyVideo && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA &&
+		p.Capabilities.SupportsNvidiaCUDAFilters(p.TonemapHDR)
 
-	// Add -hwaccel for hardware-accelerated decode when transcoding.
-	// When tone-mapping is required, only Apple VideoToolbox keeps hwaccel
-	// because scale_vt handles HDR→SDR natively on the GPU.
-	// For NVIDIA/Intel+tonemap, skip hwaccel so FFmpeg decodes in software
-	// (required by the zscale/tonemap filter pipeline); the hw encoder still applies.
 	if !copyVideo {
-		useHWAccel := hwKnown && hw.HWAccel != "" &&
-			(!p.TonemapHDR || hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE)
-		if useHWAccel {
+		switch {
+		case useNvidiaCUDAFilters:
+			args = append(args, "-hwaccel", "cuda", "-hwaccel_output_format", "cuda")
+		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+			args = append(args, "-hwaccel", hw.HWAccel)
+		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_INTEL && !p.TonemapHDR:
 			args = append(args, "-hwaccel", hw.HWAccel)
 		}
 	}
@@ -106,58 +110,50 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-i", p.SourcePath,
 		"-map", fmt.Sprintf("0:%d", p.VideoStreamIndex),
 		"-map", fmt.Sprintf("0:%d", p.AudioStreamIndex),
+		"-map_metadata", "-1",
+		"-map_chapters", "-1",
 	)
 
 	if copyVideo {
 		args = append(args, "-c:v", "copy")
 	} else {
+		encoder := "libx264"
 		if hwKnown {
-			args = append(args, "-c:v", hw.Encoder)
-			switch hwLower {
-			case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
-				args = append(args, "-rc", "vbr", "-preset", "p4")
-			case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
-				args = append(args, "-look_ahead", "1")
-			}
-		} else {
-			args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-sc_threshold", "0")
+			encoder = hw.Encoder
 		}
+
+		args = append(args, "-c:v", encoder, "-profile:v", "high")
+		switch hwLower {
+		case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
+			args = append(args, "-rc", "vbr", "-preset", "p4")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
+			args = append(args, "-look_ahead", "1")
+		case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
+			args = append(args, "-preset", "veryfast")
+		}
+
 		args = append(args,
 			"-b:v", cfg.VideoBitrate,
 			"-maxrate", cfg.VideoBitrate,
 			"-bufsize", cfg.Bufsize,
 		)
 
-		// Video filter: tone-map HDR→SDR when required, otherwise plain scale.
-		var vf string
-		switch {
-		case p.TonemapHDR && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
-			// scale_vt performs both scaling and HDR→BT.709 tone-mapping in one GPU pass.
-			vf = fmt.Sprintf(
-				"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
-				cfg.Height,
-			)
-		case p.TonemapHDR:
-			// Software tone-mapping: linearise → apply Hable tone curve → convert to BT.709.
-			// Works for CPU, NVIDIA (sw decode + hw encode), and Intel paths.
-			vf = fmt.Sprintf(
-				"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
-					"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
-					"zscale=t=bt709:m=bt709:r=tv,format=yuv420p",
-				cfg.Height,
-			)
-		default:
-			vf = fmt.Sprintf("scale=-2:%d", cfg.Height)
+		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, useNvidiaCUDAFilters))
+		if !useNvidiaCUDAFilters {
+			args = append(args, "-pix_fmt", "yuv420p")
 		}
-		args = append(args, "-vf", vf)
-		args = append(args, "-force_key_frames",
-			fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC))
+		args = append(args,
+			"-color_primaries", "bt709",
+			"-color_trc", "bt709",
+			"-colorspace", "bt709",
+		)
+		args = appendHLSKeyframeArgs(args, encoder, p.SourceFrameRate)
 	}
 
 	if p.CopyAudio {
 		args = append(args, "-c:a", "copy")
 	} else {
-		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "192k")
+		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "256k")
 	}
 
 	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
@@ -166,6 +162,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	args = append(args,
 		"-f", "hls",
 		"-hls_segment_type", "fmp4",
+		"-hls_segment_options", "movflags=+frag_discont",
 		"-hls_playlist_type", "event",
 		"-hls_list_size", "0",
 		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
@@ -175,6 +172,62 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	)
 
 	return args, nil
+}
+
+func hlsVideoFilter(cfg helpers.HLSProfileConfig, hwDevice string, tonemapHDR bool, useNvidiaCUDAFilters bool) string {
+	const sdrParams = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
+
+	switch {
+	case tonemapHDR && useNvidiaCUDAFilters:
+		return fmt.Sprintf(
+			"scale_cuda=w=-2:h=%d:format=p010,"+
+				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
+			cfg.Height,
+		)
+	case useNvidiaCUDAFilters:
+		return fmt.Sprintf("scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
+		return fmt.Sprintf(
+			"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
+			cfg.Height,
+		)
+	case tonemapHDR:
+		return fmt.Sprintf(
+			"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
+				"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
+				"zscale=t=bt709:m=bt709:r=tv,format=yuv420p,%s",
+			cfg.Height,
+			sdrParams,
+		)
+	default:
+		return fmt.Sprintf("scale=-2:%d,format=yuv420p,%s", cfg.Height, sdrParams)
+	}
+}
+
+func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []string {
+	segmentTime := float64(helpers.HLS_SEGMENT_TIME_SEC)
+	isGOPDrivenEncoder := strings.EqualFold(encoder, "h264_nvenc") ||
+		strings.EqualFold(encoder, "h264_qsv") ||
+		strings.EqualFold(encoder, "h264_videotoolbox")
+
+	if isGOPDrivenEncoder && frameRate > 0 {
+		gop := int(math.Ceil(segmentTime * frameRate))
+		if gop > 0 {
+			return append(args,
+				"-g:v:0", fmt.Sprintf("%d", gop),
+				"-keyint_min:v:0", fmt.Sprintf("%d", gop),
+			)
+		}
+	}
+
+	args = append(args,
+		"-force_key_frames:0",
+		fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC),
+	)
+	if strings.EqualFold(encoder, "libx264") {
+		args = append(args, "-sc_threshold:v:0", "0")
+	}
+	return args
 }
 
 // RunHLS starts FFmpeg in the background for HLS transcoding.
@@ -206,6 +259,9 @@ func (f *ffmpeg) RunHLS(
 	}
 
 	params.OutDir = absOutDir
+	if !params.Capabilities.Probed {
+		params.Capabilities = f.capabilities
+	}
 
 	args, err := buildHLSArgs(params)
 	if err != nil {

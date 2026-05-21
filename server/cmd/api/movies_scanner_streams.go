@@ -91,6 +91,7 @@ func (app *Application) insertVideoStream(ctx context.Context, qtx *database.Que
 		FrameRate:      frameRate,
 		AvgFrameRate:   helpers.NullString(stream.AvgFrameRate),
 		BitDepth:       bitDepth,
+		PixelFormat:    helpers.NullString(stream.PixelFormat),
 		ColorRange:     helpers.NullString(stream.ColorRange),
 		ColorSpace:     helpers.NullString(stream.ColorSpace),
 		ColorPrimaries: helpers.NullString(stream.ColorPrimaries),

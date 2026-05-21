@@ -49,7 +49,7 @@ For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each mo
 - container and stream metadata
 - video, audio, and subtitle stream rows
 - chapter information
-- video dimensions, codec names, profiles, bit depth, frame rates, and color metadata
+- video dimensions, codec names, profiles, bit depth, pixel formats, frame rates, and color metadata
 - audio codecs, language tags, channel layout, sample rate, and bitrate
 - subtitle codecs, language tags, stream indices, and titles
 
@@ -125,7 +125,7 @@ Remux is only attempted for browser-compatible H.264 codec names:
 - `avc`
 - `avc1`
 
-If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. This avoids serving copied video that browsers are unlikely to play through HLS.
+If the source video is not browser-compatible H.264, Igloo immediately falls back to the best-fit transcode profile. Igloo also falls back for H.264 streams that are not a safe browser remux target, including 10-bit, 4:2:2, or 4:4:4 sources identified from stored codec profile, bit depth, or pixel format metadata. This avoids serving copied video that browsers are unlikely to play through HLS.
 
 Even H.264 remux can be unsafe. Some copied fMP4 fragments can start at samples that are not independently decodable by browser players. To avoid that, Igloo preflights remux output before committing to it:
 
@@ -156,18 +156,24 @@ Transcode mode sets `-b:v`, `-maxrate`, and `-bufsize` from the selected profile
 CPU transcode uses:
 
 ```text
--c:v libx264 -preset veryfast -sc_threshold 0
+-c:v libx264 -preset veryfast -sc_threshold:v:0 0
 ```
 
-The `veryfast` preset is a practical default for self-hosted playback: it prioritizes real-time performance over maximum compression efficiency. Scene-cut insertion is disabled for CPU transcodes because Igloo also forces keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
+The `veryfast` preset is a practical default for self-hosted playback: it prioritizes real-time performance over maximum compression efficiency. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
 
-Every video transcode path adds:
+When the source frame rate is known and a hardware encoder is active, Igloo uses a fixed 4-second GOP:
 
 ```text
--force_key_frames expr:gte(t,n_forced*4)
+-g:v:0 <segment_time*fps> -keyint_min:v:0 <segment_time*fps>
 ```
 
-That aligns keyframes with the 4-second HLS segment target. Without predictable keyframes, HLS segments can drift, seek behavior gets worse, and browsers may wait longer for independently decodable frames.
+Other video transcode paths use forced keyframe expressions:
+
+```text
+-force_key_frames:0 expr:gte(t,n_forced*4)
+```
+
+Both paths align keyframes with the 4-second HLS segment target. Without predictable keyframes, HLS segments can drift, seek behavior gets worse, and browsers may wait longer for independently decodable frames.
 
 FFmpeg also runs with:
 
@@ -194,10 +200,10 @@ If the selected audio codec is AAC, Igloo copies it:
 -c:a copy
 ```
 
-Otherwise, Igloo converts audio to stereo AAC at `192k`:
+Otherwise, Igloo converts audio to stereo AAC at `256k`:
 
 ```text
--c:a aac -ac 2 -b:a 192k
+-c:a aac -ac 2 -b:a 256k
 ```
 
 AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
@@ -219,7 +225,7 @@ The FFmpeg encoder mapping is:
 | --- | --- | --- | --- |
 | `cpu` | none | `libx264` | Any supported local or Docker runtime |
 | `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | Local macOS development |
-| `nvidia` | `-hwaccel cuda` | `h264_nvenc` | Linux Docker or local Linux with NVIDIA runtime support |
+| `nvidia` | `-hwaccel cuda -hwaccel_output_format cuda` when CUDA filters are available; otherwise software decode | `h264_nvenc` | Linux Docker or local Linux with NVIDIA runtime support |
 | `intel` | `-hwaccel qsv` | `h264_qsv` | Linux Docker or local Linux with Intel QSV support |
 
 NVIDIA adds:
@@ -234,7 +240,7 @@ Intel adds:
 -look_ahead 1
 ```
 
-CPU and unknown devices fall back to `libx264`. This is intentional. An invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, and Docker configuration provides known values, but the HLS builder still has a safe CPU fallback.
+At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, and failed NVENC runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, and Docker configuration provides known values, but the HLS builder still has a safe CPU fallback.
 
 For Docker:
 
@@ -278,7 +284,7 @@ zscale=t=bt709:m=bt709:r=tv,
 format=yuv420p
 ```
 
-For NVIDIA and Intel HDR tone mapping, Igloo skips `-hwaccel` decode but still uses the hardware encoder. The filter chain needs software frames for `zscale` and `tonemap`; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
+For NVIDIA HDR tone mapping, Igloo uses `tonemap_cuda` only when the probed FFmpeg build exposes the CUDA tone-map filter and the options Igloo needs. If not, NVIDIA falls back to software `zscale`/`tonemap` while still using `h264_nvenc` when the encoder is usable. Intel HDR tone mapping also uses the software filter chain with the hardware encoder. The software filter chain needs software frames; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
 
 The Hable tone curve is a practical default that gives reasonable SDR output for HDR movies without exposing tone-map tuning to users yet.
 
@@ -349,11 +355,11 @@ After conversion, Igloo replaces escaped `\h` sequences with spaces. This handle
 
 For Docker deployments:
 
-- `TRANSCODE_DIR` on the host is mounted at `/transcode`.
+- `TRANSCODE_DIR` on the host is mounted at `/transcode`; Docker uses `./transcode` when it is unset.
 - The Docker image sets `TMPDIR=/transcode`.
 - HLS temp output is therefore written to the transcode mount.
-- `/config` and `/transcode` must be writable by UID/GID `1000`.
-- Media directories are mounted read-only because FFmpeg and ffprobe should inspect or read media, not modify the library.
+- The entrypoint creates `/config` and `/transcode` when absent and makes them writable by UID/GID `1000`.
+- Configured media directories are mounted read-only by the generated Compose override because FFmpeg and ffprobe should inspect or read media, not modify the library.
 
 For local development:
 

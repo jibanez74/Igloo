@@ -89,6 +89,9 @@ If you only want to run the published image, download the compose file and examp
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/jibanez74/Igloo/main/compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/jibanez74/Igloo/main/.env.example
+mkdir -p scripts
+curl -fsSLo scripts/generate-compose-media-override.sh https://raw.githubusercontent.com/jibanez74/Igloo/main/scripts/generate-compose-media-override.sh
+chmod +x scripts/generate-compose-media-override.sh
 cp .env.example .env
 ```
 
@@ -97,13 +100,14 @@ Edit `.env` before first start:
 - Set `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
 - Set `SESSION_COOKIE_SECURE=false` if you are testing over plain HTTP, such as `http://localhost:8080`.
 - Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
-- Set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` to your host media paths, or leave the defaults in place until you are ready to point Igloo at real media folders.
+- Set only the media variables you use, such as `MOVIES_DIR` or `MUSIC_DIR`; leave unused media variables commented out.
+- Each configured media directory must already exist on the host. Igloo will not create empty media library directories.
+- Optionally set `CONFIG_DIR` and `TRANSCODE_DIR`; if omitted, Docker uses `./config` and `./transcode` and the container fixes ownership at startup.
 
-Prepare writable directories for the container user:
+Generate the Compose override for enabled media libraries. Rerun this command whenever you change `MOVIES_DIR`, `SHOWS_DIR`, or `MUSIC_DIR`:
 
 ```bash
-mkdir -p ./config ./transcode
-chown -R 1000:1000 ./config ./transcode
+scripts/generate-compose-media-override.sh
 ```
 
 Pull and start the service:
@@ -156,9 +160,9 @@ The most important variables are:
 | `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
 | `HOST_PORT` | Host port for Docker, default `8080` |
 | `SESSION_COOKIE_SECURE` | Set `true` behind HTTPS; set `false` for plain HTTP development |
-| `CONFIG_DIR` | Docker host directory for the database, static assets, and logs |
-| `TRANSCODE_DIR` | Docker host directory for temporary HLS transcode output |
-| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Host media directories mounted read-only into the container |
+| `CONFIG_DIR` | Docker host directory for the database, static assets, and logs; default `./config`, auto-created |
+| `TRANSCODE_DIR` | Docker host directory for temporary HLS transcode output; default `./transcode`, auto-created |
+| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Optional host media directories; the generator mounts only configured existing paths read-only |
 | `TMDB_API_KEY` | Optional TMDB API key for movie metadata and in-theaters data |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional Spotify credentials for music metadata enrichment |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |

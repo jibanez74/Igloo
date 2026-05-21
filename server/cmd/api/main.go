@@ -336,8 +336,48 @@ func (app *Application) InitTables() error {
 		return err
 	}
 
+	if err := app.ensureStartupMigrations(); err != nil {
+		return err
+	}
+
 	app.Logger.Info("database tables initialized successfully")
 
+	return nil
+}
+
+func (app *Application) ensureStartupMigrations() error {
+	return app.ensureColumn("video_streams", "pixel_format", "ALTER TABLE video_streams ADD COLUMN pixel_format TEXT")
+}
+
+func (app *Application) ensureColumn(table string, column string, alterSQL string) error {
+	rows, err := app.DB.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return fmt.Errorf("inspect table %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan table %s info: %w", table, err)
+		}
+		if strings.EqualFold(name, column) {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate table %s info: %w", table, err)
+	}
+
+	if _, err := app.DB.Exec(alterSQL); err != nil {
+		return fmt.Errorf("apply migration for %s.%s: %w", table, column, err)
+	}
+	app.Logger.Info("database schema migration applied", "table", table, "column", column)
 	return nil
 }
 
@@ -376,21 +416,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	}
 
-	moviesDir := os.Getenv("MOVIES_DIR")
-	if moviesDir == "" {
-		moviesDir = helpers.DEFAULT_MOVIES_DIR
-	}
-
-	showsDir := os.Getenv("SHOWS_DIR")
-	if showsDir == "" {
-		showsDir = helpers.DEFAULT_SHOWS_DIR
-	}
-
-	musicDir := os.Getenv("MUSIC_DIR")
-	if musicDir == "" {
-		musicDir = helpers.DEFAULT_MUSIC_DIR
-	}
-
 	params := database.CreateSettingsParams{
 		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
 		JellyfinToken:              helpers.NullString(os.Getenv("JELLYFIN_TOKEN")),
@@ -400,9 +425,9 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,
 		DownloadImages:             downloadImages,
-		MoviesDir:                  helpers.NullString(moviesDir),
-		ShowsDir:                   helpers.NullString(showsDir),
-		MusicDir:                   helpers.NullString(musicDir),
+		MoviesDir:                  optionalEnvSetting("MOVIES_DIR"),
+		ShowsDir:                   optionalEnvSetting("SHOWS_DIR"),
+		MusicDir:                   optionalEnvSetting("MUSIC_DIR"),
 		StaticDir:                  staticDir,
 		LogsDir:                    logsDir,
 	}
@@ -420,7 +445,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	return nil
 }
 
-// InitDirs ensures required app directories exist and creates configured media roots.
+// InitDirs ensures required app directories exist and validates configured media roots.
 func (app *Application) InitDirs() error {
 	created, err := helpers.GetOrCreateDir(app.Settings.StaticDir)
 	if err != nil {
@@ -453,40 +478,48 @@ func (app *Application) InitDirs() error {
 		}
 	}
 
-	if app.Settings.MoviesDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.MoviesDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize movies directory", "error", err)
-		}
-
-		if created {
-			app.Logger.Info("created movies directory", "path", app.Settings.MoviesDir.String)
-		}
-	}
-
-	if app.Settings.ShowsDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.ShowsDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize shows directory", "error", err)
-		}
-
-		if created {
-			app.Logger.Info("created shows directory", "path", app.Settings.ShowsDir.String)
-		}
-	}
-
-	if app.Settings.MusicDir.Valid {
-		created, err = helpers.GetOrCreateDir(app.Settings.MusicDir.String)
-		if err != nil {
-			app.Logger.Error("failed to initialize music directory", "error", err)
-		}
-
-		if created {
-			app.Logger.Info("created music directory", "path", app.Settings.MusicDir.String)
-		}
-	}
+	app.validateMediaDir("movies", &app.Settings.MoviesDir)
+	app.validateMediaDir("shows", &app.Settings.ShowsDir)
+	app.validateMediaDir("music", &app.Settings.MusicDir)
 
 	app.Logger.Info("directories initialized successfully")
+
+	return nil
+}
+
+func (app *Application) validateMediaDir(mediaType string, dir *sql.NullString) {
+	if dir == nil || !dir.Valid || strings.TrimSpace(dir.String) == "" {
+		if dir != nil {
+			*dir = sql.NullString{}
+		}
+		return
+	}
+
+	dir.String = strings.TrimSpace(dir.String)
+	if err := validateExistingDir(dir.String); err != nil {
+		app.Logger.Warn("disabling inaccessible media directory", "type", mediaType, "path", dir.String, "error", err)
+		*dir = sql.NullString{}
+	}
+}
+
+func validateExistingDir(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory")
+	}
+
+	dir, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open directory: %w", err)
+	}
+
+	if err = dir.Close(); err != nil {
+		return fmt.Errorf("failed to close directory: %w", err)
+	}
 
 	return nil
 }
@@ -592,6 +625,10 @@ func (app *Application) InitSession() {
 	app.Logger.Info("session manager initialized successfully", "cookie_secure", sessionManager.Cookie.Secure)
 }
 
+func optionalEnvSetting(envName string) sql.NullString {
+	return helpers.NullString(strings.TrimSpace(os.Getenv(envName)))
+}
+
 func applyRuntimeSettingOverrides(settings *database.Setting) {
 	if settings == nil {
 		return
@@ -622,7 +659,7 @@ func overrideNullStringSetting(target *sql.NullString, envName string) {
 		return
 	}
 
-	*target = helpers.NullString(value)
+	*target = helpers.NullString(strings.TrimSpace(value))
 }
 
 func overrideStringSetting(target *string, envName string) {
@@ -635,7 +672,7 @@ func overrideStringSetting(target *string, envName string) {
 		return
 	}
 
-	*target = value
+	*target = strings.TrimSpace(value)
 }
 
 func overrideBoolSetting(target *bool, envName string) {
@@ -648,7 +685,7 @@ func overrideBoolSetting(target *bool, envName string) {
 		return
 	}
 
-	parsed, err := strconv.ParseBool(value)
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
 	if err != nil {
 		slog.Warn("invalid boolean value for env var, keeping current value", "env", envName, "value", value)
 		return

@@ -271,6 +271,7 @@ INSERT INTO video_streams (
   frame_rate,
   avg_frame_rate,
   bit_depth,
+  pixel_format,
   color_range,
   color_space,
   color_primaries,
@@ -279,7 +280,7 @@ INSERT INTO video_streams (
   title
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: DeleteMovieAudioStreams :exec

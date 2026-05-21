@@ -14,7 +14,8 @@ type FFmpegInterface interface {
 }
 
 type ffmpeg struct {
-	bin string
+	bin          string
+	capabilities Capabilities
 }
 
 var _ FFmpegInterface = (*ffmpeg)(nil)
@@ -41,7 +42,10 @@ func New() (FFmpegInterface, error) {
 		return nil, err
 	}
 
-	instance = &ffmpeg{bin: binPath}
+	instance = &ffmpeg{
+		bin:          binPath,
+		capabilities: probeCapabilities(binPath),
+	}
 
 	return instance, nil
 }

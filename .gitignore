@@ -16,6 +16,7 @@
   # Environment files
 .env
 .env.local
+/compose.override.yaml
 
 # Database files and directories created by app at start up
 *.db

@@ -617,14 +617,14 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.JellyfinToken.Valid {
 		t.Error("Expected JellyfinToken to be invalid when not set")
 	}
-	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR {
-		t.Errorf("Expected MoviesDir %q, got %q (valid=%v)", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if app.Settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir to be disabled by default, got %q", app.Settings.MoviesDir.String)
 	}
-	if !app.Settings.ShowsDir.Valid || app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR {
-		t.Errorf("Expected ShowsDir %q, got %q (valid=%v)", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if app.Settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir to be disabled by default, got %q", app.Settings.ShowsDir.String)
 	}
-	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR {
-		t.Errorf("Expected MusicDir %q, got %q (valid=%v)", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
+	if app.Settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir to be disabled by default, got %q", app.Settings.MusicDir.String)
 	}
 
 	var settingsCount int
@@ -649,6 +649,9 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	t.Setenv("ENABLE_LOGGER", "true")
 	t.Setenv("ENABLE_WATCHER", "true")
 	t.Setenv("DOWNLOAD_IMAGES", "true")
+	t.Setenv("MOVIES_DIR", "/host/movies")
+	t.Setenv("SHOWS_DIR", "/host/shows")
+	t.Setenv("MUSIC_DIR", "/host/music")
 
 	ctx := context.Background()
 	err := app.InitSettings(ctx)
@@ -665,14 +668,14 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
 	}
-	if app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR || !app.Settings.MoviesDir.Valid {
-		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	if app.Settings.MoviesDir.String != "/host/movies" || !app.Settings.MoviesDir.Valid {
+		t.Errorf("Expected MoviesDir %q (valid), got %q (valid=%v)", "/host/movies", app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
 	}
-	if app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR || !app.Settings.ShowsDir.Valid {
-		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
+	if app.Settings.ShowsDir.String != "/host/shows" || !app.Settings.ShowsDir.Valid {
+		t.Errorf("Expected ShowsDir %q (valid), got %q (valid=%v)", "/host/shows", app.Settings.ShowsDir.String, app.Settings.ShowsDir.Valid)
 	}
-	if app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR || !app.Settings.MusicDir.Valid {
-		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
+	if app.Settings.MusicDir.String != "/host/music" || !app.Settings.MusicDir.Valid {
+		t.Errorf("Expected MusicDir %q (valid), got %q (valid=%v)", "/host/music", app.Settings.MusicDir.String, app.Settings.MusicDir.Valid)
 	}
 
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
@@ -875,9 +878,32 @@ func TestInitDirs(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	moviesDir := filepath.Join(tmpDir, "movies")
+	if err := os.Mkdir(moviesDir, 0o755); err != nil {
+		t.Fatalf("failed to create movies directory: %v", err)
+	}
+
+	missingShowsDir := filepath.Join(tmpDir, "shows")
+	musicFile := filepath.Join(tmpDir, "music-file")
+	if err := os.WriteFile(musicFile, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("failed to create music file: %v", err)
+	}
+
 	app.Settings = &database.Setting{
 		StaticDir: filepath.Join(tmpDir, "static"),
 		LogsDir:   filepath.Join(tmpDir, "logs"),
+		MoviesDir: sql.NullString{
+			String: moviesDir,
+			Valid:  true,
+		},
+		ShowsDir: sql.NullString{
+			String: missingShowsDir,
+			Valid:  true,
+		},
+		MusicDir: sql.NullString{
+			String: musicFile,
+			Valid:  true,
+		},
 	}
 
 	err := app.InitDirs()
@@ -885,7 +911,12 @@ func TestInitDirs(t *testing.T) {
 		t.Fatalf("InitDirs failed: %v", err)
 	}
 
-	for _, dir := range []string{app.Settings.StaticDir, app.Settings.LogsDir} {
+	for _, dir := range []string{
+		app.Settings.StaticDir,
+		app.Settings.LogsDir,
+		filepath.Join(app.Settings.StaticDir, "albums"),
+		filepath.Join(app.Settings.StaticDir, "musicians"),
+	} {
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Errorf("expected directory %s to exist: %v", dir, err)
@@ -894,6 +925,19 @@ func TestInitDirs(t *testing.T) {
 		if !info.IsDir() {
 			t.Errorf("expected %s to be a directory", dir)
 		}
+	}
+
+	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String != moviesDir {
+		t.Errorf("expected existing movies directory to remain configured, got %q (valid=%v)", app.Settings.MoviesDir.String, app.Settings.MoviesDir.Valid)
+	}
+	if app.Settings.ShowsDir.Valid {
+		t.Errorf("expected missing shows directory to be disabled, got %q", app.Settings.ShowsDir.String)
+	}
+	if app.Settings.MusicDir.Valid {
+		t.Errorf("expected non-directory music path to be disabled, got %q", app.Settings.MusicDir.String)
+	}
+	if _, err := os.Stat(missingShowsDir); !os.IsNotExist(err) {
+		t.Errorf("expected missing shows directory not to be created, stat err=%v", err)
 	}
 }
 
