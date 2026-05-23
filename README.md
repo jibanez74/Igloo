@@ -256,7 +256,24 @@ From `web/`:
 | `bun run build` | Build the production bundle and run TypeScript checking |
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run Vitest |
+| `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run preview` | Preview the production build |
+
+### HLS transcoding e2e checks
+
+The Playwright HLS suite targets an already-running Igloo instance. On the first run, install Chromium with `bun x playwright install chromium`. Set the base URL, admin credentials, and two scanned movie IDs before running it. One movie must be a 4K source; the second must use a different transcode profile.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:8080 \
+E2E_ADMIN_EMAIL=admin@sample.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+E2E_HLS_4K_MOVIE_ID=1 \
+E2E_HLS_SECOND_MOVIE_ID=2 \
+bun run test:e2e:hls
+```
+
+Optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`.
 
 ## API Documentation
 

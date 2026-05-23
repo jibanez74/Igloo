@@ -1,4 +1,4 @@
-  import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
@@ -19,10 +19,8 @@ import {
 } from "@/lib/playback";
 import { deleteMovieWatchProgress } from "@/lib/api";
 import {
-  MOVIE_CONTROLS_IDLE_MS,
-  MOVIE_SEEK_STEP_SEC,
-  MOVIE_VOLUME_STEP,
   clampMoviePlaybackTime,
+  createHlsPlaybackSessionId,
   deriveMoviePlaybackStatus,
   displayedMovieDuration,
   hasEligibleMovieResumeProgress,
@@ -32,6 +30,11 @@ import {
   toAbsolutePlaybackTime,
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
+import {
+  MOVIE_CONTROLS_IDLE_MS,
+  MOVIE_SEEK_STEP_SEC,
+  MOVIE_VOLUME_STEP,
+} from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type { PlaySearchParams } from "@/types";
@@ -147,6 +150,7 @@ function PlayMoviePage() {
   const [resumeDismissed, setResumeDismissed] = useState(start > 0);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
+  const [playbackSessionId] = useState(createHlsPlaybackSessionId);
   const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
   const [chapterAnnouncement, setChapterAnnouncement] =
     useState<ChapterAnnouncement>({
@@ -195,6 +199,7 @@ function PlayMoviePage() {
     movieId,
     search,
     streamReloadKey,
+    playbackSessionId,
     onSyncSearch: ({ mode, audioTrack, subtitleTrack }) => {
       navigate({
         search: (prev: PlaySearchParams) => ({

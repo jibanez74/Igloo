@@ -1,9 +1,7 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
-import {
-  MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
-  persistMovieWatchProgress,
-} from "@/lib/movie-playback";
+import { persistMovieWatchProgress } from "@/lib/movie-playback";
+import { MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 
 type MovieWatchProgressSaverOptions = {

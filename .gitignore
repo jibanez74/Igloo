@@ -51,6 +51,11 @@
 AGENTS.md
 CLAUDE.md
 
+# Playwright output
+/web/test-results/
+/web/playwright-report/
+/web/blob-report/
+
 # Generated media/transcoding output
 /server/media/*
 /media/

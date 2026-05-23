@@ -1,0 +1,8 @@
+Total messages: 6 (Errors: 5, Warnings: 0)
+
+[ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:8080/api/auth/user:0
+[ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8080/favicon.ico:0
+[ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8080/favicon.ico:0
+[VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:8080/login?redirect=%2F:0
+[ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:8080/api/auth/login:0
+[ERROR] SyntaxError: Unexpected token 'I', "Internal S"... is not valid JSON @ http://localhost:8080/assets/index-C8nSj0LR.js:64

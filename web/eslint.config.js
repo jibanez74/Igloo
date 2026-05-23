@@ -24,7 +24,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
  */
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  globalIgnores(["dist", "playwright-report", "test-results", "blob-report"]),
 
   // TypeScript/React files
   {
@@ -107,6 +107,15 @@ export default defineConfig([
         },
       ],
       "better-tailwindcss/no-conflicting-classes": "warn",
+    },
+  },
+  {
+    files: ["playwright.config.ts", "e2e/**/*.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
     },
   },
 ]);
