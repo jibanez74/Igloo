@@ -17,6 +17,8 @@ import (
 
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
+	MovieID          int64
+	OwnerUserID      int64
 	PlaybackSession  string
 	TempDir          string
 	Cmd              *exec.Cmd
@@ -153,22 +155,32 @@ func (app *Application) removeHLSSession(key string) {
 	}
 }
 
-func (app *Application) cleanupPersonalHLSSessions(playbackSession string, keepKey string) {
+func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
 	app.PersonalHLSMu.Lock()
 	defer app.PersonalHLSMu.Unlock()
 
+	removed := 0
 	for key, item := range app.HLSSessionCache.Items() {
 		if key == keepKey {
 			continue
 		}
 		session, ok := item.Object.(*HLSSession)
-		if !ok || session == nil || session.IsRoom {
+		if !ok || session == nil || !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
 			continue
 		}
 		if session.PlaybackSession == playbackSession {
 			app.removeHLSSession(key)
+			removed++
 		}
 	}
+	return removed
+}
+
+func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID int64) bool {
+	return session != nil &&
+		!session.IsRoom &&
+		session.MovieID == movieID &&
+		session.OwnerUserID == ownerUserID
 }
 
 func (app *Application) markRoomHLSSessionDeleted(roomID int64) {
@@ -311,6 +323,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	startSegment := int64(startSec / float64(helpers.HLS_SEGMENT_TIME_SEC))
 	runCtx, cancel := context.WithCancel(context.Background())
 	session := &HLSSession{
+		MovieID:          params.Movie.ID,
 		PlaybackSession:  params.PlaybackSession,
 		TempDir:          tempDir,
 		Cancel:           cancel,
@@ -424,6 +437,7 @@ func (app *Application) GetOrCreateHLSSession(
 	audioTrack *int,
 	playbackSession string,
 	startSec int,
+	ownerUserID int64,
 ) (*HLSSession, string, error) {
 	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
 
@@ -431,6 +445,8 @@ func (app *Application) GetOrCreateHLSSession(
 		session, typeOK := raw.(*HLSSession)
 		if !typeOK || session == nil {
 			app.removeHLSSession(key)
+		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
+			return nil, key, errHLSSessionNotFound
 		} else {
 			app.RefreshHLSSessionTTL(key, session)
 			return session, key, nil
@@ -442,6 +458,8 @@ func (app *Application) GetOrCreateHLSSession(
 			existing, typeOK := raw.(*HLSSession)
 			if !typeOK || existing == nil {
 				app.removeHLSSession(key)
+			} else if !canAccessPersonalHLSSession(existing, movieID, ownerUserID) {
+				return nil, errHLSSessionNotFound
 			} else {
 				return existing, nil
 			}
@@ -451,9 +469,10 @@ func (app *Application) GetOrCreateHLSSession(
 		if createErr != nil {
 			return nil, createErr
 		}
+		session.OwnerUserID = ownerUserID
 
 		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
-		app.cleanupPersonalHLSSessions(playbackSession, key)
+		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, playbackSession, key)
 		return session, nil
 	})
 

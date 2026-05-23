@@ -26,3 +26,20 @@ if (!window.matchMedia) {
 if (!window.HTMLElement.prototype.scrollIntoView) {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
 }
+
+if (!window.ResizeObserver) {
+  class ResizeObserverMock {
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+  }
+
+  Object.defineProperty(window, "ResizeObserver", {
+    writable: true,
+    value: ResizeObserverMock,
+  });
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    writable: true,
+    value: ResizeObserverMock,
+  });
+}

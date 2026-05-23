@@ -257,6 +257,7 @@ From `web/`:
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run Vitest |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
+| `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |
 
 ### HLS transcoding e2e checks
@@ -274,6 +275,21 @@ bun run test:e2e:hls
 ```
 
 Optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_AUDIO_TRACK`, `E2E_HLS_TEST_TIMEOUT_MS`, and `E2E_HLS_RESPONSE_TIMEOUT_MS`.
+
+### Watch room e2e checks
+
+The Playwright watch-room suite also targets an already-running Igloo instance. It logs in as an admin, creates a temporary guest user and direct-play watch room, drives two browser contexts through the real HTTP and WebSocket flow, and stubs only browser media playback.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:8080 \
+E2E_ADMIN_EMAIL=admin@sample.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+E2E_WATCH_ROOM_MOVIE_ID=1 \
+bun run test:e2e:watch-room
+```
+
+Optional override: `E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS`.
 
 ## API Documentation
 

@@ -317,7 +317,11 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	defer app.DB.Close()
 
 	audioTrack := 0
+	app.InitSession()
+	userID := int64(42)
 	session := &HLSSession{
+		MovieID:          5,
+		OwnerUserID:      userID,
 		TempDir:          t.TempDir(),
 		DurationSec:      12,
 		StartSec:         0,
@@ -328,7 +332,10 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
 	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.HLSManifest(w, r)
+	})
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -337,7 +344,8 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	)
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, req)
+	handler := app.SessionManager.LoadAndSave(router)
+	handler.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
@@ -360,6 +368,8 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	defer app.DB.Close()
 
 	audioTrack := 0
+	app.InitSession()
+	userID := int64(43)
 	dir := t.TempDir()
 	segmentPath := filepath.Join(dir, "segment_0.m4s")
 	writeErr := os.WriteFile(segmentPath, []byte("segment-bytes"), 0644)
@@ -368,6 +378,8 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	}
 
 	session := &HLSSession{
+		MovieID:          5,
+		OwnerUserID:      userID,
 		TempDir:          dir,
 		StartSec:         0,
 		RequestedProfile: helpers.HLS_PROFILE_REMUX,
@@ -379,7 +391,10 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
 	router := chi.NewRouter()
-	router.Get("/api/movies/{id}/hls/{profile}/{filename}", app.HLSSegment)
+	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.HLSSegment(w, r)
+	})
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -388,12 +403,151 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	)
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, req)
+	handler := app.SessionManager.LoadAndSave(router)
+	handler.ServeHTTP(recorder, req)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 	if recorder.Body.String() != "segment-bytes" {
 		t.Fatalf("segment body = %q, want %q", recorder.Body.String(), "segment-bytes")
+	}
+}
+
+func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	userID := int64(100)
+	audioTrack := 0
+	matchingDir := t.TempDir()
+	matchingKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	otherMovieKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	otherUserKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 4)
+	roomKey := RoomHLSSessionKey(9)
+
+	app.HLSSessionCache.SetDefault(matchingKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: matchingDir})
+	app.HLSSessionCache.SetDefault(otherMovieKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(otherUserKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true})
+
+	router := chi.NewRouter()
+	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.StopPersonalHLSSession(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(router)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("/api/movies/5/hls/session/stop?playback_session=%s", testPlaybackSessionID),
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, ok := app.HLSSessionCache.Get(matchingKey); ok {
+		t.Fatal("expected matching personal HLS session to be removed")
+	}
+	for _, key := range []string{otherMovieKey, otherUserKey, roomKey} {
+		if _, ok := app.HLSSessionCache.Get(key); !ok {
+			t.Fatalf("expected non-matching session %q to remain", key)
+		}
+	}
+	if _, err := os.Stat(matchingDir); !os.IsNotExist(err) {
+		t.Fatalf("expected matching temp dir to be removed, err=%v", err)
+	}
+}
+
+func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	router := chi.NewRouter()
+	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, int64(100))
+		app.StopPersonalHLSSession(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(router)
+	req := httptest.NewRequest(http.MethodPost, "/api/movies/5/hls/session/stop?playback_session=not-a-uuid", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	audioTrack := 0
+	userID := int64(100)
+	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	app.HLSSessionCache.SetDefault(key, &HLSSession{
+		MovieID:         5,
+		OwnerUserID:     userID + 1,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Exited:          true,
+		ExitMu:          sync.Mutex{},
+	})
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.HLSSegment(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(router)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, ok := app.HLSSessionCache.Get(key); !ok {
+		t.Fatal("expected mismatched-owner session to remain cached")
+	}
+}
+
+func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	audioTrack := 0
+	oldKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	keepKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
+	otherKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
+
+	app.HLSSessionCache.SetDefault(oldKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(keepKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(otherKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+
+	removed := app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, keepKey)
+	if removed != 1 {
+		t.Fatalf("removed=%d, want 1", removed)
+	}
+	if _, ok := app.HLSSessionCache.Get(oldKey); ok {
+		t.Fatal("expected old same-owner window to be removed")
+	}
+	for _, key := range []string{keepKey, otherKey} {
+		if _, ok := app.HLSSessionCache.Get(key); !ok {
+			t.Fatalf("expected session %q to remain", key)
+		}
 	}
 }

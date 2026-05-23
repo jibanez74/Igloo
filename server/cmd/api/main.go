@@ -37,29 +37,29 @@ import (
 )
 
 type Application struct {
-	DB               *sql.DB
-	Queries          *database.Queries
-	Settings         *database.Setting
-	Logger           applogger.LoggerInterface
-	LoggerCloser     func() error
-	Ffprobe          ffprobe.FfprobeInterface
-	FFmpeg           ffmpeg.FFmpegInterface
-	Spotify          spotify.SpotifyInterface
-	Tmdb             tmdb.TmdbInterface
-	SessionManager   *scs.SessionManager
-	Wait             *sync.WaitGroup
-	Router           *chi.Mux
-	Server           *http.Server
-	ScannerDBMu      sync.Mutex
-	HLSSessionCache      *cache.Cache
-	HLSSessionGroup      singleflight.Group
-	HLSTranscodeLimiter  *hlsTranscodeLimiter
-	PersonalHLSMu        sync.Mutex
-	RemuxSafetyCache     *cache.Cache
-	SubtitleVTTCache *cache.Cache
-	RoomHLSTombstone *cache.Cache
-	RoomHLSMu        sync.Mutex
-	WatchRoomHub     *WatchRoomHub
+	DB                  *sql.DB
+	Queries             *database.Queries
+	Settings            *database.Setting
+	Logger              applogger.LoggerInterface
+	LoggerCloser        func() error
+	Ffprobe             ffprobe.FfprobeInterface
+	FFmpeg              ffmpeg.FFmpegInterface
+	Spotify             spotify.SpotifyInterface
+	Tmdb                tmdb.TmdbInterface
+	SessionManager      *scs.SessionManager
+	Wait                *sync.WaitGroup
+	Router              *chi.Mux
+	Server              *http.Server
+	ScannerDBMu         sync.Mutex
+	HLSSessionCache     *cache.Cache
+	HLSSessionGroup     singleflight.Group
+	HLSTranscodeLimiter *hlsTranscodeLimiter
+	PersonalHLSMu       sync.Mutex
+	RemuxSafetyCache    *cache.Cache
+	SubtitleVTTCache    *cache.Cache
+	RoomHLSTombstone    *cache.Cache
+	RoomHLSMu           sync.Mutex
+	WatchRoomHub        *WatchRoomHub
 }
 
 // SQL is the embedded startup schema applied by InitTables.
@@ -719,169 +719,174 @@ func (app *Application) InitRouter() {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Logger)
-	router.Use(app.LoadAndSaveSession)
 
-	router.Route("/api", func(r chi.Router) {
-		r.Get("/health", app.HealthCheck)
-		r.Post("/auth/login", app.AuthenticateUser)
+	router.With(app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
 
-		r.Group(func(r chi.Router) {
-			r.Use(app.IsAuth)
+	router.Group(func(r chi.Router) {
+		r.Use(app.LoadAndSaveSession)
 
-			r.Route("/auth", func(r chi.Router) {
-				r.Get("/user", app.GetCurrentAuthUser)
-				r.Delete("/logout", app.DestroySession)
-			})
+		r.Route("/api", func(r chi.Router) {
+			r.Get("/health", app.HealthCheck)
+			r.Post("/auth/login", app.AuthenticateUser)
 
-			r.Route("/user", func(r chi.Router) {
-				r.Put("/name", app.UpdateUserName)
-				r.Put("/email", app.UpdateUserEmail)
-				r.Put("/password", app.UpdateUserPassword)
-				r.Put("/avatar", app.UpdateUserAvatar)
-				r.Post("/avatar/upload", app.UploadUserAvatar)
-				r.Delete("/", app.DeleteUserAccount)
-			})
+			r.Group(func(r chi.Router) {
+				r.Use(app.IsAuth)
 
-			r.Get("/static/*", app.ServeStaticFiles)
-
-			r.Route("/tmdb", func(r chi.Router) {
-				r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
-				r.Get("/movies/{id}", app.GetMovieByTmdbID)
-			})
-
-			r.Get("/search", app.SearchAll)
-			r.Route("/search", func(r chi.Router) {
-				r.Get("/", app.SearchAll)
-				r.Get("/movies", app.SearchMovies)
-				r.Get("/albums", app.SearchAlbums)
-				r.Get("/musicians", app.SearchMusicians)
-				r.Get("/tracks", app.SearchTracks)
-			})
-
-			r.Route("/movies", func(r chi.Router) {
-				r.Get("/latest", app.GetLatestMovies)
-				r.Get("/library", app.GetMoviesLibrary)
-				r.Get("/stats", app.GetMoviesStats)
-				r.Get("/liked", app.GetLikedMovies)
-				r.Get("/{id}/like-status", app.GetMovieLikeStatus)
-				r.Get("/genres", app.GetMovieGenresList)
-				r.Get("/genres/{genreId}/movies", app.GetMoviesByGenreLibrary)
-				r.Route("/playlists", func(pr chi.Router) {
-					pr.Get("/{id}/movies", app.GetMoviePlaylistMovies)
-					pr.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
-					pr.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
-					pr.Get("/", app.GetMoviePlaylists)
-					pr.Post("/", app.CreateMoviePlaylist)
-					pr.Get("/{id}", app.GetMoviePlaylist)
-					pr.Put("/{id}", app.UpdateMoviePlaylist)
-					pr.Delete("/{id}", app.DeleteMoviePlaylist)
-				})
-				r.Get("/details/{id}", app.GetMovieDetails)
-				r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
-				r.Get("/{id}/watch-progress", app.GetMovieWatchProgress)
-				r.Post("/{id}/like", app.ToggleLikeMovie)
-				r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
-				r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
-				r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
-				r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
-				r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
-				r.Get("/{id}/stream", app.StreamMovie)
-				r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
-
-				r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
-				r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
-				r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
-				r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
-			})
-
-			r.Get("/users", app.GetUsers)
-
-			r.Route("/admin/users", func(r chi.Router) {
-				r.Use(app.RequireAdmin)
-				r.Get("/", app.AdminGetUsers)
-				r.Post("/", app.AdminCreateUser)
-				r.Patch("/{id}", app.AdminUpdateUser)
-				r.Delete("/{id}", app.AdminDeleteUser)
-				r.Put("/{id}/password", app.AdminResetUserPassword)
-			})
-
-			r.Route("/watch-rooms", func(r chi.Router) {
-				r.Get("/", app.GetWatchRooms)
-				r.Post("/", app.CreateWatchRoom)
-				r.Get("/{id}", app.GetWatchRoom)
-				r.Post("/{id}/join", app.JoinWatchRoom)
-				r.Get("/{id}/ws", app.WatchRoomWebSocket)
-				r.Get("/{id}/stream", app.StreamWatchRoomMovie)
-				r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
-				r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
-				r.Delete("/{id}", app.DeleteWatchRoom)
-			})
-
-			r.Route("/settings", func(r chi.Router) {
-				r.Get("/", app.GetSettings)
-				r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
-				r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
-				r.Get("/playback", app.GetPlaybackSettings)
-				r.Put("/playback", app.UpdatePlaybackSettings)
-				r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
-				r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
-			})
-
-			r.Route("/music", func(r chi.Router) {
-				r.Get("/stats", app.GetMusicStats)
-
-				r.Route("/albums", func(r chi.Router) {
-					r.Get("/", app.GetAlbumsAlphabetical)
-					r.Get("/details/{id}", app.GetAlbumDetails)
-					r.Get("/latest", app.GetLatestAlbums)
-					r.With(app.RequireAdmin).Delete("/{id}", app.DeleteAlbum)
+				r.Route("/auth", func(r chi.Router) {
+					r.Get("/user", app.GetCurrentAuthUser)
+					r.Delete("/logout", app.DestroySession)
 				})
 
-				r.Route("/musicians", func(r chi.Router) {
-					r.Get("/", app.GetMusiciansAlphabetical)
-					r.Get("/{id}", app.GetMusicianDetails)
+				r.Route("/user", func(r chi.Router) {
+					r.Put("/name", app.UpdateUserName)
+					r.Put("/email", app.UpdateUserEmail)
+					r.Put("/password", app.UpdateUserPassword)
+					r.Put("/avatar", app.UpdateUserAvatar)
+					r.Post("/avatar/upload", app.UploadUserAvatar)
+					r.Delete("/", app.DeleteUserAccount)
 				})
 
-				r.Route("/tracks", func(r chi.Router) {
-					r.Get("/", app.GetTracksAlphabetical)
-					r.Get("/shuffle", app.GetShuffleTracks)
-					r.Get("/details/{id}", app.GetTrackByID)
-					r.Get("/{id}/stream", app.StreamTrack)
-					r.Post("/{id}/like", app.ToggleLikeTrack)
-					r.Get("/liked", app.GetLikedTracks)
-					r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
+				r.Get("/static/*", app.ServeStaticFiles)
+
+				r.Route("/tmdb", func(r chi.Router) {
+					r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
+					r.Get("/movies/{id}", app.GetMovieByTmdbID)
 				})
 
-				r.Route("/playlists", func(r chi.Router) {
-					r.Get("/", app.GetPlaylists)
-					r.Post("/", app.CreatePlaylist)
-					r.Get("/{id}", app.GetPlaylist)
-					r.Put("/{id}", app.UpdatePlaylist)
-					r.Delete("/{id}", app.DeletePlaylist)
-					r.Get("/{id}/tracks", app.GetPlaylistTracks)
-					r.Post("/{id}/tracks", app.AddTracksToPlaylist)
-					r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
-					r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
-					r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
-					r.Post("/{id}/collaborators", app.AddCollaborator)
-					r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
+				r.Get("/search", app.SearchAll)
+				r.Route("/search", func(r chi.Router) {
+					r.Get("/", app.SearchAll)
+					r.Get("/movies", app.SearchMovies)
+					r.Get("/albums", app.SearchAlbums)
+					r.Get("/musicians", app.SearchMusicians)
+					r.Get("/tracks", app.SearchTracks)
 				})
 
-				r.Route("/user-stats", func(r chi.Router) {
-					r.Post("/play", app.RecordPlayEvent)
-					r.Get("/overview", app.GetUserListeningStats)
-					r.Get("/top-tracks", app.GetUserTopTracks)
-					r.Get("/top-musicians", app.GetUserTopMusicians)
-					r.Get("/top-genres", app.GetUserTopGenres)
-					r.Get("/top-albums", app.GetUserTopAlbums)
-					r.Get("/recently-played", app.GetUserRecentlyPlayed)
+				r.Route("/movies", func(r chi.Router) {
+					r.Get("/latest", app.GetLatestMovies)
+					r.Get("/library", app.GetMoviesLibrary)
+					r.Get("/stats", app.GetMoviesStats)
+					r.Get("/liked", app.GetLikedMovies)
+					r.Get("/{id}/like-status", app.GetMovieLikeStatus)
+					r.Get("/genres", app.GetMovieGenresList)
+					r.Get("/genres/{genreId}/movies", app.GetMoviesByGenreLibrary)
+					r.Route("/playlists", func(pr chi.Router) {
+						pr.Get("/{id}/movies", app.GetMoviePlaylistMovies)
+						pr.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
+						pr.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
+						pr.Get("/", app.GetMoviePlaylists)
+						pr.Post("/", app.CreateMoviePlaylist)
+						pr.Get("/{id}", app.GetMoviePlaylist)
+						pr.Put("/{id}", app.UpdateMoviePlaylist)
+						pr.Delete("/{id}", app.DeleteMoviePlaylist)
+					})
+					r.Get("/details/{id}", app.GetMovieDetails)
+					r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
+					r.Get("/{id}/watch-progress", app.GetMovieWatchProgress)
+					r.Post("/{id}/like", app.ToggleLikeMovie)
+					r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
+					r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
+					r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
+					r.Post("/{id}/hls/session/stop", app.StopPersonalHLSSession)
+					r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+					r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
+					r.Get("/{id}/stream", app.StreamMovie)
+					r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
+
+					r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
+					r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
+					r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
+					r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
+				})
+
+				r.Get("/users", app.GetUsers)
+
+				r.Route("/admin/users", func(r chi.Router) {
+					r.Use(app.RequireAdmin)
+					r.Get("/", app.AdminGetUsers)
+					r.Post("/", app.AdminCreateUser)
+					r.Patch("/{id}", app.AdminUpdateUser)
+					r.Delete("/{id}", app.AdminDeleteUser)
+					r.Put("/{id}/password", app.AdminResetUserPassword)
+				})
+
+				r.Route("/watch-rooms", func(r chi.Router) {
+					r.Get("/", app.GetWatchRooms)
+					r.Post("/", app.CreateWatchRoom)
+					r.Get("/{id}", app.GetWatchRoom)
+					r.Post("/{id}/join", app.JoinWatchRoom)
+					r.Get("/{id}/stream", app.StreamWatchRoomMovie)
+					r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
+					r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
+					r.Delete("/{id}", app.DeleteWatchRoom)
+				})
+
+				r.Route("/settings", func(r chi.Router) {
+					r.Get("/", app.GetSettings)
+					r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
+					r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
+					r.Get("/playback", app.GetPlaybackSettings)
+					r.Put("/playback", app.UpdatePlaybackSettings)
+					r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
+					r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
+				})
+
+				r.Route("/music", func(r chi.Router) {
+					r.Get("/stats", app.GetMusicStats)
+
+					r.Route("/albums", func(r chi.Router) {
+						r.Get("/", app.GetAlbumsAlphabetical)
+						r.Get("/details/{id}", app.GetAlbumDetails)
+						r.Get("/latest", app.GetLatestAlbums)
+						r.With(app.RequireAdmin).Delete("/{id}", app.DeleteAlbum)
+					})
+
+					r.Route("/musicians", func(r chi.Router) {
+						r.Get("/", app.GetMusiciansAlphabetical)
+						r.Get("/{id}", app.GetMusicianDetails)
+					})
+
+					r.Route("/tracks", func(r chi.Router) {
+						r.Get("/", app.GetTracksAlphabetical)
+						r.Get("/shuffle", app.GetShuffleTracks)
+						r.Get("/details/{id}", app.GetTrackByID)
+						r.Get("/{id}/stream", app.StreamTrack)
+						r.Post("/{id}/like", app.ToggleLikeTrack)
+						r.Get("/liked", app.GetLikedTracks)
+						r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
+					})
+
+					r.Route("/playlists", func(r chi.Router) {
+						r.Get("/", app.GetPlaylists)
+						r.Post("/", app.CreatePlaylist)
+						r.Get("/{id}", app.GetPlaylist)
+						r.Put("/{id}", app.UpdatePlaylist)
+						r.Delete("/{id}", app.DeletePlaylist)
+						r.Get("/{id}/tracks", app.GetPlaylistTracks)
+						r.Post("/{id}/tracks", app.AddTracksToPlaylist)
+						r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
+						r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
+						r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
+						r.Post("/{id}/collaborators", app.AddCollaborator)
+						r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
+					})
+
+					r.Route("/user-stats", func(r chi.Router) {
+						r.Post("/play", app.RecordPlayEvent)
+						r.Get("/overview", app.GetUserListeningStats)
+						r.Get("/top-tracks", app.GetUserTopTracks)
+						r.Get("/top-musicians", app.GetUserTopMusicians)
+						r.Get("/top-genres", app.GetUserTopGenres)
+						r.Get("/top-albums", app.GetUserTopAlbums)
+						r.Get("/recently-played", app.GetUserRecentlyPlayed)
+					})
 				})
 			})
 		})
-	})
 
-	// Register SPA fallback after /api routes so API paths cannot be captured.
-	router.Get("/*", app.ServeFrontend)
+		// Register SPA fallback after /api routes so API paths cannot be captured.
+		r.Get("/*", app.ServeFrontend)
+	})
 
 	app.Router = router
 }

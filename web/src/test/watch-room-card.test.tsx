@@ -2,7 +2,8 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WatchRoomCard from "@/components/WatchRoomCard";
-import type { WatchRoomType } from "@/types";
+import { WATCH_ROOM_KEY, WATCH_ROOMS_KEY } from "@/lib/constants";
+import type { ApiResponseType, WatchRoomType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
 
 const deleteWatchRoomMock = vi.fn();
@@ -138,5 +139,64 @@ describe("WatchRoomCard", () => {
     );
     expect(showSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByText("Close watch room?")).toBeInTheDocument();
+  });
+
+  it("removes a deleted room from cached watch-room queries", async () => {
+    deleteWatchRoomMock.mockResolvedValue({
+      error: false,
+      data: {
+        deleted: true,
+      },
+    });
+
+    const user = userEvent.setup();
+    const room = buildRoom();
+    const otherRoom = buildRoom({
+      id: 43,
+      movie_id: 9,
+      movie_title: "Arrival",
+    });
+    const { queryClient } = renderWithQueryClient(<WatchRoomCard room={room} />);
+    queryClient.setQueryData<ApiResponseType<{ rooms: WatchRoomType[] }>>(
+      [WATCH_ROOMS_KEY],
+      {
+        error: false,
+        data: {
+          rooms: [room, otherRoom],
+        },
+      },
+    );
+    queryClient.setQueryData([WATCH_ROOM_KEY, room.id], {
+      error: false,
+      data: {
+        room,
+      },
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /close watch room for moonfall/i }),
+    );
+    await user.click(screen.getByRole("button", { name: "Close room" }));
+
+    await waitFor(() => {
+      expect(deleteWatchRoomMock).toHaveBeenCalledWith(42);
+    });
+
+    const cachedRooms = queryClient.getQueryData<
+      ApiResponseType<{ rooms: WatchRoomType[] }>
+    >([WATCH_ROOMS_KEY]);
+
+    expect(cachedRooms?.error).toBe(false);
+    if (cachedRooms?.error === false) {
+      expect(cachedRooms.data.rooms.map(cachedRoom => cachedRoom.id)).toEqual([
+        43,
+      ]);
+    }
+    expect(queryClient.getQueryData([WATCH_ROOM_KEY, room.id])).toBeUndefined();
+    expect(showSuccessMock).toHaveBeenCalledWith(
+      "Watch room closed",
+      "\"Moonfall\" is no longer available.",
+    );
+    expect(screen.queryByText("Close watch room?")).not.toBeInTheDocument();
   });
 });

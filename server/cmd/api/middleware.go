@@ -11,6 +11,31 @@ func (app *Application) LoadAndSaveSession(next http.Handler) http.Handler {
 	return app.SessionManager.LoadAndSave(next)
 }
 
+// LoadSessionReadOnly loads the session into the request context without
+// committing changes or wrapping the response writer.
+func (app *Application) LoadSessionReadOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Cookie")
+
+		var token string
+		cookie, err := r.Cookie(app.SessionManager.Cookie.Name)
+		if err == nil {
+			token = cookie.Value
+		}
+
+		ctx, err := app.SessionManager.Load(r.Context(), token)
+		if err != nil {
+			if app.Logger != nil {
+				app.Logger.Error("failed to load read-only session", "error", err)
+			}
+			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // IsAuth rejects unauthenticated requests with 401.
 func (app *Application) IsAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

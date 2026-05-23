@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
@@ -236,17 +236,28 @@ class FakeWebSocket {
   }
 
   close() {
+    if (this.readyState === FakeWebSocket.CLOSED) {
+      return;
+    }
     this.readyState = FakeWebSocket.CLOSED;
     this.dispatch("close", new Event("close"));
   }
 
   emitMessage(payload: Record<string, unknown>) {
+    this.emitRawMessage(JSON.stringify(payload));
+  }
+
+  emitRawMessage(data: string) {
     this.dispatch(
       "message",
       new MessageEvent("message", {
-        data: JSON.stringify(payload),
+        data,
       }),
     );
+  }
+
+  serverClose() {
+    this.close();
   }
 
   private dispatch(type: string, event: Event | MessageEvent) {
@@ -329,6 +340,7 @@ describe("WatchRoomPageContent", () => {
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
+    vi.useRealTimers();
   });
 
   it("does not send a redundant join message when the websocket opens", async () => {
@@ -390,9 +402,8 @@ describe("WatchRoomPageContent", () => {
     mockVideoController.setReadyState(4);
 
     await waitFor(() => {
-      expect(Math.abs(mockVideoController.currentTime - 37)).toBeLessThanOrEqual(
-        0.1,
-      );
+      expect(mockVideoController.currentTime).toBeGreaterThanOrEqual(37);
+      expect(mockVideoController.currentTime).toBeLessThan(38);
       expect(mockVideoController.playCalls).toBe(1);
       expect(
         screen.getByRole("button", { name: /pause playback/i }),
@@ -441,6 +452,208 @@ describe("WatchRoomPageContent", () => {
         screen.getByRole("button", { name: /pause playback/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("updates connected members and announces presence changes", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const socket = FakeWebSocket.instances[0];
+    socket.emitMessage({
+      type: "room_snapshot",
+      room_id: 7,
+      connected_user_ids: [1],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("1 connected now")).toBeInTheDocument();
+    });
+
+    const membersPanel = screen.getByText("People in this room").closest("aside");
+    if (!membersPanel) {
+      throw new Error("members panel was not rendered");
+    }
+    const ownerRow = within(membersPanel).getByText("Room Owner").closest("li");
+    const guestRow = within(membersPanel).getByText("Invited Guest").closest("li");
+    if (!ownerRow || !guestRow) {
+      throw new Error("member rows were not rendered");
+    }
+
+    expect(within(ownerRow).getByText("Connected")).toBeInTheDocument();
+    expect(within(guestRow).getByText("Away")).toBeInTheDocument();
+
+    socket.emitMessage({
+      type: "member_joined",
+      room_id: 7,
+      member: {
+        id: 2,
+        name: "Invited Guest",
+        avatar: null,
+      },
+      connected_user_ids: [1, 2],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("2 connected now")).toBeInTheDocument();
+      expect(screen.getByTestId("live-announcer")).toHaveTextContent(
+        "Invited Guest joined the room",
+      );
+    });
+    expect(within(guestRow).getByText("Connected")).toBeInTheDocument();
+
+    socket.emitMessage({
+      type: "member_left",
+      room_id: 7,
+      member: {
+        id: 2,
+        name: "Invited Guest",
+        avatar: null,
+      },
+      connected_user_ids: [1],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("1 connected now")).toBeInTheDocument();
+      expect(screen.getByTestId("live-announcer")).toHaveTextContent(
+        "Invited Guest left the room",
+      );
+    });
+    expect(within(guestRow).getByText("Away")).toBeInTheDocument();
+  });
+
+  it("sends playback events for local play, pause, and seek controls", async () => {
+    const user = userEvent.setup();
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const socket = FakeWebSocket.instances[0];
+
+    await user.click(screen.getByRole("button", { name: /play playback/i }));
+
+    await waitFor(() => {
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "play",
+        position_sec: 0,
+      });
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /fast-forward 10 seconds/i }),
+    );
+
+    await waitFor(() => {
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "seek",
+        position_sec: 10,
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: /pause playback/i }));
+
+    await waitFor(() => {
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "pause",
+        position_sec: 10,
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: /rewind 10 seconds/i }));
+
+    await waitFor(() => {
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "seek",
+        position_sec: 0,
+      });
+    });
+  });
+
+  it("sends heartbeat pings while the realtime socket stays open", async () => {
+    let heartbeat: (() => void) | null = null;
+    const setIntervalSpy = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation((handler: TimerHandler) => {
+        if (typeof handler === "function") {
+          heartbeat = handler;
+        }
+        return 1;
+      });
+    const clearIntervalSpy = vi
+      .spyOn(window, "clearInterval")
+      .mockImplementation(() => undefined);
+
+    try {
+      renderRoomPage(buildRoom({ is_owner: false }));
+
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+        expect(heartbeat).not.toBeNull();
+      });
+
+      const socket = FakeWebSocket.instances[0];
+      heartbeat?.();
+
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "ping",
+      });
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
+  });
+
+  it("ignores malformed websocket messages and reconnects after an unintentional close", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledWith(7);
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.emitRawMessage("{not json");
+    firstSocket.emitMessage({
+      type: "room_snapshot",
+      room_id: 7,
+      connected_user_ids: [1, 2],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("2 connected now")).toBeInTheDocument();
+    });
+
+    let reconnect: (() => void) | null = null;
+    const setTimeoutSpy = vi
+      .spyOn(window, "setTimeout")
+      .mockImplementation((handler: TimerHandler, timeout?: number) => {
+        if (timeout === 1000 && typeof handler === "function") {
+          reconnect = handler;
+        }
+        return 1;
+      });
+
+    try {
+      act(() => {
+        firstSocket.serverClose();
+      });
+      expect(reconnect).not.toBeNull();
+      act(() => {
+        reconnect?.();
+      });
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    await waitFor(() => {
+      expect(joinWatchRoomMock).toHaveBeenCalledTimes(2);
+      expect(FakeWebSocket.instances).toHaveLength(2);
+    });
+    expect(FakeWebSocket.instances[1].url).toContain("/api/watch-rooms/7/ws");
   });
 
   it("redirects invited members gracefully when the room_deleted event arrives", async () => {

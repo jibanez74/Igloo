@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
@@ -20,7 +20,8 @@ import {
 import { deleteMovieWatchProgress } from "@/lib/api";
 import {
   clampMoviePlaybackTime,
-  createHlsPlaybackSessionId,
+  getOrCreateMovieHlsPlaybackSessionId,
+  stopMovieHlsPlaybackSession,
   deriveMoviePlaybackStatus,
   displayedMovieDuration,
   hasEligibleMovieResumeProgress,
@@ -136,6 +137,7 @@ function PlayMoviePage() {
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
+  const hlsStopCleanupTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     pause();
@@ -150,7 +152,10 @@ function PlayMoviePage() {
   const [resumeDismissed, setResumeDismissed] = useState(start > 0);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
-  const [playbackSessionId] = useState(createHlsPlaybackSessionId);
+  const playbackSessionId = useMemo(
+    () => getOrCreateMovieHlsPlaybackSessionId(movieId),
+    [movieId],
+  );
   const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
   const [chapterAnnouncement, setChapterAnnouncement] =
     useState<ChapterAnnouncement>({
@@ -212,6 +217,43 @@ function PlayMoviePage() {
       });
     },
   });
+
+  useEffect(() => {
+    if (!isHlsPlayback) return;
+
+    if (hlsStopCleanupTimerRef.current !== null) {
+      window.clearTimeout(hlsStopCleanupTimerRef.current);
+      hlsStopCleanupTimerRef.current = null;
+    }
+
+    let stopped = false;
+    const stopSession = (keepalive: boolean) => {
+      if (stopped) return;
+      stopped = true;
+      void stopMovieHlsPlaybackSession(movieId, playbackSessionId, {
+        keepalive,
+      });
+    };
+
+    const scheduleStopSession = () => {
+      if (stopped || hlsStopCleanupTimerRef.current !== null) return;
+      hlsStopCleanupTimerRef.current = window.setTimeout(() => {
+        hlsStopCleanupTimerRef.current = null;
+        stopSession(false);
+      }, 0);
+    };
+
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event.persisted) return;
+      stopSession(true);
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      scheduleStopSession();
+    };
+  }, [isHlsPlayback, movieId, playbackSessionId]);
 
   const displayedDuration = displayedMovieDuration(duration, playbackTiming);
 

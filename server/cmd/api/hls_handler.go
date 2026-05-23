@@ -18,6 +18,8 @@ import (
 
 var hlsPlaybackSessionIDPattern = regexp.MustCompile(helpers.HLS_PLAYBACK_SESSION_ID_PATTERN)
 
+var errHLSSessionNotFound = errors.New("session not found")
+
 type hlsRequestParams struct {
 	MovieID         int64
 	Profile         string
@@ -31,6 +33,11 @@ type hlsRequestParams struct {
 // at segment_0 on disk. The web player keeps absolute movie time in the UI and
 // converts seeks to session-relative media time client-side.
 func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireSessionUserID(w, r)
+	if !ok {
+		return
+	}
+
 	params, ok := parseHLSParams(w, r)
 	if !ok {
 		return
@@ -43,6 +50,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		params.AudioTrack,
 		params.PlaybackSession,
 		params.StartSec,
+		userID,
 	)
 	if err != nil {
 		app.Logger.Error("hls session failed", "error", err, "movie_id", params.MovieID)
@@ -84,6 +92,11 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 // FFmpeg writes segments asynchronously; serve only once complete.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireSessionUserID(w, r)
+	if !ok {
+		return
+	}
+
 	params, ok := parseHLSParams(w, r)
 	if !ok {
 		return
@@ -104,6 +117,10 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	session, ok := raw.(*HLSSession)
 	if !ok || session == nil {
 		app.removeHLSSession(key)
+		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		return
+	}
+	if !canAccessPersonalHLSSession(session, params.MovieID, userID) {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
@@ -176,6 +193,11 @@ func validateHLSFilename(filename string) error {
 }
 
 func writeHLSSessionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errHLSSessionNotFound) {
+		helpers.ErrorJSON(w, err, http.StatusNotFound)
+		return
+	}
+
 	var capacityErr *hlsTranscodeCapacityError
 	if errors.As(err, &capacityErr) {
 		w.Header().Set("Retry-After", strconv.Itoa(helpers.HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC))
@@ -183,6 +205,28 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 	helpers.ErrorJSON(w, err, http.StatusBadRequest)
+}
+
+func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireSessionUserID(w, r)
+	if !ok {
+		return
+	}
+
+	movieID, err := parseMovieID(r)
+	if err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	playbackSession := strings.TrimSpace(r.URL.Query().Get("playback_session"))
+	if !hlsPlaybackSessionIDPattern.MatchString(playbackSession) {
+		helpers.ErrorJSON(w, errors.New("invalid playback_session"), http.StatusBadRequest)
+		return
+	}
+
+	app.cleanupPersonalHLSSessionsForOwner(movieID, userID, playbackSession, "")
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{Error: false})
 }
 
 func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, bool) {

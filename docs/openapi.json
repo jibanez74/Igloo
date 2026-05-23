@@ -1173,6 +1173,9 @@
           },
           {
             "$ref": "#/components/parameters/StartQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
           }
         ],
         "responses": {
@@ -1207,6 +1210,9 @@
           },
           {
             "$ref": "#/components/parameters/StartQuery"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
           }
         ],
         "responses": {
@@ -2992,6 +2998,34 @@
           }
         }
       }
+    },
+    "/api/movies/{id}/hls/session/stop": {
+      "post": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "Stop a personal movie HLS playback session",
+        "operationId": "stopPersonalHlsSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          },
+          {
+            "$ref": "#/components/parameters/PlaybackSessionQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3232,6 +3266,16 @@
         "schema": {
           "type": "string",
           "example": "bytes=0-1048575"
+        }
+      },
+      "PlaybackSessionQuery": {
+        "name": "playback_session",
+        "in": "query",
+        "required": true,
+        "description": "UUID that scopes one personal HLS playback session.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
         }
       }
     },

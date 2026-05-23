@@ -149,6 +149,8 @@ func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEve
 	}
 	if !stillConnected {
 		delete(session.connectedIDs, client.user.ID)
+	} else {
+		return nil
 	}
 
 	if len(session.clients) == 0 {

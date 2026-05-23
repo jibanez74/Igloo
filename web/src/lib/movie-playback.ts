@@ -20,6 +20,77 @@ import type {
   SubtitleTrackInfoOptions,
 } from "@/types/playback";
 
+const MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX = "igloo:movie-hls-playback-session:";
+const HLS_PLAYBACK_SESSION_ID_PATTERN = new RegExp(
+  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+);
+
+type HlsPlaybackSessionStorage = Pick<Storage, "getItem" | "setItem">;
+
+export function movieHlsPlaybackSessionStorageKey(movieId: number): string {
+  return MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX + String(movieId);
+}
+
+function browserSessionStorage(): HlsPlaybackSessionStorage | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function getOrCreateMovieHlsPlaybackSessionId(
+  movieId: number,
+  storage: HlsPlaybackSessionStorage | null = browserSessionStorage(),
+): string {
+  const create = () => createHlsPlaybackSessionId();
+  if (!Number.isFinite(movieId) || movieId <= 0 || !storage) return create();
+
+  const key = movieHlsPlaybackSessionStorageKey(movieId);
+  try {
+    const existing = storage.getItem(key);
+    if (existing && HLS_PLAYBACK_SESSION_ID_PATTERN.test(existing)) {
+      return existing;
+    }
+
+    const next = create();
+    storage.setItem(key, next);
+    return next;
+  } catch {
+    return create();
+  }
+}
+
+export async function stopMovieHlsPlaybackSession(
+  movieId: number,
+  playbackSessionId: string,
+  options?: { keepalive?: boolean },
+): Promise<void> {
+  if (
+    !Number.isFinite(movieId) ||
+    movieId <= 0 ||
+    !HLS_PLAYBACK_SESSION_ID_PATTERN.test(playbackSessionId)
+  ) {
+    return;
+  }
+
+  const params = new URLSearchParams({
+    [HLS_PLAYBACK_SESSION_QUERY_PARAM]: playbackSessionId,
+  });
+
+  try {
+    await fetch("/api/movies/" + movieId + "/hls/session/stop?" + params, {
+      method: "POST",
+      credentials: "include",
+      keepalive: options?.keepalive === true,
+    });
+  } catch {
+    // Best-effort HLS cleanup; server TTL remains the fallback.
+  }
+}
+
 export function deriveMoviePlaybackStatus(
   args: MoviePlaybackStatusArgs,
 ): MoviePlaybackStatus {
