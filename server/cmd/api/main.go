@@ -51,9 +51,11 @@ type Application struct {
 	Router           *chi.Mux
 	Server           *http.Server
 	ScannerDBMu      sync.Mutex
-	HLSSessionCache  *cache.Cache
-	HLSSessionGroup  singleflight.Group
-	RemuxSafetyCache *cache.Cache
+	HLSSessionCache      *cache.Cache
+	HLSSessionGroup      singleflight.Group
+	HLSTranscodeLimiter  *hlsTranscodeLimiter
+	PersonalHLSMu        sync.Mutex
+	RemuxSafetyCache     *cache.Cache
 	SubtitleVTTCache *cache.Cache
 	RoomHLSTombstone *cache.Cache
 	RoomHLSMu        sync.Mutex
@@ -192,6 +194,8 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize ffmpeg: %v", err)
 	}
 	app.FFmpeg = ffmpegApp
+
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
 
 	// Eviction callback removes generated files when an HLS session ages out.
 	hlsCache := cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)

@@ -10,9 +10,9 @@ import {
   formatSubtitleLabel,
   getAvailableModes,
   getPrimaryVideoStream,
-  resolvePlaybackSettings,
-  type PlaybackSettings,
+  resolvePlaybackSettings
 } from "@/lib/playback";
+import type { PlaybackSettings } from "@/types/playback";
 import {
   movieTechnicalDetailsQueryOpts,
   watchRoomInviteUsersQueryOpts,

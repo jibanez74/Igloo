@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const testPlaybackSessionID = "4a5d0cb7-66f7-45ec-95d9-93fbe6e9eea4"
+
 func TestParseSegmentIndex(t *testing.T) {
 	tests := []struct {
 		filename string
@@ -47,8 +49,9 @@ func TestParseSegmentIndex(t *testing.T) {
 }
 
 func TestHLSSessionKey(t *testing.T) {
-	key := HLSSessionKey(123, "720p_3mbps", 2)
-	want := "123:720p_3mbps:2"
+	audioTrack := 2
+	key := HLSSessionKey(123, "720p_3mbps", &audioTrack, testPlaybackSessionID, 40)
+	want := "movie:123:720p_3mbps:audio:2:session:" + testPlaybackSessionID + ":start:40"
 	if key != want {
 		t.Errorf("HLSSessionKey = %q, want %q", key, want)
 	}
@@ -313,6 +316,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	audioTrack := 0
 	session := &HLSSession{
 		TempDir:          t.TempDir(),
 		DurationSec:      12,
@@ -321,14 +325,14 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
 		CopyVideo:        false,
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/movies/5/hls/remux/playlist.m3u8?audio_track=0",
+		fmt.Sprintf("/api/movies/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
 		nil,
 	)
 	recorder := httptest.NewRecorder()
@@ -340,10 +344,10 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	}
 
 	body := recorder.Body.String()
-	if !strings.Contains(body, `/api/movies/5/hls/remux/init.mp4?audio_track=0`) {
+	if !strings.Contains(body, fmt.Sprintf(`/api/movies/5/hls/remux/init.mp4?audio_track=0&playback_session=%s&start=0`, testPlaybackSessionID)) {
 		t.Fatalf("playlist body missing remux init path: %s", body)
 	}
-	if !strings.Contains(body, `/api/movies/5/hls/remux/segment_0.m4s?audio_track=0`) {
+	if !strings.Contains(body, fmt.Sprintf(`/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0`, testPlaybackSessionID)) {
 		t.Fatalf("playlist body missing remux segment path: %s", body)
 	}
 	if strings.Contains(body, helpers.HLS_PROFILE_1080P_8MBPS) {
@@ -355,6 +359,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	audioTrack := 0
 	dir := t.TempDir()
 	segmentPath := filepath.Join(dir, "segment_0.m4s")
 	writeErr := os.WriteFile(segmentPath, []byte("segment-bytes"), 0644)
@@ -371,14 +376,14 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 		Exited:           true,
 		ExitMu:           sync.Mutex{},
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, 0), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/{filename}", app.HLSSegment)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/movies/5/hls/remux/segment_0.m4s?audio_track=0",
+		fmt.Sprintf("/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
 		nil,
 	)
 	recorder := httptest.NewRecorder()

@@ -28,12 +28,13 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 	session, err := app.GetOrCreateRoomHLSSession(r.Context(), room.ID, room.MovieID, room.PlaybackMode, int(room.AudioTrack))
 	if err != nil {
 		app.Logger.Error("watch room hls session failed", "error", err, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR), http.StatusInternalServerError)
+		writeHLSSessionError(w, err)
 		return
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
-	querySuffix := buildHLSAssetQuerySuffix(int(room.AudioTrack), nil)
+	audioTrack := int(room.AudioTrack)
+	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &audioTrack})
 
 	session.ExitMu.Lock()
 	finalPlaylist := session.FinalPlaylist

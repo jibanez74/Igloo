@@ -1,4 +1,4 @@
-import type { StreamModeId } from "@/lib/constants";
+import type { StreamModeId } from "@/types/playback";
 
 export type WatchRoomMemberType = {
   id: number;

@@ -1,29 +1,28 @@
 import { updateMovieWatchProgress } from "@/lib/api";
-import { HLS_RESUME_REWIND_BUFFER_SEC } from "@/lib/constants";
 import {
-  STREAM_MODES,
-  formatSubtitleLabel,
-  type StreamModeId,
-} from "@/lib/playback";
+  HLS_PLAYBACK_SESSION_QUERY_PARAM,
+  HLS_RESUME_REWIND_BUFFER_SEC,
+  MEDIA_ERR_DECODE,
+  MEDIA_ERR_NETWORK,
+  MEDIA_ERR_SRC_NOT_SUPPORTED,
+  MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC,
+  MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
+  MOVIE_WATCH_PROGRESS_MIN_SECONDS,
+} from "@/lib/constants";
+import { STREAM_MODES, formatSubtitleLabel } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
-import type { SubtitleType } from "@/types/movies";
+import type {
+  MoviePlaybackStatus,
+  MoviePlaybackStatusArgs,
+  PlaybackTimingOptions,
+  RebaseOptions,
+  StreamModeId,
+  SubtitleTrackInfoOptions,
+} from "@/types/playback";
 
-export type MoviePlaybackStatus =
-  | { kind: "ready" }
-  | { kind: "notFound" }
-  | { kind: "loading"; message: string }
-  | { kind: "modeUnavailable"; modeLabel: string }
-  | { kind: "error"; message: string };
-
-export function deriveMoviePlaybackStatus(args: {
-  movieNotFound: boolean;
-  movieIsPending: boolean;
-  hasMovie: boolean;
-  requestedMode: StreamModeId;
-  techPending: boolean;
-  modeUnavailable: boolean;
-  playbackError: string | null;
-}): MoviePlaybackStatus {
+export function deriveMoviePlaybackStatus(
+  args: MoviePlaybackStatusArgs,
+): MoviePlaybackStatus {
   if (args.movieNotFound) return { kind: "notFound" };
   if (args.movieIsPending || !args.hasMovie) {
     return { kind: "loading", message: "Loading movie..." };
@@ -41,52 +40,41 @@ export function deriveMoviePlaybackStatus(args: {
   return { kind: "ready" };
 }
 
-export const MOVIE_SEEK_STEP_SEC = 10;
-export const MOVIE_VOLUME_STEP = 0.1;
-export const MOVIE_CONTROLS_IDLE_MS = 3000;
-export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
-export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 180;
-export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
-export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+export function createHlsPlaybackSessionId(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
 
-const MEDIA_ERR_NETWORK = 2;
-const MEDIA_ERR_DECODE = 3;
-const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
-
-type PlaybackTimingOptions = {
-  isHlsPlayback: boolean;
-  hlsStartSec: number;
-  movieDurationSec?: number;
-};
-
-type SubtitleTrackInfoOptions = {
-  movieId: number;
-  resolvedSubtitleTrack: number | null;
-  techLoaded: boolean;
-  subtitleStreams: SubtitleType[];
-};
-
-type RebaseOptions = {
-  isHlsPlayback: boolean;
-  targetTimeSec: number;
-  hlsStartSec: number;
-  currentVideoTimeSec: number;
-};
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
 
 export function buildMovieStreamUrl(
   movieId: number,
   mode: StreamModeId,
-  audioTrack: number,
+  audioTrack: number | null,
   hlsStartSec: number,
   reloadKey: number,
+  playbackSessionId: string,
 ): string {
   if (mode === "direct") return `/api/movies/${movieId}/stream`;
 
   const params = new URLSearchParams({
-    audio_track: String(audioTrack),
+    [HLS_PLAYBACK_SESSION_QUERY_PARAM]: playbackSessionId,
+    start: String(Math.floor(hlsStartSec)),
   });
-  if (hlsStartSec > 0) {
-    params.set("start", String(Math.floor(hlsStartSec)));
+  if (audioTrack !== null) {
+    params.set("audio_track", String(audioTrack));
   }
   if (reloadKey > 0) {
     params.set("reload", String(reloadKey));

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getDefaultPlaybackSettings } from "@/lib/playback";
-import type { StreamModeId } from "@/lib/constants";
+import type { StreamModeId } from "@/types/playback";
 import type { PlaybackSettingsType } from "@/types/settings";
 import type { AudioStreamType, SubtitleType } from "@/types/movies";
 

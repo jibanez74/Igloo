@@ -3,18 +3,17 @@ import {
   ISO_639_2_TO_1,
   LANGUAGE_NAMES,
   STREAM_MODES,
-  type StreamModeId,
 } from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
+import type { PlaybackModeOption, PlaybackSettings, StreamModeId } from "@/types/playback";
 import type { PlaybackSettingsType } from "@/types/settings";
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];
 const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
 
-export type { StreamModeId };
 export { STREAM_MODES };
 
 /**
@@ -47,20 +46,10 @@ export const supportsNativeHLS = (() => {
   );
 })();
 
-export type PlaybackSettings = {
-  mode: StreamModeId;
-  audioTrack: number;
-  subtitleTrack: number | null;
-};
-
 export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
   audioTrack: 0,
   subtitleTrack: null,
-};
-
-type PlaybackModeOption = {
-  id: StreamModeId;
 };
 
 const COVER_ART_CODECS = ["mjpeg", "png", "gif", "bmp"];
@@ -80,7 +69,8 @@ function isVideoDirectPlayable(codec: string): boolean {
   return BROWSER_COMPATIBLE_VIDEO_CODECS.includes(codec.toLowerCase());
 }
 
-function isAudioDirectPlayable(codec: string): boolean {
+function isAudioDirectPlayable(codec: string | undefined): boolean {
+  if (!codec) return true;
   return BROWSER_COMPATIBLE_AUDIO_CODECS.includes(codec.toLowerCase());
 }
 
@@ -106,7 +96,7 @@ export function getAvailableModes(
       if (!hasCodecInfo) return true;
       return (
         isVideoDirectPlayable(videoCodec) &&
-        isAudioDirectPlayable(audioCodec ?? "") &&
+        isAudioDirectPlayable(audioCodec) &&
         isContainerDirectPlayable(mimeType ?? "")
       );
     }
@@ -121,7 +111,7 @@ export function getAvailableModes(
 /** Default mode from codecs, container, and source height (direct → remux → transcode). */
 export function getDefaultMode(
   videoCodec: string,
-  audioCodec: string,
+  audioCodec: string | undefined,
   mimeType: string,
   sourceHeight: number,
 ): StreamModeId {

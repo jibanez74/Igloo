@@ -132,13 +132,28 @@ export const STREAM_MODES = [
   },
 ] as const;
 
-export type StreamModeId = (typeof STREAM_MODES)[number]["id"];
-
 /** Derived from `STREAM_MODES` for Zod `z.enum`. */
-export const STREAM_MODE_IDS = STREAM_MODES.map(m => m.id) as unknown as readonly [
-  StreamModeId,
-  ...StreamModeId[],
-];
+export const STREAM_MODE_IDS = [
+  "direct",
+  "remux",
+  "2160p_16mbps",
+  "1080p_8mbps",
+  "1080p_6mbps",
+  "1080p_4mbps",
+  "720p_3mbps",
+] as const;
+
+export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
+export const MOVIE_SEEK_STEP_SEC = 10;
+export const MOVIE_VOLUME_STEP = 0.1;
+export const MOVIE_CONTROLS_IDLE_MS = 3000;
+export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 180;
+export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
+export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+export const MEDIA_ERR_NETWORK = 2;
+export const MEDIA_ERR_DECODE = 3;
+export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
 /** hls.js: max `onSessionLost` recoveries per logical stream (see `hlsStreamRecoveryKey`). */
 export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;

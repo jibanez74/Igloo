@@ -100,18 +100,24 @@ const (
 	// HLS remux preflight checks the first few complete segments before the
 	// manifest is served so copied H.264 streams can fall back to transcode
 	// before playback begins.
-	HLS_REMUX_PREVALIDATE_SEGMENTS = 4
-	HLS_REMUX_PREVALIDATE_TIMEOUT  = 30 * time.Second
-	HLS_REMUX_SAFETY_CACHE_TTL     = 24 * time.Hour
-	HLS_REMUX_SAFETY_CACHE_SWEEP   = 1 * time.Hour
+	HLS_REMUX_PREVALIDATE_SEGMENTS      = 4
+	HLS_REMUX_PREVALIDATE_TIMEOUT       = 30 * time.Second
+	HLS_REMUX_SAFETY_CACHE_TTL          = 24 * time.Hour
+	HLS_REMUX_SAFETY_CACHE_SWEEP        = 1 * time.Hour
+	ENV_HLS_MAX_CPU_TRANSCODES          = "HLS_MAX_CPU_TRANSCODES"
+	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR   = 4
+	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC  = 5
+	HLS_PLAYBACK_SESSION_ID_PATTERN     = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
 
 	// HDR transfer characteristics as reported by ffprobe (color_transfer field).
 	// Used to detect HDR sources that require tone-mapping when transcoding to SDR.
-	HDR_TRANSFER_PQ         = "smpte2084"      // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
-	HDR_TRANSFER_HLG        = "arib-std-b67"   // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
-	HLS_STDERR_TAIL_LINES   = 20               // lines of FFmpeg stderr kept for error reporting
-	HLS_SESSION_TTL         = 30 * time.Minute // TTL for cached HLS session entries
-	HLS_SESSION_CACHE_SWEEP = 10 * time.Minute // interval for removing expired HLS session entries
+	HDR_TRANSFER_PQ                = "smpte2084"      // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
+	HDR_TRANSFER_HLG               = "arib-std-b67"   // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
+	HLS_STDERR_TAIL_LINES          = 20               // lines of FFmpeg stderr kept for error reporting
+	HLS_STDERR_SCANNER_BUFFER_SIZE = 64 * 1024
+	HLS_STDERR_SCANNER_MAX_TOKEN   = 1024 * 1024
+	HLS_SESSION_TTL                = 30 * time.Minute // TTL for cached HLS session entries
+	HLS_SESSION_CACHE_SWEEP        = 10 * time.Minute // interval for removing expired HLS session entries
 
 	// HLS HTTP: manifest polling, response headers, and fMP4 filenames (match FFmpeg output)
 	HLS_SEGMENT_WAIT              = 120 * time.Second
@@ -121,6 +127,7 @@ const (
 	HLS_INIT_FILENAME             = "init.mp4"
 	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
+	HLS_SDR_COLOR_PARAMS          = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
 
 	// Watch rooms
 	WATCH_ROOM_PLAYBACK_MODE_DIRECT = "direct"

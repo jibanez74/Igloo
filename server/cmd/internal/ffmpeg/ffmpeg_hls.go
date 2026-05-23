@@ -17,11 +17,6 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const (
-	hlsStderrScannerBufferSize = 64 * 1024
-	hlsStderrScannerMaxToken   = 1024 * 1024
-)
-
 func isExpectedHLSStderrClose(err error) bool {
 	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
 }
@@ -109,7 +104,12 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	args = append(args,
 		"-i", p.SourcePath,
 		"-map", fmt.Sprintf("0:%d", p.VideoStreamIndex),
-		"-map", fmt.Sprintf("0:%d", p.AudioStreamIndex),
+	)
+	hasAudio := p.AudioStreamIndex >= 0
+	if hasAudio {
+		args = append(args, "-map", fmt.Sprintf("0:%d", p.AudioStreamIndex))
+	}
+	args = append(args,
 		"-map_metadata", "-1",
 		"-map_chapters", "-1",
 	)
@@ -150,10 +150,12 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		args = appendHLSKeyframeArgs(args, encoder, p.SourceFrameRate)
 	}
 
-	if p.CopyAudio {
-		args = append(args, "-c:a", "copy")
-	} else {
-		args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "256k")
+	if hasAudio {
+		if p.CopyAudio {
+			args = append(args, "-c:a", "copy")
+		} else {
+			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "256k")
+		}
 	}
 
 	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
@@ -175,8 +177,6 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 }
 
 func hlsVideoFilter(cfg helpers.HLSProfileConfig, hwDevice string, tonemapHDR bool, useNvidiaCUDAFilters bool) string {
-	const sdrParams = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
-
 	switch {
 	case tonemapHDR && useNvidiaCUDAFilters:
 		return fmt.Sprintf(
@@ -197,10 +197,10 @@ func hlsVideoFilter(cfg helpers.HLSProfileConfig, hwDevice string, tonemapHDR bo
 				"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
 				"zscale=t=bt709:m=bt709:r=tv,format=yuv420p,%s",
 			cfg.Height,
-			sdrParams,
+			helpers.HLS_SDR_COLOR_PARAMS,
 		)
 	default:
-		return fmt.Sprintf("scale=-2:%d,format=yuv420p,%s", cfg.Height, sdrParams)
+		return fmt.Sprintf("scale=-2:%d,format=yuv420p,%s", cfg.Height, helpers.HLS_SDR_COLOR_PARAMS)
 	}
 }
 
@@ -210,13 +210,16 @@ func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []s
 		strings.EqualFold(encoder, "h264_qsv") ||
 		strings.EqualFold(encoder, "h264_videotoolbox")
 
-	if isGOPDrivenEncoder && frameRate > 0 {
+	if frameRate > 0 {
 		gop := int(math.Ceil(segmentTime * frameRate))
 		if gop > 0 {
-			return append(args,
+			args = append(args,
 				"-g:v:0", fmt.Sprintf("%d", gop),
 				"-keyint_min:v:0", fmt.Sprintf("%d", gop),
 			)
+			if isGOPDrivenEncoder {
+				return args
+			}
 		}
 	}
 
@@ -289,7 +292,7 @@ func (f *ffmpeg) RunHLS(
 	go func() {
 		defer stderrWg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
-		scanner.Buffer(make([]byte, hlsStderrScannerBufferSize), hlsStderrScannerMaxToken)
+		scanner.Buffer(make([]byte, helpers.HLS_STDERR_SCANNER_BUFFER_SIZE), helpers.HLS_STDERR_SCANNER_MAX_TOKEN)
 		for scanner.Scan() {
 			appendTail(scanner.Text())
 		}

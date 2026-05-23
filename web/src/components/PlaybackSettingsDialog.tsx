@@ -19,10 +19,9 @@ import {
   getAvailableModes,
   getPrimaryVideoStream,
   isBitmapSubtitleCodec,
-  resolvePlaybackSettings,
-  type StreamModeId,
-  type PlaybackSettings,
+  resolvePlaybackSettings
 } from "@/lib/playback";
+import type { PlaybackSettings, StreamModeId } from "@/types/playback";
 import {
   Dialog,
   DialogContent,

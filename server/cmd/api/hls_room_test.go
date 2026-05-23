@@ -12,7 +12,8 @@ import (
 
 func TestRoomHLSSessionKey_NoCollisionWithPersonalKey(t *testing.T) {
 	roomKey := RoomHLSSessionKey(1)
-	personalKey := HLSSessionKey(1, "720p_3mbps", 0)
+	audioTrack := 0
+	personalKey := HLSSessionKey(1, "720p_3mbps", &audioTrack, testPlaybackSessionID, 0)
 
 	if roomKey == personalKey {
 		t.Errorf("room key %q collides with personal key %q", roomKey, personalKey)

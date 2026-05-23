@@ -37,9 +37,9 @@ import {
   getAvailableModes,
   getDefaultPlaybackSettings,
   getPrimaryVideoStream,
-  resolvePlaybackSettings,
-  type PlaybackSettings,
+  resolvePlaybackSettings
 } from "@/lib/playback";
+import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
 import type {
   AuthUser,

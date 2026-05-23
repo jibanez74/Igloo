@@ -146,6 +146,24 @@ export type {
   UpdatePlaybackSettingsResponseType,
 } from "./settings";
 
+
+// Playback types
+export type {
+  HlsSessionRecoveryOptions,
+  MoviePlaybackStatus,
+  MoviePlaybackStatusArgs,
+  MoviePlaybackSyncTarget,
+  PlaybackModeOption,
+  PlaybackSettings,
+  PlaybackTimingOptions,
+  RebaseOptions,
+  StreamModeId,
+  SubtitleTrackInfo,
+  SubtitleTrackInfoOptions,
+  UseMoviePlaybackDataArgs,
+  VideoPlayerProps,
+} from "./playback";
+
 // Search types
 export type {
   SearchSection,

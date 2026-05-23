@@ -6,7 +6,6 @@ import {
   getAvailableModes,
   getPrimaryVideoStream,
   resolvePlaybackSettings,
-  type StreamModeId,
 } from "@/lib/playback";
 import {
   buildMovieStreamUrl,
@@ -21,25 +20,17 @@ import {
 } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
-import type { PlaySearchParams } from "@/types";
-
-type SyncTarget = {
-  mode: StreamModeId;
-  audioTrack: number;
-  subtitleTrack: number | null;
-};
-
-type UseMoviePlaybackDataArgs = {
-  movieId: number;
-  search: PlaySearchParams;
-  streamReloadKey: number;
-  onSyncSearch: (target: SyncTarget) => void;
-};
+import type {
+  MoviePlaybackSyncTarget,
+  StreamModeId,
+  UseMoviePlaybackDataArgs,
+} from "@/types/playback";
 
 export function useMoviePlaybackData({
   movieId,
   search,
   streamReloadKey,
+  playbackSessionId,
   onSyncSearch,
 }: UseMoviePlaybackDataArgs) {
   const {
@@ -111,12 +102,14 @@ export function useMoviePlaybackData({
     start,
     hlsStartSec,
   );
+  const streamAudioTrack = audioStreams.length > 0 ? resolvedAudioTrack : null;
   const streamUrl = buildMovieStreamUrl(
     movieId,
     resolvedMode,
-    resolvedAudioTrack,
+    streamAudioTrack,
     hlsStartSec,
     streamReloadKey,
+    playbackSessionId,
   );
   const qualityLabel =
     STREAM_MODES.find((m) => m.id === resolvedMode)?.label ?? resolvedMode;
@@ -132,9 +125,9 @@ export function useMoviePlaybackData({
     techLoaded,
     subtitleStreams,
   });
-  const sessionWindowKey = `${movieId}:${resolvedMode}:${resolvedAudioTrack}:${Math.floor(hlsStartSec)}`;
+  const sessionWindowKey = `${movieId}:${resolvedMode}:${streamAudioTrack ?? "none"}:${playbackSessionId}:${Math.floor(hlsStartSec)}`;
 
-  const syncSearch = useEffectEvent((target: SyncTarget) => {
+  const syncSearch = useEffectEvent((target: MoviePlaybackSyncTarget) => {
     onSyncSearch(target);
   });
 
