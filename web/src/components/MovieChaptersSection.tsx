@@ -24,7 +24,7 @@ export default function MovieChaptersSection({
         touch devices, swipe or scroll the list to see all chapters.
       </p>
       <ul
-        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex snap-x snap-mandatory list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
+        className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-amber-700/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
         aria-label={`Chapters, ${chapters.length} total`}
       >
         {chapters.map(chapter => (

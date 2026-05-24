@@ -40,6 +40,13 @@ const EditMovieDialog = lazy(loadEditMovieDialog);
 const DeleteMovieDialog = lazy(loadDeleteMovieDialog);
 const CreateWatchRoomDialog = lazy(loadCreateWatchRoomDialog);
 
+const emptyWatchProgress = (): MovieWatchProgressType => ({
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
+});
+
 export default function MovieDetailsHeroActions({
   movieId,
   movie,
@@ -95,17 +102,18 @@ export default function MovieDetailsHeroActions({
       const key = [MOVIE_WATCH_PROGRESS_KEY, movieId] as const;
       const previous =
         queryClient.getQueryData<ApiResponseType<MovieWatchProgressType>>(key);
+      const currentProgress = previous?.error === false
+        ? previous.data
+        : emptyWatchProgress();
 
-      if (previous?.error === false) {
-        queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
-          error: false,
-          data: {
-            ...previous.data,
-            progress_sec: nextWatched ? 0 : previous.data.progress_sec,
-            watched: nextWatched,
-          },
-        });
-      }
+      queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+        error: false,
+        data: {
+          ...currentProgress,
+          progress_sec: nextWatched ? 0 : currentProgress.progress_sec,
+          watched: nextWatched,
+        },
+      });
 
       return { previous };
     },
@@ -114,7 +122,10 @@ export default function MovieDetailsHeroActions({
       if (context?.previous !== undefined) {
         queryClient.setQueryData(key, context.previous);
       } else {
-        void queryClient.invalidateQueries({ queryKey: key });
+        queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+          error: false,
+          data: emptyWatchProgress(),
+        });
       }
       showActionFailed(
         "update watched status",
@@ -126,6 +137,14 @@ export default function MovieDetailsHeroActions({
       if (res.error) {
         if (context?.previous !== undefined) {
           queryClient.setQueryData(key, context.previous);
+        } else {
+          queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(
+            key,
+            {
+              error: false,
+              data: emptyWatchProgress(),
+            },
+          );
         }
         showActionFailed("update watched status", res.message);
         return;
@@ -133,16 +152,17 @@ export default function MovieDetailsHeroActions({
 
       const previous =
         queryClient.getQueryData<ApiResponseType<MovieWatchProgressType>>(key);
-      if (previous?.error === false) {
-        queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
-          error: false,
-          data: {
-            ...previous.data,
-            progress_sec: nextWatched ? 0 : previous.data.progress_sec,
-            watched: res.data.watched,
-          },
-        });
-      }
+      const currentProgress = previous?.error === false
+        ? previous.data
+        : emptyWatchProgress();
+      queryClient.setQueryData<ApiResponseType<MovieWatchProgressType>>(key, {
+        error: false,
+        data: {
+          ...currentProgress,
+          progress_sec: nextWatched ? 0 : currentProgress.progress_sec,
+          watched: res.data.watched,
+        },
+      });
 
       void queryClient.invalidateQueries({ queryKey: key });
     },
@@ -182,19 +202,16 @@ export default function MovieDetailsHeroActions({
         aria-label={isWatched ? "Mark movie as unwatched" : "Mark movie as watched"}
         aria-pressed={isWatched}
       >
-        {watchedMutation.isPending ? (
-          <Spinner className="size-4 text-emerald-400" aria-hidden="true" />
-        ) : (
-          <>
-            <Check
-              className={cn(
-                "size-4",
-                isWatched && "text-emerald-400",
-              )}
-              aria-hidden="true"
-            />
-            {isWatched ? "Watched" : "Watch"}
-          </>
+        <Check
+          className={cn(
+            "size-4",
+            isWatched && "text-emerald-400!",
+          )}
+          aria-hidden="true"
+        />
+        {isWatched ? "Watched" : "Watch"}
+        {watchedMutation.isPending && (
+          <Spinner className="size-4 text-emerald-400!" aria-hidden="true" />
         )}
       </button>
       <MovieLikeButton movieId={movieId} variant="hero" />

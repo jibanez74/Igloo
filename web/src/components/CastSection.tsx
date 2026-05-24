@@ -34,7 +34,7 @@ export default function CastSection({
       </p>
 
       <ul
-        className="scrollbar-thin scrollbar-thumb-amber-700/50 -mx-4 flex list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
+        className="-mx-4 flex scrollbar-thin scrollbar-thumb-amber-700/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >

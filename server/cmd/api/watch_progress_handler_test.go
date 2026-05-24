@@ -679,6 +679,72 @@ func TestSetMovieWatched_HTTPMissingWatched(t *testing.T) {
 	if w2.Code != http.StatusOK {
 		t.Errorf("status=%d, want %d, body=%s", w2.Code, http.StatusOK, w2.Body.String())
 	}
+	var watchedResp struct {
+		Error bool `json:"error"`
+		Data  struct {
+			MovieID int64 `json:"movie_id"`
+			Watched bool  `json:"watched"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w2.Body.Bytes(), &watchedResp); err != nil {
+		t.Fatalf("unmarshal watched response: %v", err)
+	}
+	if watchedResp.Error {
+		t.Fatalf("expected success response, got %s", w2.Body.String())
+	}
+	if watchedResp.Data.MovieID != movieID {
+		t.Errorf("movie_id=%d, want %d", watchedResp.Data.MovieID, movieID)
+	}
+	if !watchedResp.Data.Watched {
+		t.Error("expected watched=true response")
+	}
+	row, err := app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
+		UserID:  userID,
+		MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("GetMovieWatchProgress after watched=true: %v", err)
+	}
+	if !row.Watched {
+		t.Error("expected watched=true to persist")
+	}
+
+	req3 := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/movies/%d/watch-progress/watched", movieID), strings.NewReader(`{"watched": false}`))
+	req3.Header.Set("Content-Type", "application/json")
+	w3 := httptest.NewRecorder()
+	handler.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusOK {
+		t.Errorf("status=%d, want %d, body=%s", w3.Code, http.StatusOK, w3.Body.String())
+	}
+	watchedResp = struct {
+		Error bool `json:"error"`
+		Data  struct {
+			MovieID int64 `json:"movie_id"`
+			Watched bool  `json:"watched"`
+		} `json:"data"`
+	}{}
+	if err := json.Unmarshal(w3.Body.Bytes(), &watchedResp); err != nil {
+		t.Fatalf("unmarshal watched=false response: %v", err)
+	}
+	if watchedResp.Error {
+		t.Fatalf("expected success response, got %s", w3.Body.String())
+	}
+	if watchedResp.Data.MovieID != movieID {
+		t.Errorf("movie_id=%d, want %d", watchedResp.Data.MovieID, movieID)
+	}
+	if watchedResp.Data.Watched {
+		t.Error("expected watched=false response")
+	}
+	row, err = app.Queries.GetMovieWatchProgress(context.Background(), database.GetMovieWatchProgressParams{
+		UserID:  userID,
+		MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("GetMovieWatchProgress after watched=false: %v", err)
+	}
+	if row.Watched {
+		t.Error("expected watched=false to persist")
+	}
 }
 
 func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {

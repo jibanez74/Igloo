@@ -6,6 +6,7 @@ import {
   libraryMovieDetailsQueryOpts,
   movieLikeStatusQueryOpts,
   movieTechnicalDetailsQueryOpts,
+  movieWatchProgressQueryOpts,
   playbackSettingsQueryOpts,
 } from "@/lib/query-opts";
 import {
@@ -60,6 +61,9 @@ export const Route = createFileRoute("/_auth/movies/$id/")({
         ),
         context.queryClient.ensureQueryData(
           movieLikeStatusQueryOpts(movieId),
+        ),
+        context.queryClient.ensureQueryData(
+          movieWatchProgressQueryOpts(movieId),
         ),
       ]);
     }

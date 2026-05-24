@@ -11,6 +11,13 @@ import type { ApiResponseType } from "@/types";
 
 type LikeStatusPayload = { is_liked: boolean };
 
+const likeStatusResponse = (
+  isLiked: boolean,
+): ApiResponseType<LikeStatusPayload> => ({
+  error: false,
+  data: { is_liked: isLiked },
+});
+
 type MovieLikeButtonProps = {
   movieId: number;
   /**
@@ -41,20 +48,24 @@ export default function MovieLikeButton({
       const previous = queryClient.getQueryData<ApiResponseType<LikeStatusPayload>>(
         key,
       );
-      if (previous?.error === false) {
-        queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(key, {
-          error: false,
-          data: { is_liked: !previous.data.is_liked },
-        });
-      }
+      const nextLiked = previous?.error === false
+        ? !previous.data.is_liked
+        : true;
+      queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
+        key,
+        likeStatusResponse(nextLiked),
+      );
       return { previous };
     },
     onError: (_err, _vars, context) => {
-      const key = [MOVIE_LIKE_STATUS_KEY, movieId];
+      const key = [MOVIE_LIKE_STATUS_KEY, movieId] as const;
       if (context?.previous !== undefined) {
         queryClient.setQueryData(key, context.previous);
       } else {
-        void queryClient.invalidateQueries({ queryKey: key });
+        queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
+          key,
+          likeStatusResponse(false),
+        );
       }
       showActionFailed(
         "update like",
@@ -66,14 +77,19 @@ export default function MovieLikeButton({
       if (res.error) {
         if (context?.previous !== undefined) {
           queryClient.setQueryData(key, context.previous);
+        } else {
+          queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
+            key,
+            likeStatusResponse(false),
+          );
         }
         showActionFailed("update like", res.message);
         return;
       }
-      queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(key, {
-        error: false,
-        data: { is_liked: res.data.is_liked },
-      });
+      queryClient.setQueryData<ApiResponseType<LikeStatusPayload>>(
+        key,
+        likeStatusResponse(res.data.is_liked),
+      );
       // Keep the movie grid mounted — do not invalidate MOVIES_LIBRARY_KEY (refetch was
       // stealing focus / scrolling). Liked tab list only refetches when that query is active.
       void queryClient.invalidateQueries({ queryKey: [MOVIES_LIKED_KEY] });
@@ -100,19 +116,16 @@ export default function MovieLikeButton({
         aria-label={label}
         aria-pressed={isLiked}
       >
-        {mutation.isPending ? (
-          <Spinner className="size-4 text-amber-400" aria-hidden="true" />
-        ) : (
-          <>
-            <Heart
-              className={cn(
-                "size-4",
-                isLiked && "fill-amber-400 text-amber-400",
-              )}
-              aria-hidden="true"
-            />
-            {isLiked ? "Liked" : "Like"}
-          </>
+        <Heart
+          className={cn(
+            "size-4",
+            isLiked && "fill-amber-400 text-amber-400!",
+          )}
+          aria-hidden="true"
+        />
+        {isLiked ? "Liked" : "Like"}
+        {mutation.isPending && (
+          <Spinner className="size-4 text-amber-400!" aria-hidden="true" />
         )}
       </button>
     );
