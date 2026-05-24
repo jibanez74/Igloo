@@ -30,7 +30,8 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 		TokenURL:     "https://accounts.spotify.com/api/token",
 	}
 
-	if _, err := config.Token(ctx); err != nil {
+	_, err := config.Token(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("failed to get spotify token: %w", err)
 	}
 

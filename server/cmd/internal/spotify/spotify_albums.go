@@ -85,6 +85,15 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	}
 
 	if results.Albums == nil {
+		fallbackInfo := MatchDebugInfo{
+			Lookup:      "album",
+			Input:       title,
+			SearchQuery: fallback,
+			Strategy:    "album_fallback_search",
+			Threshold:   spotifyAlbumThreshold,
+			Reason:      "no_results",
+		}
+		bestInfo = chooseBetterMatchInfo(bestInfo, fallbackInfo)
 		return nil, newMatchError(bestInfo, nil)
 	}
 
