@@ -2,10 +2,10 @@ package ffmpeg
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
 	"sync"
+
+	"igloo/cmd/internal/mediabin"
 )
 
 type FFmpegInterface interface {
@@ -28,7 +28,7 @@ var (
 
 // New returns a singleton FFmpeg implementation.
 // resolveBinaryPath is defined in build-tag-specific files:
-// embed mode extracts to a temp directory, systembin mode returns a fixed path.
+// embedded mode extracts a release payload; externalbin mode uses host ffmpeg.
 func New() (FFmpegInterface, error) {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
@@ -62,9 +62,8 @@ func Cleanup() error {
 		return nil
 	}
 
-	err := os.RemoveAll(extractedDir)
-	if err != nil {
-		return fmt.Errorf("failed to cleanup ffmpeg: %w", err)
+	if err := mediabin.CleanupExtracted("ffmpeg", extractedDir); err != nil {
+		return err
 	}
 
 	extractedDir = ""

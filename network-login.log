@@ -1,4 +1,0 @@
-10. [GET] http://localhost:8080/api/auth/user => [401] Unauthorized
-19. [POST] http://localhost:8080/api/auth/login => [500] Internal Server Error
-
-Note: 17 static requests not shown, run with "static" option to see them.

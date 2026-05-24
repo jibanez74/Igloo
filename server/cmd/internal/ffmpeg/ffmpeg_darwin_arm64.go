@@ -1,4 +1,4 @@
-//go:build darwin && arm64 && !systembin
+//go:build darwin && arm64 && !externalbin
 
 package ffmpeg
 

@@ -124,7 +124,7 @@ func (app *Application) ServeFrontend(w http.ResponseWriter, r *http.Request) {
 			)
 			http.Error(
 				w,
-				"Not Found: embedded static asset missing. From the repo: build the web app, copy dist to server/cmd/api/webdist, then run go build (see server/Makefile target build-full).",
+				"Not Found: embedded static asset missing. From the repo: run make build from server/ to embed the web app.",
 				http.StatusNotFound,
 			)
 			return

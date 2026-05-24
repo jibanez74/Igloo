@@ -269,6 +269,13 @@ func cleanupHLSSession(session *HLSSession) {
 	})
 }
 
+func (app *Application) hlsTranscodeRoot() string {
+	if app == nil {
+		return RuntimeConfig{}.effectiveTranscodeDir()
+	}
+	return app.Config.effectiveTranscodeDir()
+}
+
 func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -308,7 +315,12 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		hwDevice = app.Settings.HardwareAccelerationDevice.String
 	}
 
-	tempDir, err := os.MkdirTemp("", "igloo-hls-*")
+	transcodeRoot := app.hlsTranscodeRoot()
+	if err := os.MkdirAll(transcodeRoot, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create transcode directory %s: %w", transcodeRoot, err)
+	}
+
+	tempDir, err := os.MkdirTemp(transcodeRoot, "igloo-hls-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}

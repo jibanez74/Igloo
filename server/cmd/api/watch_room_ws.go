@@ -118,18 +118,6 @@ func (hub *WatchRoomHub) connect(roomID int64, client *watchRoomClient) (watchRo
 	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), !alreadyConnected
 }
 
-func (hub *WatchRoomHub) snapshot(roomID int64) (watchRoomServerEvent, bool) {
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
-
-	session, ok := hub.sessions[roomID]
-	if !ok {
-		return watchRoomServerEvent{}, false
-	}
-
-	return hub.buildSnapshotLocked(roomID, session, time.Now().UTC()), true
-}
-
 func (hub *WatchRoomHub) disconnect(client *watchRoomClient) *watchRoomServerEvent {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()

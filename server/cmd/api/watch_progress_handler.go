@@ -38,15 +38,6 @@ func parseMovieID(r *http.Request) (int64, error) {
 	return movieID, nil
 }
 
-func (app *Application) requireSessionUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
-		return 0, false
-	}
-	return userID, true
-}
-
 func (app *Application) ensureMovieExists(r *http.Request, movieID int64) error {
 	_, err := app.Queries.GetMovieByID(r.Context(), movieID)
 	if err != nil {

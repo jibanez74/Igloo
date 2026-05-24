@@ -92,9 +92,8 @@ func formatProfileLabel(height, videoMbps int) string {
 }
 
 func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 
@@ -134,9 +133,8 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
 		return
 	}
 

@@ -8,35 +8,25 @@ Igloo uses these tools for three separate jobs:
 - `ffmpeg` creates HLS output for browser playback when direct file playback is not enough.
 - `ffmpeg` converts supported text subtitle streams to WebVTT.
 
-Direct file streaming is separate from this flow. When the client  can play a source file directly, Igloo can serve the original media without starting FFmpeg. FFmpeg is used when Igloo needs compatible HLS output, audio conversion, video transcoding, HDR tone mapping, or subtitle conversion.
+Direct file streaming is separate from this flow. When the client can play a source file directly, Igloo can serve the original media without starting FFmpeg. FFmpeg is used when Igloo needs compatible HLS output, audio conversion, video transcoding, HDR tone mapping, or subtitle conversion.
 
 ## Binary Strategy
 
-Igloo has two binary modes.
+Release builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the binary payload at compile time. At startup, Igloo extracts each binary into an operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`, marks it executable, and keeps a singleton wrapper pointing at the extracted path.
 
-Local non-Docker builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the binary payload at compile time. At startup, Igloo extracts each binary into an operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`, marks it executable, and keeps a singleton wrapper pointing at the extracted path.
+Development and CI can use the `externalbin` build tag instead. With that tag, the wrappers do not extract embedded binaries. They resolve tools in this order:
 
-Docker builds use the `systembin` build tag instead. With that tag, the wrappers do not extract embedded binaries. They return fixed paths:
-
-- `/usr/lib/jellyfin-ffmpeg/ffmpeg`
-- `/usr/lib/jellyfin-ffmpeg/ffprobe`
-
-The Docker image installs Jellyfin FFmpeg from a checksum-pinned Debian package. The server binary is built with `-tags systembin` so the runtime package is the source of truth for FFmpeg and ffprobe inside the container.
+- `IGLOO_FFMPEG_PATH` or `IGLOO_FFPROBE_PATH`
+- `ffmpeg` or `ffprobe` on `PATH`
 
 The split exists for practical reasons:
 
-- Local development binaries can be self-contained on supported platforms.
-- Docker images can use the Jellyfin FFmpeg package directly instead of embedding large media binaries into the Go binary.
-- Hardware acceleration support depends on the runtime environment, drivers, and container device access, so Docker keeps that responsibility in the image and Compose configuration instead of hiding it inside embedded binaries.
+- Release packages are self-contained on supported platforms.
+- Development and tests do not require large ignored payload files.
+- Hardware acceleration still depends on the host runtime, drivers, and FFmpeg build support.
 - The wrappers give the application a stable internal interface even though the binary source differs by build mode.
 
-Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `systembin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
-
-## Why Jellyfin FFmpeg
-
-The Docker image uses Jellyfin FFmpeg because Igloo is a media server, not a generic command-line transcoding wrapper. Distro FFmpeg packages can vary in codec support, hardware acceleration support, and build options. Jellyfin FFmpeg is built for the same broad media-server problem space Igloo has: local libraries, mixed codecs, HLS output, subtitles, and GPU acceleration.
-
-The Dockerfile currently installs Jellyfin FFmpeg `7.1.3-5` from the official Jellyfin FFmpeg release package and verifies the package SHA-256 during build. Pinning the version and checksum makes container builds more repeatable and avoids silently changing media behavior because an upstream package changed.
+Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
 
 ## Metadata Scanning
 
@@ -81,7 +71,7 @@ HLS sessions are keyed by movie ID, requested profile, audio track, and start ti
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, or server shutdown stops the process and removes the temp directory.
 
-HLS temp directories use `os.MkdirTemp("", "igloo-hls-*")`. In Docker, the image sets `TMPDIR=/transcode`, so these directories are created under the mounted transcode volume. This keeps heavy temporary media output out of the container filesystem. The container runs as UID/GID `1000`, so `/transcode` must be writable by that user.
+HLS temp directories are created under `TRANSCODE_DIR`, which defaults to `$IGLOO_DATA_DIR/transcode`. This keeps heavy temporary media output in Igloo's configured runtime data area instead of the operating-system temp directory.
 
 ## HLS Output Format
 
@@ -217,16 +207,16 @@ The hardware acceleration setting is stored as one of:
 - `nvidia`
 - `intel`
 
-Docker defaults this value to `cpu`. Set `HARDWARE_ACCELERATION_DEVICE` in `.env` when enabling a GPU block in `compose.yaml` or testing locally.
+The default value is `cpu`. Set `HARDWARE_ACCELERATION_DEVICE` in `.env` when testing host hardware acceleration.
 
 The FFmpeg encoder mapping is:
 
 | Igloo device | FFmpeg decode flag | FFmpeg video encoder | Primary environment |
 | --- | --- | --- | --- |
-| `cpu` | none | `libx264` | Any supported local or Docker runtime |
-| `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | Local macOS development |
-| `nvidia` | `-hwaccel cuda -hwaccel_output_format cuda` when CUDA filters are available; otherwise software decode | `h264_nvenc` | Linux Docker or local Linux with NVIDIA runtime support |
-| `intel` | `-hwaccel qsv` | `h264_qsv` | Linux Docker or local Linux with Intel QSV support |
+| `cpu` | none | `libx264` | Any supported runtime |
+| `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | macOS with VideoToolbox-capable FFmpeg |
+| `nvidia` | `-hwaccel cuda -hwaccel_output_format cuda` when CUDA filters are available; otherwise software decode | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
+| `intel` | `-hwaccel qsv` | `h264_qsv` | Linux with Intel QSV support |
 
 NVIDIA adds:
 
@@ -240,21 +230,9 @@ Intel adds:
 -look_ahead 1
 ```
 
-At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, and failed NVENC runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, and Docker configuration provides known values, but the HLS builder still has a safe CPU fallback.
+At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, and failed NVENC runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
 
-For Docker:
-
-- The default service uses CPU software transcoding.
-- The commented NVIDIA environment lines and runtime block set `runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES=all`, and `NVIDIA_DRIVER_CAPABILITIES=all`.
-- The commented Intel block mounts `/dev/dri/renderD128` and adds the host render group ID.
-
-NVIDIA hosts must install NVIDIA Container Toolkit before Docker can use the GPU. See NVIDIA's Container Toolkit installation guide:
-
-```text
-https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
-```
-
-Apple VideoToolbox is not exposed through the Linux Docker image. It is for local macOS builds.
+NVIDIA and Intel hardware acceleration require host drivers, device access, and an FFmpeg build with the matching encoder support. Apple VideoToolbox is available only on macOS builds with a VideoToolbox-capable FFmpeg binary.
 
 ## HDR Tone Mapping
 
@@ -353,17 +331,17 @@ After conversion, Igloo replaces escaped `\h` sequences with spaces. This handle
 
 ## Operational Notes
 
-For Docker deployments:
+For binary deployments:
 
-- `TRANSCODE_DIR` on the host is mounted at `/transcode`; Docker uses `./transcode` when it is unset.
-- The Docker image sets `TMPDIR=/transcode`.
-- HLS temp output is therefore written to the transcode mount.
-- The entrypoint creates `/config` and `/transcode` when absent and makes them writable by UID/GID `1000`.
-- Configured media directories are mounted read-only by the generated Compose override because FFmpeg and ffprobe should inspect or read media, not modify the library.
+- `IGLOO_DATA_DIR` defaults to `./data`.
+- `TRANSCODE_DIR` defaults to `$IGLOO_DATA_DIR/transcode`.
+- HLS temp output is written below `TRANSCODE_DIR`.
+- Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
 For local development:
 
-- `make dev`, `make build`, and `make build-full` use embedded binaries unless the command is changed to use `systembin`.
+- `make dev`, `make test`, and `make test-ci` use the `externalbin` build tag and require `ffmpeg` and `ffprobe` on `PATH`.
+- `make build` and `make package` use embedded release payloads for the current platform.
 - `HARDWARE_ACCELERATION_DEVICE` can be set in `.env` for local testing.
 - Apple VideoToolbox only applies to macOS builds with the Apple-capable FFmpeg binary.
 - Linux hardware acceleration requires the host drivers, devices, and FFmpeg build support to be present.
@@ -384,7 +362,7 @@ When changing FFmpeg or ffprobe behavior:
 - Keep remux validation covered by `remux_validator` tests when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.
 - Update `docs/openapi.json` when adding or changing HLS, subtitle, or playback settings endpoints.
-- Update `.env.example`, `compose.yaml`, settings validation, README hardware notes, and this document when adding a hardware acceleration device.
+- Update `.env.example`, settings validation, README hardware notes, and this document when adding a hardware acceleration device.
 - Update `hls_profiles.go`, playback settings responses, OpenAPI schemas, frontend profile lists, and this document when adding or changing an HLS profile.
 - Do not add new FFmpeg command-line options only in handlers. Keep FFmpeg argument construction centralized in the internal FFmpeg wrapper so tests can validate the full command.
 - Treat browser compatibility as a product requirement. Prefer explicit fallback to a known playable profile over exposing a stream that might work on one browser and fail on another.

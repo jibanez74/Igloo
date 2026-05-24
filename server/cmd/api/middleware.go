@@ -48,12 +48,24 @@ func (app *Application) IsAuth(next http.Handler) http.Handler {
 	})
 }
 
+func (app *Application) currentUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return 0, false
+	}
+	return userID, true
+}
+
+func (app *Application) requireSessionUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	return app.currentUserID(w, r)
+}
+
 // RequireAdmin rejects requests from non-admin users with 403.
 func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
-		if userID == 0 {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		userID, ok := app.currentUserID(w, r)
+		if !ok {
 			return
 		}
 

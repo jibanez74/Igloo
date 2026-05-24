@@ -14,10 +14,7 @@ const ffmpegProbeTimeout = 5 * time.Second
 
 type Capabilities struct {
 	Probed                 bool
-	Version                string
-	ProbeError             string
 	Encoders               map[string]bool
-	Decoders               map[string]bool
 	Filters                map[string]bool
 	HWAccels               map[string]bool
 	FilterOptions          map[string]map[string]bool
@@ -33,10 +30,6 @@ type HLSDeviceDecision struct {
 
 func (c Capabilities) SupportsEncoder(name string) bool {
 	return c.Encoders[strings.ToLower(strings.TrimSpace(name))]
-}
-
-func (c Capabilities) SupportsDecoder(name string) bool {
-	return c.Decoders[strings.ToLower(strings.TrimSpace(name))]
 }
 
 func (c Capabilities) SupportsFilter(name string) bool {
@@ -127,44 +120,23 @@ func probeCapabilities(bin string) Capabilities {
 	caps := Capabilities{
 		Probed:        true,
 		Encoders:      map[string]bool{},
-		Decoders:      map[string]bool{},
 		Filters:       map[string]bool{},
 		HWAccels:      map[string]bool{},
 		FilterOptions: map[string]map[string]bool{},
 	}
 
-	version, err := runFFmpegProbe(bin, "-version")
-	if err != nil {
-		caps.ProbeError = appendProbeError(caps.ProbeError, "version", err)
-	} else {
-		caps.Version = firstNonEmptyLine(version)
-	}
-
 	encoders, err := runFFmpegProbe(bin, "-encoders")
-	if err != nil {
-		caps.ProbeError = appendProbeError(caps.ProbeError, "encoders", err)
-	} else {
+	if err == nil {
 		caps.Encoders = parseFFmpegNamedRows(encoders)
 	}
 
-	decoders, err := runFFmpegProbe(bin, "-decoders")
-	if err != nil {
-		caps.ProbeError = appendProbeError(caps.ProbeError, "decoders", err)
-	} else {
-		caps.Decoders = parseFFmpegNamedRows(decoders)
-	}
-
 	filters, err := runFFmpegProbe(bin, "-filters")
-	if err != nil {
-		caps.ProbeError = appendProbeError(caps.ProbeError, "filters", err)
-	} else {
+	if err == nil {
 		caps.Filters = parseFFmpegNamedRows(filters)
 	}
 
 	hwaccels, err := runFFmpegProbe(bin, "-hwaccels")
-	if err != nil {
-		caps.ProbeError = appendProbeError(caps.ProbeError, "hwaccels", err)
-	} else {
+	if err == nil {
 		caps.HWAccels = parseFFmpegHWAccels(hwaccels)
 	}
 
@@ -184,7 +156,6 @@ func (c *Capabilities) recordFilterOptions(bin string, filter string, options []
 	}
 	output, err := runFFmpegProbe(bin, "-h", "filter="+filter)
 	if err != nil {
-		c.ProbeError = appendProbeError(c.ProbeError, "filter="+filter, err)
 		return
 	}
 	key := strings.ToLower(filter)
@@ -278,14 +249,6 @@ func parseFFmpegHWAccels(output string) map[string]bool {
 	return found
 }
 
-func appendProbeError(existing, name string, err error) string {
-	message := name + ": " + compactProbeError(err)
-	if existing == "" {
-		return message
-	}
-	return existing + "; " + message
-}
-
 func compactProbeError(err error) string {
 	if err == nil {
 		return ""
@@ -295,14 +258,4 @@ func compactProbeError(err error) string {
 		msg = msg[:240]
 	}
 	return msg
-}
-
-func firstNonEmptyLine(output string) string {
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			return line
-		}
-	}
-	return ""
 }

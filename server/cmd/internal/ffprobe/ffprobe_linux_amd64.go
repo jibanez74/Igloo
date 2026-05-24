@@ -1,4 +1,4 @@
-//go:build linux && amd64 && !systembin
+//go:build linux && amd64 && !externalbin
 
 package ffprobe
 

@@ -29,6 +29,159 @@ func setupTestLogger(t *testing.T, app *Application) {
 	app.Logger = logger
 }
 
+func clearRuntimeConfigEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		helpers.ENV_IGLOO_DATA_DIR,
+		helpers.ENV_DB_PATH,
+		helpers.ENV_STATIC_DIR,
+		helpers.ENV_LOGS_DIR,
+		helpers.ENV_TRANSCODE_DIR,
+		helpers.ENV_PORT,
+		helpers.ENV_LOG_TO_STDOUT,
+		helpers.ENV_SESSION_COOKIE_SECURE,
+		"DEBUG",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
+func TestNewRuntimeConfig_DerivesDataPaths(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+
+	dataDir := t.TempDir()
+	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, dataDir)
+
+	cfg, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+
+	if cfg.DataDir != dataDir {
+		t.Fatalf("expected data dir %q, got %q", dataDir, cfg.DataDir)
+	}
+	if cfg.DBPath != filepath.Join(dataDir, "igloo.db") {
+		t.Fatalf("expected derived DB path, got %q", cfg.DBPath)
+	}
+	if cfg.StaticDir != filepath.Join(dataDir, "static") {
+		t.Fatalf("expected derived static dir, got %q", cfg.StaticDir)
+	}
+	if cfg.LogsDir != filepath.Join(dataDir, "logs") {
+		t.Fatalf("expected derived logs dir, got %q", cfg.LogsDir)
+	}
+	if cfg.TranscodeDir != filepath.Join(dataDir, "transcode") {
+		t.Fatalf("expected derived transcode dir, got %q", cfg.TranscodeDir)
+	}
+}
+
+func TestNewRuntimeConfig_ExplicitPathsOverrideDataDir(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "custom.db")
+	staticDir := filepath.Join(t.TempDir(), "static")
+	logsDir := filepath.Join(t.TempDir(), "logs")
+	transcodeDir := filepath.Join(t.TempDir(), "transcode")
+
+	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, dataDir)
+	t.Setenv(helpers.ENV_DB_PATH, dbPath)
+	t.Setenv(helpers.ENV_STATIC_DIR, staticDir)
+	t.Setenv(helpers.ENV_LOGS_DIR, logsDir)
+	t.Setenv(helpers.ENV_TRANSCODE_DIR, transcodeDir)
+
+	cfg, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+
+	if cfg.DBPath != dbPath {
+		t.Fatalf("expected DB path override %q, got %q", dbPath, cfg.DBPath)
+	}
+	if cfg.StaticDir != staticDir {
+		t.Fatalf("expected static dir override %q, got %q", staticDir, cfg.StaticDir)
+	}
+	if cfg.LogsDir != logsDir {
+		t.Fatalf("expected logs dir override %q, got %q", logsDir, cfg.LogsDir)
+	}
+	if cfg.TranscodeDir != transcodeDir {
+		t.Fatalf("expected transcode dir override %q, got %q", transcodeDir, cfg.TranscodeDir)
+	}
+}
+
+func TestNewRuntimeConfig_PortHonoredWithoutDebug(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+	t.Setenv("DEBUG", "false")
+	t.Setenv(helpers.ENV_PORT, "4242")
+
+	cfg, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+
+	if cfg.Port != 4242 {
+		t.Fatalf("expected PORT to be honored without DEBUG, got %d", cfg.Port)
+	}
+}
+
+func TestNewRuntimeConfig_RejectsInvalidPort(t *testing.T) {
+	clearRuntimeConfigEnv(t)
+	t.Setenv(helpers.ENV_PORT, "not-a-port")
+
+	_, err := NewRuntimeConfig()
+	if err == nil {
+		t.Fatal("expected invalid PORT to return an error")
+	}
+}
+
+func TestLoadRuntimeEnvFiles_UsesExplicitPath(t *testing.T) {
+	envFile := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envFile, []byte("IGLOO_TEST_ENV_FILE_VALUE=loaded\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	const key = "IGLOO_TEST_ENV_FILE_VALUE"
+	old, hadOld := os.LookupEnv(key)
+	os.Unsetenv(key)
+	t.Cleanup(func() {
+		if hadOld {
+			os.Setenv(key, old)
+		} else {
+			os.Unsetenv(key)
+		}
+	})
+
+	t.Setenv(helpers.ENV_IGLOO_ENV_FILE, envFile)
+
+	loaded, err := LoadRuntimeEnvFiles()
+	if err != nil {
+		t.Fatalf("LoadRuntimeEnvFiles failed: %v", err)
+	}
+
+	if len(loaded) != 1 || loaded[0] != envFile {
+		t.Fatalf("expected explicit env file to be loaded, got %#v", loaded)
+	}
+	if got := os.Getenv(key); got != "loaded" {
+		t.Fatalf("expected env file value to load, got %q", got)
+	}
+}
+
+func TestCleanupStaleHLSTempDirsUsesConfiguredTranscodeDir(t *testing.T) {
+	transcodeDir := t.TempDir()
+	staleDir, err := os.MkdirTemp(transcodeDir, "igloo-hls-*")
+	if err != nil {
+		t.Fatalf("create stale HLS dir: %v", err)
+	}
+
+	app := &Application{}
+	setupTestLogger(t, app)
+
+	cleanupStaleHLSTempDirs(app.Logger, RuntimeConfig{TranscodeDir: transcodeDir})
+
+	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
+		t.Fatalf("expected stale HLS dir to be removed, stat err=%v", err)
+	}
+}
+
 func TestInitDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -82,12 +235,11 @@ func TestInitDB(t *testing.T) {
 }
 
 func TestInitDB_DefaultPath(t *testing.T) {
-	// The production default (/config/igloo.db) is a Docker container path and
-	// cannot be created in a test environment.  Verify instead that InitDB
-	// honours DB_PATH and creates the database at the specified location.
 	tmpDir := t.TempDir()
+	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, tmpDir)
+	t.Setenv(helpers.ENV_DB_PATH, "")
+
 	dbFile := filepath.Join(tmpDir, "igloo.db")
-	t.Setenv("DB_PATH", dbFile)
 
 	app := &Application{}
 	setupTestLogger(t, app)
@@ -519,7 +671,14 @@ func setupTestApp(t *testing.T) *Application {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}
 
-	app := &Application{DB: db}
+	dataDir := t.TempDir()
+	app := &Application{
+		DB: db,
+		Config: RuntimeConfig{
+			TranscodeDir: filepath.Join(dataDir, "transcode"),
+			Port:         helpers.DEFAULT_APP_PORT,
+		},
+	}
 	setupTestLogger(t, app)
 
 	err = app.InitTables()
@@ -915,6 +1074,7 @@ func TestInitDirs(t *testing.T) {
 	for _, dir := range []string{
 		app.Settings.StaticDir,
 		app.Settings.LogsDir,
+		app.Config.TranscodeDir,
 		filepath.Join(app.Settings.StaticDir, "albums"),
 		filepath.Join(app.Settings.StaticDir, "musicians"),
 	} {

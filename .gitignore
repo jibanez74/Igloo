@@ -1,8 +1,9 @@
 # Binaries
 /server/igloo-server
 /server/api
+/server/dist/
 
-# ffprobe and ffmpeg binaries (large files, distribute separately)
+# Embedded ffprobe and ffmpeg payloads (large files, keep local)
 /server/cmd/internal/ffprobe/ffprobe_darwin_arm64
 /server/cmd/internal/ffprobe/ffprobe_linux_amd64
 /server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64
@@ -13,10 +14,9 @@
 .vscode/
 .cursor/
 
-  # Environment files
+# Environment files
 .env
 .env.local
-/compose.override.yaml
 
 # Database files and directories created by app at start up
 *.db
@@ -24,15 +24,13 @@
 *.db-shm
 *.db-wal
 /server/static/*
+/data/
+/server/data/
 
-  # Embedded frontend assets (generated during build)
-# These are copied from web/dist by the root Makefile
-# A placeholder index.html exists for backend-only builds
+# Embedded frontend assets generated during build
 /server/cmd/api/web/dist/*.html
 /server/cmd/api/web/dist/assets/
 /server/cmd/api/web/dist/vite.svg
-
-# Symlink/copy of web/dist for embedding into Go binary
 /server/cmd/api/webdist
 
 # Frontend (web)

@@ -1,9 +1,9 @@
 package ffprobe
 
 import (
-	"fmt"
-	"os"
 	"sync"
+
+	"igloo/cmd/internal/mediabin"
 )
 
 type FfprobeInterface interface {
@@ -24,7 +24,7 @@ var (
 
 // New returns a singleton ffprobe instance.
 // resolveBinaryPath is defined in build-tag-specific files:
-// embed mode extracts to a temp directory, systembin mode returns a fixed path.
+// embedded mode extracts a release payload; externalbin mode uses host ffprobe.
 func New() (FfprobeInterface, error) {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
@@ -54,9 +54,8 @@ func Cleanup() error {
 		return nil
 	}
 
-	err := os.RemoveAll(extractedDir)
-	if err != nil {
-		return fmt.Errorf("failed to cleanup ffprobe: %w", err)
+	if err := mediabin.CleanupExtracted("ffprobe", extractedDir); err != nil {
+		return err
 	}
 
 	extractedDir = ""

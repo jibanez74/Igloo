@@ -30,7 +30,6 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver for database/sql
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/sync/singleflight"
@@ -40,6 +39,7 @@ type Application struct {
 	DB                  *sql.DB
 	Queries             *database.Queries
 	Settings            *database.Setting
+	Config              RuntimeConfig
 	Logger              applogger.LoggerInterface
 	LoggerCloser        func() error
 	Ffprobe             ffprobe.FfprobeInterface
@@ -67,29 +67,18 @@ type Application struct {
 //go:embed schema.sql
 var SQL string
 
-// FrontendFS contains the embedded frontend bundle. A minimal placeholder is committed
-// so the app builds without running the frontend build. When VITE_DEV_SERVER is set,
-// ServeFrontend redirects to the Vite dev server instead of serving from here.
-// all:webdist is required because Vite can emit chunk names starting with "_" and
-// the default embed behavior skips files beginning with "_" or ".".
-//
 //go:embed all:webdist
 var FrontendFS embed.FS
 
 func main() {
 	log.Println("igloo server starting up...")
 
-	// Load .env for local development. Missing files are silently ignored;
-	// only real read or parse failures are logged.
-	err := godotenv.Load()
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("warning: failed to load .env: %v", err)
-	}
+	loadedEnvFiles, err := LoadRuntimeEnvFiles()
 	if err != nil {
-		err = godotenv.Load("../.env")
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("warning: failed to load ../.env: %v", err)
-		}
+		log.Printf("warning: %v", err)
+	}
+	for _, path := range loadedEnvFiles {
+		log.Printf("loaded environment file %s", path)
 	}
 
 	app, err := InitApp()
@@ -97,27 +86,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	port := helpers.DEFAULT_APP_PORT
-	debug := os.Getenv("DEBUG") == "true"
-	if debug {
-		portStr := os.Getenv(helpers.ENV_PORT)
-		if portStr != "" {
-			p, err := strconv.Atoi(portStr)
-			if err != nil {
-				log.Fatalf("invalid PORT value %q: %v", portStr, err)
-			}
-			port = p
-		}
-	}
-
 	app.Server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", app.Config.Port),
 		Handler: app.Router,
 	}
 
 	go app.ListenForShutdown()
 
-	log.Printf("server listening on port %d", port)
+	log.Printf("server listening on port %d", app.Config.Port)
 
 	err = app.Server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -127,21 +103,27 @@ func main() {
 
 // InitApp wires startup dependencies in dependency order.
 func InitApp() (*Application, error) {
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load runtime config: %v", err)
+	}
+
 	app := Application{
-		Wait: &sync.WaitGroup{},
+		Config: config,
+		Wait:   &sync.WaitGroup{},
 	}
 
 	ctx := context.Background()
 
 	// Logger comes first so later startup failures are captured consistently.
-	err := app.InitLogger()
+	err = app.InitLogger()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %v", err)
 	}
 
 	// Remove any leftover HLS temp directories from a previous run that did not
 	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
-	cleanupStaleHLSTempDirs(app.Logger)
+	cleanupStaleHLSTempDirs(app.Logger, app.Config)
 
 	err = app.InitDB()
 	if err != nil {
@@ -195,6 +177,16 @@ func InitApp() (*Application, error) {
 	}
 	app.FFmpeg = ffmpegApp
 
+	app.initRuntimeCaches()
+	app.initMediaClients(ctx)
+	app.startLibraryScans()
+
+	app.InitRouter()
+
+	return &app, nil
+}
+
+func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
 
 	// Eviction callback removes generated files when an HLS session ages out.
@@ -214,7 +206,9 @@ func InitApp() (*Application, error) {
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+}
 
+func (app *Application) initMediaClients(ctx context.Context) {
 	if app.Settings.TmdbKey.Valid {
 		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
 		if err != nil {
@@ -240,7 +234,9 @@ func InitApp() (*Application, error) {
 			app.Logger.Info("spotify client initialized successfully")
 		}
 	}
+}
 
+func (app *Application) startLibraryScans() {
 	if app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
 		go app.ScanMoviesLibrary()
 	}
@@ -248,17 +244,10 @@ func InitApp() (*Application, error) {
 	if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
 		go app.ScanMusicLibrary()
 	}
-
-	app.InitRouter()
-
-	return &app, nil
 }
 
 func (app *Application) InitDB() error {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = helpers.DEFAULT_DB_PATH
-	}
+	dbPath := app.Config.effectiveDBPath()
 
 	dir := filepath.Dir(dbPath)
 	err := os.MkdirAll(dir, 0755)
@@ -405,15 +394,8 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	logsDir := os.Getenv("LOGS_DIR")
-	if logsDir == "" {
-		logsDir = helpers.DEFAULT_LOGS_DIR
-	}
-
-	staticDir := os.Getenv("STATIC_DIR")
-	if staticDir == "" {
-		staticDir = helpers.DEFAULT_STATIC_DIR
-	}
+	logsDir := app.Config.effectiveLogsDir()
+	staticDir := app.Config.effectiveStaticDir()
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {
@@ -482,6 +464,18 @@ func (app *Application) InitDirs() error {
 		}
 	}
 
+	transcodeDir := app.Config.effectiveTranscodeDir()
+	if transcodeDir != "" {
+		created, err = helpers.GetOrCreateDir(transcodeDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize transcode directory: %w", err)
+		}
+
+		if created {
+			app.Logger.Info("created transcode directory", "path", transcodeDir)
+		}
+	}
+
 	app.validateMediaDir("movies", &app.Settings.MoviesDir)
 	app.validateMediaDir("shows", &app.Settings.ShowsDir)
 	app.validateMediaDir("music", &app.Settings.MusicDir)
@@ -530,13 +524,10 @@ func validateExistingDir(path string) error {
 
 // InitLogger configures stdout logging for debug mode and file-backed logging otherwise.
 func (app *Application) InitLogger() error {
-	debug := os.Getenv("DEBUG") == "true"
-	logToStdout := envBool(helpers.ENV_LOG_TO_STDOUT, debug)
+	debug := envBool("DEBUG", app.Config.Debug)
+	logToStdout := envBool(helpers.ENV_LOG_TO_STDOUT, app.Config.LogToStdout || debug)
 
-	logsDir := os.Getenv("LOGS_DIR")
-	if logsDir == "" {
-		logsDir = helpers.DEFAULT_LOGS_DIR
-	}
+	logsDir := app.Config.effectiveLogsDir()
 
 	if !logToStdout {
 		_, err := helpers.GetOrCreateDir(logsDir)
@@ -622,7 +613,7 @@ func (app *Application) InitSession() {
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = envBool(helpers.ENV_SESSION_COOKIE_SECURE, false)
+	sessionManager.Cookie.Secure = envBool(helpers.ENV_SESSION_COOKIE_SECURE, app.Config.SessionCookieSecure)
 
 	app.SessionManager = sessionManager
 
@@ -698,21 +689,6 @@ func overrideBoolSetting(target *bool, envName string) {
 	*target = parsed
 }
 
-func envBool(name string, fallback bool) bool {
-	value, ok := os.LookupEnv(name)
-	if !ok || strings.TrimSpace(value) == "" {
-		return fallback
-	}
-
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		slog.Warn("invalid boolean value for env var, using fallback", "env", name, "value", value, "fallback", fallback)
-		return fallback
-	}
-
-	return parsed
-}
-
 func (app *Application) InitRouter() {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
@@ -720,182 +696,242 @@ func (app *Application) InitRouter() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Logger)
 
-	router.With(app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
+	app.registerWebSocketRoutes(router)
 
 	router.Group(func(r chi.Router) {
 		r.Use(app.LoadAndSaveSession)
-
-		r.Route("/api", func(r chi.Router) {
-			r.Get("/health", app.HealthCheck)
-			r.Post("/auth/login", app.AuthenticateUser)
-
-			r.Group(func(r chi.Router) {
-				r.Use(app.IsAuth)
-
-				r.Route("/auth", func(r chi.Router) {
-					r.Get("/user", app.GetCurrentAuthUser)
-					r.Delete("/logout", app.DestroySession)
-				})
-
-				r.Route("/user", func(r chi.Router) {
-					r.Put("/name", app.UpdateUserName)
-					r.Put("/email", app.UpdateUserEmail)
-					r.Put("/password", app.UpdateUserPassword)
-					r.Put("/avatar", app.UpdateUserAvatar)
-					r.Post("/avatar/upload", app.UploadUserAvatar)
-					r.Delete("/", app.DeleteUserAccount)
-				})
-
-				r.Get("/static/*", app.ServeStaticFiles)
-
-				r.Route("/tmdb", func(r chi.Router) {
-					r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
-					r.Get("/movies/{id}", app.GetMovieByTmdbID)
-				})
-
-				r.Get("/search", app.SearchAll)
-				r.Route("/search", func(r chi.Router) {
-					r.Get("/", app.SearchAll)
-					r.Get("/movies", app.SearchMovies)
-					r.Get("/albums", app.SearchAlbums)
-					r.Get("/musicians", app.SearchMusicians)
-					r.Get("/tracks", app.SearchTracks)
-				})
-
-				r.Route("/movies", func(r chi.Router) {
-					r.Get("/latest", app.GetLatestMovies)
-					r.Get("/library", app.GetMoviesLibrary)
-					r.Get("/stats", app.GetMoviesStats)
-					r.Get("/liked", app.GetLikedMovies)
-					r.Get("/{id}/like-status", app.GetMovieLikeStatus)
-					r.Get("/genres", app.GetMovieGenresList)
-					r.Get("/genres/{genreId}/movies", app.GetMoviesByGenreLibrary)
-					r.Route("/playlists", func(pr chi.Router) {
-						pr.Get("/{id}/movies", app.GetMoviePlaylistMovies)
-						pr.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
-						pr.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
-						pr.Get("/", app.GetMoviePlaylists)
-						pr.Post("/", app.CreateMoviePlaylist)
-						pr.Get("/{id}", app.GetMoviePlaylist)
-						pr.Put("/{id}", app.UpdateMoviePlaylist)
-						pr.Delete("/{id}", app.DeleteMoviePlaylist)
-					})
-					r.Get("/details/{id}", app.GetMovieDetails)
-					r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
-					r.Get("/{id}/watch-progress", app.GetMovieWatchProgress)
-					r.Post("/{id}/like", app.ToggleLikeMovie)
-					r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
-					r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
-					r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
-					r.Post("/{id}/hls/session/stop", app.StopPersonalHLSSession)
-					r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
-					r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
-					r.Get("/{id}/stream", app.StreamMovie)
-					r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
-
-					r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
-					r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
-					r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
-					r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
-				})
-
-				r.Get("/users", app.GetUsers)
-
-				r.Route("/admin/users", func(r chi.Router) {
-					r.Use(app.RequireAdmin)
-					r.Get("/", app.AdminGetUsers)
-					r.Post("/", app.AdminCreateUser)
-					r.Patch("/{id}", app.AdminUpdateUser)
-					r.Delete("/{id}", app.AdminDeleteUser)
-					r.Put("/{id}/password", app.AdminResetUserPassword)
-				})
-
-				r.Route("/watch-rooms", func(r chi.Router) {
-					r.Get("/", app.GetWatchRooms)
-					r.Post("/", app.CreateWatchRoom)
-					r.Get("/{id}", app.GetWatchRoom)
-					r.Post("/{id}/join", app.JoinWatchRoom)
-					r.Get("/{id}/stream", app.StreamWatchRoomMovie)
-					r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
-					r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
-					r.Delete("/{id}", app.DeleteWatchRoom)
-				})
-
-				r.Route("/settings", func(r chi.Router) {
-					r.Get("/", app.GetSettings)
-					r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
-					r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
-					r.Get("/playback", app.GetPlaybackSettings)
-					r.Put("/playback", app.UpdatePlaybackSettings)
-					r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
-					r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
-				})
-
-				r.Route("/music", func(r chi.Router) {
-					r.Get("/stats", app.GetMusicStats)
-
-					r.Route("/albums", func(r chi.Router) {
-						r.Get("/", app.GetAlbumsAlphabetical)
-						r.Get("/details/{id}", app.GetAlbumDetails)
-						r.Get("/latest", app.GetLatestAlbums)
-						r.With(app.RequireAdmin).Delete("/{id}", app.DeleteAlbum)
-					})
-
-					r.Route("/musicians", func(r chi.Router) {
-						r.Get("/", app.GetMusiciansAlphabetical)
-						r.Get("/{id}", app.GetMusicianDetails)
-					})
-
-					r.Route("/tracks", func(r chi.Router) {
-						r.Get("/", app.GetTracksAlphabetical)
-						r.Get("/shuffle", app.GetShuffleTracks)
-						r.Get("/details/{id}", app.GetTrackByID)
-						r.Get("/{id}/stream", app.StreamTrack)
-						r.Post("/{id}/like", app.ToggleLikeTrack)
-						r.Get("/liked", app.GetLikedTracks)
-						r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
-					})
-
-					r.Route("/playlists", func(r chi.Router) {
-						r.Get("/", app.GetPlaylists)
-						r.Post("/", app.CreatePlaylist)
-						r.Get("/{id}", app.GetPlaylist)
-						r.Put("/{id}", app.UpdatePlaylist)
-						r.Delete("/{id}", app.DeletePlaylist)
-						r.Get("/{id}/tracks", app.GetPlaylistTracks)
-						r.Post("/{id}/tracks", app.AddTracksToPlaylist)
-						r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
-						r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
-						r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
-						r.Post("/{id}/collaborators", app.AddCollaborator)
-						r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
-					})
-
-					r.Route("/user-stats", func(r chi.Router) {
-						r.Post("/play", app.RecordPlayEvent)
-						r.Get("/overview", app.GetUserListeningStats)
-						r.Get("/top-tracks", app.GetUserTopTracks)
-						r.Get("/top-musicians", app.GetUserTopMusicians)
-						r.Get("/top-genres", app.GetUserTopGenres)
-						r.Get("/top-albums", app.GetUserTopAlbums)
-						r.Get("/recently-played", app.GetUserRecentlyPlayed)
-					})
-				})
-			})
-		})
-
-		// Register SPA fallback after /api routes so API paths cannot be captured.
-		r.Get("/*", app.ServeFrontend)
+		app.registerSessionRoutes(r)
 	})
 
 	app.Router = router
 }
 
+func (app *Application) registerWebSocketRoutes(router chi.Router) {
+	router.With(app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
+}
+
+func (app *Application) registerSessionRoutes(r chi.Router) {
+	app.registerAPIRoutes(r)
+
+	// Register SPA fallback after /api routes so API paths cannot be captured.
+	r.Get("/*", app.ServeFrontend)
+}
+
+func (app *Application) registerAPIRoutes(r chi.Router) {
+	r.Route("/api", func(r chi.Router) {
+		r.Get("/health", app.HealthCheck)
+		r.Post("/auth/login", app.AuthenticateUser)
+		app.registerAuthenticatedAPIRoutes(r)
+	})
+}
+
+func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
+	r.Group(func(r chi.Router) {
+		r.Use(app.IsAuth)
+
+		app.registerAuthRoutes(r)
+		app.registerUserRoutes(r)
+		r.Get("/static/*", app.ServeStaticFiles)
+		app.registerTMDBRoutes(r)
+		app.registerSearchRoutes(r)
+		app.registerMovieRoutes(r)
+		r.Get("/users", app.GetUsers)
+		app.registerAdminUserRoutes(r)
+		app.registerWatchRoomRoutes(r)
+		app.registerSettingsRoutes(r)
+		app.registerMusicRoutes(r)
+	})
+}
+
+func (app *Application) registerAuthRoutes(r chi.Router) {
+	r.Route("/auth", func(r chi.Router) {
+		r.Get("/user", app.GetCurrentAuthUser)
+		r.Delete("/logout", app.DestroySession)
+	})
+}
+
+func (app *Application) registerUserRoutes(r chi.Router) {
+	r.Route("/user", func(r chi.Router) {
+		r.Put("/name", app.UpdateUserName)
+		r.Put("/email", app.UpdateUserEmail)
+		r.Put("/password", app.UpdateUserPassword)
+		r.Put("/avatar", app.UpdateUserAvatar)
+		r.Post("/avatar/upload", app.UploadUserAvatar)
+		r.Delete("/", app.DeleteUserAccount)
+	})
+}
+
+func (app *Application) registerTMDBRoutes(r chi.Router) {
+	r.Route("/tmdb", func(r chi.Router) {
+		r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
+		r.Get("/movies/{id}", app.GetMovieByTmdbID)
+	})
+}
+
+func (app *Application) registerSearchRoutes(r chi.Router) {
+	r.Get("/search", app.SearchAll)
+	r.Route("/search", func(r chi.Router) {
+		r.Get("/", app.SearchAll)
+		r.Get("/movies", app.SearchMovies)
+		r.Get("/albums", app.SearchAlbums)
+		r.Get("/musicians", app.SearchMusicians)
+		r.Get("/tracks", app.SearchTracks)
+	})
+}
+
+func (app *Application) registerMovieRoutes(r chi.Router) {
+	r.Route("/movies", func(r chi.Router) {
+		r.Get("/latest", app.GetLatestMovies)
+		r.Get("/library", app.GetMoviesLibrary)
+		r.Get("/stats", app.GetMoviesStats)
+		r.Get("/liked", app.GetLikedMovies)
+		r.Get("/{id}/like-status", app.GetMovieLikeStatus)
+		r.Get("/genres", app.GetMovieGenresList)
+		r.Get("/genres/{genreId}/movies", app.GetMoviesByGenreLibrary)
+		app.registerMoviePlaylistRoutes(r)
+		r.Get("/details/{id}", app.GetMovieDetails)
+		r.Get("/{id}/technical-details", app.GetMovieTechnicalDetails)
+		r.Get("/{id}/watch-progress", app.GetMovieWatchProgress)
+		r.Post("/{id}/like", app.ToggleLikeMovie)
+		r.Put("/{id}/watch-progress", app.UpdateMovieWatchProgress)
+		r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
+		r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
+		r.Post("/{id}/hls/session/stop", app.StopPersonalHLSSession)
+		r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+		r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
+		r.Get("/{id}/stream", app.StreamMovie)
+		r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
+
+		r.With(app.RequireAdmin).Post("/{id}/tmdb-search", app.TmdbSearchMovies)
+		r.With(app.RequireAdmin).Put("/{id}/identify", app.IdentifyMovie)
+		r.With(app.RequireAdmin).Patch("/{id}", app.UpdateMovieMetadata)
+		r.With(app.RequireAdmin).Delete("/{id}", app.DeleteMovie)
+	})
+}
+
+func (app *Application) registerMoviePlaylistRoutes(r chi.Router) {
+	r.Route("/playlists", func(pr chi.Router) {
+		pr.Get("/{id}/movies", app.GetMoviePlaylistMovies)
+		pr.Post("/{id}/movies", app.AddMoviesToMoviePlaylist)
+		pr.Delete("/{id}/movies/{movieId}", app.RemoveMovieFromMoviePlaylist)
+		pr.Get("/", app.GetMoviePlaylists)
+		pr.Post("/", app.CreateMoviePlaylist)
+		pr.Get("/{id}", app.GetMoviePlaylist)
+		pr.Put("/{id}", app.UpdateMoviePlaylist)
+		pr.Delete("/{id}", app.DeleteMoviePlaylist)
+	})
+}
+
+func (app *Application) registerAdminUserRoutes(r chi.Router) {
+	r.Route("/admin/users", func(r chi.Router) {
+		r.Use(app.RequireAdmin)
+		r.Get("/", app.AdminGetUsers)
+		r.Post("/", app.AdminCreateUser)
+		r.Patch("/{id}", app.AdminUpdateUser)
+		r.Delete("/{id}", app.AdminDeleteUser)
+		r.Put("/{id}/password", app.AdminResetUserPassword)
+	})
+}
+
+func (app *Application) registerWatchRoomRoutes(r chi.Router) {
+	r.Route("/watch-rooms", func(r chi.Router) {
+		r.Get("/", app.GetWatchRooms)
+		r.Post("/", app.CreateWatchRoom)
+		r.Get("/{id}", app.GetWatchRoom)
+		r.Post("/{id}/join", app.JoinWatchRoom)
+		r.Get("/{id}/stream", app.StreamWatchRoomMovie)
+		r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
+		r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
+		r.Delete("/{id}", app.DeleteWatchRoom)
+	})
+}
+
+func (app *Application) registerSettingsRoutes(r chi.Router) {
+	r.Route("/settings", func(r chi.Router) {
+		r.Get("/", app.GetSettings)
+		r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
+		r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
+		r.Get("/playback", app.GetPlaybackSettings)
+		r.Put("/playback", app.UpdatePlaybackSettings)
+		r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
+		r.With(app.RequireAdmin).Post("/scan/movies", app.TriggerMovieScan)
+	})
+}
+
+func (app *Application) registerMusicRoutes(r chi.Router) {
+	r.Route("/music", func(r chi.Router) {
+		r.Get("/stats", app.GetMusicStats)
+		app.registerAlbumRoutes(r)
+		app.registerMusicianRoutes(r)
+		app.registerTrackRoutes(r)
+		app.registerPlaylistRoutes(r)
+		app.registerUserStatsRoutes(r)
+	})
+}
+
+func (app *Application) registerAlbumRoutes(r chi.Router) {
+	r.Route("/albums", func(r chi.Router) {
+		r.Get("/", app.GetAlbumsAlphabetical)
+		r.Get("/details/{id}", app.GetAlbumDetails)
+		r.Get("/latest", app.GetLatestAlbums)
+		r.With(app.RequireAdmin).Delete("/{id}", app.DeleteAlbum)
+	})
+}
+
+func (app *Application) registerMusicianRoutes(r chi.Router) {
+	r.Route("/musicians", func(r chi.Router) {
+		r.Get("/", app.GetMusiciansAlphabetical)
+		r.Get("/{id}", app.GetMusicianDetails)
+	})
+}
+
+func (app *Application) registerTrackRoutes(r chi.Router) {
+	r.Route("/tracks", func(r chi.Router) {
+		r.Get("/", app.GetTracksAlphabetical)
+		r.Get("/shuffle", app.GetShuffleTracks)
+		r.Get("/details/{id}", app.GetTrackByID)
+		r.Get("/{id}/stream", app.StreamTrack)
+		r.Post("/{id}/like", app.ToggleLikeTrack)
+		r.Get("/liked", app.GetLikedTracks)
+		r.Get("/liked-ids", app.GetLikedTrackIDsForUser)
+	})
+}
+
+func (app *Application) registerPlaylistRoutes(r chi.Router) {
+	r.Route("/playlists", func(r chi.Router) {
+		r.Get("/", app.GetPlaylists)
+		r.Post("/", app.CreatePlaylist)
+		r.Get("/{id}", app.GetPlaylist)
+		r.Put("/{id}", app.UpdatePlaylist)
+		r.Delete("/{id}", app.DeletePlaylist)
+		r.Get("/{id}/tracks", app.GetPlaylistTracks)
+		r.Post("/{id}/tracks", app.AddTracksToPlaylist)
+		r.Delete("/{id}/tracks/{trackId}", app.RemoveTrackFromPlaylist)
+		r.Put("/{id}/tracks/reorder", app.ReorderPlaylistTracks)
+		r.Get("/{id}/collaborators", app.GetPlaylistCollaborators)
+		r.Post("/{id}/collaborators", app.AddCollaborator)
+		r.Delete("/{id}/collaborators/{userId}", app.RemoveCollaborator)
+	})
+}
+
+func (app *Application) registerUserStatsRoutes(r chi.Router) {
+	r.Route("/user-stats", func(r chi.Router) {
+		r.Post("/play", app.RecordPlayEvent)
+		r.Get("/overview", app.GetUserListeningStats)
+		r.Get("/top-tracks", app.GetUserTopTracks)
+		r.Get("/top-musicians", app.GetUserTopMusicians)
+		r.Get("/top-genres", app.GetUserTopGenres)
+		r.Get("/top-albums", app.GetUserTopAlbums)
+		r.Get("/recently-played", app.GetUserRecentlyPlayed)
+	})
+}
+
 // cleanupStaleHLSTempDirs removes leftover igloo-hls-* directories from the
-// system temp directory. These accumulate when the server is killed without a
-// graceful shutdown (e.g., systemd SIGKILL escalation, crash, power loss).
-func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface) {
-	pattern := filepath.Join(os.TempDir(), "igloo-hls-*")
+// configured transcode workspace. These accumulate when the server is killed
+// without a graceful shutdown (e.g., systemd SIGKILL escalation, crash, power loss).
+func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface, config RuntimeConfig) {
+	transcodeDir := config.effectiveTranscodeDir()
+	pattern := filepath.Join(transcodeDir, "igloo-hls-*")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		logger.Warn("failed to glob stale HLS temp dirs", "error", err)
@@ -926,19 +962,43 @@ func (app *Application) ListenForShutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if app.Server != nil {
-		err := app.Server.Shutdown(ctx)
-		if err != nil {
-			app.Logger.Error("failed to shutdown server", "error", err)
-		}
-	}
+	app.shutdownHTTPServer(ctx)
 
 	app.Logger.Info("running clean up tasks...")
 
+	app.shutdownWatchRoomHub()
+	app.cleanupHLSSessions()
+
+	// Background tasks may still need database and logger access.
+	app.Wait.Wait()
+
+	app.flushRuntimeCaches()
+	app.clearMediaClientCaches()
+	app.cleanupMediaBinaries()
+	app.closeDatabase()
+	app.closeLogger()
+
+	os.Exit(0)
+}
+
+func (app *Application) shutdownHTTPServer(ctx context.Context) {
+	if app.Server == nil {
+		return
+	}
+
+	err := app.Server.Shutdown(ctx)
+	if err != nil {
+		app.Logger.Error("failed to shutdown server", "error", err)
+	}
+}
+
+func (app *Application) shutdownWatchRoomHub() {
 	if app.WatchRoomHub != nil {
 		app.WatchRoomHub.Shutdown()
 	}
+}
 
+func (app *Application) cleanupHLSSessions() {
 	// Stop FFmpeg sessions before cleaning up the FFmpeg binary.
 	if app.HLSSessionCache != nil {
 		count := 0
@@ -953,10 +1013,9 @@ func (app *Application) ListenForShutdown() {
 		}
 		app.HLSSessionCache.Flush()
 	}
+}
 
-	// Background tasks may still need database and logger access.
-	app.Wait.Wait()
-
+func (app *Application) flushRuntimeCaches() {
 	if app.RemuxSafetyCache != nil {
 		app.RemuxSafetyCache.Flush()
 	}
@@ -966,13 +1025,18 @@ func (app *Application) ListenForShutdown() {
 	if app.RoomHLSTombstone != nil {
 		app.RoomHLSTombstone.Flush()
 	}
+}
+
+func (app *Application) clearMediaClientCaches() {
 	if app.Spotify != nil {
 		app.Spotify.ClearAllCaches()
 	}
 	if app.Tmdb != nil {
 		app.Tmdb.ClearCache()
 	}
+}
 
+func (app *Application) cleanupMediaBinaries() {
 	err := ffprobe.Cleanup()
 	if err != nil {
 		app.Logger.Error("failed to cleanup ffprobe", "error", err)
@@ -982,21 +1046,23 @@ func (app *Application) ListenForShutdown() {
 	if err != nil {
 		app.Logger.Error("failed to cleanup ffmpeg", "error", err)
 	}
+}
 
+func (app *Application) closeDatabase() {
 	if app.DB != nil {
-		err = app.DB.Close()
+		err := app.DB.Close()
 		if err != nil {
 			app.Logger.Error("failed to close database", "error", err)
 		}
 	}
+}
 
+func (app *Application) closeLogger() {
 	// Close the logger last so prior cleanup failures can still be logged.
 	if app.LoggerCloser != nil {
-		err = app.LoggerCloser()
+		err := app.LoggerCloser()
 		if err != nil {
 			log.Printf("failed to close logger: %v", err)
 		}
 	}
-
-	os.Exit(0)
 }

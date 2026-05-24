@@ -49,15 +49,23 @@ const (
 	ENV_DEFAULT_ADMIN_PASSWORD = "DEFAULT_ADMIN_PASSWORD"
 
 	// app startup defaults (used by cmd/api/main.go for InitDB / InitLogger / InitSettings)
-	DEFAULT_APP_PORT   = 8080
-	DEFAULT_DB_PATH    = "/config/igloo.db"
-	DEFAULT_STATIC_DIR = "/config/static"
-	DEFAULT_LOGS_DIR   = "/config/logs"
-	DEFAULT_MOVIES_DIR = "/media/movies"
-	DEFAULT_SHOWS_DIR  = "/media/shows"
-	DEFAULT_MUSIC_DIR  = "/media/music"
+	DEFAULT_APP_PORT      = 8080
+	DEFAULT_DATA_DIR      = "./data"
+	DEFAULT_DB_PATH       = "data/igloo.db"
+	DEFAULT_STATIC_DIR    = "data/static"
+	DEFAULT_LOGS_DIR      = "data/logs"
+	DEFAULT_TRANSCODE_DIR = "data/transcode"
+	DEFAULT_MOVIES_DIR    = "/media/movies"
+	DEFAULT_SHOWS_DIR     = "/media/shows"
+	DEFAULT_MUSIC_DIR     = "/media/music"
 
 	// env vars consumed at startup
+	ENV_IGLOO_ENV_FILE        = "IGLOO_ENV_FILE"
+	ENV_IGLOO_DATA_DIR        = "IGLOO_DATA_DIR"
+	ENV_DB_PATH               = "DB_PATH"
+	ENV_STATIC_DIR            = "STATIC_DIR"
+	ENV_LOGS_DIR              = "LOGS_DIR"
+	ENV_TRANSCODE_DIR         = "TRANSCODE_DIR"
 	ENV_SESSION_COOKIE_SECURE = "SESSION_COOKIE_SECURE"
 	ENV_LOG_TO_STDOUT         = "LOG_TO_STDOUT"
 	ENV_PORT                  = "PORT"
@@ -100,20 +108,20 @@ const (
 	// HLS remux preflight checks the first few complete segments before the
 	// manifest is served so copied H.264 streams can fall back to transcode
 	// before playback begins.
-	HLS_REMUX_PREVALIDATE_SEGMENTS      = 4
-	HLS_REMUX_PREVALIDATE_TIMEOUT       = 30 * time.Second
-	HLS_REMUX_SAFETY_CACHE_TTL          = 24 * time.Hour
-	HLS_REMUX_SAFETY_CACHE_SWEEP        = 1 * time.Hour
-	ENV_HLS_MAX_CPU_TRANSCODES          = "HLS_MAX_CPU_TRANSCODES"
-	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR   = 4
-	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC  = 5
-	HLS_PLAYBACK_SESSION_ID_PATTERN     = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+	HLS_REMUX_PREVALIDATE_SEGMENTS     = 4
+	HLS_REMUX_PREVALIDATE_TIMEOUT      = 30 * time.Second
+	HLS_REMUX_SAFETY_CACHE_TTL         = 24 * time.Hour
+	HLS_REMUX_SAFETY_CACHE_SWEEP       = 1 * time.Hour
+	ENV_HLS_MAX_CPU_TRANSCODES         = "HLS_MAX_CPU_TRANSCODES"
+	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR  = 4
+	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC = 5
+	HLS_PLAYBACK_SESSION_ID_PATTERN    = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
 
 	// HDR transfer characteristics as reported by ffprobe (color_transfer field).
 	// Used to detect HDR sources that require tone-mapping when transcoding to SDR.
-	HDR_TRANSFER_PQ                = "smpte2084"      // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
-	HDR_TRANSFER_HLG               = "arib-std-b67"   // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
-	HLS_STDERR_TAIL_LINES          = 20               // lines of FFmpeg stderr kept for error reporting
+	HDR_TRANSFER_PQ                = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
+	HDR_TRANSFER_HLG               = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
+	HLS_STDERR_TAIL_LINES          = 20             // lines of FFmpeg stderr kept for error reporting
 	HLS_STDERR_SCANNER_BUFFER_SIZE = 64 * 1024
 	HLS_STDERR_SCANNER_MAX_TOKEN   = 1024 * 1024
 	HLS_SESSION_TTL                = 30 * time.Minute // TTL for cached HLS session entries
