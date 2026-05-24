@@ -12,10 +12,8 @@ import (
 
 type TmdbInterface interface {
 	GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) error
-	GetTmdbMovieByTitle(ctx context.Context, movie *TmdbMovie) error
 	SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error)
 	GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error)
-	GetTmdbPopularMovies(ctx context.Context, region ...string) ([]*TmdbMovie, error)
 	ClearCache()
 }
 

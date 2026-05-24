@@ -18,7 +18,11 @@ func (c *spotifyClient) getArtist(key string) (*spotify.FullArtist, bool) {
 	if !found {
 		return nil, false
 	}
-	return v.(*spotify.FullArtist), true
+	artist, ok := v.(*spotify.FullArtist)
+	if !ok {
+		return nil, false
+	}
+	return artist, true
 }
 
 func (c *spotifyClient) setArtist(key string, artist *spotify.FullArtist) {
@@ -30,22 +34,18 @@ func (c *spotifyClient) getAlbum(key string) (*spotify.FullAlbum, bool) {
 	if !found {
 		return nil, false
 	}
-	return v.(*spotify.FullAlbum), true
+	album, ok := v.(*spotify.FullAlbum)
+	if !ok {
+		return nil, false
+	}
+	return album, true
 }
 
 func (c *spotifyClient) setAlbum(key string, album *spotify.FullAlbum) {
 	c.albumCache.Set(key, album, cache.DefaultExpiration)
 }
 
-func (c *spotifyClient) clearArtistCache() {
-	c.artistCache.Flush()
-}
-
-func (c *spotifyClient) clearAlbumCache() {
-	c.albumCache.Flush()
-}
-
 func (c *spotifyClient) ClearAllCaches() {
-	c.clearArtistCache()
-	c.clearAlbumCache()
+	c.artistCache.Flush()
+	c.albumCache.Flush()
 }

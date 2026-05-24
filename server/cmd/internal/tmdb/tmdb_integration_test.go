@@ -125,46 +125,6 @@ func TestGetTmdbMovieByIDIntegration(t *testing.T) {
 	})
 }
 
-func TestGetTmdbMovieByTitleIntegration(t *testing.T) {
-	apiKey := loadIntegrationEnv(t)
-
-	client, err := New(apiKey)
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	t.Run("returns error when title is empty", func(t *testing.T) {
-		movie := &TmdbMovie{Title: ""}
-		err := client.GetTmdbMovieByTitle(context.Background(), movie)
-		if err == nil {
-			t.Error("Expected error when title is empty")
-		}
-	})
-
-	t.Run("fetches movie by title", func(t *testing.T) {
-		movie := &TmdbMovie{Title: "Inception"}
-		err := client.GetTmdbMovieByTitle(context.Background(), movie)
-		if err != nil {
-			t.Fatalf("Failed to get movie by title: %v", err)
-		}
-
-		if movie.TmdbID == 0 {
-			t.Error("Expected TmdbID to be populated")
-		}
-		if movie.Title == "" {
-			t.Error("Expected title to be populated")
-		}
-	})
-
-	t.Run("returns error for non-existent movie title", func(t *testing.T) {
-		movie := &TmdbMovie{Title: "xyznonexistentmovietitle12345"}
-		err := client.GetTmdbMovieByTitle(context.Background(), movie)
-		if err == nil {
-			t.Error("Expected error for non-existent movie title")
-		}
-	})
-}
-
 func TestSearchMoviesByTitleAndYearIntegration(t *testing.T) {
 	apiKey := loadIntegrationEnv(t)
 
@@ -243,39 +203,4 @@ func TestGetMoviesInTheatersIntegration(t *testing.T) {
 	if movies[0].Title == "" {
 		t.Error("Expected title to be populated")
 	}
-}
-
-func TestGetTmdbPopularMoviesIntegration(t *testing.T) {
-	apiKey := loadIntegrationEnv(t)
-
-	client, err := New(apiKey)
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	t.Run("fetches popular movies with default region", func(t *testing.T) {
-		movies, err := client.GetTmdbPopularMovies(context.Background())
-		if err != nil {
-			t.Fatalf("Failed to get popular movies: %v", err)
-		}
-		if len(movies) == 0 {
-			t.Error("Expected at least one popular movie")
-		}
-		if movies[0].TmdbID == 0 {
-			t.Error("Expected TmdbID to be populated")
-		}
-		if movies[0].Title == "" {
-			t.Error("Expected title to be populated")
-		}
-	})
-
-	t.Run("fetches popular movies with custom region", func(t *testing.T) {
-		movies, err := client.GetTmdbPopularMovies(context.Background(), "GB")
-		if err != nil {
-			t.Fatalf("Failed to get popular movies for GB: %v", err)
-		}
-		if len(movies) == 0 {
-			t.Error("Expected at least one popular movie for GB region")
-		}
-	})
 }

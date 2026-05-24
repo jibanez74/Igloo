@@ -58,19 +58,11 @@ func (t *shutdownTestTmdb) GetTmdbMovieByID(_ context.Context, _ *tmdbapi.TmdbMo
 	return nil
 }
 
-func (t *shutdownTestTmdb) GetTmdbMovieByTitle(_ context.Context, _ *tmdbapi.TmdbMovie) error {
-	return nil
-}
-
 func (t *shutdownTestTmdb) SearchMoviesByTitleAndYear(_ context.Context, _ string, _ ...int) ([]tmdbapi.TmdbMovie, error) {
 	return nil, nil
 }
 
 func (t *shutdownTestTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdbapi.TmdbMovie, error) {
-	return nil, nil
-}
-
-func (t *shutdownTestTmdb) GetTmdbPopularMovies(_ context.Context, _ ...string) ([]*tmdbapi.TmdbMovie, error) {
 	return nil, nil
 }
 

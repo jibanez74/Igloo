@@ -149,10 +149,9 @@ func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) err
 	}
 
 	params := url.Values{}
-	params.Add("api_key", t.key)
 	params.Add("append_to_response", "credits,videos,release_dates")
 
-	requestURL := fmt.Sprintf("%s/movie/%d?%s", t.baseURL, movie.TmdbID, params.Encode())
+	requestURL := t.requestURL(fmt.Sprintf("/movie/%d", movie.TmdbID), params)
 
 	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
@@ -173,50 +172,12 @@ func (t *tmdbClient) GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) err
 	return nil
 }
 
-func (t *tmdbClient) GetTmdbMovieByTitle(ctx context.Context, movie *TmdbMovie) error {
-	if movie.Title == "" {
-		return errors.New("movie title is required")
-	}
-
-	params := url.Values{}
-	params.Add("api_key", t.key)
-	params.Add("query", movie.Title)
-	params.Add("include_adult", "false")
-
-	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
-
-	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
-	if err != nil {
-		return err
-	}
-	if statusCode != http.StatusOK {
-		return tmdbStatusError(statusCode, "unable to search movie by title from tmdb")
-	}
-
-	var searchResult struct {
-		Results []TmdbMovie `json:"results"`
-	}
-
-	err = json.Unmarshal(bodyBytes, &searchResult)
-	if err != nil {
-		return err
-	}
-
-	if len(searchResult.Results) == 0 {
-		return errors.New("no movie found with the given title")
-	}
-
-	*movie = searchResult.Results[0]
-	return nil
-}
-
 func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error) {
 	if title == "" {
 		return nil, errors.New("movie title is required")
 	}
 
 	params := url.Values{}
-	params.Add("api_key", t.key)
 	params.Add("query", title)
 	params.Add("include_adult", "false")
 
@@ -225,109 +186,61 @@ func (t *tmdbClient) SearchMoviesByTitleAndYear(ctx context.Context, title strin
 		params.Add("year", fmt.Sprintf("%d", year[0]))
 	}
 
-	requestURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
-
-	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
-	if err != nil {
-		return nil, err
-	}
-	if statusCode != http.StatusOK {
-		return nil, tmdbStatusError(statusCode, "unable to search movies from tmdb")
-	}
-
-	var searchResult struct {
-		Results []TmdbMovie `json:"results"`
-	}
-
-	err = json.Unmarshal(bodyBytes, &searchResult)
+	results, err := t.getMovieList(ctx, "/search/movie", params, "unable to search movies from tmdb")
 	if err != nil {
 		return nil, err
 	}
 
 	// If the year-filtered search returned nothing, retry without the year constraint.
-	if len(searchResult.Results) == 0 && hasYear {
+	if len(results) == 0 && hasYear {
 		params.Del("year")
-		broadURL := fmt.Sprintf("%s/search/movie?%s", t.baseURL, params.Encode())
-
-		bodyBytes, statusCode, err = t.getJSON(ctx, broadURL)
-		if err != nil {
-			return nil, err
-		}
-		if statusCode != http.StatusOK {
-			return nil, tmdbStatusError(statusCode, "unable to search movies from tmdb")
-		}
-
-		err = json.Unmarshal(bodyBytes, &searchResult)
+		results, err = t.getMovieList(ctx, "/search/movie", params, "unable to search movies from tmdb")
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if len(searchResult.Results) == 0 {
+	if len(results) == 0 {
 		return nil, errors.New("no movies found with the given query")
 	}
 
-	return searchResult.Results, nil
+	return results, nil
 }
 
 func (t *tmdbClient) GetMoviesInTheaters(ctx context.Context) ([]*TmdbMovie, error) {
 	params := url.Values{}
-	params.Add("api_key", t.key)
 	params.Add("language", "en-US")
 	params.Add("page", "1")
 	params.Add("region", "US")
 
-	requestURL := fmt.Sprintf("%s/movie/now_playing?%s", t.baseURL, params.Encode())
-
-	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
-	if err != nil {
-		return nil, err
-	}
-	if statusCode != http.StatusOK {
-		return nil, tmdbStatusError(statusCode, "unable to get movies in theaters from tmdb")
-	}
-
-	var response struct {
-		Results []TmdbMovie `json:"results"`
-	}
-
-	err = json.Unmarshal(bodyBytes, &response)
+	results, err := t.getMovieList(ctx, "/movie/now_playing", params, "unable to get movies in theaters from tmdb")
 	if err != nil {
 		return nil, err
 	}
 
-	if len(response.Results) == 0 {
+	if len(results) == 0 {
 		return nil, errors.New("no movies found in theaters")
 	}
 
-	movies := make([]*TmdbMovie, len(response.Results))
-	for i := range response.Results {
-		movies[i] = &response.Results[i]
-	}
-
-	return movies, nil
+	return tmdbMoviePointers(results), nil
 }
 
-func (t *tmdbClient) GetTmdbPopularMovies(ctx context.Context, region ...string) ([]*TmdbMovie, error) {
-	params := url.Values{}
-	params.Add("api_key", t.key)
-	params.Add("language", "en-US")
-	params.Add("page", "1")
-
-	regionCode := "US"
-	if len(region) > 0 && region[0] != "" {
-		regionCode = region[0]
+func (t *tmdbClient) requestURL(path string, params url.Values) string {
+	if params == nil {
+		params = url.Values{}
 	}
-	params.Add("region", regionCode)
+	params.Set("api_key", t.key)
+	return fmt.Sprintf("%s%s?%s", t.baseURL, path, params.Encode())
+}
 
-	requestURL := fmt.Sprintf("%s/movie/popular?%s", t.baseURL, params.Encode())
-
+func (t *tmdbClient) getMovieList(ctx context.Context, path string, params url.Values, statusFallback string) ([]TmdbMovie, error) {
+	requestURL := t.requestURL(path, params)
 	bodyBytes, statusCode, err := t.getJSON(ctx, requestURL)
 	if err != nil {
 		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, tmdbStatusError(statusCode, "unable to get popular movies from tmdb")
+		return nil, tmdbStatusError(statusCode, statusFallback)
 	}
 
 	var response struct {
@@ -339,16 +252,16 @@ func (t *tmdbClient) GetTmdbPopularMovies(ctx context.Context, region ...string)
 		return nil, err
 	}
 
-	if len(response.Results) == 0 {
-		return nil, errors.New("no popular movies found")
+	return response.Results, nil
+}
+
+func tmdbMoviePointers(movies []TmdbMovie) []*TmdbMovie {
+	ptrs := make([]*TmdbMovie, len(movies))
+	for i := range movies {
+		ptrs[i] = &movies[i]
 	}
 
-	movies := make([]*TmdbMovie, len(response.Results))
-	for i := range response.Results {
-		movies[i] = &response.Results[i]
-	}
-
-	return movies, nil
+	return ptrs
 }
 
 func (t *tmdbClient) getJSON(ctx context.Context, requestURL string) ([]byte, int, error) {
