@@ -3,6 +3,8 @@ WEB_DIR=../web
 WEB_DIST=$(WEB_DIR)/dist
 WEB_EMBED_DIR=cmd/api/webdist
 DIST_DIR=dist
+PROD_PID_FILE=$(DIST_DIR)/$(BINARY_NAME).pid
+PROD_LOG_FILE=$(DIST_DIR)/$(BINARY_NAME).log
 GO_TAGS=sqlite_fts5
 DEV_TEST_TAGS=externalbin sqlite_fts5
 LDFLAGS=-s -w
@@ -17,7 +19,7 @@ FFMPEG_PAYLOAD=cmd/internal/ffmpeg/ffmpeg_$(PAYLOAD_SUFFIX)
 FFPROBE_PAYLOAD=cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 SUPPORTED_PLATFORMS=linux-amd64 darwin-arm64
 
-.PHONY: sync-schema generate build-web prepare-web prepare-test-webdist check-package-platform check-media-payloads check-external-bins dev build package package-linux-amd64 package-darwin-arm64 run clean start stop restart test test-ci
+.PHONY: sync-schema generate build-web prepare-web prepare-test-webdist check-package-platform check-media-payloads check-external-bins dev build package package-linux-amd64 package-darwin-arm64 run prod prod-stop clean start stop restart test test-ci
 
 ## sync-schema: Copy schema from sqlc to cmd/api for embedding.
 sync-schema:
@@ -99,6 +101,50 @@ package-darwin-arm64:
 run: build
 	@echo "Starting $(BINARY_NAME)..."
 	@./$(BINARY_NAME)
+
+## prod: Build and start the complete production stack in the background.
+prod: build
+	@mkdir -p $(DIST_DIR)
+	@if [ -f "$(PROD_PID_FILE)" ] && kill -0 "$$(cat $(PROD_PID_FILE))" 2>/dev/null; then \
+		echo "$(BINARY_NAME) is already running with PID $$(cat $(PROD_PID_FILE))."; \
+		exit 1; \
+	fi
+	@echo "Starting $(BINARY_NAME) in production mode..."
+	@nohup env VITE_DEV_SERVER= ./$(BINARY_NAME) > "$(PROD_LOG_FILE)" 2>&1 & echo $$! > "$(PROD_PID_FILE)"
+	@sleep 1
+	@if ! kill -0 "$$(cat $(PROD_PID_FILE))" 2>/dev/null; then \
+		echo "$(BINARY_NAME) exited during startup. See server/$(PROD_LOG_FILE)."; \
+		rm -f "$(PROD_PID_FILE)"; \
+		exit 1; \
+	fi
+	@echo "Started $(BINARY_NAME) with PID $$(cat $(PROD_PID_FILE))."
+	@echo "Logs: server/$(PROD_LOG_FILE)"
+
+## prod-stop: Stop the production stack started by make prod.
+prod-stop:
+	@if [ ! -f "$(PROD_PID_FILE)" ]; then \
+		echo "No production PID file found at server/$(PROD_PID_FILE)."; \
+		exit 0; \
+	fi
+	@pid="$$(cat $(PROD_PID_FILE))"; \
+	if kill -0 "$$pid" 2>/dev/null; then \
+		echo "Stopping $(BINARY_NAME) with PID $$pid..."; \
+		kill -TERM "$$pid"; \
+		for _ in 1 2 3 4 5 6 7 8 9 10; do \
+			if ! kill -0 "$$pid" 2>/dev/null; then \
+				break; \
+			fi; \
+			sleep 1; \
+		done; \
+		if kill -0 "$$pid" 2>/dev/null; then \
+			echo "$(BINARY_NAME) did not stop after 10 seconds."; \
+			exit 1; \
+		fi; \
+	else \
+		echo "Removing stale PID file for PID $$pid."; \
+	fi; \
+	rm -f "$(PROD_PID_FILE)"; \
+	echo "Stopped."
 
 ## clean: Remove generated binaries, packages, and frontend build output.
 clean:
