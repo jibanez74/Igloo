@@ -147,7 +147,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			}
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Greatest Hits", "Artist B")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Greatest Hits", "Artist B"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -168,7 +168,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			writeJSON(t, w, fullAlbumJSON("answer123", "Love Yourself 結 'Answer'"))
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Love Yourself Answer", "BTS")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Love Yourself Answer", "BTS"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -196,7 +196,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			writeJSON(t, w, fullAlbumJSON("meteora123", "Meteora"))
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Meteora (Deluxe Edition)", "LINKIN PARK")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Meteora (Deluxe Edition)", "LINKIN PARK"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -223,7 +223,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			},
 		}
 
-		album, info := selectBestAlbumMatch("Target Title", "Expected Artist", albums, "query", "album_field_search")
+		album, info := selectBestAlbumMatch("Target Title", "Expected Artist", 0, albums, "query", "album_field_search")
 		if album != nil {
 			t.Fatalf("album = %#v, want nil", album)
 		}

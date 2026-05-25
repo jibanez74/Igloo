@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -32,10 +34,14 @@ type stubSpotifyLookup struct {
 
 type stubMusicScannerSpotify struct {
 	artistLookups map[string]stubSpotifyLookup
+	album         *spotifylib.FullAlbum
+	albumErr      error
+	albumInputs   []spotifyapi.AlbumSearchInput
 }
 
-func (s *stubMusicScannerSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotifylib.FullAlbum, error) {
-	return nil, nil
+func (s *stubMusicScannerSpotify) SearchAndGetAlbumDetails(_ context.Context, input spotifyapi.AlbumSearchInput) (*spotifylib.FullAlbum, error) {
+	s.albumInputs = append(s.albumInputs, input)
+	return s.album, s.albumErr
 }
 
 func (s *stubMusicScannerSpotify) SearchArtistByName(_ context.Context, artistName string) (*spotifylib.FullArtist, error) {
@@ -126,6 +132,39 @@ func newTestTrackMetadata(artist string) *ffprobe.FfprobeResult {
 			},
 		},
 	}
+}
+
+func newTestAlbumTrackMetadata(artist, album string) *ffprobe.FfprobeResult {
+	metadata := newTestTrackMetadata(artist)
+	metadata.Format.Tags.Album = album
+	metadata.Format.Tags.AlbumArtist = artist
+	metadata.Format.Tags.Date = "2020"
+	return metadata
+}
+
+func newStubAlbum(id, name, coverURL string) *spotifylib.FullAlbum {
+	return &spotifylib.FullAlbum{
+		SimpleAlbum: spotifylib.SimpleAlbum{
+			ID:          spotifylib.ID(id),
+			Name:        name,
+			ReleaseDate: "2020-01-01",
+			Images:      []spotifylib.Image{{URL: coverURL, Width: 640, Height: 640}},
+			TotalTracks: 1,
+		},
+		Popularity: 75,
+	}
+}
+
+func albumCover(t *testing.T, db *sql.DB, title string) sql.NullString {
+	t.Helper()
+
+	var cover sql.NullString
+	err := db.QueryRow("SELECT cover FROM albums WHERE title = ?", title).Scan(&cover)
+	if err != nil {
+		t.Fatalf("query album cover: %v", err)
+	}
+
+	return cover
 }
 
 func musicianNames(t *testing.T, db *sql.DB) []string {
@@ -297,5 +336,236 @@ func TestProcessTrackFile_ReturnsErrorWhenSplitArtistPersistenceFails(t *testing
 	}
 	if !strings.Contains(err.Error(), `compound musician failed for "Charlie Puth"`) {
 		t.Fatalf("error = %q, want compound musician failure", err)
+	}
+}
+
+func TestProcessTrackFile_StoresSpotifyAlbumCover(t *testing.T) {
+	probe := &stubMusicScannerFfprobe{
+		result: newTestAlbumTrackMetadata("The Example", "Example Album"),
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		album: newStubAlbum("example-album", "Example Album", "https://example.com/cover.jpg"),
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+	app.Settings = &database.Setting{
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = app.processTrackFile(context.Background(), qtx, "/music/example.mp3", "mp3")
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("processTrackFile failed: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	cover := albumCover(t, app.DB, "Example Album")
+	if !cover.Valid || cover.String != "https://example.com/cover.jpg" {
+		t.Fatalf("cover = %#v, want Spotify cover URL", cover)
+	}
+	if len(spotifyClient.albumInputs) != 1 {
+		t.Fatalf("albumInputs len = %d, want 1", len(spotifyClient.albumInputs))
+	}
+	input := spotifyClient.albumInputs[0]
+	if input.Title != "Example Album" || input.Artist != "The Example" || input.Year != 2020 {
+		t.Fatalf("album input = %+v, want title/artist/year from tags", input)
+	}
+	if len(input.TrackTitles) != 1 || input.TrackTitles[0] != "Test Song" {
+		t.Fatalf("TrackTitles = %#v, want %#v", input.TrackTitles, []string{"Test Song"})
+	}
+}
+
+func TestProcessTrackFile_UsesFolderAlbumArtworkWhenSpotifyDoesNotMatch(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "track.mp3")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+	err = os.WriteFile(filepath.Join(musicDir, "cover.jpg"), []byte("cover"), 0o644)
+	if err != nil {
+		t.Fatalf("write cover: %v", err)
+	}
+
+	probe := &stubMusicScannerFfprobe{
+		result: newTestAlbumTrackMetadata("The Example", "Local Cover Album"),
+	}
+	app := newMusicScannerTestApp(t, probe, nil)
+	app.Settings = &database.Setting{
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = app.processTrackFile(context.Background(), qtx, trackPath, "mp3")
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("processTrackFile failed: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	cover := albumCover(t, app.DB, "Local Cover Album")
+	if !cover.Valid || !strings.HasPrefix(cover.String, "/api/static/albums/album-") {
+		t.Fatalf("cover = %#v, want local static album cover", cover)
+	}
+
+	coverPath := filepath.Join(app.Settings.StaticDir, strings.TrimPrefix(cover.String, "/api/static/"))
+	got, err := os.ReadFile(coverPath)
+	if err != nil {
+		t.Fatalf("read copied cover: %v", err)
+	}
+	if string(got) != "cover" {
+		t.Fatalf("copied cover = %q, want %q", got, "cover")
+	}
+}
+
+func TestProcessTrackFile_ExtractsEmbeddedAlbumArtwork(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "track.mp3")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+
+	metadata := newTestAlbumTrackMetadata("The Example", "Embedded Cover Album")
+	metadata.Streams = append(metadata.Streams, ffprobe.Stream{
+		Index:     1,
+		CodecName: "mjpeg",
+		CodecType: "video",
+		Disposition: ffprobe.StreamDisposition{
+			AttachedPic: 1,
+		},
+	})
+	probe := &stubMusicScannerFfprobe{
+		result: metadata,
+	}
+	app := newMusicScannerTestApp(t, probe, nil)
+	app.FFmpeg = &fakeFFmpeg{}
+	app.Settings = &database.Setting{
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = app.processTrackFile(context.Background(), qtx, trackPath, "mp3")
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("processTrackFile failed: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	cover := albumCover(t, app.DB, "Embedded Cover Album")
+	if !cover.Valid || !strings.HasSuffix(cover.String, ".jpg") {
+		t.Fatalf("cover = %#v, want extracted jpg cover", cover)
+	}
+
+	coverPath := filepath.Join(app.Settings.StaticDir, strings.TrimPrefix(cover.String, "/api/static/"))
+	got, err := os.ReadFile(coverPath)
+	if err != nil {
+		t.Fatalf("read extracted cover: %v", err)
+	}
+	if string(got) != "image" {
+		t.Fatalf("extracted cover = %q, want %q", got, "image")
+	}
+}
+
+func TestScanMusicLibrary_BackfillsMissingAlbumCoverForUnchangedTrack(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "track.mp3")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+	err = os.WriteFile(filepath.Join(musicDir, "folder.jpg"), []byte("folder-cover"), 0o644)
+	if err != nil {
+		t.Fatalf("write cover: %v", err)
+	}
+
+	probe := &stubMusicScannerFfprobe{
+		err: errors.New("ffprobe should not run for unchanged track with folder art"),
+	}
+	app := newMusicScannerTestApp(t, probe, nil)
+	app.Settings = &database.Setting{
+		MusicDir:  sql.NullString{String: musicDir, Valid: true},
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	album, err := app.Queries.UpsertAlbum(context.Background(), database.UpsertAlbumParams{
+		Title:     "Backfill Album",
+		SortTitle: "Backfill Album",
+		Musician:  sql.NullString{String: "The Example", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert album: %v", err)
+	}
+
+	info, err := os.Stat(trackPath)
+	if err != nil {
+		t.Fatalf("stat track: %v", err)
+	}
+	_, err = app.Queries.UpsertTrack(context.Background(), database.UpsertTrackParams{
+		Title:         "Backfill Song",
+		SortTitle:     "Backfill Song",
+		FilePath:      trackPath,
+		FileName:      filepath.Base(trackPath),
+		Container:     "mp3",
+		MimeType:      "audio/mpeg",
+		Codec:         "mp3",
+		Size:          info.Size(),
+		TrackIndex:    1,
+		Duration:      180000,
+		Disc:          1,
+		Channels:      "stereo",
+		ChannelLayout: "stereo",
+		BitRate:       320000,
+		Profile:       "Layer 3",
+		AlbumID:       sql.NullInt64{Int64: album.ID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("upsert track: %v", err)
+	}
+
+	app.ScanMusicLibrary()
+
+	updatedAlbum, err := app.Queries.GetAlbumByID(context.Background(), album.ID)
+	if err != nil {
+		t.Fatalf("get album: %v", err)
+	}
+	if albumCoverMissing(updatedAlbum) {
+		t.Fatalf("album cover is still missing after scan")
+	}
+
+	coverPath := filepath.Join(app.Settings.StaticDir, strings.TrimPrefix(updatedAlbum.Cover.String, "/api/static/"))
+	got, err := os.ReadFile(coverPath)
+	if err != nil {
+		t.Fatalf("read backfilled cover: %v", err)
+	}
+	if string(got) != "folder-cover" {
+		t.Fatalf("backfilled cover = %q, want %q", got, "folder-cover")
 	}
 }

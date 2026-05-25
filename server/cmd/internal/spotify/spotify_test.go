@@ -143,6 +143,13 @@ func requireStringSlice(t *testing.T, got []string, want []string) {
 	}
 }
 
+func albumSearchInput(title, artist string) AlbumSearchInput {
+	return AlbumSearchInput{
+		Title:  title,
+		Artist: artist,
+	}
+}
+
 func artistSearchJSON(id, name string) interface{} {
 	return artistSearchItemsJSON(artistItemJSON(id, name))
 }
@@ -192,6 +199,35 @@ func fullAlbumJSON(id, name string) interface{} {
 		"uri":                    "",
 		"available_markets":      []interface{}{},
 	}
+}
+
+func fullAlbumJSONWithTracks(id, name string, tracks ...string) interface{} {
+	trackItems := make([]map[string]interface{}, 0, len(tracks))
+	for index, track := range tracks {
+		trackItems = append(trackItems, map[string]interface{}{
+			"id":                fmt.Sprintf("%s-track-%d", id, index+1),
+			"name":              track,
+			"type":              "track",
+			"duration_ms":       180000,
+			"disc_number":       1,
+			"track_number":      index + 1,
+			"artists":           []interface{}{},
+			"external_urls":     map[string]interface{}{},
+			"external_ids":      map[string]interface{}{},
+			"href":              "",
+			"uri":               "",
+			"available_markets": []interface{}{},
+		})
+	}
+
+	album := fullAlbumJSON(id, name).(map[string]interface{})
+	album["tracks"] = map[string]interface{}{
+		"items":  trackItems,
+		"total":  len(trackItems),
+		"limit":  50,
+		"offset": 0,
+	}
+	return album
 }
 
 func TestMatchError(t *testing.T) {
@@ -340,7 +376,7 @@ func TestSpotifyMatchSelectors(t *testing.T) {
 			},
 		}
 
-		album, info := selectBestAlbumMatch("Greatest Hits", "Artist B", albums, "query", "album_field_search")
+		album, info := selectBestAlbumMatch("Greatest Hits", "Artist B", 0, albums, "query", "album_field_search")
 		if album == nil {
 			t.Fatal("album = nil, want match")
 		}
@@ -359,6 +395,34 @@ func TestSpotifyMatchSelectors(t *testing.T) {
 			Reason:          "accepted",
 		}) {
 			t.Fatalf("MatchDebugInfo = %+v", info)
+		}
+	})
+
+	t.Run("selectBestAlbumMatch uses release year as supporting evidence", func(t *testing.T) {
+		albums := []spotifylib.SimpleAlbum{
+			{
+				ID:          "old123",
+				Name:        "Greatest Hits",
+				ReleaseDate: "1999-01-01",
+				Artists:     []spotifylib.SimpleArtist{{Name: "Artist B"}},
+			},
+			{
+				ID:          "new123",
+				Name:        "Greatest Hits",
+				ReleaseDate: "2020-01-01",
+				Artists:     []spotifylib.SimpleArtist{{Name: "Artist B"}},
+			},
+		}
+
+		album, info := selectBestAlbumMatch("Greatest Hits", "Artist B", 2020, albums, "query", "album_field_search")
+		if album == nil {
+			t.Fatal("album = nil, want match")
+		}
+		if album.ID != "new123" {
+			t.Fatalf("album.ID = %q, want %q", album.ID, "new123")
+		}
+		if info.CandidateName != "Greatest Hits" || info.Reason != "accepted" {
+			t.Fatalf("MatchDebugInfo = %+v, want accepted Greatest Hits", info)
 		}
 	})
 }
@@ -559,7 +623,7 @@ func TestSearchArtistByName(t *testing.T) {
 func TestSearchAndGetAlbumDetails(t *testing.T) {
 	t.Run("returns error for empty album title", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "", "Some Artist")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("", "Some Artist"))
 		if err == nil {
 			t.Fatal("expected error for empty title, got nil")
 		}
@@ -582,7 +646,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("t123", "Thriller"))
 			}
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Thriller", "Michael Jackson")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Thriller", "Michael Jackson"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -602,7 +666,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("g123", "Greatest Hits"))
 			}
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Greatest Hits", "")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Greatest Hits", ""))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -669,7 +733,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 
 					writeJSON(t, w, fullAlbumJSON("suffix123", tt.albumName))
 				}))
-				_, err := sc.SearchAndGetAlbumDetails(context.Background(), tt.title, tt.artist)
+				_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput(tt.title, tt.artist))
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
@@ -690,7 +754,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("ar123", "Abbey Road"))
 			}
 		}))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road (Remastered)", "The Beatles")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Abbey Road (Remastered)", "The Beatles"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -710,7 +774,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("wc123", "Whatever's Clever!"))
 			}
 		}))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Whatever\u2019s Clever!", "Charlie Puth")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Whatever\u2019s Clever!", "Charlie Puth"))
 		if err != nil {
 			t.Fatalf("unexpected error for apostrophe variant: %v", err)
 		}
@@ -727,7 +791,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("wrong123", "Completely Different Album"))
 			}
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "My Album", "My Artist")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("My Album", "My Artist"))
 		if err == nil {
 			t.Fatal("expected validation error for mismatched album name, got nil")
 		}
@@ -750,7 +814,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeSpotifyAPIError(t, w, http.StatusBadGateway, "field search failed")
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Abbey Road", "The Beatles"))
 		if err == nil {
 			t.Fatal("expected error when field search request fails, got nil")
 		}
@@ -784,7 +848,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 				writeJSON(t, w, fullAlbumJSON("fb123", "Whatever's Clever!"))
 			}
 		}))
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Whatever's Clever!", "Charlie Puth")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Whatever's Clever!", "Charlie Puth"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -821,7 +885,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeJSON(t, w, fullAlbumJSON("missingField123", "Abbey Road"))
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Abbey Road", "The Beatles"))
 		if err != nil {
 			t.Fatalf("unexpected error after missing field-search albums payload fallback: %v", err)
 		}
@@ -838,21 +902,98 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 	})
 
-	t.Run("returns error when both field filter and fallback return no results", func(t *testing.T) {
+	t.Run("accepts album-only fallback when track evidence matches", func(t *testing.T) {
+		searchCallCount := 0
+		var requests []string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				searchCallCount++
+				requests = append(requests, "search:"+r.URL.Query().Get("q"))
+				if searchCallCount < 3 {
+					writeJSON(t, w, emptyAlbumSearchJSON())
+					return
+				}
+
+				writeJSON(t, w, albumSearchItemsJSON(
+					albumItemJSON("albumOnly123", "Deep Cut Album"),
+				))
+				return
+			}
+
+			requests = append(requests, "details:"+r.URL.Path)
+			writeJSON(t, w, fullAlbumJSONWithTracks("albumOnly123", "Deep Cut Album", "Needle Song"))
+		}))
+
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), AlbumSearchInput{
+			Title:       "Deep Cut Album",
+			Artist:      "Library Artist",
+			TrackTitles: []string{"Needle Song"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(album.ID) != "albumOnly123" {
+			t.Fatalf("album.ID = %q, want %q", album.ID, "albumOnly123")
+		}
+		requireStringSlice(t, requests, []string{
+			`search:album:"Deep Cut Album" artist:"Library Artist"`,
+			"search:Deep Cut Album Library Artist",
+			`search:album:"Deep Cut Album"`,
+			"details:/v1/albums/albumOnly123",
+		})
+	})
+
+	t.Run("rejects album-only fallback when track evidence does not match", func(t *testing.T) {
+		searchCallCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				searchCallCount++
+				if searchCallCount < 3 {
+					writeJSON(t, w, emptyAlbumSearchJSON())
+					return
+				}
+
+				writeJSON(t, w, albumSearchItemsJSON(
+					albumItemJSON("albumOnly123", "Deep Cut Album"),
+				))
+				return
+			}
+
+			writeJSON(t, w, fullAlbumJSONWithTracks("albumOnly123", "Deep Cut Album", "Different Song"))
+		}))
+
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), AlbumSearchInput{
+			Title:       "Deep Cut Album",
+			Artist:      "Library Artist",
+			TrackTitles: []string{"Needle Song"},
+		})
+		if err == nil {
+			t.Fatal("expected track evidence rejection, got nil")
+		}
+		requireMatchErrorFields(t, err, MatchDebugInfo{
+			Lookup:    "album",
+			Input:     "Deep Cut Album",
+			Strategy:  "album_title_field_search",
+			Reason:    "track_mismatch",
+			Threshold: spotifyAlbumThreshold,
+		})
+	})
+
+	t.Run("returns error when all album search strategies return no results", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
 				writeJSON(t, w, emptyAlbumSearchJSON())
 			}
 		}))
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Nonexistent Album XYZ999", "Nobody")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Nonexistent Album XYZ999", "Nobody"))
 		if err == nil {
 			t.Fatal("expected error when all searches return no results, got nil")
 		}
 		requireMatchErrorInfo(t, err, MatchDebugInfo{
 			Lookup:      "album",
 			Input:       "Nonexistent Album XYZ999",
-			SearchQuery: "Nonexistent Album XYZ999 Nobody",
-			Strategy:    "album_fallback_search",
+			SearchQuery: "Nonexistent Album XYZ999",
+			Strategy:    "album_title_fallback_search",
 			Reason:      "no_results",
 			Threshold:   spotifyAlbumThreshold,
 		})
@@ -872,18 +1013,18 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeJSON(t, w, map[string]interface{}{})
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Nonexistent Album XYZ999", "Nobody")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Nonexistent Album XYZ999", "Nobody"))
 		if err == nil {
 			t.Fatal("expected error when fallback albums payload is missing, got nil")
 		}
-		if searchCallCount != 2 {
-			t.Fatalf("searchCallCount = %d, want 2", searchCallCount)
+		if searchCallCount != 4 {
+			t.Fatalf("searchCallCount = %d, want 4", searchCallCount)
 		}
 		requireMatchErrorInfo(t, err, MatchDebugInfo{
 			Lookup:      "album",
 			Input:       "Nonexistent Album XYZ999",
-			SearchQuery: "Nonexistent Album XYZ999 Nobody",
-			Strategy:    "album_fallback_search",
+			SearchQuery: "Nonexistent Album XYZ999",
+			Strategy:    "album_title_fallback_search",
 			Reason:      "no_results",
 			Threshold:   spotifyAlbumThreshold,
 		})
@@ -903,11 +1044,11 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}))
 		ctx := context.Background()
 
-		first, err := sc.SearchAndGetAlbumDetails(ctx, "Abbey Road", "The Beatles")
+		first, err := sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Abbey Road", "The Beatles"))
 		if err != nil {
 			t.Fatalf("first call failed: %v", err)
 		}
-		second, err := sc.SearchAndGetAlbumDetails(ctx, "Abbey Road", "The Beatles")
+		second, err := sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Abbey Road", "The Beatles"))
 		if err != nil {
 			t.Fatalf("second call failed: %v", err)
 		}
@@ -934,11 +1075,11 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}))
 		ctx := context.Background()
 
-		_, err := sc.SearchAndGetAlbumDetails(ctx, "Greatest Hits", "Artist A")
+		_, err := sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Greatest Hits", "Artist A"))
 		if err != nil {
 			t.Fatalf("first call failed: %v", err)
 		}
-		_, err = sc.SearchAndGetAlbumDetails(ctx, "Greatest Hits", "Artist B")
+		_, err = sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Greatest Hits", "Artist B"))
 		if err != nil {
 			t.Fatalf("second call failed: %v", err)
 		}
@@ -959,11 +1100,11 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}))
 		ctx := context.Background()
 
-		_, err := sc.SearchAndGetAlbumDetails(ctx, "  Abbey Road  ", "  The Beatles  ")
+		_, err := sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("  Abbey Road  ", "  The Beatles  "))
 		if err != nil {
 			t.Fatalf("first call failed: %v", err)
 		}
-		_, err = sc.SearchAndGetAlbumDetails(ctx, "abbey road", "the beatles")
+		_, err = sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("abbey road", "the beatles"))
 		if err != nil {
 			t.Fatalf("second call failed: %v", err)
 		}
@@ -986,7 +1127,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeSpotifyAPIError(t, w, http.StatusBadGateway, "fallback failed")
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Abbey Road", "The Beatles"))
 		if err == nil {
 			t.Fatal("expected error when fallback search request fails, got nil")
 		}
@@ -1012,7 +1153,7 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 			writeSpotifyAPIError(t, w, http.StatusBadGateway, "album details failed")
 		}))
 
-		_, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Abbey Road", "The Beatles"))
 		if err == nil {
 			t.Fatal("expected error when album details request fails, got nil")
 		}
@@ -1073,7 +1214,7 @@ func TestClearAllCaches(t *testing.T) {
 		}))
 		ctx := context.Background()
 
-		_, err := sc.SearchAndGetAlbumDetails(ctx, "Abbey Road", "The Beatles")
+		_, err := sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Abbey Road", "The Beatles"))
 		if err != nil {
 			t.Fatalf("first call failed: %v", err)
 		}
@@ -1086,7 +1227,7 @@ func TestClearAllCaches(t *testing.T) {
 
 		sc.ClearAllCaches()
 
-		_, err = sc.SearchAndGetAlbumDetails(ctx, "Abbey Road", "The Beatles")
+		_, err = sc.SearchAndGetAlbumDetails(ctx, albumSearchInput("Abbey Road", "The Beatles"))
 		if err != nil {
 			t.Fatalf("call after cache clear failed: %v", err)
 		}

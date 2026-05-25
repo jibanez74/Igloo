@@ -3,6 +3,7 @@ package spotify
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -11,10 +12,11 @@ import (
 )
 
 const (
-	spotifyArtistSearchLimit = 5
-	spotifyAlbumSearchLimit  = 5
-	spotifyArtistThreshold   = 78
-	spotifyAlbumThreshold    = 76
+	spotifyArtistSearchLimit   = 5
+	spotifyAlbumSearchLimit    = 5
+	spotifyArtistThreshold     = 78
+	spotifyAlbumThreshold      = 76
+	spotifyAlbumTrackThreshold = 88
 )
 
 var artistStopWords = map[string]struct{}{
@@ -418,7 +420,7 @@ func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strate
 	return &artists[bestIndex], info
 }
 
-func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
+func selectBestAlbumMatch(title, artist string, year int, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      "album",
 		Input:       title,
@@ -433,10 +435,10 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 	}
 
 	bestIndex := 0
-	bestScore, bestArtistName := scoreAlbumCandidate(title, artist, albums[0], 0)
+	bestScore, bestArtistName := scoreAlbumCandidate(title, artist, year, albums[0], 0)
 
 	for index := 1; index < len(albums); index++ {
-		score, candidateArtistName := scoreAlbumCandidate(title, artist, albums[index], index)
+		score, candidateArtistName := scoreAlbumCandidate(title, artist, year, albums[index], index)
 
 		if score <= bestScore {
 			continue
@@ -461,15 +463,39 @@ func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum,
 	return &albums[bestIndex], info
 }
 
-func scoreAlbumCandidate(title, artist string, album spotifylib.SimpleAlbum, index int) (int, string) {
+func scoreAlbumCandidate(title, artist string, year int, album spotifylib.SimpleAlbum, index int) (int, string) {
 	titleScore := scoreAlbumTitle(title, album.Name)
 	artistScore, candidateArtistName := scoreAlbumArtist(artist, album.Artists)
 	score := (titleScore*3 + artistScore) / 4
 	if strings.TrimSpace(artist) != "" && artistScore < 60 {
 		score -= 12
 	}
+
+	candidateYear := parseSpotifyReleaseYear(album.ReleaseDate)
+	if year > 0 && candidateYear > 0 {
+		if year == candidateYear {
+			score = min(score+4, 100)
+		} else {
+			score -= 8
+		}
+	}
+
 	score -= index
 	return score, candidateArtistName
+}
+
+func parseSpotifyReleaseYear(releaseDate string) int {
+	releaseDate = strings.TrimSpace(releaseDate)
+	if len(releaseDate) < 4 {
+		return 0
+	}
+
+	year, err := strconv.Atoi(releaseDate[:4])
+	if err != nil {
+		return 0
+	}
+
+	return year
 }
 
 func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {

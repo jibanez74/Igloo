@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
+	spotifyapi "igloo/cmd/internal/spotify"
 	"strings"
 
 	spotifylib "github.com/zmb3/spotify/v2"
@@ -160,13 +161,34 @@ func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *data
 	}
 }
 
-func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, error) {
+func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, input albumScanInput) (*database.Album, error) {
+	title := strings.TrimSpace(input.Title)
+	sortTitle := strings.TrimSpace(input.SortTitle)
+	albumArtist := strings.TrimSpace(input.AlbumArtist)
+	if sortTitle == "" {
+		sortTitle = title
+	}
+
 	if app.Spotify != nil {
-		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, title, albumArtist)
+		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, spotifyapi.AlbumSearchInput{
+			Title:       title,
+			Artist:      albumArtist,
+			Year:        input.Year,
+			TrackTitles: input.TrackTitles,
+		})
 		if err == nil && albumDetails != nil {
+			var spotifyCoverURL string
+			if len(albumDetails.Images) > 0 {
+				spotifyCoverURL = albumDetails.Images[0].URL
+			}
+
 			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
 			if err == nil {
 				app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
+				existing, err = app.resolveAlbumCoverIfMissing(ctx, qtx, existing, spotifyCoverURL, input)
+				if err != nil {
+					return nil, err
+				}
 				return &existing, nil
 			}
 
@@ -188,8 +210,8 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				params.Musician = sql.NullString{String: albumArtist, Valid: true}
 			}
 
-			if len(albumDetails.Images) > 0 {
-				params.Cover = sql.NullString{String: albumDetails.Images[0].URL, Valid: true}
+			if spotifyCoverURL != "" && (app.Settings == nil || !app.Settings.DownloadImages) {
+				params.Cover = sql.NullString{String: spotifyCoverURL, Valid: true}
 			}
 
 			album, err := qtx.UpsertAlbum(ctx, params)
@@ -197,6 +219,10 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				return nil, err
 			}
 			app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
+			album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, spotifyCoverURL, input)
+			if err != nil {
+				return nil, err
+			}
 			return &album, nil
 		}
 	}
@@ -210,6 +236,10 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 	}
 
 	album, err := qtx.UpsertAlbum(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, "", input)
 	if err != nil {
 		return nil, err
 	}

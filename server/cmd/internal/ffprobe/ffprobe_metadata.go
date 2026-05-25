@@ -78,6 +78,69 @@ type FormatTags struct {
 	SortArtist  string `json:"sort_artist"`
 }
 
+func (t *FormatTags) UnmarshalJSON(data []byte) error {
+	var raw map[string]interface{}
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return err
+	}
+
+	values := make(map[string]string, len(raw))
+	for key, value := range raw {
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		normalizedKey := normalizeTagKey(key)
+		if _, exists := values[normalizedKey]; exists {
+			continue
+		}
+
+		values[normalizedKey] = text
+	}
+
+	t.Title = firstTagValue(values, "title")
+	t.Artist = firstTagValue(values, "artist")
+	t.AlbumArtist = firstTagValue(values, "albumartist")
+	t.Composer = firstTagValue(values, "composer")
+	t.Album = firstTagValue(values, "album")
+	t.Genre = firstTagValue(values, "genre")
+	t.Track = firstTagValue(values, "track", "tracknumber")
+	t.Disc = firstTagValue(values, "disc", "discnumber")
+	t.Date = firstTagValue(values, "date", "year")
+	t.Copyright = firstTagValue(values, "copyright")
+	t.SortName = firstTagValue(values, "sortname", "titlesort")
+	t.SortAlbum = firstTagValue(values, "sortalbum", "albumsort")
+	t.SortArtist = firstTagValue(values, "sortartist", "artistsort")
+
+	return nil
+}
+
+func normalizeTagKey(key string) string {
+	key = strings.ToLower(strings.TrimSpace(key))
+	key = strings.ReplaceAll(key, "_", "")
+	key = strings.ReplaceAll(key, "-", "")
+	key = strings.ReplaceAll(key, " ", "")
+	return key
+}
+
+func firstTagValue(values map[string]string, keys ...string) string {
+	for _, key := range keys {
+		value := values[key]
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
+}
+
 type ChapterTags struct {
 	Title string `json:"title"`
 }

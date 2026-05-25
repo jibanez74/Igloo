@@ -174,6 +174,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumGenresStmt, err = db.PrepareContext(ctx, getAlbumGenres); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumGenres: %w", err)
 	}
+	if q.getAlbumTracksForArtworkStmt, err = db.PrepareContext(ctx, getAlbumTracksForArtwork); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumTracksForArtwork: %w", err)
+	}
 	if q.getAlbumsAlphabeticalStmt, err = db.PrepareContext(ctx, getAlbumsAlphabetical); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsAlphabetical: %w", err)
 	}
@@ -182,6 +185,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getAlbumsCountStmt, err = db.PrepareContext(ctx, getAlbumsCount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsCount: %w", err)
+	}
+	if q.getAlbumsMissingCoverStmt, err = db.PrepareContext(ctx, getAlbumsMissingCover); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsMissingCover: %w", err)
 	}
 	if q.getAllUsersStmt, err = db.PrepareContext(ctx, getAllUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAllUsers: %w", err)
@@ -452,6 +458,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
+	}
+	if q.updateAlbumCoverIfMissingStmt, err = db.PrepareContext(ctx, updateAlbumCoverIfMissing); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAlbumCoverIfMissing: %w", err)
 	}
 	if q.updateGeneralSettingsStmt, err = db.PrepareContext(ctx, updateGeneralSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateGeneralSettings: %w", err)
@@ -780,6 +789,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumGenresStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumTracksForArtworkStmt != nil {
+		if cerr := q.getAlbumTracksForArtworkStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumTracksForArtworkStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumsAlphabeticalStmt != nil {
 		if cerr := q.getAlbumsAlphabeticalStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsAlphabeticalStmt: %w", cerr)
@@ -793,6 +807,11 @@ func (q *Queries) Close() error {
 	if q.getAlbumsCountStmt != nil {
 		if cerr := q.getAlbumsCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsCountStmt: %w", cerr)
+		}
+	}
+	if q.getAlbumsMissingCoverStmt != nil {
+		if cerr := q.getAlbumsMissingCoverStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsMissingCoverStmt: %w", cerr)
 		}
 	}
 	if q.getAllUsersStmt != nil {
@@ -1245,6 +1264,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing unlikeTrackStmt: %w", cerr)
 		}
 	}
+	if q.updateAlbumCoverIfMissingStmt != nil {
+		if cerr := q.updateAlbumCoverIfMissingStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAlbumCoverIfMissingStmt: %w", cerr)
+		}
+	}
 	if q.updateGeneralSettingsStmt != nil {
 		if cerr := q.updateGeneralSettingsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateGeneralSettingsStmt: %w", cerr)
@@ -1454,9 +1478,11 @@ type Queries struct {
 	getAlbumByIDStmt                            *sql.Stmt
 	getAlbumBySpotifyIDStmt                     *sql.Stmt
 	getAlbumGenresStmt                          *sql.Stmt
+	getAlbumTracksForArtworkStmt                *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
+	getAlbumsMissingCoverStmt                   *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
@@ -1547,6 +1573,7 @@ type Queries struct {
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
+	updateAlbumCoverIfMissingStmt               *sql.Stmt
 	updateGeneralSettingsStmt                   *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
@@ -1627,9 +1654,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
 		getAlbumBySpotifyIDStmt:                     q.getAlbumBySpotifyIDStmt,
 		getAlbumGenresStmt:                          q.getAlbumGenresStmt,
+		getAlbumTracksForArtworkStmt:                q.getAlbumTracksForArtworkStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
+		getAlbumsMissingCoverStmt:                   q.getAlbumsMissingCoverStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
@@ -1720,6 +1749,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
+		updateAlbumCoverIfMissingStmt:               q.updateAlbumCoverIfMissingStmt,
 		updateGeneralSettingsStmt:                   q.updateGeneralSettingsStmt,
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,

@@ -77,12 +77,14 @@ type Querier interface {
 	GetAlbumBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Album, error)
 	// Returns all genres associated with an album
 	GetAlbumGenres(ctx context.Context, albumID int64) ([]GetAlbumGenresRow, error)
+	GetAlbumTracksForArtwork(ctx context.Context, albumID sql.NullInt64) ([]GetAlbumTracksForArtworkRow, error)
 	// Returns albums sorted alphabetically by title with pagination.
 	// Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
 	GetAlbumsAlphabetical(ctx context.Context, arg GetAlbumsAlphabeticalParams) ([]GetAlbumsAlphabeticalRow, error)
 	// Sorted by release date (newest first), then by title
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
+	GetAlbumsMissingCover(ctx context.Context) ([]Album, error)
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)
@@ -203,6 +205,7 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
+	UpdateAlbumCoverIfMissing(ctx context.Context, arg UpdateAlbumCoverIfMissingParams) (int64, error)
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).

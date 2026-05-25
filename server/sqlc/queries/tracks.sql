@@ -88,6 +88,19 @@ ORDER BY
   disc ASC,
   track_index ASC;
 
+-- name: GetAlbumTracksForArtwork :many
+SELECT
+  id,
+  title,
+  file_path,
+  year
+FROM tracks
+WHERE album_id = ?
+ORDER BY
+  disc ASC,
+  track_index ASC,
+  id ASC;
+
 -- name: GetTracksAlphabetical :many
 SELECT
   t.id,

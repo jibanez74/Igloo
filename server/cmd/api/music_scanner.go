@@ -115,6 +115,14 @@ func (app *Application) ScanMusicLibrary() {
 		app.Logger.Info(fmt.Sprintf("removed %d deleted track entries from database", deletedCount))
 	}
 
+	backfilledCovers, err := app.backfillMissingAlbumCovers(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to backfill missing album covers: %s", err.Error()))
+		errorCount++
+	} else if backfilledCovers > 0 {
+		app.Logger.Info(fmt.Sprintf("backfilled %d missing album covers", backfilledCovers))
+	}
+
 	if app.Spotify != nil {
 		app.Spotify.ClearAllCaches()
 	}

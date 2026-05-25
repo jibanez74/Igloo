@@ -70,6 +70,55 @@ func (q *Queries) DeleteTrack(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAlbumTracksForArtwork = `-- name: GetAlbumTracksForArtwork :many
+SELECT
+  id,
+  title,
+  file_path,
+  year
+FROM tracks
+WHERE album_id = ?
+ORDER BY
+  disc ASC,
+  track_index ASC,
+  id ASC
+`
+
+type GetAlbumTracksForArtworkRow struct {
+	ID       int64         `json:"id"`
+	Title    string        `json:"title"`
+	FilePath string        `json:"file_path"`
+	Year     sql.NullInt64 `json:"year"`
+}
+
+func (q *Queries) GetAlbumTracksForArtwork(ctx context.Context, albumID sql.NullInt64) ([]GetAlbumTracksForArtworkRow, error) {
+	rows, err := q.query(ctx, q.getAlbumTracksForArtworkStmt, getAlbumTracksForArtwork, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAlbumTracksForArtworkRow{}
+	for rows.Next() {
+		var i GetAlbumTracksForArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.FilePath,
+			&i.Year,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT
   COUNT(*)

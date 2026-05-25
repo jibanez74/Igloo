@@ -10,9 +10,16 @@ import (
 )
 
 type SpotifyInterface interface {
-	SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error)
+	SearchAndGetAlbumDetails(ctx context.Context, input AlbumSearchInput) (*spotify.FullAlbum, error)
 	SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error)
 	ClearAllCaches()
+}
+
+type AlbumSearchInput struct {
+	Title       string
+	Artist      string
+	Year        int
+	TrackTitles []string
 }
 
 var _ SpotifyInterface = (*spotifyClient)(nil)

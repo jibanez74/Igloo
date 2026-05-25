@@ -77,11 +77,13 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	params.Copyright = helpers.NullString(info.Format.Tags.Copyright)
 	params.Composer = helpers.NullString(info.Format.Tags.Composer)
 
+	trackYear := 0
 	if info.Format.Tags.Date != "" {
 		date, err := helpers.ParseDate(info.Format.Tags.Date)
 		if err == nil {
 			params.ReleaseDate = sql.NullString{String: date.Format("2006-01-02"), Valid: true}
 			params.Year = sql.NullInt64{Int64: int64(date.Year()), Valid: true}
+			trackYear = date.Year()
 		}
 	}
 
@@ -147,7 +149,16 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 			effectiveAlbumArtist = info.Format.Tags.Artist
 		}
 
-		album, err := app.getOrCreateAlbum(ctx, qtx, info.Format.Tags.Album, sortAlbum, effectiveAlbumArtist)
+		album, err := app.getOrCreateAlbum(ctx, qtx, albumScanInput{
+			Title:            info.Format.Tags.Album,
+			SortTitle:        sortAlbum,
+			AlbumArtist:      effectiveAlbumArtist,
+			Year:             trackYear,
+			TrackTitles:      []string{params.Title},
+			TrackPaths:       []string{path},
+			CurrentTrackPath: path,
+			CurrentMetadata:  info,
+		})
 		if err != nil {
 			return fmt.Errorf("album failed: %w", err)
 		}
