@@ -50,18 +50,15 @@ const (
 
 	// app startup defaults (used by cmd/api/main.go for InitDB / InitLogger / InitSettings)
 	DEFAULT_APP_PORT      = 8080
-	DEFAULT_DATA_DIR      = "./data"
-	DEFAULT_DB_PATH       = "data/igloo.db"
-	DEFAULT_STATIC_DIR    = "data/static"
-	DEFAULT_LOGS_DIR      = "data/logs"
-	DEFAULT_TRANSCODE_DIR = "data/transcode"
+	DEFAULT_DB_PATH       = "db/igloo.db"
+	DEFAULT_STATIC_DIR    = "static"
+	DEFAULT_LOGS_DIR      = "logs"
+	DEFAULT_TRANSCODE_DIR = "transcode"
 	DEFAULT_MOVIES_DIR    = "/media/movies"
 	DEFAULT_SHOWS_DIR     = "/media/shows"
 	DEFAULT_MUSIC_DIR     = "/media/music"
 
 	// env vars consumed at startup
-	ENV_IGLOO_ENV_FILE        = "IGLOO_ENV_FILE"
-	ENV_IGLOO_DATA_DIR        = "IGLOO_DATA_DIR"
 	ENV_DB_PATH               = "DB_PATH"
 	ENV_STATIC_DIR            = "STATIC_DIR"
 	ENV_LOGS_DIR              = "LOGS_DIR"

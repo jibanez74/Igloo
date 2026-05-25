@@ -71,7 +71,7 @@ HLS sessions are keyed by movie ID, requested profile, audio track, and start ti
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, or server shutdown stops the process and removes the temp directory.
 
-HLS temp directories are created under the transcode directory stored in Settings. On first launch that value is seeded from `TRANSCODE_DIR`, or from `$IGLOO_DATA_DIR/transcode` when `TRANSCODE_DIR` is unset. This keeps heavy temporary media output in Igloo's configured runtime data area instead of the operating-system temp directory.
+HLS temp directories are created under the transcode directory stored in Settings. On first launch that value is seeded from `TRANSCODE_DIR`, or from `./transcode` when `TRANSCODE_DIR` is unset. This keeps heavy temporary media output in Igloo's configured transcode workspace instead of the operating-system temp directory.
 
 ## HLS Output Format
 
@@ -333,7 +333,6 @@ After conversion, Igloo replaces escaped `\h` sequences with spaces. This handle
 
 For binary deployments:
 
-- `IGLOO_DATA_DIR` defaults to `./data`.
 - `TRANSCODE_DIR` seeds the Settings transcode directory on first launch; after that, edit it from Settings.
 - HLS temp output is written below the Settings transcode directory.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.

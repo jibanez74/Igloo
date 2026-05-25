@@ -32,7 +32,6 @@ func setupTestLogger(t *testing.T, app *Application) {
 func clearRuntimeConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		helpers.ENV_IGLOO_DATA_DIR,
 		helpers.ENV_DB_PATH,
 		helpers.ENV_STATIC_DIR,
 		helpers.ENV_LOGS_DIR,
@@ -46,44 +45,36 @@ func clearRuntimeConfigEnv(t *testing.T) {
 	}
 }
 
-func TestNewRuntimeConfig_DerivesDataPaths(t *testing.T) {
+func TestNewRuntimeConfig_DefaultPaths(t *testing.T) {
 	clearRuntimeConfigEnv(t)
-
-	dataDir := t.TempDir()
-	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, dataDir)
 
 	cfg, err := NewRuntimeConfig()
 	if err != nil {
 		t.Fatalf("NewRuntimeConfig failed: %v", err)
 	}
 
-	if cfg.DataDir != dataDir {
-		t.Fatalf("expected data dir %q, got %q", dataDir, cfg.DataDir)
-	}
-	if cfg.DBPath != filepath.Join(dataDir, "igloo.db") {
+	if cfg.DBPath != helpers.DEFAULT_DB_PATH {
 		t.Fatalf("expected derived DB path, got %q", cfg.DBPath)
 	}
-	if cfg.StaticDir != filepath.Join(dataDir, "static") {
+	if cfg.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Fatalf("expected derived static dir, got %q", cfg.StaticDir)
 	}
-	if cfg.LogsDir != filepath.Join(dataDir, "logs") {
+	if cfg.LogsDir != helpers.DEFAULT_LOGS_DIR {
 		t.Fatalf("expected derived logs dir, got %q", cfg.LogsDir)
 	}
-	if cfg.TranscodeDir != filepath.Join(dataDir, "transcode") {
+	if cfg.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
 		t.Fatalf("expected derived transcode dir, got %q", cfg.TranscodeDir)
 	}
 }
 
-func TestNewRuntimeConfig_ExplicitPathsOverrideDataDir(t *testing.T) {
+func TestNewRuntimeConfig_ExplicitPathsOverrideDefaults(t *testing.T) {
 	clearRuntimeConfigEnv(t)
 
-	dataDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "custom.db")
 	staticDir := filepath.Join(t.TempDir(), "static")
 	logsDir := filepath.Join(t.TempDir(), "logs")
 	transcodeDir := filepath.Join(t.TempDir(), "transcode")
 
-	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, dataDir)
 	t.Setenv(helpers.ENV_DB_PATH, dbPath)
 	t.Setenv(helpers.ENV_STATIC_DIR, staticDir)
 	t.Setenv(helpers.ENV_LOGS_DIR, logsDir)
@@ -133,9 +124,28 @@ func TestNewRuntimeConfig_RejectsInvalidPort(t *testing.T) {
 	}
 }
 
-func TestLoadRuntimeEnvFiles_UsesExplicitPath(t *testing.T) {
-	envFile := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(envFile, []byte("IGLOO_TEST_ENV_FILE_VALUE=loaded\n"), 0o600); err != nil {
+func changeWorkingDirectory(t *testing.T, dir string) {
+	t.Helper()
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+}
+
+func TestLoadRuntimeEnvFile_LoadsWorkingDirectoryEnvFile(t *testing.T) {
+	envDir := t.TempDir()
+	changeWorkingDirectory(t, envDir)
+
+	if err := os.WriteFile(".env", []byte("IGLOO_TEST_ENV_FILE_VALUE=loaded\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
 
@@ -150,18 +160,28 @@ func TestLoadRuntimeEnvFiles_UsesExplicitPath(t *testing.T) {
 		}
 	})
 
-	t.Setenv(helpers.ENV_IGLOO_ENV_FILE, envFile)
-
-	loaded, err := LoadRuntimeEnvFiles()
+	envFile, loaded, err := LoadRuntimeEnvFile()
 	if err != nil {
-		t.Fatalf("LoadRuntimeEnvFiles failed: %v", err)
+		t.Fatalf("LoadRuntimeEnvFile failed: %v", err)
 	}
 
-	if len(loaded) != 1 || loaded[0] != envFile {
-		t.Fatalf("expected explicit env file to be loaded, got %#v", loaded)
+	if !loaded || envFile != ".env" {
+		t.Fatalf("expected .env to be loaded, got file=%q loaded=%t", envFile, loaded)
 	}
 	if got := os.Getenv(key); got != "loaded" {
 		t.Fatalf("expected env file value to load, got %q", got)
+	}
+}
+
+func TestLoadRuntimeEnvFile_MissingEnvFileIsIgnored(t *testing.T) {
+	changeWorkingDirectory(t, t.TempDir())
+
+	envFile, loaded, err := LoadRuntimeEnvFile()
+	if err != nil {
+		t.Fatalf("LoadRuntimeEnvFile failed: %v", err)
+	}
+	if loaded || envFile != "" {
+		t.Fatalf("expected missing .env to be ignored, got file=%q loaded=%t", envFile, loaded)
 	}
 }
 
@@ -236,10 +256,10 @@ func TestInitDB(t *testing.T) {
 
 func TestInitDB_DefaultPath(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv(helpers.ENV_IGLOO_DATA_DIR, tmpDir)
+	changeWorkingDirectory(t, tmpDir)
 	t.Setenv(helpers.ENV_DB_PATH, "")
 
-	dbFile := filepath.Join(tmpDir, "igloo.db")
+	dbFile := filepath.Join(tmpDir, helpers.DEFAULT_DB_PATH)
 
 	app := &Application{}
 	setupTestLogger(t, app)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -15,7 +14,6 @@ import (
 )
 
 type RuntimeConfig struct {
-	DataDir             string
 	DBPath              string
 	StaticDir           string
 	LogsDir             string
@@ -26,58 +24,28 @@ type RuntimeConfig struct {
 	SessionCookieSecure bool
 }
 
-func LoadRuntimeEnvFiles() ([]string, error) {
-	explicit := strings.TrimSpace(os.Getenv(helpers.ENV_IGLOO_ENV_FILE))
-	if explicit != "" {
-		if err := godotenv.Load(explicit); err != nil {
-			return nil, fmt.Errorf("failed to load %s: %w", explicit, err)
+func LoadRuntimeEnvFile() (string, bool, error) {
+	const envFile = ".env"
+
+	if err := godotenv.Load(envFile); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", false, nil
 		}
-		return []string{explicit}, nil
+		return "", false, fmt.Errorf("failed to load %s: %w", envFile, err)
 	}
 
-	var loaded []string
-	seen := map[string]bool{}
-	for _, candidate := range runtimeEnvFileCandidates() {
-		candidate = filepath.Clean(candidate)
-		if seen[candidate] {
-			continue
-		}
-		seen[candidate] = true
-
-		if err := godotenv.Load(candidate); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return loaded, fmt.Errorf("failed to load %s: %w", candidate, err)
-		}
-		loaded = append(loaded, candidate)
-	}
-
-	return loaded, nil
-}
-
-func runtimeEnvFileCandidates() []string {
-	candidates := []string{
-		".env",
-		filepath.Join("..", ".env"),
-	}
-
-	if exe, err := os.Executable(); err == nil && exe != "" {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), ".env"))
-	}
-
-	return candidates
+	return envFile, true, nil
 }
 
 func NewRuntimeConfig() (RuntimeConfig, error) {
 	debug := envBool("DEBUG", false)
+
 	port, err := configuredPort()
 	if err != nil {
 		return RuntimeConfig{}, err
 	}
 
 	config := RuntimeConfig{
-		DataDir:             configuredDataDir(),
 		Port:                port,
 		Debug:               debug,
 		LogToStdout:         envBool(helpers.ENV_LOG_TO_STDOUT, debug),
@@ -91,18 +59,10 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 	return config, nil
 }
 
-func (config RuntimeConfig) effectiveDataDir() string {
-	value := strings.TrimSpace(config.DataDir)
-	if value == "" {
-		return configuredDataDir()
-	}
-	return value
-}
-
 func (config RuntimeConfig) effectiveDBPath() string {
 	value := strings.TrimSpace(config.DBPath)
 	if value == "" {
-		return configuredDBPath(config.effectiveDataDir())
+		return configuredDBPath()
 	}
 	return value
 }
@@ -110,7 +70,7 @@ func (config RuntimeConfig) effectiveDBPath() string {
 func (config RuntimeConfig) effectiveStaticDir() string {
 	value := strings.TrimSpace(config.StaticDir)
 	if value == "" {
-		return configuredStaticDir(config.effectiveDataDir())
+		return configuredStaticDir()
 	}
 	return value
 }
@@ -118,7 +78,7 @@ func (config RuntimeConfig) effectiveStaticDir() string {
 func (config RuntimeConfig) effectiveLogsDir() string {
 	value := strings.TrimSpace(config.LogsDir)
 	if value == "" {
-		return configuredLogsDir(config.effectiveDataDir())
+		return configuredLogsDir()
 	}
 	return value
 }
@@ -126,29 +86,25 @@ func (config RuntimeConfig) effectiveLogsDir() string {
 func (config RuntimeConfig) effectiveTranscodeDir() string {
 	value := strings.TrimSpace(config.TranscodeDir)
 	if value == "" {
-		return configuredTranscodeDir(config.effectiveDataDir())
+		return configuredTranscodeDir()
 	}
 	return value
 }
 
-func configuredDataDir() string {
-	return envString(helpers.ENV_IGLOO_DATA_DIR, helpers.DEFAULT_DATA_DIR)
+func configuredDBPath() string {
+	return envString(helpers.ENV_DB_PATH, helpers.DEFAULT_DB_PATH)
 }
 
-func configuredDBPath(dataDir string) string {
-	return envString(helpers.ENV_DB_PATH, filepath.Join(dataDir, "igloo.db"))
+func configuredStaticDir() string {
+	return envString(helpers.ENV_STATIC_DIR, helpers.DEFAULT_STATIC_DIR)
 }
 
-func configuredStaticDir(dataDir string) string {
-	return envString(helpers.ENV_STATIC_DIR, filepath.Join(dataDir, "static"))
+func configuredLogsDir() string {
+	return envString(helpers.ENV_LOGS_DIR, helpers.DEFAULT_LOGS_DIR)
 }
 
-func configuredLogsDir(dataDir string) string {
-	return envString(helpers.ENV_LOGS_DIR, filepath.Join(dataDir, "logs"))
-}
-
-func configuredTranscodeDir(dataDir string) string {
-	return envString(helpers.ENV_TRANSCODE_DIR, filepath.Join(dataDir, "transcode"))
+func configuredTranscodeDir() string {
+	return envString(helpers.ENV_TRANSCODE_DIR, helpers.DEFAULT_TRANSCODE_DIR)
 }
 
 func configuredPort() (int, error) {

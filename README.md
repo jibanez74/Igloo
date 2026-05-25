@@ -60,25 +60,17 @@ Igloo listens on `PORT`, defaulting to `8080`.
 
 ## Configuration
 
-Igloo reads environment variables from the process environment and from `.env` files. Existing process environment variables win over values loaded from files.
-
-Startup loads env files in this order:
-
-1. `IGLOO_ENV_FILE`, if that process variable is set.
-2. `.env` in the current working directory.
-3. `../.env`, useful when running from `server/` during development.
-4. `.env` next to the running binary.
+Igloo reads environment variables from the process environment and from one optional `.env` file in the current working directory. Existing process environment variables win over values loaded from `.env`.
 
 The most important variables are:
 
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | HTTP listener port, default `8080` |
-| `IGLOO_DATA_DIR` | Base directory for runtime files, default `./data` |
-| `DB_PATH` | SQLite database file; overrides `$IGLOO_DATA_DIR/igloo.db` and is always read at startup |
+| `DB_PATH` | SQLite database file, default `./db/igloo.db`; always read at startup |
 | `STATIC_DIR` | First-run default for downloaded artwork/static files |
 | `LOGS_DIR` | First-run default for file logs |
-| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace |
+| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace, default `./transcode` |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
 | `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
@@ -87,11 +79,10 @@ The most important variables are:
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
 | `HARDWARE_ACCELERATION_DEVICE` | Transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
-| `IGLOO_ENV_FILE` | Explicit env file path to load before startup |
 
 See [.env.example](.env.example) for the full reference.
 
-Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, and media library directories from Settings after first launch. `IGLOO_DATA_DIR` and `DB_PATH` stay environment-driven because the database location must be known before Settings can be loaded.
+Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, and media library directories from Settings after first launch. `DB_PATH` stays environment-driven because the database location must be known before Settings can be loaded.
 
 ## Hardware Acceleration
 
@@ -123,7 +114,8 @@ For local development, use:
 DEBUG=true
 PORT=8080
 SESSION_COOKIE_SECURE=false
-IGLOO_DATA_DIR=./data
+DB_PATH=./db/igloo.db
+TRANSCODE_DIR=./transcode
 ```
 
 Start the web client:
@@ -144,7 +136,7 @@ make dev
 
 `make dev` runs sqlc generation, syncs the embedded schema copy, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
-Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so a root `.env` and default `./data` directory resolve consistently with production `make start`.
+Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so a root `.env` and default runtime directories resolve consistently with production `make start`.
 
 ## Building Binaries
 
@@ -249,7 +241,7 @@ See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenan
 
 - SQLite is the database engine.
 - WAL mode is enabled at startup.
-- `DB_PATH` controls the database file path; the binary default is `./data/igloo.db`.
+- `DB_PATH` controls the database file path; the binary default is `./db/igloo.db`.
 - `server/sqlc/schema.sql` is the schema source of truth.
 - `server/cmd/api/schema.sql` is the embedded startup schema copy.
 - Query files live under `server/sqlc/queries/`.

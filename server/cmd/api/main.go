@@ -72,12 +72,12 @@ var FrontendFS embed.FS
 func main() {
 	log.Println("igloo server starting up...")
 
-	loadedEnvFiles, err := LoadRuntimeEnvFiles()
+	envFile, loadedEnvFile, err := LoadRuntimeEnvFile()
 	if err != nil {
 		log.Printf("warning: %v", err)
 	}
-	for _, path := range loadedEnvFiles {
-		log.Printf("loaded environment file %s", path)
+	if loadedEnvFile {
+		log.Printf("loaded environment file %s", envFile)
 	}
 
 	app, err := InitApp()
@@ -392,10 +392,9 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	dataDir := app.Config.effectiveDataDir()
-	logsDir := configuredLogsDir(dataDir)
-	staticDir := configuredStaticDir(dataDir)
-	transcodeDir := configuredTranscodeDir(dataDir)
+	logsDir := configuredLogsDir()
+	staticDir := configuredStaticDir()
+	transcodeDir := configuredTranscodeDir()
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {

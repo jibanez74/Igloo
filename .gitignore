@@ -18,14 +18,15 @@
 .env
 .env.local
 
-# Database files and directories created by app at start up
+# Runtime files and directories created by app at start up
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
+/db/
+/logs/
+/static/*
 /server/static/*
-/data/
-/server/data/
 
 # Embedded frontend assets generated during build
 /server/cmd/api/web/dist/*.html
