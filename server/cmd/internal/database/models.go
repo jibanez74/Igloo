@@ -231,6 +231,7 @@ type Setting struct {
 	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
 	StaticDir                  string          `json:"static_dir"`
 	LogsDir                    string          `json:"logs_dir"`
+	TranscodeDir               string          `json:"transcode_dir"`
 	CreatedAt                  string          `json:"created_at"`
 	UpdatedAt                  string          `json:"updated_at"`
 }

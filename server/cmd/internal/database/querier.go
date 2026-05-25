@@ -207,6 +207,7 @@ type Querier interface {
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumCoverIfMissing(ctx context.Context, arg UpdateAlbumCoverIfMissingParams) (int64, error)
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
+	UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error)
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)

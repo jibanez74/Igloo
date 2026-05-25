@@ -142,6 +142,8 @@ export type {
   SettingsType,
   UpdateGeneralSettingsRequest,
   UpdateGeneralSettingsResponseType,
+  UpdateLibrarySettingsRequest,
+  UpdateLibrarySettingsResponseType,
   UpdatePlaybackSettingsRequest,
   UpdatePlaybackSettingsResponseType,
 } from "./settings";

@@ -24,11 +24,12 @@ INSERT INTO settings (
   shows_dir,
   music_dir,
   static_dir,
-  logs_dir
+  logs_dir,
+  transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
@@ -45,6 +46,7 @@ type CreateSettingsParams struct {
 	MusicDir                   sql.NullString `json:"music_dir"`
 	StaticDir                  string         `json:"static_dir"`
 	LogsDir                    string         `json:"logs_dir"`
+	TranscodeDir               string         `json:"transcode_dir"`
 }
 
 func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error) {
@@ -62,6 +64,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.MusicDir,
 		arg.StaticDir,
 		arg.LogsDir,
+		arg.TranscodeDir,
 	)
 	var i Setting
 	err := row.Scan(
@@ -80,6 +83,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.ServerUploadMbps,
 		&i.StaticDir,
 		&i.LogsDir,
+		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -88,7 +92,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 
 const getSettings = `-- name: GetSettings :one
 SELECT
-  id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, created_at, updated_at
+  id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 FROM settings
 ORDER BY id
 LIMIT 1
@@ -113,6 +117,7 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.ServerUploadMbps,
 		&i.StaticDir,
 		&i.LogsDir,
+		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -132,6 +137,7 @@ SET
   download_images = ?,
   static_dir = ?,
   logs_dir = ?,
+  transcode_dir = ?,
   server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
@@ -140,7 +146,7 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, created_at, updated_at
+RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 `
 
 type UpdateGeneralSettingsParams struct {
@@ -154,6 +160,7 @@ type UpdateGeneralSettingsParams struct {
 	DownloadImages             bool            `json:"download_images"`
 	StaticDir                  string          `json:"static_dir"`
 	LogsDir                    string          `json:"logs_dir"`
+	TranscodeDir               string          `json:"transcode_dir"`
 	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
 }
 
@@ -169,6 +176,7 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		arg.DownloadImages,
 		arg.StaticDir,
 		arg.LogsDir,
+		arg.TranscodeDir,
 		arg.ServerUploadMbps,
 	)
 	var i Setting
@@ -188,6 +196,55 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		&i.ServerUploadMbps,
 		&i.StaticDir,
 		&i.LogsDir,
+		&i.TranscodeDir,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateLibrarySettings = `-- name: UpdateLibrarySettings :one
+UPDATE settings
+SET
+  movies_dir = ?,
+  shows_dir = ?,
+  music_dir = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+`
+
+type UpdateLibrarySettingsParams struct {
+	MoviesDir sql.NullString `json:"movies_dir"`
+	ShowsDir  sql.NullString `json:"shows_dir"`
+	MusicDir  sql.NullString `json:"music_dir"`
+}
+
+func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error) {
+	row := q.queryRow(ctx, q.updateLibrarySettingsStmt, updateLibrarySettings, arg.MoviesDir, arg.ShowsDir, arg.MusicDir)
+	var i Setting
+	err := row.Scan(
+		&i.ID,
+		&i.TmdbKey,
+		&i.JellyfinToken,
+		&i.SpotifyClientID,
+		&i.SpotifyClientSecret,
+		&i.HardwareAccelerationDevice,
+		&i.EnableLogger,
+		&i.EnableWatcher,
+		&i.DownloadImages,
+		&i.MoviesDir,
+		&i.ShowsDir,
+		&i.MusicDir,
+		&i.ServerUploadMbps,
+		&i.StaticDir,
+		&i.LogsDir,
+		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

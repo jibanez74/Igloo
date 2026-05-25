@@ -19,10 +19,11 @@ INSERT INTO settings (
   shows_dir,
   music_dir,
   static_dir,
-  logs_dir
+  logs_dir,
+  transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateGeneralSettings :one
@@ -38,7 +39,23 @@ SET
   download_images = ?,
   static_dir = ?,
   logs_dir = ?,
+  transcode_dir = ?,
   server_upload_mbps = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING *;
+
+-- name: UpdateLibrarySettings :one
+UPDATE settings
+SET
+  movies_dir = ?,
+  shows_dir = ?,
+  music_dir = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = (
   SELECT id

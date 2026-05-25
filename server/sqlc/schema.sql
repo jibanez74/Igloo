@@ -37,6 +37,7 @@ CREATE TABLE
     server_upload_mbps REAL,
     static_dir TEXT NOT NULL DEFAULT 'static',
     logs_dir TEXT NOT NULL DEFAULT 'logs',
+    transcode_dir TEXT NOT NULL DEFAULT 'transcode',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );

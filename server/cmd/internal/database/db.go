@@ -465,6 +465,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateGeneralSettingsStmt, err = db.PrepareContext(ctx, updateGeneralSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateGeneralSettings: %w", err)
 	}
+	if q.updateLibrarySettingsStmt, err = db.PrepareContext(ctx, updateLibrarySettings); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateLibrarySettings: %w", err)
+	}
 	if q.updateMovieStmt, err = db.PrepareContext(ctx, updateMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMovie: %w", err)
 	}
@@ -1274,6 +1277,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateGeneralSettingsStmt: %w", cerr)
 		}
 	}
+	if q.updateLibrarySettingsStmt != nil {
+		if cerr := q.updateLibrarySettingsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateLibrarySettingsStmt: %w", cerr)
+		}
+	}
 	if q.updateMovieStmt != nil {
 		if cerr := q.updateMovieStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMovieStmt: %w", cerr)
@@ -1575,6 +1583,7 @@ type Queries struct {
 	unlikeTrackStmt                             *sql.Stmt
 	updateAlbumCoverIfMissingStmt               *sql.Stmt
 	updateGeneralSettingsStmt                   *sql.Stmt
+	updateLibrarySettingsStmt                   *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
 	updatePlaylistStmt                          *sql.Stmt
@@ -1751,6 +1760,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
 		updateAlbumCoverIfMissingStmt:               q.updateAlbumCoverIfMissingStmt,
 		updateGeneralSettingsStmt:                   q.updateGeneralSettingsStmt,
+		updateLibrarySettingsStmt:                   q.updateLibrarySettingsStmt,
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,
 		updatePlaylistStmt:                          q.updatePlaylistStmt,

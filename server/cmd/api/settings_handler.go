@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ type generalSettingsResponse struct {
 	DownloadImages             bool     `json:"download_images"`
 	StaticDir                  string   `json:"static_dir"`
 	LogsDir                    string   `json:"logs_dir"`
+	TranscodeDir               string   `json:"transcode_dir"`
 	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
 	RestartRequired            bool     `json:"restart_required,omitempty"`
 }
@@ -45,7 +47,20 @@ type updateGeneralSettingsRequest struct {
 	DownloadImages             bool     `json:"download_images"`
 	StaticDir                  string   `json:"static_dir"`
 	LogsDir                    string   `json:"logs_dir"`
+	TranscodeDir               string   `json:"transcode_dir"`
 	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
+}
+
+type librarySettingsResponse struct {
+	MoviesDir *string `json:"movies_dir"`
+	ShowsDir  *string `json:"shows_dir"`
+	MusicDir  *string `json:"music_dir"`
+}
+
+type updateLibrarySettingsRequest struct {
+	MoviesDir *string `json:"movies_dir"`
+	ShowsDir  *string `json:"shows_dir"`
+	MusicDir  *string `json:"music_dir"`
 }
 
 func nullableStringValue(value sql.NullString) *string {
@@ -81,8 +96,17 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		DownloadImages:             settings.DownloadImages,
 		StaticDir:                  settings.StaticDir,
 		LogsDir:                    settings.LogsDir,
+		TranscodeDir:               settings.TranscodeDir,
 		ServerUploadMbps:           nullableFloat64Value(settings.ServerUploadMbps),
 		RestartRequired:            restartRequired,
+	}
+}
+
+func mapLibrarySettingsResponse(settings database.Setting) librarySettingsResponse {
+	return librarySettingsResponse{
+		MoviesDir: nullableStringValue(settings.MoviesDir),
+		ShowsDir:  nullableStringValue(settings.ShowsDir),
+		MusicDir:  nullableStringValue(settings.MusicDir),
 	}
 }
 
@@ -108,27 +132,9 @@ func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseData := map[string]any{
-		"music_dir":  nil,
-		"movies_dir": nil,
-		"shows_dir":  nil,
-	}
-
-	if settings.MusicDir.Valid {
-		responseData["music_dir"] = settings.MusicDir.String
-	}
-
-	if settings.MoviesDir.Valid {
-		responseData["movies_dir"] = settings.MoviesDir.String
-	}
-
-	if settings.ShowsDir.Valid {
-		responseData["shows_dir"] = settings.ShowsDir.String
-	}
-
 	res := helpers.JSONResponse{
 		Error: false,
-		Data:  responseData,
+		Data:  mapLibrarySettingsResponse(settings),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, res)
@@ -165,6 +171,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	req.HardwareAccelerationDevice = strings.TrimSpace(req.HardwareAccelerationDevice)
 	req.StaticDir = strings.TrimSpace(req.StaticDir)
 	req.LogsDir = strings.TrimSpace(req.LogsDir)
+	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
 
 	if !validateHardwareAccelerationDevice(req.HardwareAccelerationDevice) {
 		helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
@@ -178,6 +185,11 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	if req.LogsDir == "" {
 		helpers.ErrorJSON(w, errors.New("logs directory is required"), http.StatusBadRequest)
+		return
+	}
+
+	if req.TranscodeDir == "" {
+		helpers.ErrorJSON(w, errors.New("transcode directory is required"), http.StatusBadRequest)
 		return
 	}
 
@@ -216,6 +228,13 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	_, err = helpers.GetOrCreateDir(req.TranscodeDir)
+	if err != nil {
+		app.Logger.Error("failed to validate transcode directory", "error", err, "path", req.TranscodeDir)
+		helpers.ErrorJSON(w, errors.New("transcode directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
 	serverUploadMbps := sql.NullFloat64{}
 	if req.ServerUploadMbps != nil {
 		serverUploadMbps = sql.NullFloat64{Float64: *req.ServerUploadMbps, Valid: true}
@@ -233,6 +252,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		DownloadImages:             req.DownloadImages,
 		StaticDir:                  req.StaticDir,
 		LogsDir:                    req.LogsDir,
+		TranscodeDir:               req.TranscodeDir,
 		ServerUploadMbps:           serverUploadMbps,
 	})
 	if err != nil {
@@ -241,10 +261,8 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	runtimeSettings := updatedSettings
-	applyRuntimeSettingOverrides(&runtimeSettings)
-	app.Settings = &runtimeSettings
-	restartRequired := generalSettingsRestartRequired(currentSettings, runtimeSettings)
+	app.Settings = &updatedSettings
+	restartRequired := generalSettingsRestartRequired(currentSettings, updatedSettings)
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error:   false,
@@ -263,11 +281,84 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 
 	return previous.StaticDir != next.StaticDir ||
 		previous.LogsDir != next.LogsDir ||
+		previous.TranscodeDir != next.TranscodeDir ||
 		previous.EnableLogger != next.EnableLogger ||
 		previous.TmdbKey != next.TmdbKey ||
 		previous.JellyfinToken != next.JellyfinToken ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
+}
+
+func (app *Application) UpdateLibrarySettings(w http.ResponseWriter, r *http.Request) {
+	var req updateLibrarySettingsRequest
+	err := helpers.ReadJSON(w, r, &req, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	moviesDir, err := validatedOptionalMediaDir(req.MoviesDir)
+	if err != nil {
+		app.Logger.Error("failed to validate movies directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("movies directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	showsDir, err := validatedOptionalMediaDir(req.ShowsDir)
+	if err != nil {
+		app.Logger.Error("failed to validate shows directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("shows directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	musicDir, err := validatedOptionalMediaDir(req.MusicDir)
+	if err != nil {
+		app.Logger.Error("failed to validate music directory", "error", err)
+		helpers.ErrorJSON(w, errors.New("music directory is not accessible"), http.StatusBadRequest)
+		return
+	}
+
+	updatedSettings, err := app.Queries.UpdateLibrarySettings(r.Context(), database.UpdateLibrarySettingsParams{
+		MoviesDir: moviesDir,
+		ShowsDir:  showsDir,
+		MusicDir:  musicDir,
+	})
+	if err != nil {
+		app.Logger.Error("failed to update library settings", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to update library settings"))
+		return
+	}
+
+	app.Settings = &updatedSettings
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error:   false,
+		Message: "Library settings updated",
+		Data: map[string]any{
+			"settings": mapLibrarySettingsResponse(updatedSettings),
+		},
+	})
+}
+
+func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
+	if value == nil {
+		return sql.NullString{}, nil
+	}
+
+	dir := strings.TrimSpace(*value)
+	if dir == "" {
+		return sql.NullString{}, nil
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return sql.NullString{}, err
+	}
+	if !info.IsDir() {
+		return sql.NullString{}, errors.New("path is not a directory")
+	}
+
+	return helpers.NullString(dir), nil
 }
 
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,12 @@ export type SettingsType = {
   shows_dir: string | null;
 };
 
+export type UpdateLibrarySettingsRequest = SettingsType;
+
+export type UpdateLibrarySettingsResponseType = {
+  settings: SettingsType;
+};
+
 export type HardwareAccelerationDevice = "cpu" | "apple" | "nvidia" | "intel";
 
 export type GeneralSettingsType = {
@@ -17,6 +23,7 @@ export type GeneralSettingsType = {
   download_images: boolean;
   static_dir: string;
   logs_dir: string;
+  transcode_dir: string;
   server_upload_mbps: number | null;
   restart_required?: boolean;
 };
@@ -32,6 +39,7 @@ export type UpdateGeneralSettingsRequest = {
   download_images: boolean;
   static_dir: string;
   logs_dir: string;
+  transcode_dir: string;
   server_upload_mbps: number | null;
 };
 

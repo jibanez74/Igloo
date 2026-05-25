@@ -461,6 +461,7 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 
 	staticDir := t.TempDir()
 	logsDir := t.TempDir()
+	transcodeDir := t.TempDir()
 
 	marshalBody := func(t *testing.T, serverUploadMbps any) string {
 		t.Helper()
@@ -475,6 +476,7 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 			"download_images":              true,
 			"static_dir":                   staticDir,
 			"logs_dir":                     logsDir,
+			"transcode_dir":                transcodeDir,
 			"server_upload_mbps":           serverUploadMbps,
 		})
 		if err != nil {

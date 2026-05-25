@@ -1988,6 +1988,36 @@
         }
       }
     },
+    "/api/settings/libraries": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update configured library paths",
+        "description": "Admin-only endpoint. Directory paths must already exist; null clears a library path.",
+        "operationId": "updateLibrarySettings",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UpdateLibrarySettingsRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UpdateLibrarySettingsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/settings/playback": {
       "get": {
         "tags": [
@@ -3391,6 +3421,16 @@
           }
         }
       },
+      "UpdateLibrarySettingsRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateLibrarySettingsRequest"
+            }
+          }
+        }
+      },
       "UpdatePlaybackSettingsRequest": {
         "required": true,
         "content": {
@@ -3659,6 +3699,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/UpdateGeneralSettingsEnvelope"
+            }
+          }
+        }
+      },
+      "UpdateLibrarySettingsResponse": {
+        "description": "Updated library path settings response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateLibrarySettingsEnvelope"
             }
           }
         }
@@ -4898,6 +4948,35 @@
         },
         "additionalProperties": false
       },
+      "UpdateLibrarySettingsRequest": {
+        "type": "object",
+        "required": [
+          "music_dir",
+          "movies_dir",
+          "shows_dir"
+        ],
+        "properties": {
+          "music_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "movies_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shows_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "SettingsEnvelope": {
         "allOf": [
           {
@@ -4911,6 +4990,33 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SettingsData"
+              }
+            }
+          }
+        ]
+      },
+      "UpdateLibrarySettingsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "settings"
+                ],
+                "properties": {
+                  "settings": {
+                    "$ref": "#/components/schemas/SettingsData"
+                  }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -4938,6 +5044,7 @@
           "download_images",
           "static_dir",
           "logs_dir",
+          "transcode_dir",
           "server_upload_mbps"
         ],
         "properties": {
@@ -4981,6 +5088,9 @@
             "type": "string"
           },
           "logs_dir": {
+            "type": "string"
+          },
+          "transcode_dir": {
             "type": "string"
           },
           "server_upload_mbps": {
@@ -5008,6 +5118,7 @@
           "download_images",
           "static_dir",
           "logs_dir",
+          "transcode_dir",
           "server_upload_mbps"
         ],
         "properties": {
@@ -5039,6 +5150,9 @@
             "type": "string"
           },
           "logs_dir": {
+            "type": "string"
+          },
+          "transcode_dir": {
             "type": "string"
           },
           "server_upload_mbps": {

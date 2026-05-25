@@ -75,13 +75,13 @@ The most important variables are:
 | --- | --- |
 | `PORT` | HTTP listener port, default `8080` |
 | `IGLOO_DATA_DIR` | Base directory for runtime files, default `./data` |
-| `DB_PATH` | SQLite database file; overrides `$IGLOO_DATA_DIR/igloo.db` |
-| `STATIC_DIR` | Downloaded artwork/static files; overrides `$IGLOO_DATA_DIR/static` |
-| `LOGS_DIR` | File log directory; overrides `$IGLOO_DATA_DIR/logs` |
-| `TRANSCODE_DIR` | Temporary HLS workspace; overrides `$IGLOO_DATA_DIR/transcode` |
+| `DB_PATH` | SQLite database file; overrides `$IGLOO_DATA_DIR/igloo.db` and is always read at startup |
+| `STATIC_DIR` | First-run default for downloaded artwork/static files |
+| `LOGS_DIR` | First-run default for file logs |
+| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
 | `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
-| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | Optional media directories; configured paths must already exist |
+| `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | Optional TMDB API key for movie metadata and in-theaters data |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional Spotify credentials for music metadata enrichment |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |
@@ -90,6 +90,8 @@ The most important variables are:
 | `IGLOO_ENV_FILE` | Explicit env file path to load before startup |
 
 See [.env.example](.env.example) for the full reference.
+
+Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, and media library directories from Settings after first launch. `IGLOO_DATA_DIR` and `DB_PATH` stay environment-driven because the database location must be known before Settings can be loaded.
 
 ## Hardware Acceleration
 
@@ -140,9 +142,9 @@ Start the backend in another terminal:
 make dev
 ```
 
-`make dev` runs sqlc generation, syncs the embedded schema copy, and starts the API with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
+`make dev` runs sqlc generation, syncs the embedded schema copy, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
-Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from `server/`, so the root `.env` is loaded through the existing `../.env` fallback.
+Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so a root `.env` and default `./data` directory resolve consistently with production `make start`.
 
 ## Building Binaries
 
@@ -169,7 +171,7 @@ Run the built application in the background:
 make start
 ```
 
-`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served; all other runtime configuration continues to come from the shell environment and `.env` files. Stop that process with:
+`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served. Startup-only configuration comes from the shell environment and `.env` files; Settings-owned values come from the database after first launch. Stop that process with:
 
 ```bash
 make stop

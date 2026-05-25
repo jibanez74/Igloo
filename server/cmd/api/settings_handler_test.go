@@ -32,6 +32,7 @@ func setupSettingsHTTPTestApp(t *testing.T) *Application {
 }
 
 func generalSettingsBody(staticDir, logsDir string) string {
+	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
 		"jellyfin_token": "jellyfin-token",
@@ -43,8 +44,9 @@ func generalSettingsBody(staticDir, logsDir string) string {
 		"download_images": true,
 		"static_dir": %q,
 		"logs_dir": %q,
+		"transcode_dir": %q,
 		"server_upload_mbps": 25
-	}`, staticDir, logsDir)
+	}`, staticDir, logsDir, transcodeDir)
 }
 
 func performUpdateGeneralSettings(app *Application, body string) *httptest.ResponseRecorder {
@@ -88,6 +90,9 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 	if settings.LogsDir != logsDir {
 		t.Fatalf("expected logs dir %q, got %q", logsDir, settings.LogsDir)
+	}
+	if settings.TranscodeDir != filepath.Join(filepath.Dir(staticDir), "transcode") {
+		t.Fatalf("expected transcode dir to be saved, got %q", settings.TranscodeDir)
 	}
 	if app.Settings == nil || app.Settings.StaticDir != staticDir {
 		t.Fatal("expected app.Settings to reflect the saved general settings")
@@ -205,8 +210,9 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		"enable_watcher": false,
 		"download_images": false,
 		"static_dir": %q,
-		"logs_dir": %q
-	}`, staticDir, logsDir)
+		"logs_dir": %q,
+		"transcode_dir": %q
+	}`, staticDir, logsDir, filepath.Join(filepath.Dir(staticDir), "transcode"))
 	w = performUpdateGeneralSettings(app, clearBody)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected clear update 200, got %d: %s", w.Code, w.Body.String())
@@ -242,6 +248,97 @@ func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
 
 	logsDir := filepath.Join(t.TempDir(), "logs")
 	w := performUpdateGeneralSettings(app, generalSettingsBody("", logsDir))
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func performUpdateLibrarySettings(app *Application, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/libraries", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	app.UpdateLibrarySettings(w, req)
+
+	return w
+}
+
+func TestUpdateLibrarySettings_UpdatesMediaDirectories(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+
+	root := t.TempDir()
+	moviesDir := filepath.Join(root, "movies")
+	showsDir := filepath.Join(root, "shows")
+	musicDir := filepath.Join(root, "music")
+	for _, dir := range []string{moviesDir, showsDir, musicDir} {
+		if _, err := helpers.GetOrCreateDir(dir); err != nil {
+			t.Fatalf("create media dir %s: %v", dir, err)
+		}
+	}
+
+	body := fmt.Sprintf(`{
+		"movies_dir": %q,
+		"shows_dir": %q,
+		"music_dir": %q
+	}`, moviesDir, showsDir, musicDir)
+	w := performUpdateLibrarySettings(app, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings after update: %v", err)
+	}
+
+	if settings.MoviesDir.String != moviesDir || !settings.MoviesDir.Valid {
+		t.Fatalf("expected movies dir %q, got %q valid=%v", moviesDir, settings.MoviesDir.String, settings.MoviesDir.Valid)
+	}
+	if settings.ShowsDir.String != showsDir || !settings.ShowsDir.Valid {
+		t.Fatalf("expected shows dir %q, got %q valid=%v", showsDir, settings.ShowsDir.String, settings.ShowsDir.Valid)
+	}
+	if settings.MusicDir.String != musicDir || !settings.MusicDir.Valid {
+		t.Fatalf("expected music dir %q, got %q valid=%v", musicDir, settings.MusicDir.String, settings.MusicDir.Valid)
+	}
+}
+
+func TestUpdateLibrarySettings_ClearsMediaDirectories(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+
+	w := performUpdateLibrarySettings(app, `{
+		"movies_dir": "",
+		"shows_dir": null,
+		"music_dir": ""
+	}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings after update: %v", err)
+	}
+
+	if settings.MoviesDir.Valid || settings.ShowsDir.Valid || settings.MusicDir.Valid {
+		t.Fatal("expected media directories to be cleared")
+	}
+}
+
+func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+
+	body := fmt.Sprintf(`{
+		"movies_dir": %q,
+		"shows_dir": null,
+		"music_dir": null
+	}`, filepath.Join(t.TempDir(), "missing"))
+	w := performUpdateLibrarySettings(app, body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())

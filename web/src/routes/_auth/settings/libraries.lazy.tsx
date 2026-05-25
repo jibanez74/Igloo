@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useId, useTransition } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useId, useState, useTransition } from "react";
 import {
   Library,
   Music,
@@ -22,12 +22,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showError, showSuccess, showActionFailed } from "@/lib/toast-helpers";
-import { triggerMusicScan, triggerMovieScan } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
 import {
   MUSIC_STATS_KEY,
   ALBUMS_KEY,
@@ -43,7 +44,9 @@ import {
   MOVIE_PLAYLISTS_KEY,
   MOVIE_PLAYLIST_DETAILS_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
+  SETTINGS_KEY,
 } from "@/lib/constants";
+import type { SettingsType } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/settings/libraries")({
   component: LibrariesSettings,
@@ -74,6 +77,25 @@ function LibrariesSettings() {
   );
 }
 
+type LibraryPathField = keyof SettingsType;
+type PathDraft = {
+  source: string;
+  value: string;
+};
+
+function librarySettingsPayload(
+  settings: SettingsType | null,
+  field: LibraryPathField,
+  path: string | null,
+): SettingsType {
+  return {
+    movies_dir: settings?.movies_dir ?? null,
+    shows_dir: settings?.shows_dir ?? null,
+    music_dir: settings?.music_dir ?? null,
+    [field]: path,
+  };
+}
+
 function MusicLibrarySection() {
   const { data: statsData, isLoading: statsLoading } = useQuery(
     musicStatsQueryOpts(),
@@ -85,12 +107,31 @@ function MusicLibrarySection() {
   const sectionId = useId();
   const headingId = useId();
   const pathId = useId();
-  const statsId = useId();
+  const pathInputId = useId();
 
   const stats = statsData?.error === false ? statsData.data : null;
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.music_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
+  const sourcePath = libraryPath ?? "";
+  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
+  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
+
+  const updateMutation = useMutation({
+    mutationFn: updateLibrarySettings,
+    onSuccess: res => {
+      if (res.error) {
+        showActionFailed("save music library path", res.message);
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      showSuccess("Library path saved");
+    },
+    onError: () => {
+      showActionFailed("save music library path", "Failed to update path");
+    },
+  });
 
   const handleScan = () => {
     if (!libraryPath) {
@@ -129,12 +170,19 @@ function MusicLibrarySection() {
     });
   };
 
-  const handleAddLibrary = () => {
-    showError("Not implemented", "Adding libraries will be available soon");
+  const handleSaveLibrary = () => {
+    updateMutation.mutate(
+      librarySettingsPayload(
+        settings,
+        "music_dir",
+        pathValue.trim() === "" ? null : pathValue.trim(),
+      ),
+    );
   };
 
   const handleRemoveLibrary = () => {
-    showError("Not implemented", "Removing libraries will be available soon");
+    setPathDraft({ source: sourcePath, value: "" });
+    updateMutation.mutate(librarySettingsPayload(settings, "music_dir", null));
   };
 
   return (
@@ -155,70 +203,67 @@ function MusicLibrarySection() {
         </div>
       </div>
 
-      {/* Library Path */}
       <div
         id={pathId}
-        className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
+        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
-        {hasLibrary ? (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex min-w-0 flex-1 items-center gap-3'>
-              <FolderOpen
-                className='size-5 shrink-0 text-slate-300'
-                aria-hidden='true'
-              />
-              <div className='min-w-0 flex-1'>
-                <p className='text-sm font-medium text-slate-300'>
-                  Library Path
-                </p>
-                <p
-                  className='truncate text-sm text-slate-300'
-                  title={libraryPath!}
-                  aria-label={`Music library path: ${libraryPath}`}
-                >
-                  {libraryPath}
-                </p>
-              </div>
-            </div>
-            <div className='flex items-center gap-2 sm:shrink-0'>
-              <Button
-                variant='ghost'
-                size='sm'
-                onClick={handleRemoveLibrary}
-                aria-label={`Remove music library path: ${libraryPath}`}
-                className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-              >
-                <Trash2 className='mr-2 size-4' aria-hidden='true' />
-                Remove
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex items-center gap-3 text-slate-300'>
-              <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p className='text-sm'>
-                No library path configured
-              </p>
-            </div>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleAddLibrary}
-              aria-label='Add music library path'
-              className='border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'
-            >
+        <div className='flex items-center gap-3 text-slate-300'>
+          {hasLibrary ? (
+            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
+          ) : (
+            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
+          )}
+          <p className='text-sm'>
+            {hasLibrary ? "Library path configured" : "No library path configured"}
+          </p>
+        </div>
+        <div className='grid gap-2'>
+          <Label htmlFor={pathInputId}>Music library path</Label>
+          <Input
+            id={pathInputId}
+            value={pathValue}
+            onChange={event =>
+              setPathDraft({ source: sourcePath, value: event.target.value })
+            }
+            placeholder='/srv/media/music'
+            disabled={updateMutation.isPending}
+          />
+        </div>
+        <div className='flex flex-col gap-2 sm:flex-row'>
+          <Button
+            type='button'
+            size='sm'
+            onClick={handleSaveLibrary}
+            disabled={updateMutation.isPending}
+            className='bg-amber-500 text-slate-900 hover:bg-amber-400 hover:text-slate-900'
+          >
+            {updateMutation.isPending ? (
+              <Spinner className='mr-2 size-4' aria-hidden='true' />
+            ) : (
               <Plus className='mr-2 size-4' aria-hidden='true' />
-              Add Library
+            )}
+            Save Path
+          </Button>
+          {hasLibrary && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={handleRemoveLibrary}
+              disabled={updateMutation.isPending}
+              aria-label={`Remove music library path: ${libraryPath}`}
+              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
+            >
+              <Trash2 className='mr-2 size-4' aria-hidden='true' />
+              Remove
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Stats - Only show if library is configured */}
       {hasLibrary && (
         <div
-          id={statsId}
           className='grid gap-4 sm:grid-cols-3'
         >
           <div
@@ -354,11 +399,31 @@ function MoviesLibrarySection() {
   const sectionId = useId();
   const headingId = useId();
   const pathId = useId();
+  const pathInputId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const stats = statsData?.error === false ? statsData.data : null;
   const libraryPath: string | null = settings?.movies_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
+  const sourcePath = libraryPath ?? "";
+  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
+  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
+
+  const updateMutation = useMutation({
+    mutationFn: updateLibrarySettings,
+    onSuccess: res => {
+      if (res.error) {
+        showActionFailed("save movies library path", res.message);
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      showSuccess("Library path saved");
+    },
+    onError: () => {
+      showActionFailed("save movies library path", "Failed to update path");
+    },
+  });
 
   const handleScan = () => {
     if (!libraryPath) {
@@ -391,12 +456,19 @@ function MoviesLibrarySection() {
     });
   };
 
-  const handleAddLibrary = () => {
-    showError("Not implemented", "Adding libraries will be available soon");
+  const handleSaveLibrary = () => {
+    updateMutation.mutate(
+      librarySettingsPayload(
+        settings,
+        "movies_dir",
+        pathValue.trim() === "" ? null : pathValue.trim(),
+      ),
+    );
   };
 
   const handleRemoveLibrary = () => {
-    showError("Not implemented", "Removing libraries will be available soon");
+    setPathDraft({ source: sourcePath, value: "" });
+    updateMutation.mutate(librarySettingsPayload(settings, "movies_dir", null));
   };
 
   return (
@@ -417,64 +489,62 @@ function MoviesLibrarySection() {
         </div>
       </div>
 
-      {/* Library Path */}
       <div
         id={pathId}
-        className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
+        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
-        {hasLibrary ? (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex min-w-0 flex-1 items-center gap-3'>
-              <FolderOpen
-                className='size-5 shrink-0 text-slate-300'
-                aria-hidden='true'
-              />
-              <div className='min-w-0 flex-1'>
-                <p className='text-sm font-medium text-slate-300'>
-                  Library Path
-                </p>
-                <p
-                  className='truncate text-sm text-slate-300'
-                  title={libraryPath!}
-                  aria-label={`Movies library path: ${libraryPath}`}
-                >
-                  {libraryPath}
-                </p>
-              </div>
-            </div>
-            <div className='flex items-center gap-2 sm:shrink-0'>
-              <Button
-                variant='ghost'
-                size='sm'
-                onClick={handleRemoveLibrary}
-                aria-label={`Remove movies library path: ${libraryPath}`}
-                className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-              >
-                <Trash2 className='mr-2 size-4' aria-hidden='true' />
-                Remove
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex items-center gap-3 text-slate-300'>
-              <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p className='text-sm'>
-                No library path configured
-              </p>
-            </div>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleAddLibrary}
-              aria-label='Add movies library path'
-              className='border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'
-            >
+        <div className='flex items-center gap-3 text-slate-300'>
+          {hasLibrary ? (
+            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
+          ) : (
+            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
+          )}
+          <p className='text-sm'>
+            {hasLibrary ? "Library path configured" : "No library path configured"}
+          </p>
+        </div>
+        <div className='grid gap-2'>
+          <Label htmlFor={pathInputId}>Movies library path</Label>
+          <Input
+            id={pathInputId}
+            value={pathValue}
+            onChange={event =>
+              setPathDraft({ source: sourcePath, value: event.target.value })
+            }
+            placeholder='/srv/media/movies'
+            disabled={updateMutation.isPending}
+          />
+        </div>
+        <div className='flex flex-col gap-2 sm:flex-row'>
+          <Button
+            type='button'
+            size='sm'
+            onClick={handleSaveLibrary}
+            disabled={updateMutation.isPending}
+            className='bg-cyan-500 text-slate-900 hover:bg-cyan-400 hover:text-slate-900'
+          >
+            {updateMutation.isPending ? (
+              <Spinner className='mr-2 size-4' aria-hidden='true' />
+            ) : (
               <Plus className='mr-2 size-4' aria-hidden='true' />
-              Add Library
+            )}
+            Save Path
+          </Button>
+          {hasLibrary && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={handleRemoveLibrary}
+              disabled={updateMutation.isPending}
+              aria-label={`Remove movies library path: ${libraryPath}`}
+              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
+            >
+              <Trash2 className='mr-2 size-4' aria-hidden='true' />
+              Remove
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Stats - Only show if library is configured */}
@@ -544,24 +614,52 @@ function MoviesLibrarySection() {
 
 function TVShowsLibrarySection() {
   const { data: settingsData } = useQuery(settingsQueryOpts());
+  const queryClient = useQueryClient();
   const sectionId = useId();
   const headingId = useId();
   const pathId = useId();
+  const pathInputId = useId();
 
   const settings = settingsData?.error === false ? settingsData.data : null;
   const libraryPath: string | null = settings?.shows_dir ?? null;
   const hasLibrary = Boolean(libraryPath);
+  const sourcePath = libraryPath ?? "";
+  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
+  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
+
+  const updateMutation = useMutation({
+    mutationFn: updateLibrarySettings,
+    onSuccess: res => {
+      if (res.error) {
+        showActionFailed("save TV shows library path", res.message);
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      showSuccess("Library path saved");
+    },
+    onError: () => {
+      showActionFailed("save TV shows library path", "Failed to update path");
+    },
+  });
 
   const handleScan = () => {
     showError("Not implemented", "Library scanning will be available soon");
   };
 
-  const handleAddLibrary = () => {
-    showError("Not implemented", "Adding libraries will be available soon");
+  const handleSaveLibrary = () => {
+    updateMutation.mutate(
+      librarySettingsPayload(
+        settings,
+        "shows_dir",
+        pathValue.trim() === "" ? null : pathValue.trim(),
+      ),
+    );
   };
 
   const handleRemoveLibrary = () => {
-    showError("Not implemented", "Removing libraries will be available soon");
+    setPathDraft({ source: sourcePath, value: "" });
+    updateMutation.mutate(librarySettingsPayload(settings, "shows_dir", null));
   };
 
   return (
@@ -584,64 +682,62 @@ function TVShowsLibrarySection() {
         </div>
       </div>
 
-      {/* Library Path */}
       <div
         id={pathId}
-        className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
+        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
       >
-        {hasLibrary ? (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex min-w-0 flex-1 items-center gap-3'>
-              <FolderOpen
-                className='size-5 shrink-0 text-slate-300'
-                aria-hidden='true'
-              />
-              <div className='min-w-0 flex-1'>
-                <p className='text-sm font-medium text-slate-300'>
-                  Library Path
-                </p>
-                <p
-                  className='truncate text-sm text-slate-300'
-                  title={libraryPath!}
-                  aria-label={`TV shows library path: ${libraryPath}`}
-                >
-                  {libraryPath}
-                </p>
-              </div>
-            </div>
-            <div className='flex items-center gap-2 sm:shrink-0'>
-              <Button
-                variant='ghost'
-                size='sm'
-                onClick={handleRemoveLibrary}
-                aria-label={`Remove TV shows library path: ${libraryPath}`}
-                className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-              >
-                <Trash2 className='mr-2 size-4' aria-hidden='true' />
-                Remove
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='flex items-center gap-3 text-slate-300'>
-              <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-              <p className='text-sm'>
-                No library path configured
-              </p>
-            </div>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleAddLibrary}
-              aria-label='Add TV shows library path'
-              className='border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'
-            >
+        <div className='flex items-center gap-3 text-slate-300'>
+          {hasLibrary ? (
+            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
+          ) : (
+            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
+          )}
+          <p className='text-sm'>
+            {hasLibrary ? "Library path configured" : "No library path configured"}
+          </p>
+        </div>
+        <div className='grid gap-2'>
+          <Label htmlFor={pathInputId}>TV shows library path</Label>
+          <Input
+            id={pathInputId}
+            value={pathValue}
+            onChange={event =>
+              setPathDraft({ source: sourcePath, value: event.target.value })
+            }
+            placeholder='/srv/media/shows'
+            disabled={updateMutation.isPending}
+          />
+        </div>
+        <div className='flex flex-col gap-2 sm:flex-row'>
+          <Button
+            type='button'
+            size='sm'
+            onClick={handleSaveLibrary}
+            disabled={updateMutation.isPending}
+            className='bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900'
+          >
+            {updateMutation.isPending ? (
+              <Spinner className='mr-2 size-4' aria-hidden='true' />
+            ) : (
               <Plus className='mr-2 size-4' aria-hidden='true' />
-              Add Library
+            )}
+            Save Path
+          </Button>
+          {hasLibrary && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={handleRemoveLibrary}
+              disabled={updateMutation.isPending}
+              aria-label={`Remove TV shows library path: ${libraryPath}`}
+              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
+            >
+              <Trash2 className='mr-2 size-4' aria-hidden='true' />
+              Remove
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Stats Placeholder - Only show if library is configured */}

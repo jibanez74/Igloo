@@ -8,6 +8,8 @@ WEB_EMBED_DIR := $(SERVER_DIR)/cmd/api/webdist
 DIST_DIR := $(SERVER_DIR)/dist
 SERVER_BINARY := dist/$(BINARY_NAME)
 BINARY_PATH := $(SERVER_DIR)/$(SERVER_BINARY)
+DEV_BINARY := dist/$(BINARY_NAME)-dev
+DEV_BINARY_PATH := $(SERVER_DIR)/$(DEV_BINARY)
 PID_FILE := $(DIST_DIR)/$(BINARY_NAME).pid
 LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 
@@ -28,7 +30,9 @@ FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 dev: check-dev-tools generate prepare-test-webdist
 	@echo "Starting development server..."
 	@echo "Start the web client separately with: cd $(WEB_DIR) && bun run dev"
-	@cd $(SERVER_DIR) && env CGO_ENABLED=1 VITE_DEV_SERVER=http://localhost:3000 go run -tags "$(DEV_TAGS)" ./cmd/api
+	@mkdir -p $(DIST_DIR)
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go build -tags "$(DEV_TAGS)" -o $(DEV_BINARY) ./cmd/api
+	@env VITE_DEV_SERVER=http://localhost:3000 "$(DEV_BINARY_PATH)"
 
 build: check-build-tools check-media-payloads generate prepare-web
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)..."

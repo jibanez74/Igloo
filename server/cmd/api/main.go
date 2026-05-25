@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -121,10 +120,6 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize logger: %v", err)
 	}
 
-	// Remove any leftover HLS temp directories from a previous run that did not
-	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
-	cleanupStaleHLSTempDirs(app.Logger, app.Config)
-
 	err = app.InitDB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
@@ -149,6 +144,10 @@ func InitApp() (*Application, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize settings: %v", err)
 	}
+
+	// Remove any leftover HLS temp directories from a previous run that did not
+	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
+	cleanupStaleHLSTempDirs(app.Logger, app.Settings.TranscodeDir)
 
 	app.WatchRoomHub = NewWatchRoomHub()
 
@@ -378,7 +377,6 @@ func (app *Application) ensureColumn(table string, column string, alterSQL strin
 func (app *Application) InitSettings(ctx context.Context) error {
 	settings, err := app.Queries.GetSettings(ctx)
 	if err == nil {
-		applyRuntimeSettingOverrides(&settings)
 		app.Logger.Info("loaded existing settings from database")
 		app.Settings = &settings
 		return nil
@@ -394,8 +392,10 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	logsDir := app.Config.effectiveLogsDir()
-	staticDir := app.Config.effectiveStaticDir()
+	dataDir := app.Config.effectiveDataDir()
+	logsDir := configuredLogsDir(dataDir)
+	staticDir := configuredStaticDir(dataDir)
+	transcodeDir := configuredTranscodeDir(dataDir)
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {
@@ -416,6 +416,7 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		MusicDir:                   optionalEnvSetting("MUSIC_DIR"),
 		StaticDir:                  staticDir,
 		LogsDir:                    logsDir,
+		TranscodeDir:               transcodeDir,
 	}
 
 	settings, err = app.Queries.CreateSettings(ctx, params)
@@ -425,7 +426,6 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	app.Logger.Info("default settings created successfully")
 
-	applyRuntimeSettingOverrides(&settings)
 	app.Settings = &settings
 
 	return nil
@@ -464,7 +464,7 @@ func (app *Application) InitDirs() error {
 		}
 	}
 
-	transcodeDir := app.Config.effectiveTranscodeDir()
+	transcodeDir := app.Settings.TranscodeDir
 	if transcodeDir != "" {
 		created, err = helpers.GetOrCreateDir(transcodeDir)
 		if err != nil {
@@ -622,71 +622,6 @@ func (app *Application) InitSession() {
 
 func optionalEnvSetting(envName string) sql.NullString {
 	return helpers.NullString(strings.TrimSpace(os.Getenv(envName)))
-}
-
-func applyRuntimeSettingOverrides(settings *database.Setting) {
-	if settings == nil {
-		return
-	}
-
-	overrideNullStringSetting(&settings.TmdbKey, "TMDB_API_KEY")
-	overrideNullStringSetting(&settings.JellyfinToken, "JELLYFIN_TOKEN")
-	overrideNullStringSetting(&settings.SpotifyClientID, "SPOTIFY_CLIENT_ID")
-	overrideNullStringSetting(&settings.SpotifyClientSecret, "SPOTIFY_CLIENT_SECRET")
-	overrideNullStringSetting(&settings.HardwareAccelerationDevice, "HARDWARE_ACCELERATION_DEVICE")
-	overrideBoolSetting(&settings.EnableLogger, "ENABLE_LOGGER")
-	overrideBoolSetting(&settings.EnableWatcher, "ENABLE_WATCHER")
-	overrideBoolSetting(&settings.DownloadImages, "DOWNLOAD_IMAGES")
-	overrideNullStringSetting(&settings.MoviesDir, "MOVIES_DIR")
-	overrideNullStringSetting(&settings.ShowsDir, "SHOWS_DIR")
-	overrideNullStringSetting(&settings.MusicDir, "MUSIC_DIR")
-	overrideStringSetting(&settings.StaticDir, "STATIC_DIR")
-	overrideStringSetting(&settings.LogsDir, "LOGS_DIR")
-}
-
-func overrideNullStringSetting(target *sql.NullString, envName string) {
-	if target == nil {
-		return
-	}
-
-	value, ok := os.LookupEnv(envName)
-	if !ok || strings.TrimSpace(value) == "" {
-		return
-	}
-
-	*target = helpers.NullString(strings.TrimSpace(value))
-}
-
-func overrideStringSetting(target *string, envName string) {
-	if target == nil {
-		return
-	}
-
-	value, ok := os.LookupEnv(envName)
-	if !ok || strings.TrimSpace(value) == "" {
-		return
-	}
-
-	*target = strings.TrimSpace(value)
-}
-
-func overrideBoolSetting(target *bool, envName string) {
-	if target == nil {
-		return
-	}
-
-	value, ok := os.LookupEnv(envName)
-	if !ok || strings.TrimSpace(value) == "" {
-		return
-	}
-
-	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
-	if err != nil {
-		slog.Warn("invalid boolean value for env var, keeping current value", "env", envName, "value", value)
-		return
-	}
-
-	*target = parsed
 }
 
 func (app *Application) InitRouter() {
@@ -851,6 +786,7 @@ func (app *Application) registerSettingsRoutes(r chi.Router) {
 		r.Get("/", app.GetSettings)
 		r.With(app.RequireAdmin).Get("/general", app.GetGeneralSettings)
 		r.With(app.RequireAdmin).Put("/general", app.UpdateGeneralSettings)
+		r.With(app.RequireAdmin).Put("/libraries", app.UpdateLibrarySettings)
 		r.Get("/playback", app.GetPlaybackSettings)
 		r.Put("/playback", app.UpdatePlaybackSettings)
 		r.With(app.RequireAdmin).Post("/scan/music", app.TriggerMusicScan)
@@ -929,8 +865,7 @@ func (app *Application) registerUserStatsRoutes(r chi.Router) {
 // cleanupStaleHLSTempDirs removes leftover igloo-hls-* directories from the
 // configured transcode workspace. These accumulate when the server is killed
 // without a graceful shutdown (e.g., systemd SIGKILL escalation, crash, power loss).
-func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface, config RuntimeConfig) {
-	transcodeDir := config.effectiveTranscodeDir()
+func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface, transcodeDir string) {
 	pattern := filepath.Join(transcodeDir, "igloo-hls-*")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {

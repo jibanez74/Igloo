@@ -273,6 +273,9 @@ func (app *Application) hlsTranscodeRoot() string {
 	if app == nil {
 		return RuntimeConfig{}.effectiveTranscodeDir()
 	}
+	if app.Settings != nil && strings.TrimSpace(app.Settings.TranscodeDir) != "" {
+		return app.Settings.TranscodeDir
+	}
 	return app.Config.effectiveTranscodeDir()
 }
 

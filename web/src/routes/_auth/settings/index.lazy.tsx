@@ -112,6 +112,7 @@ function formFromSettings(
     download_images: settings.download_images,
     static_dir: settings.static_dir,
     logs_dir: settings.logs_dir,
+    transcode_dir: settings.transcode_dir,
     server_upload_mbps: settings.server_upload_mbps,
   };
 }
@@ -169,6 +170,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const hardwareDeviceId = useId();
   const staticDirId = useId();
   const logsDirId = useId();
+  const transcodeDirId = useId();
   const serverUploadMbpsId = useId();
   const enableLoggerId = useId();
   const enableWatcherId = useId();
@@ -220,7 +222,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const handleTextChange = (
-    field: "static_dir" | "logs_dir",
+    field: "static_dir" | "logs_dir" | "transcode_dir",
     value: string,
   ) => {
     setForm(current => ({ ...current, [field]: value }));
@@ -273,6 +275,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       return { field: "logs_dir", message: "Logs directory is required." };
     }
 
+    if (form.transcode_dir.trim() === "") {
+      return {
+        field: "transcode_dir",
+        message: "Transcode directory is required.",
+      };
+    }
+
     if (
       form.server_upload_mbps != null &&
       (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
@@ -307,6 +316,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       spotify_client_secret: form.spotify_client_secret.trim(),
       static_dir: form.static_dir.trim(),
       logs_dir: form.logs_dir.trim(),
+      transcode_dir: form.transcode_dir.trim(),
     });
   };
 
@@ -491,7 +501,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Configure application-owned storage outside media libraries.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 lg:grid-cols-2">
+        <CardContent className="grid gap-5 lg:grid-cols-3">
           <PathInput
             id={staticDirId}
             name="static_dir"
@@ -513,6 +523,17 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={<Logs className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "logs_dir"}
+          />
+          <PathInput
+            id={transcodeDirId}
+            name="transcode_dir"
+            label="Transcode directory"
+            value={form.transcode_dir}
+            onChange={value => handleTextChange("transcode_dir", value)}
+            disabled={updateMutation.isPending}
+            icon={<HardDrive className="size-4" aria-hidden="true" />}
+            required
+            invalid={validationField === "transcode_dir"}
           />
         </CardContent>
       </Card>
