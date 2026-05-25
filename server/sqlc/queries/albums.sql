@@ -31,6 +31,14 @@ WHERE cover IS NULL
   OR TRIM(cover) = ''
 ORDER BY id ASC;
 
+-- name: GetAlbumsMissingSpotifyID :many
+SELECT
+  *
+FROM albums
+WHERE spotify_id IS NULL
+  OR TRIM(spotify_id) = ''
+ORDER BY id ASC;
+
 -- name: GetAlbumsAlphabetical :many
 -- Returns albums sorted alphabetically by title with pagination.
 -- Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.

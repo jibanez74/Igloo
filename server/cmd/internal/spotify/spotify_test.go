@@ -1298,4 +1298,46 @@ func TestNew(t *testing.T) {
 			t.Fatalf("tokenCallCount = %d, want 2", tokenCallCount)
 		}
 	})
+
+	t.Run("retries rate limited API requests", func(t *testing.T) {
+		searchCallCount := 0
+		httpClient := &http.Client{
+			Transport: &mockTransport{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.String() == "https://accounts.spotify.com/api/token" {
+					writeSpotifyTokenResponse(t, w, "test-token")
+					return
+				}
+
+				if !strings.HasSuffix(r.URL.Path, "/search") {
+					t.Fatalf("unexpected request URL: %s", r.URL.String())
+				}
+
+				searchCallCount++
+				if searchCallCount == 1 {
+					w.Header().Set("Retry-After", "0")
+					writeSpotifyAPIError(t, w, http.StatusTooManyRequests, "rate limited")
+					return
+				}
+
+				writeJSON(t, w, artistSearchJSON("jm123", "John Mayer"))
+			})},
+		}
+		ctx := context.WithValue(context.Background(), interface{}(oauth2.HTTPClient), httpClient)
+
+		client, err := New(ctx, "client-id", "client-secret")
+		if err != nil {
+			t.Fatalf("expected constructor to succeed, got error: %v", err)
+		}
+
+		artist, err := client.SearchArtistByName(ctx, "John Mayer")
+		if err != nil {
+			t.Fatalf("SearchArtistByName failed: %v", err)
+		}
+		if artist.Name != "John Mayer" {
+			t.Fatalf("artist.Name = %q, want John Mayer", artist.Name)
+		}
+		if searchCallCount != 2 {
+			t.Fatalf("searchCallCount = %d, want 2", searchCallCount)
+		}
+	})
 }

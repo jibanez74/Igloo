@@ -25,16 +25,16 @@ type RuntimeConfig struct {
 }
 
 func LoadRuntimeEnvFile() (string, bool, error) {
-	const envFile = ".env"
-
-	if err := godotenv.Load(envFile); err != nil {
+	err := godotenv.Load(helpers.ENV_FILE)
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", false, nil
 		}
-		return "", false, fmt.Errorf("failed to load %s: %w", envFile, err)
+
+		return "", false, fmt.Errorf("failed to load %s: %w", helpers.ENV_FILE, err)
 	}
 
-	return envFile, true, nil
+	return helpers.ENV_FILE, true, nil
 }
 
 func NewRuntimeConfig() (RuntimeConfig, error) {
@@ -67,6 +67,10 @@ func (config RuntimeConfig) effectiveDBPath() string {
 	return value
 }
 
+func (config RuntimeConfig) effectiveDataDir() string {
+	return ""
+}
+
 func (config RuntimeConfig) effectiveStaticDir() string {
 	value := strings.TrimSpace(config.StaticDir)
 	if value == "" {
@@ -95,15 +99,15 @@ func configuredDBPath() string {
 	return envString(helpers.ENV_DB_PATH, helpers.DEFAULT_DB_PATH)
 }
 
-func configuredStaticDir() string {
+func configuredStaticDir(_ ...string) string {
 	return envString(helpers.ENV_STATIC_DIR, helpers.DEFAULT_STATIC_DIR)
 }
 
-func configuredLogsDir() string {
+func configuredLogsDir(_ ...string) string {
 	return envString(helpers.ENV_LOGS_DIR, helpers.DEFAULT_LOGS_DIR)
 }
 
-func configuredTranscodeDir() string {
+func configuredTranscodeDir(_ ...string) string {
 	return envString(helpers.ENV_TRANSCODE_DIR, helpers.DEFAULT_TRANSCODE_DIR)
 }
 

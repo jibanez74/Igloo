@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,8 +33,14 @@ type stubSpotifyLookup struct {
 	err    error
 }
 
+type stubSpotifyAlbumLookup struct {
+	album *spotifylib.FullAlbum
+	err   error
+}
+
 type stubMusicScannerSpotify struct {
 	artistLookups map[string]stubSpotifyLookup
+	albumLookups  map[string]stubSpotifyAlbumLookup
 	album         *spotifylib.FullAlbum
 	albumErr      error
 	albumInputs   []spotifyapi.AlbumSearchInput
@@ -41,6 +48,10 @@ type stubMusicScannerSpotify struct {
 
 func (s *stubMusicScannerSpotify) SearchAndGetAlbumDetails(_ context.Context, input spotifyapi.AlbumSearchInput) (*spotifylib.FullAlbum, error) {
 	s.albumInputs = append(s.albumInputs, input)
+	if lookup, ok := s.albumLookups[input.Title]; ok {
+		return lookup.album, lookup.err
+	}
+
 	return s.album, s.albumErr
 }
 
@@ -145,11 +156,12 @@ func newTestAlbumTrackMetadata(artist, album string) *ffprobe.FfprobeResult {
 func newStubAlbum(id, name, coverURL string) *spotifylib.FullAlbum {
 	return &spotifylib.FullAlbum{
 		SimpleAlbum: spotifylib.SimpleAlbum{
-			ID:          spotifylib.ID(id),
-			Name:        name,
-			ReleaseDate: "2020-01-01",
-			Images:      []spotifylib.Image{{URL: coverURL, Width: 640, Height: 640}},
-			TotalTracks: 1,
+			ID:                   spotifylib.ID(id),
+			Name:                 name,
+			ReleaseDate:          "2020-01-01",
+			ReleaseDatePrecision: "day",
+			Images:               []spotifylib.Image{{URL: coverURL, Width: 640, Height: 640}},
+			TotalTracks:          1,
 		},
 		Popularity: 75,
 	}
@@ -165,6 +177,95 @@ func albumCover(t *testing.T, db *sql.DB, title string) sql.NullString {
 	}
 
 	return cover
+}
+
+type scannerCapturedLogEntry struct {
+	msg  string
+	args []any
+}
+
+type scannerCapturedLogger struct {
+	warnEntries []scannerCapturedLogEntry
+}
+
+func (l *scannerCapturedLogger) Debug(_ string, _ ...any) {}
+
+func (l *scannerCapturedLogger) Info(_ string, _ ...any) {}
+
+func (l *scannerCapturedLogger) Warn(msg string, args ...any) {
+	entry := scannerCapturedLogEntry{
+		msg:  msg,
+		args: make([]any, len(args)),
+	}
+	copy(entry.args, args)
+	l.warnEntries = append(l.warnEntries, entry)
+}
+
+func (l *scannerCapturedLogger) Error(_ string, _ ...any) {}
+
+func logArgValue(args []any, key string) any {
+	for index := 0; index+1 < len(args); index += 2 {
+		if args[index] == key {
+			return args[index+1]
+		}
+	}
+	return nil
+}
+
+func insertAlbumWithTracks(t *testing.T, db *sql.DB, title, musician string, tracks []string, year int) int64 {
+	t.Helper()
+
+	result, err := db.Exec(
+		`INSERT INTO albums (title, sort_title, musician) VALUES (?, ?, ?)`,
+		title,
+		title,
+		musician,
+	)
+	if err != nil {
+		t.Fatalf("insert album: %v", err)
+	}
+
+	albumID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("album LastInsertId: %v", err)
+	}
+
+	for index, title := range tracks {
+		var trackYear sql.NullInt64
+		if year > 0 {
+			trackYear = sql.NullInt64{Int64: int64(year), Valid: true}
+		}
+
+		_, err = db.Exec(
+			`INSERT INTO tracks (
+				title, sort_title, file_path, file_name, container, mime_type, codec,
+				size, track_index, duration, disc, channels, channel_layout, bit_rate,
+				profile, year, album_id
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			title,
+			title,
+			fmt.Sprintf("/music/%d/%02d.mp3", albumID, index+1),
+			fmt.Sprintf("%02d.mp3", index+1),
+			"mp3",
+			"audio/mpeg",
+			"mp3",
+			int64(123456+index),
+			int64(index+1),
+			int64(180000),
+			int64(1),
+			"stereo",
+			"stereo",
+			int64(320000),
+			"Layer 3",
+			trackYear,
+			albumID,
+		)
+		if err != nil {
+			t.Fatalf("insert track %q: %v", title, err)
+		}
+	}
+
+	return albumID
 }
 
 func musicianNames(t *testing.T, db *sql.DB) []string {
@@ -491,6 +592,137 @@ func TestProcessTrackFile_ExtractsEmbeddedAlbumArtwork(t *testing.T) {
 	}
 	if string(got) != "image" {
 		t.Fatalf("extracted cover = %q, want %q", got, "image")
+	}
+}
+
+func TestBackfillMissingAlbumSpotifyIDs_UpdatesExistingAlbumWithTrackEvidence(t *testing.T) {
+	spotifyClient := &stubMusicScannerSpotify{
+		album: newStubAlbum("example-album", "Example Album", "https://example.com/cover.jpg"),
+	}
+	app := newMusicScannerTestApp(t, nil, spotifyClient)
+	albumID := insertAlbumWithTracks(t, app.DB, "Example Album", "The Example", []string{
+		"First Song",
+		"Second Song",
+	}, 2020)
+
+	backfilled, err := app.backfillMissingAlbumSpotifyIDs(context.Background())
+	if err != nil {
+		t.Fatalf("backfillMissingAlbumSpotifyIDs failed: %v", err)
+	}
+	if backfilled != 1 {
+		t.Fatalf("backfilled = %d, want 1", backfilled)
+	}
+
+	updatedAlbum, err := app.Queries.GetAlbumByID(context.Background(), albumID)
+	if err != nil {
+		t.Fatalf("get updated album: %v", err)
+	}
+	if !updatedAlbum.SpotifyID.Valid || updatedAlbum.SpotifyID.String != "example-album" {
+		t.Fatalf("SpotifyID = %#v, want example-album", updatedAlbum.SpotifyID)
+	}
+	if !updatedAlbum.SpotifyPopularity.Valid || updatedAlbum.SpotifyPopularity.Float64 != 75 {
+		t.Fatalf("SpotifyPopularity = %#v, want 75", updatedAlbum.SpotifyPopularity)
+	}
+	if !updatedAlbum.ReleaseDate.Valid || updatedAlbum.ReleaseDate.String != "2020-01-01" {
+		t.Fatalf("ReleaseDate = %#v, want 2020-01-01", updatedAlbum.ReleaseDate)
+	}
+	if !updatedAlbum.Year.Valid || updatedAlbum.Year.Int64 != 2020 {
+		t.Fatalf("Year = %#v, want 2020", updatedAlbum.Year)
+	}
+	if !updatedAlbum.TotalTracks.Valid || updatedAlbum.TotalTracks.Int64 != 1 {
+		t.Fatalf("TotalTracks = %#v, want 1", updatedAlbum.TotalTracks)
+	}
+	if !updatedAlbum.Cover.Valid || updatedAlbum.Cover.String != "https://example.com/cover.jpg" {
+		t.Fatalf("Cover = %#v, want Spotify cover URL", updatedAlbum.Cover)
+	}
+
+	if len(spotifyClient.albumInputs) != 1 {
+		t.Fatalf("albumInputs len = %d, want 1", len(spotifyClient.albumInputs))
+	}
+	input := spotifyClient.albumInputs[0]
+	if input.Title != "Example Album" || input.Artist != "The Example" || input.Year != 2020 {
+		t.Fatalf("album input = %+v, want title/artist/year from existing album", input)
+	}
+	wantTrackTitles := []string{"First Song", "Second Song"}
+	if len(input.TrackTitles) != len(wantTrackTitles) {
+		t.Fatalf("TrackTitles = %#v, want %#v", input.TrackTitles, wantTrackTitles)
+	}
+	for index := range wantTrackTitles {
+		if input.TrackTitles[index] != wantTrackTitles[index] {
+			t.Fatalf("TrackTitles = %#v, want %#v", input.TrackTitles, wantTrackTitles)
+		}
+	}
+}
+
+func TestBackfillMissingAlbumSpotifyIDs_LogsFailuresAndContinues(t *testing.T) {
+	matchErr := &spotifyapi.MatchError{
+		Info: spotifyapi.MatchDebugInfo{
+			Lookup:        "album",
+			Input:         "Missing Album",
+			SearchQuery:   `album:"Missing Album" artist:"The Example"`,
+			Strategy:      "album_field_search",
+			CandidateName: "Wrong Album",
+			Score:         42,
+			Threshold:     76,
+			Reason:        "score_below_threshold",
+		},
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		albumLookups: map[string]stubSpotifyAlbumLookup{
+			"Missing Album": {
+				err: matchErr,
+			},
+			"Matched Album": {
+				album: newStubAlbum("matched-album", "Matched Album", "https://example.com/matched.jpg"),
+			},
+		},
+	}
+	app := newMusicScannerTestApp(t, nil, spotifyClient)
+	logger := &scannerCapturedLogger{}
+	app.Logger = logger
+
+	missingAlbumID := insertAlbumWithTracks(t, app.DB, "Missing Album", "The Example", []string{"Missing Song"}, 2020)
+	matchedAlbumID := insertAlbumWithTracks(t, app.DB, "Matched Album", "The Example", []string{"Matched Song"}, 2020)
+
+	backfilled, err := app.backfillMissingAlbumSpotifyIDs(context.Background())
+	if err != nil {
+		t.Fatalf("backfillMissingAlbumSpotifyIDs failed: %v", err)
+	}
+	if backfilled != 1 {
+		t.Fatalf("backfilled = %d, want 1", backfilled)
+	}
+
+	missingAlbum, err := app.Queries.GetAlbumByID(context.Background(), missingAlbumID)
+	if err != nil {
+		t.Fatalf("get missing album: %v", err)
+	}
+	if missingAlbum.SpotifyID.Valid {
+		t.Fatalf("missing album SpotifyID = %#v, want null", missingAlbum.SpotifyID)
+	}
+
+	matchedAlbum, err := app.Queries.GetAlbumByID(context.Background(), matchedAlbumID)
+	if err != nil {
+		t.Fatalf("get matched album: %v", err)
+	}
+	if !matchedAlbum.SpotifyID.Valid || matchedAlbum.SpotifyID.String != "matched-album" {
+		t.Fatalf("matched album SpotifyID = %#v, want matched-album", matchedAlbum.SpotifyID)
+	}
+
+	if len(logger.warnEntries) != 1 {
+		t.Fatalf("warnEntries len = %d, want 1", len(logger.warnEntries))
+	}
+	entry := logger.warnEntries[0]
+	if entry.msg != "failed to match album on Spotify" {
+		t.Fatalf("warn message = %q, want Spotify match failure", entry.msg)
+	}
+	if got := logArgValue(entry.args, "reason"); got != "score_below_threshold" {
+		t.Fatalf("logged reason = %#v, want score_below_threshold", got)
+	}
+	if got := logArgValue(entry.args, "candidate"); got != "Wrong Album" {
+		t.Fatalf("logged candidate = %#v, want Wrong Album", got)
+	}
+	if got := logArgValue(entry.args, "score"); got != 42 {
+		t.Fatalf("logged score = %#v, want 42", got)
 	}
 }
 

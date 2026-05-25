@@ -85,6 +85,7 @@ type Querier interface {
 	GetAlbumsByMusicianID(ctx context.Context, musicianID int64) ([]GetAlbumsByMusicianIDRow, error)
 	GetAlbumsCount(ctx context.Context) (int64, error)
 	GetAlbumsMissingCover(ctx context.Context) ([]Album, error)
+	GetAlbumsMissingSpotifyID(ctx context.Context) ([]Album, error)
 	GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error)
 	// Audio streams for a movie (for technical details and playback settings).
 	GetAudioStreamsByMovieID(ctx context.Context, movieID int64) ([]AudioStream, error)

@@ -183,6 +183,51 @@ func (q *Queries) GetAlbumsMissingCover(ctx context.Context) ([]Album, error) {
 	return items, nil
 }
 
+const getAlbumsMissingSpotifyID = `-- name: GetAlbumsMissingSpotifyID :many
+SELECT
+  id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+FROM albums
+WHERE spotify_id IS NULL
+  OR TRIM(spotify_id) = ''
+ORDER BY id ASC
+`
+
+func (q *Queries) GetAlbumsMissingSpotifyID(ctx context.Context) ([]Album, error) {
+	rows, err := q.query(ctx, q.getAlbumsMissingSpotifyIDStmt, getAlbumsMissingSpotifyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Album{}
+	for rows.Next() {
+		var i Album
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.SortTitle,
+			&i.SpotifyID,
+			&i.SpotifyPopularity,
+			&i.Musician,
+			&i.ReleaseDate,
+			&i.Year,
+			&i.TotalTracks,
+			&i.Cover,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestAlbums = `-- name: GetLatestAlbums :many
 SELECT
   id,

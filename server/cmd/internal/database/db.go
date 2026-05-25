@@ -189,6 +189,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumsMissingCoverStmt, err = db.PrepareContext(ctx, getAlbumsMissingCover); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumsMissingCover: %w", err)
 	}
+	if q.getAlbumsMissingSpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumsMissingSpotifyID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumsMissingSpotifyID: %w", err)
+	}
 	if q.getAllUsersStmt, err = db.PrepareContext(ctx, getAllUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAllUsers: %w", err)
 	}
@@ -815,6 +818,11 @@ func (q *Queries) Close() error {
 	if q.getAlbumsMissingCoverStmt != nil {
 		if cerr := q.getAlbumsMissingCoverStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumsMissingCoverStmt: %w", cerr)
+		}
+	}
+	if q.getAlbumsMissingSpotifyIDStmt != nil {
+		if cerr := q.getAlbumsMissingSpotifyIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumsMissingSpotifyIDStmt: %w", cerr)
 		}
 	}
 	if q.getAllUsersStmt != nil {
@@ -1491,6 +1499,7 @@ type Queries struct {
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
 	getAlbumsCountStmt                          *sql.Stmt
 	getAlbumsMissingCoverStmt                   *sql.Stmt
+	getAlbumsMissingSpotifyIDStmt               *sql.Stmt
 	getAllUsersStmt                             *sql.Stmt
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
@@ -1668,6 +1677,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
 		getAlbumsCountStmt:                          q.getAlbumsCountStmt,
 		getAlbumsMissingCoverStmt:                   q.getAlbumsMissingCoverStmt,
+		getAlbumsMissingSpotifyIDStmt:               q.getAlbumsMissingSpotifyIDStmt,
 		getAllUsersStmt:                             q.getAllUsersStmt,
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,

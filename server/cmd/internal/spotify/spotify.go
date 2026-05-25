@@ -43,7 +43,7 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 	}
 
 	httpClient := config.Client(ctx)
-	client := spotify.New(httpClient)
+	client := spotify.New(httpClient, spotify.WithRetry(true))
 
 	return &spotifyClient{
 		client:      client,

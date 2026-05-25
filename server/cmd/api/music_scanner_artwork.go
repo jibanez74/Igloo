@@ -126,10 +126,31 @@ func (app *Application) backfillMissingAlbumCover(
 		return false, nil
 	}
 
+	input := buildExistingAlbumScanInput(album, tracks)
+
+	updated, err := app.setLocalAlbumCoverIfMissing(ctx, qtx, album.ID, input)
+	if err != nil {
+		return false, err
+	}
+	if updated {
+		return true, nil
+	}
+
+	updatedAlbum, err := qtx.GetAlbumByID(ctx, album.ID)
+	if err != nil {
+		return false, err
+	}
+
+	return !albumCoverMissing(updatedAlbum), nil
+}
+
+func buildExistingAlbumScanInput(album database.Album, tracks []database.GetAlbumTracksForArtworkRow) albumScanInput {
 	input := albumScanInput{
 		Title:     album.Title,
 		SortTitle: album.SortTitle,
-		Year:      int(album.Year.Int64),
+	}
+	if album.Year.Valid {
+		input.Year = int(album.Year.Int64)
 	}
 	if album.Musician.Valid {
 		input.AlbumArtist = album.Musician.String
@@ -160,17 +181,7 @@ func (app *Application) backfillMissingAlbumCover(
 		}
 	}
 
-	_, err = app.getOrCreateAlbum(ctx, qtx, input)
-	if err != nil {
-		return false, err
-	}
-
-	updatedAlbum, err := qtx.GetAlbumByID(ctx, album.ID)
-	if err != nil {
-		return false, err
-	}
-
-	return !albumCoverMissing(updatedAlbum), nil
+	return input
 }
 
 func (app *Application) setSpotifyAlbumCoverIfMissing(

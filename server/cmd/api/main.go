@@ -61,8 +61,6 @@ type Application struct {
 	WatchRoomHub        *WatchRoomHub
 }
 
-// SQL is the embedded startup schema applied by InitTables.
-//
 //go:embed schema.sql
 var SQL string
 
@@ -176,9 +174,36 @@ func InitApp() (*Application, error) {
 	}
 	app.FFmpeg = ffmpegApp
 
+	if app.Settings.TmdbKey.Valid {
+		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
+		if err != nil {
+			app.Logger.Warn("failed to initialize tmdb client", "error", err)
+		} else {
+			app.Tmdb = tmdb
+			app.Logger.Info("tmdb client initialized successfully")
+		}
+	}
+
+	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
+		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
+		spotifyClient, err := spotify.New(
+			ctx,
+			app.Settings.SpotifyClientID.String,
+			app.Settings.SpotifyClientSecret.String,
+		)
+
+		if err != nil {
+			app.Logger.Warn("failed to initialize spotify client", "error", err)
+		} else {
+			app.Spotify = spotifyClient
+			app.Logger.Info("spotify client initialized successfully")
+		}
+	}
+
 	app.initRuntimeCaches()
-	app.initMediaClients(ctx)
-	app.startLibraryScans()
+
+	go app.ScanMusicLibrary()
+	go app.ScanMoviesLibrary()
 
 	app.InitRouter()
 
@@ -205,44 +230,6 @@ func (app *Application) initRuntimeCaches() {
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
-}
-
-func (app *Application) initMediaClients(ctx context.Context) {
-	if app.Settings.TmdbKey.Valid {
-		tmdb, err := tmdb.New(app.Settings.TmdbKey.String)
-		if err != nil {
-			app.Logger.Warn("failed to initialize tmdb client", "error", err)
-		} else {
-			app.Tmdb = tmdb
-			app.Logger.Info("tmdb client initialized successfully")
-		}
-	}
-
-	if app.Settings.SpotifyClientID.Valid && app.Settings.SpotifyClientID.String != "" &&
-		app.Settings.SpotifyClientSecret.Valid && app.Settings.SpotifyClientSecret.String != "" {
-		spotifyClient, err := spotify.New(
-			ctx,
-			app.Settings.SpotifyClientID.String,
-			app.Settings.SpotifyClientSecret.String,
-		)
-
-		if err != nil {
-			app.Logger.Warn("failed to initialize spotify client", "error", err)
-		} else {
-			app.Spotify = spotifyClient
-			app.Logger.Info("spotify client initialized successfully")
-		}
-	}
-}
-
-func (app *Application) startLibraryScans() {
-	if app.Settings.MoviesDir.Valid && app.Settings.MoviesDir.String != "" {
-		go app.ScanMoviesLibrary()
-	}
-
-	if app.Settings.MusicDir.Valid && app.Settings.MusicDir.String != "" {
-		go app.ScanMusicLibrary()
-	}
 }
 
 func (app *Application) InitDB() error {
@@ -392,9 +379,10 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	logsDir := configuredLogsDir()
-	staticDir := configuredStaticDir()
-	transcodeDir := configuredTranscodeDir()
+	dataDir := app.Config.effectiveDataDir()
+	logsDir := configuredLogsDir(dataDir)
+	staticDir := configuredStaticDir(dataDir)
+	transcodeDir := configuredTranscodeDir(dataDir)
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {

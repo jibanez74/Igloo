@@ -3,6 +3,7 @@ package helpers
 import "time"
 
 const (
+	ENV_FILE = ".env"
 	// logger
 	LOGGER_MAX_LINES = 500
 
