@@ -103,10 +103,10 @@ Prerequisites:
 
 - Go `1.26.2`, matching `server/go.mod`
 - CGO enabled, with a working C compiler
-- SQLite support with FTS5 enabled; use the Make targets so the `sqlite_fts5` build tag is applied
+- SQLite support with FTS5 enabled; use the documented Make and Go test commands so the `sqlite_fts5` build tag is applied
 - `sqlc` on your `PATH`
 - Bun for the web client
-- `ffmpeg` and `ffprobe` on your `PATH` for `make dev`, `make test`, and CI-style tests
+- `ffmpeg` and `ffprobe` on your `PATH` for `make dev` and backend tests
 - Local embedded ffmpeg/ffprobe payload files only when building release binaries
 
 Create your environment file:
@@ -137,11 +137,12 @@ Vite runs on `http://localhost:3000` and proxies `/api` requests to the Go serve
 Start the backend in another terminal:
 
 ```bash
-cd server
 make dev
 ```
 
 `make dev` runs sqlc generation, syncs the embedded schema copy, and starts the API with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
+
+Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from `server/`, so the root `.env` is loaded through the existing `../.env` fallback.
 
 ## Building Binaries
 
@@ -157,38 +158,34 @@ Required payload paths:
 Build the complete binary for the current supported platform:
 
 ```bash
-cd server
 make build
 ```
 
-Create a release tarball:
+`make build` writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64.
+
+Run the built application in the background:
 
 ```bash
-cd server
-make package
+make start
 ```
 
-Platform-specific package targets are native-only:
+`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served; all other runtime configuration continues to come from the shell environment and `.env` files. Stop that process with:
 
 ```bash
-make package-linux-amd64   # must run on Linux AMD64
-make package-darwin-arm64  # must run on macOS ARM64
+make stop
 ```
 
 ## Useful Commands
 
-From `server/`:
+From the repository root:
 
 | Command | Description |
 | --- | --- |
 | `make dev` | Generate sqlc code and run the API for local development using host ffmpeg/ffprobe |
-| `make generate` | Run `sqlc generate` and sync `server/sqlc/schema.sql` into `server/cmd/api/schema.sql` |
-| `make build-web` | Build the web client into `web/dist` |
-| `make build` | Build the full binary for the current platform with embedded web assets and media tools |
-| `make package` | Build and archive `dist/igloo-server-<os>-<arch>.tar.gz` |
-| `make test` | Run backend tests with `externalbin sqlite_fts5` |
-| `make test-ci` | Run the deterministic backend suite used by GitHub Actions |
-| `make clean` | Remove built binaries, packages, embedded web assets, and `web/dist` |
+| `make build` | Build the full native binary with embedded web assets and media tools |
+| `make start` | Build and run the full application in the background |
+| `make stop` | Stop the application started by `make start` |
+| `make clean` | Remove build artifacts while preserving `.env`, database, media, and runtime data |
 
 From `web/`:
 
@@ -258,8 +255,9 @@ See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenan
 After changing schema or query files:
 
 ```bash
-cd server
-make generate
+cp server/sqlc/schema.sql server/cmd/api/schema.sql
+cd server/sqlc
+sqlc generate
 ```
 
 ## Testing
@@ -268,14 +266,18 @@ Backend:
 
 ```bash
 cd server
-make test
+mkdir -p cmd/api/webdist
+touch cmd/api/webdist/.keep
+go test -tags "externalbin sqlite_fts5" -v ./...
 ```
 
 CI-equivalent backend suite:
 
 ```bash
 cd server
-make test-ci
+mkdir -p cmd/api/webdist
+touch cmd/api/webdist/.keep
+go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 ```
 
 Frontend:
@@ -296,7 +298,7 @@ TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
 
 ## CI and Releases
 
-GitHub Actions runs backend tests plus frontend linting and build checks. Release archives are produced with the native package targets in `server/`.
+GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root.
 
 ## AI Coding Agent Notes
 

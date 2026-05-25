@@ -340,8 +340,9 @@ For binary deployments:
 
 For local development:
 
-- `make dev`, `make test`, and `make test-ci` use the `externalbin` build tag and require `ffmpeg` and `ffprobe` on `PATH`.
-- `make build` and `make package` use embedded release payloads for the current platform.
+- `make dev` uses the `externalbin` build tag and requires `ffmpeg` and `ffprobe` on `PATH`.
+- Backend tests should be run with the `externalbin sqlite_fts5` build tags and require `ffmpeg` and `ffprobe` on `PATH`.
+- `make build` uses embedded release payloads for the current native platform.
 - `HARDWARE_ACCELERATION_DEVICE` can be set in `.env` for local testing.
 - Apple VideoToolbox only applies to macOS builds with the Apple-capable FFmpeg binary.
 - Linux hardware acceleration requires the host drivers, devices, and FFmpeg build support to be present.

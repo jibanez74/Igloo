@@ -22,7 +22,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run Go tests
-        run: cd server && make test-ci
+        run: |
+          cd server
+          mkdir -p cmd/api/webdist
+          touch cmd/api/webdist/.keep
+          go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
 
   test-frontend:
     runs-on: ubuntu-latest
