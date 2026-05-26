@@ -410,7 +410,7 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 	}
 
 	go func() {
-		app.runMusicScan()
+		app.ScanMusicLibrary()
 	}()
 
 	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)

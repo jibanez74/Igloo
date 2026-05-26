@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	spotifyapi "igloo/cmd/internal/spotify"
 	"strings"
 
 	spotifylib "github.com/zmb3/spotify/v2"
@@ -59,19 +57,13 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 }
 
 func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Queries, name, sortName string) (*database.Musician, error) {
-	var spotifyErr error
-
 	if app.Spotify != nil {
 		artist, err := app.Spotify.SearchArtistByName(ctx, name)
 		if err == nil && artist != nil {
 			existing, err := qtx.GetMusicianBySpotifyID(ctx, sql.NullString{String: artist.ID.String(), Valid: true})
 			if err == nil {
 				app.processSpotifyGenres(ctx, qtx, existing.ID, artist.Genres)
-				app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityMusician, existing.ID, artist.ID.String())
 				return &existing, nil
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return nil, err
 			}
 
 			var thumb sql.NullString
@@ -95,12 +87,8 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
 			}
 
 			app.processSpotifyGenres(ctx, qtx, musician.ID, artist.Genres)
-			app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityMusician, musician.ID, artist.ID.String())
 
 			return &musician, nil
-		}
-		if err != nil {
-			spotifyErr = err
 		}
 	}
 
@@ -110,9 +98,6 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
 	})
 	if err != nil {
 		return nil, err
-	}
-	if spotifyErr != nil {
-		app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityMusician, musician.ID, spotifyErr)
 	}
 	return &musician, nil
 }
@@ -175,26 +160,44 @@ func (app *Application) processSpotifyAlbumGenres(ctx context.Context, qtx *data
 	}
 }
 
-func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, input albumScanInput) (*database.Album, error) {
-	title := strings.TrimSpace(input.Title)
-	sortTitle := strings.TrimSpace(input.SortTitle)
-	albumArtist := strings.TrimSpace(input.AlbumArtist)
-	if sortTitle == "" {
-		sortTitle = title
-	}
-
-	var spotifyErr error
+func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Queries, title, sortTitle, albumArtist string) (*database.Album, error) {
 	if app.Spotify != nil {
-		album, err := app.getOrCreateSpotifyAlbum(ctx, qtx, input)
-		if err == nil && album != nil {
-			return album, nil
-		}
-		if err != nil {
-			_, isMatchErr := spotifyapi.AsMatchError(err)
-			if !isMatchErr {
+		albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx)
+		if err == nil && albumDetails != nil {
+			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
+			if err == nil {
+				app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
+				return &existing, nil
+			}
+
+			params := database.UpsertAlbumParams{
+				Title:             title,
+				SortTitle:         sortTitle,
+				SpotifyID:         sql.NullString{String: albumDetails.ID.String(), Valid: true},
+				SpotifyPopularity: helpers.NullFloat64(float64(albumDetails.Popularity)),
+				TotalTracks:       helpers.NullInt64(int64(albumDetails.TotalTracks)),
+			}
+
+			releaseDate := albumDetails.ReleaseDateTime()
+			if !releaseDate.IsZero() {
+				params.ReleaseDate = sql.NullString{String: releaseDate.Format("2006-01-02"), Valid: true}
+				params.Year = sql.NullInt64{Int64: int64(releaseDate.Year()), Valid: true}
+			}
+
+			if albumArtist != "" {
+				params.Musician = sql.NullString{String: albumArtist, Valid: true}
+			}
+
+			if len(albumDetails.Images) > 0 {
+				params.Cover = sql.NullString{String: albumDetails.Images[0].URL, Valid: true}
+			}
+
+			album, err := qtx.UpsertAlbum(ctx, params)
+			if err != nil {
 				return nil, err
 			}
-			spotifyErr = err
+			app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
+			return &album, nil
 		}
 	}
 
@@ -207,92 +210,6 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 	}
 
 	album, err := qtx.UpsertAlbum(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, "", input)
-	if err != nil {
-		return nil, err
-	}
-	if spotifyErr != nil {
-		app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityAlbum, album.ID, spotifyErr)
-	}
-	return &album, nil
-}
-
-func (app *Application) getOrCreateSpotifyAlbum(ctx context.Context, qtx *database.Queries, input albumScanInput) (*database.Album, error) {
-	if app.Spotify == nil {
-		return nil, nil
-	}
-
-	title := strings.TrimSpace(input.Title)
-	sortTitle := strings.TrimSpace(input.SortTitle)
-	albumArtist := strings.TrimSpace(input.AlbumArtist)
-	if sortTitle == "" {
-		sortTitle = title
-	}
-
-	albumDetails, err := app.Spotify.SearchAndGetAlbumDetails(ctx, spotifyapi.AlbumSearchInput{
-		Title:       title,
-		Artist:      albumArtist,
-		Year:        input.Year,
-		TrackTitles: input.TrackTitles,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if albumDetails == nil {
-		return nil, nil
-	}
-
-	var spotifyCoverURL string
-	if len(albumDetails.Images) > 0 {
-		spotifyCoverURL = albumDetails.Images[0].URL
-	}
-
-	existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
-	if err == nil {
-		app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
-		app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityAlbum, existing.ID, albumDetails.ID.String())
-		existing, err = app.resolveAlbumCoverIfMissing(ctx, qtx, existing, spotifyCoverURL, input)
-		if err != nil {
-			return nil, err
-		}
-		return &existing, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-
-	params := database.UpsertAlbumParams{
-		Title:             title,
-		SortTitle:         sortTitle,
-		SpotifyID:         sql.NullString{String: albumDetails.ID.String(), Valid: true},
-		SpotifyPopularity: helpers.NullFloat64(float64(albumDetails.Popularity)),
-		TotalTracks:       helpers.NullInt64(int64(albumDetails.TotalTracks)),
-	}
-
-	releaseDate := albumDetails.ReleaseDateTime()
-	if !releaseDate.IsZero() {
-		params.ReleaseDate = sql.NullString{String: releaseDate.Format("2006-01-02"), Valid: true}
-		params.Year = sql.NullInt64{Int64: int64(releaseDate.Year()), Valid: true}
-	}
-
-	if albumArtist != "" {
-		params.Musician = sql.NullString{String: albumArtist, Valid: true}
-	}
-
-	if spotifyCoverURL != "" && (app.Settings == nil || !app.Settings.DownloadImages) {
-		params.Cover = sql.NullString{String: spotifyCoverURL, Valid: true}
-	}
-
-	album, err := qtx.UpsertAlbum(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
-	app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityAlbum, album.ID, albumDetails.ID.String())
-	album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, spotifyCoverURL, input)
 	if err != nil {
 		return nil, err
 	}
