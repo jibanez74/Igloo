@@ -99,6 +99,11 @@ func (app *Application) runMovieScan() {
 			moviesScanned += scanned
 			moviesSkipped += skipped
 			errorCount += errors
+			app.Logger.Info("movies scanner batch processed",
+				"scanned", moviesScanned,
+				"skipped", moviesSkipped,
+				"errors", errorCount,
+			)
 			for _, path := range processed {
 				processedPaths[filepath.Clean(path)] = true
 			}
@@ -118,6 +123,11 @@ func (app *Application) runMovieScan() {
 		moviesScanned += scanned
 		moviesSkipped += skipped
 		errorCount += errors
+		app.Logger.Info("movies scanner batch processed",
+			"scanned", moviesScanned,
+			"skipped", moviesSkipped,
+			"errors", errorCount,
+		)
 		for _, path := range processed {
 			processedPaths[filepath.Clean(path)] = true
 		}

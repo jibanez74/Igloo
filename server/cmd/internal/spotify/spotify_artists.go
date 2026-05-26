@@ -8,9 +8,6 @@ import (
 )
 
 func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error) {
-	ctx, cancel := spotifyRequestContext(ctx)
-	defer cancel()
-
 	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
 		return nil, newMatchError(MatchDebugInfo{
@@ -27,6 +24,9 @@ func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName strin
 	if cached, exists := s.getArtist(cacheKey); exists {
 		return cached, nil
 	}
+
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
 
 	results, err := s.client.Search(ctx, artistName, spotify.SearchTypeArtist, spotify.Limit(spotifyArtistSearchLimit))
 	if err != nil {

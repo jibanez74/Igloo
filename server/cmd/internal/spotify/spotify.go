@@ -15,16 +15,9 @@ import (
 const spotifyHTTPTimeout = 15 * time.Second
 
 type SpotifyInterface interface {
-	SearchAndGetAlbumDetails(ctx context.Context, input AlbumSearchInput) (*spotify.FullAlbum, error)
+	SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error)
 	SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error)
 	ClearAllCaches()
-}
-
-type AlbumSearchInput struct {
-	Title       string
-	Artist      string
-	Year        int
-	TrackTitles []string
 }
 
 var _ SpotifyInterface = (*spotifyClient)(nil)
@@ -50,12 +43,12 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 	}
 
-	_, err := config.Token(ctx)
-	if err != nil {
+	if _, err := config.Token(ctx); err != nil {
 		return nil, fmt.Errorf("failed to get spotify token: %w", err)
 	}
 
-	client := spotify.New(config.Client(ctx), spotify.WithRetry(true))
+	httpClient := config.Client(ctx)
+	client := spotify.New(httpClient)
 
 	return &spotifyClient{
 		client:      client,

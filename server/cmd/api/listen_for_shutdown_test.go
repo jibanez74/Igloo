@@ -36,7 +36,7 @@ type shutdownTestSpotify struct {
 	cleared bool
 }
 
-func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _ spotifyapi.AlbumSearchInput) (*spotify.FullAlbum, error) {
+func (s *shutdownTestSpotify) SearchAndGetAlbumDetails(_ context.Context, _, _ string) (*spotify.FullAlbum, error) {
 	return nil, nil
 }
 

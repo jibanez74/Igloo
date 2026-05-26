@@ -12,10 +12,10 @@ import (
 	"strings"
 )
 
-func (app *Application) processTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) error {
+func (app *Application) processTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) (int64, error) {
 	info, err := app.Ffprobe.GetMetadata(path)
 	if err != nil {
-		return fmt.Errorf("ffprobe failed: %w", err)
+		return 0, fmt.Errorf("ffprobe failed: %w", err)
 	}
 
 	params := database.UpsertTrackParams{
@@ -114,7 +114,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		if !splitArtists {
 			musician, err := app.getOrCreateMusician(ctx, qtx, artistTag, sortArtist)
 			if err != nil {
-				return fmt.Errorf("musician failed: %w", err)
+				return 0, fmt.Errorf("musician failed: %w", err)
 			}
 			musicianID = sql.NullInt64{Int64: musician.ID, Valid: true}
 			allMusicianIDs = append(allMusicianIDs, musician.ID)
@@ -123,7 +123,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 				m, err := app.getOrCreateMusician(ctx, qtx, part, part)
 				if err != nil {
 					app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
-					return fmt.Errorf("compound musician failed for %q: %w", part, err)
+					return 0, fmt.Errorf("compound musician failed for %q: %w", part, err)
 				}
 				if !musicianID.Valid {
 					musicianID = sql.NullInt64{Int64: m.ID, Valid: true}
@@ -149,7 +149,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 
 		album, err := app.getOrCreateAlbum(ctx, qtx, info.Format.Tags.Album, sortAlbum, effectiveAlbumArtist)
 		if err != nil {
-			return fmt.Errorf("album failed: %w", err)
+			return 0, fmt.Errorf("album failed: %w", err)
 		}
 
 		albumID = sql.NullInt64{Int64: album.ID, Valid: true}
@@ -195,7 +195,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 
 	track, err := qtx.UpsertTrack(ctx, params)
 	if err != nil {
-		return fmt.Errorf("upsert track failed: %w", err)
+		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
 	if info.Format.Tags.Genre != "" {
@@ -205,7 +205,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		})
 
 		if err != nil {
-			return fmt.Errorf("genre failed: %w", err)
+			return 0, fmt.Errorf("genre failed: %w", err)
 		}
 
 		err = qtx.DeleteTrackGenresExcept(ctx, database.DeleteTrackGenresExceptParams{
@@ -214,7 +214,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		})
 
 		if err != nil {
-			return fmt.Errorf("delete stale genres failed: %w", err)
+			return 0, fmt.Errorf("delete stale genres failed: %w", err)
 		}
 
 		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
@@ -223,7 +223,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		})
 
 		if err != nil {
-			return fmt.Errorf("track-genre relationship failed: %w", err)
+			return 0, fmt.Errorf("track-genre relationship failed: %w", err)
 		}
 
 		if musicianID.Valid {
@@ -255,7 +255,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
-	return nil
+	return track.ID, nil
 }
 
 func shouldSplitCompoundArtistCredits(err error) bool {

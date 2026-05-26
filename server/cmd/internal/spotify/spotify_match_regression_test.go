@@ -77,7 +77,7 @@ func albumSearchItemsJSON(items ...map[string]interface{}) interface{} {
 func TestSearchArtistByName_Regressions(t *testing.T) {
 	t.Run("accepts diacritic variants", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(t, w, artistSearchItemsJSON(
+			writeJSON(w, artistSearchItemsJSON(
 				artistItemJSON("beyonce-smith", "Beyonce Smith"),
 				artistItemJSON("beyonce", "Beyoncé"),
 			))
@@ -94,7 +94,7 @@ func TestSearchArtistByName_Regressions(t *testing.T) {
 
 	t.Run("accepts punctuation variants", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(t, w, artistSearchItemsJSON(
+			writeJSON(w, artistSearchItemsJSON(
 				artistItemJSON("guns-tribute", "Guns Tribute"),
 				artistItemJSON("guns", "Guns N' Roses"),
 			))
@@ -111,7 +111,7 @@ func TestSearchArtistByName_Regressions(t *testing.T) {
 
 	t.Run("accepts canonical duo name variants", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(t, w, artistSearchItemsJSON(
+			writeJSON(w, artistSearchItemsJSON(
 				artistItemJSON("hall-oates", "Daryl Hall & John Oates"),
 			))
 		}))
@@ -130,7 +130,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 	t.Run("prefers later candidate with matching artist", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
-				writeJSON(t, w, albumSearchItemsJSON(
+				writeJSON(w, albumSearchItemsJSON(
 					albumItemJSON("wrong123", "Greatest Hits", "Artist A"),
 					albumItemJSON("right123", "Greatest Hits", "Artist B"),
 				))
@@ -139,15 +139,15 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/albums/right123"):
-				writeJSON(t, w, fullAlbumJSON("right123", "Greatest Hits"))
+				writeJSON(w, fullAlbumJSON("right123", "Greatest Hits"))
 			case strings.HasSuffix(r.URL.Path, "/albums/wrong123"):
-				writeJSON(t, w, fullAlbumJSON("wrong123", "Greatest Hits"))
+				writeJSON(w, fullAlbumJSON("wrong123", "Greatest Hits"))
 			default:
 				http.NotFound(w, r)
 			}
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Greatest Hits", "Artist B"))
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Greatest Hits", "Artist B")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -159,16 +159,16 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 	t.Run("accepts unicode-bearing titles", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
-				writeJSON(t, w, albumSearchItemsJSON(
+				writeJSON(w, albumSearchItemsJSON(
 					albumItemJSON("answer123", "Love Yourself 結 'Answer'", "BTS"),
 				))
 				return
 			}
 
-			writeJSON(t, w, fullAlbumJSON("answer123", "Love Yourself 結 'Answer'"))
+			writeJSON(w, fullAlbumJSON("answer123", "Love Yourself 結 'Answer'"))
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Love Yourself Answer", "BTS"))
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Love Yourself Answer", "BTS")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -183,20 +183,20 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
 				searchCallCount++
 				if searchCallCount == 1 {
-					writeJSON(t, w, emptyAlbumSearchJSON())
+					writeJSON(w, emptyAlbumSearchJSON())
 					return
 				}
 
-				writeJSON(t, w, albumSearchItemsJSON(
+				writeJSON(w, albumSearchItemsJSON(
 					albumItemJSON("meteora123", "Meteora", "Linkin Park"),
 				))
 				return
 			}
 
-			writeJSON(t, w, fullAlbumJSON("meteora123", "Meteora"))
+			writeJSON(w, fullAlbumJSON("meteora123", "Meteora"))
 		}))
 
-		album, err := sc.SearchAndGetAlbumDetails(context.Background(), albumSearchInput("Meteora (Deluxe Edition)", "LINKIN PARK"))
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Meteora (Deluxe Edition)", "LINKIN PARK")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -223,7 +223,7 @@ func TestSearchAndGetAlbumDetails_Regressions(t *testing.T) {
 			},
 		}
 
-		album, info := selectBestAlbumMatch("Target Title", "Expected Artist", 0, albums, "query", "album_field_search")
+		album, info := selectBestAlbumMatch("Target Title", "Expected Artist", albums, "query", "album_field_search")
 		if album != nil {
 			t.Fatalf("album = %#v, want nil", album)
 		}

@@ -3,7 +3,6 @@ package spotify
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -12,11 +11,10 @@ import (
 )
 
 const (
-	spotifyArtistSearchLimit   = 5
-	spotifyAlbumSearchLimit    = 5
-	spotifyArtistThreshold     = 78
-	spotifyAlbumThreshold      = 76
-	spotifyAlbumTrackThreshold = 88
+	spotifyArtistSearchLimit = 5
+	spotifyAlbumSearchLimit  = 5
+	spotifyArtistThreshold   = 78
+	spotifyAlbumThreshold    = 76
 )
 
 var artistStopWords = map[string]struct{}{
@@ -261,26 +259,26 @@ func scoreArtistName(query, candidate string) int {
 
 	if tokensContainedInOrder(queryTokens, candidateTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		score := 92 - min(extraTokens*6, 18)
+		score := 92 - minInt(extraTokens*6, 18)
 		if len(queryTokens) == 1 && extraTokens > 0 {
 			score = 68
 		}
-		return max(score, 0)
+		return maxInt(score, 0)
 	}
 
 	matched := countMatchedTokens(queryTokens, candidateTokens)
 	if matched == len(queryTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		score := 86 - min(extraTokens*5, 20)
+		score := 86 - minInt(extraTokens*5, 20)
 		if len(queryTokens) == 1 && extraTokens > 0 {
 			score = 68
 		}
-		return max(score, 0)
+		return maxInt(score, 0)
 	}
 
 	if tokensContainedInOrder(candidateTokens, queryTokens) {
 		missingTokens := len(queryTokens) - len(candidateTokens)
-		return max(50-missingTokens*10, 0)
+		return maxInt(50-missingTokens*10, 0)
 	}
 
 	return matched * 60 / len(queryTokens)
@@ -303,10 +301,10 @@ func scoreAlbumTitle(query, candidate string) int {
 	baseCandidateTokens := tokenizeComparisonText(candidate, albumNoiseTokens)
 
 	bestScore := scoreTokenSequence(fullQueryTokens, fullCandidateTokens)
-	bestScore = max(bestScore, scoreTokenSequence(baseQueryTokens, baseCandidateTokens))
+	bestScore = maxInt(bestScore, scoreTokenSequence(baseQueryTokens, baseCandidateTokens))
 
 	if len(baseQueryTokens) > 0 && len(baseCandidateTokens) > 0 && tokensEqual(baseQueryTokens, baseCandidateTokens) {
-		bestScore = max(bestScore, 98)
+		bestScore = maxInt(bestScore, 98)
 	}
 
 	return bestScore
@@ -323,18 +321,18 @@ func scoreTokenSequence(queryTokens, candidateTokens []string) int {
 
 	if tokensContainedInOrder(queryTokens, candidateTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		return max(90-min(extraTokens*4, 16), 0)
+		return maxInt(90-minInt(extraTokens*4, 16), 0)
 	}
 
 	if tokensContainedInOrder(candidateTokens, queryTokens) {
 		missingTokens := len(queryTokens) - len(candidateTokens)
-		return max(84-min(missingTokens*5, 20), 0)
+		return maxInt(84-minInt(missingTokens*5, 20), 0)
 	}
 
 	matched := countMatchedTokens(queryTokens, candidateTokens)
 	if matched == len(queryTokens) {
 		extraTokens := len(candidateTokens) - len(queryTokens)
-		return max(86-min(extraTokens*4, 16), 0)
+		return maxInt(86-minInt(extraTokens*4, 16), 0)
 	}
 
 	return matched * 70 / len(queryTokens)
@@ -420,7 +418,7 @@ func selectBestArtistMatch(query string, artists []spotifylib.FullArtist, strate
 	return &artists[bestIndex], info
 }
 
-func selectBestAlbumMatch(title, artist string, year int, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
+func selectBestAlbumMatch(title, artist string, albums []spotifylib.SimpleAlbum, searchQuery, strategy string) (*spotifylib.SimpleAlbum, MatchDebugInfo) {
 	info := MatchDebugInfo{
 		Lookup:      "album",
 		Input:       title,
@@ -434,11 +432,24 @@ func selectBestAlbumMatch(title, artist string, year int, albums []spotifylib.Si
 		return nil, info
 	}
 
+	titleScore := scoreAlbumTitle(title, albums[0].Name)
+	artistScore, candidateArtistName := scoreAlbumArtist(artist, albums[0].Artists)
+	bestScore := (titleScore*3 + artistScore) / 4
+	if strings.TrimSpace(artist) != "" && artistScore < 60 {
+		bestScore -= 12
+	}
+
 	bestIndex := 0
-	bestScore, bestArtistName := scoreAlbumCandidate(title, artist, year, albums[0], 0)
+	bestArtistName := candidateArtistName
 
 	for index := 1; index < len(albums); index++ {
-		score, candidateArtistName := scoreAlbumCandidate(title, artist, year, albums[index], index)
+		titleScore = scoreAlbumTitle(title, albums[index].Name)
+		artistScore, candidateArtistName = scoreAlbumArtist(artist, albums[index].Artists)
+		score := (titleScore*3 + artistScore) / 4
+		if strings.TrimSpace(artist) != "" && artistScore < 60 {
+			score -= 12
+		}
+		score -= index
 
 		if score <= bestScore {
 			continue
@@ -463,41 +474,6 @@ func selectBestAlbumMatch(title, artist string, year int, albums []spotifylib.Si
 	return &albums[bestIndex], info
 }
 
-func scoreAlbumCandidate(title, artist string, year int, album spotifylib.SimpleAlbum, index int) (int, string) {
-	titleScore := scoreAlbumTitle(title, album.Name)
-	artistScore, candidateArtistName := scoreAlbumArtist(artist, album.Artists)
-	score := (titleScore*3 + artistScore) / 4
-	if strings.TrimSpace(artist) != "" && artistScore < 60 {
-		score -= 12
-	}
-
-	candidateYear := parseSpotifyReleaseYear(album.ReleaseDate)
-	if year > 0 && candidateYear > 0 {
-		if year == candidateYear {
-			score = min(score+4, 100)
-		} else {
-			score -= 8
-		}
-	}
-
-	score -= index
-	return score, candidateArtistName
-}
-
-func parseSpotifyReleaseYear(releaseDate string) int {
-	releaseDate = strings.TrimSpace(releaseDate)
-	if len(releaseDate) < 4 {
-		return 0
-	}
-
-	year, err := strconv.Atoi(releaseDate[:4])
-	if err != nil {
-		return 0
-	}
-
-	return year
-}
-
 func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 	if candidate.Score > current.Score {
 		return candidate
@@ -508,4 +484,20 @@ func chooseBetterMatchInfo(current, candidate MatchDebugInfo) MatchDebugInfo {
 	}
 
 	return current
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+
+	return right
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+
+	return right
 }

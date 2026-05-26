@@ -14,16 +14,27 @@ import (
 )
 
 type trackFile struct {
-	path string
-	ext  string
-	size int64
+	path  string
+	ext   string
+	size  int64
+	mtime int64
 }
 
 func (app *Application) ScanMusicLibrary() {
+	if !tryBeginMusicScan() {
+		app.Logger.Warn("music library scan is already in progress")
+		return
+	}
+
+	app.runMusicScan()
+}
+
+func (app *Application) runMusicScan() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
 		defer app.Wait.Done()
 	}
+	defer finishMusicScan()
 
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
 		app.Logger.Error("music directory not configured")
@@ -71,13 +82,23 @@ func (app *Application) ScanMusicLibrary() {
 			return nil
 		}
 
-		batch = append(batch, trackFile{path: path, ext: ext, size: info.Size()})
+		batch = append(batch, trackFile{
+			path:  path,
+			ext:   ext,
+			size:  info.Size(),
+			mtime: info.ModTime().UnixNano(),
+		})
 
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
 			scanned, skipped, errors, processed := app.processMusicBatch(ctx, batch)
 			tracksScanned += scanned
 			tracksSkipped += skipped
 			errorCount += errors
+			app.Logger.Info("music scanner batch processed",
+				"scanned", tracksScanned,
+				"skipped", tracksSkipped,
+				"errors", errorCount,
+			)
 			for _, path := range processed {
 				processedPaths[filepath.Clean(path)] = true
 			}
@@ -97,6 +118,11 @@ func (app *Application) ScanMusicLibrary() {
 		tracksScanned += scanned
 		tracksSkipped += skipped
 		errorCount += errors
+		app.Logger.Info("music scanner batch processed",
+			"scanned", tracksScanned,
+			"skipped", tracksSkipped,
+			"errors", errorCount,
+		)
 		for _, path := range processed {
 			processedPaths[filepath.Clean(path)] = true
 		}
@@ -140,8 +166,9 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 
 	for _, file := range files {
 		unchanged, err := qtx.CheckTrackUnchanged(ctx, database.CheckTrackUnchangedParams{
-			FilePath: file.path,
-			Size:     file.size,
+			FilePath:  file.path,
+			Size:      file.size,
+			FileMtime: file.mtime,
 		})
 
 		if err != nil {
@@ -156,12 +183,33 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 		}
 
 		savepointName := fmt.Sprintf("sp_track_%d", scanned+skipped+errCount)
+		var trackID int64
 
 		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			return app.processTrackFile(ctx, qtx, file.path, file.ext)
+			var processErr error
+			trackID, processErr = app.processTrackFile(ctx, qtx, file.path, file.ext)
+			if processErr != nil {
+				return processErr
+			}
+
+			return qtx.UpsertTrackScanStatus(ctx, database.UpsertTrackScanStatusParams{
+				TrackID:   trackID,
+				FilePath:  file.path,
+				Size:      file.size,
+				FileMtime: file.mtime,
+			})
 		})
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
+			_, statusErr := qtx.UpsertTrackScanErrorByPath(ctx, database.UpsertTrackScanErrorByPathParams{
+				Size:      file.size,
+				FileMtime: file.mtime,
+				ScanError: sql.NullString{String: err.Error(), Valid: true},
+				FilePath:  file.path,
+			})
+			if statusErr != nil {
+				app.Logger.Warn("failed to update track scan error status", "path", file.path, "error", statusErr)
+			}
 			errCount++
 			continue
 		}
