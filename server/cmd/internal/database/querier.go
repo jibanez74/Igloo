@@ -40,9 +40,11 @@ type Querier interface {
 	CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error)
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
+	CreateTrackMusician(ctx context.Context, arg CreateTrackMusicianParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
 	DeleteAlbum(ctx context.Context, id int64) error
+	DeleteAlbumMusiciansWithoutTracks(ctx context.Context, albumID int64) error
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie
@@ -64,12 +66,15 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
+	DeleteMusicSpotifyMatch(ctx context.Context, arg DeleteMusicSpotifyMatchParams) error
 	DeleteMusician(ctx context.Context, id int64) error
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	DeleteTrack(ctx context.Context, id int64) error
+	DeleteTrackGenres(ctx context.Context, trackID int64) error
 	// Deletes all genre relationships for a track except the specified genre.
 	// Used to efficiently update genres: only removes stale relationships.
 	DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error
+	DeleteTrackMusicians(ctx context.Context, trackID int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteWatchRoom(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
@@ -124,14 +129,17 @@ type Querier interface {
 	GetMoviesLibraryAsc(ctx context.Context, arg GetMoviesLibraryAscParams) ([]GetMoviesLibraryAscRow, error)
 	// Paginated library Z-A (id tie-breaker so LIMIT/OFFSET is stable when titles match).
 	GetMoviesLibraryDesc(ctx context.Context, arg GetMoviesLibraryDescParams) ([]GetMoviesLibraryDescRow, error)
+	GetMusicSpotifyMatch(ctx context.Context, arg GetMusicSpotifyMatchParams) (MusicSpotifyMatch, error)
 	GetMusicianByID(ctx context.Context, id int64) (Musician, error)
 	GetMusicianBySpotifyID(ctx context.Context, spotifyID sql.NullString) (Musician, error)
 	GetMusicianIDsByAlbumID(ctx context.Context, albumID int64) ([]int64, error)
+	GetMusicianIDsByTrackID(ctx context.Context, trackID int64) ([]int64, error)
 	// Returns musicians sorted alphabetically by sort_name with pagination.
 	// Non-alphabetic names (numbers, symbols) are grouped under '#' and sorted first.
 	GetMusiciansAlphabetical(ctx context.Context, arg GetMusiciansAlphabeticalParams) ([]GetMusiciansAlphabeticalRow, error)
 	GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]GetMusiciansByAlbumIDRow, error)
 	GetMusiciansCount(ctx context.Context) (int64, error)
+	GetMusiciansMissingSpotifyID(ctx context.Context) ([]Musician, error)
 	GetOrCreateGenre(ctx context.Context, arg GetOrCreateGenreParams) (Genre, error)
 	GetPlaylistById(ctx context.Context, id int64) (Playlist, error)
 	GetPlaylistCollaborators(ctx context.Context, playlistID int64) ([]GetPlaylistCollaboratorsRow, error)
@@ -148,6 +156,7 @@ type Querier interface {
 	// Subtitle tracks for a movie (for technical details display).
 	GetSubtitlesByMovieID(ctx context.Context, movieID int64) ([]Subtitle, error)
 	GetTrack(ctx context.Context, id int64) (Track, error)
+	GetTrackByPath(ctx context.Context, filePath string) (Track, error)
 	GetTrackScanIndex(ctx context.Context) ([]GetTrackScanIndexRow, error)
 	GetTracksAlphabetical(ctx context.Context, arg GetTracksAlphabeticalParams) ([]GetTracksAlphabeticalRow, error)
 	GetTracksByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]Track, error)
@@ -232,11 +241,14 @@ type Querier interface {
 	UpsertExtraVideo(ctx context.Context, arg UpsertExtraVideoParams) (ExtraVideo, error)
 	UpsertMovie(ctx context.Context, arg UpsertMovieParams) (Movie, error)
 	UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error
+	UpsertMusicSpotifyMatch(ctx context.Context, arg UpsertMusicSpotifyMatchParams) error
 	UpsertMusician(ctx context.Context, arg UpsertMusicianParams) (Musician, error)
 	// Creates a relationship between a musician and a genre (idempotent)
 	UpsertMusicianGenre(ctx context.Context, arg UpsertMusicianGenreParams) error
 	UpsertProductionCompany(ctx context.Context, arg UpsertProductionCompanyParams) (ProductionCompany, error)
 	UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track, error)
+	UpsertTrackScanErrorByPath(ctx context.Context, arg UpsertTrackScanErrorByPathParams) (int64, error)
+	UpsertTrackScanStatus(ctx context.Context, arg UpsertTrackScanStatusParams) error
 	// Updates aggregated stats when a play event is recorded
 	UpsertUserTrackStats(ctx context.Context, arg UpsertUserTrackStatsParams) error
 }

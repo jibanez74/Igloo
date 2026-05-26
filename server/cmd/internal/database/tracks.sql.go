@@ -14,19 +14,22 @@ const checkTrackUnchanged = `-- name: CheckTrackUnchanged :one
 SELECT
   EXISTS (
     SELECT 1
-    FROM tracks
+    FROM track_scan_status
     WHERE file_path = ?
       AND size = ?
+      AND file_mtime = ?
+      AND scan_error IS NULL
   ) AS track_exists
 `
 
 type CheckTrackUnchangedParams struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
+	FilePath  string `json:"file_path"`
+	Size      int64  `json:"size"`
+	FileMtime int64  `json:"file_mtime"`
 }
 
 func (q *Queries) CheckTrackUnchanged(ctx context.Context, arg CheckTrackUnchangedParams) (bool, error) {
-	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size)
+	row := q.queryRow(ctx, q.checkTrackUnchangedStmt, checkTrackUnchanged, arg.FilePath, arg.Size, arg.FileMtime)
 	var track_exists bool
 	err := row.Scan(&track_exists)
 	return track_exists, err
@@ -48,9 +51,15 @@ func (q *Queries) CountTracksByAlbumID(ctx context.Context, albumID sql.NullInt6
 
 const countTracksByMusicianID = `-- name: CountTracksByMusicianID :one
 SELECT
-  COUNT(*)
+  COUNT(DISTINCT tracks.id)
 FROM tracks
-WHERE musician_id = ?
+WHERE tracks.musician_id = ?1
+  OR EXISTS (
+    SELECT 1
+    FROM track_musicians
+    WHERE track_musicians.track_id = tracks.id
+      AND track_musicians.musician_id = ?1
+  )
 `
 
 func (q *Queries) CountTracksByMusicianID(ctx context.Context, musicianID sql.NullInt64) (int64, error) {
@@ -226,6 +235,47 @@ LIMIT 1
 
 func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 	row := q.queryRow(ctx, q.getTrackStmt, getTrack, id)
+	var i Track
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.SortTitle,
+		&i.FilePath,
+		&i.FileName,
+		&i.Container,
+		&i.MimeType,
+		&i.Codec,
+		&i.Size,
+		&i.TrackIndex,
+		&i.Duration,
+		&i.Disc,
+		&i.Channels,
+		&i.ChannelLayout,
+		&i.BitRate,
+		&i.Profile,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.Composer,
+		&i.Copyright,
+		&i.Language,
+		&i.AlbumID,
+		&i.MusicianID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTrackByPath = `-- name: GetTrackByPath :one
+SELECT
+  id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
+FROM tracks
+WHERE file_path = ?
+LIMIT 1
+`
+
+func (q *Queries) GetTrackByPath(ctx context.Context, filePath string) (Track, error) {
+	row := q.queryRow(ctx, q.getTrackByPathStmt, getTrackByPath, filePath)
 	var i Track
 	err := row.Scan(
 		&i.ID,
@@ -498,13 +548,13 @@ SET
   channel_layout = excluded.channel_layout,
   bit_rate = excluded.bit_rate,
   profile = excluded.profile,
-  release_date = COALESCE(excluded.release_date, tracks.release_date),
-  year = COALESCE(excluded.year, tracks.year),
-  composer = COALESCE(excluded.composer, tracks.composer),
-  copyright = COALESCE(excluded.copyright, tracks.copyright),
-  language = COALESCE(excluded.language, tracks.language),
-  album_id = COALESCE(excluded.album_id, tracks.album_id),
-  musician_id = COALESCE(excluded.musician_id, tracks.musician_id),
+  release_date = excluded.release_date,
+  year = excluded.year,
+  composer = excluded.composer,
+  copyright = excluded.copyright,
+  language = excluded.language,
+  album_id = excluded.album_id,
+  musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING id, title, sort_title, file_path, file_name, container, mime_type, codec, size, track_index, duration, disc, channels, channel_layout, bit_rate, profile, release_date, year, composer, copyright, language, album_id, musician_id, created_at, updated_at
 `
@@ -588,4 +638,85 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) (Track
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const upsertTrackScanErrorByPath = `-- name: UpsertTrackScanErrorByPath :execrows
+INSERT INTO track_scan_status (
+  track_id,
+  file_path,
+  size,
+  file_mtime,
+  scan_error
+)
+SELECT
+  tracks.id,
+  tracks.file_path,
+  ?,
+  ?,
+  ?
+FROM tracks
+WHERE tracks.file_path = ?
+ON CONFLICT (track_id) DO UPDATE
+SET
+  file_path = excluded.file_path,
+  size = excluded.size,
+  file_mtime = excluded.file_mtime,
+  last_scanned_at = CURRENT_TIMESTAMP,
+  scan_error = excluded.scan_error
+`
+
+type UpsertTrackScanErrorByPathParams struct {
+	Size      int64          `json:"size"`
+	FileMtime int64          `json:"file_mtime"`
+	ScanError sql.NullString `json:"scan_error"`
+	FilePath  string         `json:"file_path"`
+}
+
+func (q *Queries) UpsertTrackScanErrorByPath(ctx context.Context, arg UpsertTrackScanErrorByPathParams) (int64, error) {
+	result, err := q.exec(ctx, q.upsertTrackScanErrorByPathStmt, upsertTrackScanErrorByPath,
+		arg.Size,
+		arg.FileMtime,
+		arg.ScanError,
+		arg.FilePath,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const upsertTrackScanStatus = `-- name: UpsertTrackScanStatus :exec
+INSERT INTO track_scan_status (
+  track_id,
+  file_path,
+  size,
+  file_mtime,
+  scan_error
+)
+VALUES
+  (?, ?, ?, ?, NULL)
+ON CONFLICT (track_id) DO UPDATE
+SET
+  file_path = excluded.file_path,
+  size = excluded.size,
+  file_mtime = excluded.file_mtime,
+  last_scanned_at = CURRENT_TIMESTAMP,
+  scan_error = NULL
+`
+
+type UpsertTrackScanStatusParams struct {
+	TrackID   int64  `json:"track_id"`
+	FilePath  string `json:"file_path"`
+	Size      int64  `json:"size"`
+	FileMtime int64  `json:"file_mtime"`
+}
+
+func (q *Queries) UpsertTrackScanStatus(ctx context.Context, arg UpsertTrackScanStatusParams) error {
+	_, err := q.exec(ctx, q.upsertTrackScanStatusStmt, upsertTrackScanStatus,
+		arg.TrackID,
+		arg.FilePath,
+		arg.Size,
+		arg.FileMtime,
+	)
+	return err
 }

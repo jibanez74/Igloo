@@ -29,6 +29,38 @@ func (q *Queries) CreateMusicianAlbum(ctx context.Context, arg CreateMusicianAlb
 	return err
 }
 
+const deleteAlbumMusiciansWithoutTracks = `-- name: DeleteAlbumMusiciansWithoutTracks :exec
+DELETE FROM musician_albums
+WHERE musician_albums.album_id = ?1
+  AND NOT EXISTS (
+    SELECT 1
+    FROM albums
+    INNER JOIN musicians
+      ON musicians.id = musician_albums.musician_id
+    WHERE albums.id = musician_albums.album_id
+      AND albums.musician = musicians.name
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM tracks
+    WHERE tracks.album_id = musician_albums.album_id
+      AND tracks.musician_id = musician_albums.musician_id
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM tracks
+    INNER JOIN track_musicians
+      ON track_musicians.track_id = tracks.id
+    WHERE tracks.album_id = musician_albums.album_id
+      AND track_musicians.musician_id = musician_albums.musician_id
+  )
+`
+
+func (q *Queries) DeleteAlbumMusiciansWithoutTracks(ctx context.Context, albumID int64) error {
+	_, err := q.exec(ctx, q.deleteAlbumMusiciansWithoutTracksStmt, deleteAlbumMusiciansWithoutTracks, albumID)
+	return err
+}
+
 const getMusicianIDsByAlbumID = `-- name: GetMusicianIDsByAlbumID :many
 SELECT musician_id FROM musician_albums WHERE album_id = ?
 `

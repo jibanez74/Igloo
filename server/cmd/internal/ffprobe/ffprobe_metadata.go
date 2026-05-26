@@ -1,12 +1,16 @@
 package ffprobe
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+const metadataTimeout = 60 * time.Second
 
 type FfprobeResult struct {
 	Streams  []Stream  `json:"streams"`
@@ -156,7 +160,10 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	cmd := exec.Command(f.bin,
+	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, f.bin,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_streams",
@@ -166,6 +173,9 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("ffprobe timed out for %s after %s: %w", filePath, metadataTimeout, ctx.Err())
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 			return nil, fmt.Errorf("ffprobe failed for %s: %w: %s", filePath, err, exitErr.Stderr)

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
+	"igloo/cmd/internal/tmdb"
 )
 
 type stubMovieScannerFfprobe struct {
@@ -19,6 +21,78 @@ type stubMovieScannerFfprobe struct {
 
 func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
 	return s.result, s.err
+}
+
+type stubMovieScannerTmdb struct {
+	searchErr error
+}
+
+func (s *stubMovieScannerTmdb) GetTmdbMovieByID(_ context.Context, _ *tmdb.TmdbMovie) error {
+	return errors.New("tmdb details unavailable")
+}
+
+func (s *stubMovieScannerTmdb) SearchMoviesByTitleAndYear(_ context.Context, _ string, _ ...int) ([]tmdb.TmdbMovie, error) {
+	return nil, s.searchErr
+}
+
+func (s *stubMovieScannerTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdb.TmdbMovie, error) {
+	return nil, errors.New("tmdb theaters unavailable")
+}
+
+func (s *stubMovieScannerTmdb) ClearCache() {}
+
+func testMovieMetadata() *ffprobe.FfprobeResult {
+	return &ffprobe.FfprobeResult{
+		Format: ffprobe.Format{
+			Duration:   "120",
+			Size:       "5",
+			FormatName: "matroska,webm",
+		},
+		Streams: []ffprobe.Stream{
+			{
+				Index:     0,
+				CodecName: "h264",
+				CodecType: "video",
+				Width:     1920,
+				Height:    1080,
+			},
+		},
+	}
+}
+
+func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Ffprobe = &stubMovieScannerFfprobe{result: testMovieMetadata()}
+	app.Tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
+
+	moviesDir := t.TempDir()
+	files := []movieFile{
+		{path: filepath.Join(moviesDir, "Sample Movie (2020).mov"), ext: "mov", size: 5},
+		{path: filepath.Join(moviesDir, "Sample Movie (2021).m4v"), ext: "m4v", size: 5},
+		{path: filepath.Join(moviesDir, "Sample Movie (2022).webm"), ext: "webm", size: 5},
+	}
+	for _, file := range files {
+		err := os.WriteFile(file.path, []byte("movie"), 0o644)
+		if err != nil {
+			t.Fatalf("write movie %s: %v", file.path, err)
+		}
+	}
+
+	scanned, skipped, errCount, _ := app.processMoviesBatch(context.Background(), files)
+	if scanned != len(files) || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want %d/0/0", scanned, skipped, errCount, len(files))
+	}
+
+	for _, file := range files {
+		movie, err := app.Queries.GetMovieByPath(context.Background(), file.path)
+		if err != nil {
+			t.Fatalf("get movie %s: %v", file.path, err)
+		}
+		if movie.Container != file.ext {
+			t.Fatalf("movie container = %q, want %q", movie.Container, file.ext)
+		}
+	}
 }
 
 func TestReconcileMissingMoviesDeletesStaleRows(t *testing.T) {

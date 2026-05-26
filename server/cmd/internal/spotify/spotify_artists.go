@@ -8,6 +8,9 @@ import (
 )
 
 func (s *spotifyClient) SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error) {
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
+
 	artistName = strings.TrimSpace(artistName)
 	if artistName == "" {
 		return nil, newMatchError(MatchDebugInfo{

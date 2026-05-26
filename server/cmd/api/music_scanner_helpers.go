@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -58,13 +59,19 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 }
 
 func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Queries, name, sortName string) (*database.Musician, error) {
+	var spotifyErr error
+
 	if app.Spotify != nil {
 		artist, err := app.Spotify.SearchArtistByName(ctx, name)
 		if err == nil && artist != nil {
 			existing, err := qtx.GetMusicianBySpotifyID(ctx, sql.NullString{String: artist.ID.String(), Valid: true})
 			if err == nil {
 				app.processSpotifyGenres(ctx, qtx, existing.ID, artist.Genres)
+				app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityMusician, existing.ID, artist.ID.String())
 				return &existing, nil
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return nil, err
 			}
 
 			var thumb sql.NullString
@@ -88,8 +95,12 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
 			}
 
 			app.processSpotifyGenres(ctx, qtx, musician.ID, artist.Genres)
+			app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityMusician, musician.ID, artist.ID.String())
 
 			return &musician, nil
+		}
+		if err != nil {
+			spotifyErr = err
 		}
 	}
 
@@ -99,6 +110,9 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
 	})
 	if err != nil {
 		return nil, err
+	}
+	if spotifyErr != nil {
+		app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityMusician, musician.ID, spotifyErr)
 	}
 	return &musician, nil
 }
@@ -169,6 +183,7 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 		sortTitle = title
 	}
 
+	var spotifyErr error
 	if app.Spotify != nil {
 		album, err := app.getOrCreateSpotifyAlbum(ctx, qtx, input)
 		if err == nil && album != nil {
@@ -179,6 +194,7 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 			if !isMatchErr {
 				return nil, err
 			}
+			spotifyErr = err
 		}
 	}
 
@@ -197,6 +213,9 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 	album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, "", input)
 	if err != nil {
 		return nil, err
+	}
+	if spotifyErr != nil {
+		app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityAlbum, album.ID, spotifyErr)
 	}
 	return &album, nil
 }
@@ -234,11 +253,15 @@ func (app *Application) getOrCreateSpotifyAlbum(ctx context.Context, qtx *databa
 	existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
 	if err == nil {
 		app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
+		app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityAlbum, existing.ID, albumDetails.ID.String())
 		existing, err = app.resolveAlbumCoverIfMissing(ctx, qtx, existing, spotifyCoverURL, input)
 		if err != nil {
 			return nil, err
 		}
 		return &existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
 	}
 
 	params := database.UpsertAlbumParams{
@@ -268,6 +291,7 @@ func (app *Application) getOrCreateSpotifyAlbum(ctx context.Context, qtx *databa
 		return nil, err
 	}
 	app.processSpotifyAlbumGenres(ctx, qtx, album.ID, albumDetails.Genres)
+	app.recordSpotifyMatch(ctx, qtx, spotifyMatchEntityAlbum, album.ID, albumDetails.ID.String())
 	album, err = app.resolveAlbumCoverIfMissing(ctx, qtx, album, spotifyCoverURL, input)
 	if err != nil {
 		return nil, err

@@ -53,9 +53,15 @@ SELECT
     WHERE ma.musician_id = m.id
   ) AS album_count,
   (
-    SELECT COUNT(*)
+    SELECT COUNT(DISTINCT t.id)
     FROM tracks AS t
     WHERE t.musician_id = m.id
+      OR EXISTS (
+        SELECT 1
+        FROM track_musicians AS tm
+        WHERE tm.track_id = t.id
+          AND tm.musician_id = m.id
+      )
   ) AS track_count
 FROM musicians AS m
 ORDER BY
@@ -123,5 +129,19 @@ SELECT
 FROM tracks AS t
 LEFT JOIN albums AS a
   ON t.album_id = a.id
-WHERE t.musician_id = ?
+WHERE t.musician_id = sqlc.arg(musician_id)
+  OR EXISTS (
+    SELECT 1
+    FROM track_musicians AS tm
+    WHERE tm.track_id = t.id
+      AND tm.musician_id = sqlc.arg(musician_id)
+  )
 ORDER BY t.sort_title ASC;
+
+-- name: GetMusiciansMissingSpotifyID :many
+SELECT
+  *
+FROM musicians
+WHERE spotify_id IS NULL
+  OR TRIM(spotify_id) = ''
+ORDER BY id ASC;

@@ -60,7 +60,9 @@ Igloo listens on `PORT`, defaulting to `8080`.
 
 ## Configuration
 
-Igloo reads environment variables from the process environment and from one optional `.env` file in the current working directory. Existing process environment variables win over values loaded from `.env`.
+Igloo reads environment variables from the process environment and from one optional `.env` file in the current working directory. Existing process environment variables win over values loaded from `.env`. The `.env` file is runtime configuration only: it is not embedded into the binary during `make build`.
+
+The current working directory matters. When you run `./igloo-server`, Igloo looks for `./.env` relative to the directory you started the process from, not automatically next to the executable. For packaged releases, start the binary from the extracted package directory that contains `.env`, or provide configuration through the shell or a service manager.
 
 The most important variables are:
 
@@ -70,19 +72,21 @@ The most important variables are:
 | `DB_PATH` | SQLite database file, default `./db/igloo.db`; always read at startup |
 | `STATIC_DIR` | First-run default for downloaded artwork/static files |
 | `LOGS_DIR` | First-run default for file logs |
-| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace, default `./transcode` |
+| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
 | `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
-| `TMDB_API_KEY` | Optional TMDB API key for movie metadata and in-theaters data |
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional Spotify credentials for music metadata enrichment |
-| `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | Runtime feature flags |
+| `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
+| `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
-| `HARDWARE_ACCELERATION_DEVICE` | Transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
+| `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
+| `HLS_MAX_CPU_TRANSCODES` | Optional startup limit for concurrent CPU transcodes |
+| `DEBUG` | Optional startup flag for debug logging |
 
 See [.env.example](.env.example) for the full reference.
 
-Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, and media library directories from Settings after first launch. `DB_PATH` stays environment-driven because the database location must be known before Settings can be loaded.
+Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH` stays environment-driven because the database location must be known before Settings can be loaded.
 
 ## Hardware Acceleration
 
@@ -136,7 +140,7 @@ make dev
 
 `make dev` runs sqlc generation, syncs the embedded schema copy, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
-Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so a root `.env` and default runtime directories resolve consistently with production `make start`.
+Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so the recommended local workflow is to keep one root `.env` and edit app-owned values from Settings after first launch. Default runtime directories resolve consistently with production `make start`.
 
 ## Building Binaries
 
@@ -155,7 +159,7 @@ Build the complete binary for the current supported platform:
 make build
 ```
 
-`make build` writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64.
+`make build` writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64. Build-time output includes embedded web assets and media tool payloads, but not `.env` values.
 
 Run the built application in the background:
 
@@ -163,7 +167,7 @@ Run the built application in the background:
 make start
 ```
 
-`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served. Startup-only configuration comes from the shell environment and `.env` files; Settings-owned values come from the database after first launch. Stop that process with:
+`make start` rebuilds the app, runs `server/dist/igloo-server` from the repo root, and writes its PID and log file under `server/dist/`. It sets only `VITE_DEV_SERVER=` so the embedded web app is served. Because the process starts from the repo root, the root `.env` is loaded. Startup-only configuration comes from the shell environment and `.env`; Settings-owned values come from the database after first launch. Stop that process with:
 
 ```bash
 make stop

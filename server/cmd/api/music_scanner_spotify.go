@@ -45,6 +45,7 @@ func (app *Application) backfillMissingAlbumSpotifyIDs(ctx context.Context) (int
 		})
 		if err != nil {
 			app.logSpotifyAlbumMatchFailure(album, err)
+			app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityAlbum, album.ID, err)
 		}
 	}
 
@@ -81,6 +82,67 @@ func (app *Application) backfillMissingAlbumSpotifyID(
 	}
 
 	return spotifyIDPresent(updatedAlbum.SpotifyID), nil
+}
+
+func (app *Application) backfillMissingMusicianSpotifyIDs(ctx context.Context) (int, error) {
+	if app.Spotify == nil {
+		return 0, nil
+	}
+
+	app.ScannerDBMu.Lock()
+	defer app.ScannerDBMu.Unlock()
+
+	tx, err := app.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	musicians, err := qtx.GetMusiciansMissingSpotifyID(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	backfilled := 0
+	for index, musician := range musicians {
+		savepointName := fmt.Sprintf("sp_musician_spotify_%d", index)
+		err = manageSavepoint(ctx, tx, savepointName, func() error {
+			updated, updateErr := app.backfillMissingMusicianSpotifyID(ctx, qtx, musician)
+			if updateErr != nil {
+				return updateErr
+			}
+			if updated {
+				backfilled++
+			}
+			return nil
+		})
+		if err != nil {
+			app.logSpotifyMusicianMatchFailure(musician, err)
+			app.recordSpotifyMatchFailure(ctx, qtx, spotifyMatchEntityMusician, musician.ID, err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return 0, err
+	}
+
+	return backfilled, nil
+}
+
+func (app *Application) backfillMissingMusicianSpotifyID(
+	ctx context.Context,
+	qtx *database.Queries,
+	musician database.Musician,
+) (bool, error) {
+	updatedMusician, err := app.getOrCreateMusician(ctx, qtx, musician.Name, musician.SortName)
+	if err != nil {
+		return false, err
+	}
+
+	return spotifyIDPresent(updatedMusician.SpotifyID), nil
 }
 
 func spotifyIDPresent(spotifyID sql.NullString) bool {
@@ -126,4 +188,37 @@ func (app *Application) logSpotifyAlbumMatchFailure(album database.Album, err er
 	}
 
 	app.Logger.Warn("failed to match album on Spotify", args...)
+}
+
+func (app *Application) logSpotifyMusicianMatchFailure(musician database.Musician, err error) {
+	if app.Logger == nil {
+		return
+	}
+
+	matchErr, ok := spotifyapi.AsMatchError(err)
+	if !ok {
+		app.Logger.Warn("failed to match musician on Spotify",
+			"musician_id", musician.ID,
+			"name", musician.Name,
+			"error", err,
+		)
+		return
+	}
+
+	info := matchErr.Info
+	args := []any{
+		"musician_id", musician.ID,
+		"name", musician.Name,
+		"search", info.SearchQuery,
+		"strategy", info.Strategy,
+		"reason", info.Reason,
+		"candidate", info.CandidateName,
+		"score", info.Score,
+		"threshold", info.Threshold,
+	}
+	if matchErr.Err != nil {
+		args = append(args, "error", matchErr.Err)
+	}
+
+	app.Logger.Warn("failed to match musician on Spotify", args...)
 }

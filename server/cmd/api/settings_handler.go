@@ -20,6 +20,42 @@ var (
 	isMovieScanning bool
 )
 
+func tryBeginMusicScan() bool {
+	scanMutex.Lock()
+	defer scanMutex.Unlock()
+
+	if isScanning {
+		return false
+	}
+
+	isScanning = true
+	return true
+}
+
+func finishMusicScan() {
+	scanMutex.Lock()
+	isScanning = false
+	scanMutex.Unlock()
+}
+
+func tryBeginMovieScan() bool {
+	movieScanMutex.Lock()
+	defer movieScanMutex.Unlock()
+
+	if isMovieScanning {
+		return false
+	}
+
+	isMovieScanning = true
+	return true
+}
+
+func finishMovieScan() {
+	movieScanMutex.Lock()
+	isMovieScanning = false
+	movieScanMutex.Unlock()
+}
+
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
 	JellyfinToken              *string  `json:"jellyfin_token"`
@@ -362,32 +398,19 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 }
 
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	scanMutex.Lock()
-	if isScanning {
-		scanMutex.Unlock()
+	if !tryBeginMusicScan() {
 		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"))
 		return
 	}
 
-	isScanning = true
-	scanMutex.Unlock()
-
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
-		scanMutex.Lock()
-		isScanning = false
-		scanMutex.Unlock()
+		finishMusicScan()
 		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
 		return
 	}
 
 	go func() {
-		defer func() {
-			scanMutex.Lock()
-			isScanning = false
-			scanMutex.Unlock()
-		}()
-
-		app.ScanMusicLibrary()
+		app.runMusicScan()
 	}()
 
 	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)
@@ -401,32 +424,19 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	movieScanMutex.Lock()
-	if isMovieScanning {
-		movieScanMutex.Unlock()
+	if !tryBeginMovieScan() {
 		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"))
 		return
 	}
 
-	isMovieScanning = true
-	movieScanMutex.Unlock()
-
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
-		movieScanMutex.Lock()
-		isMovieScanning = false
-		movieScanMutex.Unlock()
+		finishMovieScan()
 		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
 		return
 	}
 
 	go func() {
-		defer func() {
-			movieScanMutex.Lock()
-			isMovieScanning = false
-			movieScanMutex.Unlock()
-		}()
-
-		app.ScanMoviesLibrary()
+		app.runMovieScan()
 	}()
 
 	app.Logger.Info("movie library scan triggered via API", "path", app.Settings.MoviesDir.String)

@@ -31,10 +31,20 @@ type movieRenameIndex struct {
 }
 
 func (app *Application) ScanMoviesLibrary() {
+	if !tryBeginMovieScan() {
+		app.Logger.Warn("movie library scan is already in progress")
+		return
+	}
+
+	app.runMovieScan()
+}
+
+func (app *Application) runMovieScan() {
 	if app.Wait != nil {
 		app.Wait.Add(1)
 		defer app.Wait.Done()
 	}
+	defer finishMovieScan()
 
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
 		app.Logger.Error("movies directory not configured")
@@ -135,22 +145,12 @@ func (app *Application) ScanMoviesLibrary() {
 		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// ScannerDBMu serializes scanner writes; savepoints keep one bad movie from rolling back the batch.
+// ScannerDBMu serializes scanner writes; each changed movie commits independently.
 func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int, processed []string) {
-	app.ScannerDBMu.Lock()
-	defer app.ScannerDBMu.Unlock()
-
-	tx, err := app.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, len(files), nil
-	}
-	defer tx.Rollback()
-
-	qtx := app.Queries.WithTx(tx)
 	processed = make([]string, 0, len(files))
 
 	for _, file := range files {
-		_, err = qtx.CheckMovieUnchanged(ctx, database.CheckMovieUnchangedParams{
+		_, err := app.Queries.CheckMovieUnchanged(ctx, database.CheckMovieUnchangedParams{
 			FilePath: file.path,
 			Size:     file.size,
 		})
@@ -160,12 +160,7 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 			continue
 		}
 
-		savepointName := fmt.Sprintf("sp_movie_%d", scanned+skipped+errCount)
-
-		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			return app.processMovieFile(ctx, qtx, file.path, file.ext, file.size)
-		})
-
+		err = app.processMovie(ctx, file)
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
 			errCount++
@@ -176,13 +171,32 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 		processed = append(processed, file.path)
 	}
 
-	err = tx.Commit()
+	return scanned, skipped, errCount, processed
+}
+
+func (app *Application) processMovie(ctx context.Context, file movieFile) error {
+	app.ScannerDBMu.Lock()
+	defer app.ScannerDBMu.Unlock()
+
+	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to commit batch: %s", err.Error()))
-		return 0, 0, len(files), nil
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := app.Queries.WithTx(tx)
+
+	err = app.processMovieFile(ctx, qtx, file.path, file.ext, file.size)
+	if err != nil {
+		return err
 	}
 
-	return scanned, skipped, errCount, processed
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit movie: %w", err)
+	}
+
+	return nil
 }
 
 func (app *Application) reconcileMissingMovies(

@@ -14,6 +14,10 @@ DELETE FROM track_genres
 WHERE track_id = ?
   AND genre_id != ?;
 
+-- name: DeleteTrackGenres :exec
+DELETE FROM track_genres
+WHERE track_id = ?;
+
 -- name: GetGenresByAlbumID :many
 SELECT
   tg.track_id,

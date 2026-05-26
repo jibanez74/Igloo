@@ -160,9 +160,15 @@ SELECT
     WHERE ma.musician_id = m.id
   ) AS album_count,
   (
-    SELECT COUNT(*)
+    SELECT COUNT(DISTINCT t.id)
     FROM tracks AS t
     WHERE t.musician_id = m.id
+      OR EXISTS (
+        SELECT 1
+        FROM track_musicians AS tm
+        WHERE tm.track_id = t.id
+          AND tm.musician_id = m.id
+      )
   ) AS track_count
 FROM musicians AS m
 ORDER BY
@@ -262,6 +268,49 @@ func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]G
 	return items, nil
 }
 
+const getMusiciansMissingSpotifyID = `-- name: GetMusiciansMissingSpotifyID :many
+SELECT
+  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+FROM musicians
+WHERE spotify_id IS NULL
+  OR TRIM(spotify_id) = ''
+ORDER BY id ASC
+`
+
+func (q *Queries) GetMusiciansMissingSpotifyID(ctx context.Context) ([]Musician, error) {
+	rows, err := q.query(ctx, q.getMusiciansMissingSpotifyIDStmt, getMusiciansMissingSpotifyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Musician{}
+	for rows.Next() {
+		var i Musician
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SortName,
+			&i.Summary,
+			&i.SpotifyID,
+			&i.SpotifyPopularity,
+			&i.SpotifyFollowers,
+			&i.Thumb,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTracksByMusicianID = `-- name: GetTracksByMusicianID :many
 SELECT
   t.id,
@@ -279,7 +328,13 @@ SELECT
 FROM tracks AS t
 LEFT JOIN albums AS a
   ON t.album_id = a.id
-WHERE t.musician_id = ?
+WHERE t.musician_id = ?1
+  OR EXISTS (
+    SELECT 1
+    FROM track_musicians AS tm
+    WHERE tm.track_id = t.id
+      AND tm.musician_id = ?1
+  )
 ORDER BY t.sort_title ASC
 `
 

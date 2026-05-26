@@ -128,6 +128,37 @@ CREATE INDEX IF NOT EXISTS idx_track_album ON tracks (album_id);
 
 CREATE INDEX IF NOT EXISTS idx_track_musician ON tracks (musician_id);
 
+-- track_scan_status
+CREATE TABLE
+  IF NOT EXISTS track_scan_status (
+    track_id INTEGER PRIMARY KEY,
+    file_path TEXT NOT NULL UNIQUE,
+    size INTEGER NOT NULL,
+    file_mtime INTEGER NOT NULL,
+    last_scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    scan_error TEXT,
+    FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_track_scan_status_file_path
+ON track_scan_status (file_path);
+
+-- track_musicians
+CREATE TABLE
+  IF NOT EXISTS track_musicians (
+    track_id INTEGER NOT NULL,
+    musician_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (track_id, musician_id),
+    FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (musician_id) REFERENCES musicians (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_track_musicians_track ON track_musicians (track_id);
+
+CREATE INDEX IF NOT EXISTS idx_track_musicians_musician ON track_musicians (musician_id);
+
 -- movies
 CREATE TABLE
   IF NOT EXISTS movies (
@@ -136,7 +167,7 @@ CREATE TABLE
     file_path TEXT NOT NULL UNIQUE,
     file_name TEXT NOT NULL,
     size INTEGER NOT NULL,
-    container TEXT NOT NULL CHECK (container IN ('mkv', 'mp4', 'avi', 'webm')),
+    container TEXT NOT NULL CHECK (container IN ('mkv', 'mp4', 'avi', 'mov', 'm4v', 'webm')),
     mime_type TEXT NOT NULL,
     adult BOOLEAN NOT NULL,
     tmdb_id INTEGER,
@@ -495,6 +526,36 @@ CREATE TABLE
 CREATE INDEX IF NOT EXISTS idx_album_genres_album ON album_genres (album_id);
 
 CREATE INDEX IF NOT EXISTS idx_album_genres_genre ON album_genres (genre_id);
+
+-- music_spotify_matches
+CREATE TABLE
+  IF NOT EXISTS music_spotify_matches (
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician')),
+    entity_id INTEGER NOT NULL,
+    spotify_id TEXT,
+    status TEXT NOT NULL CHECK (status IN ('matched', 'pending', 'failed', 'unmatched')),
+    reason TEXT,
+    score INTEGER,
+    threshold_value INTEGER,
+    candidate_name TEXT,
+    candidate_artist TEXT,
+    search_query TEXT,
+    strategy TEXT,
+    error TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (entity_type, entity_id)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_music_spotify_matches_status
+ON music_spotify_matches (entity_type, status);
+
+CREATE TRIGGER IF NOT EXISTS music_spotify_matches_album_ad AFTER DELETE ON albums BEGIN
+  DELETE FROM music_spotify_matches WHERE entity_type = 'album' AND entity_id = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS music_spotify_matches_musician_ad AFTER DELETE ON musicians BEGIN
+  DELETE FROM music_spotify_matches WHERE entity_type = 'musician' AND entity_id = old.id;
+END;
 
 -- user_liked_tracks
 CREATE TABLE

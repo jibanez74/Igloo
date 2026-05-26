@@ -25,11 +25,12 @@ var AudioMimeTypes = map[string]string{
 }
 
 var ValidVideoExtensions = map[string]bool{
-	"mp4": true,
-	"avi": true,
-	"mkv": true,
-	"mov": true,
-	"m4v": true,
+	"mp4":  true,
+	"avi":  true,
+	"mkv":  true,
+	"mov":  true,
+	"m4v":  true,
+	"webm": true,
 }
 
 var knownNonYearTokens = map[string]bool{
@@ -119,5 +120,5 @@ func GetFileExtension(path string) string {
 		return ""
 	}
 
-	return ext[1:]
+	return strings.ToLower(ext[1:])
 }

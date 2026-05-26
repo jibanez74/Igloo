@@ -30,6 +30,16 @@ func (q *Queries) CreateTrackGenre(ctx context.Context, arg CreateTrackGenrePara
 	return err
 }
 
+const deleteTrackGenres = `-- name: DeleteTrackGenres :exec
+DELETE FROM track_genres
+WHERE track_id = ?
+`
+
+func (q *Queries) DeleteTrackGenres(ctx context.Context, trackID int64) error {
+	_, err := q.exec(ctx, q.deleteTrackGenresStmt, deleteTrackGenres, trackID)
+	return err
+}
+
 const deleteTrackGenresExcept = `-- name: DeleteTrackGenresExcept :exec
 DELETE FROM track_genres
 WHERE track_id = ?

@@ -16,6 +16,9 @@ type albumSearchStrategy struct {
 }
 
 func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, input AlbumSearchInput) (*spotify.FullAlbum, error) {
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
+
 	input.Title = strings.TrimSpace(input.Title)
 	input.Artist = strings.TrimSpace(input.Artist)
 	if input.Title == "" {

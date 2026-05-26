@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -26,6 +27,25 @@ type stubMusicScannerFfprobe struct {
 
 func (s *stubMusicScannerFfprobe) GetMetadata(_ string) (*ffprobe.FfprobeResult, error) {
 	return s.result, s.err
+}
+
+type sequenceMusicScannerFfprobe struct {
+	results []*ffprobe.FfprobeResult
+	calls   int
+}
+
+func (s *sequenceMusicScannerFfprobe) GetMetadata(_ string) (*ffprobe.FfprobeResult, error) {
+	if len(s.results) == 0 {
+		return nil, errors.New("no ffprobe results configured")
+	}
+
+	index := s.calls
+	if index >= len(s.results) {
+		index = len(s.results) - 1
+	}
+	s.calls++
+
+	return s.results[index], nil
 }
 
 type stubSpotifyLookup struct {
@@ -297,6 +317,18 @@ func musicianNames(t *testing.T, db *sql.DB) []string {
 	return names
 }
 
+func musicianIDByName(t *testing.T, db *sql.DB, name string) int64 {
+	t.Helper()
+
+	var id int64
+	err := db.QueryRow("SELECT id FROM musicians WHERE name = ?", name).Scan(&id)
+	if err != nil {
+		t.Fatalf("query musician %q: %v", name, err)
+	}
+
+	return id
+}
+
 func TestProcessTrackFile_PreservesFullArtistTagOnSpotifyProbeFailure(t *testing.T) {
 	probe := &stubMusicScannerFfprobe{
 		result: newTestTrackMetadata("Earth, Wind & Fire"),
@@ -396,6 +428,72 @@ func TestProcessTrackFile_SplitsCompoundCreditsOnMatchRejection(t *testing.T) {
 	}
 }
 
+func TestProcessTrackFile_SplitsFeatureCreditsIntoTrackMusicians(t *testing.T) {
+	probe := &stubMusicScannerFfprobe{
+		result: newTestAlbumTrackMetadata("Lead Artist feat. Guest Artist", "Feature Album"),
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		artistLookups: map[string]stubSpotifyLookup{
+			"Lead Artist feat. Guest Artist": {
+				err: &spotifyapi.MatchError{
+					Info: spotifyapi.MatchDebugInfo{
+						Lookup:      "artist",
+						Input:       "Lead Artist feat. Guest Artist",
+						SearchQuery: "Lead Artist feat. Guest Artist",
+						Strategy:    "artist_search",
+						Threshold:   78,
+						Reason:      "no_results",
+					},
+				},
+			},
+			"Lead Artist": {
+				artist: newStubArtist("lead-artist", "Lead Artist"),
+			},
+			"Guest Artist": {
+				artist: newStubArtist("guest-artist", "Guest Artist"),
+			},
+		},
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = app.processTrackFile(context.Background(), qtx, "/music/feature.mp3", "mp3")
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("processTrackFile failed: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	names := musicianNames(t, app.DB)
+	wantNames := []string{"Guest Artist", "Lead Artist"}
+	if len(names) != len(wantNames) {
+		t.Fatalf("names = %v, want %v", names, wantNames)
+	}
+	for index := range wantNames {
+		if names[index] != wantNames[index] {
+			t.Fatalf("names = %v, want %v", names, wantNames)
+		}
+	}
+
+	guestID := musicianIDByName(t, app.DB, "Guest Artist")
+	tracks, err := app.Queries.GetTracksByMusicianID(context.Background(), sqlNullInt64(guestID))
+	if err != nil {
+		t.Fatalf("GetTracksByMusicianID: %v", err)
+	}
+	if len(tracks) != 1 || tracks[0].Title != "Test Song" {
+		t.Fatalf("guest tracks = %#v, want Test Song", tracks)
+	}
+}
+
 func TestProcessTrackFile_ReturnsErrorWhenSplitArtistPersistenceFails(t *testing.T) {
 	probe := &stubMusicScannerFfprobe{
 		result: newTestTrackMetadata("Charlie Puth & Coco Jones"),
@@ -482,6 +580,83 @@ func TestProcessTrackFile_StoresSpotifyAlbumCover(t *testing.T) {
 	}
 	if len(input.TrackTitles) != 1 || input.TrackTitles[0] != "Test Song" {
 		t.Fatalf("TrackTitles = %#v, want %#v", input.TrackTitles, []string{"Test Song"})
+	}
+}
+
+func TestProcessTrackFile_RecordsSpotifyAlbumMatchDiagnostics(t *testing.T) {
+	matchErr := &spotifyapi.MatchError{
+		Info: spotifyapi.MatchDebugInfo{
+			Lookup:        "album",
+			Input:         "Missing Album",
+			SearchQuery:   `album:"Missing Album" artist:"The Example"`,
+			Strategy:      "album_field_search",
+			CandidateName: "Wrong Album",
+			Score:         42,
+			Threshold:     76,
+			Reason:        "score_below_threshold",
+		},
+	}
+	probe := &stubMusicScannerFfprobe{
+		result: newTestAlbumTrackMetadata("The Example", "Missing Album"),
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		artistLookups: map[string]stubSpotifyLookup{
+			"The Example": {
+				artist: newStubArtist("the-example", "The Example"),
+			},
+		},
+		albumLookups: map[string]stubSpotifyAlbumLookup{
+			"Missing Album": {
+				err: matchErr,
+			},
+		},
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+	app.Settings = &database.Setting{
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	tx, err := app.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	qtx := app.Queries.WithTx(tx)
+	err = app.processTrackFile(context.Background(), qtx, "/music/missing.mp3", "mp3")
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("processTrackFile failed: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	var albumID int64
+	err = app.DB.QueryRow("SELECT id FROM albums WHERE title = ?", "Missing Album").Scan(&albumID)
+	if err != nil {
+		t.Fatalf("query album id: %v", err)
+	}
+
+	match, err := app.Queries.GetMusicSpotifyMatch(context.Background(), database.GetMusicSpotifyMatchParams{
+		EntityType: spotifyMatchEntityAlbum,
+		EntityID:   albumID,
+	})
+	if err != nil {
+		t.Fatalf("GetMusicSpotifyMatch: %v", err)
+	}
+	if match.Status != spotifyMatchStatusUnmatched {
+		t.Fatalf("match status = %q, want %q", match.Status, spotifyMatchStatusUnmatched)
+	}
+	if !match.Reason.Valid || match.Reason.String != "score_below_threshold" {
+		t.Fatalf("match reason = %#v, want score_below_threshold", match.Reason)
+	}
+	if !match.CandidateName.Valid || match.CandidateName.String != "Wrong Album" {
+		t.Fatalf("candidate = %#v, want Wrong Album", match.CandidateName)
+	}
+	if !match.Score.Valid || match.Score.Int64 != 42 {
+		t.Fatalf("score = %#v, want 42", match.Score)
 	}
 }
 
@@ -592,6 +767,250 @@ func TestProcessTrackFile_ExtractsEmbeddedAlbumArtwork(t *testing.T) {
 	}
 	if string(got) != "image" {
 		t.Fatalf("extracted cover = %q, want %q", got, "image")
+	}
+}
+
+func TestScanMusicLibrary_RescansSameSizeMtimeChangesAndClearsStaleMetadata(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "TRACK.MP3")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+
+	first := newTestAlbumTrackMetadata("The Example", "Example Album")
+	first.Format.Tags.Genre = "Rock"
+
+	second := newTestTrackMetadata("")
+	second.Format.Tags.Title = "Retagged Song"
+	second.Format.Tags.Album = ""
+	second.Format.Tags.AlbumArtist = ""
+	second.Format.Tags.Genre = ""
+
+	probe := &sequenceMusicScannerFfprobe{
+		results: []*ffprobe.FfprobeResult{first, second},
+	}
+	app := newMusicScannerTestApp(t, probe, nil)
+	app.Settings = &database.Setting{
+		MusicDir:  sql.NullString{String: musicDir, Valid: true},
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	app.ScanMusicLibrary()
+
+	track, err := app.Queries.GetTrackByPath(context.Background(), trackPath)
+	if err != nil {
+		t.Fatalf("get scanned track: %v", err)
+	}
+	if track.Title != "Test Song" || !track.AlbumID.Valid || !track.MusicianID.Valid {
+		t.Fatalf("first scan track = %+v, want tagged album and musician", track)
+	}
+
+	newTime := time.Now().Add(2 * time.Hour)
+	err = os.Chtimes(trackPath, newTime, newTime)
+	if err != nil {
+		t.Fatalf("chtimes track: %v", err)
+	}
+
+	app.ScanMusicLibrary()
+
+	track, err = app.Queries.GetTrackByPath(context.Background(), trackPath)
+	if err != nil {
+		t.Fatalf("get rescanned track: %v", err)
+	}
+	if track.Title != "Retagged Song" {
+		t.Fatalf("track title = %q, want Retagged Song", track.Title)
+	}
+	if track.AlbumID.Valid {
+		t.Fatalf("album_id = %#v, want cleared", track.AlbumID)
+	}
+	if track.MusicianID.Valid {
+		t.Fatalf("musician_id = %#v, want cleared", track.MusicianID)
+	}
+	if probe.calls != 2 {
+		t.Fatalf("ffprobe calls = %d, want 2", probe.calls)
+	}
+
+	var trackGenreCount int
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM track_genres WHERE track_id = ?", track.ID).Scan(&trackGenreCount)
+	if err != nil {
+		t.Fatalf("count track genres: %v", err)
+	}
+	if trackGenreCount != 0 {
+		t.Fatalf("track genre count = %d, want 0", trackGenreCount)
+	}
+
+	var albumCount int
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM albums").Scan(&albumCount)
+	if err != nil {
+		t.Fatalf("count albums: %v", err)
+	}
+	if albumCount != 0 {
+		t.Fatalf("album count = %d, want 0", albumCount)
+	}
+
+	var musicianCount int
+	err = app.DB.QueryRow("SELECT COUNT(*) FROM musicians").Scan(&musicianCount)
+	if err != nil {
+		t.Fatalf("count musicians: %v", err)
+	}
+	if musicianCount != 0 {
+		t.Fatalf("musician count = %d, want 0", musicianCount)
+	}
+}
+
+func TestScanMusicLibrary_IndexesM4AWhenSpotifyMatchFails(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "03 I Miss You.m4a")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+
+	metadata := newTestAlbumTrackMetadata("Adele", "25")
+	metadata.Streams[0].CodecName = "aac"
+	metadata.Streams[0].Profile = "LC"
+	metadata.Format.Tags.Title = "I Miss You"
+
+	matchErr := &spotifyapi.MatchError{
+		Info: spotifyapi.MatchDebugInfo{
+			Lookup:      "album",
+			Input:       "25",
+			SearchQuery: `album:"25" artist:"Adele"`,
+			Strategy:    "album_field_search",
+			Reason:      "search_failed",
+			Threshold:   76,
+		},
+		Err: errors.New("spotify unavailable"),
+	}
+
+	probe := &stubMusicScannerFfprobe{result: metadata}
+	spotifyClient := &stubMusicScannerSpotify{
+		artistLookups: map[string]stubSpotifyLookup{
+			"Adele": {
+				err: &spotifyapi.MatchError{
+					Info: spotifyapi.MatchDebugInfo{
+						Lookup:      "artist",
+						Input:       "Adele",
+						SearchQuery: "Adele",
+						Strategy:    "artist_search",
+						Reason:      "search_failed",
+						Threshold:   78,
+					},
+					Err: errors.New("spotify unavailable"),
+				},
+			},
+		},
+		albumErr: matchErr,
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+	app.Settings = &database.Setting{
+		MusicDir:  sql.NullString{String: musicDir, Valid: true},
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	app.ScanMusicLibrary()
+
+	track, err := app.Queries.GetTrackByPath(context.Background(), trackPath)
+	if err != nil {
+		t.Fatalf("get scanned track: %v", err)
+	}
+	if track.Title != "I Miss You" {
+		t.Fatalf("track title = %q, want I Miss You", track.Title)
+	}
+	if track.Container != "m4a" || track.MimeType != "audio/mp4" {
+		t.Fatalf("track container/mime = %s/%s, want m4a/audio/mp4", track.Container, track.MimeType)
+	}
+	if !track.AlbumID.Valid || !track.MusicianID.Valid {
+		t.Fatalf("track = %+v, want local album and musician despite Spotify failure", track)
+	}
+}
+
+func TestScanMusicLibrary_DuplicateScanDoesNotStart(t *testing.T) {
+	finishMusicScan()
+	if !tryBeginMusicScan() {
+		t.Fatal("expected test to acquire music scan guard")
+	}
+	defer finishMusicScan()
+
+	probe := &sequenceMusicScannerFfprobe{
+		results: []*ffprobe.FfprobeResult{newTestTrackMetadata("Adele")},
+	}
+	app := newMusicScannerTestApp(t, probe, nil)
+	app.Settings = &database.Setting{
+		MusicDir:  sql.NullString{String: t.TempDir(), Valid: true},
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	app.ScanMusicLibrary()
+
+	if probe.calls != 0 {
+		t.Fatalf("ffprobe calls = %d, want duplicate scan to skip before probing", probe.calls)
+	}
+}
+
+func TestScanMusicLibrary_ReconcileMissingTrackDeletesSecondaryMusicians(t *testing.T) {
+	musicDir := t.TempDir()
+	trackPath := filepath.Join(musicDir, "feature.mp3")
+	err := os.WriteFile(trackPath, []byte("audio"), 0o644)
+	if err != nil {
+		t.Fatalf("write track: %v", err)
+	}
+
+	probe := &stubMusicScannerFfprobe{
+		result: newTestTrackMetadata("Lead Artist feat. Guest Artist"),
+	}
+	spotifyClient := &stubMusicScannerSpotify{
+		artistLookups: map[string]stubSpotifyLookup{
+			"Lead Artist feat. Guest Artist": {
+				err: &spotifyapi.MatchError{
+					Info: spotifyapi.MatchDebugInfo{
+						Lookup:      "artist",
+						Input:       "Lead Artist feat. Guest Artist",
+						SearchQuery: "Lead Artist feat. Guest Artist",
+						Strategy:    "artist_search",
+						Threshold:   78,
+						Reason:      "no_results",
+					},
+				},
+			},
+			"Lead Artist": {
+				artist: newStubArtist("lead-artist", "Lead Artist"),
+			},
+			"Guest Artist": {
+				artist: newStubArtist("guest-artist", "Guest Artist"),
+			},
+		},
+	}
+	app := newMusicScannerTestApp(t, probe, spotifyClient)
+	app.Settings = &database.Setting{
+		MusicDir:  sql.NullString{String: musicDir, Valid: true},
+		StaticDir: filepath.Join(t.TempDir(), "static"),
+	}
+
+	app.ScanMusicLibrary()
+
+	names := musicianNames(t, app.DB)
+	wantNames := []string{"Guest Artist", "Lead Artist"}
+	if len(names) != len(wantNames) {
+		t.Fatalf("names = %v, want %v", names, wantNames)
+	}
+	for index := range wantNames {
+		if names[index] != wantNames[index] {
+			t.Fatalf("names = %v, want %v", names, wantNames)
+		}
+	}
+
+	err = os.Remove(trackPath)
+	if err != nil {
+		t.Fatalf("remove track: %v", err)
+	}
+
+	app.ScanMusicLibrary()
+
+	names = musicianNames(t, app.DB)
+	if len(names) != 0 {
+		t.Fatalf("names after reconcile = %v, want none", names)
 	}
 }
 

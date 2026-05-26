@@ -5,6 +5,13 @@ FROM tracks
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetTrackByPath :one
+SELECT
+  *
+FROM tracks
+WHERE file_path = ?
+LIMIT 1;
+
 -- name: GetTrackScanIndex :many
 SELECT
   id,
@@ -17,10 +24,54 @@ FROM tracks;
 SELECT
   EXISTS (
     SELECT 1
-    FROM tracks
+    FROM track_scan_status
     WHERE file_path = ?
       AND size = ?
+      AND file_mtime = ?
+      AND scan_error IS NULL
   ) AS track_exists;
+
+-- name: UpsertTrackScanStatus :exec
+INSERT INTO track_scan_status (
+  track_id,
+  file_path,
+  size,
+  file_mtime,
+  scan_error
+)
+VALUES
+  (?, ?, ?, ?, NULL)
+ON CONFLICT (track_id) DO UPDATE
+SET
+  file_path = excluded.file_path,
+  size = excluded.size,
+  file_mtime = excluded.file_mtime,
+  last_scanned_at = CURRENT_TIMESTAMP,
+  scan_error = NULL;
+
+-- name: UpsertTrackScanErrorByPath :execrows
+INSERT INTO track_scan_status (
+  track_id,
+  file_path,
+  size,
+  file_mtime,
+  scan_error
+)
+SELECT
+  tracks.id,
+  tracks.file_path,
+  ?,
+  ?,
+  ?
+FROM tracks
+WHERE tracks.file_path = ?
+ON CONFLICT (track_id) DO UPDATE
+SET
+  file_path = excluded.file_path,
+  size = excluded.size,
+  file_mtime = excluded.file_mtime,
+  last_scanned_at = CURRENT_TIMESTAMP,
+  scan_error = excluded.scan_error;
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (
@@ -65,13 +116,13 @@ SET
   channel_layout = excluded.channel_layout,
   bit_rate = excluded.bit_rate,
   profile = excluded.profile,
-  release_date = COALESCE(excluded.release_date, tracks.release_date),
-  year = COALESCE(excluded.year, tracks.year),
-  composer = COALESCE(excluded.composer, tracks.composer),
-  copyright = COALESCE(excluded.copyright, tracks.copyright),
-  language = COALESCE(excluded.language, tracks.language),
-  album_id = COALESCE(excluded.album_id, tracks.album_id),
-  musician_id = COALESCE(excluded.musician_id, tracks.musician_id),
+  release_date = excluded.release_date,
+  year = excluded.year,
+  composer = excluded.composer,
+  copyright = excluded.copyright,
+  language = excluded.language,
+  album_id = excluded.album_id,
+  musician_id = excluded.musician_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
@@ -141,9 +192,15 @@ WHERE album_id = ?;
 
 -- name: CountTracksByMusicianID :one
 SELECT
-  COUNT(*)
+  COUNT(DISTINCT tracks.id)
 FROM tracks
-WHERE musician_id = ?;
+WHERE tracks.musician_id = sqlc.arg(musician_id)
+  OR EXISTS (
+    SELECT 1
+    FROM track_musicians
+    WHERE track_musicians.track_id = tracks.id
+      AND track_musicians.musician_id = sqlc.arg(musician_id)
+  );
 
 -- name: GetAlbumsCount :one
 SELECT
