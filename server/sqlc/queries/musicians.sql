@@ -80,16 +80,6 @@ FROM musicians
 WHERE id = ?
 LIMIT 1;
 
--- name: CountAlbumsByMusicianID :one
-SELECT
-  COUNT(*)
-FROM musician_albums
-WHERE musician_id = ?;
-
--- name: DeleteMusician :exec
-DELETE FROM musicians
-WHERE id = ?;
-
 -- name: GetAlbumsByMusicianID :many
 -- Sorted by release date (newest first), then by title
 SELECT
@@ -137,11 +127,3 @@ WHERE t.musician_id = sqlc.arg(musician_id)
       AND tm.musician_id = sqlc.arg(musician_id)
   )
 ORDER BY t.sort_title ASC;
-
--- name: GetMusiciansMissingSpotifyID :many
-SELECT
-  *
-FROM musicians
-WHERE spotify_id IS NULL
-  OR TRIM(spotify_id) = ''
-ORDER BY id ASC;

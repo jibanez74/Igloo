@@ -13,30 +13,9 @@ import (
 )
 
 var (
-	scanMutex  sync.Mutex
-	isScanning bool
-
 	movieScanMutex  sync.Mutex
 	isMovieScanning bool
 )
-
-func tryBeginMusicScan() bool {
-	scanMutex.Lock()
-	defer scanMutex.Unlock()
-
-	if isScanning {
-		return false
-	}
-
-	isScanning = true
-	return true
-}
-
-func finishMusicScan() {
-	scanMutex.Lock()
-	isScanning = false
-	scanMutex.Unlock()
-}
 
 func tryBeginMovieScan() bool {
 	movieScanMutex.Lock()
@@ -398,20 +377,12 @@ func validatedOptionalMediaDir(value *string) (sql.NullString, error) {
 }
 
 func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request) {
-	if !tryBeginMusicScan() {
-		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"))
-		return
-	}
-
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
-		finishMusicScan()
 		helpers.ErrorJSON(w, errors.New("music directory is not configured"))
 		return
 	}
 
-	go func() {
-		app.runMusicScan()
-	}()
+	go app.MusicScanLibrary()
 
 	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)
 

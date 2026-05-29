@@ -10,30 +10,6 @@ import (
 	"database/sql"
 )
 
-const countAlbumsByMusicianID = `-- name: CountAlbumsByMusicianID :one
-SELECT
-  COUNT(*)
-FROM musician_albums
-WHERE musician_id = ?
-`
-
-func (q *Queries) CountAlbumsByMusicianID(ctx context.Context, musicianID int64) (int64, error) {
-	row := q.queryRow(ctx, q.countAlbumsByMusicianIDStmt, countAlbumsByMusicianID, musicianID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const deleteMusician = `-- name: DeleteMusician :exec
-DELETE FROM musicians
-WHERE id = ?
-`
-
-func (q *Queries) DeleteMusician(ctx context.Context, id int64) error {
-	_, err := q.exec(ctx, q.deleteMusicianStmt, deleteMusician, id)
-	return err
-}
-
 const getAlbumsByMusicianID = `-- name: GetAlbumsByMusicianID :many
 SELECT
   a.id,
@@ -255,49 +231,6 @@ func (q *Queries) GetMusiciansByAlbumID(ctx context.Context, albumID int64) ([]G
 	for rows.Next() {
 		var i GetMusiciansByAlbumIDRow
 		if err := rows.Scan(&i.ID, &i.Name, &i.Thumb); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getMusiciansMissingSpotifyID = `-- name: GetMusiciansMissingSpotifyID :many
-SELECT
-  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
-FROM musicians
-WHERE spotify_id IS NULL
-  OR TRIM(spotify_id) = ''
-ORDER BY id ASC
-`
-
-func (q *Queries) GetMusiciansMissingSpotifyID(ctx context.Context) ([]Musician, error) {
-	rows, err := q.query(ctx, q.getMusiciansMissingSpotifyIDStmt, getMusiciansMissingSpotifyID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Musician{}
-	for rows.Next() {
-		var i Musician
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.SortName,
-			&i.Summary,
-			&i.SpotifyID,
-			&i.SpotifyPopularity,
-			&i.SpotifyFollowers,
-			&i.Thumb,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

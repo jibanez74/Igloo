@@ -202,7 +202,7 @@ func InitApp() (*Application, error) {
 
   app.initRuntimeCaches()
 
-  go app.ScanMusicLibrary()
+  go app.MusicScanLibrary()
   go app.ScanMoviesLibrary()
 
   app.InitRouter()

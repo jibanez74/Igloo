@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
 )
 
@@ -35,53 +34,51 @@ func testMusicMetadata() *ffprobe.FfprobeResult {
 	}
 }
 
-func TestProcessMusicBatchWritesScanStatusAndSkipsUnchanged(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.Ffprobe = &stubMovieScannerFfprobe{result: testMusicMetadata()}
-
-	file := trackFile{
-		path:  filepath.Join(t.TempDir(), "Test Track.m4a"),
-		ext:   "m4a",
-		size:  5,
-		mtime: 123456789,
-	}
-
-	scanned, skipped, errCount, processed := app.processMusicBatch(context.Background(), []trackFile{file})
-	if scanned != 1 || skipped != 0 || errCount != 0 || len(processed) != 1 {
-		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d processed=%d, want 1/0/0/1", scanned, skipped, errCount, len(processed))
-	}
-
-	var statusCount int
-	err := app.DB.QueryRow("SELECT COUNT(*) FROM track_scan_status WHERE file_path = ? AND size = ? AND file_mtime = ? AND scan_error IS NULL", file.path, file.size, file.mtime).Scan(&statusCount)
-	if err != nil {
-		t.Fatalf("count track scan status: %v", err)
-	}
-	if statusCount != 1 {
-		t.Fatalf("track scan status count = %d, want 1", statusCount)
-	}
-
-	scanned, skipped, errCount, processed = app.processMusicBatch(context.Background(), []trackFile{file})
-	if scanned != 0 || skipped != 1 || errCount != 0 || len(processed) != 0 {
-		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d processed=%d, want 0/1/0/0", scanned, skipped, errCount, len(processed))
-	}
+type countingMusicScannerFfprobe struct {
+	result *ffprobe.FfprobeResult
+	calls  int
 }
 
-func TestRunMusicScanClearsInProgressFlagWhenDirectoryMissing(t *testing.T) {
-	finishMusicScan()
+func (s *countingMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+	s.calls++
+	return s.result, nil
+}
 
+func TestProcessMusicBatchInsertsTrackAndSkipsExistingPathSize(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Settings = &database.Setting{}
 
-	if !tryBeginMusicScan() {
-		t.Fatal("expected to reserve music scan")
+	ffprobeStub := &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.Ffprobe = ffprobeStub
+
+	file := trackFile{
+		path: filepath.Join(t.TempDir(), "Test Track.m4a"),
+		ext:  "m4a",
+		size: 5,
 	}
 
-	app.runMusicScan()
-
-	if !tryBeginMusicScan() {
-		t.Fatal("music scan flag was not cleared")
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
-	finishMusicScan()
+
+	var trackCount int
+	err := app.DB.QueryRow("SELECT COUNT(*) FROM tracks WHERE file_path = ? AND size = ?", file.path, file.size).Scan(&trackCount)
+	if err != nil {
+		t.Fatalf("count tracks: %v", err)
+	}
+	if trackCount != 1 {
+		t.Fatalf("track count = %d, want 1", trackCount)
+	}
+	if ffprobeStub.calls != 1 {
+		t.Fatalf("ffprobe calls = %d, want 1", ffprobeStub.calls)
+	}
+
+	scanned, skipped, errCount = app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 0 || skipped != 1 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 0/1/0", scanned, skipped, errCount)
+	}
+	if ffprobeStub.calls != 1 {
+		t.Fatalf("ffprobe calls after skip = %d, want 1", ffprobeStub.calls)
+	}
 }

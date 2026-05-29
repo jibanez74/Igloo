@@ -5,73 +5,14 @@ FROM tracks
 WHERE id = ?
 LIMIT 1;
 
--- name: GetTrackByPath :one
-SELECT
-  *
-FROM tracks
-WHERE file_path = ?
-LIMIT 1;
-
--- name: GetTrackScanIndex :many
-SELECT
-  id,
-  file_path,
-  album_id,
-  musician_id
-FROM tracks;
-
--- name: CheckTrackUnchanged :one
+-- name: CheckTrackExistsByPathAndSize :one
 SELECT
   EXISTS (
     SELECT 1
-    FROM track_scan_status
+    FROM tracks
     WHERE file_path = ?
       AND size = ?
-      AND file_mtime = ?
-      AND scan_error IS NULL
   ) AS track_exists;
-
--- name: UpsertTrackScanStatus :exec
-INSERT INTO track_scan_status (
-  track_id,
-  file_path,
-  size,
-  file_mtime,
-  scan_error
-)
-VALUES
-  (?, ?, ?, ?, NULL)
-ON CONFLICT (track_id) DO UPDATE
-SET
-  file_path = excluded.file_path,
-  size = excluded.size,
-  file_mtime = excluded.file_mtime,
-  last_scanned_at = CURRENT_TIMESTAMP,
-  scan_error = NULL;
-
--- name: UpsertTrackScanErrorByPath :execrows
-INSERT INTO track_scan_status (
-  track_id,
-  file_path,
-  size,
-  file_mtime,
-  scan_error
-)
-SELECT
-  tracks.id,
-  tracks.file_path,
-  ?,
-  ?,
-  ?
-FROM tracks
-WHERE tracks.file_path = ?
-ON CONFLICT (track_id) DO UPDATE
-SET
-  file_path = excluded.file_path,
-  size = excluded.size,
-  file_mtime = excluded.file_mtime,
-  last_scanned_at = CURRENT_TIMESTAMP,
-  scan_error = excluded.scan_error;
 
 -- name: UpsertTrack :one
 INSERT INTO tracks (
@@ -126,10 +67,6 @@ SET
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
--- name: DeleteTrack :exec
-DELETE FROM tracks
-WHERE id = ?;
-
 -- name: GetTracksByAlbumID :many
 SELECT
   *
@@ -138,19 +75,6 @@ WHERE album_id = ?
 ORDER BY
   disc ASC,
   track_index ASC;
-
--- name: GetAlbumTracksForArtwork :many
-SELECT
-  id,
-  title,
-  file_path,
-  year
-FROM tracks
-WHERE album_id = ?
-ORDER BY
-  disc ASC,
-  track_index ASC,
-  id ASC;
 
 -- name: GetTracksAlphabetical :many
 SELECT
@@ -183,24 +107,6 @@ OFFSET ?;
 SELECT
   COUNT(*)
 FROM tracks;
-
--- name: CountTracksByAlbumID :one
-SELECT
-  COUNT(*)
-FROM tracks
-WHERE album_id = ?;
-
--- name: CountTracksByMusicianID :one
-SELECT
-  COUNT(DISTINCT tracks.id)
-FROM tracks
-WHERE tracks.musician_id = sqlc.arg(musician_id)
-  OR EXISTS (
-    SELECT 1
-    FROM track_musicians
-    WHERE track_musicians.track_id = tracks.id
-      AND track_musicians.musician_id = sqlc.arg(musician_id)
-  );
 
 -- name: GetAlbumsCount :one
 SELECT

@@ -128,21 +128,6 @@ CREATE INDEX IF NOT EXISTS idx_track_album ON tracks (album_id);
 
 CREATE INDEX IF NOT EXISTS idx_track_musician ON tracks (musician_id);
 
--- track_scan_status
-CREATE TABLE
-  IF NOT EXISTS track_scan_status (
-    track_id INTEGER PRIMARY KEY,
-    file_path TEXT NOT NULL UNIQUE,
-    size INTEGER NOT NULL,
-    file_mtime INTEGER NOT NULL,
-    last_scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    scan_error TEXT,
-    FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE ON UPDATE CASCADE
-  );
-
-CREATE INDEX IF NOT EXISTS idx_track_scan_status_file_path
-ON track_scan_status (file_path);
-
 -- track_musicians
 CREATE TABLE
   IF NOT EXISTS track_musicians (

@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func (app *Application) processTrackFile(ctx context.Context, qtx *database.Queries, path, ext string) (int64, error) {
+func (app *Application) processTrackFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) (int64, error) {
 	info, err := app.Ffprobe.GetMetadata(path)
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe failed: %w", err)
@@ -21,6 +21,7 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	params := database.UpsertTrackParams{
 		FilePath: path,
 		FileName: filepath.Base(path),
+		Size:     fileSize,
 	}
 
 	if info.Format.Tags.Title != "" {
@@ -40,13 +41,6 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 	mimeType, ok := helpers.AudioMimeTypes[ext]
 	if ok {
 		params.MimeType = mimeType
-	}
-
-	if info.Format.Size != "" {
-		size, err := strconv.ParseInt(info.Format.Size, 10, 64)
-		if err == nil {
-			params.Size = size
-		}
 	}
 
 	if info.Format.Duration != "" {

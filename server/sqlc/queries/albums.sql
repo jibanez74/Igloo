@@ -23,22 +23,6 @@ FROM albums
 ORDER BY created_at DESC
 LIMIT 12;
 
--- name: GetAlbumsMissingCover :many
-SELECT
-  *
-FROM albums
-WHERE cover IS NULL
-  OR TRIM(cover) = ''
-ORDER BY id ASC;
-
--- name: GetAlbumsMissingSpotifyID :many
-SELECT
-  *
-FROM albums
-WHERE spotify_id IS NULL
-  OR TRIM(spotify_id) = ''
-ORDER BY id ASC;
-
 -- name: GetAlbumsAlphabetical :many
 -- Returns albums sorted alphabetically by title with pagination.
 -- Non-alphabetic titles (numbers, symbols) are grouped under '#' and sorted first.
@@ -83,14 +67,6 @@ SET
   cover = COALESCE(excluded.cover, albums.cover),
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
-
--- name: UpdateAlbumCoverIfMissing :execrows
-UPDATE albums
-SET
-  cover = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-  AND (cover IS NULL OR TRIM(cover) = '');
 
 -- name: DeleteAlbum :exec
 DELETE FROM albums
