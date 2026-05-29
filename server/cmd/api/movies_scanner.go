@@ -559,3 +559,21 @@ func isMovieUnderRoot(path, root string) bool {
 	}
 	return !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
+
+func tryBeginMovieScan() bool {
+	movieScanMutex.Lock()
+	defer movieScanMutex.Unlock()
+
+	if isMovieScanning {
+		return false
+	}
+
+	isMovieScanning = true
+	return true
+}
+
+func finishMovieScan() {
+	movieScanMutex.Lock()
+	isMovieScanning = false
+	movieScanMutex.Unlock()
+}

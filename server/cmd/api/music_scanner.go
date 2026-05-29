@@ -163,3 +163,21 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 
 	return scanned, skipped, errCount
 }
+
+func tryBeginMusicScan() bool {
+	musicScanMutex.Lock()
+	defer musicScanMutex.Unlock()
+
+	if isMusicScanning {
+		return false
+	}
+
+	isMusicScanning = true
+	return true
+}
+
+func finishMusicScan() {
+	musicScanMutex.Lock()
+	isMusicScanning = false
+	musicScanMutex.Unlock()
+}

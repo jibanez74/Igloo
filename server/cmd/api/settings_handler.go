@@ -19,42 +19,6 @@ var (
 	isMusicScanning bool
 )
 
-func tryBeginMovieScan() bool {
-	movieScanMutex.Lock()
-	defer movieScanMutex.Unlock()
-
-	if isMovieScanning {
-		return false
-	}
-
-	isMovieScanning = true
-	return true
-}
-
-func finishMovieScan() {
-	movieScanMutex.Lock()
-	isMovieScanning = false
-	movieScanMutex.Unlock()
-}
-
-func tryBeginMusicScan() bool {
-	musicScanMutex.Lock()
-	defer musicScanMutex.Unlock()
-
-	if isMusicScanning {
-		return false
-	}
-
-	isMusicScanning = true
-	return true
-}
-
-func finishMusicScan() {
-	musicScanMutex.Lock()
-	isMusicScanning = false
-	musicScanMutex.Unlock()
-}
-
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
 	JellyfinToken              *string  `json:"jellyfin_token"`
