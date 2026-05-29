@@ -62,12 +62,22 @@ func (app *Application) getOrCreateMusician(ctx context.Context, qtx *database.Q
 		if err == nil && artist != nil {
 			existing, err := qtx.GetMusicianBySpotifyID(ctx, sql.NullString{String: artist.ID.String(), Valid: true})
 			if err == nil {
+				if len(artist.Images) > 0 && artist.Images[0].URL != "" {
+					existing, err = qtx.UpdateMusicianSpotifyThumb(ctx, database.UpdateMusicianSpotifyThumbParams{
+						ID:    existing.ID,
+						Thumb: sql.NullString{String: artist.Images[0].URL, Valid: true},
+					})
+					if err != nil {
+						return nil, err
+					}
+				}
+
 				app.processSpotifyGenres(ctx, qtx, existing.ID, artist.Genres)
 				return &existing, nil
 			}
 
 			var thumb sql.NullString
-			if len(artist.Images) > 0 {
+			if len(artist.Images) > 0 && artist.Images[0].URL != "" {
 				thumb = sql.NullString{String: artist.Images[0].URL, Valid: true}
 			}
 
@@ -166,6 +176,16 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 		if err == nil && albumDetails != nil {
 			existing, err := qtx.GetAlbumBySpotifyID(ctx, sql.NullString{String: albumDetails.ID.String(), Valid: true})
 			if err == nil {
+				if len(albumDetails.Images) > 0 && albumDetails.Images[0].URL != "" {
+					existing, err = qtx.UpdateAlbumSpotifyCover(ctx, database.UpdateAlbumSpotifyCoverParams{
+						ID:    existing.ID,
+						Cover: sql.NullString{String: albumDetails.Images[0].URL, Valid: true},
+					})
+					if err != nil {
+						return nil, err
+					}
+				}
+
 				app.processSpotifyAlbumGenres(ctx, qtx, existing.ID, albumDetails.Genres)
 				return &existing, nil
 			}
@@ -188,7 +208,7 @@ func (app *Application) getOrCreateAlbum(ctx context.Context, qtx *database.Quer
 				params.Musician = sql.NullString{String: albumArtist, Valid: true}
 			}
 
-			if len(albumDetails.Images) > 0 {
+			if len(albumDetails.Images) > 0 && albumDetails.Images[0].URL != "" {
 				params.Cover = sql.NullString{String: albumDetails.Images[0].URL, Valid: true}
 			}
 

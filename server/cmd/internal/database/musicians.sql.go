@@ -322,6 +322,38 @@ func (q *Queries) GetTracksByMusicianID(ctx context.Context, musicianID sql.Null
 	return items, nil
 }
 
+const updateMusicianSpotifyThumb = `-- name: UpdateMusicianSpotifyThumb :one
+UPDATE musicians
+SET
+  thumb = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+`
+
+type UpdateMusicianSpotifyThumbParams struct {
+	Thumb sql.NullString `json:"thumb"`
+	ID    int64          `json:"id"`
+}
+
+func (q *Queries) UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (Musician, error) {
+	row := q.queryRow(ctx, q.updateMusicianSpotifyThumbStmt, updateMusicianSpotifyThumb, arg.Thumb, arg.ID)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SortName,
+		&i.Summary,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.SpotifyFollowers,
+		&i.Thumb,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const upsertMusician = `-- name: UpsertMusician :one
 INSERT INTO musicians (
   name,

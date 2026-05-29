@@ -432,6 +432,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
 	}
+	if q.updateAlbumSpotifyCoverStmt, err = db.PrepareContext(ctx, updateAlbumSpotifyCover); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAlbumSpotifyCover: %w", err)
+	}
 	if q.updateGeneralSettingsStmt, err = db.PrepareContext(ctx, updateGeneralSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateGeneralSettings: %w", err)
 	}
@@ -443,6 +446,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateMoviePlaylistStmt, err = db.PrepareContext(ctx, updateMoviePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMoviePlaylist: %w", err)
+	}
+	if q.updateMusicianSpotifyThumbStmt, err = db.PrepareContext(ctx, updateMusicianSpotifyThumb); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateMusicianSpotifyThumb: %w", err)
 	}
 	if q.updatePlaylistStmt, err = db.PrepareContext(ctx, updatePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdatePlaylist: %w", err)
@@ -1192,6 +1198,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing unlikeTrackStmt: %w", cerr)
 		}
 	}
+	if q.updateAlbumSpotifyCoverStmt != nil {
+		if cerr := q.updateAlbumSpotifyCoverStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAlbumSpotifyCoverStmt: %w", cerr)
+		}
+	}
 	if q.updateGeneralSettingsStmt != nil {
 		if cerr := q.updateGeneralSettingsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateGeneralSettingsStmt: %w", cerr)
@@ -1210,6 +1221,11 @@ func (q *Queries) Close() error {
 	if q.updateMoviePlaylistStmt != nil {
 		if cerr := q.updateMoviePlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMoviePlaylistStmt: %w", cerr)
+		}
+	}
+	if q.updateMusicianSpotifyThumbStmt != nil {
+		if cerr := q.updateMusicianSpotifyThumbStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateMusicianSpotifyThumbStmt: %w", cerr)
 		}
 	}
 	if q.updatePlaylistStmt != nil {
@@ -1492,10 +1508,12 @@ type Queries struct {
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
+	updateAlbumSpotifyCoverStmt                 *sql.Stmt
 	updateGeneralSettingsStmt                   *sql.Stmt
 	updateLibrarySettingsStmt                   *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
 	updateMoviePlaylistStmt                     *sql.Stmt
+	updateMusicianSpotifyThumbStmt              *sql.Stmt
 	updatePlaylistStmt                          *sql.Stmt
 	updatePlaylistTimestampStmt                 *sql.Stmt
 	updateTrackPositionStmt                     *sql.Stmt
@@ -1659,10 +1677,12 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
+		updateAlbumSpotifyCoverStmt:                 q.updateAlbumSpotifyCoverStmt,
 		updateGeneralSettingsStmt:                   q.updateGeneralSettingsStmt,
 		updateLibrarySettingsStmt:                   q.updateLibrarySettingsStmt,
 		updateMovieStmt:                             q.updateMovieStmt,
 		updateMoviePlaylistStmt:                     q.updateMoviePlaylistStmt,
+		updateMusicianSpotifyThumbStmt:              q.updateMusicianSpotifyThumbStmt,
 		updatePlaylistStmt:                          q.updatePlaylistStmt,
 		updatePlaylistTimestampStmt:                 q.updatePlaylistTimestampStmt,
 		updateTrackPositionStmt:                     q.updateTrackPositionStmt,

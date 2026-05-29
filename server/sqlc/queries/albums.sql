@@ -42,6 +42,14 @@ ORDER BY
 LIMIT ?
 OFFSET ?;
 
+-- name: UpdateAlbumSpotifyCover :one
+UPDATE albums
+SET
+  cover = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
+
 -- name: UpsertAlbum :one
 INSERT INTO albums (
   title,

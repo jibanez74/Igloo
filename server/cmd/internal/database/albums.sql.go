@@ -187,6 +187,40 @@ func (q *Queries) GetLatestAlbums(ctx context.Context) ([]GetLatestAlbumsRow, er
 	return items, nil
 }
 
+const updateAlbumSpotifyCover = `-- name: UpdateAlbumSpotifyCover :one
+UPDATE albums
+SET
+  cover = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, title, sort_title, spotify_id, spotify_popularity, musician, release_date, year, total_tracks, cover, created_at, updated_at
+`
+
+type UpdateAlbumSpotifyCoverParams struct {
+	Cover sql.NullString `json:"cover"`
+	ID    int64          `json:"id"`
+}
+
+func (q *Queries) UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error) {
+	row := q.queryRow(ctx, q.updateAlbumSpotifyCoverStmt, updateAlbumSpotifyCover, arg.Cover, arg.ID)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.SortTitle,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.Musician,
+		&i.ReleaseDate,
+		&i.Year,
+		&i.TotalTracks,
+		&i.Cover,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const upsertAlbum = `-- name: UpsertAlbum :one
 INSERT INTO albums (
   title,

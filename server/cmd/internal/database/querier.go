@@ -196,12 +196,14 @@ type Querier interface {
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
+	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error)
 	// Dedicated UPDATE for movie metadata (used by Edit feature).
 	// Does NOT touch file-level fields (file_path, file_name, size, container, mime_type).
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMoviePlaylist(ctx context.Context, arg UpdateMoviePlaylistParams) (Playlist, error)
+	UpdateMusicianSpotifyThumb(ctx context.Context, arg UpdateMusicianSpotifyThumbParams) (Musician, error)
 	UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) (Playlist, error)
 	UpdatePlaylistTimestamp(ctx context.Context, id int64) error
 	UpdateTrackPosition(ctx context.Context, arg UpdateTrackPositionParams) error

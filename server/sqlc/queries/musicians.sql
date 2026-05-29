@@ -5,6 +5,14 @@ FROM musicians
 WHERE spotify_id = ?
 LIMIT 1;
 
+-- name: UpdateMusicianSpotifyThumb :one
+UPDATE musicians
+SET
+  thumb = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
+
 -- name: UpsertMusician :one
 INSERT INTO musicians (
   name,

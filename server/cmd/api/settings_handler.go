@@ -15,6 +15,8 @@ import (
 var (
 	movieScanMutex  sync.Mutex
 	isMovieScanning bool
+	musicScanMutex  sync.Mutex
+	isMusicScanning bool
 )
 
 func tryBeginMovieScan() bool {
@@ -33,6 +35,24 @@ func finishMovieScan() {
 	movieScanMutex.Lock()
 	isMovieScanning = false
 	movieScanMutex.Unlock()
+}
+
+func tryBeginMusicScan() bool {
+	musicScanMutex.Lock()
+	defer musicScanMutex.Unlock()
+
+	if isMusicScanning {
+		return false
+	}
+
+	isMusicScanning = true
+	return true
+}
+
+func finishMusicScan() {
+	musicScanMutex.Lock()
+	isMusicScanning = false
+	musicScanMutex.Unlock()
 }
 
 type generalSettingsResponse struct {
