@@ -45,8 +45,13 @@ func (app *Application) runMusicScan() {
 	tracksSkipped := 0
 	startTime := time.Now()
 	batch := make([]trackFile, 0, helpers.SCANNER_BATCH_SIZE)
+	scanIndex, err := app.loadMusicScanIndex(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
+		return
+	}
 
-	err := filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
+	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			if path == app.Settings.MusicDir.String {
 				return err
@@ -69,6 +74,11 @@ func (app *Application) runMusicScan() {
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to get file info for %s: %s", path, err.Error()))
 			errorCount++
+			return nil
+		}
+
+		if existingSize, ok := scanIndex[filepath.Clean(path)]; ok && existingSize == info.Size() {
+			tracksSkipped++
 			return nil
 		}
 
@@ -162,6 +172,20 @@ func (app *Application) processMusicBatch(ctx context.Context, files []trackFile
 	}
 
 	return scanned, skipped, errCount
+}
+
+func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int64, error) {
+	rows, err := app.Queries.ListMusicTrackScanIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	index := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		index[filepath.Clean(row.FilePath)] = row.Size
+	}
+
+	return index, nil
 }
 
 func tryBeginMusicScan() bool {

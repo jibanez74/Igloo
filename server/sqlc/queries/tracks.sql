@@ -14,6 +14,12 @@ SELECT
       AND size = ?
   ) AS track_exists;
 
+-- name: ListMusicTrackScanIndex :many
+SELECT
+  file_path,
+  size
+FROM tracks;
+
 -- name: UpsertTrack :one
 INSERT INTO tracks (
   title,

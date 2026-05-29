@@ -405,6 +405,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.likeTrackStmt, err = db.PrepareContext(ctx, likeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query LikeTrack: %w", err)
 	}
+	if q.listMusicTrackScanIndexStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndex); err != nil {
+		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndex: %w", err)
+	}
 	if q.lockMovieMetadataFieldsStmt, err = db.PrepareContext(ctx, lockMovieMetadataFields); err != nil {
 		return nil, fmt.Errorf("error preparing query LockMovieMetadataFields: %w", err)
 	}
@@ -1153,6 +1156,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing likeTrackStmt: %w", cerr)
 		}
 	}
+	if q.listMusicTrackScanIndexStmt != nil {
+		if cerr := q.listMusicTrackScanIndexStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listMusicTrackScanIndexStmt: %w", cerr)
+		}
+	}
 	if q.lockMovieMetadataFieldsStmt != nil {
 		if cerr := q.lockMovieMetadataFieldsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing lockMovieMetadataFieldsStmt: %w", cerr)
@@ -1499,6 +1507,7 @@ type Queries struct {
 	isWatchRoomOwnerStmt                        *sql.Stmt
 	likeMovieStmt                               *sql.Stmt
 	likeTrackStmt                               *sql.Stmt
+	listMusicTrackScanIndexStmt                 *sql.Stmt
 	lockMovieMetadataFieldsStmt                 *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
@@ -1668,6 +1677,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		isWatchRoomOwnerStmt:                        q.isWatchRoomOwnerStmt,
 		likeMovieStmt:                               q.likeMovieStmt,
 		likeTrackStmt:                               q.likeTrackStmt,
+		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
 		lockMovieMetadataFieldsStmt:                 q.lockMovieMetadataFieldsStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
