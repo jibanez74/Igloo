@@ -98,6 +98,32 @@ func (q *Queries) GetMusicianByID(ctx context.Context, id int64) (Musician, erro
 	return i, err
 }
 
+const getMusicianByName = `-- name: GetMusicianByName :one
+SELECT
+  id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at
+FROM musicians
+WHERE name = ?
+LIMIT 1
+`
+
+func (q *Queries) GetMusicianByName(ctx context.Context, name string) (Musician, error) {
+	row := q.queryRow(ctx, q.getMusicianByNameStmt, getMusicianByName, name)
+	var i Musician
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SortName,
+		&i.Summary,
+		&i.SpotifyID,
+		&i.SpotifyPopularity,
+		&i.SpotifyFollowers,
+		&i.Thumb,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getMusicianBySpotifyID = `-- name: GetMusicianBySpotifyID :one
 SELECT
   id, name, sort_name, summary, spotify_id, spotify_popularity, spotify_followers, thumb, created_at, updated_at

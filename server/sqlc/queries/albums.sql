@@ -12,6 +12,14 @@ FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
 
+-- name: GetAlbumByTitleAndMusician :one
+SELECT
+  *
+FROM albums
+WHERE title = ?
+  AND musician IS ?
+LIMIT 1;
+
 -- name: GetLatestAlbums :many
 SELECT
   id,

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"io/fs"
 	"path/filepath"
@@ -50,6 +49,7 @@ func (app *Application) runMusicScan() {
 		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
 		return
 	}
+	scan := newMusicScanContext(scanIndex)
 
 	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -77,7 +77,7 @@ func (app *Application) runMusicScan() {
 			return nil
 		}
 
-		if existingSize, ok := scanIndex[filepath.Clean(path)]; ok && existingSize == info.Size() {
+		if scan.trackUnchanged(path, info.Size()) {
 			tracksSkipped++
 			return nil
 		}
@@ -89,7 +89,7 @@ func (app *Application) runMusicScan() {
 		})
 
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
-			scanned, skipped, errors := app.processMusicBatch(ctx, batch)
+			scanned, skipped, errors := app.processMusicBatchWithContext(ctx, scan, batch)
 			tracksScanned += scanned
 			tracksSkipped += skipped
 			errorCount += errors
@@ -105,14 +105,10 @@ func (app *Application) runMusicScan() {
 	}
 
 	if len(batch) > 0 {
-		scanned, skipped, errors := app.processMusicBatch(ctx, batch)
+		scanned, skipped, errors := app.processMusicBatchWithContext(ctx, scan, batch)
 		tracksScanned += scanned
 		tracksSkipped += skipped
 		errorCount += errors
-	}
-
-	if app.Spotify != nil {
-		app.Spotify.ClearAllCaches()
 	}
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
@@ -120,55 +116,36 @@ func (app *Application) runMusicScan() {
 }
 
 func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
-	tx, err := app.DB.BeginTx(ctx, nil)
+	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to start music batch transaction: %s", err.Error()))
+		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
 		return 0, 0, len(files)
 	}
-	defer tx.Rollback()
 
-	qtx := app.Queries.WithTx(tx)
+	return app.processMusicBatchWithContext(ctx, newMusicScanContext(scanIndex), files)
+}
 
-	for index, file := range files {
-		exists, err := qtx.CheckTrackExistsByPathAndSize(ctx, database.CheckTrackExistsByPathAndSizeParams{
-			FilePath: file.path,
-			Size:     file.size,
-		})
+func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *musicScanContext, files []trackFile) (scanned, skipped, errCount int) {
+	for _, file := range files {
+		if scan.trackUnchanged(file.path, file.size) {
+			skipped++
+			continue
+		}
 
+		resolved, err := app.resolveTrackFile(ctx, scan, file)
 		if err != nil {
 			errCount++
 			continue
 		}
 
-		if exists {
-			skipped++
-			continue
-		}
-
-		savepointName := fmt.Sprintf("sp_music_track_%d", index)
-		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			_, processErr := app.processTrackFile(ctx, qtx, file.path, file.ext, file.size)
-			return processErr
-		})
-
+		_, err = app.persistResolvedTrack(ctx, scan, resolved)
 		if err != nil {
+			app.Logger.Warn("failed to persist music track", "path", file.path, "error", err)
 			errCount++
 			continue
 		}
 
 		scanned++
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		app.Logger.Error("failed to commit music batch transaction",
-			"error", err,
-			"scanned", scanned,
-			"skipped", skipped,
-			"errors", errCount,
-		)
-		errCount += scanned
-		return 0, skipped, errCount
 	}
 
 	return scanned, skipped, errCount

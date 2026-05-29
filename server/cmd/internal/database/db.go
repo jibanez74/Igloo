@@ -156,6 +156,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAlbumBySpotifyIDStmt, err = db.PrepareContext(ctx, getAlbumBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumBySpotifyID: %w", err)
 	}
+	if q.getAlbumByTitleAndMusicianStmt, err = db.PrepareContext(ctx, getAlbumByTitleAndMusician); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAlbumByTitleAndMusician: %w", err)
+	}
 	if q.getAlbumGenresStmt, err = db.PrepareContext(ctx, getAlbumGenres); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAlbumGenres: %w", err)
 	}
@@ -252,8 +255,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMoviesLibraryDescStmt, err = db.PrepareContext(ctx, getMoviesLibraryDesc); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMoviesLibraryDesc: %w", err)
 	}
+	if q.getMusicSpotifyMatchStmt, err = db.PrepareContext(ctx, getMusicSpotifyMatch); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicSpotifyMatch: %w", err)
+	}
 	if q.getMusicianByIDStmt, err = db.PrepareContext(ctx, getMusicianByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianByID: %w", err)
+	}
+	if q.getMusicianByNameStmt, err = db.PrepareContext(ctx, getMusicianByName); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMusicianByName: %w", err)
 	}
 	if q.getMusicianBySpotifyIDStmt, err = db.PrepareContext(ctx, getMusicianBySpotifyID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMusicianBySpotifyID: %w", err)
@@ -501,6 +510,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertMovieWatchProgressStmt, err = db.PrepareContext(ctx, upsertMovieWatchProgress); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMovieWatchProgress: %w", err)
 	}
+	if q.upsertMusicSpotifyMatchStmt, err = db.PrepareContext(ctx, upsertMusicSpotifyMatch); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertMusicSpotifyMatch: %w", err)
+	}
 	if q.upsertMusicianStmt, err = db.PrepareContext(ctx, upsertMusician); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertMusician: %w", err)
 	}
@@ -741,6 +753,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAlbumBySpotifyIDStmt: %w", cerr)
 		}
 	}
+	if q.getAlbumByTitleAndMusicianStmt != nil {
+		if cerr := q.getAlbumByTitleAndMusicianStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAlbumByTitleAndMusicianStmt: %w", cerr)
+		}
+	}
 	if q.getAlbumGenresStmt != nil {
 		if cerr := q.getAlbumGenresStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAlbumGenresStmt: %w", cerr)
@@ -901,9 +918,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMoviesLibraryDescStmt: %w", cerr)
 		}
 	}
+	if q.getMusicSpotifyMatchStmt != nil {
+		if cerr := q.getMusicSpotifyMatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicSpotifyMatchStmt: %w", cerr)
+		}
+	}
 	if q.getMusicianByIDStmt != nil {
 		if cerr := q.getMusicianByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMusicianByIDStmt: %w", cerr)
+		}
+	}
+	if q.getMusicianByNameStmt != nil {
+		if cerr := q.getMusicianByNameStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMusicianByNameStmt: %w", cerr)
 		}
 	}
 	if q.getMusicianBySpotifyIDStmt != nil {
@@ -1316,6 +1343,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertMovieWatchProgressStmt: %w", cerr)
 		}
 	}
+	if q.upsertMusicSpotifyMatchStmt != nil {
+		if cerr := q.upsertMusicSpotifyMatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertMusicSpotifyMatchStmt: %w", cerr)
+		}
+	}
 	if q.upsertMusicianStmt != nil {
 		if cerr := q.upsertMusicianStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertMusicianStmt: %w", cerr)
@@ -1424,6 +1456,7 @@ type Queries struct {
 	getAdminUserStmt                            *sql.Stmt
 	getAlbumByIDStmt                            *sql.Stmt
 	getAlbumBySpotifyIDStmt                     *sql.Stmt
+	getAlbumByTitleAndMusicianStmt              *sql.Stmt
 	getAlbumGenresStmt                          *sql.Stmt
 	getAlbumsAlphabeticalStmt                   *sql.Stmt
 	getAlbumsByMusicianIDStmt                   *sql.Stmt
@@ -1456,7 +1489,9 @@ type Queries struct {
 	getMoviesCountStmt                          *sql.Stmt
 	getMoviesLibraryAscStmt                     *sql.Stmt
 	getMoviesLibraryDescStmt                    *sql.Stmt
+	getMusicSpotifyMatchStmt                    *sql.Stmt
 	getMusicianByIDStmt                         *sql.Stmt
+	getMusicianByNameStmt                       *sql.Stmt
 	getMusicianBySpotifyIDStmt                  *sql.Stmt
 	getMusiciansAlphabeticalStmt                *sql.Stmt
 	getMusiciansByAlbumIDStmt                   *sql.Stmt
@@ -1539,6 +1574,7 @@ type Queries struct {
 	upsertExtraVideoStmt                        *sql.Stmt
 	upsertMovieStmt                             *sql.Stmt
 	upsertMovieWatchProgressStmt                *sql.Stmt
+	upsertMusicSpotifyMatchStmt                 *sql.Stmt
 	upsertMusicianStmt                          *sql.Stmt
 	upsertMusicianGenreStmt                     *sql.Stmt
 	upsertProductionCompanyStmt                 *sql.Stmt
@@ -1594,6 +1630,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAdminUserStmt:                            q.getAdminUserStmt,
 		getAlbumByIDStmt:                            q.getAlbumByIDStmt,
 		getAlbumBySpotifyIDStmt:                     q.getAlbumBySpotifyIDStmt,
+		getAlbumByTitleAndMusicianStmt:              q.getAlbumByTitleAndMusicianStmt,
 		getAlbumGenresStmt:                          q.getAlbumGenresStmt,
 		getAlbumsAlphabeticalStmt:                   q.getAlbumsAlphabeticalStmt,
 		getAlbumsByMusicianIDStmt:                   q.getAlbumsByMusicianIDStmt,
@@ -1626,7 +1663,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getMoviesCountStmt:                          q.getMoviesCountStmt,
 		getMoviesLibraryAscStmt:                     q.getMoviesLibraryAscStmt,
 		getMoviesLibraryDescStmt:                    q.getMoviesLibraryDescStmt,
+		getMusicSpotifyMatchStmt:                    q.getMusicSpotifyMatchStmt,
 		getMusicianByIDStmt:                         q.getMusicianByIDStmt,
+		getMusicianByNameStmt:                       q.getMusicianByNameStmt,
 		getMusicianBySpotifyIDStmt:                  q.getMusicianBySpotifyIDStmt,
 		getMusiciansAlphabeticalStmt:                q.getMusiciansAlphabeticalStmt,
 		getMusiciansByAlbumIDStmt:                   q.getMusiciansByAlbumIDStmt,
@@ -1709,6 +1748,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertExtraVideoStmt:                        q.upsertExtraVideoStmt,
 		upsertMovieStmt:                             q.upsertMovieStmt,
 		upsertMovieWatchProgressStmt:                q.upsertMovieWatchProgressStmt,
+		upsertMusicSpotifyMatchStmt:                 q.upsertMusicSpotifyMatchStmt,
 		upsertMusicianStmt:                          q.upsertMusicianStmt,
 		upsertMusicianGenreStmt:                     q.upsertMusicianGenreStmt,
 		upsertProductionCompanyStmt:                 q.upsertProductionCompanyStmt,
