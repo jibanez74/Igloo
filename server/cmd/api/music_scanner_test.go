@@ -53,6 +53,11 @@ func (s *countingMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffp
 	return s.result, nil
 }
 
+func (s *countingMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+	s.calls++
+	return s.result, nil
+}
+
 type failingPathMusicScannerFfprobe struct {
 	result      *ffprobe.FfprobeResult
 	failingPath string
@@ -60,6 +65,15 @@ type failingPathMusicScannerFfprobe struct {
 }
 
 func (s *failingPathMusicScannerFfprobe) GetMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+	s.calls++
+	if filePath == s.failingPath {
+		return nil, errors.New("ffprobe failed")
+	}
+
+	return s.result, nil
+}
+
+func (s *failingPathMusicScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
 	s.calls++
 	if filePath == s.failingPath {
 		return nil, errors.New("ffprobe failed")

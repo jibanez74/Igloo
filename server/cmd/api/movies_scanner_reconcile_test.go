@@ -23,6 +23,10 @@ func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffprobe
 	return s.result, s.err
 }
 
+func (s *stubMovieScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
+	return s.result, s.err
+}
+
 type stubMovieScannerTmdb struct {
 	searchErr error
 }

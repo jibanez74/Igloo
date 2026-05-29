@@ -57,7 +57,7 @@ type resolvedSpotifyMatch struct {
 }
 
 func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file trackFile) (*resolvedTrack, error) {
-	info, err := app.Ffprobe.GetMetadata(file.path)
+	info, err := app.Ffprobe.GetAudioMetadata(file.path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}

@@ -156,6 +156,28 @@ type Chapter struct {
 }
 
 func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
+	return f.runMetadata(filePath,
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_streams",
+		"-show_format",
+		"-show_chapters",
+		filePath,
+	)
+}
+
+func (f *ffprobe) GetAudioMetadata(filePath string) (*FfprobeResult, error) {
+	return f.runMetadata(filePath,
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		"-show_streams",
+		"-show_entries", "format=filename,duration,size,bit_rate,format_name:format_tags:stream=index,codec_name,codec_type,profile,bit_rate,sample_rate,channels,channel_layout:stream_tags=title,language",
+		filePath,
+	)
+}
+
+func (f *ffprobe) runMetadata(filePath string, args ...string) (*FfprobeResult, error) {
 	if strings.TrimSpace(filePath) == "" {
 		return nil, fmt.Errorf("file path is required")
 	}
@@ -163,13 +185,7 @@ func (f *ffprobe) GetMetadata(filePath string) (*FfprobeResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, f.bin,
-		"-v", "quiet",
-		"-print_format", "json",
-		"-show_streams",
-		"-show_format",
-		"-show_chapters",
-		filePath)
+	cmd := exec.CommandContext(ctx, f.bin, args...)
 
 	output, err := cmd.Output()
 	if err != nil {
