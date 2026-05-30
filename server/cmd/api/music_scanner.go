@@ -21,12 +21,14 @@ func (app *Application) MusicScanLibrary() {
 		return
 	}
 
-	app.runMusicScan()
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMusicScan()
 }
 
 func (app *Application) runMusicScan() {
 	if app.Wait != nil {
-		app.Wait.Add(1)
 		defer app.Wait.Done()
 	}
 	defer finishMusicScan()
@@ -113,16 +115,6 @@ func (app *Application) runMusicScan() {
 
 	app.Logger.Info(fmt.Sprintf("music scanner completed: %d scanned, %d skipped, %d errors in %s",
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
-}
-
-func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
-	scanIndex, err := app.loadMusicScanIndex(ctx)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
-		return 0, 0, len(files)
-	}
-
-	return app.processMusicBatchWithContext(ctx, newMusicScanContext(scanIndex), files)
 }
 
 func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *musicScanContext, files []trackFile) (scanned, skipped, errCount int) {

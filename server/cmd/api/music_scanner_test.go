@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/ffprobe"
@@ -18,6 +17,16 @@ import (
 
 	spotifylib "github.com/zmb3/spotify/v2"
 )
+
+func (app *Application) processMusicBatch(ctx context.Context, files []trackFile) (scanned, skipped, errCount int) {
+	scanIndex, err := app.loadMusicScanIndex(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
+		return 0, 0, len(files)
+	}
+
+	return app.processMusicBatchWithContext(ctx, newMusicScanContext(scanIndex), files)
+}
 
 func testMusicMetadata() *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
@@ -953,7 +962,17 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 		t.Fatalf("seed album: %v", err)
 	}
 
-	time.Sleep(1100 * time.Millisecond)
+	var seededMusicianUpdatedAt string
+	err = app.DB.QueryRow("SELECT updated_at FROM musicians WHERE id = ?", seededMusician.ID).Scan(&seededMusicianUpdatedAt)
+	if err != nil {
+		t.Fatalf("get seeded musician updated_at: %v", err)
+	}
+
+	var seededAlbumUpdatedAt string
+	err = app.DB.QueryRow("SELECT updated_at FROM albums WHERE id = ?", seededAlbum.ID).Scan(&seededAlbumUpdatedAt)
+	if err != nil {
+		t.Fatalf("get seeded album updated_at: %v", err)
+	}
 
 	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
 	app.Spotify = &musicScannerSpotifyStub{
@@ -989,8 +1008,8 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get musician updated_at: %v", err)
 	}
-	if musicianUpdatedAt != seededMusician.UpdatedAt {
-		t.Fatalf("musician updated_at = %q, want unchanged %q", musicianUpdatedAt, seededMusician.UpdatedAt)
+	if musicianUpdatedAt != seededMusicianUpdatedAt {
+		t.Fatalf("musician updated_at = %q, want unchanged %q", musicianUpdatedAt, seededMusicianUpdatedAt)
 	}
 
 	var albumUpdatedAt string
@@ -998,8 +1017,8 @@ func TestProcessMusicBatchDoesNotUpdateUnchangedSpotifyImages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get album updated_at: %v", err)
 	}
-	if albumUpdatedAt != seededAlbum.UpdatedAt {
-		t.Fatalf("album updated_at = %q, want unchanged %q", albumUpdatedAt, seededAlbum.UpdatedAt)
+	if albumUpdatedAt != seededAlbumUpdatedAt {
+		t.Fatalf("album updated_at = %q, want unchanged %q", albumUpdatedAt, seededAlbumUpdatedAt)
 	}
 }
 
@@ -1409,6 +1428,58 @@ func TestProcessMusicBatchUpdatesChangedTrackAndReplacesGenre(t *testing.T) {
 		WHERE t.file_path = ? AND g.tag = ?
 	`, trackPath, "Rock"); got != 0 {
 		t.Fatalf("Rock track genre count = %d, want 0", got)
+	}
+}
+
+func TestProcessMusicBatchClearsTrackGenresWhenGenreRemoved(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Removed Genre.m4a")
+	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Genre Removed",
+			Artist: "Genre Artist",
+			Album:  "Genre Album",
+			Genre:  "Rock",
+		}),
+	})
+	app.Ffprobe = ffprobeStub
+
+	file := trackFile{path: trackPath, ext: "m4a", size: 5}
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_genres AS tg
+		INNER JOIN tracks AS t ON t.id = tg.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 1 {
+		t.Fatalf("initial track genre count = %d, want 1", got)
+	}
+
+	ffprobeStub.results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+		Title:  "Genre Removed",
+		Artist: "Genre Artist",
+		Album:  "Genre Album",
+	})
+	file.size = 8
+
+	scanned, skipped, errCount = app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_genres AS tg
+		INNER JOIN tracks AS t ON t.id = tg.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 0 {
+		t.Fatalf("track genre count after genre removal = %d, want 0", got)
 	}
 }
 

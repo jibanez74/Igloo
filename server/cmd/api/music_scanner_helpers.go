@@ -315,7 +315,12 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		return 0, fmt.Errorf("track-musician relationships failed: %w", err)
 	}
 
-	if resolved.genreTag != "" {
+	if resolved.genreTag == "" {
+		err = qtx.DeleteTrackGenres(ctx, track.ID)
+		if err != nil {
+			return 0, fmt.Errorf("delete track genres failed: %w", err)
+		}
+	} else {
 		genreID, err := app.getOrCreateMusicGenreID(ctx, qtx, scan, resolved.genreTag)
 		if err != nil {
 			return 0, fmt.Errorf("genre failed: %w", err)

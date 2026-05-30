@@ -141,6 +141,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deletePlaylistStmt, err = db.PrepareContext(ctx, deletePlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query DeletePlaylist: %w", err)
 	}
+	if q.deleteTrackGenresStmt, err = db.PrepareContext(ctx, deleteTrackGenres); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteTrackGenres: %w", err)
+	}
 	if q.deleteTrackGenresExceptStmt, err = db.PrepareContext(ctx, deleteTrackGenresExcept); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteTrackGenresExcept: %w", err)
 	}
@@ -735,6 +738,11 @@ func (q *Queries) Close() error {
 	if q.deletePlaylistStmt != nil {
 		if cerr := q.deletePlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deletePlaylistStmt: %w", cerr)
+		}
+	}
+	if q.deleteTrackGenresStmt != nil {
+		if cerr := q.deleteTrackGenresStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTrackGenresStmt: %w", cerr)
 		}
 	}
 	if q.deleteTrackGenresExceptStmt != nil {
@@ -1475,6 +1483,7 @@ type Queries struct {
 	deleteMovieVideoStreamsStmt                 *sql.Stmt
 	deleteMovieWatchProgressStmt                *sql.Stmt
 	deletePlaylistStmt                          *sql.Stmt
+	deleteTrackGenresStmt                       *sql.Stmt
 	deleteTrackGenresExceptStmt                 *sql.Stmt
 	deleteTrackMusiciansStmt                    *sql.Stmt
 	deleteTrackMusiciansExceptStmt              *sql.Stmt
@@ -1652,6 +1661,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieVideoStreamsStmt:                 q.deleteMovieVideoStreamsStmt,
 		deleteMovieWatchProgressStmt:                q.deleteMovieWatchProgressStmt,
 		deletePlaylistStmt:                          q.deletePlaylistStmt,
+		deleteTrackGenresStmt:                       q.deleteTrackGenresStmt,
 		deleteTrackGenresExceptStmt:                 q.deleteTrackGenresExceptStmt,
 		deleteTrackMusiciansStmt:                    q.deleteTrackMusiciansStmt,
 		deleteTrackMusiciansExceptStmt:              q.deleteTrackMusiciansExceptStmt,
