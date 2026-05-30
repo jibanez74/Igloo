@@ -56,6 +56,13 @@ type resolvedSpotifyMatch struct {
 	errorText       sql.NullString
 }
 
+type compoundArtistCredits struct {
+	parts        []string
+	hasDelimiter bool
+	hasComma     bool
+	hasDuplicate bool
+}
+
 func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file trackFile) (*resolvedTrack, error) {
 	info, err := app.Ffprobe.GetAudioMetadata(file.path)
 	if err != nil {
@@ -187,11 +194,11 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 		sortArtist = artistTag
 	}
 
-	isCompound := strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ", ")
-	splitArtists := false
+	credits := parseCompoundArtistCredits(artistTag)
+	splitArtists := shouldSplitCompoundArtistCreditsLocally(credits)
 	var combined *resolvedMusician
 
-	if isCompound {
+	if !splitArtists && credits.hasDelimiter && len(credits.parts) >= 2 {
 		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
@@ -200,8 +207,7 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 		splitArtists = musician.splitCompoundOnNoMatch
 	}
 
-	parts := splitCompoundArtistCredits(artistTag)
-	if len(parts) < 2 {
+	if len(credits.parts) < 2 {
 		splitArtists = false
 	}
 
@@ -217,8 +223,8 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 		return []resolvedMusician{*musician}, nil
 	}
 
-	musicians := make([]resolvedMusician, 0, len(parts))
-	for _, part := range parts {
+	musicians := make([]resolvedMusician, 0, len(credits.parts))
+	for _, part := range credits.parts {
 		musician, err := app.resolveMusician(ctx, scan, part, part)
 		if err != nil {
 			app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
@@ -240,24 +246,81 @@ func shouldSplitCompoundArtistCredits(err error) bool {
 }
 
 func splitCompoundArtistCredits(artistTag string) []string {
-	normalized := strings.ReplaceAll(artistTag, " & ", ", ")
-	rawParts := strings.Split(normalized, ", ")
-	parts := make([]string, 0, len(rawParts))
-	seen := make(map[string]struct{}, len(rawParts))
+	return parseCompoundArtistCredits(artistTag).parts
+}
 
-	for _, rawPart := range rawParts {
+func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
+	rawCommaParts := strings.Split(artistTag, ",")
+	commaParts := make([]string, 0, len(rawCommaParts))
+
+	for _, rawPart := range rawCommaParts {
 		part := strings.TrimSpace(rawPart)
 		if part == "" {
 			continue
 		}
 
-		if _, exists := seen[part]; exists {
+		if isArtistSuffix(part) && len(commaParts) > 0 {
+			lastIndex := len(commaParts) - 1
+			commaParts[lastIndex] = commaParts[lastIndex] + ", " + part
 			continue
 		}
 
-		seen[part] = struct{}{}
-		parts = append(parts, part)
+		commaParts = append(commaParts, part)
 	}
 
-	return parts
+	credits := compoundArtistCredits{
+		hasDelimiter: strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ","),
+		hasComma:     strings.Contains(artistTag, ","),
+	}
+	seen := make(map[string]struct{}, len(commaParts))
+
+	for _, commaPart := range commaParts {
+		ampersandParts := strings.Split(commaPart, " & ")
+		for _, rawPart := range ampersandParts {
+			part := strings.TrimSpace(rawPart)
+			if part == "" {
+				continue
+			}
+
+			cacheKey := normalizedMusicCacheKey(part)
+			if _, exists := seen[cacheKey]; exists {
+				credits.hasDuplicate = true
+				continue
+			}
+
+			seen[cacheKey] = struct{}{}
+			credits.parts = append(credits.parts, part)
+		}
+	}
+
+	return credits
+}
+
+func shouldSplitCompoundArtistCreditsLocally(credits compoundArtistCredits) bool {
+	if len(credits.parts) < 2 || !credits.hasComma {
+		return false
+	}
+
+	if credits.hasDuplicate {
+		return true
+	}
+
+	for _, part := range credits.parts {
+		if len(strings.Fields(part)) < 2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isArtistSuffix(value string) bool {
+	suffix := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
+
+	switch suffix {
+	case "jr", "sr", "ii", "iii", "iv", "v", "vi":
+		return true
+	default:
+		return false
+	}
 }

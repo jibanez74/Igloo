@@ -265,6 +265,7 @@ func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicSca
 func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *database.Queries, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
 	params := resolved.params
 	musicianIDs := make([]int64, 0, len(resolved.musicians))
+	seenMusicianIDs := make(map[int64]struct{}, len(resolved.musicians))
 
 	for _, musicianInput := range resolved.musicians {
 		musicianID, err := app.persistMusician(ctx, qtx, scan, musicianInput)
@@ -274,6 +275,10 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		if !params.MusicianID.Valid {
 			params.MusicianID = sql.NullInt64{Int64: musicianID, Valid: true}
 		}
+		if _, exists := seenMusicianIDs[musicianID]; exists {
+			continue
+		}
+		seenMusicianIDs[musicianID] = struct{}{}
 		musicianIDs = append(musicianIDs, musicianID)
 	}
 
@@ -305,6 +310,11 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 		return 0, fmt.Errorf("upsert track failed: %w", err)
 	}
 
+	err = app.syncTrackMusicians(ctx, qtx, track.ID, musicianIDs)
+	if err != nil {
+		return 0, fmt.Errorf("track-musician relationships failed: %w", err)
+	}
+
 	if resolved.genreTag != "" {
 		genreID, err := app.getOrCreateMusicGenreID(ctx, qtx, scan, resolved.genreTag)
 		if err != nil {
@@ -324,12 +334,12 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("track-genre relationship failed: %w", err)
 		}
 
-		if params.MusicianID.Valid {
-			err = app.createMusicianGenreIfNeeded(ctx, qtx, scan, params.MusicianID.Int64, genreID)
+		for _, musicianID := range musicianIDs {
+			err = app.createMusicianGenreIfNeeded(ctx, qtx, scan, musicianID, genreID)
 			if err != nil {
 				app.Logger.Warn("failed to create musician-genre relationship",
 					"error", err,
-					"musician_id", params.MusicianID.Int64,
+					"musician_id", musicianID,
 					"genre_id", genreID,
 				)
 			}
@@ -707,6 +717,32 @@ func (app *Application) createTrackGenreIfNeeded(ctx context.Context, qtx *datab
 	}
 
 	scan.trackGenres[cacheKey] = struct{}{}
+	return nil
+}
+
+func (app *Application) syncTrackMusicians(ctx context.Context, qtx *database.Queries, trackID int64, musicianIDs []int64) error {
+	if len(musicianIDs) == 0 {
+		return qtx.DeleteTrackMusicians(ctx, trackID)
+	}
+
+	err := qtx.DeleteTrackMusiciansExcept(ctx, database.DeleteTrackMusiciansExceptParams{
+		TrackID:     trackID,
+		MusicianIds: musicianIDs,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, musicianID := range musicianIDs {
+		err = qtx.CreateTrackMusician(ctx, database.CreateTrackMusicianParams{
+			TrackID:    trackID,
+			MusicianID: musicianID,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -1,8 +1,8 @@
 # Igloo
 
-Igloo is a self-hosted media center for personal movie and music libraries. It is built for people who want to own their media, run their own server, and enjoy a polished playback experience without depending on a managed cloud platform.
+Igloo is a self-hosted media center for personal movie and music libraries. It is built for people who want to own their media, run their own server, and use a polished playback experience without depending on a managed cloud platform.
 
-Accessibility is one of Igloo's core design values, especially strong screen reader support, but Igloo is not meant to be a media platform only for blind users. The goal is to build a media center that feels excellent for everyone: fast, attractive, reliable, comfortable to navigate, and usable whether someone is browsing visually, using a keyboard, navigating with a remote, or relying on assistive technology.
+Accessibility is one of Igloo's core design values, especially strong screen reader support, but Igloo is not meant to be a media platform only for blind users. The goal is a media center that feels good for everyone: fast, attractive, reliable, comfortable to navigate, and usable whether someone is browsing visually, using a keyboard, navigating with a remote, or relying on assistive technology.
 
 Igloo is intended to run on user-managed hardware, usually inside a private network or Tailscale tailnet. It is pre-v1 software, so API, database, configuration, and client behavior may change before a stable v1 release.
 
@@ -10,7 +10,7 @@ Igloo is intended to run on user-managed hardware, usually inside a private netw
 
 - `server/`: Go backend, chi API, SQLite startup schema, media scanning, playback endpoints, HLS support, database access, and FFmpeg/ffprobe integration.
 - `web/`: React web client for browser-based library management, administration, and playback.
-- `docs/`: OpenAPI documentation and project notes.
+- `docs/`: OpenAPI documentation, FFmpeg notes, roadmap, and project notes.
 
 Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
 
@@ -18,17 +18,17 @@ Native TV clients, including the planned Android TV / Google TV app, are not par
 
 What works today:
 
-- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, and technical details.
-- Movie features including watch progress, likes, playlists, direct streaming, HLS playback, WebVTT subtitle extraction, and admin metadata editing.
-- Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, playlists with collaborators, liked tracks, playback, and listening statistics.
-- Watch rooms for shared movie playback, including direct stream and HLS room playback.
-- Session-based accounts, admin user management, general settings, and playback preferences.
+- Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, cast/crew details, technical stream details, and admin metadata editing.
+- Movie playback through direct streaming, remuxed HLS, transcoded HLS, WebVTT subtitle extraction, audio/subtitle track selection, watch progress, likes, and movie playlists.
+- Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist track relationships, music playlists with collaborators, liked tracks, playback, and listening statistics.
+- Watch rooms for shared movie playback, including direct stream and HLS room playback with WebSocket synchronization.
+- Session-based accounts, admin user management, user account settings, library path settings, general server settings, and per-user playback preferences.
 - A React web client served by the Go server in production and by Vite during development.
 - OpenAPI documentation in `docs/openapi.json`, with a route coverage test to keep the spec aligned with the Go router.
 
 Current limitations:
 
-- TV shows and photos have UI placeholders, but they are not complete library features yet.
+- TV shows and photos have web UI placeholders. TV library paths can be configured, but scanning and playback are not implemented yet.
 - APIs may still change before v1.
 - Metadata providers are optional; without TMDB or Spotify, Igloo relies on local file metadata.
 - Full backend tests require a SQLite build with FTS5 enabled.
@@ -53,10 +53,10 @@ Before first start, edit `.env`:
 - Set `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
 - Set `SESSION_COOKIE_SECURE=false` when testing over plain HTTP, such as `http://localhost:8080`.
 - Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
-- Set only the media variables you use, such as `MOVIES_DIR` or `MUSIC_DIR`.
+- Optionally set `MOVIES_DIR` and `MUSIC_DIR` to seed library paths on first launch. You can also configure paths later from Settings.
 - Each configured media directory must already exist. Igloo will not create empty media library directories.
 
-Igloo listens on `PORT`, defaulting to `8080`.
+Start Igloo from the directory that contains `.env`. Igloo listens on `PORT`, defaulting to `8080`.
 
 ## Configuration
 
@@ -70,7 +70,7 @@ The most important variables are:
 | --- | --- |
 | `PORT` | HTTP listener port, default `8080` |
 | `DB_PATH` | SQLite database file, default `./db/igloo.db`; always read at startup |
-| `STATIC_DIR` | First-run default for downloaded artwork/static files |
+| `STATIC_DIR` | First-run default for downloaded artwork and uploaded static files |
 | `LOGS_DIR` | First-run default for file logs |
 | `TRANSCODE_DIR` | First-run default for the temporary HLS workspace |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
@@ -78,6 +78,7 @@ The most important variables are:
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
+| `JELLYFIN_TOKEN` | Stored in settings for future/local integration work; not required for current core features |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
 | `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
@@ -86,13 +87,13 @@ The most important variables are:
 
 See [.env.example](.env.example) for the full reference.
 
-Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH` stays environment-driven because the database location must be known before Settings can be loaded.
+Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH`, `PORT`, `SESSION_COOKIE_SECURE`, `LOG_TO_STDOUT`, `HLS_MAX_CPU_TRANSCODES`, and `DEBUG` stay startup-driven.
 
 ## Hardware Acceleration
 
 CPU transcoding is the portable default. `HARDWARE_ACCELERATION_DEVICE=apple` enables Apple VideoToolbox on macOS builds. `intel` and `nvidia` are Linux hardware targets and require the corresponding host drivers and device access.
 
-For implementation details, hardware acceleration behavior, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
+At startup, Igloo probes FFmpeg capabilities and falls back to CPU when the selected hardware path is unavailable. For implementation details, hardware acceleration behavior, and operational notes, see [docs/ffmpeg.md](docs/ffmpeg.md).
 
 ## Development Setup
 
@@ -138,7 +139,7 @@ Start the backend in another terminal:
 make dev
 ```
 
-`make dev` runs sqlc generation, syncs the embedded schema copy, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
+`make dev` runs sqlc generation, syncs the embedded schema copy, creates a placeholder web asset directory for tests/development, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
 Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so the recommended local workflow is to keep one root `.env` and edit app-owned values from Settings after first launch. Default runtime directories resolve consistently with production `make start`.
 
@@ -159,7 +160,7 @@ Build the complete binary for the current supported platform:
 make build
 ```
 
-`make build` writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64. Build-time output includes embedded web assets and media tool payloads, but not `.env` values.
+`make build` runs sqlc generation, builds the web client with Bun, copies the web bundle into `server/cmd/api/webdist`, and writes the production binary to `server/dist/igloo-server`. Builds are native-only: Linux AMD64 builds must run on Linux AMD64, and macOS ARM64 builds must run on macOS ARM64. Build-time output includes embedded web assets and media tool payloads, but not `.env` values.
 
 Run the built application in the background:
 
@@ -191,8 +192,10 @@ From `web/`:
 | --- | --- |
 | `bun run dev` | Start Vite on port `3000` |
 | `bun run build` | Build the production bundle and run TypeScript checking |
+| `bun run build:analyze` | Build with bundle visualizer output under `web/dist/` and run TypeScript checking |
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run Vitest |
+| `bun run test:e2e` | Run all Playwright specs against an existing server |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |
@@ -249,14 +252,15 @@ See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenan
 - `server/sqlc/schema.sql` is the schema source of truth.
 - `server/cmd/api/schema.sql` is the embedded startup schema copy.
 - Query files live under `server/sqlc/queries/`.
+- Generated database code lives under `server/cmd/internal/database/`.
 
 After changing schema or query files:
 
 ```bash
-cp server/sqlc/schema.sql server/cmd/api/schema.sql
-cd server/sqlc
-sqlc generate
+make generate
 ```
+
+`make generate` copies `server/sqlc/schema.sql` to `server/cmd/api/schema.sql` and runs `sqlc generate` from `server/sqlc`.
 
 ## Testing
 
@@ -287,6 +291,13 @@ bun run build
 bun run test
 ```
 
+Playwright suites are opt-in and require an already-running Igloo instance:
+
+```bash
+cd web
+bun run test:e2e
+```
+
 Live TMDB integration tests are intentionally outside the default suite:
 
 ```bash
@@ -296,33 +307,8 @@ TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
 
 ## CI and Releases
 
-GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root.
+GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root. Release packages are expected to include the built binary and `.env.example`; web assets and media tool payloads are embedded into the binary during the native build.
 
 ## AI Coding Agent Notes
 
-This repository may be used with AI coding agents such as Codex. Project-specific instructions should live in a root-level `AGENTS.md` file.
-
-Recommended guidance for `AGENTS.md`:
-
-```md
-# Agent Instructions
-
-This repository contains the Igloo Go server and React web client.
-
-Do not implement native TV client code in this repository unless explicitly requested.
-
-Server:
-- Use Go.
-- Use chi for routing.
-- Use sqlc for database access.
-- Keep OpenAPI documentation aligned with registered routes.
-
-Web:
-- Use React, TypeScript, Vite, TanStack Router, TanStack Query, and Bun.
-- Do not use npm, yarn, or pnpm.
-
-General:
-- Prefer explicit, readable code.
-- Treat accessibility as part of the feature, not a separate cleanup step.
-- Avoid unnecessary abstraction.
-```
+This repository may be used with AI coding agents such as Codex. Project-specific instructions should live in a root-level `AGENTS.md` file. Keep those instructions aligned with the Go server, React/Vite web client, Bun package management, sqlc database workflow, OpenAPI maintenance, and accessibility requirements.

@@ -93,6 +93,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createTrackGenreStmt, err = db.PrepareContext(ctx, createTrackGenre); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateTrackGenre: %w", err)
 	}
+	if q.createTrackMusicianStmt, err = db.PrepareContext(ctx, createTrackMusician); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateTrackMusician: %w", err)
+	}
 	if q.createUserStmt, err = db.PrepareContext(ctx, createUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUser: %w", err)
 	}
@@ -140,6 +143,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deleteTrackGenresExceptStmt, err = db.PrepareContext(ctx, deleteTrackGenresExcept); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteTrackGenresExcept: %w", err)
+	}
+	if q.deleteTrackMusiciansStmt, err = db.PrepareContext(ctx, deleteTrackMusicians); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteTrackMusicians: %w", err)
+	}
+	if q.deleteTrackMusiciansExceptStmt, err = db.PrepareContext(ctx, deleteTrackMusiciansExcept); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteTrackMusiciansExcept: %w", err)
 	}
 	if q.deleteUserStmt, err = db.PrepareContext(ctx, deleteUser); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteUser: %w", err)
@@ -648,6 +657,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createTrackGenreStmt: %w", cerr)
 		}
 	}
+	if q.createTrackMusicianStmt != nil {
+		if cerr := q.createTrackMusicianStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createTrackMusicianStmt: %w", cerr)
+		}
+	}
 	if q.createUserStmt != nil {
 		if cerr := q.createUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createUserStmt: %w", cerr)
@@ -726,6 +740,16 @@ func (q *Queries) Close() error {
 	if q.deleteTrackGenresExceptStmt != nil {
 		if cerr := q.deleteTrackGenresExceptStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteTrackGenresExceptStmt: %w", cerr)
+		}
+	}
+	if q.deleteTrackMusiciansStmt != nil {
+		if cerr := q.deleteTrackMusiciansStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTrackMusiciansStmt: %w", cerr)
+		}
+	}
+	if q.deleteTrackMusiciansExceptStmt != nil {
+		if cerr := q.deleteTrackMusiciansExceptStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTrackMusiciansExceptStmt: %w", cerr)
 		}
 	}
 	if q.deleteUserStmt != nil {
@@ -1435,6 +1459,7 @@ type Queries struct {
 	createPlaylistStmt                          *sql.Stmt
 	createSettingsStmt                          *sql.Stmt
 	createTrackGenreStmt                        *sql.Stmt
+	createTrackMusicianStmt                     *sql.Stmt
 	createUserStmt                              *sql.Stmt
 	createWatchRoomStmt                         *sql.Stmt
 	deleteAlbumStmt                             *sql.Stmt
@@ -1451,6 +1476,8 @@ type Queries struct {
 	deleteMovieWatchProgressStmt                *sql.Stmt
 	deletePlaylistStmt                          *sql.Stmt
 	deleteTrackGenresExceptStmt                 *sql.Stmt
+	deleteTrackMusiciansStmt                    *sql.Stmt
+	deleteTrackMusiciansExceptStmt              *sql.Stmt
 	deleteUserStmt                              *sql.Stmt
 	deleteWatchRoomStmt                         *sql.Stmt
 	getAdminUserStmt                            *sql.Stmt
@@ -1609,6 +1636,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createPlaylistStmt:                          q.createPlaylistStmt,
 		createSettingsStmt:                          q.createSettingsStmt,
 		createTrackGenreStmt:                        q.createTrackGenreStmt,
+		createTrackMusicianStmt:                     q.createTrackMusicianStmt,
 		createUserStmt:                              q.createUserStmt,
 		createWatchRoomStmt:                         q.createWatchRoomStmt,
 		deleteAlbumStmt:                             q.deleteAlbumStmt,
@@ -1625,6 +1653,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteMovieWatchProgressStmt:                q.deleteMovieWatchProgressStmt,
 		deletePlaylistStmt:                          q.deletePlaylistStmt,
 		deleteTrackGenresExceptStmt:                 q.deleteTrackGenresExceptStmt,
+		deleteTrackMusiciansStmt:                    q.deleteTrackMusiciansStmt,
+		deleteTrackMusiciansExceptStmt:              q.deleteTrackMusiciansExceptStmt,
 		deleteUserStmt:                              q.deleteUserStmt,
 		deleteWatchRoomStmt:                         q.deleteWatchRoomStmt,
 		getAdminUserStmt:                            q.getAdminUserStmt,

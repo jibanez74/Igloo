@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1729,5 +1730,115 @@ func TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians(t *testing.T) 
 		WHERE a.title = ? AND m.name IN (?, ?)
 	`, "Compound Album", "Artist One", "Artist Two"); got != 2 {
 		t.Fatalf("musician_albums split artist count = %d, want 2", got)
+	}
+}
+
+func TestSplitCompoundArtistCreditsPreservesSuffixes(t *testing.T) {
+	credits := parseCompoundArtistCredits("Anthony Ramos, Okieriete Onaodowan, Daveed Diggs, Lin-Manuel Miranda & Leslie Odom, Jr.")
+	want := []string{
+		"Anthony Ramos",
+		"Okieriete Onaodowan",
+		"Daveed Diggs",
+		"Lin-Manuel Miranda",
+		"Leslie Odom, Jr.",
+	}
+	if !slices.Equal(credits.parts, want) {
+		t.Fatalf("parts = %#v, want %#v", credits.parts, want)
+	}
+	if !shouldSplitCompoundArtistCreditsLocally(credits) {
+		t.Fatal("expected Hamilton-style credits to split locally")
+	}
+
+	credits = parseCompoundArtistCredits("Earth, Wind & Fire")
+	if shouldSplitCompoundArtistCreditsLocally(credits) {
+		t.Fatal("expected single-word comma/ampersand band name to stay combined locally")
+	}
+}
+
+func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Ampersand Artist.m4a")
+	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Ampersand Artist",
+			Artist: "Brooks & Dunn",
+		}),
+	})
+
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{
+		{path: trackPath, ext: "m4a", size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Brooks & Dunn"); got != 1 {
+		t.Fatalf("combined musician count = %d, want 1", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Brooks", "Dunn"); got != 0 {
+		t.Fatalf("split musician count = %d, want 0", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		INNER JOIN musicians AS m ON m.id = tm.musician_id
+		WHERE t.file_path = ? AND m.name = ?
+	`, trackPath, "Brooks & Dunn"); got != 1 {
+		t.Fatalf("combined track_musicians count = %d, want 1", got)
+	}
+}
+
+func TestProcessMusicBatchRemovesStaleTrackMusiciansOnRescan(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Changed Artist.m4a")
+	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Changed Artist",
+			Artist: "Artist One & Artist Two, Artist One",
+		}),
+	})
+	app.Ffprobe = ffprobeStub
+
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{
+		{path: trackPath, ext: "m4a", size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	ffprobeStub.results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+		Title:  "Changed Artist",
+		Artist: "Solo Artist",
+	})
+
+	scanned, skipped, errCount = app.processMusicBatch(context.Background(), []trackFile{
+		{path: trackPath, ext: "m4a", size: 8},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		INNER JOIN musicians AS m ON m.id = tm.musician_id
+		WHERE t.file_path = ? AND m.name = ?
+	`, trackPath, "Solo Artist"); got != 1 {
+		t.Fatalf("solo track_musicians count = %d, want 1", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		INNER JOIN musicians AS m ON m.id = tm.musician_id
+		WHERE t.file_path = ? AND m.name IN (?, ?)
+	`, trackPath, "Artist One", "Artist Two"); got != 0 {
+		t.Fatalf("stale split track_musicians count = %d, want 0", got)
 	}
 }

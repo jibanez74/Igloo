@@ -37,6 +37,7 @@ type Querier interface {
 	CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error)
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
+	CreateTrackMusician(ctx context.Context, arg CreateTrackMusicianParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
 	DeleteAlbum(ctx context.Context, id int64) error
@@ -65,6 +66,8 @@ type Querier interface {
 	// Deletes all genre relationships for a track except the specified genre.
 	// Used to efficiently update genres: only removes stale relationships.
 	DeleteTrackGenresExcept(ctx context.Context, arg DeleteTrackGenresExceptParams) error
+	DeleteTrackMusicians(ctx context.Context, trackID int64) error
+	DeleteTrackMusiciansExcept(ctx context.Context, arg DeleteTrackMusiciansExceptParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteWatchRoom(ctx context.Context, id int64) error
 	GetAdminUser(ctx context.Context) (User, error)
