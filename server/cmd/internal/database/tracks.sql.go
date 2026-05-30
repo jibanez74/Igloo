@@ -324,6 +324,41 @@ func (q *Queries) GetTracksCount(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const listMusicTrackScanIndex = `-- name: ListMusicTrackScanIndex :many
+SELECT
+  file_path,
+  size
+FROM tracks
+`
+
+type ListMusicTrackScanIndexRow struct {
+	FilePath string `json:"file_path"`
+	Size     int64  `json:"size"`
+}
+
+func (q *Queries) ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error) {
+	rows, err := q.query(ctx, q.listMusicTrackScanIndexStmt, listMusicTrackScanIndex)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMusicTrackScanIndexRow{}
+	for rows.Next() {
+		var i ListMusicTrackScanIndexRow
+		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertTrack = `-- name: UpsertTrack :one
 INSERT INTO tracks (
   title,

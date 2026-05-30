@@ -345,6 +345,27 @@ func TestUpdateLibrarySettings_RejectsMissingMediaDirectory(t *testing.T) {
 	}
 }
 
+func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
+
+	finishMusicScan()
+	if !tryBeginMusicScan() {
+		t.Fatal("failed to acquire music scan guard")
+	}
+	defer finishMusicScan()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
+	w := httptest.NewRecorder()
+
+	app.TriggerMusicScan(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {

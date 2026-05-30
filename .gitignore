@@ -1,61 +1,55 @@
-# Binaries
+# Local environment
+.env*
+!.env.example
+
+# Server build output
 /server/igloo-server
 /server/api
 /server/dist/
 
-# Embedded ffprobe and ffmpeg payloads (large files, keep local)
+# Embedded ffprobe and ffmpeg payloads (large local binaries)
 /server/cmd/internal/ffprobe/ffprobe_darwin_arm64
 /server/cmd/internal/ffprobe/ffprobe_linux_amd64
 /server/cmd/internal/ffmpeg/ffmpeg_darwin_arm64
 /server/cmd/internal/ffmpeg/ffmpeg_linux_amd64
 
-# IDE and editor
-.idea/
-.vscode/
-.cursor/
+# Embedded frontend assets generated during build
+/server/cmd/api/webdist/
 
-# Environment files
-.env
-.env.local
-
-# Runtime files and directories created by app at start up
+# Runtime data created by local app runs
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
 /db/
 /logs/
-/static/*
-/server/static/*
+/static/
+/server/static/
+/media/
+/transcode/
 
-# Embedded frontend assets generated during build
-/server/cmd/api/web/dist/*.html
-/server/cmd/api/web/dist/assets/
-/server/cmd/api/web/dist/vite.svg
-/server/cmd/api/webdist
-
-# Frontend (web)
+# Frontend dependencies, generated files, and reports
 /web/node_modules/
-/web/dist
+/web/dist/
 /web/.tanstack/
 /web/src/routeTree.gen.ts
+/web/test-results/
+/web/playwright-report/
+/web/blob-report/
+/web/coverage/
+/web/*.tsbuildinfo
+
+# IDE and editor
+.idea/
+.vscode/
+.cursor/
 
 # OS files
 .DS_Store
 
-# AU files or directories
+# Local assistant tooling
 .claude/
 .codex/
 .playwright-mcp/
 AGENTS.md
 CLAUDE.md
-
-# Playwright output
-/web/test-results/
-/web/playwright-report/
-/web/blob-report/
-
-# Generated media/transcoding output
-/server/media/*
-/media/
-/transcode/

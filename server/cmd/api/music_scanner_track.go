@@ -10,49 +10,100 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	spotifylib "github.com/zmb3/spotify/v2"
 )
 
-func (app *Application) processTrackFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) (int64, error) {
-	info, err := app.Ffprobe.GetMetadata(path)
+type resolvedTrack struct {
+	params    database.UpsertTrackParams
+	musicians []resolvedMusician
+	album     *resolvedAlbum
+	genreTag  string
+	filePath  string
+	fileSize  int64
+}
+
+type resolvedMusician struct {
+	name                   string
+	sortName               string
+	existingID             int64
+	hasExistingID          bool
+	spotifyArtist          *spotifylib.FullArtist
+	spotifyMatch           *resolvedSpotifyMatch
+	splitCompoundOnNoMatch bool
+}
+
+type resolvedAlbum struct {
+	title         string
+	sortTitle     string
+	albumArtist   string
+	existingID    int64
+	hasExistingID bool
+	spotifyAlbum  *spotifylib.FullAlbum
+	spotifyMatch  *resolvedSpotifyMatch
+}
+
+type resolvedSpotifyMatch struct {
+	status          string
+	spotifyID       sql.NullString
+	reason          sql.NullString
+	score           sql.NullInt64
+	thresholdValue  sql.NullInt64
+	candidateName   sql.NullString
+	candidateArtist sql.NullString
+	searchQuery     sql.NullString
+	strategy        sql.NullString
+	errorText       sql.NullString
+}
+
+type compoundArtistCredits struct {
+	parts        []string
+	hasDelimiter bool
+	hasComma     bool
+	hasDuplicate bool
+}
+
+func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file trackFile) (*resolvedTrack, error) {
+	info, err := app.Ffprobe.GetAudioMetadata(file.path)
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %w", err)
+		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
 
 	params := database.UpsertTrackParams{
-		FilePath: path,
-		FileName: filepath.Base(path),
-		Size:     fileSize,
+		FilePath: file.path,
+		FileName: filepath.Base(file.path),
+		Size:     file.size,
 	}
 
-	if info.Format.Tags.Title != "" {
-		params.Title = info.Format.Tags.Title
+	tags := info.Format.Tags
+	if tags.Title != "" {
+		params.Title = tags.Title
 	} else {
-		params.Title = filepath.Base(path)
+		params.Title = filepath.Base(file.path)
 	}
 
-	if info.Format.Tags.SortName != "" {
-		params.SortTitle = info.Format.Tags.SortName
+	if tags.SortName != "" {
+		params.SortTitle = tags.SortName
 	} else {
 		params.SortTitle = params.Title
 	}
 
-	params.Container = ext
-
-	mimeType, ok := helpers.AudioMimeTypes[ext]
+	params.Container = file.ext
+	mimeType, ok := helpers.AudioMimeTypes[file.ext]
 	if ok {
 		params.MimeType = mimeType
 	}
 
 	if info.Format.Duration != "" {
-		duration, err := helpers.ParseDurationMs(info.Format.Duration)
-		if err == nil {
+		duration, parseErr := helpers.ParseDurationMs(info.Format.Duration)
+		if parseErr == nil {
 			params.Duration = duration
 		}
 	}
 
-	if info.Format.Tags.Track != "" {
-		index, err := helpers.ParseSlashNumber(info.Format.Tags.Track)
-		if err == nil {
+	if tags.Track != "" {
+		index, parseErr := helpers.ParseSlashNumber(tags.Track)
+		if parseErr == nil {
 			params.TrackIndex = index
 		}
 	}
@@ -61,195 +112,128 @@ func (app *Application) processTrackFile(ctx context.Context, qtx *database.Quer
 		params.BitRate = helpers.ParseBitRate(info.Format.BitRate)
 	}
 
-	if info.Format.Tags.Disc != "" {
-		disc, err := helpers.ParseSlashNumber(info.Format.Tags.Disc)
-		if err == nil {
+	if tags.Disc != "" {
+		disc, parseErr := helpers.ParseSlashNumber(tags.Disc)
+		if parseErr == nil {
 			params.Disc = disc
 		}
 	}
 
-	params.Copyright = helpers.NullString(info.Format.Tags.Copyright)
-	params.Composer = helpers.NullString(info.Format.Tags.Composer)
+	params.Copyright = helpers.NullString(tags.Copyright)
+	params.Composer = helpers.NullString(tags.Composer)
 
-	if info.Format.Tags.Date != "" {
-		date, err := helpers.ParseDate(info.Format.Tags.Date)
-		if err == nil {
+	if tags.Date != "" {
+		date, parseErr := helpers.ParseDate(tags.Date)
+		if parseErr == nil {
 			params.ReleaseDate = sql.NullString{String: date.Format("2006-01-02"), Valid: true}
 			params.Year = sql.NullInt64{Int64: int64(date.Year()), Valid: true}
 		}
 	}
 
-	var musicianID sql.NullInt64
-	var allMusicianIDs []int64
-
-	if info.Format.Tags.Artist != "" {
-		sortArtist := info.Format.Tags.SortArtist
-		if sortArtist == "" {
-			sortArtist = info.Format.Tags.Artist
-		}
-
-		artistTag := info.Format.Tags.Artist
-		isCompound := strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ", ")
-
-		// Probe compound-looking artist names before creating a possibly bogus combined artist.
-		splitArtists := false
-		if isCompound && app.Spotify != nil {
-			_, err := app.Spotify.SearchArtistByName(ctx, artistTag)
-			if err != nil {
-				splitArtists = shouldSplitCompoundArtistCredits(err)
-			}
-		}
-
-		parts := splitCompoundArtistCredits(artistTag)
-		if len(parts) < 2 {
-			splitArtists = false
-		}
-
-		if !splitArtists {
-			musician, err := app.getOrCreateMusician(ctx, qtx, artistTag, sortArtist)
-			if err != nil {
-				return 0, fmt.Errorf("musician failed: %w", err)
-			}
-			musicianID = sql.NullInt64{Int64: musician.ID, Valid: true}
-			allMusicianIDs = append(allMusicianIDs, musician.ID)
-		} else {
-			for _, part := range parts {
-				m, err := app.getOrCreateMusician(ctx, qtx, part, part)
-				if err != nil {
-					app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
-					return 0, fmt.Errorf("compound musician failed for %q: %w", part, err)
-				}
-				if !musicianID.Valid {
-					musicianID = sql.NullInt64{Int64: m.ID, Valid: true}
-				}
-				allMusicianIDs = append(allMusicianIDs, m.ID)
-			}
-		}
-	}
-	params.MusicianID = musicianID
-
-	var albumID sql.NullInt64
-
-	if info.Format.Tags.Album != "" {
-		sortAlbum := info.Format.Tags.SortAlbum
-		if sortAlbum == "" {
-			sortAlbum = info.Format.Tags.Album
-		}
-
-		effectiveAlbumArtist := info.Format.Tags.AlbumArtist
-		if effectiveAlbumArtist == "" {
-			effectiveAlbumArtist = info.Format.Tags.Artist
-		}
-
-		album, err := app.getOrCreateAlbum(ctx, qtx, info.Format.Tags.Album, sortAlbum, effectiveAlbumArtist)
-		if err != nil {
-			return 0, fmt.Errorf("album failed: %w", err)
-		}
-
-		albumID = sql.NullInt64{Int64: album.ID, Valid: true}
-	}
-	params.AlbumID = albumID
-
-	if albumID.Valid {
-		for _, mID := range allMusicianIDs {
-			err := qtx.CreateMusicianAlbum(ctx, database.CreateMusicianAlbumParams{
-				MusicianID: mID,
-				AlbumID:    albumID.Int64,
-			})
-			if err != nil {
-				app.Logger.Warn("failed to create musician-album relationship",
-					"error", err,
-					"musician_id", mID,
-					"album_id", albumID.Int64,
-				)
-			}
-		}
-	}
-
 	for _, stream := range info.Streams {
-		if stream.CodecType == "audio" {
-			params.Codec = stream.CodecName
-			params.Profile = stream.Profile
-
-			if stream.ChannelLayout != "" {
-				params.Channels = stream.ChannelLayout
-				params.ChannelLayout = stream.ChannelLayout
-			} else {
-				params.Channels = strconv.Itoa(stream.Channels)
-				params.ChannelLayout = strconv.Itoa(stream.Channels)
-			}
-
-			if stream.Tags.Language != "" {
-				params.Language = sql.NullString{String: stream.Tags.Language, Valid: true}
-			}
-
-			break
+		if stream.CodecType != "audio" {
+			continue
 		}
+
+		params.Codec = stream.CodecName
+		params.Profile = stream.Profile
+
+		if stream.ChannelLayout != "" {
+			params.Channels = stream.ChannelLayout
+			params.ChannelLayout = stream.ChannelLayout
+		} else {
+			params.Channels = strconv.Itoa(stream.Channels)
+			params.ChannelLayout = strconv.Itoa(stream.Channels)
+		}
+
+		if stream.Tags.Language != "" {
+			params.Language = sql.NullString{String: stream.Tags.Language, Valid: true}
+		}
+
+		break
 	}
 
-	track, err := qtx.UpsertTrack(ctx, params)
-	if err != nil {
-		return 0, fmt.Errorf("upsert track failed: %w", err)
+	resolved := &resolvedTrack{
+		params:   params,
+		genreTag: tags.Genre,
+		filePath: file.path,
+		fileSize: file.size,
 	}
 
-	if info.Format.Tags.Genre != "" {
-		genre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
-			Tag:       info.Format.Tags.Genre,
-			GenreType: "music",
-		})
-
-		if err != nil {
-			return 0, fmt.Errorf("genre failed: %w", err)
+	if tags.Artist != "" {
+		musicians, resolveErr := app.resolveTrackMusicians(ctx, scan, tags.Artist, tags.SortArtist)
+		if resolveErr != nil {
+			return nil, resolveErr
 		}
-
-		err = qtx.DeleteTrackGenresExcept(ctx, database.DeleteTrackGenresExceptParams{
-			TrackID: track.ID,
-			GenreID: genre.ID,
-		})
-
-		if err != nil {
-			return 0, fmt.Errorf("delete stale genres failed: %w", err)
-		}
-
-		err = qtx.CreateTrackGenre(ctx, database.CreateTrackGenreParams{
-			TrackID: track.ID,
-			GenreID: genre.ID,
-		})
-
-		if err != nil {
-			return 0, fmt.Errorf("track-genre relationship failed: %w", err)
-		}
-
-		if musicianID.Valid {
-			err = qtx.UpsertMusicianGenre(ctx, database.UpsertMusicianGenreParams{
-				MusicianID: musicianID.Int64,
-				GenreID:    genre.ID,
-			})
-			if err != nil {
-				app.Logger.Warn("failed to create musician-genre relationship",
-					"error", err,
-					"musician_id", musicianID.Int64,
-					"genre_id", genre.ID,
-				)
-			}
-		}
-
-		if albumID.Valid {
-			err = qtx.UpsertAlbumGenre(ctx, database.UpsertAlbumGenreParams{
-				AlbumID: albumID.Int64,
-				GenreID: genre.ID,
-			})
-			if err != nil {
-				app.Logger.Warn("failed to create album-genre relationship",
-					"error", err,
-					"album_id", albumID.Int64,
-					"genre_id", genre.ID,
-				)
-			}
-		}
+		resolved.musicians = musicians
 	}
 
-	return track.ID, nil
+	if tags.Album != "" {
+		sortAlbum := tags.SortAlbum
+		if sortAlbum == "" {
+			sortAlbum = tags.Album
+		}
+
+		effectiveAlbumArtist := tags.AlbumArtist
+		if effectiveAlbumArtist == "" {
+			effectiveAlbumArtist = tags.Artist
+		}
+
+		album, resolveErr := app.resolveAlbum(ctx, scan, tags.Album, sortAlbum, effectiveAlbumArtist)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("album failed: %w", resolveErr)
+		}
+		resolved.album = album
+	}
+
+	return resolved, nil
+}
+
+func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicScanContext, artistTag, sortArtist string) ([]resolvedMusician, error) {
+	if sortArtist == "" {
+		sortArtist = artistTag
+	}
+
+	credits := parseCompoundArtistCredits(artistTag)
+	splitArtists := shouldSplitCompoundArtistCreditsLocally(credits)
+	var combined *resolvedMusician
+
+	if !splitArtists && credits.hasDelimiter && len(credits.parts) >= 2 {
+		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
+		if err != nil {
+			return nil, fmt.Errorf("musician failed: %w", err)
+		}
+		combined = musician
+		splitArtists = musician.splitCompoundOnNoMatch
+	}
+
+	if len(credits.parts) < 2 {
+		splitArtists = false
+	}
+
+	if !splitArtists {
+		if combined != nil {
+			return []resolvedMusician{*combined}, nil
+		}
+
+		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
+		if err != nil {
+			return nil, fmt.Errorf("musician failed: %w", err)
+		}
+		return []resolvedMusician{*musician}, nil
+	}
+
+	musicians := make([]resolvedMusician, 0, len(credits.parts))
+	for _, part := range credits.parts {
+		musician, err := app.resolveMusician(ctx, scan, part, part)
+		if err != nil {
+			app.Logger.Warn("failed to resolve compound artist part", "part", part, "error", err)
+			return nil, fmt.Errorf("compound musician failed for %q: %w", part, err)
+		}
+		musicians = append(musicians, *musician)
+	}
+
+	return musicians, nil
 }
 
 func shouldSplitCompoundArtistCredits(err error) bool {
@@ -262,24 +246,81 @@ func shouldSplitCompoundArtistCredits(err error) bool {
 }
 
 func splitCompoundArtistCredits(artistTag string) []string {
-	normalized := strings.ReplaceAll(artistTag, " & ", ", ")
-	rawParts := strings.Split(normalized, ", ")
-	parts := make([]string, 0, len(rawParts))
-	seen := make(map[string]struct{}, len(rawParts))
+	return parseCompoundArtistCredits(artistTag).parts
+}
 
-	for _, rawPart := range rawParts {
+func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
+	rawCommaParts := strings.Split(artistTag, ",")
+	commaParts := make([]string, 0, len(rawCommaParts))
+
+	for _, rawPart := range rawCommaParts {
 		part := strings.TrimSpace(rawPart)
 		if part == "" {
 			continue
 		}
 
-		if _, exists := seen[part]; exists {
+		if isArtistSuffix(part) && len(commaParts) > 0 {
+			lastIndex := len(commaParts) - 1
+			commaParts[lastIndex] = commaParts[lastIndex] + ", " + part
 			continue
 		}
 
-		seen[part] = struct{}{}
-		parts = append(parts, part)
+		commaParts = append(commaParts, part)
 	}
 
-	return parts
+	credits := compoundArtistCredits{
+		hasDelimiter: strings.Contains(artistTag, " & ") || strings.Contains(artistTag, ","),
+		hasComma:     strings.Contains(artistTag, ","),
+	}
+	seen := make(map[string]struct{}, len(commaParts))
+
+	for _, commaPart := range commaParts {
+		ampersandParts := strings.Split(commaPart, " & ")
+		for _, rawPart := range ampersandParts {
+			part := strings.TrimSpace(rawPart)
+			if part == "" {
+				continue
+			}
+
+			cacheKey := normalizedMusicCacheKey(part)
+			if _, exists := seen[cacheKey]; exists {
+				credits.hasDuplicate = true
+				continue
+			}
+
+			seen[cacheKey] = struct{}{}
+			credits.parts = append(credits.parts, part)
+		}
+	}
+
+	return credits
+}
+
+func shouldSplitCompoundArtistCreditsLocally(credits compoundArtistCredits) bool {
+	if len(credits.parts) < 2 || !credits.hasComma {
+		return false
+	}
+
+	if credits.hasDuplicate {
+		return true
+	}
+
+	for _, part := range credits.parts {
+		if len(strings.Fields(part)) < 2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isArtistSuffix(value string) bool {
+	suffix := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
+
+	switch suffix {
+	case "jr", "sr", "ii", "iii", "iv", "v", "vi":
+		return true
+	default:
+		return false
+	}
 }

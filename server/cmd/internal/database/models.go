@@ -151,6 +151,22 @@ type MovieWatchProgress struct {
 	UpdatedAt   string  `json:"updated_at"`
 }
 
+type MusicSpotifyMatch struct {
+	EntityType      string         `json:"entity_type"`
+	EntityID        int64          `json:"entity_id"`
+	SpotifyID       sql.NullString `json:"spotify_id"`
+	Status          string         `json:"status"`
+	Reason          sql.NullString `json:"reason"`
+	Score           sql.NullInt64  `json:"score"`
+	ThresholdValue  sql.NullInt64  `json:"threshold_value"`
+	CandidateName   sql.NullString `json:"candidate_name"`
+	CandidateArtist sql.NullString `json:"candidate_artist"`
+	SearchQuery     sql.NullString `json:"search_query"`
+	Strategy        sql.NullString `json:"strategy"`
+	Error           sql.NullString `json:"error"`
+	UpdatedAt       string         `json:"updated_at"`
+}
+
 type Musician struct {
 	ID                int64           `json:"id"`
 	Name              string          `json:"name"`

@@ -1,0 +1,115 @@
+Igloo Test Results
+Run time: 2026-05-29 21:08:01 AST
+
+Summary
+Overall result: FAIL
+
+The full backend Go test suite fails because of the active desired-behavior
+music scanner test added for compound artist splitting:
+
+  TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians
+  music_scanner_test.go:1697: split musician count = 0, want 2
+
+This matches the known current scanner gap: compound artist metadata such as
+"Artist One & Artist Two, Artist One" is still stored as a combined artist
+string instead of deterministic unique artists linked through track_musicians.
+
+Backend
+Command:
+  cd server
+  go test -tags "externalbin sqlite_fts5" ./... -count=1
+
+Result:
+  FAIL
+
+Failure:
+  package: igloo/cmd/api
+  test: TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians
+  assertion: split musician count = 0, want 2
+
+Package results:
+  FAIL igloo/cmd/api
+  ok   igloo/cmd/internal/ffmpeg
+  ok   igloo/cmd/internal/ffprobe
+  ok   igloo/cmd/internal/helpers
+  ok   igloo/cmd/internal/logger
+  ok   igloo/cmd/internal/spotify
+  ok   igloo/cmd/internal/tmdb
+  no test files: igloo/cmd/internal/database, igloo/cmd/internal/ffmpeg/fmp4testutil, igloo/cmd/internal/mediabin
+
+Backend confirmation without the intentional scanner expectation:
+Command:
+  cd server
+  go test -tags "externalbin sqlite_fts5" ./... -skip 'TestProcessMusicBatchSplitsCompoundArtistsIntoTrackMusicians' -count=1
+
+Result:
+  PASS
+
+Package results:
+  ok igloo/cmd/api 7.889s
+  ok igloo/cmd/internal/ffmpeg 0.038s
+  ok igloo/cmd/internal/ffprobe 0.093s
+  ok igloo/cmd/internal/helpers 0.566s
+  ok igloo/cmd/internal/logger 0.016s
+  ok igloo/cmd/internal/spotify 0.010s
+  ok igloo/cmd/internal/tmdb 0.063s
+
+Web unit tests
+Setup note:
+  The first attempt to run Vitest failed because web dependencies were not
+  installed: "vitest: command not found".
+
+Install command:
+  cd web
+  bun install --frozen-lockfile
+
+Install result:
+  PASS
+  429 packages installed. The lockfile was not changed.
+
+Command:
+  cd web
+  bun run test
+
+Result:
+  PASS
+
+Vitest result:
+  Test Files: 15 passed (15)
+  Tests: 85 passed (85)
+  Duration: 7.04s
+
+Note:
+  Vitest printed a warning that baseline-browser-mapping data is over two
+  months old. This did not fail the test run.
+
+Playwright E2E
+Command:
+  cd web
+  bun run test:e2e
+
+Result:
+  PASS with skips
+
+Playwright result:
+  3 skipped
+
+Skipped tests:
+  e2e/hls-transcode.spec.ts: 4K movie transcodes at 2160p
+  e2e/hls-transcode.spec.ts: second movie transcodes with a different profile
+  e2e/watch-room.spec.ts: syncs direct-room playback controls across owner and guest browsers
+
+Reason:
+  These suites are opt-in and require an already-running Igloo instance plus
+  E2E environment variables such as E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, and
+  scanned movie IDs. Those variables were not set in this environment.
+
+Files changed before/while testing
+  server/cmd/api/music_scanner_test.go
+
+Conclusion
+The repository's automated test state is red only because the new active
+compound-artist scanner expectation is failing. With that one test skipped,
+all backend Go packages passed. Web Vitest passed after installing locked
+dependencies. Playwright executed successfully but skipped all opt-in E2E
+tests due missing E2E environment configuration.

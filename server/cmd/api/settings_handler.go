@@ -15,25 +15,9 @@ import (
 var (
 	movieScanMutex  sync.Mutex
 	isMovieScanning bool
+	musicScanMutex  sync.Mutex
+	isMusicScanning bool
 )
-
-func tryBeginMovieScan() bool {
-	movieScanMutex.Lock()
-	defer movieScanMutex.Unlock()
-
-	if isMovieScanning {
-		return false
-	}
-
-	isMovieScanning = true
-	return true
-}
-
-func finishMovieScan() {
-	movieScanMutex.Lock()
-	isMovieScanning = false
-	movieScanMutex.Unlock()
-}
 
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
@@ -382,7 +366,15 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	go app.MusicScanLibrary()
+	if !tryBeginMusicScan() {
+		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"), http.StatusConflict)
+		return
+	}
+
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMusicScan()
 
 	app.Logger.Info("music library scan triggered via API", "path", app.Settings.MusicDir.String)
 

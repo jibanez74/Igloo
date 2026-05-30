@@ -8,6 +8,7 @@ import (
 
 type FfprobeInterface interface {
 	GetMetadata(filePath string) (*FfprobeResult, error)
+	GetAudioMetadata(filePath string) (*FfprobeResult, error)
 }
 
 type ffprobe struct {

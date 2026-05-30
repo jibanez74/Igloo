@@ -12,6 +12,14 @@ FROM albums
 WHERE spotify_id = ?
 LIMIT 1;
 
+-- name: GetAlbumByTitleAndMusician :one
+SELECT
+  *
+FROM albums
+WHERE title = ?
+  AND musician IS ?
+LIMIT 1;
+
 -- name: GetLatestAlbums :many
 SELECT
   id,
@@ -41,6 +49,14 @@ ORDER BY
   UPPER(title)
 LIMIT ?
 OFFSET ?;
+
+-- name: UpdateAlbumSpotifyCover :one
+UPDATE albums
+SET
+  cover = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
 
 -- name: UpsertAlbum :one
 INSERT INTO albums (

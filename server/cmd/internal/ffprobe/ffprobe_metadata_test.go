@@ -94,6 +94,53 @@ func TestGetMetadata_AudioStream(t *testing.T) {
 	}
 }
 
+func TestGetAudioMetadata_AudioFile(t *testing.T) {
+	trackPath := getTestMediaPath("track.m4a")
+	requireTestMedia(t, trackPath)
+
+	probe, err := New()
+	if err != nil {
+		t.Fatalf("Failed to create ffprobe instance: %v", err)
+	}
+	defer Cleanup()
+
+	result, err := probe.GetAudioMetadata(trackPath)
+	if err != nil {
+		t.Fatalf("GetAudioMetadata failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if len(result.Streams) == 0 {
+		t.Error("Expected at least one stream")
+	}
+
+	if len(result.Chapters) != 0 {
+		t.Errorf("Expected audio metadata to omit chapters, got %d", len(result.Chapters))
+	}
+
+	if result.Format.Duration == "" {
+		t.Error("Expected Format.Duration to be set")
+	}
+
+	var audioStream *Stream
+	for i := range result.Streams {
+		if result.Streams[i].CodecType == "audio" {
+			audioStream = &result.Streams[i]
+			break
+		}
+	}
+
+	if audioStream == nil {
+		t.Fatal("Expected to find an audio stream")
+	}
+	if audioStream.CodecName == "" {
+		t.Error("Expected audio stream to have CodecName")
+	}
+}
+
 func TestGetMetadata_NonExistentFile(t *testing.T) {
 	probe, err := New()
 	if err != nil {
@@ -115,6 +162,19 @@ func TestGetMetadata_EmptyPath(t *testing.T) {
 	defer Cleanup()
 
 	_, err = probe.GetMetadata("")
+	if err == nil {
+		t.Error("Expected error for empty file path")
+	}
+}
+
+func TestGetAudioMetadata_EmptyPath(t *testing.T) {
+	probe, err := New()
+	if err != nil {
+		t.Fatalf("Failed to create ffprobe instance: %v", err)
+	}
+	defer Cleanup()
+
+	_, err = probe.GetAudioMetadata("")
 	if err == nil {
 		t.Error("Expected error for empty file path")
 	}
