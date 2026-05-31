@@ -22,6 +22,9 @@ CREATE TABLE
   IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tmdb_key TEXT,
+    immich_base_url TEXT,
+    immich_api_key TEXT,
+    jellyfin_base_url TEXT,
     jellyfin_token TEXT,
     spotify_client_id TEXT,
     spotify_client_secret TEXT,
@@ -501,7 +504,7 @@ CREATE TABLE
     entity_type TEXT NOT NULL CHECK (entity_type IN ('album', 'musician')),
     entity_id INTEGER NOT NULL,
     spotify_id TEXT,
-    status TEXT NOT NULL CHECK (status IN ('matched', 'pending', 'failed', 'unmatched')),
+    status TEXT NOT NULL CHECK (status IN ('matched', 'failed', 'unmatched')),
     reason TEXT,
     score INTEGER,
     threshold_value INTEGER,

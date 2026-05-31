@@ -435,7 +435,35 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 		t.Fatalf("TMDB detail calls = %#v, want [603]", tmdbStub.detailCalls)
 	}
 
-	movie, err := app.Queries.GetMovieByPath(ctx, path)
+	movie := struct {
+		ID            int64
+		Title         string
+		TmdbID        sql.NullInt64
+		Size          int64
+		Year          sql.NullInt64
+		ReleaseDate   sql.NullString
+		Certification sql.NullString
+		Language      sql.NullString
+		RunTime       sql.NullInt64
+		Duration      sql.NullFloat64
+	}{}
+	err := app.DB.QueryRowContext(ctx, `
+		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
+		FROM movies
+		WHERE file_path = ?
+		LIMIT 1
+	`, path).Scan(
+		&movie.ID,
+		&movie.Title,
+		&movie.TmdbID,
+		&movie.Size,
+		&movie.Year,
+		&movie.ReleaseDate,
+		&movie.Certification,
+		&movie.Language,
+		&movie.RunTime,
+		&movie.Duration,
+	)
 	if err != nil {
 		t.Fatalf("get movie by path: %v", err)
 	}
@@ -616,7 +644,35 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
-	movie, err := app.Queries.GetMovieByPath(ctx, path)
+	movie := struct {
+		ID            int64
+		Title         string
+		TmdbID        sql.NullInt64
+		Size          int64
+		Year          sql.NullInt64
+		ReleaseDate   sql.NullString
+		Certification sql.NullString
+		Language      sql.NullString
+		RunTime       sql.NullInt64
+		Duration      sql.NullFloat64
+	}{}
+	err := app.DB.QueryRowContext(ctx, `
+		SELECT id, title, tmdb_id, size, year, release_date, certification, language, run_time, duration
+		FROM movies
+		WHERE file_path = ?
+		LIMIT 1
+	`, path).Scan(
+		&movie.ID,
+		&movie.Title,
+		&movie.TmdbID,
+		&movie.Size,
+		&movie.Year,
+		&movie.ReleaseDate,
+		&movie.Certification,
+		&movie.Language,
+		&movie.RunTime,
+		&movie.Duration,
+	)
 	if err != nil {
 		t.Fatalf("get movie by path: %v", err)
 	}

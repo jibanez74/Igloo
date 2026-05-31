@@ -20,13 +20,6 @@ SELECT
 FROM movies
 WHERE id IN (sqlc.slice(ids));
 
--- name: GetMovieByPath :one
-SELECT
-  *
-FROM movies
-WHERE file_path = ?
-LIMIT 1;
-
 -- name: GetMovieScanIndex :many
 SELECT
   id,

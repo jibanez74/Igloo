@@ -1,288 +1,234 @@
-Yes. That is a good fit for Igloo, especially because you do **not** want Igloo to become a full photo-management backend. Let Immich handle photo storage, backup, thumbnails, metadata, albums, people, search indexing, and jobs. Igloo should provide the browsing experience.
+Yes. Before you start, handle these two things as project dependencies: **the Immich API key** and **the OpenAPI spec**.
 
-A clean mental model:
+## 1. How to get an Immich API key
+
+In the Immich web app:
+
+1. Log in to Immich.
+2. Click the user icon in the top-right corner.
+3. Open **Account Settings** / **User Settings**.
+4. Go to **API Keys**.
+5. Create a new API key.
+6. Give it a name like `Igloo Photos`.
+7. Select the permissions you want.
+8. Copy the key immediately and store it somewhere secure.
+
+Immich’s docs say API keys can be created from **User Settings > API Keys**, and API keys can have permissions to limit access. ([Immich API][1])
+
+For your first read-only Igloo Photos integration, start with the minimum permissions needed for browsing. At minimum, you will likely need read permissions around albums and assets, for example:
 
 ```txt
-Igloo
-  Movies / TV / Music = Igloo-native
-  Photos = Immich-backed
+album.read
+asset.read
 ```
 
-## Recommended approach
+Depending on the exact endpoints you use, you may also need permissions for users, people, tags, memories, or search later. Do not enable upload/delete permissions yet unless you are intentionally adding write features.
 
-Build a **Photos module** in Igloo that connects to an existing Immich server.
+## 2. How to configure the API key in Igloo
 
-Do **not** copy the photo files into Igloo. Do **not** duplicate Immich’s database. Do **not** try to reimplement Immich’s indexing pipeline.
+For development, use environment variables:
 
-Instead:
+```env
+IMMICH_BASE_URL=http://localhost:2283
+IMMICH_API_KEY=your_api_key_here
+```
+
+Then your Igloo backend should call Immich using the `x-api-key` header. Immich documents `x-api-key: <apiKey>` as the API-key authentication header. It also supports `apiKey` as a query parameter, but the header is the cleaner option. ([Immich API][2])
+
+Example with `fetch`:
+
+```ts
+const response = await fetch(`${process.env.IMMICH_BASE_URL}/api/albums`, {
+  headers: {
+    "x-api-key": process.env.IMMICH_API_KEY!,
+    "Accept": "application/json",
+  },
+});
+
+if (!response.ok) {
+  throw new Error(`Immich request failed: ${response.status}`);
+}
+
+const albums = await response.json();
+```
+
+For Igloo, I would not expose this key to the React app. Keep it server-side.
+
+The flow should be:
 
 ```txt
-Igloo Web Client
-  ↓
-Igloo Server
-  ↓
-Immich API
-  ↓
-Immich Server
+Igloo React app
+  -> Igloo backend endpoint
+    -> Immich API with x-api-key
 ```
 
-The browser talks to your Igloo server. Your Igloo server talks to Immich.
-
-Immich has a documented REST API, OpenAPI-generated SDKs, and a published TypeScript SDK called `@immich/sdk`. The Immich API includes stable endpoints for assets, albums, thumbnails, original downloads, video playback, and metadata. ([Immich][1])
-
-## Why route through the Igloo server?
-
-You could call Immich directly from the browser, but I would avoid that.
-
-The better architecture is:
+For example:
 
 ```txt
 GET /api/photos/albums
-GET /api/photos/albums/:albumId
-GET /api/photos/assets
-GET /api/photos/assets/:assetId
-GET /api/photos/assets/:assetId/thumbnail
-GET /api/photos/assets/:assetId/original
-GET /api/photos/assets/:assetId/video
 ```
 
-Those are **Igloo endpoints**. Internally, they call Immich.
-
-This gives you several advantages:
-
-1. **No Immich API key in the browser**
-2. **Igloo controls access**
-3. **You can normalize Immich responses into your own types**
-4. **You can change Immich integration later without rewriting the frontend**
-5. **You can hide Immich-specific API churn from the Igloo UI**
-6. **You can add caching, streaming, rate limits, and permissions in one place**
-
-For a self-hosted app, this matters. Even if everything is inside Tailscale or a local network, keeping secrets out of frontend JavaScript is still the better design.
-
-## Minimum useful version
-
-For the first version, I would keep it read-only.
-
-Start with:
+internally calls:
 
 ```txt
-Photos
-Albums
-Favorites
-Recently added
-Asset detail page
-Full-screen viewer
-Slideshow mode
-Video playback for Immich videos
-Download/open original
+GET {IMMICH_BASE_URL}/api/albums
 ```
 
-Immich exposes album listing through `GET /albums`, and assets include stable endpoints for retrieving asset info, thumbnails, originals, and video playback. ([Immich API][2])
+## 3. How to test the API key manually
 
-A first Igloo Photos section could look like:
+Use `curl` first before writing any Igloo code:
+
+```bash
+curl -L \
+  -H "Accept: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  "http://localhost:2283/api/albums"
+```
+
+Or, if your Immich server is on another machine:
+
+```bash
+curl -L \
+  -H "Accept: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  "http://192.168.1.50:2283/api/albums"
+```
+
+If that works, your Igloo backend can use the same base URL and key.
+
+## 4. How to get the OpenAPI JSON file
+
+Immich’s official docs say the API documentation is generated from OpenAPI, and the generated SDK is based on `immich-openapi-specs.json`. ([Immich][3])
+
+The file is in the Immich GitHub repo here:
 
 ```txt
-/photos
-/photos/albums
-/photos/albums/:albumId
-/photos/assets/:assetId
-/photos/slideshow?albumId=...
+open-api/immich-openapi-specs.json
 ```
 
-That would already be useful without touching uploads, deletion, sharing, face recognition, library scanning, or admin features.
-
-## What I would not build at first
-
-Avoid these in the first version:
+GitHub shows the file at:
 
 ```txt
-Upload
-Delete
-Edit metadata
-Album management
-Face/person management
-Sharing links
-Admin settings
-Library scans
-Duplicate management
+immich/open-api/immich-openapi-specs.json
 ```
 
-Those are not impossible, but they increase risk. They also move Igloo closer to being a second Immich UI, which is probably not what you want.
+and marks it as a large JSON file of about 705 KB. ([GitHub][4])
 
-For Igloo, the value is not “replace Immich.” The value is:
+To download it:
+
+```bash
+curl -L \
+  -o immich-openapi-specs.json \
+  https://raw.githubusercontent.com/immich-app/immich/main/open-api/immich-openapi-specs.json
+```
+
+However, for your project, I would **not** blindly use `main` forever. Use the spec that matches the Immich version you are targeting.
+
+For example, if your Immich server is version `v1.135.0`, download from that tag instead of `main`:
+
+```bash
+curl -L \
+  -o immich-openapi-specs.json \
+  https://raw.githubusercontent.com/immich-app/immich/v1.135.0/open-api/immich-openapi-specs.json
+```
+
+That keeps your generated client aligned with the Immich server you are actually running.
+
+## 5. How to inspect the API
+
+You have three practical options.
+
+### Option A: Use the hosted Immich API docs
+
+Use the published API docs for exploration:
 
 ```txt
-Use Immich as the photo engine.
-Use Igloo as the accessible media-center interface.
+https://api.immich.app
 ```
 
-## TypeScript shape
+Immich’s docs point to this as the official published API documentation site. ([Immich][3])
 
-Since Igloo already has its own frontend/backend direction, I would create your own internal types instead of leaking Immich DTOs everywhere.
+This is best for reading endpoints manually.
 
-Example:
+### Option B: Open the JSON file in an OpenAPI viewer
 
-```ts
-export type IglooPhotoAsset = {
-  id: string;
-  type: "image" | "video";
-  title: string | null;
-  createdAt: string;
-  thumbUrl: string;
-  originalUrl: string;
-  duration?: string | null;
-  width?: number | null;
-  height?: number | null;
-};
-```
-
-Then your server maps Immich responses into this shape.
-
-That lets your React UI stay simple:
-
-```ts
-const assets = await getAlbumAssets(albumId);
-```
-
-instead of coupling every component to Immich’s API details.
-
-## Backend adapter idea
-
-In Go, this could be a small package:
+Download `immich-openapi-specs.json`, then open it with tools like:
 
 ```txt
-internal/immich/
-  client.go
-  albums.go
-  assets.go
-  thumbnails.go
-  types.go
+Swagger Editor
+Redocly
+Scalar
+OpenAPI Generator
 ```
 
-Or if your current Igloo direction for this module is TypeScript/Bun, the equivalent:
+This is useful when you want local docs while developing Igloo.
+
+### Option C: Generate a TypeScript client
+
+Since you are using TypeScript heavily, you can generate a client from the OpenAPI file:
+
+```bash
+bunx @openapitools/openapi-generator-cli generate \
+  -i immich-openapi-specs.json \
+  -g typescript-fetch \
+  -o src/lib/immich/generated
+```
+
+That said, for Igloo, I would probably start with a thin handwritten adapter instead of using the generated client everywhere. Generated clients can be noisy.
+
+A good structure would be:
 
 ```txt
-src/immich/
+src/lib/immich/
   client.ts
   albums.ts
   assets.ts
-  thumbnails.ts
   types.ts
+  generated/   # optional
 ```
 
-The adapter should own:
+## Recommended first setup for Igloo
 
-```txt
-IMMICH_BASE_URL
-IMMICH_API_KEY
-request helpers
-response mapping
-thumbnail proxying
-original download proxying
-error handling
+Start simple:
+
+```env
+IMMICH_BASE_URL=http://your-immich-server:2283
+IMMICH_API_KEY=your_key
 ```
 
-## Thumbnail handling
+Create an Igloo server helper:
 
-For thumbnails, I would proxy them through Igloo:
+```ts
+const immichBaseUrl = process.env.IMMICH_BASE_URL;
+const immichApiKey = process.env.IMMICH_API_KEY;
 
-```txt
-Browser:
-GET /api/photos/assets/:id/thumbnail
+export async function immichFetch(path: string, init?: RequestInit) {
+  if (!immichBaseUrl) {
+    throw new Error("IMMICH_BASE_URL is not configured");
+  }
 
-Igloo:
-GET {IMMICH_URL}/api/assets/:id/thumbnail
+  if (!immichApiKey) {
+    throw new Error("IMMICH_API_KEY is not configured");
+  }
+
+  const response = await fetch(`${immichBaseUrl}/api${path}`, {
+    ...init,
+    headers: {
+      "Accept": "application/json",
+      "x-api-key": immichApiKey,
+      ...init?.headers,
+    },
+  });
+
+  return response;
+}
 ```
 
-This lets Igloo control auth and caching.
+Then build your own Igloo endpoints on top of that.
 
-You can add response headers later:
+My recommendation: use the OpenAPI file to understand the API and confirm DTOs, but expose your own small Igloo photo API to the frontend. Keep the Immich key and Immich-specific details server-side.
 
-```txt
-Cache-Control: private, max-age=86400
-```
-
-You may also decide to redirect to Immich’s thumbnail URL later, but proxying is easier and safer for the first implementation.
-
-## Video handling
-
-Immich supports video assets and has a stable video playback endpoint under assets. ([Immich API][3])
-
-For Igloo, I would treat Immich videos differently from your movie/TV pipeline. Do not run them through your Igloo FFmpeg logic at first.
-
-Use Immich’s own video playback endpoint through your proxy:
-
-```txt
-GET /api/photos/assets/:id/video
-```
-
-Then render it in the browser with a normal `<video>` element unless you discover a playback format issue.
-
-## Configuration
-
-Igloo should have a settings screen or config section like:
-
-```txt
-Photos integration: enabled / disabled
-Immich server URL
-Immich API key
-Connection test
-Default landing view: timeline / albums / favorites
-```
-
-For development, environment variables are fine. But based on how you usually think about Igloo, the long-term version should be configurable from the web UI.
-
-## Practical recommendation
-
-Build it in three phases:
-
-### Phase 1: Read-only browsing
-
-```txt
-Connect to Immich
-List albums
-List assets in album
-Show thumbnails
-Open asset detail
-Full-screen image viewer
-Basic video playback
-```
-
-### Phase 2: Better media-center experience
-
-```txt
-Timeline view
-Favorites
-Keyboard/remote-friendly navigation
-Slideshow mode
-Accessible labels
-Fast grid virtualization
-Lazy thumbnail loading
-```
-
-### Phase 3: Optional write features
-
-```txt
-Upload
-Add/remove favorites
-Create album
-Add/remove assets from album
-Delete asset
-```
-
-I would only add Phase 3 after the browsing experience feels solid.
-
-## My recommendation for Igloo
-
-This is worth adding, but keep it explicitly framed as an **Immich integration**:
-
-```txt
-Igloo Photos lets you browse your Immich library from inside Igloo.
-Immich remains the source of truth for photo storage and management.
-```
-
-That fits Igloo’s purpose well: one accessible media-center interface for movies, shows, music, and photos, without turning Igloo into a second photo-management server.
-
-[1]: https://docs.immich.app/api/?utm_source=chatgpt.com "API"
-[2]: https://api.immich.app/endpoints/albums?utm_source=chatgpt.com "Albums"
-[3]: https://api.immich.app/endpoints/assets?utm_source=chatgpt.com "Assets"
+[1]: https://api.immich.app/getting-started?utm_source=chatgpt.com "Getting started"
+[2]: https://api.immich.app/authentication "Immich - API Documentation"
+[3]: https://docs.immich.app/api/ "API | Immich"
+[4]: https://github.com/immich-app/immich/blob/main/open-api/immich-openapi-specs.json "immich/open-api/immich-openapi-specs.json at main · immich-app/immich · GitHub"
