@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffprobe"
 	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
 	"math"
@@ -23,6 +22,14 @@ type tmdbMatchCandidate struct {
 	Confidence float64
 }
 
+type resolvedMovie struct {
+	params    database.UpsertMovieParams
+	tmdbMovie *tmdb.TmdbMovie
+	streams   []ffprobe.Stream
+	chapters  []ffprobe.Chapter
+	fileSize  int64
+}
+
 var movieReleaseNoiseTokens = map[string]bool{
 	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
 	"bluray": true, "brrip": true, "webrip": true, "web": true, "webdl": true, "web-dl": true,
@@ -35,14 +42,19 @@ var movieReleaseNoiseTokens = map[string]bool{
 }
 
 func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
-	existingMovie, err := qtx.GetMovieByPath(ctx, path)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("get existing movie failed: %w", err)
+	resolved, err := app.resolveMovieFile(ctx, movieFile{path: path, ext: ext, size: fileSize})
+	if err != nil {
+		return err
 	}
 
-	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(path))
+	_, err = app.persistResolvedMovieTx(ctx, qtx, newMovieScanContext(nil), resolved)
+	return err
+}
+
+func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*resolvedMovie, error) {
+	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.path))
 	if err != nil {
-		baseName := filepath.Base(path)
+		baseName := filepath.Base(file.path)
 		ext := filepath.Ext(baseName)
 		titleYear = &helpers.TitleYearResponse{
 			Title: strings.TrimSuffix(baseName, ext),
@@ -58,64 +70,55 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 	var tmdbMovie *tmdb.TmdbMovie
 
 	if app.Tmdb != nil {
-		if existingMovie.UserLockedTmdbID && existingMovie.TmdbID.Valid {
-			lockedMovie := &tmdb.TmdbMovie{TmdbID: int(existingMovie.TmdbID.Int64)}
-			err = app.Tmdb.GetTmdbMovieByID(ctx, lockedMovie)
-			if err == nil {
-				tmdbMovie = lockedMovie
-			}
+		var searchResults []tmdb.TmdbMovie
+		var searchErr error
+		if titleYear.Year > 0 {
+			searchResults, searchErr = app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle, titleYear.Year)
 		} else {
-			searchResults, searchErr := app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
-			if searchErr == nil && len(searchResults) > 0 {
-				bestMatch := selectBestTmdbMatch(searchResults, searchTitle, titleYear.Year)
-				if bestMatch != nil {
-					err = app.Tmdb.GetTmdbMovieByID(ctx, bestMatch.Movie)
-					if err == nil {
-						tmdbMovie = bestMatch.Movie
-						if bestMatch.Confidence < 70 {
-							app.Logger.Warn(
-								"low-confidence TMDB movie match",
-								"path", path,
-								"parsed_title", searchTitle,
-								"parsed_year", titleYear.Year,
-								"tmdb_id", bestMatch.Movie.TmdbID,
-								"tmdb_title", bestMatch.Movie.Title,
-								"tmdb_release_date", bestMatch.Movie.ReleaseDate,
-								"confidence", fmt.Sprintf("%.1f", bestMatch.Confidence),
-								"alternatives", summarizeTmdbCandidates(searchResults, searchTitle, titleYear.Year),
-							)
-						}
+			searchResults, searchErr = app.Tmdb.SearchMoviesByTitleAndYear(ctx, searchTitle)
+		}
+		if searchErr == nil && len(searchResults) > 0 {
+			bestMatch := selectBestTmdbMatch(searchResults, searchTitle, titleYear.Year)
+			if bestMatch != nil {
+				err = app.Tmdb.GetTmdbMovieByID(ctx, bestMatch.Movie)
+				if err == nil {
+					tmdbMovie = bestMatch.Movie
+					if bestMatch.Confidence < 70 {
+						app.Logger.Warn(
+							"low-confidence TMDB movie match",
+							"path", file.path,
+							"parsed_title", searchTitle,
+							"parsed_year", titleYear.Year,
+							"tmdb_id", bestMatch.Movie.TmdbID,
+							"tmdb_title", bestMatch.Movie.Title,
+							"tmdb_release_date", bestMatch.Movie.ReleaseDate,
+							"confidence", fmt.Sprintf("%.1f", bestMatch.Confidence),
+							"alternatives", summarizeTmdbCandidates(searchResults, searchTitle, titleYear.Year),
+						)
 					}
 				}
 			}
 		}
 	}
 
-	info, err := app.Ffprobe.GetMetadata(path)
+	info, err := app.Ffprobe.GetMetadata(file.path)
 	if err != nil {
-		return fmt.Errorf("ffprobe failed (required): %w", err)
+		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := mime.TypeByExtension("." + ext)
+	mimeType := mime.TypeByExtension("." + file.ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 
 	params := database.UpsertMovieParams{
 		Title:     titleYear.Title,
-		FilePath:  path,
-		FileName:  filepath.Base(path),
-		Container: ext,
+		FilePath:  file.path,
+		FileName:  filepath.Base(file.path),
+		Size:      file.size,
+		Container: file.ext,
 		MimeType:  mimeType,
 		Adult:     false,
-	}
-
-	params.Size = fileSize
-	if info.Format.Size != "" {
-		size, err := strconv.ParseInt(info.Format.Size, 10, 64)
-		if err == nil && size > 0 {
-			params.Size = size
-		}
 	}
 
 	if tmdbMovie != nil {
@@ -154,56 +157,68 @@ func (app *Application) processMovieFile(ctx context.Context, qtx *database.Quer
 		}
 	}
 
+	return &resolvedMovie{
+		params:    params,
+		tmdbMovie: tmdbMovie,
+		streams:   info.Streams,
+		chapters:  info.Chapters,
+		fileSize:  params.Size,
+	}, nil
+}
+
+func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *database.Queries, scan *movieScanContext, resolved *resolvedMovie) (int64, error) {
+	params := resolved.params
+
 	movie, err := qtx.UpsertMovie(ctx, params)
 	if err != nil {
-		return fmt.Errorf("upsert movie failed: %w", err)
+		return 0, fmt.Errorf("upsert movie failed: %w", err)
 	}
 
-	if tmdbMovie != nil {
+	if resolved.tmdbMovie != nil {
 		err = qtx.DeleteMovieCast(ctx, movie.ID)
 		if err != nil {
-			return fmt.Errorf("delete existing cast failed: %w", err)
+			return 0, fmt.Errorf("delete existing cast failed: %w", err)
 		}
 
 		err = qtx.DeleteMovieCrew(ctx, movie.ID)
 		if err != nil {
-			return fmt.Errorf("delete existing crew failed: %w", err)
+			return 0, fmt.Errorf("delete existing crew failed: %w", err)
 		}
 
-		if err := app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
-			return fmt.Errorf("process production companies failed: %w", err)
+		if err := app.processProductionCompanies(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.ProductionCompanies); err != nil {
+			return 0, fmt.Errorf("process production companies failed: %w", err)
 		}
 
-		if err := app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
-			return fmt.Errorf("process cast failed: %w", err)
+		if err := app.processCast(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Cast); err != nil {
+			return 0, fmt.Errorf("process cast failed: %w", err)
 		}
 
-		if err := app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
-			return fmt.Errorf("process crew failed: %w", err)
+		if err := app.processCrew(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Crew); err != nil {
+			return 0, fmt.Errorf("process crew failed: %w", err)
 		}
 
-		if err := app.processMovieGenres(ctx, qtx, movie.ID, tmdbMovie.Genres); err != nil {
-			return fmt.Errorf("process genres failed: %w", err)
+		if err := app.processMovieGenres(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Genres); err != nil {
+			return 0, fmt.Errorf("process genres failed: %w", err)
 		}
 
-		if err := app.processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
-			return fmt.Errorf("process extra videos failed: %w", err)
+		if err := app.processExtraVideos(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Videos.Results); err != nil {
+			return 0, fmt.Errorf("process extra videos failed: %w", err)
 		}
 	}
 
-	videoStreamCount, err := app.processMovieStreams(ctx, qtx, movie.ID, info.Streams)
+	videoStreamCount, err := app.processMovieStreams(ctx, qtx, movie.ID, resolved.streams)
 	if err != nil {
-		return fmt.Errorf("process movie streams failed: %w", err)
+		return 0, fmt.Errorf("process movie streams failed: %w", err)
 	}
 	if videoStreamCount == 0 {
-		return fmt.Errorf("no video stream found - invalid movie file")
+		return 0, fmt.Errorf("no video stream found - invalid movie file")
 	}
 
-	if err := app.processChapters(ctx, qtx, movie.ID, info.Chapters); err != nil {
-		return fmt.Errorf("process chapters failed: %w", err)
+	if err := app.processChapters(ctx, qtx, movie.ID, resolved.chapters); err != nil {
+		return 0, fmt.Errorf("process chapters failed: %w", err)
 	}
 
-	return nil
+	return movie.ID, nil
 }
 
 func selectBestTmdbMatch(results []tmdb.TmdbMovie, targetTitle string, targetYear int) *tmdbMatchCandidate {

@@ -147,7 +147,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Idempotent Artist"
 		profilePath := "/idempotent/profile.jpg"
 
-		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("First getOrCreateArtist failed: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 			t.Fatal("First getOrCreateArtist returned nil artist")
 		}
 
-		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("Second getOrCreateArtist failed: %v", err)
 		}
@@ -191,12 +191,52 @@ func TestGetOrCreateArtist(t *testing.T) {
 		}
 	})
 
+	t.Run("cached artist refreshes mutable metadata", func(t *testing.T) {
+		tmdbID := 22222
+		scan := newMovieScanContext(nil)
+
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, scan, tmdbID, "Old Artist", "")
+		if err != nil {
+			t.Fatalf("first getOrCreateArtist failed: %v", err)
+		}
+		if firstArtist == nil {
+			t.Fatal("first getOrCreateArtist returned nil artist")
+		}
+		if scan.artistIDs[tmdbID] != firstArtist.ID {
+			t.Fatalf("cached artist ID = %d, want %d", scan.artistIDs[tmdbID], firstArtist.ID)
+		}
+
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, scan, tmdbID, "New Artist", "/new/profile.jpg")
+		if err != nil {
+			t.Fatalf("second getOrCreateArtist failed: %v", err)
+		}
+		if secondArtist == nil {
+			t.Fatal("second getOrCreateArtist returned nil artist")
+		}
+		if secondArtist.ID != firstArtist.ID {
+			t.Fatalf("artist ID = %d, want cached ID %d", secondArtist.ID, firstArtist.ID)
+		}
+		if secondArtist.Name != "New Artist" || !secondArtist.Profile.Valid || secondArtist.Profile.String != "/new/profile.jpg" {
+			t.Fatalf("artist = %+v, want refreshed name/profile", secondArtist)
+		}
+
+		var name string
+		var profile sql.NullString
+		err = app.DB.QueryRow("SELECT name, profile FROM artist WHERE tmdb_id = ?", tmdbID).Scan(&name, &profile)
+		if err != nil {
+			t.Fatalf("query artist: %v", err)
+		}
+		if name != "New Artist" || !profile.Valid || profile.String != "/new/profile.jpg" {
+			t.Fatalf("stored artist name/profile = %q/%+v, want refreshed metadata", name, profile)
+		}
+	})
+
 	t.Run("empty profile path handles null", func(t *testing.T) {
 		tmdbID := 11111
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}

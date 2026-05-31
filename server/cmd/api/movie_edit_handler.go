@@ -13,77 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type movieMetadataLocks struct {
-	Title          bool
-	TmdbID         bool
-	ImdbID         bool
-	PosterPath     bool
-	BackdropPath   bool
-	Adult          bool
-	Language       bool
-	Year           bool
-	ReleaseDate    bool
-	Overview       bool
-	TagLine        bool
-	Certification  bool
-	CriticRating   bool
-	AudienceRating bool
-	Revenue        bool
-	Budget         bool
-	RunTime        bool
-}
-
-func (l movieMetadataLocks) any() bool {
-	return l.Title || l.TmdbID || l.ImdbID || l.PosterPath || l.BackdropPath ||
-		l.Adult || l.Language || l.Year || l.ReleaseDate || l.Overview ||
-		l.TagLine || l.Certification || l.CriticRating || l.AudienceRating ||
-		l.Revenue || l.Budget || l.RunTime
-}
-
-func (l movieMetadataLocks) toParams(movieID int64) database.LockMovieMetadataFieldsParams {
-	return database.LockMovieMetadataFieldsParams{
-		UserLockedTitle:          l.Title,
-		UserLockedTmdbID:         l.TmdbID,
-		UserLockedImdbID:         l.ImdbID,
-		UserLockedPosterPath:     l.PosterPath,
-		UserLockedBackdropPath:   l.BackdropPath,
-		UserLockedAdult:          l.Adult,
-		UserLockedLanguage:       l.Language,
-		UserLockedYear:           l.Year,
-		UserLockedReleaseDate:    l.ReleaseDate,
-		UserLockedOverview:       l.Overview,
-		UserLockedTagLine:        l.TagLine,
-		UserLockedCertification:  l.Certification,
-		UserLockedCriticRating:   l.CriticRating,
-		UserLockedAudienceRating: l.AudienceRating,
-		UserLockedRevenue:        l.Revenue,
-		UserLockedBudget:         l.Budget,
-		UserLockedRunTime:        l.RunTime,
-		ID:                       movieID,
-	}
-}
-
-func tmdbMovieLocks() movieMetadataLocks {
-	return movieMetadataLocks{
-		Title:         true,
-		TmdbID:        true,
-		ImdbID:        true,
-		PosterPath:    true,
-		BackdropPath:  true,
-		Adult:         true,
-		Language:      true,
-		Year:          true,
-		ReleaseDate:   true,
-		Overview:      true,
-		TagLine:       true,
-		Certification: true,
-		CriticRating:  true,
-		Revenue:       true,
-		Budget:        true,
-		RunTime:       true,
-	}
-}
-
 func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -143,13 +72,6 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = qtx.LockMovieMetadataFields(ctx, tmdbMovieLocks().toParams(movie.ID))
-	if err != nil {
-		app.Logger.Error("failed to lock movie metadata", "error", err, "id", id)
-		helpers.ErrorJSON(w, errors.New("failed to update movie"))
-		return
-	}
-
 	// Delete existing cast and crew before re-inserting (the other entity
 	// processors already delete-then-insert so they handle this internally).
 	if err = qtx.DeleteMovieCast(ctx, movie.ID); err != nil {
@@ -163,27 +85,27 @@ func (app *Application) IdentifyMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = app.processProductionCompanies(ctx, qtx, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
+	if err = app.processProductionCompanies(ctx, qtx, nil, movie.ID, tmdbMovie.ProductionCompanies); err != nil {
 		app.Logger.Error("failed to process production companies", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update production companies"))
 		return
 	}
-	if err = app.processCast(ctx, qtx, movie.ID, tmdbMovie.Credits.Cast); err != nil {
+	if err = app.processCast(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Cast); err != nil {
 		app.Logger.Error("failed to process cast", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update cast"))
 		return
 	}
-	if err = app.processCrew(ctx, qtx, movie.ID, tmdbMovie.Credits.Crew); err != nil {
+	if err = app.processCrew(ctx, qtx, nil, movie.ID, tmdbMovie.Credits.Crew); err != nil {
 		app.Logger.Error("failed to process crew", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update crew"))
 		return
 	}
-	if err = app.processMovieGenres(ctx, qtx, movie.ID, tmdbMovie.Genres); err != nil {
+	if err = app.processMovieGenres(ctx, qtx, nil, movie.ID, tmdbMovie.Genres); err != nil {
 		app.Logger.Error("failed to process genres", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update genres"))
 		return
 	}
-	if err = app.processExtraVideos(ctx, qtx, movie.ID, tmdbMovie.Videos.Results); err != nil {
+	if err = app.processExtraVideos(ctx, qtx, nil, movie.ID, tmdbMovie.Videos.Results); err != nil {
 		app.Logger.Error("failed to process extra videos", "error", err, "movie_id", movie.ID)
 		helpers.ErrorJSON(w, errors.New("failed to update extra videos"))
 		return
@@ -302,27 +224,6 @@ func (app *Application) UpdateMovieMetadata(w http.ResponseWriter, r *http.Reque
 		app.Logger.Error("failed to update movie metadata", "error", err, "id", id)
 		helpers.ErrorJSON(w, errors.New("failed to update movie"))
 		return
-	}
-
-	locks := movieMetadataLocks{
-		Title:         payload.Title != nil,
-		Year:          payload.Year != nil,
-		ReleaseDate:   payload.ReleaseDate != nil,
-		Overview:      payload.Overview != nil,
-		TagLine:       payload.TagLine != nil,
-		Certification: payload.Certification != nil,
-		PosterPath:    payload.PosterPath != nil,
-		BackdropPath:  payload.BackdropPath != nil,
-		Language:      payload.Language != nil,
-	}
-
-	if locks.any() {
-		err = qtx.LockMovieMetadataFields(ctx, locks.toParams(movie.ID))
-		if err != nil {
-			app.Logger.Error("failed to lock movie metadata", "error", err, "id", id)
-			helpers.ErrorJSON(w, errors.New("failed to update movie"))
-			return
-		}
 	}
 
 	err = tx.Commit()

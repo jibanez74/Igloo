@@ -12,6 +12,7 @@ import (
 func (app *Application) processProductionCompanies(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	companies []struct {
 		ID            int    `json:"id"`
@@ -35,9 +36,14 @@ func (app *Application) processProductionCompanies(
 			return fmt.Errorf("upsert production company failed: %w", err)
 		}
 
+		companyID := upserted.ID
+		if scan != nil {
+			scan.productionCompanyIDs[company.ID] = companyID
+		}
+
 		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
-			ProductionCompanyID: upserted.ID,
+			ProductionCompanyID: companyID,
 		})
 		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
@@ -50,6 +56,7 @@ func (app *Application) processProductionCompanies(
 func (app *Application) processCast(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	cast []struct {
 		ID          int    `json:"id"`
@@ -60,7 +67,7 @@ func (app *Application) processCast(
 	},
 ) error {
 	for _, castMember := range cast {
-		artist, err := app.getOrCreateArtist(ctx, qtx, castMember.ID, castMember.Name, castMember.ProfilePath)
+		artist, err := app.getOrCreateArtist(ctx, qtx, scan, castMember.ID, castMember.Name, castMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
@@ -83,6 +90,7 @@ func (app *Application) processCast(
 func (app *Application) processCrew(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	crew []struct {
 		ID          int    `json:"id"`
@@ -93,7 +101,7 @@ func (app *Application) processCrew(
 	},
 ) error {
 	for _, crewMember := range crew {
-		artist, err := app.getOrCreateArtist(ctx, qtx, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
+		artist, err := app.getOrCreateArtist(ctx, qtx, scan, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
@@ -138,6 +146,7 @@ func mapTmdbVideoSite(s string) string {
 func (app *Application) processExtraVideos(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	results []tmdb.TmdbVideoResult,
 ) error {
@@ -164,14 +173,18 @@ func (app *Application) processExtraVideos(
 			Site:       mapTmdbVideoSite(v.Site),
 			Official:   v.Official,
 		})
-
 		if err != nil {
 			return fmt.Errorf("upsert extra video failed: %w", err)
 		}
 
+		extraID := extra.ID
+		if scan != nil {
+			scan.extraVideoIDs[v.ID] = extraID
+		}
+
 		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
 			MovieID:      movieID,
-			ExtraVideoID: extra.ID,
+			ExtraVideoID: extraID,
 		})
 
 		if err != nil {
@@ -185,6 +198,7 @@ func (app *Application) processExtraVideos(
 func (app *Application) processMovieGenres(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	movieID int64,
 	genres []struct {
 		ID   int    `json:"id"`
@@ -197,18 +211,14 @@ func (app *Application) processMovieGenres(
 	}
 
 	for _, genre := range genres {
-		dbGenre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
-			Tag:       genre.Name,
-			GenreType: "movie",
-		})
-
+		genreID, err := app.getOrCreateMovieGenreID(ctx, qtx, scan, genre.Name)
 		if err != nil {
 			return fmt.Errorf("get or create genre failed: %w", err)
 		}
 
 		err = qtx.CreateMovieGenre(ctx, database.CreateMovieGenreParams{
 			MovieID: movieID,
-			GenreID: dbGenre.ID,
+			GenreID: genreID,
 		})
 
 		if err != nil {
@@ -217,4 +227,26 @@ func (app *Application) processMovieGenres(
 	}
 
 	return nil
+}
+
+func (app *Application) getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *movieScanContext, tag string) (int64, error) {
+	cacheKey := normalizedMovieCacheKey(tag, "movie")
+	if scan != nil {
+		if genreID, ok := scan.genreIDs[cacheKey]; ok {
+			return genreID, nil
+		}
+	}
+
+	dbGenre, err := qtx.GetOrCreateGenre(ctx, database.GetOrCreateGenreParams{
+		Tag:       tag,
+		GenreType: "movie",
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	if scan != nil {
+		scan.genreIDs[cacheKey] = dbGenre.ID
+	}
+	return dbGenre.ID, nil
 }

@@ -24,6 +24,7 @@ func extractYearFromReleaseDate(releaseDate string) int {
 func (app *Application) getOrCreateArtist(
 	ctx context.Context,
 	qtx *database.Queries,
+	scan *movieScanContext,
 	tmdbID int,
 	name string,
 	profilePath string,
@@ -37,6 +38,10 @@ func (app *Application) getOrCreateArtist(
 	})
 	if err != nil {
 		return nil, fmt.Errorf("upsert artist failed: %w", err)
+	}
+
+	if scan != nil {
+		scan.artistIDs[tmdbID] = upserted.ID
 	}
 
 	return &upserted, nil

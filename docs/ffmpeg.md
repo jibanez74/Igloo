@@ -35,7 +35,6 @@ Movie and music scans treat ffprobe as required infrastructure.
 For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each movie file. The scanner uses ffprobe output for:
 
 - duration and runtime
-- file size when ffprobe reports it
 - container and stream metadata
 - video, audio, and subtitle stream rows
 - chapter information

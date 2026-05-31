@@ -16,8 +16,6 @@ type Querier interface {
 	AddWatchRoomMember(ctx context.Context, arg AddWatchRoomMemberParams) error
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
 	CanUserEditPlaylist(ctx context.Context, arg CanUserEditPlaylistParams) (bool, error)
-	// Quick check if movie exists with same path and size (likely unchanged)
-	CheckMovieUnchanged(ctx context.Context, arg CheckMovieUnchangedParams) (int64, error)
 	CheckTrackExistsByPathAndSize(ctx context.Context, arg CheckTrackExistsByPathAndSizeParams) (bool, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
@@ -192,7 +190,6 @@ type Querier interface {
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
-	LockMovieMetadataFields(ctx context.Context, arg LockMovieMetadataFieldsParams) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
 	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
