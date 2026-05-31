@@ -147,7 +147,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Idempotent Artist"
 		profilePath := "/idempotent/profile.jpg"
 
-		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("First getOrCreateArtist failed: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 			t.Fatal("First getOrCreateArtist returned nil artist")
 		}
 
-		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("Second getOrCreateArtist failed: %v", err)
 		}
@@ -196,7 +196,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}

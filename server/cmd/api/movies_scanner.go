@@ -31,17 +31,24 @@ type movieRenameIndex struct {
 }
 
 func (app *Application) ScanMoviesLibrary() {
+	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
+		app.Logger.Error("movies directory not configured")
+		return
+	}
+
 	if !tryBeginMovieScan() {
 		app.Logger.Warn("movie library scan is already in progress")
 		return
 	}
 
-	app.runMovieScan()
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMovieScan()
 }
 
 func (app *Application) runMovieScan() {
 	if app.Wait != nil {
-		app.Wait.Add(1)
 		defer app.Wait.Done()
 	}
 	defer finishMovieScan()
@@ -58,12 +65,17 @@ func (app *Application) runMovieScan() {
 	moviesScanned := 0
 	moviesSkipped := 0
 	startTime := time.Now()
-	scannedPaths := make(map[string]bool)
-	processedPaths := make(map[string]bool)
+
+	scanIndex, err := app.loadMovieScanIndex(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
+		return
+	}
+	scan := newMovieScanContext(scanIndex)
 
 	batch := make([]movieFile, 0, helpers.SCANNER_BATCH_SIZE)
 
-	err := filepath.WalkDir(app.Settings.MoviesDir.String, func(path string, entry fs.DirEntry, err error) error {
+	err = filepath.WalkDir(app.Settings.MoviesDir.String, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			if path == app.Settings.MoviesDir.String {
 				return err
@@ -82,9 +94,6 @@ func (app *Application) runMovieScan() {
 			return nil
 		}
 
-		cleanPath := filepath.Clean(path)
-		scannedPaths[cleanPath] = true
-
 		info, err := entry.Info()
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to get file info for %s: %s", path, err.Error()))
@@ -92,21 +101,18 @@ func (app *Application) runMovieScan() {
 			return nil
 		}
 
+		if scan.movieUnchanged(path, info.Size()) {
+			moviesSkipped++
+			return nil
+		}
+
 		batch = append(batch, movieFile{path: path, ext: ext, size: info.Size()})
 
 		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
-			scanned, skipped, errors, processed := app.processMoviesBatch(ctx, batch)
+			scanned, skipped, errors := app.processMoviesBatchWithContext(ctx, scan, batch)
 			moviesScanned += scanned
 			moviesSkipped += skipped
 			errorCount += errors
-			app.Logger.Info("movies scanner batch processed",
-				"scanned", moviesScanned,
-				"skipped", moviesSkipped,
-				"errors", errorCount,
-			)
-			for _, path := range processed {
-				processedPaths[filepath.Clean(path)] = true
-			}
 			batch = batch[:0]
 		}
 
@@ -119,58 +125,36 @@ func (app *Application) runMovieScan() {
 	}
 
 	if len(batch) > 0 {
-		scanned, skipped, errors, processed := app.processMoviesBatch(ctx, batch)
+		scanned, skipped, errors := app.processMoviesBatchWithContext(ctx, scan, batch)
 		moviesScanned += scanned
 		moviesSkipped += skipped
 		errorCount += errors
-		app.Logger.Info("movies scanner batch processed",
-			"scanned", moviesScanned,
-			"skipped", moviesSkipped,
-			"errors", errorCount,
-		)
-		for _, path := range processed {
-			processedPaths[filepath.Clean(path)] = true
-		}
-	}
-
-	deletedCount, renamedCount, err := app.reconcileMissingMovies(
-		ctx,
-		filepath.Clean(app.Settings.MoviesDir.String),
-		scannedPaths,
-		processedPaths,
-	)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to reconcile deleted movies: %s", err.Error()))
-		errorCount++
-	} else {
-		if renamedCount > 0 {
-			app.Logger.Info(fmt.Sprintf("preserved %d renamed movie entries in database", renamedCount))
-		}
-		if deletedCount > 0 {
-			app.Logger.Info(fmt.Sprintf("removed %d deleted movie entries from database", deletedCount))
-		}
 	}
 
 	app.Logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s",
 		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-// ScannerDBMu serializes scanner writes; each changed movie commits independently.
 func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int, processed []string) {
-	processed = make([]string, 0, len(files))
+	scanIndex, err := app.loadMovieScanIndex(ctx)
+	if err != nil {
+		app.Logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
+		return 0, 0, 1, nil
+	}
 
+	scan := newMovieScanContext(scanIndex)
+	scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, files)
+	return scanned, skipped, errCount, nil
+}
+
+func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan *movieScanContext, files []movieFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
-		_, err := app.Queries.CheckMovieUnchanged(ctx, database.CheckMovieUnchangedParams{
-			FilePath: file.path,
-			Size:     file.size,
-		})
-
-		if err == nil {
+		if scan.movieUnchanged(file.path, file.size) {
 			skipped++
 			continue
 		}
 
-		err = app.processMovie(ctx, file)
+		err := app.processMovie(ctx, scan, file)
 		if err != nil {
 			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
 			errCount++
@@ -178,35 +162,62 @@ func (app *Application) processMoviesBatch(ctx context.Context, files []movieFil
 		}
 
 		scanned++
-		processed = append(processed, file.path)
 	}
 
-	return scanned, skipped, errCount, processed
+	return scanned, skipped, errCount
 }
 
-func (app *Application) processMovie(ctx context.Context, file movieFile) error {
+func (app *Application) processMovie(ctx context.Context, scan *movieScanContext, file movieFile) error {
+	resolved, err := app.resolveMovieFile(ctx, file)
+	if err != nil {
+		return err
+	}
+
+	_, err = app.persistResolvedMovie(ctx, scan, resolved)
+	return err
+}
+
+func (app *Application) persistResolvedMovie(ctx context.Context, scan *movieScanContext, resolved *resolvedMovie) (int64, error) {
+	txScan := scan.clone()
+
 	app.ScannerDBMu.Lock()
 	defer app.ScannerDBMu.Unlock()
 
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
+		return 0, fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
 
 	qtx := app.Queries.WithTx(tx)
-
-	err = app.processMovieFile(ctx, qtx, file.path, file.ext, file.size)
+	movieID, err := app.persistResolvedMovieTx(ctx, qtx, txScan, resolved)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return fmt.Errorf("failed to commit movie: %w", err)
+		return 0, fmt.Errorf("failed to commit movie: %w", err)
 	}
 
-	return nil
+	txScan.movieIndex[filepath.Clean(resolved.params.FilePath)] = resolved.fileSize
+	scan.mergeFrom(txScan)
+
+	return movieID, nil
+}
+
+func (app *Application) loadMovieScanIndex(ctx context.Context) (map[string]int64, error) {
+	rows, err := app.Queries.GetMovieScanIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	index := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		index[filepath.Clean(row.FilePath)] = row.Size
+	}
+
+	return index, nil
 }
 
 func (app *Application) reconcileMissingMovies(

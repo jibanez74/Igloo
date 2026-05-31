@@ -387,20 +387,20 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request) {
-	if !tryBeginMovieScan() {
-		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"))
-		return
-	}
-
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
-		finishMovieScan()
 		helpers.ErrorJSON(w, errors.New("movies directory is not configured"))
 		return
 	}
 
-	go func() {
-		app.runMovieScan()
-	}()
+	if !tryBeginMovieScan() {
+		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"), http.StatusConflict)
+		return
+	}
+
+	if app.Wait != nil {
+		app.Wait.Add(1)
+	}
+	go app.runMovieScan()
 
 	app.Logger.Info("movie library scan triggered via API", "path", app.Settings.MoviesDir.String)
 

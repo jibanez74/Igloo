@@ -366,6 +366,27 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	}
 }
 
+func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
+	app := setupSettingsHTTPTestApp(t)
+	defer app.DB.Close()
+	app.Settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
+
+	finishMovieScan()
+	if !tryBeginMovieScan() {
+		t.Fatal("failed to acquire movie scan guard")
+	}
+	defer finishMovieScan()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
+	w := httptest.NewRecorder()
+
+	app.TriggerMovieScan(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {

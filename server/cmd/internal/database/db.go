@@ -42,9 +42,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.canUserEditPlaylistStmt, err = db.PrepareContext(ctx, canUserEditPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query CanUserEditPlaylist: %w", err)
 	}
-	if q.checkMovieUnchangedStmt, err = db.PrepareContext(ctx, checkMovieUnchanged); err != nil {
-		return nil, fmt.Errorf("error preparing query CheckMovieUnchanged: %w", err)
-	}
 	if q.checkTrackExistsByPathAndSizeStmt, err = db.PrepareContext(ctx, checkTrackExistsByPathAndSize); err != nil {
 		return nil, fmt.Errorf("error preparing query CheckTrackExistsByPathAndSize: %w", err)
 	}
@@ -429,9 +426,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listMusicTrackScanIndexStmt, err = db.PrepareContext(ctx, listMusicTrackScanIndex); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMusicTrackScanIndex: %w", err)
 	}
-	if q.lockMovieMetadataFieldsStmt, err = db.PrepareContext(ctx, lockMovieMetadataFields); err != nil {
-		return nil, fmt.Errorf("error preparing query LockMovieMetadataFields: %w", err)
-	}
 	if q.markMovieUnwatchedStmt, err = db.PrepareContext(ctx, markMovieUnwatched); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkMovieUnwatched: %w", err)
 	}
@@ -573,11 +567,6 @@ func (q *Queries) Close() error {
 	if q.canUserEditPlaylistStmt != nil {
 		if cerr := q.canUserEditPlaylistStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing canUserEditPlaylistStmt: %w", cerr)
-		}
-	}
-	if q.checkMovieUnchangedStmt != nil {
-		if cerr := q.checkMovieUnchangedStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing checkMovieUnchangedStmt: %w", cerr)
 		}
 	}
 	if q.checkTrackExistsByPathAndSizeStmt != nil {
@@ -1220,11 +1209,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listMusicTrackScanIndexStmt: %w", cerr)
 		}
 	}
-	if q.lockMovieMetadataFieldsStmt != nil {
-		if cerr := q.lockMovieMetadataFieldsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing lockMovieMetadataFieldsStmt: %w", cerr)
-		}
-	}
 	if q.markMovieUnwatchedStmt != nil {
 		if cerr := q.markMovieUnwatchedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markMovieUnwatchedStmt: %w", cerr)
@@ -1450,7 +1434,6 @@ type Queries struct {
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
 	canUserEditPlaylistStmt                     *sql.Stmt
-	checkMovieUnchangedStmt                     *sql.Stmt
 	checkTrackExistsByPathAndSizeStmt           *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
@@ -1579,7 +1562,6 @@ type Queries struct {
 	likeMovieStmt                               *sql.Stmt
 	likeTrackStmt                               *sql.Stmt
 	listMusicTrackScanIndexStmt                 *sql.Stmt
-	lockMovieMetadataFieldsStmt                 *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
 	reassignMoviePathStmt                       *sql.Stmt
@@ -1628,7 +1610,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
 		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
-		checkMovieUnchangedStmt:                     q.checkMovieUnchangedStmt,
 		checkTrackExistsByPathAndSizeStmt:           q.checkTrackExistsByPathAndSizeStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
@@ -1757,7 +1738,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		likeMovieStmt:                               q.likeMovieStmt,
 		likeTrackStmt:                               q.likeTrackStmt,
 		listMusicTrackScanIndexStmt:                 q.listMusicTrackScanIndexStmt,
-		lockMovieMetadataFieldsStmt:                 q.lockMovieMetadataFieldsStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
 		reassignMoviePathStmt:                       q.reassignMoviePathStmt,

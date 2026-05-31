@@ -1,12 +1,123 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
+	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/ffprobe"
+	"igloo/cmd/internal/helpers"
 	"igloo/cmd/internal/tmdb"
 )
+
+type movieScannerCapturedLogger struct {
+	debugEntries []capturedLogEntry
+	infoEntries  []capturedLogEntry
+	warnEntries  []capturedLogEntry
+	errorEntries []capturedLogEntry
+}
+
+func (l *movieScannerCapturedLogger) Debug(msg string, args ...any) {
+	l.debugEntries = append(l.debugEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
+}
+
+func (l *movieScannerCapturedLogger) Info(msg string, args ...any) {
+	l.infoEntries = append(l.infoEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
+}
+
+func (l *movieScannerCapturedLogger) Warn(msg string, args ...any) {
+	l.warnEntries = append(l.warnEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
+}
+
+func (l *movieScannerCapturedLogger) Error(msg string, args ...any) {
+	l.errorEntries = append(l.errorEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
+}
+
+func movieScannerMetadataFixture(duration, size string) *ffprobe.FfprobeResult {
+	return &ffprobe.FfprobeResult{
+		Format: ffprobe.Format{
+			Duration:   duration,
+			Size:       size,
+			FormatName: "matroska,webm",
+		},
+		Streams: []ffprobe.Stream{
+			{
+				Index:        0,
+				CodecName:    "h264",
+				CodecType:    "video",
+				Profile:      "High",
+				BitRate:      "5000000",
+				Width:        1920,
+				Height:       1080,
+				CodedWidth:   1920,
+				CodedHeight:  1080,
+				AspectRatio:  "16:9",
+				Level:        41,
+				FrameRate:    "24000/1001",
+				AvgFrameRate: "24000/1001",
+				BitDepth:     "8",
+				PixelFormat:  "yuv420p",
+				Tags: ffprobe.StreamTags{
+					Language: "eng",
+					Title:    "Main Video",
+				},
+			},
+			{
+				Index:       1,
+				CodecName:   "mjpeg",
+				CodecType:   "video",
+				Width:       600,
+				Height:      900,
+				Disposition: ffprobe.StreamDisposition{AttachedPic: 1},
+			},
+			{
+				Index:         2,
+				CodecName:     "aac",
+				CodecType:     "audio",
+				Profile:       "LC",
+				BitRate:       "192000",
+				SampleRate:    "48000",
+				Channels:      6,
+				ChannelLayout: "5.1",
+				Tags: ffprobe.StreamTags{
+					Language: "eng",
+					Title:    "Surround",
+				},
+			},
+			{
+				Index:     3,
+				CodecName: "subrip",
+				CodecType: "subtitle",
+				Tags: ffprobe.StreamTags{
+					Language: "eng",
+					Title:    "English",
+				},
+			},
+		},
+		Chapters: []ffprobe.Chapter{
+			{StartTime: "0.000000", Tags: ffprobe.ChapterTags{Title: "Opening"}},
+			{StartTime: "120.500000", Tags: ffprobe.ChapterTags{Title: "Follow the White Rabbit"}},
+		},
+	}
+}
+
+func tmdbMovieFromJSON(t *testing.T, payload string) tmdb.TmdbMovie {
+	t.Helper()
+
+	var movie tmdb.TmdbMovie
+	err := json.Unmarshal([]byte(payload), &movie)
+	if err != nil {
+		t.Fatalf("unmarshal tmdb fixture: %v", err)
+	}
+	return movie
+}
 
 func TestSelectBestTmdbMatch(t *testing.T) {
 	t.Run("empty results returns nil", func(t *testing.T) {
@@ -236,4 +347,458 @@ func TestFfprobeFormatDurationRejectedWhenInvalid(t *testing.T) {
 			t.Errorf("%q should not be accepted as positive duration", s)
 		}
 	}
+}
+
+func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	moviesDir := t.TempDir()
+	path := filepath.Join(moviesDir, "The.Matrix.1999.mkv")
+	if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
+		t.Fatalf("write movie: %v", err)
+	}
+
+	tmdbDetails := tmdbMovieFromJSON(t, `{
+		"id": 603,
+		"title": "The Matrix",
+		"original_title": "The Matrix",
+		"overview": "A computer hacker learns about the true nature of reality.",
+		"release_date": "1999-03-31",
+		"poster_path": "/matrix-poster.jpg",
+		"backdrop_path": "/matrix-backdrop.jpg",
+		"vote_average": 8.2,
+		"adult": false,
+		"original_language": "en",
+		"runtime": 136,
+		"tagline": "Welcome to the Real World.",
+		"budget": 63000000,
+		"revenue": 463517383,
+		"imdb_id": "tt0133093",
+		"genres": [
+			{"id": 28, "name": "Action"},
+			{"id": 878, "name": "Science Fiction"}
+		],
+		"production_companies": [
+			{"id": 174, "name": "Warner Bros.", "logo_path": "/wb.png", "origin_country": "US"}
+		],
+		"credits": {
+			"cast": [
+				{"id": 6384, "name": "Keanu Reeves", "character": "Neo", "profile_path": "/keanu.jpg", "order": 0}
+			],
+			"crew": [
+				{"id": 9339, "name": "Lana Wachowski", "job": "Director", "department": "Directing", "profile_path": "/lana.jpg"}
+			]
+		},
+		"videos": {
+			"results": [
+				{"id": "533ec654c3a36854480003eb", "key": "vKQi3bBA1y8", "name": "Official Trailer", "site": "YouTube", "type": "Trailer", "official": true}
+			]
+		},
+		"release_dates": {
+			"results": [
+				{"iso_3166_1": "GB", "release_dates": [{"certification": "15"}]},
+				{"iso_3166_1": "US", "release_dates": [{"certification": "R"}]}
+			]
+		}
+	}`)
+
+	tmdbStub := &stubMovieScannerTmdb{
+		searchResults: []tmdb.TmdbMovie{{
+			TmdbID:      603,
+			Title:       "The Matrix",
+			ReleaseDate: "1999-03-31",
+			VoteAverage: 8.2,
+		}},
+		detailMovies: map[int]tmdb.TmdbMovie{603: tmdbDetails},
+	}
+	app.Tmdb = tmdbStub
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4", "12345")}
+
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, newMovieScanContext(nil), []movieFile{
+		{path: path, ext: "mkv", size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+	if len(tmdbStub.searchCalls) != 1 {
+		t.Fatalf("expected 1 TMDB search, got %d", len(tmdbStub.searchCalls))
+	}
+	if tmdbStub.searchCalls[0].title != "the matrix" {
+		t.Fatalf("TMDB search title = %q, want the matrix", tmdbStub.searchCalls[0].title)
+	}
+	if len(tmdbStub.searchCalls[0].year) != 1 || tmdbStub.searchCalls[0].year[0] != 1999 {
+		t.Fatalf("TMDB search year = %#v, want [1999]", tmdbStub.searchCalls[0].year)
+	}
+	if len(tmdbStub.detailCalls) != 1 || tmdbStub.detailCalls[0] != 603 {
+		t.Fatalf("TMDB detail calls = %#v, want [603]", tmdbStub.detailCalls)
+	}
+
+	movie, err := app.Queries.GetMovieByPath(ctx, path)
+	if err != nil {
+		t.Fatalf("get movie by path: %v", err)
+	}
+	if movie.Title != "The Matrix" {
+		t.Fatalf("movie title = %q, want The Matrix", movie.Title)
+	}
+	if !movie.TmdbID.Valid || movie.TmdbID.Int64 != 603 {
+		t.Fatalf("tmdb id = %+v, want 603", movie.TmdbID)
+	}
+	if movie.Size != 12345 {
+		t.Fatalf("movie size = %d, want ffprobe size 12345", movie.Size)
+	}
+	if !movie.Year.Valid || movie.Year.Int64 != 1999 {
+		t.Fatalf("year = %+v, want 1999", movie.Year)
+	}
+	if !movie.ReleaseDate.Valid || movie.ReleaseDate.String != "1999-03-31" {
+		t.Fatalf("release date = %+v, want 1999-03-31", movie.ReleaseDate)
+	}
+	if !movie.Certification.Valid || movie.Certification.String != "R" {
+		t.Fatalf("certification = %+v, want R", movie.Certification)
+	}
+	if !movie.Language.Valid || movie.Language.String != "en" {
+		t.Fatalf("language = %+v, want en", movie.Language)
+	}
+	if !movie.RunTime.Valid || movie.RunTime.Int64 != 91 {
+		t.Fatalf("runtime minutes = %+v, want 91", movie.RunTime)
+	}
+	if !movie.Duration.Valid || math.Abs(movie.Duration.Float64-5432.4) > 0.001 {
+		t.Fatalf("duration = %+v, want 5432.4", movie.Duration)
+	}
+
+	genres, err := app.Queries.GetGenresByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get genres: %v", err)
+	}
+	if got := movieGenreTags(genres); got != "Action,Science Fiction" {
+		t.Fatalf("genres = %q, want Action,Science Fiction", got)
+	}
+
+	cast, err := app.Queries.GetCastByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get cast: %v", err)
+	}
+	if len(cast) != 1 || cast[0].ArtistName != "Keanu Reeves" || cast[0].Character != "Neo" {
+		t.Fatalf("cast = %+v, want Keanu Reeves as Neo", cast)
+	}
+
+	crew, err := app.Queries.GetCrewByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get crew: %v", err)
+	}
+	if len(crew) != 1 || crew[0].ArtistName != "Lana Wachowski" || crew[0].Job != "Director" {
+		t.Fatalf("crew = %+v, want Lana Wachowski Director", crew)
+	}
+
+	companies, err := app.Queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get production companies: %v", err)
+	}
+	if len(companies) != 1 || companies[0].Name != "Warner Bros." || companies[0].TmdbID != 174 {
+		t.Fatalf("production companies = %+v, want Warner Bros.", companies)
+	}
+
+	extras, err := app.Queries.GetMovieExtraVideos(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get extra videos: %v", err)
+	}
+	if len(extras) != 1 || extras[0].Title != "Official Trailer" || extras[0].Type != "trailer" || extras[0].Site != "youtube" {
+		t.Fatalf("extra videos = %+v, want mapped YouTube trailer", extras)
+	}
+
+	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get video streams: %v", err)
+	}
+	if len(videoStreams) != 1 || videoStreams[0].StreamIndex != 0 || videoStreams[0].Codec != "h264" {
+		t.Fatalf("video streams = %+v, want one h264 non-cover stream", videoStreams)
+	}
+
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get audio streams: %v", err)
+	}
+	if len(audioStreams) != 1 || audioStreams[0].StreamIndex != 2 || audioStreams[0].Channels != 6 {
+		t.Fatalf("audio streams = %+v, want one 5.1 audio stream", audioStreams)
+	}
+
+	subtitles, err := app.Queries.GetSubtitlesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get subtitles: %v", err)
+	}
+	if len(subtitles) != 1 || subtitles[0].StreamIndex != 3 || subtitles[0].Codec != "subrip" {
+		t.Fatalf("subtitles = %+v, want one subrip subtitle", subtitles)
+	}
+
+	chapters, err := app.Queries.GetChaptersByMovieID(ctx, helpers.NullInt64(movie.ID))
+	if err != nil {
+		t.Fatalf("get chapters: %v", err)
+	}
+	if len(chapters) != 2 || chapters[0].Title != "Opening" || chapters[1].StartTime != 120 {
+		t.Fatalf("chapters = %+v, want two normalized chapters", chapters)
+	}
+}
+
+func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	moviesDir := t.TempDir()
+	path := filepath.Join(moviesDir, "Replace.Me.2020.mkv")
+	if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
+		t.Fatalf("write movie: %v", err)
+	}
+
+	firstDetails := tmdbMovieFromJSON(t, `{
+		"id": 1000,
+		"title": "Replace Me",
+		"release_date": "2020-01-01",
+		"genres": [{"id": 28, "name": "Action"}],
+		"production_companies": [{"id": 1, "name": "Old Studio"}],
+		"credits": {
+			"cast": [{"id": 10, "name": "First Actor", "character": "Old Role", "order": 0}],
+			"crew": [{"id": 11, "name": "First Director", "job": "Director", "department": "Directing"}]
+		},
+		"videos": {"results": [{"id": "old-video", "key": "old", "name": "Old Trailer", "site": "YouTube", "type": "Trailer"}]}
+	}`)
+	secondDetails := tmdbMovieFromJSON(t, `{
+		"id": 1000,
+		"title": "Replace Me Restored",
+		"release_date": "2020-01-01",
+		"genres": [{"id": 18, "name": "Drama"}],
+		"production_companies": [{"id": 2, "name": "New Studio"}],
+		"credits": {
+			"cast": [{"id": 20, "name": "Second Actor", "character": "New Role", "order": 0}],
+			"crew": [{"id": 21, "name": "Second Director", "job": "Director", "department": "Directing"}]
+		},
+		"videos": {"results": [{"id": "new-video", "key": "new", "name": "New Trailer", "site": "Vimeo", "type": "Featurette"}]}
+	}`)
+	tmdbStub := &stubMovieScannerTmdb{
+		searchResults: []tmdb.TmdbMovie{{
+			TmdbID:      1000,
+			Title:       "Replace Me",
+			ReleaseDate: "2020-01-01",
+		}},
+		detailMovies: map[int]tmdb.TmdbMovie{1000: firstDetails},
+	}
+	app.Tmdb = tmdbStub
+	app.Ffprobe = &stubMovieScannerFfprobe{
+		results: []*ffprobe.FfprobeResult{
+			movieScannerMetadataFixture("120", "100"),
+			{
+				Format: ffprobe.Format{Duration: "180", Size: "200", FormatName: "matroska,webm"},
+				Streams: []ffprobe.Stream{
+					{Index: 4, CodecName: "hevc", CodecType: "video", Width: 3840, Height: 2160},
+					{Index: 5, CodecName: "aac", CodecType: "audio", Channels: 2},
+				},
+				Chapters: []ffprobe.Chapter{
+					{StartTime: "30.000000", Tags: ffprobe.ChapterTags{Title: "Only New Chapter"}},
+				},
+			},
+		},
+	}
+
+	scan := newMovieScanContext(nil)
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, scan, []movieFile{
+		{path: path, ext: "mkv", size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	tmdbStub.detailMovies[1000] = secondDetails
+	scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, []movieFile{
+		{path: path, ext: "mkv", size: 6},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	movie, err := app.Queries.GetMovieByPath(ctx, path)
+	if err != nil {
+		t.Fatalf("get movie by path: %v", err)
+	}
+	if movie.Title != "Replace Me Restored" || movie.Size != 200 {
+		t.Fatalf("movie after rescan = title %q size %d, want restored/200", movie.Title, movie.Size)
+	}
+
+	genres, err := app.Queries.GetGenresByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get genres: %v", err)
+	}
+	if got := movieGenreTags(genres); got != "Drama" {
+		t.Fatalf("genres after rescan = %q, want Drama", got)
+	}
+
+	cast, err := app.Queries.GetCastByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get cast: %v", err)
+	}
+	if len(cast) != 1 || cast[0].ArtistName != "Second Actor" || cast[0].Character != "New Role" {
+		t.Fatalf("cast after rescan = %+v, want only second actor", cast)
+	}
+
+	crew, err := app.Queries.GetCrewByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get crew: %v", err)
+	}
+	if len(crew) != 1 || crew[0].ArtistName != "Second Director" {
+		t.Fatalf("crew after rescan = %+v, want only second director", crew)
+	}
+
+	companies, err := app.Queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get production companies: %v", err)
+	}
+	if len(companies) != 1 || companies[0].Name != "New Studio" {
+		t.Fatalf("production companies after rescan = %+v, want New Studio", companies)
+	}
+
+	extras, err := app.Queries.GetMovieExtraVideos(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get extra videos: %v", err)
+	}
+	if len(extras) != 1 || extras[0].Title != "New Trailer" || extras[0].Type != "special_feature" || extras[0].Site != "vimeo" {
+		t.Fatalf("extra videos after rescan = %+v, want mapped new featurette", extras)
+	}
+
+	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get video streams: %v", err)
+	}
+	if len(videoStreams) != 1 || videoStreams[0].StreamIndex != 4 || videoStreams[0].Codec != "hevc" {
+		t.Fatalf("video streams after rescan = %+v, want one new hevc stream", videoStreams)
+	}
+
+	audioStreams, err := app.Queries.GetAudioStreamsByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get audio streams: %v", err)
+	}
+	if len(audioStreams) != 1 || audioStreams[0].StreamIndex != 5 {
+		t.Fatalf("audio streams after rescan = %+v, want one new audio stream", audioStreams)
+	}
+
+	chapters, err := app.Queries.GetChaptersByMovieID(ctx, helpers.NullInt64(movie.ID))
+	if err != nil {
+		t.Fatalf("get chapters: %v", err)
+	}
+	if len(chapters) != 1 || chapters[0].Title != "Only New Chapter" || chapters[0].StartTime != 30 {
+		t.Fatalf("chapters after rescan = %+v, want one new chapter", chapters)
+	}
+}
+
+func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "")}
+	resolved, err := app.resolveMovieFile(context.Background(), movieFile{
+		path: "/movies/Local.Only.2024.mkv",
+		ext:  "mkv",
+		size: 321,
+	})
+	if err != nil {
+		t.Fatalf("resolve movie without tmdb: %v", err)
+	}
+	if resolved.tmdbMovie != nil {
+		t.Fatal("expected no tmdb movie when TMDB is not configured")
+	}
+	if resolved.params.Title != "Local Only" {
+		t.Fatalf("title = %q, want Local Only", resolved.params.Title)
+	}
+	if !resolved.params.Year.Valid || resolved.params.Year.Int64 != 2024 {
+		t.Fatalf("year = %+v, want 2024", resolved.params.Year)
+	}
+	if resolved.params.Size != 321 {
+		t.Fatalf("size = %d, want filesystem size 321 when ffprobe size is empty", resolved.params.Size)
+	}
+}
+
+func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	tmdbStub := &stubMovieScannerTmdb{
+		searchResults: []tmdb.TmdbMovie{{
+			TmdbID:      42,
+			Title:       "Detail Fails",
+			ReleaseDate: "2022-01-01",
+		}},
+		detailErr: sql.ErrNoRows,
+	}
+	app.Tmdb = tmdbStub
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
+
+	resolved, err := app.resolveMovieFile(context.Background(), movieFile{
+		path: "/movies/Detail.Fails.2022.mkv",
+		ext:  "mkv",
+		size: 123,
+	})
+	if err != nil {
+		t.Fatalf("resolve movie with failing tmdb detail: %v", err)
+	}
+	if resolved.tmdbMovie != nil {
+		t.Fatal("expected scanner to fall back when TMDB detail fetch fails")
+	}
+	if resolved.params.Title != "Detail Fails" {
+		t.Fatalf("title = %q, want filename title Detail Fails", resolved.params.Title)
+	}
+	if !resolved.params.Year.Valid || resolved.params.Year.Int64 != 2022 {
+		t.Fatalf("year = %+v, want filename year 2022", resolved.params.Year)
+	}
+	if len(tmdbStub.detailCalls) != 1 || tmdbStub.detailCalls[0] != 42 {
+		t.Fatalf("detail calls = %#v, want [42]", tmdbStub.detailCalls)
+	}
+}
+
+func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	moviesDir := t.TempDir()
+	for i := 0; i < helpers.SCANNER_BATCH_SIZE+1; i++ {
+		path := filepath.Join(moviesDir, "Movie."+strconv.Itoa(i)+".2020.mkv")
+		if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
+			t.Fatalf("write movie %d: %v", i, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(moviesDir, "not-a-movie.txt"), []byte("text"), 0o644); err != nil {
+		t.Fatalf("write non-video file: %v", err)
+	}
+
+	logger := &movieScannerCapturedLogger{}
+	app.Logger = logger
+	ffprobeStub := &stubMovieScannerFfprobe{result: testMovieMetadata()}
+	app.Ffprobe = ffprobeStub
+	app.Settings = &database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}}
+
+	app.runMovieScan()
+
+	if ffprobeStub.calls != helpers.SCANNER_BATCH_SIZE+1 {
+		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, helpers.SCANNER_BATCH_SIZE+1)
+	}
+
+	foundCompletion := false
+	wantCompletion := "movies scanner completed: " + strconv.Itoa(helpers.SCANNER_BATCH_SIZE+1) + " scanned, 0 skipped, 0 errors"
+	for _, entry := range logger.infoEntries {
+		if strings.Contains(entry.msg, "movies scanner batch processed") {
+			t.Fatalf("unexpected per-batch log entry: %q", entry.msg)
+		}
+		if strings.Contains(entry.msg, wantCompletion) {
+			foundCompletion = true
+		}
+	}
+	if !foundCompletion {
+		t.Fatalf("missing final completion log; info entries = %+v", logger.infoEntries)
+	}
+}
+
+func movieGenreTags(genres []database.GetGenresByMovieIDRow) string {
+	tags := make([]string, 0, len(genres))
+	for _, genre := range genres {
+		tags = append(tags, genre.Tag)
+	}
+	return strings.Join(tags, ",")
 }
