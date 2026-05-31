@@ -5,15 +5,6 @@ FROM tracks
 WHERE id = ?
 LIMIT 1;
 
--- name: CheckTrackExistsByPathAndSize :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM tracks
-    WHERE file_path = ?
-      AND size = ?
-  ) AS track_exists;
-
 -- name: ListMusicTrackScanIndex :many
 SELECT
   file_path,

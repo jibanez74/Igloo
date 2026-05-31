@@ -78,7 +78,7 @@ The most important variables are:
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
-| `JELLYFIN_TOKEN` | Stored in settings for future/local integration work; not required for current core features |
+| `JELLYFIN_API_KEY` | First-run default for optional Jellyfin API integration work; not required for current core features |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
 | `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
@@ -196,9 +196,39 @@ From `web/`:
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
+| `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |
+| `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |
+
+### Login E2E Checks
+
+The Playwright login suite targets an already-running Igloo instance. It verifies the login form, invalid credentials, UI sign-in redirects, safe redirect handling, responsive layout, accessibility, and browser console cleanliness.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+bun run test:e2e:login
+```
+
+When omitted, those environment variables default to the local dev values shown above.
+
+### General Settings E2E Checks
+
+The Playwright general settings suite targets an already-running Igloo instance. It logs in as an admin, updates Jellyfin and Immich integration settings, verifies accessibility and optimistic UI behavior, confirms persistence, and restores the original settings.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+bun run test:e2e:general-settings
+```
+
+When omitted, those environment variables default to the local dev values shown above.
 
 ### HLS Transcoding E2E Checks
 

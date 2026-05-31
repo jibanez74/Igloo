@@ -467,7 +467,7 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 		t.Helper()
 		b, err := json.Marshal(map[string]any{
 			"tmdb_key":                     "tmdb-key",
-			"jellyfin_token":               "jellyfin-token",
+			"jellyfin_api_key":             "jellyfin-api-key",
 			"spotify_client_id":            "spotify-id",
 			"spotify_client_secret":        "spotify-secret",
 			"hardware_acceleration_device": "nvidia",

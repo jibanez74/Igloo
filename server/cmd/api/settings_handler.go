@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,10 @@ var (
 
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
-	JellyfinToken              *string  `json:"jellyfin_token"`
+	ImmichBaseURL              *string  `json:"immich_base_url"`
+	ImmichApiKey               *string  `json:"immich_api_key"`
+	JellyfinBaseURL            *string  `json:"jellyfin_base_url"`
+	JellyfinApiKey             *string  `json:"jellyfin_api_key"`
 	SpotifyClientID            *string  `json:"spotify_client_id"`
 	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
@@ -37,7 +41,10 @@ type generalSettingsResponse struct {
 
 type updateGeneralSettingsRequest struct {
 	TmdbKey                    string   `json:"tmdb_key"`
-	JellyfinToken              string   `json:"jellyfin_token"`
+	ImmichBaseURL              string   `json:"immich_base_url"`
+	ImmichApiKey               string   `json:"immich_api_key"`
+	JellyfinBaseURL            string   `json:"jellyfin_base_url"`
+	JellyfinApiKey             string   `json:"jellyfin_api_key"`
 	SpotifyClientID            string   `json:"spotify_client_id"`
 	SpotifyClientSecret        string   `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
@@ -62,22 +69,6 @@ type updateLibrarySettingsRequest struct {
 	MusicDir  *string `json:"music_dir"`
 }
 
-func nullableStringValue(value sql.NullString) *string {
-	if !value.Valid {
-		return nil
-	}
-
-	return &value.String
-}
-
-func nullableFloat64Value(value sql.NullFloat64) *float64 {
-	if !value.Valid {
-		return nil
-	}
-
-	return &value.Float64
-}
-
 func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
 	hardwareAccelerationDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if settings.HardwareAccelerationDevice.Valid && settings.HardwareAccelerationDevice.String != "" {
@@ -85,10 +76,13 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 	}
 
 	return generalSettingsResponse{
-		TmdbKey:                    nullableStringValue(settings.TmdbKey),
-		JellyfinToken:              nullableStringValue(settings.JellyfinToken),
-		SpotifyClientID:            nullableStringValue(settings.SpotifyClientID),
-		SpotifyClientSecret:        nullableStringValue(settings.SpotifyClientSecret),
+		TmdbKey:                    helpers.StringPtrFromNull(settings.TmdbKey),
+		ImmichBaseURL:              helpers.StringPtrFromNull(settings.ImmichBaseUrl),
+		ImmichApiKey:               helpers.StringPtrFromNull(settings.ImmichApiKey),
+		JellyfinBaseURL:            helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
+		JellyfinApiKey:             helpers.StringPtrFromNull(settings.JellyfinApiKey),
+		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
+		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
 		HardwareAccelerationDevice: hardwareAccelerationDevice,
 		EnableLogger:               settings.EnableLogger,
 		EnableWatcher:              settings.EnableWatcher,
@@ -96,16 +90,16 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		StaticDir:                  settings.StaticDir,
 		LogsDir:                    settings.LogsDir,
 		TranscodeDir:               settings.TranscodeDir,
-		ServerUploadMbps:           nullableFloat64Value(settings.ServerUploadMbps),
+		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
 		RestartRequired:            restartRequired,
 	}
 }
 
 func mapLibrarySettingsResponse(settings database.Setting) librarySettingsResponse {
 	return librarySettingsResponse{
-		MoviesDir: nullableStringValue(settings.MoviesDir),
-		ShowsDir:  nullableStringValue(settings.ShowsDir),
-		MusicDir:  nullableStringValue(settings.MusicDir),
+		MoviesDir: helpers.StringPtrFromNull(settings.MoviesDir),
+		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
+		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
 	}
 }
 
@@ -119,6 +113,22 @@ func validateHardwareAccelerationDevice(value string) bool {
 	default:
 		return false
 	}
+}
+
+func isOptionalHTTPBaseURL(value string) bool {
+	if value == "" {
+		return true
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return parsed.Host != ""
 }
 
 func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +174,10 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	}
 
 	req.TmdbKey = strings.TrimSpace(req.TmdbKey)
-	req.JellyfinToken = strings.TrimSpace(req.JellyfinToken)
+	req.ImmichBaseURL = strings.TrimSpace(req.ImmichBaseURL)
+	req.ImmichApiKey = strings.TrimSpace(req.ImmichApiKey)
+	req.JellyfinBaseURL = strings.TrimSpace(req.JellyfinBaseURL)
+	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
 	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
 	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
 	req.HardwareAccelerationDevice = strings.TrimSpace(req.HardwareAccelerationDevice)
@@ -174,6 +187,16 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	if !validateHardwareAccelerationDevice(req.HardwareAccelerationDevice) {
 		helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
+		return
+	}
+
+	if !isOptionalHTTPBaseURL(req.JellyfinBaseURL) {
+		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
+		return
+	}
+
+	if !isOptionalHTTPBaseURL(req.ImmichBaseURL) {
+		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}
 
@@ -234,15 +257,13 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	serverUploadMbps := sql.NullFloat64{}
-	if req.ServerUploadMbps != nil {
-		serverUploadMbps = sql.NullFloat64{Float64: *req.ServerUploadMbps, Valid: true}
-	}
-
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 		TmdbKey:                    helpers.NullString(req.TmdbKey),
-		JellyfinToken:              helpers.NullString(req.JellyfinToken),
+		ImmichBaseUrl:              helpers.NullString(req.ImmichBaseURL),
+		ImmichApiKey:               helpers.NullString(req.ImmichApiKey),
+		JellyfinBaseUrl:            helpers.NullString(req.JellyfinBaseURL),
+		JellyfinApiKey:             helpers.NullString(req.JellyfinApiKey),
 		SpotifyClientID:            helpers.NullString(req.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(req.SpotifyClientSecret),
 		HardwareAccelerationDevice: helpers.NullString(req.HardwareAccelerationDevice),
@@ -252,7 +273,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		StaticDir:                  req.StaticDir,
 		LogsDir:                    req.LogsDir,
 		TranscodeDir:               req.TranscodeDir,
-		ServerUploadMbps:           serverUploadMbps,
+		ServerUploadMbps:           helpers.NullFloat64FromPtr(req.ServerUploadMbps),
 	})
 	if err != nil {
 		app.Logger.Error("failed to update general settings", "error", err)
@@ -283,7 +304,10 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 		previous.TranscodeDir != next.TranscodeDir ||
 		previous.EnableLogger != next.EnableLogger ||
 		previous.TmdbKey != next.TmdbKey ||
-		previous.JellyfinToken != next.JellyfinToken ||
+		previous.ImmichBaseUrl != next.ImmichBaseUrl ||
+		previous.ImmichApiKey != next.ImmichApiKey ||
+		previous.JellyfinBaseUrl != next.JellyfinBaseUrl ||
+		previous.JellyfinApiKey != next.JellyfinApiKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
 }

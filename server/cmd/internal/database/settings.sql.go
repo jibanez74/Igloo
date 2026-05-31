@@ -13,7 +13,7 @@ import (
 const createSettings = `-- name: CreateSettings :one
 INSERT INTO settings (
   tmdb_key,
-  jellyfin_token,
+  jellyfin_api_key,
   spotify_client_id,
   spotify_client_secret,
   hardware_acceleration_device,
@@ -29,12 +29,12 @@ INSERT INTO settings (
 )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
 	TmdbKey                    sql.NullString `json:"tmdb_key"`
-	JellyfinToken              sql.NullString `json:"jellyfin_token"`
+	JellyfinApiKey             sql.NullString `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
@@ -52,7 +52,7 @@ type CreateSettingsParams struct {
 func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error) {
 	row := q.queryRow(ctx, q.createSettingsStmt, createSettings,
 		arg.TmdbKey,
-		arg.JellyfinToken,
+		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
 		arg.HardwareAccelerationDevice,
@@ -70,7 +70,10 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.TmdbKey,
-		&i.JellyfinToken,
+		&i.ImmichBaseUrl,
+		&i.ImmichApiKey,
+		&i.JellyfinBaseUrl,
+		&i.JellyfinApiKey,
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
@@ -92,7 +95,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 
 const getSettings = `-- name: GetSettings :one
 SELECT
-  id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+  id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 FROM settings
 ORDER BY id
 LIMIT 1
@@ -104,7 +107,10 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.TmdbKey,
-		&i.JellyfinToken,
+		&i.ImmichBaseUrl,
+		&i.ImmichApiKey,
+		&i.JellyfinBaseUrl,
+		&i.JellyfinApiKey,
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
@@ -128,7 +134,10 @@ const updateGeneralSettings = `-- name: UpdateGeneralSettings :one
 UPDATE settings
 SET
   tmdb_key = ?,
-  jellyfin_token = ?,
+  immich_base_url = ?,
+  immich_api_key = ?,
+  jellyfin_base_url = ?,
+  jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
   hardware_acceleration_device = ?,
@@ -146,12 +155,15 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 `
 
 type UpdateGeneralSettingsParams struct {
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`
-	JellyfinToken              sql.NullString  `json:"jellyfin_token"`
+	ImmichBaseUrl              sql.NullString  `json:"immich_base_url"`
+	ImmichApiKey               sql.NullString  `json:"immich_api_key"`
+	JellyfinBaseUrl            sql.NullString  `json:"jellyfin_base_url"`
+	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
@@ -167,7 +179,10 @@ type UpdateGeneralSettingsParams struct {
 func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error) {
 	row := q.queryRow(ctx, q.updateGeneralSettingsStmt, updateGeneralSettings,
 		arg.TmdbKey,
-		arg.JellyfinToken,
+		arg.ImmichBaseUrl,
+		arg.ImmichApiKey,
+		arg.JellyfinBaseUrl,
+		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
 		arg.HardwareAccelerationDevice,
@@ -183,7 +198,10 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 	err := row.Scan(
 		&i.ID,
 		&i.TmdbKey,
-		&i.JellyfinToken,
+		&i.ImmichBaseUrl,
+		&i.ImmichApiKey,
+		&i.JellyfinBaseUrl,
+		&i.JellyfinApiKey,
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
@@ -216,7 +234,7 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, jellyfin_token, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
 `
 
 type UpdateLibrarySettingsParams struct {
@@ -231,7 +249,10 @@ func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySe
 	err := row.Scan(
 		&i.ID,
 		&i.TmdbKey,
-		&i.JellyfinToken,
+		&i.ImmichBaseUrl,
+		&i.ImmichApiKey,
+		&i.JellyfinBaseUrl,
+		&i.JellyfinApiKey,
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,

@@ -42,9 +42,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.canUserEditPlaylistStmt, err = db.PrepareContext(ctx, canUserEditPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query CanUserEditPlaylist: %w", err)
 	}
-	if q.checkTrackExistsByPathAndSizeStmt, err = db.PrepareContext(ctx, checkTrackExistsByPathAndSize); err != nil {
-		return nil, fmt.Errorf("error preparing query CheckTrackExistsByPathAndSize: %w", err)
-	}
 	if q.countAdminsStmt, err = db.PrepareContext(ctx, countAdmins); err != nil {
 		return nil, fmt.Errorf("error preparing query CountAdmins: %w", err)
 	}
@@ -224,9 +221,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
-	}
-	if q.getMovieByPathStmt, err = db.PrepareContext(ctx, getMovieByPath); err != nil {
-		return nil, fmt.Errorf("error preparing query GetMovieByPath: %w", err)
 	}
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
@@ -569,11 +563,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing canUserEditPlaylistStmt: %w", cerr)
 		}
 	}
-	if q.checkTrackExistsByPathAndSizeStmt != nil {
-		if cerr := q.checkTrackExistsByPathAndSizeStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing checkTrackExistsByPathAndSizeStmt: %w", cerr)
-		}
-	}
 	if q.countAdminsStmt != nil {
 		if cerr := q.countAdminsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countAdminsStmt: %w", cerr)
@@ -872,11 +861,6 @@ func (q *Queries) Close() error {
 	if q.getMovieByIDStmt != nil {
 		if cerr := q.getMovieByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieByIDStmt: %w", cerr)
-		}
-	}
-	if q.getMovieByPathStmt != nil {
-		if cerr := q.getMovieByPathStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getMovieByPathStmt: %w", cerr)
 		}
 	}
 	if q.getMovieExtraVideosStmt != nil {
@@ -1434,7 +1418,6 @@ type Queries struct {
 	addWatchRoomMemberStmt                      *sql.Stmt
 	adminUpdateUserStmt                         *sql.Stmt
 	canUserEditPlaylistStmt                     *sql.Stmt
-	checkTrackExistsByPathAndSizeStmt           *sql.Stmt
 	countAdminsStmt                             *sql.Stmt
 	countMoviesForGenreStmt                     *sql.Stmt
 	countPlaylistMoviesStmt                     *sql.Stmt
@@ -1495,7 +1478,6 @@ type Queries struct {
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
 	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
-	getMovieByPathStmt                          *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
@@ -1610,7 +1592,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addWatchRoomMemberStmt:                      q.addWatchRoomMemberStmt,
 		adminUpdateUserStmt:                         q.adminUpdateUserStmt,
 		canUserEditPlaylistStmt:                     q.canUserEditPlaylistStmt,
-		checkTrackExistsByPathAndSizeStmt:           q.checkTrackExistsByPathAndSizeStmt,
 		countAdminsStmt:                             q.countAdminsStmt,
 		countMoviesForGenreStmt:                     q.countMoviesForGenreStmt,
 		countPlaylistMoviesStmt:                     q.countPlaylistMoviesStmt,
@@ -1671,7 +1652,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
 		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
-		getMovieByPathStmt:                          q.getMovieByPathStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,

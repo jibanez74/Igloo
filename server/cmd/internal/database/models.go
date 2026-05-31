@@ -217,7 +217,10 @@ type ProductionCompany struct {
 type Setting struct {
 	ID                         int64           `json:"id"`
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`
-	JellyfinToken              sql.NullString  `json:"jellyfin_token"`
+	ImmichBaseUrl              sql.NullString  `json:"immich_base_url"`
+	ImmichApiKey               sql.NullString  `json:"immich_api_key"`
+	JellyfinBaseUrl            sql.NullString  `json:"jellyfin_base_url"`
+	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`

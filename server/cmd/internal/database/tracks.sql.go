@@ -10,28 +10,6 @@ import (
 	"database/sql"
 )
 
-const checkTrackExistsByPathAndSize = `-- name: CheckTrackExistsByPathAndSize :one
-SELECT
-  EXISTS (
-    SELECT 1
-    FROM tracks
-    WHERE file_path = ?
-      AND size = ?
-  ) AS track_exists
-`
-
-type CheckTrackExistsByPathAndSizeParams struct {
-	FilePath string `json:"file_path"`
-	Size     int64  `json:"size"`
-}
-
-func (q *Queries) CheckTrackExistsByPathAndSize(ctx context.Context, arg CheckTrackExistsByPathAndSizeParams) (bool, error) {
-	row := q.queryRow(ctx, q.checkTrackExistsByPathAndSizeStmt, checkTrackExistsByPathAndSize, arg.FilePath, arg.Size)
-	var track_exists bool
-	err := row.Scan(&track_exists)
-	return track_exists, err
-}
-
 const getAlbumsCount = `-- name: GetAlbumsCount :one
 SELECT
   COUNT(*)

@@ -246,12 +246,18 @@ func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	}
 
 	for _, file := range files {
-		movie, err := app.Queries.GetMovieByPath(context.Background(), file.path)
+		var container string
+		err := app.DB.QueryRowContext(context.Background(), `
+			SELECT container
+			FROM movies
+			WHERE file_path = ?
+			LIMIT 1
+		`, file.path).Scan(&container)
 		if err != nil {
 			t.Fatalf("get movie %s: %v", file.path, err)
 		}
-		if movie.Container != file.ext {
-			t.Fatalf("movie container = %q, want %q", movie.Container, file.ext)
+		if container != file.ext {
+			t.Fatalf("movie container = %q, want %q", container, file.ext)
 		}
 	}
 }

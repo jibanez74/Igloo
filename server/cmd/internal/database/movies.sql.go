@@ -531,48 +531,6 @@ func (q *Queries) GetMovieByID(ctx context.Context, id int64) (Movie, error) {
 	return i, err
 }
 
-const getMovieByPath = `-- name: GetMovieByPath :one
-SELECT
-  id, title, file_path, file_name, size, container, mime_type, adult, tmdb_id, imdb_id, poster_path, backdrop_path, language, year, release_date, overview, tag_line, certification, critic_rating, audience_rating, revenue, budget, run_time, duration, created_at, updated_at
-FROM movies
-WHERE file_path = ?
-LIMIT 1
-`
-
-func (q *Queries) GetMovieByPath(ctx context.Context, filePath string) (Movie, error) {
-	row := q.queryRow(ctx, q.getMovieByPathStmt, getMovieByPath, filePath)
-	var i Movie
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.FilePath,
-		&i.FileName,
-		&i.Size,
-		&i.Container,
-		&i.MimeType,
-		&i.Adult,
-		&i.TmdbID,
-		&i.ImdbID,
-		&i.PosterPath,
-		&i.BackdropPath,
-		&i.Language,
-		&i.Year,
-		&i.ReleaseDate,
-		&i.Overview,
-		&i.TagLine,
-		&i.Certification,
-		&i.CriticRating,
-		&i.AudienceRating,
-		&i.Revenue,
-		&i.Budget,
-		&i.RunTime,
-		&i.Duration,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getMovieExtraVideos = `-- name: GetMovieExtraVideos :many
 SELECT
   ev.id,

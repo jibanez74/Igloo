@@ -109,19 +109,18 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 	}
 
 	var serverUpload *float64
-	if app.Settings != nil && app.Settings.ServerUploadMbps.Valid {
-		v := app.Settings.ServerUploadMbps.Float64
-		serverUpload = &v
+	if app.Settings != nil {
+		serverUpload = helpers.Float64PtrFromNull(app.Settings.ServerUploadMbps)
 	}
 
 	res := playbackSettingsResponse{
 		Profiles:                  playbackProfileCatalog(),
-		PreferredProfile:          nullableStringValue(prefs.PreferredHlsProfile),
-		DownloadMbps:              nullableFloat64Value(prefs.DownloadMbps),
+		PreferredProfile:          helpers.StringPtrFromNull(prefs.PreferredHlsProfile),
+		DownloadMbps:              helpers.Float64PtrFromNull(prefs.DownloadMbps),
 		ServerUploadMbps:          serverUpload,
 		IsAdmin:                   prefs.IsAdmin,
-		PreferredAudioLanguage:    nullableStringValue(prefs.PreferredAudioLanguage),
-		PreferredSubtitleLanguage: nullableStringValue(prefs.PreferredSubtitleLanguage),
+		PreferredAudioLanguage:    helpers.StringPtrFromNull(prefs.PreferredAudioLanguage),
+		PreferredSubtitleLanguage: helpers.StringPtrFromNull(prefs.PreferredSubtitleLanguage),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -167,7 +166,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 					helpers.ErrorJSON(w, errors.New("invalid playback profile"), http.StatusBadRequest)
 					return
 				}
-				preferred = sql.NullString{String: trimmed, Valid: true}
+				preferred = helpers.NullString(trimmed)
 			}
 		}
 	}
@@ -185,7 +184,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 				helpers.ErrorJSON(w, errors.New("download speed must be greater than 0 and less than 10000 Mbps"), http.StatusBadRequest)
 				return
 			}
-			download = sql.NullFloat64{Float64: *val, Valid: true}
+			download = helpers.NullFloat64FromPtr(val)
 		}
 	}
 
@@ -204,7 +203,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 					helpers.ErrorJSON(w, errors.New("invalid audio language code"), http.StatusBadRequest)
 					return
 				}
-				audioLang = sql.NullString{String: trimmed, Valid: true}
+				audioLang = helpers.NullString(trimmed)
 			}
 		}
 	}
@@ -224,7 +223,7 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 					helpers.ErrorJSON(w, errors.New("invalid subtitle language code"), http.StatusBadRequest)
 					return
 				}
-				subtitleLang = sql.NullString{String: trimmed, Valid: true}
+				subtitleLang = helpers.NullString(trimmed)
 			}
 		}
 	}
@@ -243,10 +242,10 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	}
 
 	res := updatePlaybackSettingsResponse{
-		PreferredProfile:          nullableStringValue(updated.PreferredHlsProfile),
-		DownloadMbps:              nullableFloat64Value(updated.DownloadMbps),
-		PreferredAudioLanguage:    nullableStringValue(updated.PreferredAudioLanguage),
-		PreferredSubtitleLanguage: nullableStringValue(updated.PreferredSubtitleLanguage),
+		PreferredProfile:          helpers.StringPtrFromNull(updated.PreferredHlsProfile),
+		DownloadMbps:              helpers.Float64PtrFromNull(updated.DownloadMbps),
+		PreferredAudioLanguage:    helpers.StringPtrFromNull(updated.PreferredAudioLanguage),
+		PreferredSubtitleLanguage: helpers.StringPtrFromNull(updated.PreferredSubtitleLanguage),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
