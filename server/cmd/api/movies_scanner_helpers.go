@@ -29,16 +29,6 @@ func (app *Application) getOrCreateArtist(
 	name string,
 	profilePath string,
 ) (*database.Artist, error) {
-	if scan != nil {
-		if artistID, ok := scan.artistIDs[tmdbID]; ok {
-			return &database.Artist{
-				ID:     artistID,
-				Name:   name,
-				TmdbID: int64(tmdbID),
-			}, nil
-		}
-	}
-
 	profile := helpers.NullString(profilePath)
 
 	upserted, err := qtx.UpsertArtist(ctx, database.UpsertArtistParams{

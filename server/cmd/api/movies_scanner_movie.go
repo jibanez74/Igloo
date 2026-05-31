@@ -115,17 +115,10 @@ func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*
 		Title:     titleYear.Title,
 		FilePath:  file.path,
 		FileName:  filepath.Base(file.path),
+		Size:      file.size,
 		Container: file.ext,
 		MimeType:  mimeType,
 		Adult:     false,
-	}
-
-	params.Size = file.size
-	if info.Format.Size != "" {
-		size, err := strconv.ParseInt(info.Format.Size, 10, 64)
-		if err == nil && size > 0 {
-			params.Size = size
-		}
 	}
 
 	if tmdbMovie != nil {

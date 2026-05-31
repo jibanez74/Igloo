@@ -445,8 +445,8 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	if !movie.TmdbID.Valid || movie.TmdbID.Int64 != 603 {
 		t.Fatalf("tmdb id = %+v, want 603", movie.TmdbID)
 	}
-	if movie.Size != 12345 {
-		t.Fatalf("movie size = %d, want ffprobe size 12345", movie.Size)
+	if movie.Size != 5 {
+		t.Fatalf("movie size = %d, want filesystem size 5", movie.Size)
 	}
 	if !movie.Year.Valid || movie.Year.Int64 != 1999 {
 		t.Fatalf("year = %+v, want 1999", movie.Year)
@@ -620,8 +620,8 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	if err != nil {
 		t.Fatalf("get movie by path: %v", err)
 	}
-	if movie.Title != "Replace Me Restored" || movie.Size != 200 {
-		t.Fatalf("movie after rescan = title %q size %d, want restored/200", movie.Title, movie.Size)
+	if movie.Title != "Replace Me Restored" || movie.Size != 6 {
+		t.Fatalf("movie after rescan = title %q size %d, want restored/6", movie.Title, movie.Size)
 	}
 
 	genres, err := app.Queries.GetGenresByMovieID(ctx, movie.ID)
@@ -689,11 +689,93 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 }
 
+func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "Entity Cache",
+		FilePath:  "/movies/Entity.Cache.2024.mkv",
+		FileName:  "Entity.Cache.2024.mkv",
+		Size:      100,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+	})
+	if err != nil {
+		t.Fatalf("upsert movie: %v", err)
+	}
+
+	scan := newMovieScanContext(nil)
+	firstCompanies := []struct {
+		ID            int    `json:"id"`
+		LogoPath      string `json:"logo_path"`
+		Name          string `json:"name"`
+		OriginCountry string `json:"origin_country"`
+	}{
+		{ID: 100, LogoPath: "/old-logo.png", Name: "Old Studio", OriginCountry: "US"},
+	}
+	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, firstCompanies); err != nil {
+		t.Fatalf("process first production companies: %v", err)
+	}
+
+	firstVideos := []tmdb.TmdbVideoResult{
+		{ID: "video-1", Key: "old-key", Name: "Old Trailer", Site: "YouTube", Type: "Trailer", Official: false},
+	}
+	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, firstVideos); err != nil {
+		t.Fatalf("process first extra videos: %v", err)
+	}
+
+	secondCompanies := []struct {
+		ID            int    `json:"id"`
+		LogoPath      string `json:"logo_path"`
+		Name          string `json:"name"`
+		OriginCountry string `json:"origin_country"`
+	}{
+		{ID: 100, LogoPath: "/new-logo.png", Name: "New Studio", OriginCountry: "GB"},
+	}
+	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, secondCompanies); err != nil {
+		t.Fatalf("process second production companies: %v", err)
+	}
+
+	secondVideos := []tmdb.TmdbVideoResult{
+		{ID: "video-1", Key: "new-key", Name: "New Featurette", Site: "Vimeo", Type: "Featurette", Official: true},
+	}
+	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, secondVideos); err != nil {
+		t.Fatalf("process second extra videos: %v", err)
+	}
+
+	companies, err := app.Queries.GetProductionCompaniesByMovieID(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get production companies: %v", err)
+	}
+	if len(companies) != 1 {
+		t.Fatalf("production companies count = %d, want 1", len(companies))
+	}
+	company := companies[0]
+	if company.Name != "New Studio" || !company.Logo.Valid || company.Logo.String != "/new-logo.png" || !company.Country.Valid || company.Country.String != "GB" {
+		t.Fatalf("production company = %+v, want refreshed mutable metadata", company)
+	}
+
+	extras, err := app.Queries.GetMovieExtraVideos(ctx, movie.ID)
+	if err != nil {
+		t.Fatalf("get extra videos: %v", err)
+	}
+	if len(extras) != 1 {
+		t.Fatalf("extra videos count = %d, want 1", len(extras))
+	}
+	extra := extras[0]
+	if extra.Title != "New Featurette" || extra.Key != "new-key" || extra.Type != "special_feature" || extra.Site != "vimeo" || !extra.Official {
+		t.Fatalf("extra video = %+v, want refreshed mutable metadata", extra)
+	}
+}
+
 func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "")}
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
 	resolved, err := app.resolveMovieFile(context.Background(), movieFile{
 		path: "/movies/Local.Only.2024.mkv",
 		ext:  "mkv",
@@ -712,7 +794,7 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 		t.Fatalf("year = %+v, want 2024", resolved.params.Year)
 	}
 	if resolved.params.Size != 321 {
-		t.Fatalf("size = %d, want filesystem size 321 when ffprobe size is empty", resolved.params.Size)
+		t.Fatalf("size = %d, want filesystem size 321 even when ffprobe size is present", resolved.params.Size)
 	}
 }
 

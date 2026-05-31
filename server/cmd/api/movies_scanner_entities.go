@@ -26,28 +26,22 @@ func (app *Application) processProductionCompanies(
 	}
 
 	for _, company := range companies {
-		companyID := int64(0)
+		upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
+			Name:    company.Name,
+			TmdbID:  int64(company.ID),
+			Logo:    helpers.NullString(company.LogoPath),
+			Country: helpers.NullString(company.OriginCountry),
+		})
+		if err != nil {
+			return fmt.Errorf("upsert production company failed: %w", err)
+		}
+
+		companyID := upserted.ID
 		if scan != nil {
-			companyID = scan.productionCompanyIDs[company.ID]
+			scan.productionCompanyIDs[company.ID] = companyID
 		}
 
-		if companyID == 0 {
-			upserted, err := qtx.UpsertProductionCompany(ctx, database.UpsertProductionCompanyParams{
-				Name:    company.Name,
-				TmdbID:  int64(company.ID),
-				Logo:    helpers.NullString(company.LogoPath),
-				Country: helpers.NullString(company.OriginCountry),
-			})
-			if err != nil {
-				return fmt.Errorf("upsert production company failed: %w", err)
-			}
-			companyID = upserted.ID
-			if scan != nil {
-				scan.productionCompanyIDs[company.ID] = companyID
-			}
-		}
-
-		err := qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
+		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
 			ProductionCompanyID: companyID,
 		})
@@ -171,27 +165,21 @@ func (app *Application) processExtraVideos(
 			title = v.Key
 		}
 
-		extraID := int64(0)
-		if scan != nil {
-			extraID = scan.extraVideoIDs[v.ID]
+		extra, err := qtx.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{
+			Title:      title,
+			ExternalID: helpers.NullString(v.ID),
+			Key:        v.Key,
+			Type:       mapTmdbVideoType(v.Type),
+			Site:       mapTmdbVideoSite(v.Site),
+			Official:   v.Official,
+		})
+		if err != nil {
+			return fmt.Errorf("upsert extra video failed: %w", err)
 		}
 
-		if extraID == 0 {
-			extra, err := qtx.UpsertExtraVideo(ctx, database.UpsertExtraVideoParams{
-				Title:      title,
-				ExternalID: helpers.NullString(v.ID),
-				Key:        v.Key,
-				Type:       mapTmdbVideoType(v.Type),
-				Site:       mapTmdbVideoSite(v.Site),
-				Official:   v.Official,
-			})
-			if err != nil {
-				return fmt.Errorf("upsert extra video failed: %w", err)
-			}
-			extraID = extra.ID
-			if scan != nil {
-				scan.extraVideoIDs[v.ID] = extraID
-			}
+		extraID := extra.ID
+		if scan != nil {
+			scan.extraVideoIDs[v.ID] = extraID
 		}
 
 		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
