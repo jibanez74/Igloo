@@ -35,7 +35,10 @@ func generalSettingsBody(staticDir, logsDir string) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
+		"jellyfin_base_url": "https://jellyfin.local:8096/base",
 		"jellyfin_api_key": "jellyfin-api-key",
+		"immich_base_url": "http://immich.local:2283",
+		"immich_api_key": "immich-api-key",
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
 		"hardware_acceleration_device": "nvidia",
@@ -79,8 +82,17 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if settings.TmdbKey.String != "tmdb-key" || !settings.TmdbKey.Valid {
 		t.Fatalf("expected TMDB key to be saved, got %q valid=%v", settings.TmdbKey.String, settings.TmdbKey.Valid)
 	}
+	if settings.JellyfinBaseUrl.String != "https://jellyfin.local:8096/base" || !settings.JellyfinBaseUrl.Valid {
+		t.Fatalf("expected Jellyfin base URL to be saved, got %q valid=%v", settings.JellyfinBaseUrl.String, settings.JellyfinBaseUrl.Valid)
+	}
 	if settings.JellyfinApiKey.String != "jellyfin-api-key" || !settings.JellyfinApiKey.Valid {
 		t.Fatalf("expected Jellyfin API key to be saved, got %q valid=%v", settings.JellyfinApiKey.String, settings.JellyfinApiKey.Valid)
+	}
+	if settings.ImmichBaseUrl.String != "http://immich.local:2283" || !settings.ImmichBaseUrl.Valid {
+		t.Fatalf("expected Immich base URL to be saved, got %q valid=%v", settings.ImmichBaseUrl.String, settings.ImmichBaseUrl.Valid)
+	}
+	if settings.ImmichApiKey.String != "immich-api-key" || !settings.ImmichApiKey.Valid {
+		t.Fatalf("expected Immich API key to be saved, got %q valid=%v", settings.ImmichApiKey.String, settings.ImmichApiKey.Valid)
 	}
 	if settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
 		t.Fatalf("expected hardware device nvidia, got %q", settings.HardwareAccelerationDevice.String)
@@ -99,6 +111,9 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	}
 	if app.Settings == nil || app.Settings.StaticDir != staticDir {
 		t.Fatal("expected app.Settings to reflect the saved general settings")
+	}
+	if app.Settings.ImmichApiKey.String != "immich-api-key" || !app.Settings.ImmichApiKey.Valid {
+		t.Fatalf("expected app.Settings Immich API key to be saved, got %q valid=%v", app.Settings.ImmichApiKey.String, app.Settings.ImmichApiKey.Valid)
 	}
 	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 25 {
 		t.Fatalf("expected server upload Mbps 25, got valid=%v value=%v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
@@ -119,6 +134,46 @@ func TestUpdateGeneralSettings_RejectsInvalidServerUploadMbps(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
+	cases := []struct {
+		name string
+		old  string
+		new  string
+	}{
+		{
+			name: "jellyfin invalid scheme",
+			old:  `"jellyfin_base_url": "https://jellyfin.local:8096/base"`,
+			new:  `"jellyfin_base_url": "ftp://jellyfin.local"`,
+		},
+		{
+			name: "jellyfin missing host",
+			old:  `"jellyfin_base_url": "https://jellyfin.local:8096/base"`,
+			new:  `"jellyfin_base_url": "https:///jellyfin"`,
+		},
+		{
+			name: "immich missing scheme",
+			old:  `"immich_base_url": "http://immich.local:2283"`,
+			new:  `"immich_base_url": "immich.local:2283"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupSettingsHTTPTestApp(t)
+			defer app.DB.Close()
+
+			staticDir := filepath.Join(t.TempDir(), "static")
+			logsDir := filepath.Join(t.TempDir(), "logs")
+			body := strings.Replace(generalSettingsBody(staticDir, logsDir), tc.old, tc.new, 1)
+			w := performUpdateGeneralSettings(app, body)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -205,7 +260,10 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 
 	clearBody := fmt.Sprintf(`{
 		"tmdb_key": "",
+		"jellyfin_base_url": "",
 		"jellyfin_api_key": "",
+		"immich_base_url": "",
+		"immich_api_key": "",
 		"spotify_client_id": "",
 		"spotify_client_secret": "",
 		"hardware_acceleration_device": "cpu",
@@ -226,7 +284,9 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		t.Fatalf("GetSettings after clear: %v", err)
 	}
 	if settings.TmdbKey.Valid || settings.JellyfinApiKey.Valid ||
-		settings.SpotifyClientID.Valid || settings.SpotifyClientSecret.Valid {
+		settings.JellyfinBaseUrl.Valid || settings.ImmichBaseUrl.Valid ||
+		settings.ImmichApiKey.Valid || settings.SpotifyClientID.Valid ||
+		settings.SpotifyClientSecret.Valid {
 		t.Fatal("expected optional string settings to be cleared")
 	}
 }

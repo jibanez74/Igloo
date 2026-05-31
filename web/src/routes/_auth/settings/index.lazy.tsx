@@ -49,6 +49,8 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
+  ApiResponseType,
+  GeneralSettingsResponseType,
   GeneralSettingsType,
   HardwareAccelerationDevice,
   UpdateGeneralSettingsRequest,
@@ -67,9 +69,14 @@ type HardwareOption = {
 
 type SecretField =
   | "tmdb_key"
+  | "immich_api_key"
   | "jellyfin_api_key"
   | "spotify_client_id"
   | "spotify_client_secret";
+
+type BaseURLField = "immich_base_url" | "jellyfin_base_url";
+
+type GeneralSettingsQueryData = ApiResponseType<GeneralSettingsResponseType>;
 
 const HARDWARE_OPTIONS: HardwareOption[] = [
   {
@@ -103,6 +110,9 @@ function formFromSettings(
 ): UpdateGeneralSettingsRequest {
   return {
     tmdb_key: settings.tmdb_key ?? "",
+    immich_base_url: settings.immich_base_url ?? "",
+    immich_api_key: settings.immich_api_key ?? "",
+    jellyfin_base_url: settings.jellyfin_base_url ?? "",
     jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
@@ -121,6 +131,28 @@ function isHardwareAccelerationDevice(
   value: string,
 ): value is HardwareAccelerationDevice {
   return HARDWARE_OPTIONS.some(option => option.value === value);
+}
+
+function isOptionalHTTPBaseURL(value: string) {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return true;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.host !== ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function optionalSetting(value: string) {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 function GeneralSettings() {
@@ -164,7 +196,10 @@ type GeneralSettingsFormProps = {
 function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
   const tmdbKeyId = useId();
+  const jellyfinBaseUrlId = useId();
   const jellyfinApiKeyId = useId();
+  const immichBaseUrlId = useId();
+  const immichApiKeyId = useId();
   const spotifyClientIdId = useId();
   const spotifyClientSecretId = useId();
   const hardwareDeviceId = useId();
@@ -193,12 +228,75 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
   const updateMutation = useMutation({
     mutationFn: updateGeneralSettings,
-    onSuccess: res => {
+    onMutate: async nextSettings => {
+      await queryClient.cancelQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
+
+      const previousData = queryClient.getQueryData<GeneralSettingsQueryData>([
+        GENERAL_SETTINGS_KEY,
+      ]);
+
+      queryClient.setQueryData<GeneralSettingsQueryData>(
+        [GENERAL_SETTINGS_KEY],
+        current => {
+          if (current?.error !== false || !current.data?.settings) {
+            return current;
+          }
+
+          return {
+            ...current,
+            data: {
+              ...current.data,
+              settings: {
+                ...current.data.settings,
+                tmdb_key: optionalSetting(nextSettings.tmdb_key),
+                immich_base_url: optionalSetting(nextSettings.immich_base_url),
+                immich_api_key: optionalSetting(nextSettings.immich_api_key),
+                jellyfin_base_url: optionalSetting(
+                  nextSettings.jellyfin_base_url,
+                ),
+                jellyfin_api_key: optionalSetting(nextSettings.jellyfin_api_key),
+                spotify_client_id: optionalSetting(
+                  nextSettings.spotify_client_id,
+                ),
+                spotify_client_secret: optionalSetting(
+                  nextSettings.spotify_client_secret,
+                ),
+                hardware_acceleration_device:
+                  nextSettings.hardware_acceleration_device,
+                enable_logger: nextSettings.enable_logger,
+                enable_watcher: nextSettings.enable_watcher,
+                download_images: nextSettings.download_images,
+                static_dir: nextSettings.static_dir,
+                logs_dir: nextSettings.logs_dir,
+                transcode_dir: nextSettings.transcode_dir,
+                server_upload_mbps: nextSettings.server_upload_mbps,
+              },
+            },
+          };
+        },
+      );
+
+      return { previousData };
+    },
+    onSuccess: (res, _nextSettings, context) => {
       if (res.error) {
+        if (context?.previousData) {
+          queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
+        }
         showActionFailed("save settings", res.message);
         return;
       }
 
+      queryClient.setQueryData<GeneralSettingsQueryData>(
+        [GENERAL_SETTINGS_KEY],
+        {
+          error: false,
+          message: res.message,
+          data: {
+            settings: res.data.settings,
+          },
+        },
+      );
       queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
       queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
 
@@ -212,12 +310,19 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       showSuccess("Settings saved");
     },
-    onError: () => {
+    onError: (_error, _nextSettings, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData([GENERAL_SETTINGS_KEY], context.previousData);
+      }
       showActionFailed("save settings", "An unexpected error occurred");
     },
   });
 
   const handleSecretChange = (field: SecretField, value: string) => {
+    setForm(current => ({ ...current, [field]: value }));
+  };
+
+  const handleBaseURLChange = (field: BaseURLField, value: string) => {
     setForm(current => ({ ...current, [field]: value }));
   };
 
@@ -267,6 +372,20 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const validateForm = (): { field: string | null; message: string } => {
+    if (!isOptionalHTTPBaseURL(form.jellyfin_base_url)) {
+      return {
+        field: "jellyfin_base_url",
+        message: "Jellyfin base URL must start with http:// or https://.",
+      };
+    }
+
+    if (!isOptionalHTTPBaseURL(form.immich_base_url)) {
+      return {
+        field: "immich_base_url",
+        message: "Immich base URL must start with http:// or https://.",
+      };
+    }
+
     if (form.static_dir.trim() === "") {
       return { field: "static_dir", message: "Static directory is required." };
     }
@@ -311,6 +430,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     updateMutation.mutate({
       ...form,
       tmdb_key: form.tmdb_key.trim(),
+      immich_base_url: form.immich_base_url.trim(),
+      immich_api_key: form.immich_api_key.trim(),
+      jellyfin_base_url: form.jellyfin_base_url.trim(),
       jellyfin_api_key: form.jellyfin_api_key.trim(),
       spotify_client_id: form.spotify_client_id.trim(),
       spotify_client_secret: form.spotify_client_secret.trim(),
@@ -323,6 +445,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="max-w-5xl animate-in space-y-6 duration-300 fade-in"
     >
       <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
@@ -462,12 +585,40 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             onChange={value => handleSecretChange("tmdb_key", value)}
             disabled={updateMutation.isPending}
           />
+          <URLInput
+            id={jellyfinBaseUrlId}
+            name="jellyfin_base_url"
+            label="Jellyfin base URL"
+            value={form.jellyfin_base_url}
+            onChange={value =>
+              handleBaseURLChange("jellyfin_base_url", value)
+            }
+            disabled={updateMutation.isPending}
+            invalid={validationField === "jellyfin_base_url"}
+          />
           <SecretInput
             id={jellyfinApiKeyId}
             name="jellyfin_api_key"
             label="Jellyfin API key"
             value={form.jellyfin_api_key}
             onChange={value => handleSecretChange("jellyfin_api_key", value)}
+            disabled={updateMutation.isPending}
+          />
+          <URLInput
+            id={immichBaseUrlId}
+            name="immich_base_url"
+            label="Immich base URL"
+            value={form.immich_base_url}
+            onChange={value => handleBaseURLChange("immich_base_url", value)}
+            disabled={updateMutation.isPending}
+            invalid={validationField === "immich_base_url"}
+          />
+          <SecretInput
+            id={immichApiKeyId}
+            name="immich_api_key"
+            label="Immich API key"
+            value={form.immich_api_key}
+            onChange={value => handleSecretChange("immich_api_key", value)}
             disabled={updateMutation.isPending}
           />
           <SecretInput
@@ -700,6 +851,50 @@ type SecretInputProps = {
   onChange: (value: string) => void;
   disabled: boolean;
 };
+
+type URLInputProps = {
+  id: string;
+  name: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  invalid: boolean;
+};
+
+function URLInput({
+  id,
+  name,
+  label,
+  value,
+  onChange,
+  disabled,
+  invalid,
+}: URLInputProps) {
+  const descriptionId = `${id}-description`;
+
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        name={name}
+        type="url"
+        inputMode="url"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        disabled={disabled}
+        aria-describedby={descriptionId}
+        aria-invalid={invalid || undefined}
+        autoComplete="off"
+        className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+      />
+      <p id={descriptionId} className="text-sm text-slate-400">
+        Use http:// or https://. Leave blank to clear this value.
+      </p>
+    </div>
+  );
+}
 
 function SecretInput({
   id,

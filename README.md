@@ -196,9 +196,24 @@ From `web/`:
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
+| `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |
+
+### General Settings E2E Checks
+
+The Playwright general settings suite targets an already-running Igloo instance. It logs in as an admin, updates Jellyfin and Immich integration settings, verifies accessibility and optimistic UI behavior, confirms persistence, and restores the original settings.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+bun run test:e2e:general-settings
+```
+
+When omitted, those environment variables default to the local dev values shown above.
 
 ### HLS Transcoding E2E Checks
 

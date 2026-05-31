@@ -5035,6 +5035,9 @@
         "type": "object",
         "required": [
           "tmdb_key",
+          "immich_base_url",
+          "immich_api_key",
+          "jellyfin_base_url",
           "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
@@ -5053,6 +5056,26 @@
               "string",
               "null"
             ]
+          },
+          "immich_base_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional Immich base URL. Non-null values must use http:// or https://."
+          },
+          "immich_api_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "jellyfin_base_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional Jellyfin base URL. Non-null values must use http:// or https://."
           },
           "jellyfin_api_key": {
             "type": [
@@ -5109,6 +5132,9 @@
         "type": "object",
         "required": [
           "tmdb_key",
+          "immich_base_url",
+          "immich_api_key",
+          "jellyfin_base_url",
           "jellyfin_api_key",
           "spotify_client_id",
           "spotify_client_secret",
@@ -5124,6 +5150,17 @@
         "properties": {
           "tmdb_key": {
             "type": "string"
+          },
+          "immich_base_url": {
+            "type": "string",
+            "description": "Optional Immich base URL. Blank clears the value; nonblank values must use http:// or https://."
+          },
+          "immich_api_key": {
+            "type": "string"
+          },
+          "jellyfin_base_url": {
+            "type": "string",
+            "description": "Optional Jellyfin base URL. Blank clears the value; nonblank values must use http:// or https://."
           },
           "jellyfin_api_key": {
             "type": "string"

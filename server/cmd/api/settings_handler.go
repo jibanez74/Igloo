@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,9 @@ var (
 
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
+	ImmichBaseURL              *string  `json:"immich_base_url"`
+	ImmichApiKey               *string  `json:"immich_api_key"`
+	JellyfinBaseURL            *string  `json:"jellyfin_base_url"`
 	JellyfinApiKey             *string  `json:"jellyfin_api_key"`
 	SpotifyClientID            *string  `json:"spotify_client_id"`
 	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
@@ -37,6 +41,9 @@ type generalSettingsResponse struct {
 
 type updateGeneralSettingsRequest struct {
 	TmdbKey                    string   `json:"tmdb_key"`
+	ImmichBaseURL              string   `json:"immich_base_url"`
+	ImmichApiKey               string   `json:"immich_api_key"`
+	JellyfinBaseURL            string   `json:"jellyfin_base_url"`
 	JellyfinApiKey             string   `json:"jellyfin_api_key"`
 	SpotifyClientID            string   `json:"spotify_client_id"`
 	SpotifyClientSecret        string   `json:"spotify_client_secret"`
@@ -70,6 +77,9 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 
 	return generalSettingsResponse{
 		TmdbKey:                    helpers.StringPtrFromNull(settings.TmdbKey),
+		ImmichBaseURL:              helpers.StringPtrFromNull(settings.ImmichBaseUrl),
+		ImmichApiKey:               helpers.StringPtrFromNull(settings.ImmichApiKey),
+		JellyfinBaseURL:            helpers.StringPtrFromNull(settings.JellyfinBaseUrl),
 		JellyfinApiKey:             helpers.StringPtrFromNull(settings.JellyfinApiKey),
 		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
 		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
@@ -103,6 +113,22 @@ func validateHardwareAccelerationDevice(value string) bool {
 	default:
 		return false
 	}
+}
+
+func isOptionalHTTPBaseURL(value string) bool {
+	if value == "" {
+		return true
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return parsed.Host != ""
 }
 
 func (app *Application) GetSettings(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +174,9 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	}
 
 	req.TmdbKey = strings.TrimSpace(req.TmdbKey)
+	req.ImmichBaseURL = strings.TrimSpace(req.ImmichBaseURL)
+	req.ImmichApiKey = strings.TrimSpace(req.ImmichApiKey)
+	req.JellyfinBaseURL = strings.TrimSpace(req.JellyfinBaseURL)
 	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
 	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
 	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
@@ -158,6 +187,16 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	if !validateHardwareAccelerationDevice(req.HardwareAccelerationDevice) {
 		helpers.ErrorJSON(w, errors.New("invalid hardware acceleration device"), http.StatusBadRequest)
+		return
+	}
+
+	if !isOptionalHTTPBaseURL(req.JellyfinBaseURL) {
+		helpers.ErrorJSON(w, errors.New("jellyfin base URL must be a valid http or https URL"), http.StatusBadRequest)
+		return
+	}
+
+	if !isOptionalHTTPBaseURL(req.ImmichBaseURL) {
+		helpers.ErrorJSON(w, errors.New("immich base URL must be a valid http or https URL"), http.StatusBadRequest)
 		return
 	}
 
@@ -221,6 +260,9 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 		TmdbKey:                    helpers.NullString(req.TmdbKey),
+		ImmichBaseUrl:              helpers.NullString(req.ImmichBaseURL),
+		ImmichApiKey:               helpers.NullString(req.ImmichApiKey),
+		JellyfinBaseUrl:            helpers.NullString(req.JellyfinBaseURL),
 		JellyfinApiKey:             helpers.NullString(req.JellyfinApiKey),
 		SpotifyClientID:            helpers.NullString(req.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(req.SpotifyClientSecret),
@@ -262,6 +304,9 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 		previous.TranscodeDir != next.TranscodeDir ||
 		previous.EnableLogger != next.EnableLogger ||
 		previous.TmdbKey != next.TmdbKey ||
+		previous.ImmichBaseUrl != next.ImmichBaseUrl ||
+		previous.ImmichApiKey != next.ImmichApiKey ||
+		previous.JellyfinBaseUrl != next.JellyfinBaseUrl ||
 		previous.JellyfinApiKey != next.JellyfinApiKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret

@@ -134,6 +134,9 @@ const updateGeneralSettings = `-- name: UpdateGeneralSettings :one
 UPDATE settings
 SET
   tmdb_key = ?,
+  immich_base_url = ?,
+  immich_api_key = ?,
+  jellyfin_base_url = ?,
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
@@ -157,6 +160,9 @@ RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jell
 
 type UpdateGeneralSettingsParams struct {
 	TmdbKey                    sql.NullString  `json:"tmdb_key"`
+	ImmichBaseUrl              sql.NullString  `json:"immich_base_url"`
+	ImmichApiKey               sql.NullString  `json:"immich_api_key"`
+	JellyfinBaseUrl            sql.NullString  `json:"jellyfin_base_url"`
 	JellyfinApiKey             sql.NullString  `json:"jellyfin_api_key"`
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
@@ -173,6 +179,9 @@ type UpdateGeneralSettingsParams struct {
 func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error) {
 	row := q.queryRow(ctx, q.updateGeneralSettingsStmt, updateGeneralSettings,
 		arg.TmdbKey,
+		arg.ImmichBaseUrl,
+		arg.ImmichApiKey,
+		arg.JellyfinBaseUrl,
 		arg.JellyfinApiKey,
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,

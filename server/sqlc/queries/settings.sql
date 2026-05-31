@@ -30,6 +30,9 @@ RETURNING *;
 UPDATE settings
 SET
   tmdb_key = ?,
+  immich_base_url = ?,
+  immich_api_key = ?,
+  jellyfin_base_url = ?,
   jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
