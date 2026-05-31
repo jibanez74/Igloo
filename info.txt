@@ -1,0 +1,288 @@
+Yes. That is a good fit for Igloo, especially because you do **not** want Igloo to become a full photo-management backend. Let Immich handle photo storage, backup, thumbnails, metadata, albums, people, search indexing, and jobs. Igloo should provide the browsing experience.
+
+A clean mental model:
+
+```txt
+Igloo
+  Movies / TV / Music = Igloo-native
+  Photos = Immich-backed
+```
+
+## Recommended approach
+
+Build a **Photos module** in Igloo that connects to an existing Immich server.
+
+Do **not** copy the photo files into Igloo. Do **not** duplicate Immich’s database. Do **not** try to reimplement Immich’s indexing pipeline.
+
+Instead:
+
+```txt
+Igloo Web Client
+  ↓
+Igloo Server
+  ↓
+Immich API
+  ↓
+Immich Server
+```
+
+The browser talks to your Igloo server. Your Igloo server talks to Immich.
+
+Immich has a documented REST API, OpenAPI-generated SDKs, and a published TypeScript SDK called `@immich/sdk`. The Immich API includes stable endpoints for assets, albums, thumbnails, original downloads, video playback, and metadata. ([Immich][1])
+
+## Why route through the Igloo server?
+
+You could call Immich directly from the browser, but I would avoid that.
+
+The better architecture is:
+
+```txt
+GET /api/photos/albums
+GET /api/photos/albums/:albumId
+GET /api/photos/assets
+GET /api/photos/assets/:assetId
+GET /api/photos/assets/:assetId/thumbnail
+GET /api/photos/assets/:assetId/original
+GET /api/photos/assets/:assetId/video
+```
+
+Those are **Igloo endpoints**. Internally, they call Immich.
+
+This gives you several advantages:
+
+1. **No Immich API key in the browser**
+2. **Igloo controls access**
+3. **You can normalize Immich responses into your own types**
+4. **You can change Immich integration later without rewriting the frontend**
+5. **You can hide Immich-specific API churn from the Igloo UI**
+6. **You can add caching, streaming, rate limits, and permissions in one place**
+
+For a self-hosted app, this matters. Even if everything is inside Tailscale or a local network, keeping secrets out of frontend JavaScript is still the better design.
+
+## Minimum useful version
+
+For the first version, I would keep it read-only.
+
+Start with:
+
+```txt
+Photos
+Albums
+Favorites
+Recently added
+Asset detail page
+Full-screen viewer
+Slideshow mode
+Video playback for Immich videos
+Download/open original
+```
+
+Immich exposes album listing through `GET /albums`, and assets include stable endpoints for retrieving asset info, thumbnails, originals, and video playback. ([Immich API][2])
+
+A first Igloo Photos section could look like:
+
+```txt
+/photos
+/photos/albums
+/photos/albums/:albumId
+/photos/assets/:assetId
+/photos/slideshow?albumId=...
+```
+
+That would already be useful without touching uploads, deletion, sharing, face recognition, library scanning, or admin features.
+
+## What I would not build at first
+
+Avoid these in the first version:
+
+```txt
+Upload
+Delete
+Edit metadata
+Album management
+Face/person management
+Sharing links
+Admin settings
+Library scans
+Duplicate management
+```
+
+Those are not impossible, but they increase risk. They also move Igloo closer to being a second Immich UI, which is probably not what you want.
+
+For Igloo, the value is not “replace Immich.” The value is:
+
+```txt
+Use Immich as the photo engine.
+Use Igloo as the accessible media-center interface.
+```
+
+## TypeScript shape
+
+Since Igloo already has its own frontend/backend direction, I would create your own internal types instead of leaking Immich DTOs everywhere.
+
+Example:
+
+```ts
+export type IglooPhotoAsset = {
+  id: string;
+  type: "image" | "video";
+  title: string | null;
+  createdAt: string;
+  thumbUrl: string;
+  originalUrl: string;
+  duration?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+```
+
+Then your server maps Immich responses into this shape.
+
+That lets your React UI stay simple:
+
+```ts
+const assets = await getAlbumAssets(albumId);
+```
+
+instead of coupling every component to Immich’s API details.
+
+## Backend adapter idea
+
+In Go, this could be a small package:
+
+```txt
+internal/immich/
+  client.go
+  albums.go
+  assets.go
+  thumbnails.go
+  types.go
+```
+
+Or if your current Igloo direction for this module is TypeScript/Bun, the equivalent:
+
+```txt
+src/immich/
+  client.ts
+  albums.ts
+  assets.ts
+  thumbnails.ts
+  types.ts
+```
+
+The adapter should own:
+
+```txt
+IMMICH_BASE_URL
+IMMICH_API_KEY
+request helpers
+response mapping
+thumbnail proxying
+original download proxying
+error handling
+```
+
+## Thumbnail handling
+
+For thumbnails, I would proxy them through Igloo:
+
+```txt
+Browser:
+GET /api/photos/assets/:id/thumbnail
+
+Igloo:
+GET {IMMICH_URL}/api/assets/:id/thumbnail
+```
+
+This lets Igloo control auth and caching.
+
+You can add response headers later:
+
+```txt
+Cache-Control: private, max-age=86400
+```
+
+You may also decide to redirect to Immich’s thumbnail URL later, but proxying is easier and safer for the first implementation.
+
+## Video handling
+
+Immich supports video assets and has a stable video playback endpoint under assets. ([Immich API][3])
+
+For Igloo, I would treat Immich videos differently from your movie/TV pipeline. Do not run them through your Igloo FFmpeg logic at first.
+
+Use Immich’s own video playback endpoint through your proxy:
+
+```txt
+GET /api/photos/assets/:id/video
+```
+
+Then render it in the browser with a normal `<video>` element unless you discover a playback format issue.
+
+## Configuration
+
+Igloo should have a settings screen or config section like:
+
+```txt
+Photos integration: enabled / disabled
+Immich server URL
+Immich API key
+Connection test
+Default landing view: timeline / albums / favorites
+```
+
+For development, environment variables are fine. But based on how you usually think about Igloo, the long-term version should be configurable from the web UI.
+
+## Practical recommendation
+
+Build it in three phases:
+
+### Phase 1: Read-only browsing
+
+```txt
+Connect to Immich
+List albums
+List assets in album
+Show thumbnails
+Open asset detail
+Full-screen image viewer
+Basic video playback
+```
+
+### Phase 2: Better media-center experience
+
+```txt
+Timeline view
+Favorites
+Keyboard/remote-friendly navigation
+Slideshow mode
+Accessible labels
+Fast grid virtualization
+Lazy thumbnail loading
+```
+
+### Phase 3: Optional write features
+
+```txt
+Upload
+Add/remove favorites
+Create album
+Add/remove assets from album
+Delete asset
+```
+
+I would only add Phase 3 after the browsing experience feels solid.
+
+## My recommendation for Igloo
+
+This is worth adding, but keep it explicitly framed as an **Immich integration**:
+
+```txt
+Igloo Photos lets you browse your Immich library from inside Igloo.
+Immich remains the source of truth for photo storage and management.
+```
+
+That fits Igloo’s purpose well: one accessible media-center interface for movies, shows, music, and photos, without turning Igloo into a second photo-management server.
+
+[1]: https://docs.immich.app/api/?utm_source=chatgpt.com "API"
+[2]: https://api.immich.app/endpoints/albums?utm_source=chatgpt.com "Albums"
+[3]: https://api.immich.app/endpoints/assets?utm_source=chatgpt.com "Assets"

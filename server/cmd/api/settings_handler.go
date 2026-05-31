@@ -62,22 +62,6 @@ type updateLibrarySettingsRequest struct {
 	MusicDir  *string `json:"music_dir"`
 }
 
-func nullableStringValue(value sql.NullString) *string {
-	if !value.Valid {
-		return nil
-	}
-
-	return &value.String
-}
-
-func nullableFloat64Value(value sql.NullFloat64) *float64 {
-	if !value.Valid {
-		return nil
-	}
-
-	return &value.Float64
-}
-
 func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool) generalSettingsResponse {
 	hardwareAccelerationDevice := helpers.HARDWARE_ACCELERATION_DEVICE_CPU
 	if settings.HardwareAccelerationDevice.Valid && settings.HardwareAccelerationDevice.String != "" {
@@ -85,10 +69,10 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 	}
 
 	return generalSettingsResponse{
-		TmdbKey:                    nullableStringValue(settings.TmdbKey),
-		JellyfinToken:              nullableStringValue(settings.JellyfinToken),
-		SpotifyClientID:            nullableStringValue(settings.SpotifyClientID),
-		SpotifyClientSecret:        nullableStringValue(settings.SpotifyClientSecret),
+		TmdbKey:                    helpers.StringPtrFromNull(settings.TmdbKey),
+		JellyfinToken:              helpers.StringPtrFromNull(settings.JellyfinToken),
+		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
+		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
 		HardwareAccelerationDevice: hardwareAccelerationDevice,
 		EnableLogger:               settings.EnableLogger,
 		EnableWatcher:              settings.EnableWatcher,
@@ -96,16 +80,16 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		StaticDir:                  settings.StaticDir,
 		LogsDir:                    settings.LogsDir,
 		TranscodeDir:               settings.TranscodeDir,
-		ServerUploadMbps:           nullableFloat64Value(settings.ServerUploadMbps),
+		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
 		RestartRequired:            restartRequired,
 	}
 }
 
 func mapLibrarySettingsResponse(settings database.Setting) librarySettingsResponse {
 	return librarySettingsResponse{
-		MoviesDir: nullableStringValue(settings.MoviesDir),
-		ShowsDir:  nullableStringValue(settings.ShowsDir),
-		MusicDir:  nullableStringValue(settings.MusicDir),
+		MoviesDir: helpers.StringPtrFromNull(settings.MoviesDir),
+		ShowsDir:  helpers.StringPtrFromNull(settings.ShowsDir),
+		MusicDir:  helpers.StringPtrFromNull(settings.MusicDir),
 	}
 }
 
@@ -234,11 +218,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	serverUploadMbps := sql.NullFloat64{}
-	if req.ServerUploadMbps != nil {
-		serverUploadMbps = sql.NullFloat64{Float64: *req.ServerUploadMbps, Valid: true}
-	}
-
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 		TmdbKey:                    helpers.NullString(req.TmdbKey),
@@ -252,7 +231,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		StaticDir:                  req.StaticDir,
 		LogsDir:                    req.LogsDir,
 		TranscodeDir:               req.TranscodeDir,
-		ServerUploadMbps:           serverUploadMbps,
+		ServerUploadMbps:           helpers.NullFloat64FromPtr(req.ServerUploadMbps),
 	})
 	if err != nil {
 		app.Logger.Error("failed to update general settings", "error", err)
