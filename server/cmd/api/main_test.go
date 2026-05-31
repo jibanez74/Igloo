@@ -670,7 +670,7 @@ func clearSettingsEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"TMDB_API_KEY",
-		"JELLYFIN_TOKEN",
+		"JELLYFIN_API_KEY",
 		"SPOTIFY_CLIENT_ID",
 		"SPOTIFY_CLIENT_SECRET",
 		"HARDWARE_ACCELERATION_DEVICE",
@@ -734,8 +734,8 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.TmdbKey.Valid {
 		t.Error("Expected TmdbKey to be invalid when not set")
 	}
-	if app.Settings.JellyfinToken.Valid {
-		t.Error("Expected JellyfinToken to be invalid when not set")
+	if app.Settings.JellyfinApiKey.Valid {
+		t.Error("Expected JellyfinApiKey to be invalid when not set")
 	}
 	if app.Settings.MoviesDir.Valid {
 		t.Errorf("Expected MoviesDir to be disabled by default, got %q", app.Settings.MoviesDir.String)
@@ -764,7 +764,7 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	clearSettingsEnv(t)
 
 	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
-	t.Setenv("JELLYFIN_TOKEN", "test-jellyfin-token")
+	t.Setenv("JELLYFIN_API_KEY", "test-jellyfin-api-key")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
 	t.Setenv("ENABLE_LOGGER", "true")
 	t.Setenv("ENABLE_WATCHER", "true")
@@ -785,8 +785,8 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	if app.Settings.TmdbKey.String != "test-tmdb-key" || !app.Settings.TmdbKey.Valid {
 		t.Errorf("Expected TmdbKey 'test-tmdb-key' (valid), got '%s' (valid=%v)", app.Settings.TmdbKey.String, app.Settings.TmdbKey.Valid)
 	}
-	if app.Settings.JellyfinToken.String != "test-jellyfin-token" || !app.Settings.JellyfinToken.Valid {
-		t.Errorf("Expected JellyfinToken 'test-jellyfin-token' (valid), got '%s' (valid=%v)", app.Settings.JellyfinToken.String, app.Settings.JellyfinToken.Valid)
+	if app.Settings.JellyfinApiKey.String != "test-jellyfin-api-key" || !app.Settings.JellyfinApiKey.Valid {
+		t.Errorf("Expected JellyfinApiKey 'test-jellyfin-api-key' (valid), got '%s' (valid=%v)", app.Settings.JellyfinApiKey.String, app.Settings.JellyfinApiKey.Valid)
 	}
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" || !app.Settings.HardwareAccelerationDevice.Valid {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia' (valid), got '%s' (valid=%v)", app.Settings.HardwareAccelerationDevice.String, app.Settings.HardwareAccelerationDevice.Valid)
@@ -828,7 +828,7 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 
 	params := database.CreateSettingsParams{
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
-		JellyfinToken:              sql.NullString{Valid: false},
+		JellyfinApiKey:             sql.NullString{Valid: false},
 		HardwareAccelerationDevice: sql.NullString{String: "nvidia", Valid: true},
 		EnableLogger:               true,
 		EnableWatcher:              false,
@@ -873,7 +873,7 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 
 	params := database.CreateSettingsParams{
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
-		JellyfinToken:              sql.NullString{String: "existing-jellyfin", Valid: true},
+		JellyfinApiKey:             sql.NullString{String: "existing-jellyfin", Valid: true},
 		SpotifyClientID:            sql.NullString{String: "existing-spotify-id", Valid: true},
 		SpotifyClientSecret:        sql.NullString{String: "existing-spotify-secret", Valid: true},
 		HardwareAccelerationDevice: sql.NullString{String: "cpu", Valid: true},
@@ -894,7 +894,7 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 
 	clearSettingsEnv(t)
 	t.Setenv("TMDB_API_KEY", "override-key")
-	t.Setenv("JELLYFIN_TOKEN", "override-jellyfin")
+	t.Setenv("JELLYFIN_API_KEY", "override-jellyfin")
 	t.Setenv("SPOTIFY_CLIENT_ID", "override-spotify-id")
 	t.Setenv("SPOTIFY_CLIENT_SECRET", "override-spotify-secret")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
@@ -916,8 +916,8 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	if app.Settings.TmdbKey.String != "existing-key" {
 		t.Errorf("Expected existing tmdb key, got %q", app.Settings.TmdbKey.String)
 	}
-	if app.Settings.JellyfinToken.String != "existing-jellyfin" {
-		t.Errorf("Expected existing jellyfin token, got %q", app.Settings.JellyfinToken.String)
+	if app.Settings.JellyfinApiKey.String != "existing-jellyfin" {
+		t.Errorf("Expected existing jellyfin api key, got %q", app.Settings.JellyfinApiKey.String)
 	}
 	if app.Settings.SpotifyClientID.String != "existing-spotify-id" {
 		t.Errorf("Expected existing spotify client id, got %q", app.Settings.SpotifyClientID.String)

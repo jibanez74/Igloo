@@ -67,7 +67,7 @@ type HardwareOption = {
 
 type SecretField =
   | "tmdb_key"
-  | "jellyfin_token"
+  | "jellyfin_api_key"
   | "spotify_client_id"
   | "spotify_client_secret";
 
@@ -103,7 +103,7 @@ function formFromSettings(
 ): UpdateGeneralSettingsRequest {
   return {
     tmdb_key: settings.tmdb_key ?? "",
-    jellyfin_token: settings.jellyfin_token ?? "",
+    jellyfin_api_key: settings.jellyfin_api_key ?? "",
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
     hardware_acceleration_device: settings.hardware_acceleration_device,
@@ -164,7 +164,7 @@ type GeneralSettingsFormProps = {
 function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
   const tmdbKeyId = useId();
-  const jellyfinTokenId = useId();
+  const jellyfinApiKeyId = useId();
   const spotifyClientIdId = useId();
   const spotifyClientSecretId = useId();
   const hardwareDeviceId = useId();
@@ -311,7 +311,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     updateMutation.mutate({
       ...form,
       tmdb_key: form.tmdb_key.trim(),
-      jellyfin_token: form.jellyfin_token.trim(),
+      jellyfin_api_key: form.jellyfin_api_key.trim(),
       spotify_client_id: form.spotify_client_id.trim(),
       spotify_client_secret: form.spotify_client_secret.trim(),
       static_dir: form.static_dir.trim(),
@@ -463,11 +463,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             disabled={updateMutation.isPending}
           />
           <SecretInput
-            id={jellyfinTokenId}
-            name="jellyfin_token"
-            label="Jellyfin token"
-            value={form.jellyfin_token}
-            onChange={value => handleSecretChange("jellyfin_token", value)}
+            id={jellyfinApiKeyId}
+            name="jellyfin_api_key"
+            label="Jellyfin API key"
+            value={form.jellyfin_api_key}
+            onChange={value => handleSecretChange("jellyfin_api_key", value)}
             disabled={updateMutation.isPending}
           />
           <SecretInput

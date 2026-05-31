@@ -25,7 +25,7 @@ CREATE TABLE
     immich_base_url TEXT,
     immich_api_key TEXT,
     jellyfin_base_url TEXT,
-    jellyfin_token TEXT,
+    jellyfin_api_key TEXT,
     spotify_client_id TEXT,
     spotify_client_secret TEXT,
     hardware_acceleration_device TEXT CHECK (

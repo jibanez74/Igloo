@@ -78,7 +78,7 @@ The most important variables are:
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
-| `JELLYFIN_TOKEN` | Stored in settings for future/local integration work; not required for current core features |
+| `JELLYFIN_API_KEY` | First-run default for optional Jellyfin API integration work; not required for current core features |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
 | `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |

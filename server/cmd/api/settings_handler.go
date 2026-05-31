@@ -21,7 +21,7 @@ var (
 
 type generalSettingsResponse struct {
 	TmdbKey                    *string  `json:"tmdb_key"`
-	JellyfinToken              *string  `json:"jellyfin_token"`
+	JellyfinApiKey             *string  `json:"jellyfin_api_key"`
 	SpotifyClientID            *string  `json:"spotify_client_id"`
 	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
@@ -37,7 +37,7 @@ type generalSettingsResponse struct {
 
 type updateGeneralSettingsRequest struct {
 	TmdbKey                    string   `json:"tmdb_key"`
-	JellyfinToken              string   `json:"jellyfin_token"`
+	JellyfinApiKey             string   `json:"jellyfin_api_key"`
 	SpotifyClientID            string   `json:"spotify_client_id"`
 	SpotifyClientSecret        string   `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
@@ -70,7 +70,7 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 
 	return generalSettingsResponse{
 		TmdbKey:                    helpers.StringPtrFromNull(settings.TmdbKey),
-		JellyfinToken:              helpers.StringPtrFromNull(settings.JellyfinToken),
+		JellyfinApiKey:             helpers.StringPtrFromNull(settings.JellyfinApiKey),
 		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
 		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
 		HardwareAccelerationDevice: hardwareAccelerationDevice,
@@ -148,7 +148,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	}
 
 	req.TmdbKey = strings.TrimSpace(req.TmdbKey)
-	req.JellyfinToken = strings.TrimSpace(req.JellyfinToken)
+	req.JellyfinApiKey = strings.TrimSpace(req.JellyfinApiKey)
 	req.SpotifyClientID = strings.TrimSpace(req.SpotifyClientID)
 	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
 	req.HardwareAccelerationDevice = strings.TrimSpace(req.HardwareAccelerationDevice)
@@ -221,7 +221,7 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	currentSettings := app.Settings
 	updatedSettings, err := app.Queries.UpdateGeneralSettings(r.Context(), database.UpdateGeneralSettingsParams{
 		TmdbKey:                    helpers.NullString(req.TmdbKey),
-		JellyfinToken:              helpers.NullString(req.JellyfinToken),
+		JellyfinApiKey:             helpers.NullString(req.JellyfinApiKey),
 		SpotifyClientID:            helpers.NullString(req.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(req.SpotifyClientSecret),
 		HardwareAccelerationDevice: helpers.NullString(req.HardwareAccelerationDevice),
@@ -262,7 +262,7 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 		previous.TranscodeDir != next.TranscodeDir ||
 		previous.EnableLogger != next.EnableLogger ||
 		previous.TmdbKey != next.TmdbKey ||
-		previous.JellyfinToken != next.JellyfinToken ||
+		previous.JellyfinApiKey != next.JellyfinApiKey ||
 		previous.SpotifyClientID != next.SpotifyClientID ||
 		previous.SpotifyClientSecret != next.SpotifyClientSecret
 }

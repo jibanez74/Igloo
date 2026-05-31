@@ -14,7 +14,7 @@ export type HardwareAccelerationDevice = "cpu" | "apple" | "nvidia" | "intel";
 
 export type GeneralSettingsType = {
   tmdb_key: string | null;
-  jellyfin_token: string | null;
+  jellyfin_api_key: string | null;
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
   hardware_acceleration_device: HardwareAccelerationDevice;
@@ -30,7 +30,7 @@ export type GeneralSettingsType = {
 
 export type UpdateGeneralSettingsRequest = {
   tmdb_key: string;
-  jellyfin_token: string;
+  jellyfin_api_key: string;
   spotify_client_id: string;
   spotify_client_secret: string;
   hardware_acceleration_device: HardwareAccelerationDevice;

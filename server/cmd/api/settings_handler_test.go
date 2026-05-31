@@ -35,7 +35,7 @@ func generalSettingsBody(staticDir, logsDir string) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
-		"jellyfin_token": "jellyfin-token",
+		"jellyfin_api_key": "jellyfin-api-key",
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
 		"hardware_acceleration_device": "nvidia",
@@ -78,6 +78,9 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 
 	if settings.TmdbKey.String != "tmdb-key" || !settings.TmdbKey.Valid {
 		t.Fatalf("expected TMDB key to be saved, got %q valid=%v", settings.TmdbKey.String, settings.TmdbKey.Valid)
+	}
+	if settings.JellyfinApiKey.String != "jellyfin-api-key" || !settings.JellyfinApiKey.Valid {
+		t.Fatalf("expected Jellyfin API key to be saved, got %q valid=%v", settings.JellyfinApiKey.String, settings.JellyfinApiKey.Valid)
 	}
 	if settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
 		t.Fatalf("expected hardware device nvidia, got %q", settings.HardwareAccelerationDevice.String)
@@ -202,7 +205,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 
 	clearBody := fmt.Sprintf(`{
 		"tmdb_key": "",
-		"jellyfin_token": "",
+		"jellyfin_api_key": "",
 		"spotify_client_id": "",
 		"spotify_client_secret": "",
 		"hardware_acceleration_device": "cpu",
@@ -222,7 +225,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSettings after clear: %v", err)
 	}
-	if settings.TmdbKey.Valid || settings.JellyfinToken.Valid ||
+	if settings.TmdbKey.Valid || settings.JellyfinApiKey.Valid ||
 		settings.SpotifyClientID.Valid || settings.SpotifyClientSecret.Valid {
 		t.Fatal("expected optional string settings to be cleared")
 	}

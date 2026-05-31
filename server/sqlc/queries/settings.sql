@@ -8,7 +8,7 @@ LIMIT 1;
 -- name: CreateSettings :one
 INSERT INTO settings (
   tmdb_key,
-  jellyfin_token,
+  jellyfin_api_key,
   spotify_client_id,
   spotify_client_secret,
   hardware_acceleration_device,
@@ -30,7 +30,7 @@ RETURNING *;
 UPDATE settings
 SET
   tmdb_key = ?,
-  jellyfin_token = ?,
+  jellyfin_api_key = ?,
   spotify_client_id = ?,
   spotify_client_secret = ?,
   hardware_acceleration_device = ?,
