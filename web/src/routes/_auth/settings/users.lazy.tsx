@@ -1,6 +1,6 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   Card,
@@ -31,7 +31,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
-import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
+import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/settings/users")({
@@ -44,6 +44,47 @@ type DialogState =
   | { type: "edit"; user: AdminUserType }
   | { type: "delete"; user: AdminUserType }
   | { type: "reset-password"; user: AdminUserType };
+
+type UserFormErrorField = "name" | "email" | "password" | "confirmPassword" | "form";
+type UserFormErrors = Partial<Record<UserFormErrorField, string>>;
+type DialogCloseAutoFocusHandler = (event: Event) => void;
+
+const MIN_PASSWORD_LENGTH = 9;
+const MAX_PASSWORD_LENGTH = 128;
+
+function describedBy(...ids: Array<string | false | null | undefined>) {
+  const value = ids.filter(Boolean).join(" ");
+  return value || undefined;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+$/.test(email);
+}
+
+function hasDuplicateEmail(
+  users: AdminUserType[],
+  email: string,
+  ignoredUserId?: number,
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return users.some(user => {
+    if (ignoredUserId !== undefined && user.id === ignoredUserId) {
+      return false;
+    }
+    return user.email.trim().toLowerCase() === normalizedEmail;
+  });
+}
+
+function firstErrorMessage(errors: UserFormErrors) {
+  return (
+    errors.name ??
+    errors.email ??
+    errors.password ??
+    errors.confirmPassword ??
+    errors.form ??
+    "Check the form for errors."
+  );
+}
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -59,6 +100,9 @@ function UsersSettings() {
   const { data: authData } = useQuery(authUserQueryOpts());
 
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
+  const [dialogError, setDialogError] = useState("");
+  const addUserButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const authResolved = authData?.error === false && !!authData.data?.user?.id;
   const currentUserId =
@@ -67,12 +111,40 @@ function UsersSettings() {
   const users: AdminUserType[] =
     usersData?.error === false ? (usersData.data?.users ?? []) : [];
 
-  const closeDialog = () => setDialog({ type: "none" });
+  const focusDialogOpener = () => {
+    const restoreTarget = restoreFocusRef.current;
+    const focusTarget = restoreTarget?.isConnected
+      ? restoreTarget
+      : addUserButtonRef.current;
+    if (!focusTarget) return;
+    const restoreFocus =
+      window.requestAnimationFrame ??
+      ((callback: FrameRequestCallback) => window.setTimeout(callback, 0));
+    restoreFocus(() => focusTarget.focus());
+  };
+
+  const openDialog = (nextDialog: DialogState, restoreTarget: HTMLElement) => {
+    setDialogError("");
+    restoreFocusRef.current = restoreTarget;
+    setDialog(nextDialog);
+  };
+
+  const closeDialog = () => {
+    setDialog({ type: "none" });
+    setDialogError("");
+    focusDialogOpener();
+  };
+
+  const handleDialogCloseAutoFocus: DialogCloseAutoFocusHandler = event => {
+    event.preventDefault();
+    focusDialogOpener();
+  };
 
   const createMutation = useMutation({
     mutationFn: adminCreateUser,
     onSuccess: res => {
       if (res.error) {
+        setDialogError(res.message);
         showActionFailed("create user", res.message);
         return;
       }
@@ -80,7 +152,11 @@ function UsersSettings() {
       queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       closeDialog();
     },
-    onError: () => showActionFailed("create user", "An unexpected error occurred"),
+    onError: () => {
+      const message = "An unexpected error occurred";
+      setDialogError(message);
+      showActionFailed("create user", message);
+    },
   });
 
   const updateMutation = useMutation({
@@ -88,6 +164,7 @@ function UsersSettings() {
       adminUpdateUser(id, data),
     onSuccess: res => {
       if (res.error) {
+        setDialogError(res.message);
         showActionFailed("update user", res.message);
         return;
       }
@@ -95,13 +172,18 @@ function UsersSettings() {
       queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       closeDialog();
     },
-    onError: () => showActionFailed("update user", "An unexpected error occurred"),
+    onError: () => {
+      const message = "An unexpected error occurred";
+      setDialogError(message);
+      showActionFailed("update user", message);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: adminDeleteUser,
     onSuccess: res => {
       if (res.error) {
+        setDialogError(res.message);
         showActionFailed("delete user", res.message);
         return;
       }
@@ -109,7 +191,11 @@ function UsersSettings() {
       queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       closeDialog();
     },
-    onError: () => showActionFailed("delete user", "An unexpected error occurred"),
+    onError: () => {
+      const message = "An unexpected error occurred";
+      setDialogError(message);
+      showActionFailed("delete user", message);
+    },
   });
 
   const resetPasswordMutation = useMutation({
@@ -117,13 +203,18 @@ function UsersSettings() {
       adminResetUserPassword(id, password),
     onSuccess: res => {
       if (res.error) {
+        setDialogError(res.message);
         showActionFailed("reset password", res.message);
         return;
       }
       showSuccess("Password reset successfully");
       closeDialog();
     },
-    onError: () => showActionFailed("reset password", "An unexpected error occurred"),
+    onError: () => {
+      const message = "An unexpected error occurred";
+      setDialogError(message);
+      showActionFailed("reset password", message);
+    },
   });
 
   return (
@@ -140,8 +231,9 @@ function UsersSettings() {
             </CardDescription>
           </div>
           <Button
+            ref={addUserButtonRef}
             variant="accent"
-            onClick={() => setDialog({ type: "create" })}
+            onClick={event => openDialog({ type: "create" }, event.currentTarget)}
             className="w-full shrink-0 sm:w-auto"
           >
             <UserPlus className="size-4" aria-hidden="true" />
@@ -221,7 +313,12 @@ function UsersSettings() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setDialog({ type: "reset-password", user })}
+                            onClick={event =>
+                              openDialog(
+                                { type: "reset-password", user },
+                                event.currentTarget,
+                              )
+                            }
                             aria-label={`Reset password for ${user.name}`}
                             className="text-slate-400 hover:text-white"
                           >
@@ -230,7 +327,9 @@ function UsersSettings() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setDialog({ type: "edit", user })}
+                            onClick={event =>
+                              openDialog({ type: "edit", user }, event.currentTarget)
+                            }
                             aria-label={`Edit ${user.name}`}
                             className="text-slate-400 hover:text-white"
                           >
@@ -239,7 +338,9 @@ function UsersSettings() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setDialog({ type: "delete", user })}
+                            onClick={event =>
+                              openDialog({ type: "delete", user }, event.currentTarget)
+                            }
                             aria-label={`Delete ${user.name}`}
                             className="text-slate-400 hover:text-red-400"
                           >
@@ -258,18 +359,26 @@ function UsersSettings() {
 
       {dialog.type === "create" && (
         <CreateUserDialog
+          users={users}
           onClose={closeDialog}
           onSubmit={data => createMutation.mutate(data)}
           isPending={createMutation.isPending}
+          serverError={dialogError}
+          onClearServerError={() => setDialogError("")}
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
         />
       )}
 
       {dialog.type === "edit" && (
         <EditUserDialog
           user={dialog.user}
+          users={users}
           onClose={closeDialog}
           onSubmit={data => updateMutation.mutate({ id: dialog.user.id, data })}
           isPending={updateMutation.isPending}
+          serverError={dialogError}
+          onClearServerError={() => setDialogError("")}
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
         />
       )}
 
@@ -279,6 +388,9 @@ function UsersSettings() {
           onClose={closeDialog}
           onConfirm={() => deleteMutation.mutate(dialog.user.id)}
           isPending={deleteMutation.isPending}
+          serverError={dialogError}
+          onClearServerError={() => setDialogError("")}
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
         />
       )}
 
@@ -290,6 +402,9 @@ function UsersSettings() {
             resetPasswordMutation.mutate({ id: dialog.user.id, password })
           }
           isPending={resetPasswordMutation.isPending}
+          serverError={dialogError}
+          onClearServerError={() => setDialogError("")}
+          onCloseAutoFocus={handleDialogCloseAutoFocus}
         />
       )}
     </div>
@@ -297,29 +412,94 @@ function UsersSettings() {
 }
 
 type CreateUserDialogProps = {
+  users: AdminUserType[];
   onClose: () => void;
   onSubmit: (data: { name: string; email: string; password: string; is_admin: boolean }) => void;
   isPending: boolean;
+  serverError: string;
+  onClearServerError: () => void;
+  onCloseAutoFocus: DialogCloseAutoFocusHandler;
 };
 
-function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProps) {
+function CreateUserDialog({
+  users,
+  onClose,
+  onSubmit,
+  isPending,
+  serverError,
+  onClearServerError,
+  onCloseAutoFocus,
+}: CreateUserDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [errors, setErrors] = useState<UserFormErrors>({});
   const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
   const isAdminId = useId();
+  const nameErrorId = `${nameId}-error`;
+  const emailErrorId = `${emailId}-error`;
+  const passwordDescriptionId = `${passwordId}-description`;
+  const passwordErrorId = `${passwordId}-error`;
+  const formErrorId = `${passwordId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit({ name: name.trim(), email: email.trim(), password, is_admin: isAdmin });
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const nextErrors: UserFormErrors = {};
+
+    if (trimmedName === "") {
+      nextErrors.name = "Name is required.";
+    } else if (trimmedName.length > 100) {
+      nextErrors.name = "Name must be 100 characters or less.";
+    }
+
+    if (trimmedEmail === "") {
+      nextErrors.email = "Email is required.";
+    } else if (!isValidEmail(trimmedEmail)) {
+      nextErrors.email = "Enter a valid email address.";
+    } else if (hasDuplicateEmail(users, trimmedEmail)) {
+      nextErrors.email = "A user with that email already exists.";
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      nextErrors.password = "Password must be at least 9 characters.";
+    } else if (password.length > MAX_PASSWORD_LENGTH) {
+      nextErrors.password = "Password must be 128 characters or less.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      showValidationError(firstErrorMessage(nextErrors));
+      if (nextErrors.name) {
+        document.getElementById(nameId)?.focus();
+      } else if (nextErrors.email) {
+        document.getElementById(emailId)?.focus();
+      } else {
+        document.getElementById(passwordId)?.focus();
+      }
+      return;
+    }
+
+    setErrors({});
+    onClearServerError();
+    onSubmit({
+      name: trimmedName,
+      email: trimmedEmail,
+      password,
+      is_admin: isAdmin,
+    });
   };
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle className="text-white">Add User</DialogTitle>
           <DialogDescription className="text-slate-300">
@@ -327,51 +507,92 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor={nameId} className="text-slate-300">Name</Label>
             <Input
               id={nameId}
+              name="name"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => {
+                setName(e.target.value);
+                setErrors(current => ({ ...current, name: undefined }));
+                onClearServerError();
+              }}
               placeholder="Full name"
               maxLength={100}
               required
               aria-required="true"
+              aria-invalid={!!errors.name || undefined}
+              aria-describedby={describedBy(errors.name && nameErrorId)}
               className={lightInputClassName}
               aria-label="User name"
             />
+            {errors.name && (
+              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+                {errors.name}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={emailId} className="text-slate-300">Email</Label>
             <Input
               id={emailId}
+              name="email"
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={e => {
+                setEmail(e.target.value);
+                setErrors(current => ({ ...current, email: undefined }));
+                onClearServerError();
+              }}
               placeholder="user@example.com"
               required
               aria-required="true"
+              aria-invalid={!!errors.email || undefined}
+              aria-describedby={describedBy(errors.email && emailErrorId)}
               className={lightInputClassName}
               aria-label="User email"
             />
+            {errors.email && (
+              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+                {errors.email}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={passwordId} className="text-slate-300">Password</Label>
             <Input
               id={passwordId}
+              name="password"
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => {
+                setPassword(e.target.value);
+                setErrors(current => ({ ...current, password: undefined }));
+                onClearServerError();
+              }}
               placeholder="At least 9 characters"
               required
               aria-required="true"
+              aria-invalid={!!errors.password || undefined}
+              aria-describedby={describedBy(
+                passwordDescriptionId,
+                errors.password && passwordErrorId,
+              )}
               className={lightInputClassName}
               aria-label="User password"
             />
-            <p className="text-xs text-slate-400">Must be 9–128 characters</p>
+            <p id={passwordDescriptionId} className="text-xs text-slate-400">
+              Must be 9–128 characters
+            </p>
+            {errors.password && (
+              <p id={passwordErrorId} className="text-xs text-red-400" role="alert">
+                {errors.password}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -387,6 +608,12 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
               Grant admin privileges
             </Label>
           </div>
+
+          {serverError && (
+            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+              {serverError}
+            </p>
+          )}
 
           <DialogFooter className="gap-2 pt-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
@@ -404,27 +631,78 @@ function CreateUserDialog({ onClose, onSubmit, isPending }: CreateUserDialogProp
 
 type EditUserDialogProps = {
   user: AdminUserType;
+  users: AdminUserType[];
   onClose: () => void;
   onSubmit: (data: { name: string; email: string; is_admin: boolean }) => void;
   isPending: boolean;
+  serverError: string;
+  onClearServerError: () => void;
+  onCloseAutoFocus: DialogCloseAutoFocusHandler;
 };
 
-function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogProps) {
+function EditUserDialog({
+  user,
+  users,
+  onClose,
+  onSubmit,
+  isPending,
+  serverError,
+  onClearServerError,
+  onCloseAutoFocus,
+}: EditUserDialogProps) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [isAdmin, setIsAdmin] = useState(user.is_admin);
+  const [errors, setErrors] = useState<UserFormErrors>({});
   const nameId = useId();
   const emailId = useId();
   const isAdminId = useId();
+  const nameErrorId = `${nameId}-error`;
+  const emailErrorId = `${emailId}-error`;
+  const formErrorId = `${emailId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit({ name: name.trim(), email: email.trim(), is_admin: isAdmin });
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const nextErrors: UserFormErrors = {};
+
+    if (trimmedName === "") {
+      nextErrors.name = "Name is required.";
+    } else if (trimmedName.length > 100) {
+      nextErrors.name = "Name must be 100 characters or less.";
+    }
+
+    if (trimmedEmail === "") {
+      nextErrors.email = "Email is required.";
+    } else if (!isValidEmail(trimmedEmail)) {
+      nextErrors.email = "Enter a valid email address.";
+    } else if (hasDuplicateEmail(users, trimmedEmail, user.id)) {
+      nextErrors.email = "A user with that email already exists.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      showValidationError(firstErrorMessage(nextErrors));
+      if (nextErrors.name) {
+        document.getElementById(nameId)?.focus();
+      } else {
+        document.getElementById(emailId)?.focus();
+      }
+      return;
+    }
+
+    setErrors({});
+    onClearServerError();
+    onSubmit({ name: trimmedName, email: trimmedEmail, is_admin: isAdmin });
   };
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle className="text-white">Edit User</DialogTitle>
           <DialogDescription className="text-slate-300">
@@ -432,35 +710,59 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor={nameId} className="text-slate-300">Name</Label>
             <Input
               id={nameId}
+              name="name"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => {
+                setName(e.target.value);
+                setErrors(current => ({ ...current, name: undefined }));
+                onClearServerError();
+              }}
               placeholder="Full name"
               maxLength={100}
               required
               aria-required="true"
+              aria-invalid={!!errors.name || undefined}
+              aria-describedby={describedBy(errors.name && nameErrorId)}
               className={lightInputClassName}
               aria-label="User name"
             />
+            {errors.name && (
+              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+                {errors.name}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={emailId} className="text-slate-300">Email</Label>
             <Input
               id={emailId}
+              name="email"
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={e => {
+                setEmail(e.target.value);
+                setErrors(current => ({ ...current, email: undefined }));
+                onClearServerError();
+              }}
               placeholder="user@example.com"
               required
               aria-required="true"
+              aria-invalid={!!errors.email || undefined}
+              aria-describedby={describedBy(errors.email && emailErrorId)}
               className={lightInputClassName}
               aria-label="User email"
             />
+            {errors.email && (
+              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+                {errors.email}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -476,6 +778,12 @@ function EditUserDialog({ user, onClose, onSubmit, isPending }: EditUserDialogPr
               Admin privileges
             </Label>
           </div>
+
+          {serverError && (
+            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+              {serverError}
+            </p>
+          )}
 
           <DialogFooter className="gap-2 pt-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
@@ -496,16 +804,32 @@ type DeleteUserDialogProps = {
   onClose: () => void;
   onConfirm: () => void;
   isPending: boolean;
+  serverError: string;
+  onClearServerError: () => void;
+  onCloseAutoFocus: DialogCloseAutoFocusHandler;
 };
 
-function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDialogProps) {
+function DeleteUserDialog({
+  user,
+  onClose,
+  onConfirm,
+  isPending,
+  serverError,
+  onClearServerError,
+  onCloseAutoFocus,
+}: DeleteUserDialogProps) {
   const [confirmText, setConfirmText] = useState("");
   const confirmId = useId();
+  const confirmErrorId = `${confirmId}-error`;
+  const formErrorId = `${confirmId}-form-error`;
   const invalid = confirmText.length > 0 && confirmText !== "DELETE";
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle className="text-red-400">Delete User</DialogTitle>
           <DialogDescription className="text-slate-300">
@@ -522,14 +846,29 @@ function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDia
             <Input
               id={confirmId}
               value={confirmText}
-              onChange={e => setConfirmText(e.target.value)}
+              onChange={e => {
+                setConfirmText(e.target.value);
+                onClearServerError();
+              }}
               placeholder="DELETE"
               className={`font-mono ${lightInputClassName}`}
               aria-label="Type DELETE to confirm user deletion"
               aria-invalid={invalid}
+              aria-describedby={describedBy(invalid && confirmErrorId)}
             />
+            {invalid && (
+              <p id={confirmErrorId} className="text-xs text-red-400" role="alert">
+                Type DELETE exactly to enable deletion.
+              </p>
+            )}
           </div>
         </div>
+
+        {serverError && (
+          <p id={formErrorId} className="text-sm text-red-400" role="alert">
+            {serverError}
+          </p>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
@@ -537,7 +876,10 @@ function DeleteUserDialog({ user, onClose, onConfirm, isPending }: DeleteUserDia
           </Button>
           <Button
             variant="destructive"
-            onClick={onConfirm}
+            onClick={() => {
+              onClearServerError();
+              onConfirm();
+            }}
             disabled={isPending || confirmText !== "DELETE"}
           >
             {isPending ? "Deleting..." : "Delete User"}
@@ -553,25 +895,83 @@ type ResetPasswordDialogProps = {
   onClose: () => void;
   onSubmit: (password: string) => void;
   isPending: boolean;
+  serverError: string;
+  onClearServerError: () => void;
+  onCloseAutoFocus: DialogCloseAutoFocusHandler;
 };
 
-function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswordDialogProps) {
+function ResetPasswordDialog({
+  user,
+  onClose,
+  onSubmit,
+  isPending,
+  serverError,
+  onClearServerError,
+  onCloseAutoFocus,
+}: ResetPasswordDialogProps) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<UserFormErrors>({});
   const passwordId = useId();
   const confirmPasswordId = useId();
+  const passwordDescriptionId = `${passwordId}-description`;
+  const passwordErrorId = `${passwordId}-error`;
+  const confirmPasswordErrorId = `${confirmPasswordId}-error`;
+  const formErrorId = `${confirmPasswordId}-form-error`;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) return;
+    const nextErrors: UserFormErrors = {};
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      nextErrors.password = "Password must be at least 9 characters.";
+    } else if (password.length > MAX_PASSWORD_LENGTH) {
+      nextErrors.password = "Password must be 128 characters or less.";
+    }
+
+    if (password !== confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      showValidationError(firstErrorMessage(nextErrors));
+      if (nextErrors.password) {
+        document.getElementById(passwordId)?.focus();
+      } else {
+        document.getElementById(confirmPasswordId)?.focus();
+      }
+      return;
+    }
+
+    setErrors({});
+    onClearServerError();
     onSubmit(password);
   };
 
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const passwordError =
+    errors.password ??
+    (password.length > 0 && password.length < MIN_PASSWORD_LENGTH
+      ? "Password must be at least 9 characters."
+      : undefined) ??
+    (password.length > MAX_PASSWORD_LENGTH
+      ? "Password must be 128 characters or less."
+      : undefined);
+  const confirmPasswordError =
+    errors.confirmPassword ?? (mismatch ? "Passwords do not match." : undefined);
+  const resetDisabled =
+    isPending ||
+    password.length < MIN_PASSWORD_LENGTH ||
+    password.length > MAX_PASSWORD_LENGTH ||
+    mismatch;
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle className="text-white">Reset Password</DialogTitle>
           <DialogDescription className="text-slate-300">
@@ -579,43 +979,81 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor={passwordId} className="text-slate-300">New Password</Label>
             <Input
               id={passwordId}
+              name="password"
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => {
+                setPassword(e.target.value);
+                setErrors(current => ({ ...current, password: undefined }));
+                onClearServerError();
+              }}
               placeholder="At least 9 characters"
               required
               aria-required="true"
+              aria-invalid={!!passwordError || undefined}
+              aria-describedby={describedBy(
+                passwordDescriptionId,
+                passwordError && passwordErrorId,
+              )}
               className={lightInputClassName}
               aria-label="New password"
             />
-            <p className="text-xs text-slate-400">Must be 9–128 characters</p>
+            <p id={passwordDescriptionId} className="text-xs text-slate-400">
+              Must be 9–128 characters
+            </p>
+            {passwordError && (
+              <p id={passwordErrorId} className="text-xs text-red-400" role="alert">
+                {passwordError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor={confirmPasswordId} className="text-slate-300">Confirm Password</Label>
             <Input
               id={confirmPasswordId}
+              name="confirmPassword"
               type="password"
               value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              onChange={e => {
+                setConfirmPassword(e.target.value);
+                setErrors(current => ({
+                  ...current,
+                  confirmPassword: undefined,
+                }));
+                onClearServerError();
+              }}
               placeholder="Repeat new password"
               required
               aria-required="true"
               className={lightInputClassName}
               aria-label="Confirm new password"
-              aria-invalid={mismatch}
+              aria-invalid={!!confirmPasswordError || undefined}
+              aria-describedby={describedBy(
+                confirmPasswordError && confirmPasswordErrorId,
+              )}
             />
-            {mismatch && (
-              <p className="text-xs text-red-400" role="alert">
-                Passwords do not match
+            {confirmPasswordError && (
+              <p
+                id={confirmPasswordErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {confirmPasswordError}
               </p>
             )}
           </div>
+
+          {serverError && (
+            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+              {serverError}
+            </p>
+          )}
 
           <DialogFooter className="gap-2 pt-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
@@ -624,7 +1062,7 @@ function ResetPasswordDialog({ user, onClose, onSubmit, isPending }: ResetPasswo
             <Button
               type="submit"
               variant="accent"
-              disabled={isPending || password.length < 9 || mismatch}
+              disabled={resetDisabled}
             >
               {isPending ? "Resetting..." : "Reset Password"}
             </Button>
