@@ -25,7 +25,7 @@ FFMPEG_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffmpeg/ffmpeg_$(PAYLOAD_SUFFIX)
 FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 
 .PHONY: dev build start stop clean
-.PHONY: check-dev-tools check-build-tools check-platform check-media-payloads sync-schema generate prepare-test-webdist prepare-web
+.PHONY: check-dev-tools check-build-tools check-platform check-media-payloads generate prepare-test-webdist prepare-web
 
 dev: check-dev-tools generate prepare-test-webdist
 	@echo "Starting development server..."
@@ -120,10 +120,7 @@ check-media-payloads: check-platform
 	@test -f "$(FFMPEG_PAYLOAD)" || (echo "Missing embedded ffmpeg payload: $(FFMPEG_PAYLOAD)"; exit 1)
 	@test -f "$(FFPROBE_PAYLOAD)" || (echo "Missing embedded ffprobe payload: $(FFPROBE_PAYLOAD)"; exit 1)
 
-sync-schema:
-	@cp $(SERVER_DIR)/sqlc/schema.sql $(SERVER_DIR)/cmd/api/schema.sql
-
-generate: sync-schema
+generate:
 	@cd $(SERVER_DIR)/sqlc && sqlc generate
 
 prepare-test-webdist:
