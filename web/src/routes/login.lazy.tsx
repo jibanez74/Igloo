@@ -152,6 +152,7 @@ function LoginPage() {
                       maxLength={128}
                       id="password"
                       name="password"
+                      autoComplete="current-password"
                       required
                       className={`px-10 ${lightInputClassName}`}
                       disabled={isSubmitting}
