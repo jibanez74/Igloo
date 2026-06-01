@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
+import { z } from "zod/mini";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 
 const trailerSearchSchema = z.object({
-  mediaType: z.enum(["movie", "tv"]).optional(),
-  mediaId: z.coerce.number().int().positive().optional(),
-  videoKey: z.string().optional(),
-  returnTo: z.string().optional(),
+  mediaType: z.optional(z.enum(["movie", "tv"])),
+  mediaId: z.optional(z.coerce.number().check(z.int(), z.positive())),
+  videoKey: z.optional(z.string()),
+  returnTo: z.optional(z.string()),
 });
 
 export const Route = createFileRoute("/_auth/trailer")({

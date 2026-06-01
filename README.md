@@ -279,8 +279,7 @@ See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenan
 - SQLite is the database engine.
 - WAL mode is enabled at startup.
 - `DB_PATH` controls the database file path; the binary default is `./db/igloo.db`.
-- `server/sqlc/schema.sql` is the schema source of truth.
-- `server/cmd/api/schema.sql` is the embedded startup schema copy.
+- `server/sqlc/schema.sql` is the schema source of truth and the embedded startup schema.
 - Query files live under `server/sqlc/queries/`.
 - Generated database code lives under `server/cmd/internal/database/`.
 
@@ -290,7 +289,7 @@ After changing schema or query files:
 make generate
 ```
 
-`make generate` copies `server/sqlc/schema.sql` to `server/cmd/api/schema.sql` and runs `sqlc generate` from `server/sqlc`.
+`make generate` runs `sqlc generate` from `server/sqlc`.
 
 ## Testing
 

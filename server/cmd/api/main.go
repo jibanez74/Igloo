@@ -24,6 +24,7 @@ import (
 	applogger "igloo/cmd/internal/logger"
 	"igloo/cmd/internal/spotify"
 	"igloo/cmd/internal/tmdb"
+	"igloo/sqlc"
 
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
@@ -61,8 +62,7 @@ type Application struct {
 	WatchRoomHub        *WatchRoomHub
 }
 
-//go:embed schema.sql
-var SQL string
+var SQL = sqlc.Schema
 
 //go:embed all:webdist
 var FrontendFS embed.FS

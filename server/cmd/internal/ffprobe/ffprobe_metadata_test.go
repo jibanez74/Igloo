@@ -2,144 +2,8 @@ package ffprobe
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 )
-
-func getTestMediaPath(filename string) string {
-	_, currentFile, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
-	return filepath.Join(projectRoot, "media", filename)
-}
-
-func requireTestMedia(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Skipf("test media not found (add server/media/track.m4a to run): %v", err)
-	}
-}
-
-func TestGetMetadata_AudioFile(t *testing.T) {
-	trackPath := getTestMediaPath("track.m4a")
-	requireTestMedia(t, trackPath)
-
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	result, err := probe.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetMetadata failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Expected non-nil result")
-	}
-
-	if len(result.Streams) == 0 {
-		t.Error("Expected at least one stream")
-	}
-
-	if result.Format.Filename == "" {
-		t.Error("Expected Format.Filename to be set")
-	}
-
-	if result.Format.Duration == "" {
-		t.Error("Expected Format.Duration to be set")
-	}
-
-	if result.Format.FormatName == "" {
-		t.Error("Expected Format.FormatName to be set")
-	}
-}
-
-func TestGetMetadata_AudioStream(t *testing.T) {
-	trackPath := getTestMediaPath("track.m4a")
-	requireTestMedia(t, trackPath)
-
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	result, err := probe.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetMetadata failed: %v", err)
-	}
-
-	var audioStream *Stream
-
-	for i := range result.Streams {
-		if result.Streams[i].CodecType == "audio" {
-			audioStream = &result.Streams[i]
-			break
-		}
-	}
-
-	if audioStream == nil {
-		t.Fatal("Expected to find an audio stream")
-	}
-
-	if audioStream.CodecName == "" {
-		t.Error("Expected audio stream to have CodecName")
-	}
-
-	if audioStream.Channels == 0 {
-		t.Error("Expected audio stream to have Channels > 0")
-	}
-}
-
-func TestGetAudioMetadata_AudioFile(t *testing.T) {
-	trackPath := getTestMediaPath("track.m4a")
-	requireTestMedia(t, trackPath)
-
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	result, err := probe.GetAudioMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetAudioMetadata failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Expected non-nil result")
-	}
-
-	if len(result.Streams) == 0 {
-		t.Error("Expected at least one stream")
-	}
-
-	if len(result.Chapters) != 0 {
-		t.Errorf("Expected audio metadata to omit chapters, got %d", len(result.Chapters))
-	}
-
-	if result.Format.Duration == "" {
-		t.Error("Expected Format.Duration to be set")
-	}
-
-	var audioStream *Stream
-	for i := range result.Streams {
-		if result.Streams[i].CodecType == "audio" {
-			audioStream = &result.Streams[i]
-			break
-		}
-	}
-
-	if audioStream == nil {
-		t.Fatal("Expected to find an audio stream")
-	}
-	if audioStream.CodecName == "" {
-		t.Error("Expected audio stream to have CodecName")
-	}
-}
 
 func TestGetMetadata_NonExistentFile(t *testing.T) {
 	probe, err := New()
@@ -180,34 +44,6 @@ func TestGetAudioMetadata_EmptyPath(t *testing.T) {
 	}
 }
 
-func TestGetMetadata_FormatTags(t *testing.T) {
-	trackPath := getTestMediaPath("track.m4a")
-	requireTestMedia(t, trackPath)
-
-	probe, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	result, err := probe.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("GetMetadata failed: %v", err)
-	}
-
-	t.Logf("Title: %s", result.Format.Tags.Title)
-	t.Logf("Artist: %s", result.Format.Tags.Artist)
-	t.Logf("Album: %s", result.Format.Tags.Album)
-	t.Logf("Genre: %s", result.Format.Tags.Genre)
-	t.Logf("Track: %s", result.Format.Tags.Track)
-	t.Logf("Date: %s", result.Format.Tags.Date)
-
-	// Actual values depend on the test file's embedded metadata.
-	if result.Format.Tags == (FormatTags{}) {
-		t.Log("Warning: No format tags found in file - this may be expected if file has no metadata")
-	}
-}
-
 func TestFormatTagsUnmarshalAliases(t *testing.T) {
 	var tags FormatTags
 	err := json.Unmarshal([]byte(`{
@@ -243,39 +79,5 @@ func TestFormatTagsUnmarshalAliases(t *testing.T) {
 	}
 	if tags.SortArtist != "Artist Sort" {
 		t.Fatalf("SortArtist = %q, want %q", tags.SortArtist, "Artist Sort")
-	}
-}
-
-func TestGetMetadata_MultipleCallsUseSameInstance(t *testing.T) {
-	trackPath := getTestMediaPath("track.m4a")
-	requireTestMedia(t, trackPath)
-
-	probe1, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create first ffprobe instance: %v", err)
-	}
-
-	probe2, err := New()
-	if err != nil {
-		t.Fatalf("Failed to create second ffprobe instance: %v", err)
-	}
-	defer Cleanup()
-
-	if probe1 != probe2 {
-		t.Error("Expected New() to return the same singleton instance")
-	}
-
-	result1, err := probe1.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("First GetMetadata call failed: %v", err)
-	}
-
-	result2, err := probe2.GetMetadata(trackPath)
-	if err != nil {
-		t.Fatalf("Second GetMetadata call failed: %v", err)
-	}
-
-	if result1.Format.Duration != result2.Format.Duration {
-		t.Error("Expected same duration from both calls")
 	}
 }

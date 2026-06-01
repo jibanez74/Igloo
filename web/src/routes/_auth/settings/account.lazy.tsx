@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
+import type { FormEvent } from "react";
 import {
   Card,
   CardContent,
@@ -33,7 +34,6 @@ import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
   ADMIN_USERS_KEY,
-  PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -43,9 +43,13 @@ import {
   uploadUserAvatar,
   deleteUserAccount,
 } from "@/lib/api";
-import { showSuccess, showError, showActionFailed } from "@/lib/toast-helpers";
+import {
+  showSuccess,
+  showError,
+  showActionFailed,
+  showValidationError,
+} from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
-import { logout } from "@/lib/api";
 import type { AuthUser } from "@/types";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
@@ -53,6 +57,34 @@ import { cn } from "@/lib/utils";
 export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,
 });
+
+type AccountErrorField =
+  | "name"
+  | "email"
+  | "avatarUrl"
+  | "avatarUpload"
+  | "currentPassword"
+  | "newPassword"
+  | "confirmPassword"
+  | "deleteConfirm";
+
+type AccountErrors = Partial<Record<AccountErrorField, string>>;
+
+const MIN_PASSWORD_LENGTH = 9;
+const MAX_PASSWORD_LENGTH = 128;
+const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+];
+
+function describedBy(...ids: Array<string | false | null | undefined>) {
+  const value = ids.filter(Boolean).join(" ");
+  return value || undefined;
+}
 
 function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
@@ -71,6 +103,17 @@ function AccountSettings() {
   const confirmPasswordId = useId();
   const deleteConfirmId = useId();
   const deleteConfirmHelperId = useId();
+  const emailErrorId = `${emailId}-error`;
+  const nameDescriptionId = `${nameId}-description`;
+  const nameErrorId = `${nameId}-error`;
+  const avatarUploadDescriptionId = `${avatarUploadId}-description`;
+  const avatarUploadErrorId = `${avatarUploadId}-error`;
+  const avatarUrlErrorId = `${avatarUrlId}-error`;
+  const currentPasswordErrorId = `${currentPasswordId}-error`;
+  const newPasswordDescriptionId = `${newPasswordId}-description`;
+  const newPasswordErrorId = `${newPasswordId}-error`;
+  const confirmPasswordErrorId = `${confirmPasswordId}-error`;
+  const deleteConfirmErrorId = `${deleteConfirmId}-error`;
 
   const user: AuthUser | null =
     userData?.error === false && userData.data?.user
@@ -84,9 +127,28 @@ function AccountSettings() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [errors, setErrors] = useState<AccountErrors>({});
 
   const nameValue = name ?? user?.name ?? "";
   const emailValue = email ?? user?.email ?? "";
+  const deleteConfirmError =
+    deleteConfirmText.length > 0 && deleteConfirmText !== "DELETE"
+      ? "Type DELETE exactly to confirm account deletion."
+      : errors.deleteConfirm;
+
+  const showFieldError = (
+    field: AccountErrorField,
+    message: string,
+    fieldId: string,
+  ) => {
+    setErrors(current => ({ ...current, [field]: message }));
+    showValidationError(message);
+    document.getElementById(fieldId)?.focus();
+  };
+
+  const clearError = (field: AccountErrorField) => {
+    setErrors(current => ({ ...current, [field]: undefined }));
+  };
 
   // Name update mutation with optimistic updates
   const updateNameMutation = useMutation({
@@ -128,9 +190,14 @@ function AccountSettings() {
     },
     onSuccess: res => {
       if (res.error) {
+        setErrors(current => ({
+          ...current,
+          name: res.message || "Failed to update name.",
+        }));
         showActionFailed("update name", res.message);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
+        clearError("name");
         showSuccess("Name updated successfully");
         queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
@@ -168,9 +235,14 @@ function AccountSettings() {
     },
     onSuccess: res => {
       if (res.error) {
+        setErrors(current => ({
+          ...current,
+          email: res.message || "Failed to update email.",
+        }));
         showActionFailed("update email", res.message);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
+        clearError("email");
         showSuccess("Email updated successfully");
         queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       }
@@ -188,8 +260,18 @@ function AccountSettings() {
     }) => updateUserPassword(currentPassword, newPassword),
     onSuccess: res => {
       if (res.error) {
+        setErrors(current => ({
+          ...current,
+          currentPassword: res.message || "Failed to update password.",
+        }));
         showActionFailed("update password", res.message);
       } else {
+        setErrors(current => ({
+          ...current,
+          currentPassword: undefined,
+          newPassword: undefined,
+          confirmPassword: undefined,
+        }));
         showSuccess("Password updated successfully");
         setCurrentPassword("");
         setNewPassword("");
@@ -235,9 +317,14 @@ function AccountSettings() {
     },
     onSuccess: res => {
       if (res.error) {
+        setErrors(current => ({
+          ...current,
+          avatarUrl: res.message || "Failed to update avatar.",
+        }));
         showActionFailed("update avatar", res.message);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
+        clearError("avatarUrl");
         showSuccess("Avatar updated successfully");
         setAvatarUrl("");
         queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
@@ -264,9 +351,14 @@ function AccountSettings() {
     },
     onSuccess: res => {
       if (res.error) {
+        setErrors(current => ({
+          ...current,
+          avatarUpload: res.message || "Failed to upload avatar.",
+        }));
         showActionFailed("upload avatar", res.message);
         queryClient.invalidateQueries({ queryKey: [AUTH_USER_KEY] });
       } else {
+        clearError("avatarUpload");
         showSuccess("Avatar uploaded successfully");
         if (res.data?.user) {
           queryClient.setQueryData([AUTH_USER_KEY], {
@@ -280,71 +372,116 @@ function AccountSettings() {
   });
 
   const handleUpdateName = () => {
-    if (!user || !nameValue.trim()) {
-      showError("Name is required");
+    const trimmedName = nameValue.trim();
+    if (!user || !trimmedName) {
+      showFieldError("name", "Name is required.", nameId);
       return;
     }
 
-    if (nameValue.trim() === user.name) {
-      return; // No change
-    }
-
-    if (nameValue.length > 100) {
-      showError("Name must be 100 characters or less");
+    if (trimmedName === user.name) {
       return;
     }
 
-    updateNameMutation.mutate(nameValue.trim());
+    if (trimmedName.length > 100) {
+      showFieldError(
+        "name",
+        "Name must be 100 characters or less.",
+        nameId,
+      );
+      return;
+    }
+
+    clearError("name");
+    updateNameMutation.mutate(trimmedName);
   };
 
   const handleUpdateEmail = () => {
-    if (!user || !emailValue.trim()) {
-      showError("Email is required");
+    const trimmedEmail = emailValue.trim();
+    if (!user || !trimmedEmail) {
+      showFieldError("email", "Email is required.", emailId);
       return;
     }
 
-    if (emailValue.trim() === user.email) {
+    if (trimmedEmail === user.email) {
       return;
     }
 
-    if (emailValue.length > 255) {
-      showError("Email must be 255 characters or less");
+    if (trimmedEmail.length > 255) {
+      showFieldError(
+        "email",
+        "Email must be 255 characters or less.",
+        emailId,
+      );
       return;
     }
 
-    updateEmailMutation.mutate(emailValue.trim());
+    clearError("email");
+    updateEmailMutation.mutate(trimmedEmail);
   };
 
-  const handleUpdatePassword = () => {
-    if (!currentPassword || !newPassword) {
-      showError("Current and new password are required");
+  const handleUpdatePassword = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const nextErrors: AccountErrors = {};
+
+    if (!currentPassword) {
+      nextErrors.currentPassword = "Current password is required.";
+    }
+
+    if (!newPassword) {
+      nextErrors.newPassword = "New password is required.";
+    } else if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      nextErrors.newPassword = "New password must be at least 9 characters.";
+    } else if (newPassword.length > MAX_PASSWORD_LENGTH) {
+      nextErrors.newPassword =
+        "New password must be 128 characters or less.";
+    }
+
+    if (!confirmPassword) {
+      nextErrors.confirmPassword = "Confirm your new password.";
+    } else if (newPassword && newPassword !== confirmPassword) {
+      nextErrors.confirmPassword = "New passwords do not match.";
+    }
+
+    if (nextErrors.currentPassword) {
+      showFieldError(
+        "currentPassword",
+        nextErrors.currentPassword,
+        currentPasswordId,
+      );
       return;
     }
 
-    if (newPassword.length < 9) {
-      showError("New password must be at least 9 characters");
+    if (nextErrors.newPassword) {
+      showFieldError("newPassword", nextErrors.newPassword, newPasswordId);
       return;
     }
 
-    if (newPassword.length > 128) {
-      showError("New password must be 128 characters or less");
+    if (nextErrors.confirmPassword) {
+      showFieldError(
+        "confirmPassword",
+        nextErrors.confirmPassword,
+        confirmPasswordId,
+      );
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      showError("New passwords do not match");
-      return;
-    }
-
+    setErrors(current => ({
+      ...current,
+      currentPassword: undefined,
+      newPassword: undefined,
+      confirmPassword: undefined,
+    }));
     updatePasswordMutation.mutate({ currentPassword, newPassword });
   };
 
   const handleUpdateAvatarUrl = () => {
     if (!avatarUrl.trim()) {
-      showError("Avatar URL is required");
+      showFieldError("avatarUrl", "Avatar URL is required.", avatarUrlId);
       return;
     }
 
+    clearError("avatarUrl");
     updateAvatarUrlMutation.mutate(avatarUrl.trim());
   };
 
@@ -352,36 +489,37 @@ function AccountSettings() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-      "image/avif",
-    ];
-    if (!allowedTypes.includes(file.type)) {
-      showError("Invalid file type", "Allowed: JPEG, PNG, GIF, WebP, AVIF");
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      const message =
+        "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, AVIF.";
+      setErrors(current => ({ ...current, avatarUpload: message }));
+      showValidationError(message);
+      document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
     }
 
-    // Validate file size (20MB)
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) {
-      showError("File too large", "Maximum size is 20MB");
+    if (file.size > MAX_AVATAR_SIZE) {
+      const message = "File too large. Maximum size is 20MB.";
+      setErrors(current => ({ ...current, avatarUpload: message }));
+      showValidationError(message);
+      document.getElementById(avatarUploadId)?.focus();
       e.target.value = "";
       return;
     }
 
+    clearError("avatarUpload");
     uploadAvatarMutation.mutate(file);
-    // Reset file input
     e.target.value = "";
   };
 
   const handleDeleteAccount = () => {
     if (deleteConfirmText !== "DELETE") {
-      showError("Please type DELETE to confirm");
+      showFieldError(
+        "deleteConfirm",
+        "Type DELETE exactly to confirm account deletion.",
+        deleteConfirmId,
+      );
       return;
     }
 
@@ -397,20 +535,28 @@ function AccountSettings() {
         }
 
         showSuccess("Account deleted successfully");
-        const logoutRes = await logout();
-        if (logoutRes.error) {
-          showActionFailed("log out", logoutRes.message);
-        }
-        queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
-        queryClient.removeQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
-        queryClient.invalidateQueries();
-        navigate({ to: "/login", replace: true });
+        queryClient.setQueryData([AUTH_USER_KEY], {
+          error: true,
+          message: "Not authenticated",
+        });
+        queryClient.removeQueries({
+          predicate: query => query.queryKey[0] !== AUTH_USER_KEY,
+        });
+        await navigate({ to: "/login", replace: true });
       } catch {
         showError("Failed to delete account");
         setDeleteDialogOpen(false);
         setDeleteConfirmText("");
       }
     });
+  };
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setDeleteConfirmText("");
+      clearError("deleteConfirm");
+    }
   };
 
   const getAvatarUrl = () => {
@@ -491,19 +637,24 @@ function AccountSettings() {
                 id={emailId}
                 type="email"
                 value={emailValue}
-                onChange={e => setEmail(e.target.value)}
+                onChange={e => {
+                  setEmail(e.target.value);
+                  clearError("email");
+                }}
                 placeholder="Enter your email"
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your email address"
                 required
                 aria-required="true"
+                aria-invalid={!!errors.email || undefined}
+                aria-describedby={describedBy(errors.email && emailErrorId)}
               />
               <Button
+                type="button"
                 onClick={handleUpdateEmail}
                 disabled={
                   updateEmailMutation.isPending ||
-                  emailValue.trim() === user.email ||
-                  !emailValue.trim()
+                  emailValue.trim() === user.email
                 }
                 variant="accent"
                 className="w-full sm:w-auto"
@@ -511,6 +662,11 @@ function AccountSettings() {
                 {updateEmailMutation.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
+            {errors.email && (
+              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+                {errors.email}
+              </p>
+            )}
           </div>
 
           {/* Name */}
@@ -523,18 +679,26 @@ function AccountSettings() {
                 id={nameId}
                 type="text"
                 value={nameValue}
-                onChange={e => setName(e.target.value)}
+                onChange={e => {
+                  setName(e.target.value);
+                  clearError("name");
+                }}
                 placeholder="Enter your name"
                 maxLength={100}
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your display name"
+                aria-invalid={!!errors.name || undefined}
+                aria-describedby={describedBy(
+                  nameDescriptionId,
+                  errors.name && nameErrorId,
+                )}
               />
               <Button
+                type="button"
                 onClick={handleUpdateName}
                 disabled={
                   updateNameMutation.isPending ||
-                  nameValue.trim() === user.name ||
-                  !nameValue.trim()
+                  nameValue.trim() === user.name
                 }
                 variant="accent"
                 className="w-full sm:w-auto"
@@ -542,9 +706,14 @@ function AccountSettings() {
                 {updateNameMutation.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p id={nameDescriptionId} className="text-xs text-slate-400">
               Your display name (max 100 characters)
             </p>
+            {errors.name && (
+              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+                {errors.name}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -599,6 +768,11 @@ function AccountSettings() {
                   disabled={uploadAvatarMutation.isPending}
                   className="peer absolute inset-0 z-10 h-9 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   aria-label="Upload avatar image"
+                  aria-invalid={!!errors.avatarUpload || undefined}
+                  aria-describedby={describedBy(
+                    avatarUploadDescriptionId,
+                    errors.avatarUpload && avatarUploadErrorId,
+                  )}
                 />
                 <label
                   htmlFor={avatarUploadId}
@@ -619,9 +793,18 @@ function AccountSettings() {
                 </label>
               </div>
             </div>
-            <p className="text-xs text-slate-400">
+            <p id={avatarUploadDescriptionId} className="text-xs text-slate-400">
               JPEG, PNG, GIF, WebP, or AVIF (max 20MB)
             </p>
+            {errors.avatarUpload && (
+              <p
+                id={avatarUploadErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {errors.avatarUpload}
+              </p>
+            )}
           </div>
 
           {/* Set Avatar URL */}
@@ -634,22 +817,37 @@ function AccountSettings() {
                 id={avatarUrlId}
                 type="url"
                 value={avatarUrl}
-                onChange={e => setAvatarUrl(e.target.value)}
+                onChange={e => {
+                  setAvatarUrl(e.target.value);
+                  clearError("avatarUrl");
+                }}
                 placeholder="https://example.com/avatar.jpg"
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Avatar image URL"
+                aria-invalid={!!errors.avatarUrl || undefined}
+                aria-describedby={describedBy(
+                  errors.avatarUrl && avatarUrlErrorId,
+                )}
               />
               <Button
+                type="button"
                 onClick={handleUpdateAvatarUrl}
-                disabled={
-                  updateAvatarUrlMutation.isPending || !avatarUrl.trim()
-                }
+                disabled={updateAvatarUrlMutation.isPending}
                 variant="accent"
                 className="w-full sm:w-auto"
               >
                 {updateAvatarUrlMutation.isPending ? "Saving..." : "Set URL"}
               </Button>
             </div>
+            {errors.avatarUrl && (
+              <p
+                id={avatarUrlErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {errors.avatarUrl}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -665,7 +863,20 @@ function AccountSettings() {
             Update your account password
           </CardDescription>
         </CardHeader>
-        <CardContent className="max-w-2xl space-y-4">
+        <CardContent className="max-w-2xl">
+          <form
+            onSubmit={handleUpdatePassword}
+            noValidate
+            className="space-y-4"
+          >
+            <input
+              type="email"
+              name="username"
+              autoComplete="username"
+              value={emailValue}
+              readOnly
+              hidden
+            />
           <div className="space-y-2">
             <Label htmlFor={currentPasswordId} className="text-slate-300">
               Current Password
@@ -674,13 +885,30 @@ function AccountSettings() {
               id={currentPasswordId}
               type="password"
               value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
+              onChange={e => {
+                setCurrentPassword(e.target.value);
+                clearError("currentPassword");
+              }}
               placeholder="Enter current password"
               className={lightInputClassName}
               aria-label="Current password"
+              autoComplete="current-password"
               required
               aria-required="true"
+              aria-invalid={!!errors.currentPassword || undefined}
+              aria-describedby={describedBy(
+                errors.currentPassword && currentPasswordErrorId,
+              )}
             />
+            {errors.currentPassword && (
+              <p
+                id={currentPasswordErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {errors.currentPassword}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -691,14 +919,34 @@ function AccountSettings() {
               id={newPasswordId}
               type="password"
               value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
+              onChange={e => {
+                setNewPassword(e.target.value);
+                clearError("newPassword");
+              }}
               placeholder="Enter new password"
               className={lightInputClassName}
               aria-label="New password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
+              aria-invalid={!!errors.newPassword || undefined}
+              aria-describedby={describedBy(
+                newPasswordDescriptionId,
+                errors.newPassword && newPasswordErrorId,
+              )}
             />
-            <p className="text-xs text-slate-400">
+            <p id={newPasswordDescriptionId} className="text-xs text-slate-400">
               Must be at least 9 characters and no more than 128 characters
             </p>
+            {errors.newPassword && (
+              <p
+                id={newPasswordErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {errors.newPassword}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -709,21 +957,33 @@ function AccountSettings() {
               id={confirmPasswordId}
               type="password"
               value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              onChange={e => {
+                setConfirmPassword(e.target.value);
+                clearError("confirmPassword");
+              }}
               placeholder="Confirm new password"
               className={lightInputClassName}
               aria-label="Confirm new password"
+              autoComplete="new-password"
+              aria-invalid={!!errors.confirmPassword || undefined}
+              aria-describedby={describedBy(
+                errors.confirmPassword && confirmPasswordErrorId,
+              )}
             />
+            {errors.confirmPassword && (
+              <p
+                id={confirmPasswordErrorId}
+                className="text-xs text-red-400"
+                role="alert"
+              >
+                {errors.confirmPassword}
+              </p>
+            )}
           </div>
 
           <Button
-            onClick={handleUpdatePassword}
-            disabled={
-              updatePasswordMutation.isPending ||
-              !currentPassword ||
-              !newPassword ||
-              !confirmPassword
-            }
+            type="submit"
+            disabled={updatePasswordMutation.isPending}
             variant="accent"
             className="w-full sm:w-auto"
           >
@@ -731,6 +991,7 @@ function AccountSettings() {
               ? "Updating..."
               : "Update Password"}
           </Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -759,7 +1020,7 @@ function AccountSettings() {
             )}
           </div>
           <Button
-            onClick={() => setDeleteDialogOpen(true)}
+            onClick={() => handleDeleteDialogOpenChange(true)}
             disabled={user.is_admin}
             variant="destructive"
             className="w-full sm:w-auto"
@@ -772,7 +1033,7 @@ function AccountSettings() {
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-red-400">Delete Account</DialogTitle>
@@ -795,24 +1056,34 @@ function AccountSettings() {
                 id={deleteConfirmId}
                 type="text"
                 value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
+                onChange={e => {
+                  setDeleteConfirmText(e.target.value);
+                  clearError("deleteConfirm");
+                }}
                 placeholder="DELETE"
                 className={`font-mono ${lightInputClassName}`}
                 aria-label="Type DELETE to confirm account deletion"
-                aria-describedby={deleteConfirmHelperId}
-                aria-invalid={
-                  deleteConfirmText.length > 0 && deleteConfirmText !== "DELETE"
-                }
+                aria-describedby={describedBy(
+                  deleteConfirmHelperId,
+                  deleteConfirmError && deleteConfirmErrorId,
+                )}
+                aria-invalid={!!deleteConfirmError || undefined}
               />
+              {deleteConfirmError && (
+                <p
+                  id={deleteConfirmErrorId}
+                  className="text-xs text-red-400"
+                  role="alert"
+                >
+                  {deleteConfirmError}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setDeleteConfirmText("");
-              }}
+              onClick={() => handleDeleteDialogOpenChange(false)}
               disabled={isDeleting}
             >
               Cancel
