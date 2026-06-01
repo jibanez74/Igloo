@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
+import { z } from "zod/mini";
 import {
   searchAlbumsQueryOpts,
   searchAllQueryOpts,
@@ -10,12 +10,15 @@ import {
 import { SEARCH_PER_PAGE } from "@/lib/constants";
 
 const searchSchema = z.object({
-  q: z.string().catch("").default(""),
-  tab: z
-    .enum(["all", "movies", "albums", "musicians", "tracks"])
-    .catch("all")
-    .default("all"),
-  page: z.number().int().positive().catch(1).default(1),
+  q: z._default(z.catch(z.string(), ""), ""),
+  tab: z._default(
+    z.catch(z.enum(["all", "movies", "albums", "musicians", "tracks"]), "all"),
+    "all",
+  ),
+  page: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
 });
 
 export type SearchParams = z.infer<typeof searchSchema>;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { z } from "zod";
+import { z } from "zod/mini";
 import {
   ArrowLeft,
   Disc3,
@@ -49,11 +49,26 @@ import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 
 const musicSearchSchema = z.object({
-  tab: z.enum(["musicians", "albums", "tracks", "playlists"]).catch("albums").default("albums"),
-  albumsPage: z.number().int().positive().catch(1).default(1),
-  musiciansPage: z.number().int().positive().catch(1).default(1),
-  playlistsView: z.enum(["playlists", "liked"]).catch("playlists").default("playlists"),
-  likedTracksPage: z.number().int().positive().catch(1).default(1),
+  tab: z._default(
+    z.catch(z.enum(["musicians", "albums", "tracks", "playlists"]), "albums"),
+    "albums",
+  ),
+  albumsPage: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
+  musiciansPage: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
+  playlistsView: z._default(
+    z.catch(z.enum(["playlists", "liked"]), "playlists"),
+    "playlists",
+  ),
+  likedTracksPage: z._default(
+    z.catch(z.number().check(z.int(), z.positive()), 1),
+    1,
+  ),
 });
 
 type MusicSearchParams = z.infer<typeof musicSearchSchema>;
