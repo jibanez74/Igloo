@@ -1,4 +1,10 @@
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 type ApiResponse<T> = {
   error: boolean;
@@ -29,7 +35,7 @@ type UserSettingsEnv = {
 function readUserSettingsEnv(): UserSettingsEnv {
   return {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
+    email: process.env.E2E_ADMIN_EMAIL ?? "admin@sample.com",
     password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
   };
 }
@@ -40,6 +46,45 @@ function apiURL(env: UserSettingsEnv, path: string) {
 
 async function readJSON<T>(response: APIResponse) {
   return (await response.json()) as ApiResponse<T>;
+}
+
+function isAppApiResponse(response: Response) {
+  return new URL(response.url()).pathname.startsWith("/api/");
+}
+
+function trackBrowserIssues(page: Page) {
+  const consoleIssues: string[] = [];
+  const pageErrors: string[] = [];
+  const failedRequests: string[] = [];
+  const responseErrors: string[] = [];
+
+  page.on("console", message => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleIssues.push(`${message.type()}: ${message.text()}`);
+    }
+  });
+  page.on("pageerror", error => pageErrors.push(error.message));
+  page.on("requestfailed", request => {
+    failedRequests.push(
+      `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
+    );
+  });
+  page.on("response", response => {
+    if (isAppApiResponse(response) && response.status() >= 400) {
+      responseErrors.push(
+        `${response.status()} ${response.request().method()} ${response.url()}`,
+      );
+    }
+  });
+
+  return {
+    assertClean() {
+      expect(consoleIssues).toEqual([]);
+      expect(pageErrors).toEqual([]);
+      expect(failedRequests).toEqual([]);
+      expect(responseErrors).toEqual([]);
+    },
+  };
 }
 
 async function login(
@@ -115,36 +160,21 @@ test.describe("Users settings", () => {
     const editedName = `Playwright Users Settings Edited ${stamp}`;
     const editedEmail = `${prefix}-edited@example.com`;
     const resetPassword = `ResetPass${stamp}!`;
-    const consoleIssues: string[] = [];
-    const pageErrors: string[] = [];
-    const failedRequests: string[] = [];
-    const adminUserErrors: string[] = [];
+    const tracker = trackBrowserIssues(page);
     let createPostCount = 0;
+    let resetPasswordPutCount = 0;
 
-    page.on("console", message => {
-      if (message.type() === "error" || message.type() === "warning") {
-        consoleIssues.push(`${message.type()}: ${message.text()}`);
-      }
-    });
-    page.on("pageerror", error => pageErrors.push(error.message));
-    page.on("requestfailed", request => {
-      failedRequests.push(
-        `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
-      );
-    });
     page.on("request", request => {
-      if (
-        request.url().includes("/api/admin/users") &&
-        request.method() === "POST"
-      ) {
+      const url = new URL(request.url());
+      if (url.pathname === "/api/admin/users" && request.method() === "POST") {
         createPostCount += 1;
       }
-    });
-    page.on("response", response => {
-      if (response.url().includes("/api/admin/users") && response.status() >= 400) {
-        adminUserErrors.push(
-          `${response.status()} ${response.request().method()} ${response.url()}`,
-        );
+      if (
+        url.pathname.startsWith("/api/admin/users/") &&
+        url.pathname.endsWith("/password") &&
+        request.method() === "PUT"
+      ) {
+        resetPasswordPutCount += 1;
       }
     });
 
@@ -227,6 +257,7 @@ test.describe("Users settings", () => {
       await expect(
         page.getByRole("button", { name: "Reset Password", exact: true }),
       ).toBeDisabled();
+      expect(resetPasswordPutCount).toBe(0);
       await page
         .getByRole("textbox", { name: "New password", exact: true })
         .fill(resetPassword);
@@ -235,6 +266,7 @@ test.describe("Users settings", () => {
         .fill(resetPassword);
       await page.getByRole("button", { name: "Reset Password", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Reset Password" })).toBeHidden();
+      expect(resetPasswordPutCount).toBe(1);
 
       await logout(page, env);
       await login(page, env, editedEmail, resetPassword);
@@ -279,8 +311,19 @@ test.describe("Users settings", () => {
       await page
         .getByRole("textbox", { name: "Type DELETE to confirm user deletion" })
         .fill("DELETE");
-      await page.getByRole("button", { name: "Delete User" }).click();
-      await expect(page.getByText(editedName)).toBeHidden();
+      await Promise.all([
+        page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return (
+            url.pathname.startsWith("/api/admin/users/") &&
+            response.request().method() === "DELETE" &&
+            response.status() === 200
+          );
+        }),
+        page.getByRole("button", { name: "Delete User" }).click(),
+      ]);
+      await expect(page.getByRole("dialog", { name: "Delete User" })).toBeHidden();
+      await expect(editedRow).toHaveCount(0);
 
       const deletedLogin = await page.context().request.post(
         apiURL(env, "/api/auth/login"),
@@ -296,9 +339,6 @@ test.describe("Users settings", () => {
       await cleanupAuditUsers(page, env, prefix);
     }
 
-    expect(consoleIssues).toEqual([]);
-    expect(pageErrors).toEqual([]);
-    expect(failedRequests).toEqual([]);
-    expect(adminUserErrors).toEqual([]);
+    tracker.assertClean();
   });
 });
