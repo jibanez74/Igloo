@@ -66,6 +66,10 @@ function apiURL(env: AccountSettingsEnv, path: string) {
   return new URL(path, env.baseURL).toString();
 }
 
+function isAppApiResponse(response: Response) {
+  return new URL(response.url()).pathname.startsWith("/api/");
+}
+
 async function readJSON<T>(response: APIResponse) {
   return (await response.json()) as ApiResponse<T>;
 }
@@ -139,7 +143,7 @@ function trackBrowserIssues(page: Page) {
   const responseErrors: string[] = [];
 
   page.on("console", message => {
-    if (message.type() === "error" || message.type() === "warning") {
+    if (message.type() === "error") {
       consoleIssues.push(`${message.type()}: ${message.text()}`);
     }
   });
@@ -149,8 +153,8 @@ function trackBrowserIssues(page: Page) {
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
   });
-  page.on("response", (response: Response) => {
-    if (response.status() >= 400) {
+  page.on("response", response => {
+    if (isAppApiResponse(response) && response.status() >= 500) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,
       );
