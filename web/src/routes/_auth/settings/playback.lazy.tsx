@@ -57,6 +57,10 @@ const NO_PROFILE_VALUE = "__none__";
 const NO_LANGUAGE_VALUE = "__none__";
 const SUBTITLE_OFF_VALUE = "off";
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}$/;
+const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
+  "Download speed must be between 0 and 10000 Mbps.";
+const SERVER_UPLOAD_VALIDATION_MESSAGE =
+  "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
 
 const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
   ([, a], [, b]) => a.localeCompare(b),
@@ -134,6 +138,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const recommendationId = useId();
   const recommendationTitleId = useId();
   const serverUploadMbpsId = useId();
+  const statusId = useId();
   const preferredAudioLanguageId = useId();
   const preferredSubtitleLanguageId = useId();
 
@@ -234,7 +239,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
       form.download_mbps != null &&
       (form.download_mbps <= 0 || form.download_mbps >= 10000)
     ) {
-      return "Download speed must be between 0 and 10000 Mbps.";
+      return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
     }
     if (
       form.preferred_profile != null &&
@@ -260,7 +265,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
       form.server_upload_mbps != null &&
       (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
     ) {
-      return "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
+      return SERVER_UPLOAD_VALIDATION_MESSAGE;
     }
     return "";
   };
@@ -287,15 +292,29 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const recommendedProfile = recommendedId
     ? settings.profiles.find(p => p.id === recommendedId)
     : null;
+  const downloadMbpsInvalid =
+    validationMessage === DOWNLOAD_SPEED_VALIDATION_MESSAGE &&
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= 10000);
+  const serverUploadMbpsInvalid =
+    validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
+    settings.is_admin &&
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000);
 
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="max-w-5xl animate-in space-y-6 duration-300 fade-in"
     >
       <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+          <CardTitle
+            role="heading"
+            aria-level={2}
+            className="flex items-center gap-2 text-white"
+          >
             <Play className="size-5 text-amber-400" aria-hidden="true" />
             Playback Settings
           </CardTitle>
@@ -329,7 +348,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
               value={form.download_mbps ?? ""}
               onChange={event => handleDownloadMbpsChange(event.target.value)}
               disabled={updateMutation.isPending}
-              aria-describedby={`${downloadMbpsId}-description`}
+              aria-invalid={downloadMbpsInvalid ? "true" : undefined}
+              aria-describedby={
+                downloadMbpsInvalid
+                  ? `${downloadMbpsId}-description ${statusId}`
+                  : `${downloadMbpsId}-description`
+              }
               className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
             />
             <p
@@ -371,7 +395,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
                   handleServerUploadMbpsChange(event.target.value)
                 }
                 disabled={updateMutation.isPending}
-                aria-describedby={`${serverUploadMbpsId}-description`}
+                aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+                aria-describedby={
+                  serverUploadMbpsInvalid
+                    ? `${serverUploadMbpsId}-description ${statusId}`
+                    : `${serverUploadMbpsId}-description`
+                }
                 className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
               />
               <p
@@ -582,6 +611,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">Playback settings</p>
           <p
+            id={statusId}
             className={cn(
               "mt-1 text-sm transition-colors",
               validationMessage ? "text-red-300" : "text-slate-400",

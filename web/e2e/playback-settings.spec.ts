@@ -62,10 +62,13 @@ type PlaybackSettingsEnv = {
   password: string;
 };
 
+const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
+  "Download speed must be between 0 and 10000 Mbps.";
+
 function readPlaybackSettingsEnv(): PlaybackSettingsEnv {
   return {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
+    email: process.env.E2E_ADMIN_EMAIL ?? "admin@sample.com",
     password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
   };
 }
@@ -183,7 +186,7 @@ function trackBrowserIssues(page: Page) {
   const responseErrors: string[] = [];
 
   page.on("console", message => {
-    if (message.type() === "error") {
+    if (message.type() === "error" || message.type() === "warning") {
       consoleIssues.push(`${message.type()}: ${message.text()}`);
     }
   });
@@ -317,6 +320,52 @@ test.describe("Playback settings", () => {
     } finally {
       await restorePlaybackSettings(page, env, baselineSettings);
     }
+
+    tracker.assertClean();
+  });
+
+  test("validates zero download speed before saving", async ({ page }) => {
+    const env = readPlaybackSettingsEnv();
+    const tracker = trackBrowserIssues(page);
+
+    await login(page, env);
+
+    await page.goto(apiURL(env, "/settings/playback"), {
+      waitUntil: "networkidle",
+    });
+    const downloadInput = page.getByRole("spinbutton", {
+      name: "Download speed (Mbps)",
+    });
+
+    await downloadInput.fill("0");
+    const successfulPutPromise = page
+      .waitForResponse(
+        response => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/settings/playback" &&
+            response.request().method() === "PUT" &&
+            response.status() < 400
+          );
+        },
+        { timeout: 500 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    await page.getByRole("button", { name: "Save Settings" }).click();
+
+    const validationStatus = page
+      .locator("p[aria-live='polite']")
+      .filter({ hasText: DOWNLOAD_SPEED_VALIDATION_MESSAGE });
+    await expect(validationStatus).toBeVisible();
+    await expect(validationStatus).toHaveAttribute("aria-live", "polite");
+    await expect(downloadInput).toHaveAttribute("aria-invalid", "true");
+    await expectDescriptionIncludes(
+      page,
+      downloadInput,
+      DOWNLOAD_SPEED_VALIDATION_MESSAGE,
+    );
+    expect(await successfulPutPromise).toBe(false);
 
     tracker.assertClean();
   });
