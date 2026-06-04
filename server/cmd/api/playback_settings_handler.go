@@ -151,6 +151,11 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if _, ok := rawFields["server_upload_mbps"]; ok && !current.IsAdmin {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusForbidden)
+		return
+	}
+
 	preferred := current.PreferredHlsProfile
 	if raw, ok := rawFields["preferred_profile"]; ok {
 		var val *string
@@ -228,13 +233,76 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	updated, err := app.Queries.UpdateUserPlaybackPreferences(r.Context(), database.UpdateUserPlaybackPreferencesParams{
+	var serverUpload sql.NullFloat64
+	serverUploadProvided := false
+	if raw, ok := rawFields["server_upload_mbps"]; ok {
+		serverUploadProvided = true
+
+		var val *float64
+		if err := json.Unmarshal(raw, &val); err != nil {
+			helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+			return
+		}
+		if val != nil {
+			if *val <= 0 || *val >= 100000 {
+				helpers.ErrorJSON(w, errors.New("server upload speed must be greater than 0 and less than 100000 Mbps"), http.StatusBadRequest)
+				return
+			}
+			serverUpload = helpers.NullFloat64FromPtr(val)
+		}
+	}
+
+	updateParams := database.UpdateUserPlaybackPreferencesParams{
 		PreferredHlsProfile:       preferred,
 		DownloadMbps:              download,
 		PreferredAudioLanguage:    audioLang,
 		PreferredSubtitleLanguage: subtitleLang,
 		ID:                        userID,
-	})
+	}
+
+	var updated database.UpdateUserPlaybackPreferencesRow
+	if serverUploadProvided {
+		tx, err := app.DB.BeginTx(r.Context(), nil)
+		if err != nil {
+			app.Logger.Error("failed to begin playback settings transaction", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+			return
+		}
+
+		qtx := app.Queries.WithTx(tx)
+		updated, err = qtx.UpdateUserPlaybackPreferences(r.Context(), updateParams)
+		if err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
+			}
+			app.Logger.Error("failed to update playback preferences", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+			return
+		}
+
+		updatedSettings, err := qtx.UpdatePlaybackServerUploadMbps(r.Context(), serverUpload)
+		if err != nil {
+			rollbackErr := tx.Rollback()
+			if rollbackErr != nil {
+				app.Logger.Error("failed to roll back playback settings transaction", "error", rollbackErr, "user_id", userID)
+			}
+			app.Logger.Error("failed to update playback server upload speed", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+			return
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			app.Logger.Error("failed to commit playback settings transaction", "error", err, "user_id", userID)
+			helpers.ErrorJSON(w, errors.New("failed to update playback settings"))
+			return
+		}
+
+		app.Settings = &updatedSettings
+	} else {
+		updated, err = app.Queries.UpdateUserPlaybackPreferences(r.Context(), updateParams)
+	}
 	if err != nil {
 		app.Logger.Error("failed to update playback preferences", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to update playback settings"))

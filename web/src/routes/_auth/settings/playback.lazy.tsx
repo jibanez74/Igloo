@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent } from "react";
@@ -30,7 +30,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { LANGUAGE_NAMES, PLAYBACK_SETTINGS_KEY } from "@/lib/constants";
+import {
+  GENERAL_SETTINGS_KEY,
+  LANGUAGE_NAMES,
+  PLAYBACK_SETTINGS_KEY,
+} from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
@@ -61,12 +65,18 @@ const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
 function formFromSettings(
   settings: PlaybackSettingsType,
 ): UpdatePlaybackSettingsRequest {
-  return {
+  const form: UpdatePlaybackSettingsRequest = {
     preferred_profile: settings.preferred_profile,
     download_mbps: settings.download_mbps,
     preferred_audio_language: settings.preferred_audio_language,
     preferred_subtitle_language: settings.preferred_subtitle_language,
   };
+
+  if (settings.is_admin) {
+    form.server_upload_mbps = settings.server_upload_mbps;
+  }
+
+  return form;
 }
 
 function PlaybackSettings() {
@@ -110,20 +120,20 @@ function PlaybackSettings() {
     return null;
   }
 
-  return <PlaybackSettingsForm settings={settings} userId={userId} />;
+  return <PlaybackSettingsForm settings={settings} />;
 }
 
 type PlaybackSettingsFormProps = {
   settings: PlaybackSettingsType;
-  userId: number;
 };
 
-function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
+function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const queryClient = useQueryClient();
   const downloadMbpsId = useId();
   const preferredProfileId = useId();
   const recommendationId = useId();
   const recommendationTitleId = useId();
+  const serverUploadMbpsId = useId();
   const preferredAudioLanguageId = useId();
   const preferredSubtitleLanguageId = useId();
 
@@ -147,9 +157,8 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         showActionFailed("save playback settings", res.message);
         return;
       }
-      queryClient.invalidateQueries({
-        queryKey: [PLAYBACK_SETTINGS_KEY, userId],
-      });
+      queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
       showSuccess("Playback settings saved");
     },
     onError: () => {
@@ -170,6 +179,19 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     setForm(current => ({
       ...current,
       download_mbps: Number.isFinite(parsed) ? parsed : null,
+    }));
+  };
+
+  const handleServerUploadMbpsChange = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      setForm(current => ({ ...current, server_upload_mbps: null }));
+      return;
+    }
+    const parsed = Number.parseFloat(trimmed);
+    setForm(current => ({
+      ...current,
+      server_upload_mbps: Number.isFinite(parsed) ? parsed : null,
     }));
   };
 
@@ -233,6 +255,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     ) {
       return "Subtitle language must be a 2- or 3-letter lowercase code.";
     }
+    if (
+      settings.is_admin &&
+      form.server_upload_mbps != null &&
+      (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
+    ) {
+      return "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
+    }
     return "";
   };
 
@@ -251,7 +280,9 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   const recommendedId = recommendedProfileId(
     settings.profiles,
     form.download_mbps,
-    settings.server_upload_mbps,
+    settings.is_admin
+      ? (form.server_upload_mbps ?? null)
+      : settings.server_upload_mbps,
   );
   const recommendedProfile = recommendedId
     ? settings.profiles.find(p => p.id === recommendedId)
@@ -323,27 +354,46 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-white">
-            {settings.server_upload_mbps != null
-              ? `${settings.server_upload_mbps} Mbps`
-              : "Not set (uncapped)"}
-          </p>
-          <p className="mt-2 text-sm text-slate-400">
-            {settings.is_admin ? (
-              <>
-                Edit this in{" "}
-                <Link
-                  to="/settings"
-                  className="text-amber-300 underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-                >
-                  General settings → Server Bandwidth
-                </Link>
-                .
-              </>
-            ) : (
-              "Set by the server administrator. Affects your recommendation when streaming from outside the home network."
-            )}
-          </p>
+          {settings.is_admin ? (
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={serverUploadMbpsId}>
+                Server upload bandwidth (Mbps)
+              </Label>
+              <Input
+                id={serverUploadMbpsId}
+                name="server_upload_mbps"
+                type="number"
+                inputMode="decimal"
+                min={0.1}
+                step={0.1}
+                value={form.server_upload_mbps ?? ""}
+                onChange={event =>
+                  handleServerUploadMbpsChange(event.target.value)
+                }
+                disabled={updateMutation.isPending}
+                aria-describedby={`${serverUploadMbpsId}-description`}
+                className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+              />
+              <p
+                id={`${serverUploadMbpsId}-description`}
+                className="text-sm text-slate-400"
+              >
+                Leave blank if the server should be uncapped.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-white">
+                {settings.server_upload_mbps != null
+                  ? `${settings.server_upload_mbps} Mbps`
+                  : "Not set (uncapped)"}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Set by the server administrator. Affects your recommendation
+                when streaming from outside the home network.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 

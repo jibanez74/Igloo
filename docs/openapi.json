@@ -2041,7 +2041,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Update playback preferences",
+        "summary": "Update playback preferences and admin server bandwidth",
         "operationId": "updatePlaybackSettings",
         "requestBody": {
           "$ref": "#/components/requestBodies/UpdatePlaybackSettingsRequest"
@@ -2055,6 +2055,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -5370,6 +5373,15 @@
               "null"
             ],
             "description": "Two- or three-letter language code, or off."
+          },
+          "server_upload_mbps": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Admin-only server upload bandwidth cap in Mbps.",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 100000
           }
         },
         "additionalProperties": false
