@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod/mini";
@@ -769,13 +769,18 @@ function PlaylistsTabContent({
 }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreate, setShowCreate] = useState(false);
-  const createPlaylistButtonRef = useRef<HTMLButtonElement | null>(null);
+  const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...moviePlaylistsQueryOpts(),
     enabled: view !== "liked",
   });
   const playlists = data?.error === false ? data.data.playlists : [];
+
+  const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
+    createPlaylistRestoreRef.current = event.currentTarget;
+    setShowCreate(true);
+  };
 
   if (view === "liked") {
     return (
@@ -840,9 +845,8 @@ function PlaylistsTabContent({
             Liked movies
           </button>
           <button
-            ref={createPlaylistButtonRef}
             type="button"
-            onClick={() => setShowCreate(true)}
+            onClick={handleCreateOpen}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
@@ -852,7 +856,7 @@ function PlaylistsTabContent({
       </div>
 
       {playlists.length === 0 ? (
-        <EmptyMoviePlaylistsState onCreate={() => setShowCreate(true)} />
+        <EmptyMoviePlaylistsState onCreate={handleCreateOpen} />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {playlists.map(p => (
@@ -864,7 +868,7 @@ function PlaylistsTabContent({
       <CreateMoviePlaylistDialog
         open={showCreate}
         onOpenChange={setShowCreate}
-        restoreFocusRef={createPlaylistButtonRef}
+        restoreFocusRef={createPlaylistRestoreRef}
       />
     </div>
   );
@@ -1046,7 +1050,7 @@ function PlaylistsTabSkeleton() {
 }
 
 type EmptyMoviePlaylistsStateProps = {
-  onCreate: () => void;
+  onCreate: (event: MouseEvent<HTMLButtonElement>) => void;
 };
 
 function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {

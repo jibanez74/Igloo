@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -740,7 +740,7 @@ type PlaylistsTabContentProps = {
 function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const createPlaylistButtonRef = useRef<HTMLButtonElement | null>(null);
+  const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { data, isLoading } = useQuery({
     ...playlistsQueryOpts(),
     enabled: playlistsView !== "liked",
@@ -769,6 +769,11 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       }),
       replace: true,
     });
+
+  const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
+    createPlaylistRestoreRef.current = event.currentTarget;
+    setShowCreateDialog(true);
+  };
 
   if (playlistsView === "liked") {
     return (
@@ -810,9 +815,8 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
             Liked tracks
           </button>
           <button
-            ref={createPlaylistButtonRef}
             type="button"
-            onClick={() => setShowCreateDialog(true)}
+            onClick={handleCreateOpen}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-4"
             aria-label="Create new playlist"
           >
@@ -824,7 +828,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
 
       {/* Playlists grid or empty state */}
       {playlists.length === 0 ? (
-        <EmptyPlaylistsState onCreateClick={() => setShowCreateDialog(true)} />
+        <EmptyPlaylistsState onCreateClick={handleCreateOpen} />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {playlists.map((playlist) => (
@@ -836,7 +840,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       <CreatePlaylistDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        restoreFocusRef={createPlaylistButtonRef}
+        restoreFocusRef={createPlaylistRestoreRef}
       />
     </div>
   );
@@ -1022,7 +1026,7 @@ function PlaylistsTabSkeleton() {
 }
 
 type EmptyPlaylistsStateProps = {
-  onCreateClick: () => void;
+  onCreateClick: (event: MouseEvent<HTMLButtonElement>) => void;
 };
 
 function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
