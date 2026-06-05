@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { showDeleted, showActionFailed } from "@/lib/toast-helpers";
@@ -15,7 +15,6 @@ import {
   ArrowLeft,
   User,
 } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import { albumDetailsQueryOpts, likedTrackIdsQueryOpts } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -26,17 +25,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import TrackItem from "@/components/TrackItem";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatDate, formatDuration } from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
@@ -231,6 +223,7 @@ function AlbumDetailsContent({
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const coverUrl = getMediaImageUrl(unwrapString(album.cover));
   const releaseYear = unwrapInt(album.year);
@@ -266,7 +259,7 @@ function AlbumDetailsContent({
       queryClient.invalidateQueries({ queryKey: ["albums"] });
       queryClient.invalidateQueries({ queryKey: ["music-stats"] });
 
-      // Navigate back to music page
+      setIsDeleteDialogOpen(false);
       navigate({ to: "/music", search: { tab: "albums" } });
     } catch (error) {
       console.error("Failed to delete album:", error);
@@ -276,7 +269,6 @@ function AlbumDetailsContent({
       );
     } finally {
       setIsDeleting(false);
-      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -469,6 +461,7 @@ function AlbumDetailsContent({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
+                      ref={moreOptionsButtonRef}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-600 sm:w-auto"
                       aria-label="More options"
                     >
@@ -490,54 +483,31 @@ function AlbumDetailsContent({
                 </DropdownMenu>
               </div>
 
-              <Dialog
+              <ConfirmDialog
                 open={isDeleteDialogOpen}
                 onOpenChange={setIsDeleteDialogOpen}
+                title="Delete Album"
+                description={
+                  <>
+                    Are you sure you want to delete "{album.title}"? This action
+                    cannot be undone and will permanently remove:
+                  </>
+                }
+                confirmLabel="Delete Album"
+                pending={isDeleting}
+                restoreFocusRef={moreOptionsButtonRef}
+                onConfirm={() => void handleDeleteAlbum()}
               >
-                <DialogContent className="border-slate-700 bg-slate-900 text-white">
-                  <DialogHeader>
-                    <DialogTitle className="text-white">Delete Album</DialogTitle>
-                    <DialogDescription className="text-slate-400">
-                      Are you sure you want to delete "{album.title}"? This
-                      action cannot be undone and will permanently remove:
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <ul className="ml-4 list-disc space-y-1 text-sm text-slate-300">
-                    <li>The album and all its metadata</li>
-                    <li>
-                      All {tracks.length}{" "}
-                      {tracks.length === 1 ? "track" : "tracks"} associated with
-                      this album
-                    </li>
-                    <li>All genre and artist associations</li>
-                  </ul>
-
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <button
-                      onClick={() => setIsDeleteDialogOpen(false)}
-                      disabled={isDeleting}
-                      className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 font-medium text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleDeleteAlbum}
-                      disabled={isDeleting}
-                      className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
-                    >
-                      {isDeleting ? (
-                        <>
-                          <Spinner className="mr-2 size-4" />
-                          Deleting...
-                        </>
-                      ) : (
-                        "Delete Album"
-                      )}
-                    </button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <ul className="ml-4 list-disc space-y-1 text-sm text-slate-300">
+                  <li>The album and all its metadata</li>
+                  <li>
+                    All {tracks.length}{" "}
+                    {tracks.length === 1 ? "track" : "tracks"} associated with
+                    this album
+                  </li>
+                  <li>All genre and artist associations</li>
+                </ul>
+              </ConfirmDialog>
 
               {artists.length > 0 && (
                 <section className="mt-6" aria-labelledby="artists-heading">

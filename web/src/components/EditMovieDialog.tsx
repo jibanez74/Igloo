@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import type {
   LibraryMovieDetailsMovieType,
   TmdbSearchResultType,
@@ -51,11 +52,9 @@ export default function EditMovieDialog({
       <DialogContent
         className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
         onCloseAutoFocus={(event) => {
-          const restoreTarget = restoreFocusRef?.current;
-          if (!restoreTarget) return;
-
+          if (!restoreFocusRef) return;
           event.preventDefault();
-          restoreTarget.focus();
+          focusDialogRestoreTarget(restoreFocusRef.current);
         }}
       >
         <DialogTitle className="text-white">Edit Movie</DialogTitle>

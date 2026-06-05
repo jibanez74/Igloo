@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { MoreVertical, Plus, Disc3, User, Trash2 } from "lucide-react";
 import {
@@ -33,6 +33,7 @@ export default function TrackActionsMenu({
   onRemoveFromPlaylist,
 }: TrackActionsMenuProps) {
   const [showAddToPlaylist, setShowAddToPlaylist] = useState(false);
+  const actionsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const hasAlbum = albumId != null && albumId > 0;
   const hasMusician = musicianId != null && musicianId > 0;
@@ -43,6 +44,7 @@ export default function TrackActionsMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
+            ref={actionsButtonRef}
             className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
             aria-label="More actions"
           >
@@ -111,6 +113,7 @@ export default function TrackActionsMenu({
         onOpenChange={setShowAddToPlaylist}
         trackId={trackId}
         trackTitle={trackTitle}
+        restoreFocusRef={actionsButtonRef}
       />
     </>
   );

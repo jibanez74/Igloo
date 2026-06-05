@@ -33,6 +33,7 @@ import {
 import { lightInputClassName } from "@/lib/input-styles";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
+import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
 
 export const Route = createLazyFileRoute("/_auth/settings/users")({
   component: UsersSettings,
@@ -102,7 +103,11 @@ function UsersSettings() {
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
   const [dialogError, setDialogError] = useState("");
   const addUserButtonRef = useRef<HTMLButtonElement | null>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const {
+    setRestoreFocusTarget,
+    restoreFocus,
+    onCloseAutoFocus: handleDialogCloseAutoFocus,
+  } = useDialogFocusRestore({ fallbackRef: addUserButtonRef });
 
   const authResolved = authData?.error === false && !!authData.data?.user?.id;
   const currentUserId =
@@ -111,33 +116,16 @@ function UsersSettings() {
   const users: AdminUserType[] =
     usersData?.error === false ? (usersData.data?.users ?? []) : [];
 
-  const focusDialogOpener = () => {
-    const restoreTarget = restoreFocusRef.current;
-    const focusTarget = restoreTarget?.isConnected
-      ? restoreTarget
-      : addUserButtonRef.current;
-    if (!focusTarget) return;
-    const restoreFocus =
-      window.requestAnimationFrame ??
-      ((callback: FrameRequestCallback) => window.setTimeout(callback, 0));
-    restoreFocus(() => focusTarget.focus());
-  };
-
   const openDialog = (nextDialog: DialogState, restoreTarget: HTMLElement) => {
     setDialogError("");
-    restoreFocusRef.current = restoreTarget;
+    setRestoreFocusTarget(restoreTarget);
     setDialog(nextDialog);
   };
 
   const closeDialog = () => {
     setDialog({ type: "none" });
     setDialogError("");
-    focusDialogOpener();
-  };
-
-  const handleDialogCloseAutoFocus: DialogCloseAutoFocusHandler = event => {
-    event.preventDefault();
-    focusDialogOpener();
+    restoreFocus();
   };
 
   const createMutation = useMutation({

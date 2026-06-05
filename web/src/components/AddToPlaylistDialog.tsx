@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { showAdded, showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { ListMusic, Check } from "lucide-react";
@@ -17,12 +17,14 @@ import { playlistsQueryOpts } from "@/lib/query-opts";
 import { addTracksToPlaylist } from "@/lib/api";
 import { PLAYLISTS_KEY, PLAYLIST_TRACKS_KEY } from "@/lib/constants";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type AddToPlaylistDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trackId: number;
   trackTitle: string;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 export default function AddToPlaylistDialog({
@@ -30,6 +32,7 @@ export default function AddToPlaylistDialog({
   onOpenChange,
   trackId,
   trackTitle,
+  restoreFocusRef,
 }: AddToPlaylistDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlaylists, setSelectedPlaylists] = useState<Set<number>>(
@@ -92,6 +95,15 @@ export default function AddToPlaylistDialog({
     onOpenChange(false);
   };
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setSearchQuery("");
+      setSelectedPlaylists(new Set());
+      setAnnouncement("");
+    }
+    onOpenChange(next);
+  };
+
   const togglePlaylist = (id: number, playlistName: string) => {
     setSelectedPlaylists((prev) => {
       const next = new Set(prev);
@@ -112,8 +124,18 @@ export default function AddToPlaylistDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        onCloseAutoFocus={
+          restoreFocusRef
+            ? event => {
+                event.preventDefault();
+                focusDialogRestoreTarget(restoreFocusRef.current);
+              }
+            : undefined
+        }
+      >
         {/* Announce selection changes to screen readers */}
         <LiveAnnouncer message={announcement} />
 
@@ -129,6 +151,7 @@ export default function AddToPlaylistDialog({
           <Input
             type="text"
             placeholder="Search playlists..."
+            aria-label="Search playlists"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500"

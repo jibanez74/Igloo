@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   showCreated,
@@ -22,6 +22,7 @@ import { createPlaylist, updatePlaylist } from "@/lib/api";
 import { PLAYLISTS_KEY, PLAYLIST_DETAILS_KEY } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import type { NullableString } from "@/types";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 // ============================================================================
 // Types
@@ -47,6 +48,7 @@ type EditModeProps = {
 type PlaylistFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 } & (CreateModeProps | EditModeProps);
 
 // ============================================================================
@@ -77,7 +79,7 @@ const DIALOG_CONFIG = {
 // ============================================================================
 
 export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
-  const { open, onOpenChange, mode } = props;
+  const { open, onOpenChange, mode, restoreFocusRef } = props;
 
   // For edit mode, we use a key to force remount when playlist changes
   const formKey = mode === "edit" ? props.playlist.id : "create";
@@ -90,6 +92,7 @@ export default function PlaylistFormDialog(props: PlaylistFormDialogProps) {
           mode={mode}
           playlist={mode === "edit" ? props.playlist : undefined}
           onOpenChange={onOpenChange}
+          restoreFocusRef={restoreFocusRef}
         />
       )}
     </Dialog>
@@ -104,9 +107,15 @@ type PlaylistFormProps = {
   mode: "create" | "edit";
   playlist?: PlaylistData;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
-function PlaylistForm({ mode, playlist, onOpenChange }: PlaylistFormProps) {
+function PlaylistForm({
+  mode,
+  playlist,
+  onOpenChange,
+  restoreFocusRef,
+}: PlaylistFormProps) {
   const config = DIALOG_CONFIG[mode];
   const queryClient = useQueryClient();
 
@@ -195,7 +204,17 @@ function PlaylistForm({ mode, playlist, onOpenChange }: PlaylistFormProps) {
   const inputIdPrefix = mode === "edit" ? "edit-" : "";
 
   return (
-    <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+    <DialogContent
+      className="border-slate-700 bg-slate-900 sm:max-w-md"
+      onCloseAutoFocus={
+        restoreFocusRef
+          ? event => {
+              event.preventDefault();
+              focusDialogRestoreTarget(restoreFocusRef.current);
+            }
+          : undefined
+      }
+    >
       <DialogHeader>
         <DialogTitle className="text-white">{config.title}</DialogTitle>
         <DialogDescription className="text-slate-400">

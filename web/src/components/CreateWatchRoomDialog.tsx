@@ -36,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type CreateWatchRoomDialogProps = {
   movieId: number;
@@ -203,10 +204,9 @@ export default function CreateWatchRoomDialog({
       <DialogContent
         className="flex max-h-[90vh] flex-col overflow-hidden border-slate-700 bg-slate-900 sm:max-w-xl"
         onCloseAutoFocus={event => {
-          const restoreTarget = restoreFocusRef?.current;
-          if (!restoreTarget) return;
+          if (!restoreFocusRef) return;
           event.preventDefault();
-          restoreTarget.focus();
+          focusDialogRestoreTarget(restoreFocusRef.current);
         }}
       >
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">

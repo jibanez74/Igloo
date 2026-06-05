@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod/mini";
@@ -769,6 +769,7 @@ function PlaylistsTabContent({
 }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreate, setShowCreate] = useState(false);
+  const createPlaylistButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...moviePlaylistsQueryOpts(),
@@ -839,6 +840,7 @@ function PlaylistsTabContent({
             Liked movies
           </button>
           <button
+            ref={createPlaylistButtonRef}
             type="button"
             onClick={() => setShowCreate(true)}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
@@ -862,6 +864,7 @@ function PlaylistsTabContent({
       <CreateMoviePlaylistDialog
         open={showCreate}
         onOpenChange={setShowCreate}
+        restoreFocusRef={createPlaylistButtonRef}
       />
     </div>
   );

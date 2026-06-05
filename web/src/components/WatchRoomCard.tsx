@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Film, Trash2, Users } from "lucide-react";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
@@ -21,6 +21,7 @@ function getInitials(name: string) {
 
 export default function WatchRoomCard({ room }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const closeRoomButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const posterUrl = room.movie_poster
     ? buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE)
@@ -78,6 +79,7 @@ export default function WatchRoomCard({ room }: Props) {
 
           {room.is_owner && (
             <Button
+              ref={closeRoomButtonRef}
               variant="ghost"
               size="icon"
               className="size-8 shrink-0 text-slate-500 hover:text-red-400"
@@ -146,6 +148,7 @@ export default function WatchRoomCard({ room }: Props) {
           movieTitle={room.movie_title}
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
+          restoreFocusRef={closeRoomButtonRef}
         />
       )}
     </article>

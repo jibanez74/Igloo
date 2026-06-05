@@ -12,6 +12,7 @@ import {
   SUBTITLES_NONE_LABEL,
 } from "@/lib/constants";
 import { preventDialogDismissIfRadixSelectContent } from "@/lib/dialog-select";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import {
   describePlaybackExperience,
   formatPlaybackAudioLabel,
@@ -404,11 +405,9 @@ export default function PlaybackSettingsDialog({
         onPointerDownOutside={preventDialogDismissIfRadixSelectContent}
         onInteractOutside={preventDialogDismissIfRadixSelectContent}
         onCloseAutoFocus={event => {
-          const restoreTarget = restoreFocusRef?.current;
-          if (!restoreTarget) return;
-
+          if (!restoreFocusRef) return;
           event.preventDefault();
-          restoreTarget.focus();
+          focusDialogRestoreTarget(restoreFocusRef.current);
         }}
       >
         <PlaybackSettingsDialogForm

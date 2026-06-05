@@ -740,6 +740,7 @@ type PlaylistsTabContentProps = {
 function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const createPlaylistButtonRef = useRef<HTMLButtonElement | null>(null);
   const { data, isLoading } = useQuery({
     ...playlistsQueryOpts(),
     enabled: playlistsView !== "liked",
@@ -809,6 +810,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
             Liked tracks
           </button>
           <button
+            ref={createPlaylistButtonRef}
             type="button"
             onClick={() => setShowCreateDialog(true)}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-4"
@@ -834,6 +836,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       <CreatePlaylistDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
+        restoreFocusRef={createPlaylistButtonRef}
       />
     </div>
   );

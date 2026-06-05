@@ -24,16 +24,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import TrackItem from "@/components/TrackItem";
 import EditPlaylistDialog from "@/components/EditPlaylistDialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
@@ -128,6 +119,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
   const audioPlayer = useAudioPlayerActions();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { playlist, track_count, duration, is_owner, can_edit } = data;
   const coverUrl = getMediaImageUrl(
@@ -366,6 +359,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {is_owner && (
             <div className="mt-4 flex flex-wrap justify-center gap-3 sm:gap-4 lg:justify-start">
               <button
+                ref={editButtonRef}
                 onClick={() => setShowEditDialog(true)}
                 className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-amber-400 focus:text-amber-400 focus:outline-none sm:gap-2 sm:text-sm"
                 aria-label="Edit playlist"
@@ -375,6 +369,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 <span className="hidden sm:inline">Details</span>
               </button>
               <button
+                ref={deleteButtonRef}
                 onClick={handleDeletePlaylist}
                 disabled={deleteMutation.isPending}
                 className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-red-400 focus:text-red-400 focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
@@ -452,33 +447,26 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           playlist={playlist}
+          restoreFocusRef={editButtonRef}
         />
       )}
 
       {/* Delete Playlist Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete playlist</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &ldquo;{playlist.name}&rdquo;? This action cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setShowDeleteDialog(false);
-                deleteMutation.mutate();
-              }}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete playlist"
+        description={
+          <>
+            Are you sure you want to delete &ldquo;{playlist.name}&rdquo;? This
+            action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        pending={deleteMutation.isPending}
+        restoreFocusRef={deleteButtonRef}
+        onConfirm={() => deleteMutation.mutate()}
+      />
     </article>
   );
 }

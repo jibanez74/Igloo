@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import {
   Card,
@@ -53,6 +53,7 @@ import { useNavigate } from "@tanstack/react-router";
 import type { AuthUser } from "@/types";
 import { lightInputClassName } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,
@@ -93,6 +94,7 @@ function AccountSettings() {
   const [isDeleting, startDeleteTransition] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const deleteAccountButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const emailId = useId();
   const nameId = useId();
@@ -1020,6 +1022,7 @@ function AccountSettings() {
             )}
           </div>
           <Button
+            ref={deleteAccountButtonRef}
             onClick={() => handleDeleteDialogOpenChange(true)}
             disabled={user.is_admin}
             variant="destructive"
@@ -1034,7 +1037,13 @@ function AccountSettings() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
-        <DialogContent className="border-slate-700 bg-slate-900 text-white sm:max-w-md">
+        <DialogContent
+          className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            focusDialogRestoreTarget(deleteAccountButtonRef.current);
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="text-red-400">Delete Account</DialogTitle>
             <DialogDescription className="text-slate-300">
