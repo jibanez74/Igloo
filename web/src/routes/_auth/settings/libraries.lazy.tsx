@@ -187,7 +187,7 @@ function LibrariesSettings() {
 
   if (data?.error) {
     return (
-      <div className="max-w-5xl animate-in duration-300 fade-in">
+      <div className="max-w-5xl">
         <Card className="border-red-500/20 bg-red-500/10">
           <CardHeader>
             <CardTitle className="text-red-300">
@@ -352,7 +352,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="max-w-5xl animate-in space-y-6 duration-300 fade-in"
+      className="max-w-5xl space-y-6"
     >
       <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
@@ -803,7 +803,7 @@ function LibrariesSettingsLoading() {
 
   return (
     <div
-      className="max-w-5xl animate-in duration-300 fade-in"
+      className="max-w-5xl"
       role="status"
       aria-labelledby={loadingId}
     >

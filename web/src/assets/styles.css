@@ -119,3 +119,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+::view-transition-old(settings-page) {
+  animation: settings-page-fade-out 200ms ease-in both;
+}
+
+::view-transition-new(settings-page) {
+  animation: settings-page-fade-in 200ms ease-out both;
+}
+
+@keyframes settings-page-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes settings-page-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(settings-page),
+  ::view-transition-new(settings-page) {
+    animation: none;
+  }
+}

@@ -5,6 +5,7 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
 import {
   Tabs,
@@ -12,8 +13,15 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  SETTINGS_PAGE_CONTENT_ENTER_CLASS,
+  SETTINGS_PAGE_CONTENT_EXIT_CLASS,
+  SETTINGS_PAGE_TRANSITION_MS,
+  SETTINGS_PAGE_VIEW_TRANSITION_NAME,
+} from "@/lib/constants";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
+import { cn } from "@/lib/utils";
 
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Sliders, path: "/settings" },
@@ -56,7 +64,16 @@ function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
   const { data: authData } = useSuspenseQuery(authUserQueryOpts());
+  const exitTimerRef = useRef<number | null>(null);
+  const [isContentExiting, setIsContentExiting] = useState(false);
   const isAdmin = authData.data?.user.is_admin ?? false;
+  const prefersReducedMotion =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const supportsViewTransition =
+    typeof document !== "undefined" && "startViewTransition" in document;
+  const usesSettingsPageViewTransition =
+    supportsViewTransition && !prefersReducedMotion;
+  const usesSettingsPageContentAnimation = !usesSettingsPageViewTransition;
 
   const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,
@@ -64,14 +81,45 @@ function SettingsLayout() {
     tabs: SETTINGS_TABS,
   });
 
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleTabChange = (newTab: string) => {
     const tab = visibleTabs.find(t => t.id === newTab);
-    if (tab) {
-      navigate({
+    if (!tab || tab.id === currentTab) {
+      return;
+    }
+
+    if (exitTimerRef.current !== null) {
+      window.clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+
+    if (supportsViewTransition || prefersReducedMotion) {
+      void navigate({
+        to: tab.path,
+        replace: true,
+        viewTransition: usesSettingsPageViewTransition
+          ? { types: [SETTINGS_PAGE_VIEW_TRANSITION_NAME] }
+          : undefined,
+      });
+      return;
+    }
+
+    setIsContentExiting(true);
+    exitTimerRef.current = window.setTimeout(() => {
+      exitTimerRef.current = null;
+      setIsContentExiting(false);
+      void navigate({
         to: tab.path,
         replace: true,
       });
-    }
+    }, SETTINGS_PAGE_TRANSITION_MS);
   };
 
   const isCompactLayout = visibleTabs.length <= 2;
@@ -91,7 +139,7 @@ function SettingsLayout() {
         content="Configure your Igloo media center settings and preferences."
       />
 
-      <div className="min-w-0 animate-in duration-300 fade-in">
+      <div className="min-w-0">
         {/* Page header */}
         <header className="mb-6 sm:mb-7">
           <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
@@ -125,7 +173,18 @@ function SettingsLayout() {
           </TabsList>
 
           <TabsContent value={currentTab} className="mt-6">
-            <Outlet />
+            <div
+              key={location.pathname}
+              className={cn(
+                usesSettingsPageContentAnimation &&
+                  (isContentExiting
+                    ? SETTINGS_PAGE_CONTENT_EXIT_CLASS
+                    : SETTINGS_PAGE_CONTENT_ENTER_CLASS),
+              )}
+              style={{ viewTransitionName: SETTINGS_PAGE_VIEW_TRANSITION_NAME }}
+            >
+              <Outlet />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
