@@ -327,6 +327,17 @@ test.describe("Playback settings", () => {
   test("validates zero download speed before saving", async ({ page }) => {
     const env = readPlaybackSettingsEnv();
     const tracker = trackBrowserIssues(page);
+    let playbackPutCount = 0;
+
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (
+        url.pathname === "/api/settings/playback" &&
+        request.method() === "PUT"
+      ) {
+        playbackPutCount += 1;
+      }
+    });
 
     await login(page, env);
 
@@ -338,20 +349,6 @@ test.describe("Playback settings", () => {
     });
 
     await downloadInput.fill("0");
-    const successfulPutPromise = page
-      .waitForResponse(
-        response => {
-          const url = new URL(response.url());
-          return (
-            url.pathname === "/api/settings/playback" &&
-            response.request().method() === "PUT" &&
-            response.status() < 400
-          );
-        },
-        { timeout: 500 },
-      )
-      .then(() => true)
-      .catch(() => false);
     await page.getByRole("button", { name: "Save Settings" }).click();
 
     const validationStatus = page
@@ -365,7 +362,11 @@ test.describe("Playback settings", () => {
       downloadInput,
       DOWNLOAD_SPEED_VALIDATION_MESSAGE,
     );
-    expect(await successfulPutPromise).toBe(false);
+    expect(playbackPutCount).toBe(0);
+
+    await downloadInput.fill("5");
+    await expect(validationStatus).toHaveCount(0);
+    await expect(downloadInput).not.toHaveAttribute("aria-invalid", "true");
 
     tracker.assertClean();
   });

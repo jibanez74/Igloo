@@ -83,6 +83,45 @@ function formFromSettings(
   return form;
 }
 
+function validatePlaybackSettingsForm(
+  form: UpdatePlaybackSettingsRequest,
+  settings: PlaybackSettingsType,
+) {
+  if (
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= 10000)
+  ) {
+    return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
+  }
+  if (
+    form.preferred_profile != null &&
+    !settings.profiles.some(p => p.id === form.preferred_profile)
+  ) {
+    return "Selected profile is not available.";
+  }
+  if (
+    form.preferred_audio_language != null &&
+    !LANGUAGE_CODE_PATTERN.test(form.preferred_audio_language)
+  ) {
+    return "Audio language must be a 2- or 3-letter lowercase code.";
+  }
+  if (
+    form.preferred_subtitle_language != null &&
+    form.preferred_subtitle_language !== SUBTITLE_OFF_VALUE &&
+    !LANGUAGE_CODE_PATTERN.test(form.preferred_subtitle_language)
+  ) {
+    return "Subtitle language must be a 2- or 3-letter lowercase code.";
+  }
+  if (
+    settings.is_admin &&
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
+  ) {
+    return SERVER_UPLOAD_VALIDATION_MESSAGE;
+  }
+  return "";
+}
+
 function PlaybackSettings() {
   const { data: authData, isLoading: authLoading } = useQuery(
     authUserQueryOpts(),
@@ -176,28 +215,36 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
 
   const handleDownloadMbpsChange = (value: string) => {
     const trimmed = value.trim();
+    let downloadMbps: number | null = null;
     if (trimmed === "") {
-      setForm(current => ({ ...current, download_mbps: null }));
-      return;
+      downloadMbps = null;
+    } else {
+      const parsed = Number.parseFloat(trimmed);
+      downloadMbps = Number.isFinite(parsed) ? parsed : null;
     }
-    const parsed = Number.parseFloat(trimmed);
-    setForm(current => ({
-      ...current,
-      download_mbps: Number.isFinite(parsed) ? parsed : null,
-    }));
+
+    const nextForm = { ...form, download_mbps: downloadMbps };
+    setForm(nextForm);
+    if (validationMessage) {
+      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
+    }
   };
 
   const handleServerUploadMbpsChange = (value: string) => {
     const trimmed = value.trim();
+    let serverUploadMbps: number | null = null;
     if (trimmed === "") {
-      setForm(current => ({ ...current, server_upload_mbps: null }));
-      return;
+      serverUploadMbps = null;
+    } else {
+      const parsed = Number.parseFloat(trimmed);
+      serverUploadMbps = Number.isFinite(parsed) ? parsed : null;
     }
-    const parsed = Number.parseFloat(trimmed);
-    setForm(current => ({
-      ...current,
-      server_upload_mbps: Number.isFinite(parsed) ? parsed : null,
-    }));
+
+    const nextForm = { ...form, server_upload_mbps: serverUploadMbps };
+    setForm(nextForm);
+    if (validationMessage) {
+      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
+    }
   };
 
   const handleProfileChange = (value: string) => {
@@ -235,39 +282,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   };
 
   const validateForm = () => {
-    if (
-      form.download_mbps != null &&
-      (form.download_mbps <= 0 || form.download_mbps >= 10000)
-    ) {
-      return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
-    }
-    if (
-      form.preferred_profile != null &&
-      !settings.profiles.some(p => p.id === form.preferred_profile)
-    ) {
-      return "Selected profile is not available.";
-    }
-    if (
-      form.preferred_audio_language != null &&
-      !LANGUAGE_CODE_PATTERN.test(form.preferred_audio_language)
-    ) {
-      return "Audio language must be a 2- or 3-letter lowercase code.";
-    }
-    if (
-      form.preferred_subtitle_language != null &&
-      form.preferred_subtitle_language !== SUBTITLE_OFF_VALUE &&
-      !LANGUAGE_CODE_PATTERN.test(form.preferred_subtitle_language)
-    ) {
-      return "Subtitle language must be a 2- or 3-letter lowercase code.";
-    }
-    if (
-      settings.is_admin &&
-      form.server_upload_mbps != null &&
-      (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
-    ) {
-      return SERVER_UPLOAD_VALIDATION_MESSAGE;
-    }
-    return "";
+    return validatePlaybackSettingsForm(form, settings);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
