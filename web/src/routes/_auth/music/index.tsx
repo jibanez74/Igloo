@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -770,8 +770,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       replace: true,
     });
 
-  const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
-    createPlaylistRestoreRef.current = event.currentTarget;
+  const handleCreateOpen = () => {
     setShowCreateDialog(true);
   };
 
@@ -816,6 +815,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
           </button>
           <button
             type="button"
+            ref={createPlaylistRestoreRef}
             onClick={handleCreateOpen}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-4"
             aria-label="Create new playlist"
@@ -1026,7 +1026,7 @@ function PlaylistsTabSkeleton() {
 }
 
 type EmptyPlaylistsStateProps = {
-  onCreateClick: (event: MouseEvent<HTMLButtonElement>) => void;
+  onCreateClick: () => void;
 };
 
 function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {

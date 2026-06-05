@@ -89,6 +89,10 @@ export default function AddToPlaylistDialog({
   });
 
   const handleClose = () => {
+    if (mutation.isPending) {
+      return;
+    }
+
     setSearchQuery("");
     setSelectedPlaylists(new Set());
     setAnnouncement("");
@@ -96,6 +100,10 @@ export default function AddToPlaylistDialog({
   };
 
   const handleOpenChange = (next: boolean) => {
+    if (!next && mutation.isPending) {
+      return;
+    }
+
     if (!next) {
       setSearchQuery("");
       setSelectedPlaylists(new Set());
