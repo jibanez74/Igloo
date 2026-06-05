@@ -67,6 +67,13 @@ function SettingsLayout() {
   const exitTimerRef = useRef<number | null>(null);
   const [isContentExiting, setIsContentExiting] = useState(false);
   const isAdmin = authData.data?.user.is_admin ?? false;
+  const prefersReducedMotion =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const supportsViewTransition =
+    typeof document !== "undefined" && "startViewTransition" in document;
+  const usesSettingsPageViewTransition =
+    supportsViewTransition && !prefersReducedMotion;
+  const usesSettingsPageContentAnimation = !usesSettingsPageViewTransition;
 
   const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,
@@ -93,15 +100,11 @@ function SettingsLayout() {
       exitTimerRef.current = null;
     }
 
-    const prefersReducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const supportsViewTransition = "startViewTransition" in document;
-
     if (supportsViewTransition || prefersReducedMotion) {
       void navigate({
         to: tab.path,
         replace: true,
-        viewTransition: supportsViewTransition && !prefersReducedMotion
+        viewTransition: usesSettingsPageViewTransition
           ? { types: [SETTINGS_PAGE_VIEW_TRANSITION_NAME] }
           : undefined,
       });
@@ -173,9 +176,10 @@ function SettingsLayout() {
             <div
               key={location.pathname}
               className={cn(
-                isContentExiting
-                  ? SETTINGS_PAGE_CONTENT_EXIT_CLASS
-                  : SETTINGS_PAGE_CONTENT_ENTER_CLASS,
+                usesSettingsPageContentAnimation &&
+                  (isContentExiting
+                    ? SETTINGS_PAGE_CONTENT_EXIT_CLASS
+                    : SETTINGS_PAGE_CONTENT_ENTER_CLASS),
               )}
               style={{ viewTransitionName: SETTINGS_PAGE_VIEW_TRANSITION_NAME }}
             >
