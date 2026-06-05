@@ -67,3 +67,16 @@ WHERE id = (
   LIMIT 1
 )
 RETURNING *;
+
+-- name: UpdatePlaybackServerUploadMbps :one
+UPDATE settings
+SET
+  server_upload_mbps = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING *;

@@ -80,6 +80,7 @@ export type UpdatePlaybackSettingsRequest = {
   download_mbps: number | null;
   preferred_audio_language: string | null;
   preferred_subtitle_language: string | null;
+  server_upload_mbps?: number | null;
 };
 
 export type PlaybackSettingsResponseType = {

@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent } from "react";
@@ -30,7 +30,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { LANGUAGE_NAMES, PLAYBACK_SETTINGS_KEY } from "@/lib/constants";
+import {
+  GENERAL_SETTINGS_KEY,
+  LANGUAGE_NAMES,
+  PLAYBACK_SETTINGS_KEY,
+} from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import { authUserQueryOpts, playbackSettingsQueryOpts } from "@/lib/query-opts";
@@ -53,6 +57,10 @@ const NO_PROFILE_VALUE = "__none__";
 const NO_LANGUAGE_VALUE = "__none__";
 const SUBTITLE_OFF_VALUE = "off";
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}$/;
+const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
+  "Download speed must be between 0 and 10000 Mbps.";
+const SERVER_UPLOAD_VALIDATION_MESSAGE =
+  "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
 
 const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
   ([, a], [, b]) => a.localeCompare(b),
@@ -61,12 +69,57 @@ const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
 function formFromSettings(
   settings: PlaybackSettingsType,
 ): UpdatePlaybackSettingsRequest {
-  return {
+  const form: UpdatePlaybackSettingsRequest = {
     preferred_profile: settings.preferred_profile,
     download_mbps: settings.download_mbps,
     preferred_audio_language: settings.preferred_audio_language,
     preferred_subtitle_language: settings.preferred_subtitle_language,
   };
+
+  if (settings.is_admin) {
+    form.server_upload_mbps = settings.server_upload_mbps;
+  }
+
+  return form;
+}
+
+function validatePlaybackSettingsForm(
+  form: UpdatePlaybackSettingsRequest,
+  settings: PlaybackSettingsType,
+) {
+  if (
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= 10000)
+  ) {
+    return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
+  }
+  if (
+    form.preferred_profile != null &&
+    !settings.profiles.some(p => p.id === form.preferred_profile)
+  ) {
+    return "Selected profile is not available.";
+  }
+  if (
+    form.preferred_audio_language != null &&
+    !LANGUAGE_CODE_PATTERN.test(form.preferred_audio_language)
+  ) {
+    return "Audio language must be a 2- or 3-letter lowercase code.";
+  }
+  if (
+    form.preferred_subtitle_language != null &&
+    form.preferred_subtitle_language !== SUBTITLE_OFF_VALUE &&
+    !LANGUAGE_CODE_PATTERN.test(form.preferred_subtitle_language)
+  ) {
+    return "Subtitle language must be a 2- or 3-letter lowercase code.";
+  }
+  if (
+    settings.is_admin &&
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
+  ) {
+    return SERVER_UPLOAD_VALIDATION_MESSAGE;
+  }
+  return "";
 }
 
 function PlaybackSettings() {
@@ -110,20 +163,21 @@ function PlaybackSettings() {
     return null;
   }
 
-  return <PlaybackSettingsForm settings={settings} userId={userId} />;
+  return <PlaybackSettingsForm settings={settings} />;
 }
 
 type PlaybackSettingsFormProps = {
   settings: PlaybackSettingsType;
-  userId: number;
 };
 
-function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
+function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const queryClient = useQueryClient();
   const downloadMbpsId = useId();
   const preferredProfileId = useId();
   const recommendationId = useId();
   const recommendationTitleId = useId();
+  const serverUploadMbpsId = useId();
+  const statusId = useId();
   const preferredAudioLanguageId = useId();
   const preferredSubtitleLanguageId = useId();
 
@@ -147,9 +201,8 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         showActionFailed("save playback settings", res.message);
         return;
       }
-      queryClient.invalidateQueries({
-        queryKey: [PLAYBACK_SETTINGS_KEY, userId],
-      });
+      queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
       showSuccess("Playback settings saved");
     },
     onError: () => {
@@ -162,15 +215,36 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
   const handleDownloadMbpsChange = (value: string) => {
     const trimmed = value.trim();
+    let downloadMbps: number | null = null;
     if (trimmed === "") {
-      setForm(current => ({ ...current, download_mbps: null }));
-      return;
+      downloadMbps = null;
+    } else {
+      const parsed = Number.parseFloat(trimmed);
+      downloadMbps = Number.isFinite(parsed) ? parsed : null;
     }
-    const parsed = Number.parseFloat(trimmed);
-    setForm(current => ({
-      ...current,
-      download_mbps: Number.isFinite(parsed) ? parsed : null,
-    }));
+
+    const nextForm = { ...form, download_mbps: downloadMbps };
+    setForm(nextForm);
+    if (validationMessage) {
+      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
+    }
+  };
+
+  const handleServerUploadMbpsChange = (value: string) => {
+    const trimmed = value.trim();
+    let serverUploadMbps: number | null = null;
+    if (trimmed === "") {
+      serverUploadMbps = null;
+    } else {
+      const parsed = Number.parseFloat(trimmed);
+      serverUploadMbps = Number.isFinite(parsed) ? parsed : null;
+    }
+
+    const nextForm = { ...form, server_upload_mbps: serverUploadMbps };
+    setForm(nextForm);
+    if (validationMessage) {
+      setValidationMessage(validatePlaybackSettingsForm(nextForm, settings));
+    }
   };
 
   const handleProfileChange = (value: string) => {
@@ -208,32 +282,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   };
 
   const validateForm = () => {
-    if (
-      form.download_mbps != null &&
-      (form.download_mbps <= 0 || form.download_mbps >= 10000)
-    ) {
-      return "Download speed must be between 0 and 10000 Mbps.";
-    }
-    if (
-      form.preferred_profile != null &&
-      !settings.profiles.some(p => p.id === form.preferred_profile)
-    ) {
-      return "Selected profile is not available.";
-    }
-    if (
-      form.preferred_audio_language != null &&
-      !LANGUAGE_CODE_PATTERN.test(form.preferred_audio_language)
-    ) {
-      return "Audio language must be a 2- or 3-letter lowercase code.";
-    }
-    if (
-      form.preferred_subtitle_language != null &&
-      form.preferred_subtitle_language !== SUBTITLE_OFF_VALUE &&
-      !LANGUAGE_CODE_PATTERN.test(form.preferred_subtitle_language)
-    ) {
-      return "Subtitle language must be a 2- or 3-letter lowercase code.";
-    }
-    return "";
+    return validatePlaybackSettingsForm(form, settings);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -251,20 +300,36 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   const recommendedId = recommendedProfileId(
     settings.profiles,
     form.download_mbps,
-    settings.server_upload_mbps,
+    settings.is_admin
+      ? (form.server_upload_mbps ?? null)
+      : settings.server_upload_mbps,
   );
   const recommendedProfile = recommendedId
     ? settings.profiles.find(p => p.id === recommendedId)
     : null;
+  const downloadMbpsInvalid =
+    validationMessage === DOWNLOAD_SPEED_VALIDATION_MESSAGE &&
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= 10000);
+  const serverUploadMbpsInvalid =
+    validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
+    settings.is_admin &&
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000);
 
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="max-w-5xl animate-in space-y-6 duration-300 fade-in"
     >
       <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+          <CardTitle
+            role="heading"
+            aria-level={2}
+            className="flex items-center gap-2 text-white"
+          >
             <Play className="size-5 text-amber-400" aria-hidden="true" />
             Playback Settings
           </CardTitle>
@@ -298,7 +363,12 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               value={form.download_mbps ?? ""}
               onChange={event => handleDownloadMbpsChange(event.target.value)}
               disabled={updateMutation.isPending}
-              aria-describedby={`${downloadMbpsId}-description`}
+              aria-invalid={downloadMbpsInvalid ? "true" : undefined}
+              aria-describedby={
+                downloadMbpsInvalid
+                  ? `${downloadMbpsId}-description ${statusId}`
+                  : `${downloadMbpsId}-description`
+              }
               className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
             />
             <p
@@ -323,27 +393,51 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-white">
-            {settings.server_upload_mbps != null
-              ? `${settings.server_upload_mbps} Mbps`
-              : "Not set (uncapped)"}
-          </p>
-          <p className="mt-2 text-sm text-slate-400">
-            {settings.is_admin ? (
-              <>
-                Edit this in{" "}
-                <Link
-                  to="/settings"
-                  className="text-amber-300 underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-                >
-                  General settings → Server Bandwidth
-                </Link>
-                .
-              </>
-            ) : (
-              "Set by the server administrator. Affects your recommendation when streaming from outside the home network."
-            )}
-          </p>
+          {settings.is_admin ? (
+            <div className="grid max-w-md gap-2">
+              <Label htmlFor={serverUploadMbpsId}>
+                Server upload bandwidth (Mbps)
+              </Label>
+              <Input
+                id={serverUploadMbpsId}
+                name="server_upload_mbps"
+                type="number"
+                inputMode="decimal"
+                min={0.1}
+                step={0.1}
+                value={form.server_upload_mbps ?? ""}
+                onChange={event =>
+                  handleServerUploadMbpsChange(event.target.value)
+                }
+                disabled={updateMutation.isPending}
+                aria-invalid={serverUploadMbpsInvalid ? "true" : undefined}
+                aria-describedby={
+                  serverUploadMbpsInvalid
+                    ? `${serverUploadMbpsId}-description ${statusId}`
+                    : `${serverUploadMbpsId}-description`
+                }
+                className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+              />
+              <p
+                id={`${serverUploadMbpsId}-description`}
+                className="text-sm text-slate-400"
+              >
+                Leave blank if the server should be uncapped.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-white">
+                {settings.server_upload_mbps != null
+                  ? `${settings.server_upload_mbps} Mbps`
+                  : "Not set (uncapped)"}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Set by the server administrator. Affects your recommendation
+                when streaming from outside the home network.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -532,6 +626,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">Playback settings</p>
           <p
+            id={statusId}
             className={cn(
               "mt-1 text-sm transition-colors",
               validationMessage ? "text-red-300" : "text-slate-400",

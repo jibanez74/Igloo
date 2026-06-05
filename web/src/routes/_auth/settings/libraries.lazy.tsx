@@ -1,19 +1,22 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState, useTransition } from "react";
+import { useId, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import {
+  AlertCircle,
+  Disc3,
+  Film,
+  FolderOpen,
   Library,
   Music,
-  Film,
-  Tv,
-  FolderOpen,
+  RotateCcw,
+  Save,
   Scan,
-  Plus,
   Trash2,
-  Disc3,
+  Tv,
   User,
-  AlertCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -27,7 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
-import { showError, showSuccess, showActionFailed } from "@/lib/toast-helpers";
+import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
 import {
   MUSIC_STATS_KEY,
@@ -46,726 +49,772 @@ import {
   MOVIE_PLAYLIST_MOVIES_KEY,
   SETTINGS_KEY,
 } from "@/lib/constants";
-import type { SettingsType } from "@/types";
+import { cn } from "@/lib/utils";
+import type { ApiResponseType, SettingsType } from "@/types";
 
 export const Route = createLazyFileRoute("/_auth/settings/libraries")({
   component: LibrariesSettings,
 });
 
-function LibrariesSettings() {
+type LibraryPathField = keyof SettingsType;
+type ImplementedScan = "movies" | "music";
+
+type LibrariesForm = {
+  movies_dir: string;
+  shows_dir: string;
+  music_dir: string;
+};
+
+type LibrarySectionConfig = {
+  field: LibraryPathField;
+  scan: ImplementedScan | null;
+  title: string;
+  description: string;
+  pathLabel: string;
+  placeholder: string;
+  Icon: LucideIcon;
+  iconClassName: string;
+  iconBackgroundClassName: string;
+  scanButtonClassName: string;
+  clearLabel: string;
+};
+
+type FormFeedback = {
+  message: string;
+  tone: "neutral" | "success" | "error";
+};
+
+type SettingsQueryData = ApiResponseType<SettingsType>;
+
+const DEFAULT_FEEDBACK: FormFeedback = {
+  message: "Saved library paths are used by scan and playback features.",
+  tone: "neutral",
+};
+
+const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
+  {
+    field: "movies_dir",
+    scan: "movies",
+    title: "Movies Library",
+    description: "Manage your movie collection",
+    pathLabel: "Movies library path",
+    placeholder: "/srv/media/movies",
+    Icon: Film,
+    iconClassName: "text-cyan-400",
+    iconBackgroundClassName: "bg-cyan-500/10",
+    scanButtonClassName:
+      "bg-cyan-500 text-slate-900 hover:bg-cyan-400 hover:text-slate-900",
+    clearLabel: "Clear movies library path",
+  },
+  {
+    field: "shows_dir",
+    scan: null,
+    title: "TV Shows Library",
+    description: "Manage your TV show collection",
+    pathLabel: "TV shows library path",
+    placeholder: "/srv/media/shows",
+    Icon: Tv,
+    iconClassName: "text-purple-400",
+    iconBackgroundClassName: "bg-purple-500/10",
+    scanButtonClassName:
+      "bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900",
+    clearLabel: "Clear TV shows library path",
+  },
+  {
+    field: "music_dir",
+    scan: "music",
+    title: "Music Library",
+    description: "Manage your music collection",
+    pathLabel: "Music library path",
+    placeholder: "/srv/media/music",
+    Icon: Music,
+    iconClassName: "text-amber-400",
+    iconBackgroundClassName: "bg-amber-500/10",
+    scanButtonClassName:
+      "bg-amber-500 text-slate-900 hover:bg-amber-400 hover:text-slate-900",
+    clearLabel: "Clear music library path",
+  },
+];
+
+function formFromSettings(settings: SettingsType): LibrariesForm {
+  return {
+    movies_dir: settings.movies_dir ?? "",
+    shows_dir: settings.shows_dir ?? "",
+    music_dir: settings.music_dir ?? "",
+  };
+}
+
+function payloadFromForm(form: LibrariesForm): SettingsType {
+  return {
+    movies_dir: optionalLibraryPath(form.movies_dir),
+    shows_dir: optionalLibraryPath(form.shows_dir),
+    music_dir: optionalLibraryPath(form.music_dir),
+  };
+}
+
+function optionalLibraryPath(value: string) {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+function formHasChanges(form: LibrariesForm, settings: SettingsType) {
+  const savedForm = formFromSettings(settings);
   return (
-    <div className='space-y-8'>
-      <Card className='border-slate-700/50 bg-slate-800/30'>
+    form.movies_dir !== savedForm.movies_dir ||
+    form.shows_dir !== savedForm.shows_dir ||
+    form.music_dir !== savedForm.music_dir
+  );
+}
+
+function fieldFromLibraryError(message?: string): LibraryPathField | null {
+  const normalized = message?.toLowerCase() ?? "";
+  if (normalized.includes("movies")) return "movies_dir";
+  if (normalized.includes("shows")) return "shows_dir";
+  if (normalized.includes("music")) return "music_dir";
+  return null;
+}
+
+function scanLabel(scan: ImplementedScan) {
+  return scan === "movies" ? "movies" : "music";
+}
+
+function LibrariesSettings() {
+  const { data, isLoading } = useQuery(settingsQueryOpts());
+
+  if (isLoading) {
+    return <LibrariesSettingsLoading />;
+  }
+
+  if (data?.error) {
+    return (
+      <div className="max-w-5xl animate-in duration-300 fade-in">
+        <Card className="border-red-500/20 bg-red-500/10">
+          <CardHeader>
+            <CardTitle className="text-red-300">
+              Library settings unavailable
+            </CardTitle>
+            <CardDescription className="text-red-200/80">
+              {data.message || "Failed to load library settings."}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (data?.error === false && data.data) {
+    return <LibrariesSettingsForm settings={data.data} />;
+  }
+
+  return null;
+}
+
+type LibrariesSettingsFormProps = {
+  settings: SettingsType;
+};
+
+function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
+  const queryClient = useQueryClient();
+  const [syncedSettings, setSyncedSettings] = useState(settings);
+  const [form, setForm] = useState<LibrariesForm>(() =>
+    formFromSettings(settings),
+  );
+  const [feedback, setFeedback] = useState<FormFeedback>(DEFAULT_FEEDBACK);
+  const [validationField, setValidationField] =
+    useState<LibraryPathField | null>(null);
+  const [activeScan, setActiveScan] = useState<ImplementedScan | null>(null);
+  const formStatusId = useId();
+  const hasChanges = formHasChanges(form, syncedSettings);
+
+  if (settings !== syncedSettings) {
+    setSyncedSettings(settings);
+    setForm(formFromSettings(settings));
+    setValidationField(null);
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: updateLibrarySettings,
+    onSuccess: res => {
+      if (res.error) {
+        const message = res.message || "Failed to save library paths.";
+        setValidationField(fieldFromLibraryError(message));
+        setFeedback({ message, tone: "error" });
+        showActionFailed("save library paths", message);
+        return;
+      }
+
+      const nextSettings = res.data.settings;
+      setSyncedSettings(nextSettings);
+      setForm(formFromSettings(nextSettings));
+      setValidationField(null);
+      setFeedback({ message: "Library paths saved.", tone: "success" });
+      queryClient.setQueryData<SettingsQueryData>([SETTINGS_KEY], {
+        error: false,
+        message: res.message,
+        data: nextSettings,
+      });
+      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
+      showSuccess("Library paths saved");
+    },
+    onError: () => {
+      setFeedback({
+        message: "An unexpected error occurred while saving library paths.",
+        tone: "error",
+      });
+      showActionFailed("save library paths", "An unexpected error occurred");
+    },
+  });
+
+  const handlePathChange = (field: LibraryPathField, value: string) => {
+    setForm(current => ({ ...current, [field]: value }));
+    setValidationField(current => (current === field ? null : current));
+    setFeedback({
+      message: "Library path changes are ready to save.",
+      tone: "neutral",
+    });
+  };
+
+  const handleClearPath = (field: LibraryPathField) => {
+    setForm(current => ({ ...current, [field]: "" }));
+    setValidationField(current => (current === field ? null : current));
+    setFeedback({
+      message: "Library path changes are ready to save.",
+      tone: "neutral",
+    });
+  };
+
+  const handleReset = () => {
+    setForm(formFromSettings(syncedSettings));
+    setValidationField(null);
+    setFeedback(DEFAULT_FEEDBACK);
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!hasChanges) {
+      setFeedback({
+        message: "No library path changes to save.",
+        tone: "neutral",
+      });
+      return;
+    }
+
+    setFeedback({ message: "Saving library paths...", tone: "neutral" });
+    updateMutation.mutate(payloadFromForm(form));
+  };
+
+  const handleScan = async (scan: ImplementedScan) => {
+    const field = scan === "movies" ? "movies_dir" : "music_dir";
+    const savedPath = syncedSettings[field];
+    const label = scanLabel(scan);
+    if (!savedPath) {
+      const message = `Save a ${label} library path before scanning.`;
+      setFeedback({ message, tone: "error" });
+      showActionFailed(`scan ${label} library`, message);
+      return;
+    }
+
+    setActiveScan(scan);
+    setFeedback({
+      message: `Starting ${label} library scan...`,
+      tone: "neutral",
+    });
+
+    try {
+      const res =
+        scan === "movies" ? await triggerMovieScan() : await triggerMusicScan();
+      if (res.error) {
+        const message = res.message || `Failed to start ${label} scan.`;
+        setFeedback({ message, tone: "error" });
+        showActionFailed(`scan ${label} library`, message);
+        return;
+      }
+
+      setFeedback({
+        message: `${label === "movies" ? "Movies" : "Music"} library scan started.`,
+        tone: "success",
+      });
+      showSuccess(
+        "Scan started",
+        `${label === "movies" ? "Movies" : "Music"} library scan has been initiated`,
+      );
+      invalidateScanQueries(queryClient, scan);
+    } catch {
+      const message = `Failed to start ${label} scan.`;
+      setFeedback({ message, tone: "error" });
+      showActionFailed(`scan ${label} library`, message);
+    } finally {
+      setActiveScan(current => (current === scan ? null : current));
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="max-w-5xl animate-in space-y-6 duration-300 fade-in"
+    >
+      <Card className="border-slate-700/50 bg-slate-800/30">
         <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-white'>
-            <Library className='size-5 text-amber-400' aria-hidden='true' />
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Library className="size-5 text-amber-400" aria-hidden="true" />
             Library Management
           </CardTitle>
-          <CardDescription className='text-slate-300'>
-            Manage your media library paths and scanning
+          <CardDescription className="text-slate-300">
+            Manage your media library paths and scanning.
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-6'>
-          <MoviesLibrarySection />
-          <Separator className='bg-slate-700/50' />
-          <TVShowsLibrarySection />
-          <Separator className='bg-slate-700/50' />
-          <MusicLibrarySection />
+        <CardContent className="space-y-6">
+          {LIBRARY_SECTIONS.map((section, index) => (
+            <LibrarySectionGroup key={section.field} showSeparator={index > 0}>
+              <LibraryPathSection
+                config={section}
+                pathValue={form[section.field]}
+                savedPath={syncedSettings[section.field]}
+                invalid={validationField === section.field}
+                disabled={updateMutation.isPending}
+                scanPending={activeScan === section.scan}
+                scanDisabled={
+                  updateMutation.isPending ||
+                  activeScan !== null ||
+                  form[section.field] !==
+                    formFromSettings(syncedSettings)[section.field]
+                }
+                formStatusId={formStatusId}
+                onPathChange={value => handlePathChange(section.field, value)}
+                onClearPath={() => handleClearPath(section.field)}
+                onScan={
+                  section.scan ? () => handleScan(section.scan as ImplementedScan) : undefined
+                }
+              >
+                {section.field === "movies_dir" && (
+                  <MoviesLibraryStats hasLibrary={Boolean(syncedSettings.movies_dir)} />
+                )}
+                {section.field === "shows_dir" && (
+                  <TVShowsUnavailableStatus hasLibrary={Boolean(syncedSettings.shows_dir)} />
+                )}
+                {section.field === "music_dir" && (
+                  <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
+                )}
+              </LibraryPathSection>
+            </LibrarySectionGroup>
+          ))}
         </CardContent>
       </Card>
+
+      <div className="rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white">
+            Library path settings
+          </p>
+          <p
+            id={formStatusId}
+            className={cn(
+              "mt-1 text-sm transition-colors",
+              feedback.tone === "error"
+                ? "text-red-300"
+                : feedback.tone === "success"
+                  ? "text-emerald-300"
+                  : "text-slate-400",
+            )}
+            aria-live="polite"
+          >
+            {feedback.message}
+          </p>
+        </div>
+        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleReset}
+            disabled={!hasChanges || updateMutation.isPending}
+            className="border-slate-600 bg-slate-800/90 text-slate-100 hover:bg-slate-700 hover:text-white"
+          >
+            <RotateCcw className="size-4" aria-hidden="true" />
+            Reset library paths
+          </Button>
+          <Button
+            type="submit"
+            variant="accent"
+            disabled={!hasChanges || updateMutation.isPending}
+          >
+            {updateMutation.isPending ? (
+              <Spinner className="size-4" aria-hidden="true" />
+            ) : (
+              <Save className="size-4" aria-hidden="true" />
+            )}
+            {updateMutation.isPending ? "Saving..." : "Save library paths"}
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+type LibrarySectionGroupProps = {
+  showSeparator: boolean;
+  children: ReactNode;
+};
+
+function LibrarySectionGroup({
+  showSeparator,
+  children,
+}: LibrarySectionGroupProps) {
+  return (
+    <>
+      {showSeparator && <Separator className="bg-slate-700/50" />}
+      {children}
+    </>
+  );
+}
+
+type LibraryPathSectionProps = {
+  config: LibrarySectionConfig;
+  pathValue: string;
+  savedPath: string | null;
+  invalid: boolean;
+  disabled: boolean;
+  scanPending: boolean;
+  scanDisabled: boolean;
+  formStatusId: string;
+  children: ReactNode;
+  onPathChange: (value: string) => void;
+  onClearPath: () => void;
+  onScan?: () => void;
+};
+
+function LibraryPathSection({
+  config,
+  pathValue,
+  savedPath,
+  invalid,
+  disabled,
+  scanPending,
+  scanDisabled,
+  formStatusId,
+  children,
+  onPathChange,
+  onClearPath,
+  onScan,
+}: LibraryPathSectionProps) {
+  const headingId = useId();
+  const pathInputId = useId();
+  const descriptionId = `${pathInputId}-description`;
+  const pathStatusId = `${pathInputId}-status`;
+  const Icon = config.Icon;
+  const trimmedPath = pathValue.trim();
+  const savedValue = savedPath ?? "";
+  const hasSavedPath = savedValue !== "";
+  const hasPathValue = trimmedPath !== "";
+  const pathChanged = pathValue !== savedValue;
+
+  return (
+    <section aria-labelledby={headingId} className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-lg",
+            config.iconBackgroundClassName,
+          )}
+          aria-hidden="true"
+        >
+          <Icon className={cn("size-5", config.iconClassName)} aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <h3 id={headingId} className="text-lg font-semibold text-white">
+            {config.title}
+          </h3>
+          <p className="text-sm text-slate-300">{config.description}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+        <div
+          id={pathStatusId}
+          className={cn(
+            "flex items-center gap-3 text-sm",
+            invalid ? "text-red-300" : "text-slate-300",
+          )}
+        >
+          {hasSavedPath ? (
+            <FolderOpen className="size-5 shrink-0" aria-hidden="true" />
+          ) : (
+            <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+          )}
+          <p>{libraryPathStatusText(hasSavedPath, hasPathValue, pathChanged)}</p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={pathInputId}>{config.pathLabel}</Label>
+          <Input
+            id={pathInputId}
+            type="text"
+            value={pathValue}
+            onChange={event => onPathChange(event.target.value)}
+            placeholder={config.placeholder}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
+            autoComplete="off"
+            className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+          />
+          <p id={descriptionId} className="text-sm text-slate-400">
+            Enter a directory path readable by the Igloo server. Leave blank to
+            clear this library path.
+          </p>
+        </div>
+        {hasPathValue && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClearPath}
+            disabled={disabled}
+            aria-label={config.clearLabel}
+            className="w-full text-slate-300 hover:bg-slate-800 hover:text-red-400 sm:w-fit"
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Clear path
+          </Button>
+        )}
+      </div>
+
+      {children}
+
+      {config.scan && hasSavedPath && (
+        <Button
+          type="button"
+          onClick={onScan}
+          disabled={scanDisabled}
+          aria-busy={scanPending}
+          aria-label={
+            scanPending
+              ? `Scanning ${scanLabel(config.scan)} library, please wait`
+              : `Scan ${scanLabel(config.scan)} library`
+          }
+          className={cn(
+            "w-full disabled:opacity-50",
+            config.scanButtonClassName,
+          )}
+        >
+          {scanPending ? (
+            <>
+              <Spinner className="size-4" aria-hidden="true" />
+              <span>Scanning...</span>
+            </>
+          ) : (
+            <>
+              <Scan className="size-4" aria-hidden="true" />
+              Scan Library
+            </>
+          )}
+        </Button>
+      )}
+    </section>
+  );
+}
+
+function libraryPathStatusText(
+  hasSavedPath: boolean,
+  hasPathValue: boolean,
+  pathChanged: boolean,
+) {
+  if (pathChanged && !hasPathValue) return "Path will be cleared after saving.";
+  if (pathChanged && hasSavedPath) return "Path changed, save to apply.";
+  if (pathChanged) return "Path ready to save.";
+  if (hasSavedPath) return "Library path configured.";
+  return "No library path configured.";
+}
+
+type StatsProps = {
+  hasLibrary: boolean;
+};
+
+function MoviesLibraryStats({ hasLibrary }: StatsProps) {
+  const { data, isLoading } = useQuery({
+    ...moviesStatsQueryOpts(),
+    enabled: hasLibrary,
+  });
+  const stats = data?.error === false ? data.data : null;
+
+  if (!hasLibrary) return null;
+
+  return (
+    <div className="grid gap-4" aria-label="Movies library statistics">
+      <StatItem
+        label="Movies"
+        value={stats?.total_movies ?? 0}
+        loading={isLoading}
+        loadingLabel="Loading movies count"
+        icon={<Film className="size-5 text-cyan-400" aria-hidden="true" />}
+        iconBackgroundClassName="bg-cyan-500/10"
+      />
     </div>
   );
 }
 
-type LibraryPathField = keyof SettingsType;
-type PathDraft = {
-  source: string;
-  value: string;
+function MusicLibraryStats({ hasLibrary }: StatsProps) {
+  const { data, isLoading } = useQuery({
+    ...musicStatsQueryOpts(),
+    enabled: hasLibrary,
+  });
+  const stats = data?.error === false ? data.data : null;
+
+  if (!hasLibrary) return null;
+
+  return (
+    <div
+      className="grid gap-4 sm:grid-cols-3"
+      aria-label="Music library statistics"
+    >
+      <StatItem
+        label="Albums"
+        value={stats?.total_albums ?? 0}
+        loading={isLoading}
+        loadingLabel="Loading albums count"
+        icon={<Disc3 className="size-5 text-amber-400" aria-hidden="true" />}
+        iconBackgroundClassName="bg-amber-500/10"
+      />
+      <StatItem
+        label="Tracks"
+        value={stats?.total_tracks ?? 0}
+        loading={isLoading}
+        loadingLabel="Loading tracks count"
+        icon={<Music className="size-5 text-amber-400" aria-hidden="true" />}
+        iconBackgroundClassName="bg-amber-500/10"
+      />
+      <StatItem
+        label="Musicians"
+        value={stats?.total_musicians ?? 0}
+        loading={isLoading}
+        loadingLabel="Loading musicians count"
+        icon={<User className="size-5 text-amber-400" aria-hidden="true" />}
+        iconBackgroundClassName="bg-amber-500/10"
+      />
+    </div>
+  );
+}
+
+type StatItemProps = {
+  label: string;
+  value: number;
+  loading: boolean;
+  loadingLabel: string;
+  icon: ReactNode;
+  iconBackgroundClassName: string;
 };
 
-function librarySettingsPayload(
-  settings: SettingsType | null,
-  field: LibraryPathField,
-  path: string | null,
-): SettingsType {
-  return {
-    movies_dir: settings?.movies_dir ?? null,
-    shows_dir: settings?.shows_dir ?? null,
-    music_dir: settings?.music_dir ?? null,
-    [field]: path,
-  };
-}
-
-function MusicLibrarySection() {
-  const { data: statsData, isLoading: statsLoading } = useQuery(
-    musicStatsQueryOpts(),
-  );
-
-  const { data: settingsData } = useQuery(settingsQueryOpts());
-  const queryClient = useQueryClient();
-  const [isScanning, startTransition] = useTransition();
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
-  const pathInputId = useId();
-
-  const stats = statsData?.error === false ? statsData.data : null;
-  const settings = settingsData?.error === false ? settingsData.data : null;
-  const libraryPath: string | null = settings?.music_dir ?? null;
-  const hasLibrary = Boolean(libraryPath);
-  const sourcePath = libraryPath ?? "";
-  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
-  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
-
-  const updateMutation = useMutation({
-    mutationFn: updateLibrarySettings,
-    onSuccess: res => {
-      if (res.error) {
-        showActionFailed("save music library path", res.message);
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
-      showSuccess("Library path saved");
-    },
-    onError: () => {
-      showActionFailed("save music library path", "Failed to update path");
-    },
-  });
-
-  const handleScan = () => {
-    if (!libraryPath) {
-      showError(
-        "No library path",
-        "Please configure a music library path first",
-      );
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await triggerMusicScan();
-        if (res.error) {
-          showActionFailed("scan music library", res.message);
-        } else {
-          showSuccess("Scan started", "Music library scan has been initiated");
-          // Invalidate all music-related queries to get fresh data after scan
-          const musicQueryKeys = [
-            MUSIC_STATS_KEY,
-            ALBUMS_KEY,
-            TRACKS_KEY,
-            MUSICIANS_KEY,
-            LATEST_ALBUMS_KEY,
-            ALBUMS_PAGINATED_KEY,
-            MUSICIANS_PAGINATED_KEY,
-            TRACKS_INFINITE_KEY,
-          ];
-          musicQueryKeys.forEach(key => {
-            queryClient.invalidateQueries({ queryKey: [key] });
-          });
-        }
-      } catch {
-        showActionFailed("scan music library", "Failed to start scan");
-      }
-    });
-  };
-
-  const handleSaveLibrary = () => {
-    updateMutation.mutate(
-      librarySettingsPayload(
-        settings,
-        "music_dir",
-        pathValue.trim() === "" ? null : pathValue.trim(),
-      ),
-    );
-  };
-
-  const handleRemoveLibrary = () => {
-    setPathDraft({ source: sourcePath, value: "" });
-    updateMutation.mutate(librarySettingsPayload(settings, "music_dir", null));
-  };
-
+function StatItem({
+  label,
+  value,
+  loading,
+  loadingLabel,
+  icon,
+  iconBackgroundClassName,
+}: StatItemProps) {
   return (
-    <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
-      {/* Section Header */}
-      <div className='flex items-center gap-3'>
+    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+      <div className="flex items-center gap-3">
         <div
-          className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10'
-          aria-hidden='true'
-        >
-          <Music className='size-5 text-amber-400' aria-hidden='true' />
-        </div>
-        <div className='min-w-0'>
-          <h3 id={headingId} className='text-lg font-semibold text-white'>
-            Music Library
-          </h3>
-          <p className='text-sm text-slate-300'>Manage your music collection</p>
-        </div>
-      </div>
-
-      <div
-        id={pathId}
-        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-      >
-        <div className='flex items-center gap-3 text-slate-300'>
-          {hasLibrary ? (
-            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
-          ) : (
-            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-lg",
+            iconBackgroundClassName,
           )}
-          <p className='text-sm'>
-            {hasLibrary ? "Library path configured" : "No library path configured"}
-          </p>
-        </div>
-        <div className='grid gap-2'>
-          <Label htmlFor={pathInputId}>Music library path</Label>
-          <Input
-            id={pathInputId}
-            value={pathValue}
-            onChange={event =>
-              setPathDraft({ source: sourcePath, value: event.target.value })
-            }
-            placeholder='/srv/media/music'
-            disabled={updateMutation.isPending}
-          />
-        </div>
-        <div className='flex flex-col gap-2 sm:flex-row'>
-          <Button
-            type='button'
-            size='sm'
-            onClick={handleSaveLibrary}
-            disabled={updateMutation.isPending}
-            className='bg-amber-500 text-slate-900 hover:bg-amber-400 hover:text-slate-900'
-          >
-            {updateMutation.isPending ? (
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-            ) : (
-              <Plus className='mr-2 size-4' aria-hidden='true' />
-            )}
-            Save Path
-          </Button>
-          {hasLibrary && (
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              onClick={handleRemoveLibrary}
-              disabled={updateMutation.isPending}
-              aria-label={`Remove music library path: ${libraryPath}`}
-              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-            >
-              <Trash2 className='mr-2 size-4' aria-hidden='true' />
-              Remove
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats - Only show if library is configured */}
-      {hasLibrary && (
-        <div
-          className='grid gap-4 sm:grid-cols-3'
+          aria-hidden="true"
         >
-          <div
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-          >
-            <div className='flex items-center gap-3'>
-              <div
-                className='flex size-10 items-center justify-center rounded-lg bg-amber-500/10'
-                aria-hidden='true'
-              >
-                <Disc3 className='size-5 text-amber-400' aria-hidden='true' />
-              </div>
-              <div>
-                {statsLoading ? (
-                  <>
-                    <Spinner
-                      className='size-5 text-amber-400'
-                      aria-hidden='true'
-                    />
-                    <span className='sr-only'>Loading albums count</span>
-                  </>
-                ) : (
-                  <>
-                    <p className='text-2xl font-bold text-white'>
-                      {stats?.total_albums?.toLocaleString() ?? 0}
-                    </p>
-                    <p className='text-sm text-slate-300'>Albums</p>
-                  </>
-                )}
-              </div>
-            </div>
+          {icon}
+        </div>
+        {loading ? (
+          <div role="status" className="flex items-center gap-2 text-slate-300">
+            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+            <span className="sr-only">{loadingLabel}</span>
           </div>
-
-          <div
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-          >
-            <div className='flex items-center gap-3'>
-              <div
-                className='flex size-10 items-center justify-center rounded-lg bg-amber-500/10'
-                aria-hidden='true'
-              >
-                <Music className='size-5 text-amber-400' aria-hidden='true' />
-              </div>
-              <div>
-                {statsLoading ? (
-                  <>
-                    <Spinner
-                      className='size-5 text-amber-400'
-                      aria-hidden='true'
-                    />
-                    <span className='sr-only'>Loading tracks count</span>
-                  </>
-                ) : (
-                  <>
-                    <p className='text-2xl font-bold text-white'>
-                      {stats?.total_tracks?.toLocaleString() ?? 0}
-                    </p>
-                    <p className='text-sm text-slate-300'>Tracks</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-          >
-            <div className='flex items-center gap-3'>
-              <div
-                className='flex size-10 items-center justify-center rounded-lg bg-amber-500/10'
-                aria-hidden='true'
-              >
-                <User className='size-5 text-amber-400' aria-hidden='true' />
-              </div>
-              <div>
-                {statsLoading ? (
-                  <>
-                    <Spinner
-                      className='size-5 text-amber-400'
-                      aria-hidden='true'
-                    />
-                    <span className='sr-only'>Loading musicians count</span>
-                  </>
-                ) : (
-                  <>
-                    <p className='text-2xl font-bold text-white'>
-                      {stats?.total_musicians?.toLocaleString() ?? 0}
-                    </p>
-                    <p className='text-sm text-slate-300'>Musicians</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scan Button - Only show if library is configured */}
-      {hasLibrary && (
-        <Button
-          onClick={handleScan}
-          disabled={isScanning}
-          aria-busy={isScanning}
-          aria-label={
-            isScanning
-              ? "Scanning music library, please wait"
-              : "Scan music library"
-          }
-          className='w-full bg-amber-500 text-slate-900 hover:bg-amber-400 hover:text-slate-900 disabled:opacity-50'
-        >
-          {isScanning ? (
-            <>
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-              <span aria-live='polite'>Scanning...</span>
-            </>
-          ) : (
-            <>
-              <Scan className='mr-2 size-4' aria-hidden='true' />
-              Scan Library
-            </>
-          )}
-        </Button>
-      )}
-    </section>
-  );
-}
-
-function MoviesLibrarySection() {
-  const { data: settingsData } = useQuery(settingsQueryOpts());
-  const { data: statsData, isLoading: statsLoading } = useQuery(moviesStatsQueryOpts());
-  const queryClient = useQueryClient();
-  const [isScanning, startTransition] = useTransition();
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
-  const pathInputId = useId();
-
-  const settings = settingsData?.error === false ? settingsData.data : null;
-  const stats = statsData?.error === false ? statsData.data : null;
-  const libraryPath: string | null = settings?.movies_dir ?? null;
-  const hasLibrary = Boolean(libraryPath);
-  const sourcePath = libraryPath ?? "";
-  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
-  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
-
-  const updateMutation = useMutation({
-    mutationFn: updateLibrarySettings,
-    onSuccess: res => {
-      if (res.error) {
-        showActionFailed("save movies library path", res.message);
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
-      showSuccess("Library path saved");
-    },
-    onError: () => {
-      showActionFailed("save movies library path", "Failed to update path");
-    },
-  });
-
-  const handleScan = () => {
-    if (!libraryPath) {
-      showError("No library path", "Please configure a movies library path first");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await triggerMovieScan();
-        if (res.error) {
-          showActionFailed("scan movies library", res.message);
-        } else {
-          showSuccess("Scan started", "Movies library scan has been initiated");
-          const movieQueryKeys = [
-            MOVIES_STATS_KEY,
-            MOVIES_KEY,
-            LATEST_MOVIES_KEY,
-            MOVIE_PLAYLISTS_KEY,
-            MOVIE_PLAYLIST_DETAILS_KEY,
-            MOVIE_PLAYLIST_MOVIES_KEY,
-          ];
-          movieQueryKeys.forEach(key => {
-            queryClient.invalidateQueries({ queryKey: [key] });
-          });
-        }
-      } catch {
-        showActionFailed("scan movies library", "Failed to start scan");
-      }
-    });
-  };
-
-  const handleSaveLibrary = () => {
-    updateMutation.mutate(
-      librarySettingsPayload(
-        settings,
-        "movies_dir",
-        pathValue.trim() === "" ? null : pathValue.trim(),
-      ),
-    );
-  };
-
-  const handleRemoveLibrary = () => {
-    setPathDraft({ source: sourcePath, value: "" });
-    updateMutation.mutate(librarySettingsPayload(settings, "movies_dir", null));
-  };
-
-  return (
-    <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
-      {/* Section Header */}
-      <div className='flex items-center gap-3'>
-        <div
-          className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10'
-          aria-hidden='true'
-        >
-          <Film className='size-5 text-cyan-400' aria-hidden='true' />
-        </div>
-        <div className='min-w-0'>
-          <h3 id={headingId} className='text-lg font-semibold text-white'>
-            Movies Library
-          </h3>
-          <p className='text-sm text-slate-300'>Manage your movie collection</p>
-        </div>
-      </div>
-
-      <div
-        id={pathId}
-        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-      >
-        <div className='flex items-center gap-3 text-slate-300'>
-          {hasLibrary ? (
-            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
-          ) : (
-            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-          )}
-          <p className='text-sm'>
-            {hasLibrary ? "Library path configured" : "No library path configured"}
-          </p>
-        </div>
-        <div className='grid gap-2'>
-          <Label htmlFor={pathInputId}>Movies library path</Label>
-          <Input
-            id={pathInputId}
-            value={pathValue}
-            onChange={event =>
-              setPathDraft({ source: sourcePath, value: event.target.value })
-            }
-            placeholder='/srv/media/movies'
-            disabled={updateMutation.isPending}
-          />
-        </div>
-        <div className='flex flex-col gap-2 sm:flex-row'>
-          <Button
-            type='button'
-            size='sm'
-            onClick={handleSaveLibrary}
-            disabled={updateMutation.isPending}
-            className='bg-cyan-500 text-slate-900 hover:bg-cyan-400 hover:text-slate-900'
-          >
-            {updateMutation.isPending ? (
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-            ) : (
-              <Plus className='mr-2 size-4' aria-hidden='true' />
-            )}
-            Save Path
-          </Button>
-          {hasLibrary && (
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              onClick={handleRemoveLibrary}
-              disabled={updateMutation.isPending}
-              aria-label={`Remove movies library path: ${libraryPath}`}
-              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-            >
-              <Trash2 className='mr-2 size-4' aria-hidden='true' />
-              Remove
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats - Only show if library is configured */}
-      {hasLibrary && (
-        <div
-          className='grid gap-4'
-        >
-          <div
-            className='rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-          >
-            <div className='flex items-center gap-3'>
-              <div
-                className='flex size-10 items-center justify-center rounded-lg bg-cyan-500/10'
-                aria-hidden='true'
-              >
-                <Film className='size-5 text-cyan-400' aria-hidden='true' />
-              </div>
-              <div>
-                {statsLoading ? (
-                  <>
-                    <Spinner className='size-5 text-cyan-400' aria-hidden='true' />
-                    <span className='sr-only'>Loading movies count</span>
-                  </>
-                ) : (
-                  <>
-                    <p className='text-2xl font-bold text-white'>
-                      {stats?.total_movies?.toLocaleString() ?? 0}
-                    </p>
-                    <p className='text-sm text-slate-300'>Movies</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scan Button - Only show if library is configured */}
-      {hasLibrary && (
-        <Button
-          onClick={handleScan}
-          disabled={isScanning}
-          aria-busy={isScanning}
-          aria-label={
-            isScanning
-              ? "Scanning movies library, please wait"
-              : "Scan movies library"
-          }
-          className='w-full bg-cyan-500 text-slate-900 hover:bg-cyan-400 hover:text-slate-900 disabled:opacity-50'
-        >
-          {isScanning ? (
-            <>
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-              <span aria-live='polite'>Scanning...</span>
-            </>
-          ) : (
-            <>
-              <Scan className='mr-2 size-4' aria-hidden='true' />
-              Scan Library
-            </>
-          )}
-        </Button>
-      )}
-    </section>
-  );
-}
-
-function TVShowsLibrarySection() {
-  const { data: settingsData } = useQuery(settingsQueryOpts());
-  const queryClient = useQueryClient();
-  const sectionId = useId();
-  const headingId = useId();
-  const pathId = useId();
-  const pathInputId = useId();
-
-  const settings = settingsData?.error === false ? settingsData.data : null;
-  const libraryPath: string | null = settings?.shows_dir ?? null;
-  const hasLibrary = Boolean(libraryPath);
-  const sourcePath = libraryPath ?? "";
-  const [pathDraft, setPathDraft] = useState<PathDraft | null>(null);
-  const pathValue = pathDraft?.source === sourcePath ? pathDraft.value : sourcePath;
-
-  const updateMutation = useMutation({
-    mutationFn: updateLibrarySettings,
-    onSuccess: res => {
-      if (res.error) {
-        showActionFailed("save TV shows library path", res.message);
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
-      showSuccess("Library path saved");
-    },
-    onError: () => {
-      showActionFailed("save TV shows library path", "Failed to update path");
-    },
-  });
-
-  const handleScan = () => {
-    showError("Not implemented", "Library scanning will be available soon");
-  };
-
-  const handleSaveLibrary = () => {
-    updateMutation.mutate(
-      librarySettingsPayload(
-        settings,
-        "shows_dir",
-        pathValue.trim() === "" ? null : pathValue.trim(),
-      ),
-    );
-  };
-
-  const handleRemoveLibrary = () => {
-    setPathDraft({ source: sourcePath, value: "" });
-    updateMutation.mutate(librarySettingsPayload(settings, "shows_dir", null));
-  };
-
-  return (
-    <section id={sectionId} aria-labelledby={headingId} className='space-y-4'>
-      {/* Section Header */}
-      <div className='flex items-center gap-3'>
-        <div
-          className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-purple-500/10'
-          aria-hidden='true'
-        >
-          <Tv className='size-5 text-purple-400' aria-hidden='true' />
-        </div>
-        <div className='min-w-0'>
-          <h3 id={headingId} className='text-lg font-semibold text-white'>
-            TV Shows Library
-          </h3>
-          <p className='text-sm text-slate-300'>
-            Manage your TV show collection
-          </p>
-        </div>
-      </div>
-
-      <div
-        id={pathId}
-        className='space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4'
-      >
-        <div className='flex items-center gap-3 text-slate-300'>
-          {hasLibrary ? (
-            <FolderOpen className='size-5 shrink-0' aria-hidden='true' />
-          ) : (
-            <AlertCircle className='size-5 shrink-0' aria-hidden='true' />
-          )}
-          <p className='text-sm'>
-            {hasLibrary ? "Library path configured" : "No library path configured"}
-          </p>
-        </div>
-        <div className='grid gap-2'>
-          <Label htmlFor={pathInputId}>TV shows library path</Label>
-          <Input
-            id={pathInputId}
-            value={pathValue}
-            onChange={event =>
-              setPathDraft({ source: sourcePath, value: event.target.value })
-            }
-            placeholder='/srv/media/shows'
-            disabled={updateMutation.isPending}
-          />
-        </div>
-        <div className='flex flex-col gap-2 sm:flex-row'>
-          <Button
-            type='button'
-            size='sm'
-            onClick={handleSaveLibrary}
-            disabled={updateMutation.isPending}
-            className='bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900'
-          >
-            {updateMutation.isPending ? (
-              <Spinner className='mr-2 size-4' aria-hidden='true' />
-            ) : (
-              <Plus className='mr-2 size-4' aria-hidden='true' />
-            )}
-            Save Path
-          </Button>
-          {hasLibrary && (
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              onClick={handleRemoveLibrary}
-              disabled={updateMutation.isPending}
-              aria-label={`Remove TV shows library path: ${libraryPath}`}
-              className='text-slate-300 hover:bg-slate-800 hover:text-red-400'
-            >
-              <Trash2 className='mr-2 size-4' aria-hidden='true' />
-              Remove
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats Placeholder - Only show if library is configured */}
-      {hasLibrary && (
-        <div
-          className='rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6'
-        >
-          <div className='flex items-center gap-3 text-slate-300'>
-            <AlertCircle className='size-5' aria-hidden='true' />
-            <p className='text-sm'>
-              TV show statistics will be available after TV shows feature is
-              implemented
+        ) : (
+          <div>
+            <p className="text-2xl font-bold text-white">
+              {value.toLocaleString()}
             </p>
+            <p className="text-sm text-slate-300">{label}</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {/* Scan Button - Only show if library is configured */}
-      {hasLibrary && (
-        <Button
-          onClick={handleScan}
-          aria-label="Scan TV shows library"
-          className='w-full bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900 disabled:opacity-50'
-        >
-          <Scan className='mr-2 size-4' aria-hidden='true' />
-          Scan Library
-        </Button>
-      )}
-    </section>
+function TVShowsUnavailableStatus({ hasLibrary }: StatsProps) {
+  if (!hasLibrary) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-4 text-sm text-slate-300">
+        TV shows can be configured now. Scanning will be available after TV show
+        support is implemented.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6">
+      <div className="flex items-center gap-3 text-slate-300">
+        <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white">
+            TV shows scanning unavailable
+          </p>
+          <p className="text-sm">
+            The TV shows path is saved, but TV scanning is not implemented yet.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function invalidateScanQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  scan: ImplementedScan,
+) {
+  const queryKeys =
+    scan === "movies"
+      ? [
+          MOVIES_STATS_KEY,
+          MOVIES_KEY,
+          LATEST_MOVIES_KEY,
+          MOVIE_PLAYLISTS_KEY,
+          MOVIE_PLAYLIST_DETAILS_KEY,
+          MOVIE_PLAYLIST_MOVIES_KEY,
+        ]
+      : [
+          MUSIC_STATS_KEY,
+          ALBUMS_KEY,
+          TRACKS_KEY,
+          MUSICIANS_KEY,
+          LATEST_ALBUMS_KEY,
+          ALBUMS_PAGINATED_KEY,
+          MUSICIANS_PAGINATED_KEY,
+          TRACKS_INFINITE_KEY,
+        ];
+
+  queryKeys.forEach(key => {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  });
+}
+
+function LibrariesSettingsLoading() {
+  const loadingId = useId();
+
+  return (
+    <div
+      className="max-w-5xl animate-in duration-300 fade-in"
+      role="status"
+      aria-labelledby={loadingId}
+    >
+      <Card className="border-slate-700/50 bg-slate-800/30">
+        <CardContent className="flex min-h-40 items-center justify-center">
+          <div className="flex items-center gap-3 text-slate-300">
+            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+            <span id={loadingId}>Loading library settings...</span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

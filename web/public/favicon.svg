@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Igloo">
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M12 44c0-14.36 8.95-25 20-25s20 10.64 20 25v5H12z" fill="#f8fafc"/>
+  <path d="M18 43c.7-10.75 7.2-18 14-18s13.3 7.25 14 18" fill="none" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M28 49V39c0-3.3 1.9-5.5 4-5.5s4 2.2 4 5.5v10" fill="#0f172a"/>
+</svg>

@@ -19,7 +19,6 @@ import {
   RotateCcw,
   Save,
   Sliders,
-  Wifi,
 } from "lucide-react";
 import {
   Card,
@@ -206,7 +205,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const staticDirId = useId();
   const logsDirId = useId();
   const transcodeDirId = useId();
-  const serverUploadMbpsId = useId();
   const enableLoggerId = useId();
   const enableWatcherId = useId();
   const downloadImagesId = useId();
@@ -342,19 +340,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     });
   };
 
-  const handleServerUploadMbpsChange = (value: string) => {
-    const trimmed = value.trim();
-    if (trimmed === "") {
-      setForm(current => ({ ...current, server_upload_mbps: null }));
-      return;
-    }
-    const parsed = Number.parseFloat(trimmed);
-    setForm(current => ({
-      ...current,
-      server_upload_mbps: Number.isFinite(parsed) ? parsed : null,
-    }));
-  };
-
   const handleHardwareChange = (value: string) => {
     if (!isHardwareAccelerationDevice(value)) return;
     startTransition(() => {
@@ -398,17 +383,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       return {
         field: "transcode_dir",
         message: "Transcode directory is required.",
-      };
-    }
-
-    if (
-      form.server_upload_mbps != null &&
-      (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
-    ) {
-      return {
-        field: "server_upload_mbps",
-        message:
-          "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.",
       };
     }
 
@@ -686,49 +660,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             required
             invalid={validationField === "transcode_dir"}
           />
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Wifi className="size-5 text-amber-400" aria-hidden="true" />
-            Server Bandwidth
-          </CardTitle>
-          <CardDescription className="text-slate-300">
-            Caps the server&apos;s outbound bandwidth when streaming to viewers
-            outside your home network.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid max-w-md gap-2">
-            <Label htmlFor={serverUploadMbpsId}>
-              Server upload bandwidth (Mbps)
-            </Label>
-            <Input
-              id={serverUploadMbpsId}
-              name="server_upload_mbps"
-              type="number"
-              inputMode="decimal"
-              min={0.1}
-              step={0.1}
-              value={form.server_upload_mbps ?? ""}
-              onChange={event =>
-                handleServerUploadMbpsChange(event.target.value)
-              }
-              disabled={updateMutation.isPending}
-              aria-describedby={`${serverUploadMbpsId}-description`}
-              aria-invalid={validationField === "server_upload_mbps"}
-              className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
-            />
-            <p
-              id={`${serverUploadMbpsId}-description`}
-              className="text-sm text-slate-400"
-            >
-              Used to recommend a stream profile when viewers stream from
-              outside the home network. Leave blank if uncapped.
-            </p>
-          </div>
         </CardContent>
       </Card>
 

@@ -271,3 +271,46 @@ func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySe
 	)
 	return i, err
 }
+
+const updatePlaybackServerUploadMbps = `-- name: UpdatePlaybackServerUploadMbps :one
+UPDATE settings
+SET
+  server_upload_mbps = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = (
+  SELECT id
+  FROM settings
+  ORDER BY id
+  LIMIT 1
+)
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+`
+
+func (q *Queries) UpdatePlaybackServerUploadMbps(ctx context.Context, serverUploadMbps sql.NullFloat64) (Setting, error) {
+	row := q.queryRow(ctx, q.updatePlaybackServerUploadMbpsStmt, updatePlaybackServerUploadMbps, serverUploadMbps)
+	var i Setting
+	err := row.Scan(
+		&i.ID,
+		&i.TmdbKey,
+		&i.ImmichBaseUrl,
+		&i.ImmichApiKey,
+		&i.JellyfinBaseUrl,
+		&i.JellyfinApiKey,
+		&i.SpotifyClientID,
+		&i.SpotifyClientSecret,
+		&i.HardwareAccelerationDevice,
+		&i.EnableLogger,
+		&i.EnableWatcher,
+		&i.DownloadImages,
+		&i.MoviesDir,
+		&i.ShowsDir,
+		&i.MusicDir,
+		&i.ServerUploadMbps,
+		&i.StaticDir,
+		&i.LogsDir,
+		&i.TranscodeDir,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

@@ -547,6 +547,154 @@ func TestGetPlaybackSettings_ReportsServerUploadCap(t *testing.T) {
 	}
 }
 
+func TestUpdatePlaybackSettings_AdminCanUpdateServerUploadCap(t *testing.T) {
+	app := setupPlaybackHTTPTestApp(t)
+	defer app.DB.Close()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	handler := mountPlaybackRouter(app, admin.ID)
+
+	body := fmt.Sprintf(`{
+		"preferred_profile": %q,
+		"download_mbps": 75,
+		"preferred_audio_language": "en",
+		"preferred_subtitle_language": "off",
+		"server_upload_mbps": 12.5
+	}`, helpers.HLS_PROFILE_1080P_6MBPS)
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	prefs, err := app.Queries.GetUserPlaybackPreferences(context.Background(), admin.ID)
+	if err != nil {
+		t.Fatalf("GetUserPlaybackPreferences: %v", err)
+	}
+	if !prefs.PreferredHlsProfile.Valid || prefs.PreferredHlsProfile.String != helpers.HLS_PROFILE_1080P_6MBPS {
+		t.Fatalf("expected preferred profile %q, got valid=%v %q", helpers.HLS_PROFILE_1080P_6MBPS, prefs.PreferredHlsProfile.Valid, prefs.PreferredHlsProfile.String)
+	}
+	if !prefs.DownloadMbps.Valid || prefs.DownloadMbps.Float64 != 75 {
+		t.Fatalf("expected download Mbps 75, got valid=%v %v", prefs.DownloadMbps.Valid, prefs.DownloadMbps.Float64)
+	}
+	if !prefs.PreferredAudioLanguage.Valid || prefs.PreferredAudioLanguage.String != "en" {
+		t.Fatalf("expected preferred audio language en, got valid=%v %q", prefs.PreferredAudioLanguage.Valid, prefs.PreferredAudioLanguage.String)
+	}
+	if !prefs.PreferredSubtitleLanguage.Valid || prefs.PreferredSubtitleLanguage.String != "off" {
+		t.Fatalf("expected preferred subtitle language off, got valid=%v %q", prefs.PreferredSubtitleLanguage.Valid, prefs.PreferredSubtitleLanguage.String)
+	}
+
+	settings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !settings.ServerUploadMbps.Valid || settings.ServerUploadMbps.Float64 != 12.5 {
+		t.Fatalf("expected server_upload_mbps 12.5, got valid=%v %v", settings.ServerUploadMbps.Valid, settings.ServerUploadMbps.Float64)
+	}
+	if app.Settings == nil || !app.Settings.ServerUploadMbps.Valid || app.Settings.ServerUploadMbps.Float64 != 12.5 {
+		t.Fatalf("expected app.Settings server_upload_mbps 12.5, got %+v", app.Settings)
+	}
+}
+
+func TestUpdatePlaybackSettings_RegularUserCannotUpdateServerUploadCap(t *testing.T) {
+	app := setupPlaybackHTTPTestApp(t)
+	defer app.DB.Close()
+
+	settings, err := app.Queries.UpdatePlaybackServerUploadMbps(context.Background(), helpers.NullFloat64(22))
+	if err != nil {
+		t.Fatalf("seed server upload: %v", err)
+	}
+	app.Settings = &settings
+
+	user := createTestUser(t, app, "Regular", "regular@example.com", false)
+	handler := mountPlaybackRouter(app, user.ID)
+
+	body := fmt.Sprintf(`{"preferred_profile": %q, "download_mbps": 50, "server_upload_mbps": 10}`, helpers.HLS_PROFILE_1080P_6MBPS)
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	prefs, err := app.Queries.GetUserPlaybackPreferences(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("GetUserPlaybackPreferences: %v", err)
+	}
+	if prefs.PreferredHlsProfile.Valid {
+		t.Fatalf("expected preferred_hls_profile unchanged, got %q", prefs.PreferredHlsProfile.String)
+	}
+	if prefs.DownloadMbps.Valid {
+		t.Fatalf("expected download_mbps unchanged, got %v", prefs.DownloadMbps.Float64)
+	}
+
+	gotSettings, err := app.Queries.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !gotSettings.ServerUploadMbps.Valid || gotSettings.ServerUploadMbps.Float64 != 22 {
+		t.Fatalf("expected server_upload_mbps unchanged at 22, got valid=%v %v", gotSettings.ServerUploadMbps.Valid, gotSettings.ServerUploadMbps.Float64)
+	}
+}
+
+func TestUpdatePlaybackSettings_ServerUploadMbpsBoundaries(t *testing.T) {
+	cases := []struct {
+		name       string
+		value      string
+		wantStatus int
+		wantValid  bool
+		wantStored float64
+	}{
+		{"null clears", "null", http.StatusOK, false, 0},
+		{"zero rejected", "0", http.StatusBadRequest, true, 25},
+		{"just above zero accepted", "0.1", http.StatusOK, true, 0.1},
+		{"just below ceiling accepted", "99999.99", http.StatusOK, true, 99999.99},
+		{"ceiling rejected", "100000", http.StatusBadRequest, true, 25},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := setupPlaybackHTTPTestApp(t)
+			defer app.DB.Close()
+
+			settings, err := app.Queries.UpdatePlaybackServerUploadMbps(context.Background(), helpers.NullFloat64(25))
+			if err != nil {
+				t.Fatalf("seed server upload: %v", err)
+			}
+			app.Settings = &settings
+
+			admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+			handler := mountPlaybackRouter(app, admin.ID)
+
+			body := `{"server_upload_mbps": ` + tc.value + `}`
+			req := httptest.NewRequest(http.MethodPut, "/api/settings/playback", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("value=%s expected status %d, got %d: %s", tc.value, tc.wantStatus, w.Code, w.Body.String())
+			}
+
+			gotSettings, err := app.Queries.GetSettings(context.Background())
+			if err != nil {
+				t.Fatalf("GetSettings: %v", err)
+			}
+			if gotSettings.ServerUploadMbps.Valid != tc.wantValid {
+				t.Fatalf("expected server_upload_mbps valid=%v, got %v", tc.wantValid, gotSettings.ServerUploadMbps.Valid)
+			}
+			if tc.wantValid && gotSettings.ServerUploadMbps.Float64 != tc.wantStored {
+				t.Fatalf("expected stored server_upload_mbps %v, got %v", tc.wantStored, gotSettings.ServerUploadMbps.Float64)
+			}
+		})
+	}
+}
+
 func TestUpdatePlaybackSettings_LanguagePrefsRoundTrip(t *testing.T) {
 	app := setupPlaybackHTTPTestApp(t)
 	defer app.DB.Close()
