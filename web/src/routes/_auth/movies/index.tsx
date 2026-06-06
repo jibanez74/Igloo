@@ -1,4 +1,11 @@
-import { useRef, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type MutableRefObject,
+  type RefObject,
+} from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod/mini";
@@ -36,6 +43,7 @@ import {
 import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 const moviesSearchSchema = z.object({
   tab: z._default(
@@ -113,6 +121,10 @@ export const Route = createFileRoute("/_auth/movies/")({
   component: MoviesPage,
 });
 
+type PlaylistsFocusIntent =
+  | "enter-liked-from-toolbar"
+  | "return-to-playlists";
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -121,6 +133,8 @@ function MoviesPage() {
   const navigate = Route.useNavigate();
   const { tab, allPage, sort, genreId, genresPage, view, playlistsPage } =
     Route.useSearch();
+  const genresTabTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const playlistsTabTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const handleTabChange = (newTab: string) =>
     navigate({
@@ -173,6 +187,7 @@ function MoviesPage() {
           </TabsTrigger>
           <TabsTrigger
             value="genres"
+            ref={genresTabTriggerRef}
             className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
           >
             <Film
@@ -183,6 +198,7 @@ function MoviesPage() {
           </TabsTrigger>
           <TabsTrigger
             value="playlists"
+            ref={playlistsTabTriggerRef}
             className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
           >
             <ListVideo
@@ -202,6 +218,7 @@ function MoviesPage() {
             genreId={genreId}
             genresPage={genresPage}
             sort={sort}
+            fallbackFocusRef={genresTabTriggerRef}
           />
         </TabsContent>
 
@@ -210,6 +227,7 @@ function MoviesPage() {
             view={view}
             playlistsPage={playlistsPage}
             sort={sort}
+            playlistsTabTriggerRef={playlistsTabTriggerRef}
           />
         </TabsContent>
       </Tabs>
@@ -488,14 +506,18 @@ type GenresTabContentProps = {
   genreId: number | undefined;
   genresPage: number;
   sort: "asc" | "desc";
+  fallbackFocusRef: RefObject<HTMLButtonElement | null>;
 };
 
 function GenresTabContent({
   genreId,
   genresPage,
   sort,
+  fallbackFocusRef,
 }: GenresTabContentProps) {
   const navigate = Route.useNavigate();
+  const genreButtonRefs = useRef(new Map<number, HTMLButtonElement>());
+  const pendingRestoreGenreIdRef = useRef<number | null>(null);
 
   const genresQuery = useQuery(moviesGenresQueryOpts());
   const genresRes = genresQuery.data;
@@ -521,6 +543,17 @@ function GenresTabContent({
       ? genres.find(g => g.genre_id === genreId)?.genre_tag
       : undefined;
 
+  useEffect(() => {
+    const restoreGenreId = pendingRestoreGenreIdRef.current;
+    if (genreId != null || restoreGenreId == null) return;
+
+    pendingRestoreGenreIdRef.current = null;
+    focusDialogRestoreTarget(
+      genreButtonRefs.current.get(restoreGenreId),
+      fallbackFocusRef.current,
+    );
+  }, [fallbackFocusRef, genreId]);
+
   const getAnnouncement = () => {
     if (!hasSelectedGenre) return undefined;
     if (moviesLoading) return undefined;
@@ -541,6 +574,7 @@ function GenresTabContent({
   };
 
   const handleClearGenre = () => {
+    pendingRestoreGenreIdRef.current = genreId ?? null;
     navigate({
       to: "/movies",
       search: (prev: MoviesSearchParams) => ({
@@ -617,6 +651,13 @@ function GenresTabContent({
             <li key={g.genre_id} className="min-w-0">
               <button
                 type="button"
+                ref={node => {
+                  if (node) {
+                    genreButtonRefs.current.set(g.genre_id, node);
+                    return;
+                  }
+                  genreButtonRefs.current.delete(g.genre_id);
+                }}
                 onClick={() => handleSelectGenre(g.genre_id)}
                 className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                   hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3"
@@ -760,22 +801,37 @@ type PlaylistsTabContentProps = {
   view: "liked" | undefined;
   playlistsPage: number;
   sort: "asc" | "desc";
+  playlistsTabTriggerRef: RefObject<HTMLButtonElement | null>;
 };
 
 function PlaylistsTabContent({
   view,
   playlistsPage,
   sort,
+  playlistsTabTriggerRef,
 }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreate, setShowCreate] = useState(false);
   const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
+  const likedMoviesButtonRef = useRef<HTMLButtonElement | null>(null);
+  const focusIntentRef = useRef<PlaylistsFocusIntent | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...moviePlaylistsQueryOpts(),
     enabled: view !== "liked",
   });
   const playlists = data?.error === false ? data.data.playlists : [];
+
+  useEffect(() => {
+    if (view === "liked" || isLoading) return;
+    if (focusIntentRef.current !== "return-to-playlists") return;
+
+    focusIntentRef.current = null;
+    focusDialogRestoreTarget(
+      likedMoviesButtonRef.current,
+      playlistsTabTriggerRef.current,
+    );
+  }, [isLoading, playlistsTabTriggerRef, view]);
 
   const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
     createPlaylistRestoreRef.current = event.currentTarget;
@@ -787,7 +843,9 @@ function PlaylistsTabContent({
       <LikedMoviesInPlaylistsTab
         playlistsPage={playlistsPage}
         sort={sort}
-        onExitLiked={() =>
+        focusIntentRef={focusIntentRef}
+        onExitLiked={() => {
+          focusIntentRef.current = "return-to-playlists";
           navigate({
             to: "/movies",
             search: (prev: MoviesSearchParams) => ({
@@ -796,8 +854,8 @@ function PlaylistsTabContent({
               playlistsPage: 1,
             }),
             replace: true,
-          })
-        }
+          });
+        }}
       />
     );
   }
@@ -828,7 +886,9 @@ function PlaylistsTabContent({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() =>
+            ref={likedMoviesButtonRef}
+            onClick={() => {
+              focusIntentRef.current = "enter-liked-from-toolbar";
               navigate({
                 to: "/movies",
                 search: (prev: MoviesSearchParams) => ({
@@ -837,8 +897,8 @@ function PlaylistsTabContent({
                   playlistsPage: 1,
                 }),
                 replace: true,
-              })
-            }
+              });
+            }}
             className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
@@ -878,14 +938,17 @@ type LikedMoviesInPlaylistsTabProps = {
   playlistsPage: number;
   sort: "asc" | "desc";
   onExitLiked: () => void;
+  focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
 };
 
 function LikedMoviesInPlaylistsTab({
   playlistsPage,
   sort,
   onExitLiked,
+  focusIntentRef,
 }: LikedMoviesInPlaylistsTabProps) {
   const navigate = Route.useNavigate();
+  const backToPlaylistsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery(
     likedMoviesQueryOpts(playlistsPage, MOVIES_PER_PAGE, sort),
@@ -894,6 +957,16 @@ function LikedMoviesInPlaylistsTab({
   const movies = data?.error === false ? data.data.movies : [];
   const totalPages = data?.error === false ? data.data.total_pages : 0;
   const total = data?.error === false ? data.data.total : 0;
+
+  useEffect(() => {
+    if (isLoading || focusIntentRef.current !== "enter-liked-from-toolbar") {
+      return;
+    }
+    if (!backToPlaylistsButtonRef.current) return;
+
+    focusIntentRef.current = null;
+    focusDialogRestoreTarget(backToPlaylistsButtonRef.current);
+  }, [focusIntentRef, isLoading]);
 
   const getAnnouncement = () => {
     if (isLoading) return undefined;
@@ -946,6 +1019,7 @@ function LikedMoviesInPlaylistsTab({
       <div>
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <button
+            ref={backToPlaylistsButtonRef}
             type="button"
             onClick={onExitLiked}
             className="text-sm font-medium text-amber-400 hover:underline"
@@ -971,6 +1045,7 @@ function LikedMoviesInPlaylistsTab({
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <button
+            ref={backToPlaylistsButtonRef}
             type="button"
             onClick={onExitLiked}
             className="text-sm font-medium text-amber-400 hover:underline"
