@@ -7,7 +7,10 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+
+const defaultMatchMedia = window.matchMedia;
 
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(
@@ -223,8 +226,118 @@ async function renderMoviesRoute(initialEntry: string) {
   );
 }
 
+function setReducedMotionPreference(prefersReducedMotion: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches:
+        query === "(prefers-reduced-motion: reduce)" && prefersReducedMotion,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function wait(ms: number) {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: defaultMatchMedia,
+  });
+});
+
+describe("movies route tab transitions", () => {
+  it("delays swapping from all movies to genres until the fade-out completes", async () => {
+    const user = userEvent.setup();
+
+    await renderMoviesRoute("/movies/");
+
+    expect(screen.getByText("Arrival")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Genres" }));
+
+    expect(screen.getByText("Arrival")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Action/i }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      await wait(CONTENT_FADE_TRANSITION_MS - 50);
+    });
+
+    expect(screen.getByText("Arrival")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Action/i }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
+      },
+      { timeout: CONTENT_FADE_TRANSITION_MS + 500 },
+    );
+  });
+
+  it("delays swapping from genres to playlists until the fade-out completes", async () => {
+    const user = userEvent.setup();
+
+    await renderMoviesRoute("/movies/?tab=genres");
+
+    expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Playlists" }));
+
+    expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Liked movies" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      await wait(CONTENT_FADE_TRANSITION_MS - 50);
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Liked movies" }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole("button", { name: "Liked movies" })).toBeInTheDocument();
+      },
+      { timeout: CONTENT_FADE_TRANSITION_MS + 500 },
+    );
+  });
+
+  it("switches tabs without waiting when reduced motion is enabled", async () => {
+    setReducedMotionPreference(true);
+    const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    await renderMoviesRoute("/movies/");
+
+    expect(screen.getByText("Arrival")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Genres" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
+    });
+    expect(
+      setTimeoutSpy.mock.calls.some(([, delay]) => delay === CONTENT_FADE_TRANSITION_MS),
+    ).toBe(false);
+  });
 });
 
 describe("movies route focus restoration", () => {
@@ -279,9 +392,18 @@ describe("movies route focus restoration", () => {
       await screen.findByRole("menuitem", { name: "Liked movies" }),
     );
 
-    await screen.findByRole("button", { name: "Back to playlists" });
+    expect(
+      screen.queryByRole("button", { name: "Back to playlists" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      await wait(CONTENT_FADE_TRANSITION_MS - 50);
+    });
 
     await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Back to playlists" }),
+      ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
     });
   });

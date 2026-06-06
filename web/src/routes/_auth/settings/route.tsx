@@ -5,7 +5,6 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
 import { Settings, User, Sliders, Library, Play, Users } from "lucide-react";
 import {
   Tabs,
@@ -14,11 +13,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  SETTINGS_PAGE_CONTENT_ENTER_CLASS,
-  SETTINGS_PAGE_CONTENT_EXIT_CLASS,
-  SETTINGS_PAGE_TRANSITION_MS,
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
   SETTINGS_PAGE_VIEW_TRANSITION_NAME,
 } from "@/lib/constants";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
 import { cn } from "@/lib/utils";
@@ -64,16 +64,13 @@ function SettingsLayout() {
   const navigate = Route.useNavigate();
   const location = useLocation();
   const { data: authData } = useSuspenseQuery(authUserQueryOpts());
-  const exitTimerRef = useRef<number | null>(null);
-  const [isContentExiting, setIsContentExiting] = useState(false);
   const isAdmin = authData.data?.user.is_admin ?? false;
-  const prefersReducedMotion =
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  const supportsViewTransition =
-    typeof document !== "undefined" && "startViewTransition" in document;
-  const usesSettingsPageViewTransition =
-    supportsViewTransition && !prefersReducedMotion;
-  const usesSettingsPageContentAnimation = !usesSettingsPageViewTransition;
+  const {
+    isExiting,
+    runTransition,
+    usesContentAnimation,
+    usesViewTransition,
+  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,
@@ -81,45 +78,23 @@ function SettingsLayout() {
     tabs: SETTINGS_TABS,
   });
 
-  useEffect(() => {
-    return () => {
-      if (exitTimerRef.current !== null) {
-        window.clearTimeout(exitTimerRef.current);
-      }
-    };
-  }, []);
-
   const handleTabChange = (newTab: string) => {
     const tab = visibleTabs.find(t => t.id === newTab);
     if (!tab || tab.id === currentTab) {
       return;
     }
 
-    if (exitTimerRef.current !== null) {
-      window.clearTimeout(exitTimerRef.current);
-      exitTimerRef.current = null;
-    }
-
-    if (supportsViewTransition || prefersReducedMotion) {
-      void navigate({
-        to: tab.path,
-        replace: true,
-        viewTransition: usesSettingsPageViewTransition
-          ? { types: [SETTINGS_PAGE_VIEW_TRANSITION_NAME] }
-          : undefined,
-      });
-      return;
-    }
-
-    setIsContentExiting(true);
-    exitTimerRef.current = window.setTimeout(() => {
-      exitTimerRef.current = null;
-      setIsContentExiting(false);
-      void navigate({
-        to: tab.path,
-        replace: true,
-      });
-    }, SETTINGS_PAGE_TRANSITION_MS);
+    runTransition({
+      shouldAnimate: true,
+      onTransition: () =>
+        navigate({
+          to: tab.path,
+          replace: true,
+          viewTransition: usesViewTransition
+            ? { types: [SETTINGS_PAGE_VIEW_TRANSITION_NAME] }
+            : undefined,
+        }),
+    });
   };
 
   const isCompactLayout = visibleTabs.length <= 2;
@@ -176,10 +151,8 @@ function SettingsLayout() {
             <div
               key={location.pathname}
               className={cn(
-                usesSettingsPageContentAnimation &&
-                  (isContentExiting
-                    ? SETTINGS_PAGE_CONTENT_EXIT_CLASS
-                    : SETTINGS_PAGE_CONTENT_ENTER_CLASS),
+                usesContentAnimation &&
+                  (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
               )}
               style={{ viewTransitionName: SETTINGS_PAGE_VIEW_TRANSITION_NAME }}
             >

@@ -32,6 +32,14 @@ import CreateMoviePlaylistDialog from "@/components/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/MovieCard";
 import MoviePlaylistCard from "@/components/MoviePlaylistCard";
 import LibraryPagination from "@/components/LibraryPagination";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
+import {
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
+  MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME,
+  MOVIES_PER_PAGE,
+} from "@/lib/constants";
 import {
   likedMoviesQueryOpts,
   moviePlaylistsQueryOpts,
@@ -40,9 +48,9 @@ import {
   moviesLibraryQueryOpts,
   moviesStatsQueryOpts,
 } from "@/lib/query-opts";
-import { MOVIES_PER_PAGE } from "@/lib/constants";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
+import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 const moviesSearchSchema = z.object({
@@ -135,17 +143,89 @@ function MoviesPage() {
     Route.useSearch();
   const genresTabTriggerRef = useRef<HTMLButtonElement | null>(null);
   const playlistsTabTriggerRef = useRef<HTMLButtonElement | null>(null);
-
-  const handleTabChange = (newTab: string) =>
-    navigate({
-      to: "/movies",
-      search: (prev: MoviesSearchParams) => ({
-        ...prev,
-        tab: newTab as MoviesSearchParams["tab"],
-        ...(newTab !== "playlists" ? { view: undefined } : {}),
-      }),
-      replace: true,
+  const { isExiting, runTransition, usesContentAnimation } =
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
+      enableViewTransition: false,
     });
+
+  const topLevelTabPanelClassName = cn(
+    usesContentAnimation &&
+      (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+  );
+  const topLevelTabPanelStyle = {
+    viewTransitionName: MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME,
+  } as const;
+  let topLevelTabContent = (
+    <AllMoviesTabContent currentPage={allPage} sort={sort} />
+  );
+
+  if (tab === "genres") {
+    topLevelTabContent = (
+      <GenresTabContent
+        genreId={genreId}
+        genresPage={genresPage}
+        sort={sort}
+        fallbackFocusRef={genresTabTriggerRef}
+      />
+    );
+  }
+
+  if (tab === "playlists") {
+    topLevelTabContent = (
+      <PlaylistsTabContent
+        view={view}
+        playlistsPage={playlistsPage}
+        sort={sort}
+        playlistsTabTriggerRef={playlistsTabTriggerRef}
+      />
+    );
+  }
+
+  const navigateWithTabTransition = (
+    nextTab: MoviesSearchParams["tab"],
+    getNextSearch: (prev: MoviesSearchParams) => MoviesSearchParams,
+  ) => {
+    const shouldAnimate = nextTab !== tab;
+    const navigateToNextTab = () =>
+      navigate({
+        to: "/movies",
+        search: prev => getNextSearch(prev),
+        replace: true,
+      });
+
+    runTransition({
+      shouldAnimate,
+      onTransition: navigateToNextTab,
+    });
+  };
+
+  const handleTabChange = (newTab: string) => {
+    const nextTab = newTab as MoviesSearchParams["tab"];
+
+    navigateWithTabTransition(nextTab, prev => ({
+      ...prev,
+      tab: nextTab,
+      ...(nextTab !== "playlists" ? { view: undefined } : {}),
+    }));
+  };
+
+  const handleOpenLikedMovies = () => {
+    navigateWithTabTransition("playlists", prev => ({
+      ...prev,
+      tab: "playlists",
+      view: "liked",
+      playlistsPage: 1,
+    }));
+  };
+
+  const handleOpenMoviePlaylists = () => {
+    navigateWithTabTransition("playlists", prev => ({
+      ...prev,
+      tab: "playlists",
+      view: undefined,
+      playlistsPage: 1,
+    }));
+  };
 
   return (
     <div className="min-w-0">
@@ -169,7 +249,10 @@ function MoviesPage() {
       {/* Stats + More dropdown */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <MoviesStats />
-        <MoreMenu />
+        <MoreMenu
+          onOpenLikedMovies={handleOpenLikedMovies}
+          onOpenMoviePlaylists={handleOpenMoviePlaylists}
+        />
       </div>
 
       {/* Tabs — controlled by URL search param */}
@@ -209,26 +292,14 @@ function MoviesPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-5 sm:mt-6">
-          <AllMoviesTabContent currentPage={allPage} sort={sort} />
-        </TabsContent>
-
-        <TabsContent value="genres" className="mt-5 sm:mt-6">
-          <GenresTabContent
-            genreId={genreId}
-            genresPage={genresPage}
-            sort={sort}
-            fallbackFocusRef={genresTabTriggerRef}
-          />
-        </TabsContent>
-
-        <TabsContent value="playlists" className="mt-5 sm:mt-6">
-          <PlaylistsTabContent
-            view={view}
-            playlistsPage={playlistsPage}
-            sort={sort}
-            playlistsTabTriggerRef={playlistsTabTriggerRef}
-          />
+        <TabsContent value={tab} className="mt-5 sm:mt-6">
+          <div
+            key={tab}
+            className={topLevelTabPanelClassName}
+            style={topLevelTabPanelStyle}
+          >
+            {topLevelTabContent}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
@@ -282,8 +353,15 @@ function MoviesStats() {
 // More dropdown (placeholders only)
 // ---------------------------------------------------------------------------
 
-function MoreMenu() {
-  const navigate = Route.useNavigate();
+type MoreMenuProps = {
+  onOpenLikedMovies: () => void;
+  onOpenMoviePlaylists: () => void;
+};
+
+function MoreMenu({
+  onOpenLikedMovies,
+  onOpenMoviePlaylists,
+}: MoreMenuProps) {
 
   return (
     <DropdownMenu>
@@ -299,36 +377,14 @@ function MoreMenu() {
       >
         <DropdownMenuItem
           className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
-          onClick={() =>
-            navigate({
-              to: "/movies",
-              search: (prev: MoviesSearchParams) => ({
-                ...prev,
-                tab: "playlists",
-                view: "liked",
-                playlistsPage: 1,
-              }),
-              replace: true,
-            })
-          }
+          onClick={onOpenLikedMovies}
         >
           <Heart className="mr-2 size-4" aria-hidden="true" />
           Liked movies
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
-          onClick={() =>
-            navigate({
-              to: "/movies",
-              search: (prev: MoviesSearchParams) => ({
-                ...prev,
-                tab: "playlists",
-                view: undefined,
-                playlistsPage: 1,
-              }),
-              replace: true,
-            })
-          }
+          onClick={onOpenMoviePlaylists}
         >
           <ListVideo className="mr-2 size-4" aria-hidden="true" />
           Movie playlists

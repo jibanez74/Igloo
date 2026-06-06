@@ -274,13 +274,16 @@ export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 export const MOVIE_DETAILS_CONTENT_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
 
-// Settings page transitions
-export const SETTINGS_PAGE_TRANSITION_MS = 200;
-export const SETTINGS_PAGE_VIEW_TRANSITION_NAME = "settings-page";
-export const SETTINGS_PAGE_CONTENT_ENTER_CLASS =
+// Shared content fade transitions
+export const CONTENT_FADE_TRANSITION_MS = 200;
+export const CONTENT_FADE_ENTER_CLASS =
   "animate-in fade-in-0 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100";
-export const SETTINGS_PAGE_CONTENT_EXIT_CLASS =
+export const CONTENT_FADE_EXIT_CLASS =
   "animate-out fade-out-0 fill-mode-both duration-200 ease-in motion-reduce:animate-none motion-reduce:opacity-100";
+
+// Settings page transitions
+export const SETTINGS_PAGE_VIEW_TRANSITION_NAME = "settings-page";
+export const MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME = "movies-tab-panel";
 
 // watch rooms
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;
