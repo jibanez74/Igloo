@@ -39,6 +39,10 @@
 /web/coverage/
 /web/*.tsbuildinfo
 
+# Local Playwright/debug screenshots
+/movies-*.png
+/settings-*.png
+
 # IDE and editor
 .idea/
 .vscode/
