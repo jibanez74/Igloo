@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { deleteWatchRoom } from "@/lib/api";
 import { WATCH_ROOM_KEY, WATCH_ROOMS_KEY } from "@/lib/constants";
@@ -7,17 +7,7 @@ import {
   showSuccess,
 } from "@/lib/toast-helpers";
 import type { ApiResponseType, WatchRoomType } from "@/types";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Spinner } from "@/components/ui/spinner";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type DeleteWatchRoomDialogProps = {
   roomId: number;
@@ -27,6 +17,7 @@ type DeleteWatchRoomDialogProps = {
   onDeleteStart?: () => void;
   onDeleteError?: () => void;
   onDeleted?: () => void | Promise<void>;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 function removeDeletedRoomFromCache(
@@ -56,6 +47,7 @@ export default function DeleteWatchRoomDialog({
   onDeleteStart,
   onDeleteError,
   onDeleted,
+  restoreFocusRef,
 }: DeleteWatchRoomDialogProps) {
   const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState(false);
@@ -119,37 +111,21 @@ export default function DeleteWatchRoomDialog({
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="border-slate-700 bg-slate-900">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-white">
-            Close watch room?
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-slate-400">
-            This will close the watch room for{" "}
-            <strong className="text-slate-200">{movieTitle}</strong> and remove
-            all members. This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel
-            disabled={deleting}
-            className="border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
-          >
-            Cancel
-          </AlertDialogCancel>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => void handleDelete()}
-            disabled={deleting}
-            className="bg-red-600 text-white hover:bg-red-700"
-          >
-            {deleting ? <Spinner className="size-4" /> : null}
-            {deleting ? "Closing…" : "Close room"}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Close watch room?"
+      description={
+        <>
+          This will close the watch room for{" "}
+          <strong className="text-slate-200">{movieTitle}</strong> and remove
+          all members. This action cannot be undone.
+        </>
+      }
+      confirmLabel="Close room"
+      pending={deleting}
+      restoreFocusRef={restoreFocusRef}
+      onConfirm={() => void handleDelete()}
+    />
   );
 }

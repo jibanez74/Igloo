@@ -275,7 +275,7 @@ export default function MovieDetailsHeroActions({
             onOpenChange={handlePlaybackSettingsOpenChange}
             settings={playbackSettings}
             onSave={onPlaybackSettingsChange}
-            restoreFocusRef={playButtonRef}
+            restoreFocusRef={moreOptionsButtonRef}
             formResetKey={playbackFormResetKey}
           />
         </Suspense>
@@ -312,6 +312,7 @@ export default function MovieDetailsHeroActions({
             movieId={movieId}
             open={technicalDetailsOpen}
             onOpenChange={onTechnicalDetailsOpenChange}
+            restoreFocusRef={moreOptionsButtonRef}
           />
         </Suspense>
       )}
@@ -323,6 +324,7 @@ export default function MovieDetailsHeroActions({
             movieTitle={movieTitle}
             open={deleteOpen}
             onOpenChange={onDeleteOpenChange}
+            restoreFocusRef={moreOptionsButtonRef}
           />
         </Suspense>
       )}

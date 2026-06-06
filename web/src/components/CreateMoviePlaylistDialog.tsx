@@ -1,5 +1,5 @@
-import { useState } from "react";
-    import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, type RefObject } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   showActionFailed,
   showCreated,
@@ -19,15 +19,18 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { createMoviePlaylist } from "@/lib/api";
 import { MOVIE_PLAYLISTS_KEY } from "@/lib/constants";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type CreateMoviePlaylistDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
 export default function CreateMoviePlaylistDialog({
   open,
   onOpenChange,
+  restoreFocusRef,
 }: CreateMoviePlaylistDialogProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -89,7 +92,17 @@ export default function CreateMoviePlaylistDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+      <DialogContent
+        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        onCloseAutoFocus={
+          restoreFocusRef
+            ? event => {
+                event.preventDefault();
+                focusDialogRestoreTarget(restoreFocusRef.current);
+              }
+            : undefined
+        }
+      >
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-white">New movie playlist</DialogTitle>

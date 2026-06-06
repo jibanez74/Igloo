@@ -42,6 +42,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -234,13 +235,14 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
           playerFullscreenMode && "max-w-none",
         )}
       >
-        <WatchRoomHeader
-          room={room}
-          connectedCount={connectedMembers.length}
-          connectionReady={connectionReady}
-          onDelete={() => setDeleteDialogOpen(true)}
-          onLeave={() => navigate({ to: "/" })}
-        />
+          <WatchRoomHeader
+            room={room}
+            connectedCount={connectedMembers.length}
+            connectionReady={connectionReady}
+            deleteButtonRef={deleteButtonRef}
+            onDelete={() => setDeleteDialogOpen(true)}
+            onLeave={() => navigate({ to: "/" })}
+          />
 
         <div
           className={cn(
@@ -300,6 +302,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             markRoomDeletionHandled(false);
           }}
           onDeleted={handleOwnerDeleteSuccess}
+          restoreFocusRef={deleteButtonRef}
         />
       ) : null}
     </div>
@@ -353,6 +356,7 @@ type WatchRoomHeaderProps = {
   room: WatchRoomDetailType;
   connectedCount: number;
   connectionReady: boolean;
+  deleteButtonRef: RefObject<HTMLButtonElement | null>;
   onDelete: () => void;
   onLeave: () => void;
 };
@@ -361,6 +365,7 @@ function WatchRoomHeader({
   room,
   connectedCount,
   connectionReady,
+  deleteButtonRef,
   onDelete,
   onLeave,
 }: WatchRoomHeaderProps) {
@@ -384,6 +389,7 @@ function WatchRoomHeader({
         <div className="flex flex-wrap items-center gap-3">
           {room.is_owner ? (
             <Button
+              ref={deleteButtonRef}
               type="button"
               variant="destructive"
               size="sm"

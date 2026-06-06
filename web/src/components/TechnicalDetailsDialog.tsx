@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -215,10 +216,12 @@ export default function TechnicalDetailsDialog({
   movieId,
   open,
   onOpenChange,
+  restoreFocusRef,
 }: {
   movieId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -244,6 +247,14 @@ export default function TechnicalDetailsDialog({
       <DialogContent
         className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
         onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={
+          restoreFocusRef
+            ? event => {
+                event.preventDefault();
+                focusDialogRestoreTarget(restoreFocusRef.current);
+              }
+            : undefined
+        }
       >
         <DialogHeader>
           <DialogTitle

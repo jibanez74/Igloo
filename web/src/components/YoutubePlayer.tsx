@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -27,20 +26,6 @@ export default function YoutubePlayer({
     controls: true,
     onEnd: () => onOpenChange(false),
   });
-
-  useEffect(() => {
-    if (open && isReady && containerRef.current) {
-      const timer = setTimeout(() => {
-        const iframe = containerRef.current?.querySelector("iframe");
-
-        if (iframe) {
-          iframe.focus();
-        }
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-  }, [open, isReady, containerRef]);
 
   // Prevent Space and Enter from bubbling up and closing the dialog
   const handleKeyDown = (e: React.KeyboardEvent) => {

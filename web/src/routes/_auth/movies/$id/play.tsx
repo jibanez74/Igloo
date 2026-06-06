@@ -527,6 +527,7 @@ function PlayMoviePage() {
       )}
       role="region"
       aria-label={`Video player for ${title}`}
+      tabIndex={-1}
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
       <LiveAnnouncer
@@ -540,6 +541,7 @@ function PlayMoviePage() {
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
+        restoreFocusRef={containerRef}
       />
 
       <p className="sr-only">
