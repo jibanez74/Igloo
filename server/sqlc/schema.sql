@@ -897,3 +897,41 @@ CREATE TRIGGER IF NOT EXISTS tracks_search_musician_au AFTER UPDATE OF name ON m
   LEFT JOIN musicians AS m ON m.id = t.musician_id
   WHERE t.musician_id = new.id;
 END;
+
+-- notifications
+CREATE TABLE
+  IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_by_user_id INTEGER NOT NULL,
+    user_id INTEGER,
+    title TEXT NOT NULL CHECK (title IN ('movie_request', 'album_request', 'track_request', 'other')),
+    message TEXT NOT NULL,
+    is_admin BOOLEAN NOT NULL DEFAULT false,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (user_id IS NULL OR is_admin = false),
+    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_notifications_created_by_user
+ON notifications (created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created_at
+ON notifications (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_admin_created_at
+ON notifications (is_admin, created_at DESC);
+
+CREATE TABLE
+  IF NOT EXISTS notification_reads (
+    notification_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (notification_id, user_id),
+    FOREIGN KEY (notification_id) REFERENCES notifications (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_notification_reads_user
+ON notification_reads (user_id);

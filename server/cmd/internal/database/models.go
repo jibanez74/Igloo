@@ -163,6 +163,17 @@ type Musician struct {
 	UpdatedAt         string          `json:"updated_at"`
 }
 
+type Notification struct {
+	ID              int64         `json:"id"`
+	CreatedByUserID int64         `json:"created_by_user_id"`
+	UserID          sql.NullInt64 `json:"user_id"`
+	Title           string        `json:"title"`
+	Message         string        `json:"message"`
+	IsAdmin         bool          `json:"is_admin"`
+	CreatedAt       string        `json:"created_at"`
+	UpdatedAt       string        `json:"updated_at"`
+}
+
 type Playlist struct {
 	ID          int64          `json:"id"`
 	UserID      int64          `json:"user_id"`
