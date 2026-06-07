@@ -200,7 +200,7 @@ function createMoviesQueryClient() {
 }
 
 async function renderMoviesRoute(initialEntry: string) {
-  window.scrollTo = vi.fn();
+  vi.stubGlobal("scrollTo", vi.fn());
   mockMoviesFetch();
 
   const queryClient = createMoviesQueryClient();
@@ -250,8 +250,8 @@ function wait(ms: number) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  vi.useRealTimers();
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: defaultMatchMedia,
