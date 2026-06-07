@@ -87,6 +87,7 @@ export type {
   MoviePlaylistDetailResponseType,
   CreateMoviePlaylistRequest,
   UpdateMoviePlaylistRequest,
+  TmdbStatusType,
   TmdbSearchMoviesRequest,
   UpdateMovieMetadataRequest,
 } from "./movies";
@@ -130,6 +131,13 @@ export type {
 
 // User types
 export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
+
+// Notification types
+export type {
+  NotificationType,
+  CreateNotificationRequest,
+  CreateNotificationResponseType,
+} from "./notifications";
 
 // Settings types
 export type {

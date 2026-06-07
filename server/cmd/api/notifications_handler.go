@@ -6,6 +6,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"strings"
 )
 
 type CreateNotificationReq struct {
@@ -20,6 +21,19 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 	err := helpers.ReadJSON(w, r, &req, 0)
 	if err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	req.Title = strings.TrimSpace(req.Title)
+	req.Message = strings.TrimSpace(req.Message)
+
+	if !isValidNotificationTitle(req.Title) {
+		helpers.ErrorJSON(w, errors.New("invalid notification title"), http.StatusBadRequest)
+		return
+	}
+
+	if req.Message == "" {
+		helpers.ErrorJSON(w, errors.New("message is required"), http.StatusBadRequest)
 		return
 	}
 
@@ -48,4 +62,16 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 			"notification": notification,
 		},
 	})
+}
+
+func isValidNotificationTitle(title string) bool {
+	switch title {
+	case helpers.NOTIFICATION_TITLE_MOVIE_REQUEST,
+		helpers.NOTIFICATION_TITLE_ALBUM_REQUEST,
+		helpers.NOTIFICATION_TITLE_TRACK_REQUEST,
+		helpers.NOTIFICATION_TITLE_OTHER:
+		return true
+	default:
+		return false
+	}
 }

@@ -3,6 +3,7 @@ export const AUTH_USER_KEY = "auth-user";
 export const WATCH_ROOMS_KEY = "watch-rooms";
 export const WATCH_ROOM_KEY = "watch-room";
 export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
+export const TMDB_STATUS_KEY = "tmdb-status";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";
@@ -33,8 +34,8 @@ export const SEARCH_TRACKS_KEY = "search-tracks";
 /** Default page size for paginated /api/search/<entity> endpoints (matches server SEARCH_DEFAULT_PER_PAGE). */
 export const SEARCH_PER_PAGE = 24;
 
-// tmdb (paths only from API; frontend builds full URLs inline)
-export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
+// tmdb (paths only from API; frontend builds same-origin proxy URLs inline)
+export const TMDB_IMAGE_BASE = "/api/tmdb/images";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";

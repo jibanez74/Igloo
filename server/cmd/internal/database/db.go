@@ -225,6 +225,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getMovieByIDStmt, err = db.PrepareContext(ctx, getMovieByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieByID: %w", err)
 	}
+	if q.getMovieByTmdbIDStmt, err = db.PrepareContext(ctx, getMovieByTmdbID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMovieByTmdbID: %w", err)
+	}
 	if q.getMovieExtraVideosStmt, err = db.PrepareContext(ctx, getMovieExtraVideos); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMovieExtraVideos: %w", err)
 	}
@@ -883,6 +886,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getMovieByIDStmt: %w", cerr)
 		}
 	}
+	if q.getMovieByTmdbIDStmt != nil {
+		if cerr := q.getMovieByTmdbIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMovieByTmdbIDStmt: %w", cerr)
+		}
+	}
 	if q.getMovieExtraVideosStmt != nil {
 		if cerr := q.getMovieExtraVideosStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMovieExtraVideosStmt: %w", cerr)
@@ -1519,6 +1527,7 @@ type Queries struct {
 	getLikedTrackIDsByUserIDStmt                *sql.Stmt
 	getLikedTracksForUserStmt                   *sql.Stmt
 	getMovieByIDStmt                            *sql.Stmt
+	getMovieByTmdbIDStmt                        *sql.Stmt
 	getMovieExtraVideosStmt                     *sql.Stmt
 	getMovieForDirectStreamStmt                 *sql.Stmt
 	getMovieGenresWithCountsStmt                *sql.Stmt
@@ -1698,6 +1707,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLikedTrackIDsByUserIDStmt:                q.getLikedTrackIDsByUserIDStmt,
 		getLikedTracksForUserStmt:                   q.getLikedTracksForUserStmt,
 		getMovieByIDStmt:                            q.getMovieByIDStmt,
+		getMovieByTmdbIDStmt:                        q.getMovieByTmdbIDStmt,
 		getMovieExtraVideosStmt:                     q.getMovieExtraVideosStmt,
 		getMovieForDirectStreamStmt:                 q.getMovieForDirectStreamStmt,
 		getMovieGenresWithCountsStmt:                q.getMovieGenresWithCountsStmt,

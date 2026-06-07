@@ -36,7 +36,7 @@ async function readJSON<T>(response: APIResponse | Response) {
 }
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
-  return response.status() === 401 && response.url().includes("/api/auth/user");
+  return response.status() === 200 && response.url().includes("/api/auth/user");
 }
 
 function isExpectedInvalidLoginResponse(response: Response) {
@@ -114,7 +114,10 @@ async function expectUnauthenticated(context: BrowserContext, env: LoginEnv) {
     failOnStatusCode: false,
   });
 
-  expect(response.status()).toBe(401);
+  expect(response.status()).toBe(200);
+
+  const body = await readJSON<unknown>(response);
+  expect(body.error, body.message).toBe(true);
 }
 
 async function expectAuthenticated(context: BrowserContext, env: LoginEnv) {
@@ -448,7 +451,7 @@ test.describe("Login screen", () => {
       env.password,
     );
     expect(unsafeRedirectLoginResponse.status()).toBe(200);
-    await expectAppPath(page, env, "/");
+    await expectAppPath(page, env, "/movies");
 
     expect(new URL(page.url()).origin).toBe(new URL(env.baseURL).origin);
     await expectAuthenticated(context, env);

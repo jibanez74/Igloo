@@ -103,6 +103,7 @@ type Querier interface {
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
+	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (GetMovieByTmdbIDRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)

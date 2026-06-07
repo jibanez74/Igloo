@@ -74,14 +74,14 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
 	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusOK)
 		return
 	}
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusOK)
 		} else {
 			app.Logger.Error("failed to fetch user from database", "error", err, "id", userID)
 			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))

@@ -19,6 +19,7 @@ import {
   getMoviesInTheaters,
   getMovieGenresWithCounts,
   getMovieLikeStatus,
+  getTmdbStatus,
   getMoviesByGenre,
   getMoviesLibrary,
   getMoviesStats,
@@ -50,6 +51,7 @@ import {
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
+  TMDB_STATUS_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
   MOVIE_PLAYLIST_DETAILS_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
@@ -148,6 +150,15 @@ export function inTheatersQueryOpts() {
     queryFn: getMoviesInTheaters,
     staleTime: STALE_THEATERS,
     gcTime: GC_LONG,
+  });
+}
+
+export function tmdbStatusQueryOpts() {
+  return queryOptions({
+    queryKey: [TMDB_STATUS_KEY],
+    queryFn: getTmdbStatus,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_DEFAULT,
   });
 }
 

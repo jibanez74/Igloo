@@ -313,12 +313,18 @@ export type TmdbSearchResultType = {
   release_date: string;
   overview: string;
   poster_path: string;
+  already_in_library: boolean;
+  library_movie_id?: number;
 };
 
 export type TmdbSearchMoviesRequest = {
   title: string;
   year?: number;
   tmdb_id?: number;
+};
+
+export type TmdbStatusType = {
+  available: boolean;
 };
 
 export type UpdateMovieMetadataRequest = {
