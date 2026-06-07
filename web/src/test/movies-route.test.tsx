@@ -243,13 +243,9 @@ function setReducedMotionPreference(prefersReducedMotion: boolean) {
   });
 }
 
-function wait(ms: number) {
-  return new Promise(resolve => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   Object.defineProperty(window, "matchMedia", {
@@ -261,6 +257,7 @@ afterEach(() => {
 describe("movies route tab transitions", () => {
   it("delays swapping from all movies to genres until the fade-out completes", async () => {
     const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
 
     await renderMoviesRoute("/movies/");
 
@@ -273,25 +270,30 @@ describe("movies route tab transitions", () => {
       screen.queryByRole("button", { name: /Action/i }),
     ).not.toBeInTheDocument();
 
-    await act(async () => {
-      await wait(CONTENT_FADE_TRANSITION_MS - 50);
-    });
+    const transitionCall = setTimeoutSpy.mock.calls.find(
+      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
+    );
+    const transitionCallback = transitionCall?.[0];
 
+    expect(transitionCall).toBeDefined();
+    expect(transitionCallback).toEqual(expect.any(Function));
     expect(screen.getByText("Arrival")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Action/i }),
     ).not.toBeInTheDocument();
 
-    await waitFor(
-      () => {
-        expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
-      },
-      { timeout: CONTENT_FADE_TRANSITION_MS + 500 },
-    );
+    await act(async () => {
+      (transitionCallback as () => void)();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
+    });
   });
 
   it("delays swapping from genres to playlists until the fade-out completes", async () => {
     const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
 
     await renderMoviesRoute("/movies/?tab=genres");
 
@@ -304,20 +306,24 @@ describe("movies route tab transitions", () => {
       screen.queryByRole("button", { name: "Liked movies" }),
     ).not.toBeInTheDocument();
 
-    await act(async () => {
-      await wait(CONTENT_FADE_TRANSITION_MS - 50);
-    });
+    const transitionCall = setTimeoutSpy.mock.calls.find(
+      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
+    );
+    const transitionCallback = transitionCall?.[0];
 
+    expect(transitionCall).toBeDefined();
+    expect(transitionCallback).toEqual(expect.any(Function));
     expect(
       screen.queryByRole("button", { name: "Liked movies" }),
     ).not.toBeInTheDocument();
 
-    await waitFor(
-      () => {
-        expect(screen.getByRole("button", { name: "Liked movies" })).toBeInTheDocument();
-      },
-      { timeout: CONTENT_FADE_TRANSITION_MS + 500 },
-    );
+    await act(async () => {
+      (transitionCallback as () => void)();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Liked movies" })).toBeInTheDocument();
+    });
   });
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
@@ -384,6 +390,7 @@ describe("movies route focus restoration", () => {
 
   it("does not override dropdown focus behavior when liked movies is opened from More options", async () => {
     const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
 
     await renderMoviesRoute("/movies/");
 
@@ -396,8 +403,16 @@ describe("movies route focus restoration", () => {
       screen.queryByRole("button", { name: "Back to playlists" }),
     ).not.toBeInTheDocument();
 
+    const transitionCall = setTimeoutSpy.mock.calls.find(
+      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
+    );
+    const transitionCallback = transitionCall?.[0];
+
+    expect(transitionCall).toBeDefined();
+    expect(transitionCallback).toEqual(expect.any(Function));
+
     await act(async () => {
-      await wait(CONTENT_FADE_TRANSITION_MS - 50);
+      (transitionCallback as () => void)();
     });
 
     await waitFor(() => {

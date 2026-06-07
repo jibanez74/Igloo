@@ -897,7 +897,7 @@ function PlaylistsTabContent({
       likedMoviesButtonRef.current,
       playlistsTabTriggerRef.current,
     );
-  }, [isLoading, playlistsTabTriggerRef, view]);
+  }, [focusIntentRef, isLoading, playlistsTabTriggerRef, view]);
 
   const handleCreateOpen = (event: MouseEvent<HTMLButtonElement>) => {
     createPlaylistRestoreRef.current = event.currentTarget;
