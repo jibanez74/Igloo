@@ -143,6 +143,7 @@ function MoviesPage() {
     Route.useSearch();
   const genresTabTriggerRef = useRef<HTMLButtonElement | null>(null);
   const playlistsTabTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const playlistsFocusIntentRef = useRef<PlaylistsFocusIntent | null>(null);
   const { isExiting, runTransition, usesContentAnimation } =
     useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
       enableViewTransition: false,
@@ -155,6 +156,9 @@ function MoviesPage() {
   const topLevelTabPanelStyle = {
     viewTransitionName: MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME,
   } as const;
+  const primeEnterLikedFocus = () => {
+    playlistsFocusIntentRef.current = "enter-liked-from-toolbar";
+  };
   let topLevelTabContent = (
     <AllMoviesTabContent currentPage={allPage} sort={sort} />
   );
@@ -176,6 +180,8 @@ function MoviesPage() {
         view={view}
         playlistsPage={playlistsPage}
         sort={sort}
+        focusIntentRef={playlistsFocusIntentRef}
+        primeEnterLikedFocus={primeEnterLikedFocus}
         playlistsTabTriggerRef={playlistsTabTriggerRef}
       />
     );
@@ -210,6 +216,7 @@ function MoviesPage() {
   };
 
   const handleOpenLikedMovies = () => {
+    primeEnterLikedFocus();
     navigateWithTabTransition("playlists", prev => ({
       ...prev,
       tab: "playlists",
@@ -857,6 +864,8 @@ type PlaylistsTabContentProps = {
   view: "liked" | undefined;
   playlistsPage: number;
   sort: "asc" | "desc";
+  focusIntentRef: MutableRefObject<PlaylistsFocusIntent | null>;
+  primeEnterLikedFocus: () => void;
   playlistsTabTriggerRef: RefObject<HTMLButtonElement | null>;
 };
 
@@ -864,13 +873,14 @@ function PlaylistsTabContent({
   view,
   playlistsPage,
   sort,
+  focusIntentRef,
+  primeEnterLikedFocus,
   playlistsTabTriggerRef,
 }: PlaylistsTabContentProps) {
   const navigate = Route.useNavigate();
   const [showCreate, setShowCreate] = useState(false);
   const createPlaylistRestoreRef = useRef<HTMLButtonElement | null>(null);
   const likedMoviesButtonRef = useRef<HTMLButtonElement | null>(null);
-  const focusIntentRef = useRef<PlaylistsFocusIntent | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     ...moviePlaylistsQueryOpts(),
@@ -944,7 +954,7 @@ function PlaylistsTabContent({
             type="button"
             ref={likedMoviesButtonRef}
             onClick={() => {
-              focusIntentRef.current = "enter-liked-from-toolbar";
+              primeEnterLikedFocus();
               navigate({
                 to: "/movies",
                 search: (prev: MoviesSearchParams) => ({

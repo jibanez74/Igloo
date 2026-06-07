@@ -39,8 +39,8 @@ const moviesAllPath =
   "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
 const moviesGenresPath =
   "/movies?tab=genres&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
-const visibleMotionThreshold = 4;
-const reducedMotionDriftThreshold = 2;
+const visibleMotionThreshold = 4; // Mean per-channel RGB delta across sampled tab-content frames; a heuristic floor where the fade reads as visibly moving instead of normal capture noise.
+const reducedMotionDriftThreshold = 2; // Mean per-channel RGB drift allowed with `prefers-reduced-motion`; a heuristic tolerance for screenshot/layout jitter while still treating the transition as effectively static.
 
 function readMoviesEnv(): MoviesEnv {
   return {
