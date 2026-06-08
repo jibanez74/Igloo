@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 type NullableString = {
   String: string;
@@ -105,6 +105,39 @@ const mockTracks = [
     musician_name: nullableString("The Band"),
   },
 ];
+
+const likedTrackPages = {
+  1: [
+    {
+      id: 40,
+      title: "Heartline",
+      duration: 210,
+      codec: "flac",
+      bit_rate: 900000,
+      file_path: "/music/heartline.flac",
+      album_id: nullableInt64(41),
+      album_title: nullableString("Warm Static"),
+      album_cover: nullableString(),
+      musician_id: nullableInt64(42),
+      musician_name: nullableString("Amber Field"),
+    },
+  ],
+  2: [
+    {
+      id: 41,
+      title: "Second Favorite",
+      duration: 195,
+      codec: "flac",
+      bit_rate: 900000,
+      file_path: "/music/second-favorite.flac",
+      album_id: nullableInt64(43),
+      album_title: nullableString("Late Catalog"),
+      album_cover: nullableString(),
+      musician_id: nullableInt64(44),
+      musician_name: nullableString("Cedar Room"),
+    },
+  ],
+};
 
 const mockPlaylists = [
   {
@@ -254,6 +287,21 @@ async function mockMusicIndexApi(
       return;
     }
 
+    if (url.pathname === "/api/music/tracks/liked") {
+      const likedTracksPage = Number(url.searchParams.get("page") ?? "1");
+      const perPage = Number(url.searchParams.get("per_page") ?? "50");
+
+      await fulfillJSON(route, apiResponse({
+        tracks: likedTrackPages[likedTracksPage as keyof typeof likedTrackPages] ?? [],
+        total: 2,
+        page: likedTracksPage,
+        per_page: perPage,
+        total_pages: 2,
+        has_more: likedTracksPage < 2,
+      }));
+      return;
+    }
+
     if (url.pathname === "/api/music/tracks") {
       await fulfillJSON(route, apiResponse({
         tracks: mockTracks,
@@ -270,6 +318,38 @@ async function mockMusicIndexApi(
       message: `Unexpected API request: ${url.pathname}`,
     });
   });
+}
+
+async function expectNoHorizontalOverflow(locator: Locator, label: string) {
+  const bounds = await locator.evaluate(element => {
+    const tolerance = 1;
+    const rect = element.getBoundingClientRect();
+    const clientWidth = document.documentElement.clientWidth;
+
+    return {
+      clientWidth,
+      fits: rect.left >= -tolerance && rect.right <= clientWidth + tolerance,
+      left: rect.left,
+      right: rect.right,
+      width: rect.width,
+    };
+  });
+
+  expect(bounds, `${label} should fit within the viewport`).toMatchObject({
+    fits: true,
+  });
+}
+
+async function expectPageHasNoHorizontalScroll(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+
+  expect(
+    dimensions.scrollWidth,
+    `page should not scroll horizontally: ${JSON.stringify(dimensions)}`,
+  ).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
 test("musicians tab renders accessible count text and URL-backed pagination", async ({ page }) => {
@@ -290,6 +370,101 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
   await expect(page).toHaveURL(/musiciansPage=2/);
   await expect.poll(() => requestedMusicianRequests).toContainEqual("/api/music/musicians?page=2&per_page=24");
   await expect(page.getByRole("link", { name: "Northern Signal, 3 albums, 27 tracks" })).toBeVisible();
+});
+
+test("music tabs avoid horizontal overflow on mobile", async ({ page }) => {
+  const requestedMusicianRequests: string[] = [];
+
+  await mockMusicIndexApi(page, requestedMusicianRequests);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/music?tab=albums");
+
+  const tablist = page.getByRole("tablist");
+  const stats = page.getByRole("region", { name: /Library statistics:/ });
+
+  const albumLink = page.getByRole("link", { name: "First Mock Album by Aurora Pines" });
+  await expect(albumLink).toBeVisible();
+  const albumCard = albumLink.locator("xpath=ancestor::article");
+  const albumGrid = albumCard.locator("xpath=parent::*");
+
+  await expectPageHasNoHorizontalScroll(page);
+  await expectNoHorizontalOverflow(tablist, "music tablist");
+  await expectNoHorizontalOverflow(stats, "music stats");
+  await expectNoHorizontalOverflow(albumGrid, "album card grid");
+  await expectNoHorizontalOverflow(albumCard, "album card");
+
+  await page.getByRole("tab", { name: "Musicians" }).click();
+
+  const musicianLink = page.getByRole("link", { name: "Aurora Pines, 2 albums, 18 tracks" });
+  await expect(musicianLink).toBeVisible();
+  const musicianCard = musicianLink.locator("xpath=ancestor::article");
+  const musicianGrid = musicianCard.locator("xpath=parent::*");
+
+  await expectPageHasNoHorizontalScroll(page);
+  await expectNoHorizontalOverflow(tablist, "music tablist");
+  await expectNoHorizontalOverflow(stats, "music stats");
+  await expectNoHorizontalOverflow(musicianGrid, "musician card grid");
+  await expectNoHorizontalOverflow(musicianCard, "musician card");
+  await expectNoHorizontalOverflow(page.getByRole("navigation", { name: "pagination" }), "musicians pagination");
+
+  await page.getByRole("tab", { name: "Tracks" }).click();
+
+  const tracksList = page.getByRole("list", { name: "Tracks" });
+  const addLikedButton = page.getByRole("button", { name: "Add Alabaster to liked" });
+  await expect(addLikedButton).toBeVisible();
+  const tracksToolbar = page
+    .getByRole("button", { name: "Play all tracks" })
+    .locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' mb-4 ')][1]");
+  const firstTrackRow = addLikedButton.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' group ')][1]");
+
+  await expectPageHasNoHorizontalScroll(page);
+  await expectNoHorizontalOverflow(tablist, "music tablist");
+  await expectNoHorizontalOverflow(stats, "music stats");
+  await expectNoHorizontalOverflow(tracksToolbar, "tracks toolbar");
+  await expectNoHorizontalOverflow(tracksList, "tracks list");
+  await expectNoHorizontalOverflow(firstTrackRow, "first track row");
+  await expectNoHorizontalOverflow(addLikedButton, "track liked action");
+  await expectNoHorizontalOverflow(page.getByRole("button", { name: "More actions for Alabaster" }), "track more actions");
+  await expectNoHorizontalOverflow(page.getByRole("button", { name: "Play Alabaster" }), "track play action");
+
+  await page.getByRole("tab", { name: "Playlists" }).click();
+
+  const likedTracksButton = page.getByRole("button", { name: "View liked tracks" });
+  const createPlaylistButton = page.getByRole("button", { name: "Create new playlist" });
+  const playlistLink = page.getByRole("link", { name: "Morning Rotation, 3 tracks, 9m 0s" });
+  await expect(playlistLink).toBeVisible();
+  const playlistCard = playlistLink.locator("xpath=ancestor::article");
+  const playlistGrid = playlistCard.locator("xpath=parent::*");
+  const playlistControls = likedTracksButton.locator("xpath=parent::*");
+
+  await expectPageHasNoHorizontalScroll(page);
+  await expectNoHorizontalOverflow(tablist, "music tablist");
+  await expectNoHorizontalOverflow(stats, "music stats");
+  await expectNoHorizontalOverflow(playlistControls, "playlist controls");
+  await expectNoHorizontalOverflow(likedTracksButton, "view liked tracks button");
+  await expectNoHorizontalOverflow(createPlaylistButton, "create playlist button");
+  await expectNoHorizontalOverflow(playlistGrid, "playlist card grid");
+  await expectNoHorizontalOverflow(playlistCard, "playlist card");
+
+  await likedTracksButton.click();
+
+  const backToPlaylistsButton = page.getByRole("button", { name: "Back to playlists" });
+  const removeLikedButton = page.getByRole("button", { name: "Remove Heartline from liked" });
+  await expect(removeLikedButton).toBeVisible();
+  const likedTracksHeader = backToPlaylistsButton.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' mb-6 ')][1]");
+  const likedTracksList = removeLikedButton.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' overflow-hidden ')][1]");
+  const firstLikedTrackRow = removeLikedButton.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' group ')][1]");
+
+  await expectPageHasNoHorizontalScroll(page);
+  await expectNoHorizontalOverflow(tablist, "music tablist");
+  await expectNoHorizontalOverflow(stats, "music stats");
+  await expectNoHorizontalOverflow(likedTracksHeader, "liked tracks header");
+  await expectNoHorizontalOverflow(likedTracksList, "liked tracks list");
+  await expectNoHorizontalOverflow(firstLikedTrackRow, "first liked track row");
+  await expectNoHorizontalOverflow(removeLikedButton, "liked track liked action");
+  await expectNoHorizontalOverflow(page.getByRole("button", { name: "More actions for Heartline" }), "liked track more actions");
+  await expectNoHorizontalOverflow(page.getByRole("button", { name: "Play Heartline" }), "liked track play action");
+  await expectNoHorizontalOverflow(page.getByRole("navigation", { name: "pagination" }), "liked tracks pagination");
 });
 
 test("tracks tab exposes accessible controls and action menu targets", async ({ page }) => {
@@ -367,4 +542,39 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   ]);
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
+});
+
+test("playlists tab opens liked tracks subview with URL-backed pagination", async ({ page }) => {
+  const requestedMusicianRequests: string[] = [];
+
+  await mockMusicIndexApi(page, requestedMusicianRequests);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/music?tab=playlists");
+
+  await page.getByRole("button", { name: "View liked tracks" }).click();
+
+  await expect(page).toHaveURL(/tab=playlists/);
+  await expect(page).toHaveURL(/playlistsView=liked/);
+  await expect(page.getByRole("button", { name: "Back to playlists" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Liked Tracks" })).toBeVisible();
+  await expect(page.getByText("2 tracks")).toBeVisible();
+  await expect(page.getByText("Heartline")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove Heartline from liked" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "More actions for Heartline" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Heartline" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "pagination" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Go to next page" }).click();
+
+  await expect(page).toHaveURL(/likedTracksPage=2/);
+  await expect(page.getByText("Second Favorite")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove Second Favorite from liked" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Back to playlists" }).click();
+
+  await expect(page).not.toHaveURL(/playlistsView=liked/);
+  await expect(page).not.toHaveURL(/likedTracksPage=2/);
+  await expect(page).toHaveURL(/tab=playlists/);
+  await expect(page.getByRole("button", { name: "View liked tracks" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new playlist" })).toBeVisible();
 });
