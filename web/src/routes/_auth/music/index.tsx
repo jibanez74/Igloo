@@ -464,13 +464,18 @@ function TracksTabContent() {
 
   // Ref to measure offset from top of page for scrollMargin
   const listRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [intersectionRoot, setIntersectionRoot] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   // Measure scroll margin after mount
   useEffect(() => {
-    if (listRef.current) {
-      setScrollMargin(listRef.current.offsetTop);
-    }
+    const listElement = listRef.current;
+    if (!listElement) return;
+
+    const parent = findScrollParent(listElement);
+    setIntersectionRoot(parent);
+    setScrollMargin(listElement.offsetTop);
   }, []);
 
   // Get total tracks count from first page
@@ -504,6 +509,44 @@ function TracksTabContent() {
 
   // Get virtual items for dependency tracking
   const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, virtualItems.length]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (
+      !target ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          fetchNextPage();
+        }
+      },
+      {
+        root: intersectionRoot === document.documentElement ? null : intersectionRoot,
+        rootMargin: "800px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    intersectionRoot,
+    isFetchingNextPage,
+    virtualItems.length,
+  ]);
 
   // Trigger infinite scroll when near the end
   useEffect(() => {
@@ -570,6 +613,8 @@ function TracksTabContent() {
       <div
         ref={listRef}
         className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
+        role="list"
+        aria-label="Tracks"
       >
         <div
           style={{
@@ -586,6 +631,9 @@ function TracksTabContent() {
             return (
               <div
                 key={virtualRow.key}
+                role={item.type === "track" ? "listitem" : undefined}
+                aria-posinset={item.type === "track" ? item.trackIndex : undefined}
+                aria-setsize={item.type === "track" ? totalTracks : undefined}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -603,6 +651,18 @@ function TracksTabContent() {
               </div>
             );
           })}
+
+          <div
+            ref={loadMoreRef}
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: `${virtualizer.getTotalSize() - 1}px`,
+              width: "100%",
+              height: "1px",
+            }}
+          />
         </div>
 
         {isFetchingNextPage && (
@@ -683,9 +743,32 @@ function ShuffleButton() {
   );
 }
 
+function findScrollParent(element: HTMLElement) {
+  let parent = element.parentElement;
+
+  while (parent) {
+    const { overflowY } = window.getComputedStyle(parent);
+
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return parent;
+    }
+
+    parent = parent.parentElement;
+  }
+
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : document.documentElement;
+}
+
 function LetterHeader({ letter }: { letter: string }) {
   return (
-    <div className="border-b border-amber-500/20 bg-slate-800/50 px-4 py-3">
+    <div
+      className="border-b border-amber-500/20 bg-slate-800/50 px-4 py-3"
+      role="heading"
+      aria-level={3}
+      aria-label={`Tracks starting with ${letter}`}
+    >
       <span className="text-2xl font-bold text-amber-400">{letter}</span>
     </div>
   );
@@ -741,7 +824,7 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
   const items: VirtualItem[] = [];
   let currentLetter: string | null = null;
 
-  for (const track of tracks) {
+  tracks.forEach((track, index) => {
     const firstChar = track.title.charAt(0).toUpperCase();
     const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
 
@@ -751,8 +834,8 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
       currentLetter = letter;
     }
 
-    items.push({ type: "track", track });
-  }
+    items.push({ type: "track", track, trackIndex: index + 1 });
+  });
 
   return items;
 }

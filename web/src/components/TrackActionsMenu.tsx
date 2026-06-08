@@ -46,7 +46,7 @@ export default function TrackActionsMenu({
           <button
             ref={actionsButtonRef}
             className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-            aria-label="More actions"
+            aria-label={`More actions for ${trackTitle}`}
           >
             <MoreVertical className="size-4" aria-hidden="true" />
           </button>

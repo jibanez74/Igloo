@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -58,6 +58,22 @@ function nullableInt64(value: number | null = null) {
   return {
     Int64: value ?? 0,
     Valid: value != null,
+  };
+}
+
+function track(id: number, title: string) {
+  return {
+    id,
+    title,
+    duration: 180,
+    codec: "flac",
+    bit_rate: 900000,
+    file_path: `/music/${title}.flac`,
+    album_id: nullableInt64(10),
+    album_title: nullableString("Blue Record"),
+    album_cover: nullableString(),
+    musician_id: nullableInt64(20),
+    musician_name: nullableString("The Band"),
   };
 }
 
@@ -132,6 +148,28 @@ function mockMusicFetch() {
           page: 1,
           per_page: 24,
           total_pages: 1,
+        },
+      });
+    }
+
+    if (url === "/api/music/tracks?limit=50&offset=0") {
+      return jsonResponse({
+        error: false,
+        data: {
+          tracks: [track(1, "Alabaster"), track(2, "Borrowed Light")],
+          total: 2,
+          offset: 0,
+          limit: 50,
+          has_more: false,
+        },
+      });
+    }
+
+    if (url === "/api/music/tracks/liked-ids") {
+      return jsonResponse({
+        error: false,
+        data: {
+          liked_track_ids: [2],
         },
       });
     }
@@ -260,5 +298,35 @@ describe("music route tab transitions", () => {
         ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
       ),
     ).toBe(false);
+  });
+});
+
+describe("music route tracks tab", () => {
+  it("labels the virtualized track list and track action menus", async () => {
+    await renderMusicRoute("/music/?tab=tracks");
+
+    const tracksList = await screen.findByRole("list", { name: "Tracks" });
+
+    expect(tracksList).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Tracks starting with A" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Tracks starting with B" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More actions for Alabaster" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More actions for Borrowed Light" }),
+    ).toBeInTheDocument();
+
+    const trackRows = within(tracksList).getAllByRole("listitem");
+
+    expect(trackRows).toHaveLength(2);
+    expect(trackRows[0]).toHaveAttribute("aria-posinset", "1");
+    expect(trackRows[0]).toHaveAttribute("aria-setsize", "2");
+    expect(trackRows[1]).toHaveAttribute("aria-posinset", "2");
+    expect(trackRows[1]).toHaveAttribute("aria-setsize", "2");
   });
 });

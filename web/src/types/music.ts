@@ -171,6 +171,7 @@ export type VirtualItemLetter = {
 export type VirtualItemTrack = {
   type: "track";
   track: TrackListItemType;
+  trackIndex: number;
 };
 
 export type VirtualItem = VirtualItemLetter | VirtualItemTrack;
