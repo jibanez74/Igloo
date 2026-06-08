@@ -51,9 +51,7 @@ function SearchPage() {
   const { q, tab, page } = Route.useSearch();
   const trimmed = q.trim();
   const { isExiting, runTransition, usesContentAnimation } =
-    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
-      enableViewTransition: false,
-    });
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   const handleTabChange = (newTab: string) => {
     const nextTab = newTab as SearchTab;

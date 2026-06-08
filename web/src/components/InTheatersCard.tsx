@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  TMDB_POSTER_SIZE,
+} from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+import { cn } from "@/lib/utils";
 import type { TheaterMovieType } from "@/types";
 
 type MovieCardProps = {
@@ -25,7 +30,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
   };
 
   return (
-    <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20">
+    <article
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20",
+      )}
+    >
       <Link
         to="/movies/in-theaters/$id"
         params={{ id: id.toString() }}
@@ -43,7 +53,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
               loading="lazy"
               decoding="async"
               fetchPriority="low"
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

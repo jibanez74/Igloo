@@ -64,7 +64,7 @@ export default function ComingSoon({
 
       <div
         ref={containerRef}
-        className="translate-y-4 opacity-0 transition-all duration-700 ease-out will-change-transform"
+        className="translate-y-4 opacity-0 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none"
       >
         {/* Animated icon container */}
         <div className="relative mx-auto mb-8" aria-hidden="true">

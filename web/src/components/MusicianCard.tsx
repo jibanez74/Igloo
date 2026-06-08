@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+} from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { cn } from "@/lib/utils";
 import type { SimpleMusicianType } from "@/types";
 
 type MusicianCardProps = {
@@ -23,7 +28,12 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
   const showThumb = thumbUrl && !thumbLoadFailed;
 
   return (
-    <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20">
+    <article
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+      )}
+    >
       <Link
         to="/music/musician/$id"
         params={{ id: id.toString() }}
@@ -38,7 +48,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
               alt={`Photo of ${name}`}
               loading="lazy"
               decoding="async"
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
               onError={() => setThumbLoadFailed(true)}
             />
           ) : (

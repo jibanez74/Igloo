@@ -104,9 +104,7 @@ function MusicPage() {
   const navigate = Route.useNavigate();
   const { tab, albumsPage, musiciansPage, playlistsView, likedTracksPage } = Route.useSearch();
   const { isExiting, runTransition, usesContentAnimation } =
-    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
-      enableViewTransition: false,
-    });
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   // React 19 document metadata
   const pageTitle = "Music Library - Igloo";
@@ -687,7 +685,7 @@ function ShuffleButton() {
 
 function LetterHeader({ letter }: { letter: string }) {
   return (
-    <div className="animate-in border-b border-amber-500/20 bg-slate-800/50 px-4 py-3 duration-300 fade-in">
+    <div className="border-b border-amber-500/20 bg-slate-800/50 px-4 py-3">
       <span className="text-2xl font-bold text-amber-400">{letter}</span>
     </div>
   );

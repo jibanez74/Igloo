@@ -6,8 +6,15 @@ import { Music, Play } from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  CARD_ACTION_REVEAL_CLASS,
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  CARD_OVERLAY_REVEAL_CLASS,
+} from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { cn } from "@/lib/utils";
 import type { SimpleAlbumType } from "@/types";
 
 type AlbumCardProps = {
@@ -55,7 +62,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
   return (
     <article
-      className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20"
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+      )}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
@@ -77,7 +87,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
               decoding="async"
               fetchPriority="low"
               sizes="(min-width: 1024px) 16.66vw, (min-width: 768px) 25vw, (min-width: 640px) 33.33vw, 50vw"
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
               onError={() => setFailedCoverUrl(coverUrl)}
             />
           ) : (
@@ -88,7 +98,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
           {/* Play button overlay - appears on hover/focus */}
           <div
-            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100"
+            className={cn(
+              CARD_OVERLAY_REVEAL_CLASS,
+              "absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
+            )}
             aria-hidden="true"
           />
         </div>
@@ -110,7 +123,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
       <button
         onClick={handlePlayAlbum}
         disabled={isLoading}
-        className="absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50"
+        className={cn(
+          CARD_ACTION_REVEAL_CLASS,
+          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50",
+        )}
         aria-label={`Play ${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >
         {isLoading ? (

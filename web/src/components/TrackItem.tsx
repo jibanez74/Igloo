@@ -99,7 +99,7 @@ export default function TrackItem({
   // Play button visibility classes based on variant
   const getPlayButtonClasses = () => {
     const baseClasses =
-      "flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-all hover:bg-amber-400";
+      "flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-[background-color,opacity] duration-150 hover:bg-amber-400 motion-reduce:transition-none";
 
     if (variant === "library" || variant === "playlist") {
       // Library and Playlist: always visible
@@ -125,7 +125,7 @@ export default function TrackItem({
 
   return (
     <div
-      className={`group flex items-center gap-3 p-3 transition-all duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
+      className={`group flex items-center gap-3 p-3 transition-[background-color,opacity,box-shadow] duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
         isCurrentTrack ? "bg-slate-800/40" : ""
       } ${isDragging ? "opacity-50 shadow-lg ring-2 ring-amber-400/50" : ""}`}
     >
@@ -182,7 +182,7 @@ export default function TrackItem({
       <button
         onClick={handleLikeClick}
         disabled={isLikeLoading}
-        className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-all ${
+        className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-[color,opacity] duration-150 motion-reduce:transition-none ${
           isLiked
             ? "text-red-500 hover:text-red-400"
             : "text-slate-400 hover:text-red-400"

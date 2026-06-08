@@ -68,9 +68,7 @@ function SettingsLayout() {
     isExiting,
     runTransition,
     usesContentAnimation,
-  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
-    enableViewTransition: false,
-  });
+  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,

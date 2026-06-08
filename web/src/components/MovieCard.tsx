@@ -2,8 +2,15 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { Film, Play } from "lucide-react";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import {
+  CARD_ACTION_REVEAL_CLASS,
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  CARD_OVERLAY_REVEAL_CLASS,
+  TMDB_POSTER_SIZE,
+} from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
+import { cn } from "@/lib/utils";
 import type { LatestMovieType } from "@/types";
 
 type MovieCardProps = {
@@ -26,7 +33,10 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
   return (
     <article
-      className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 fade-in focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20"
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20",
+      )}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
@@ -48,7 +58,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
                 loading="lazy"
                 decoding="async"
                 fetchPriority="low"
-                className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
               />
             ) : (
               <div className="flex size-full items-center justify-center">
@@ -57,7 +67,10 @@ export default function MovieCard({ movie }: MovieCardProps) {
             )}
             {/* Overlay - appears on hover/focus */}
             <div
-              className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100"
+              className={cn(
+                CARD_OVERLAY_REVEAL_CLASS,
+                "absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
+              )}
               aria-hidden="true"
             />
             {/* Gradient overlay for text readability */}
@@ -81,7 +94,10 @@ export default function MovieCard({ movie }: MovieCardProps) {
       <Link
         to="/movies/$id/play"
         params={{ id: String(id) }}
-        className="absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        className={cn(
+          CARD_ACTION_REVEAL_CLASS,
+          "absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+        )}
         aria-label={`Play ${ariaTitle}`}
       >
         <Play className="size-7 fill-current" aria-hidden="true" />

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Play } from "lucide-react";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import {
-  MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+  DETAIL_PAGE_CONTENT_ENTER_CLASS,
   TMDB_BACKDROP_SIZE,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
@@ -188,14 +188,14 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
         companiesNonEmpty={productionCompanies.length > 0}
       />
 
-      <div className={cn(MOVIE_DETAILS_CONTENT_ENTER_CLASS)}>
+      <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
         <MovieDetailsBackdrop backdropUrl={backdropUrl} />
       </div>
 
       <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
         <div
           className={cn(
-            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "delay-75 motion-reduce:delay-0",
           )}
         >
@@ -264,7 +264,7 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
 
         <div
           className={cn(
-            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "delay-150 motion-reduce:delay-0",
           )}
         >

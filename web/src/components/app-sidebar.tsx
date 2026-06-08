@@ -115,7 +115,7 @@ export default function AppSidebar({
           to="/"
           onClick={handleNavClick}
           aria-label="Igloo – Home"
-          className="flex items-center gap-3 transition-opacity hover:opacity-80"
+          className="flex items-center gap-3 transition-opacity duration-150 hover:opacity-80 motion-reduce:transition-none"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20">
             <span className="text-lg font-bold">I</span>
