@@ -47,6 +47,55 @@ function track(id: number) {
   };
 }
 
+const mockAlbum = {
+  id: 1,
+  title: "Mock Album",
+  cover: nullableString("/api/static/albums/mock-album.svg"),
+  musician: nullableString("Mock Artist"),
+  year: nullableInt64(2026),
+};
+
+const coverlessAlbum = {
+  id: 2,
+  title: "Coverless Album",
+  cover: nullableString(),
+  musician: nullableString("No Cover Artist"),
+  year: nullableInt64(2026),
+};
+
+const pageTwoAlbum = {
+  id: 3,
+  title: "Page Two Album",
+  cover: nullableString("/api/static/albums/page-two-album.svg"),
+  musician: nullableString("Second Page Artist"),
+  year: nullableInt64(2026),
+};
+
+const mockMusician = {
+  id: 1,
+  name: "Mock Artist",
+  sort_name: "Mock Artist",
+  thumb: nullableString(),
+  album_count: 1,
+  track_count: 2267,
+};
+
+const mockPlaylist = {
+  id: 1,
+  user_id: 1,
+  name: "Mock Playlist",
+  description: nullableString("A deterministic playlist for music E2E tests"),
+  cover_image: nullableString(),
+  is_public: false,
+  folder_id: nullableInt64(),
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  track_count: 2,
+  total_duration: 360000,
+  is_owner: true,
+  can_edit: true,
+};
+
 async function fulfillJSON(route: Route, body: unknown) {
   await route.fulfill({
     status: 200,
@@ -55,9 +104,22 @@ async function fulfillJSON(route: Route, body: unknown) {
   });
 }
 
-async function mockMusicApi(page: Page, requestedOffsets: number[]) {
+async function mockMusicApi(
+  page: Page,
+  requestedOffsets: number[],
+  requestedAlbumRequests: string[] = [],
+) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
+
+    if (url.pathname.startsWith("/api/static/albums/")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="#f59e0b"/><circle cx="32" cy="32" r="18" fill="#0f172a"/></svg>`,
+      });
+      return;
+    }
 
     if (url.pathname === "/api/auth/user") {
       await fulfillJSON(route, apiResponse({
@@ -76,7 +138,7 @@ async function mockMusicApi(page: Page, requestedOffsets: number[]) {
 
     if (url.pathname === "/api/music/stats") {
       await fulfillJSON(route, apiResponse({
-        total_albums: 1,
+        total_albums: 3,
         total_tracks: 2267,
         total_musicians: 1,
       }));
@@ -84,9 +146,24 @@ async function mockMusicApi(page: Page, requestedOffsets: number[]) {
     }
 
     if (url.pathname === "/api/music/albums") {
+      const albumPage = Number(url.searchParams.get("page") ?? "1");
+      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      requestedAlbumRequests.push(`${url.pathname}${url.search}`);
+
       await fulfillJSON(route, apiResponse({
-        albums: [],
-        total: 0,
+        albums: albumPage === 2 ? [pageTwoAlbum] : [mockAlbum, coverlessAlbum],
+        total: 3,
+        page: albumPage,
+        per_page: perPage,
+        total_pages: 2,
+      }));
+      return;
+    }
+
+    if (url.pathname === "/api/music/musicians") {
+      await fulfillJSON(route, apiResponse({
+        musicians: [mockMusician],
+        total: 1,
         page: 1,
         per_page: 24,
         total_pages: 1,
@@ -94,13 +171,9 @@ async function mockMusicApi(page: Page, requestedOffsets: number[]) {
       return;
     }
 
-    if (url.pathname === "/api/music/musicians") {
+    if (url.pathname === "/api/music/playlists") {
       await fulfillJSON(route, apiResponse({
-        musicians: [],
-        total: 0,
-        page: 1,
-        per_page: 24,
-        total_pages: 1,
+        playlists: [mockPlaylist],
       }));
       return;
     }
@@ -157,6 +230,80 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
   expect(overflow.offenders).toEqual([]);
 }
+
+test("music library shell and URL-backed tabs render accessibly", async ({ page }) => {
+  const requestedOffsets: number[] = [];
+
+  await mockMusicApi(page, requestedOffsets);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/music");
+
+  await expect(page).toHaveTitle("Music Library - Igloo");
+  await expect(page.getByRole("heading", { name: "Music Library", level: 1 })).toBeVisible();
+  await expect(page.getByLabel("Library statistics: 3 albums, 2267 tracks, 1 musicians")).toBeVisible();
+
+  const tablist = page.getByRole("tablist");
+  await expect(tablist).toBeVisible();
+
+  const tabs = page.getByRole("tab");
+  await expect(tabs).toHaveCount(4);
+
+  const musiciansTab = page.getByRole("tab", { name: "Musicians" });
+  const albumsTab = page.getByRole("tab", { name: "Albums" });
+  const tracksTab = page.getByRole("tab", { name: "Tracks" });
+  const playlistsTab = page.getByRole("tab", { name: "Playlists" });
+
+  await expect(albumsTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Mock Album by Mock Artist" })).toBeVisible();
+
+  await musiciansTab.click();
+  await expect(page).toHaveURL(/tab=musicians/);
+  await expect(musiciansTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: "Mock Artist, 1 albums, 2267 tracks" })).toBeVisible();
+
+  await albumsTab.click();
+  await expect(page).toHaveURL(/tab=albums/);
+  await expect(albumsTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: "Mock Album by Mock Artist" })).toBeVisible();
+
+  await tracksTab.click();
+  await expect(page).toHaveURL(/tab=tracks/);
+  await expect(tracksTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("list", { name: "Tracks" })).toBeVisible();
+
+  await playlistsTab.click();
+  await expect(page).toHaveURL(/tab=playlists/);
+  await expect(playlistsTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: "Mock Playlist, 2 tracks, 6m 0s" })).toBeVisible();
+});
+
+test("albums tab renders accessible album cards and URL-backed pagination", async ({ page }) => {
+  const requestedOffsets: number[] = [];
+  const requestedAlbumRequests: string[] = [];
+
+  await mockMusicApi(page, requestedOffsets, requestedAlbumRequests);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/music");
+
+  const albumsTab = page.getByRole("tab", { name: "Albums" });
+  await expect(albumsTab).toHaveAttribute("aria-selected", "true");
+
+  const mockAlbumLink = page.getByRole("link", { name: "Mock Album by Mock Artist" });
+  await expect(mockAlbumLink).toBeVisible();
+  await expect(mockAlbumLink.getByRole("img", { name: "Album cover for Mock Album" })).toBeVisible();
+
+  const coverlessAlbumLink = page.getByRole("link", { name: "Coverless Album by No Cover Artist" });
+  await expect(coverlessAlbumLink).toBeVisible();
+  await expect(coverlessAlbumLink.locator("img")).toHaveCount(0);
+  await expect(coverlessAlbumLink.locator("svg")).toBeVisible();
+
+  await page.getByRole("button", { name: "Go to next page" }).click();
+
+  await expect(page).toHaveURL(/albumsPage=2/);
+  await expect.poll(() => requestedAlbumRequests).toContainEqual("/api/music/albums?page=2&per_page=24");
+  await expect(page.getByRole("link", { name: "Page Two Album by Second Page Artist" })).toBeVisible();
+});
 
 test("tracks tab keeps fetching pages while the virtualized list grows", async ({ page }) => {
   const consoleIssues: string[] = [];
