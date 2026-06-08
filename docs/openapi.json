@@ -34,6 +34,10 @@
       "description": "Locally stored static media assets"
     },
     {
+      "name": "Notifications",
+      "description": "User-visible notifications"
+    },
+    {
       "name": "TMDB",
       "description": "TMDB-backed movie metadata"
     },
@@ -350,6 +354,126 @@
           },
           "500": {
             "description": "Failed to serve static file."
+          }
+        }
+      }
+    },
+    "/api/notifications/": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Create a notification",
+        "operationId": "createNotification",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CreateNotificationRequest"
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/CreateNotificationResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/tmdb/status": {
+      "get": {
+        "tags": [
+          "TMDB"
+        ],
+        "summary": "Get TMDB availability",
+        "operationId": "getTmdbStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TmdbStatusResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/tmdb/images/{size}/{file}": {
+      "get": {
+        "tags": [
+          "TMDB"
+        ],
+        "summary": "Proxy a TMDB image",
+        "operationId": "proxyTmdbImage",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TmdbImageSizePath"
+          },
+          {
+            "$ref": "#/components/parameters/TmdbImageFilePath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TMDB image bytes.",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/tmdb/movies/search": {
+      "post": {
+        "tags": [
+          "TMDB"
+        ],
+        "summary": "Search TMDB movies",
+        "operationId": "searchTmdbMovies",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/TmdbSearchMoviesRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TmdbSearchResultsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -3130,6 +3254,32 @@
           "type": "string"
         }
       },
+      "TmdbImageSizePath": {
+        "name": "size",
+        "in": "path",
+        "required": true,
+        "description": "Allowed TMDB image size.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "original",
+            "w1280",
+            "w500",
+            "w185",
+            "w92"
+          ]
+        }
+      },
+      "TmdbImageFilePath": {
+        "name": "file",
+        "in": "path",
+        "required": true,
+        "description": "Safe TMDB image file name.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        }
+      },
       "HLSProfilePath": {
         "name": "profile",
         "in": "path",
@@ -3524,6 +3674,16 @@
           }
         }
       },
+      "CreateNotificationRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateNotificationRequest"
+            }
+          }
+        }
+      },
       "TmdbSearchMoviesRequest": {
         "required": true,
         "content": {
@@ -3892,6 +4052,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/BulkAddEnvelope"
+            }
+          }
+        }
+      },
+      "CreateNotificationResponse": {
+        "description": "Notification creation response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateNotificationEnvelope"
+            }
+          }
+        }
+      },
+      "TmdbStatusResponse": {
+        "description": "TMDB availability response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TmdbStatusEnvelope"
             }
           }
         }
@@ -4432,6 +4612,16 @@
       },
       "ServiceUnavailable": {
         "description": "Generated media segment is not ready yet.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "Upstream service returned an error.",
         "content": {
           "application/json": {
             "schema": {
@@ -6440,6 +6630,108 @@
         "type": "object",
         "additionalProperties": true
       },
+      "CreateNotificationRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "message"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "enum": [
+              "movie_request",
+              "album_request",
+              "track_request",
+              "other"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "isAdmin": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Notification": {
+        "type": "object",
+        "required": [
+          "id",
+          "created_by_user_id",
+          "user_id",
+          "title",
+          "message",
+          "is_admin",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_by_user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "$ref": "#/components/schemas/SqlNullInt64"
+          },
+          "title": {
+            "type": "string",
+            "enum": [
+              "movie_request",
+              "album_request",
+              "track_request",
+              "other"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "is_admin": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateNotificationEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "notification"
+                ],
+                "properties": {
+                  "notification": {
+                    "$ref": "#/components/schemas/Notification"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
       "TheaterMovie": {
         "type": "object",
         "required": [
@@ -6479,7 +6771,8 @@
           "title",
           "release_date",
           "overview",
-          "poster_path"
+          "poster_path",
+          "already_in_library"
         ],
         "properties": {
           "tmdb_id": {
@@ -6496,6 +6789,13 @@
           },
           "poster_path": {
             "type": "string"
+          },
+          "already_in_library": {
+            "type": "boolean"
+          },
+          "library_movie_id": {
+            "type": "integer",
+            "format": "int64"
           }
         },
         "additionalProperties": true
@@ -6571,6 +6871,33 @@
           }
         },
         "additionalProperties": false
+      },
+      "TmdbStatusEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "available"
+                ],
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
       },
       "TmdbTheaterMoviesEnvelope": {
         "allOf": [
