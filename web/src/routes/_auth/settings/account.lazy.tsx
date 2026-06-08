@@ -537,13 +537,7 @@ function AccountSettings() {
         }
 
         showSuccess("Account deleted successfully");
-        queryClient.setQueryData([AUTH_USER_KEY], {
-          error: true,
-          message: "Not authenticated",
-        });
-        queryClient.removeQueries({
-          predicate: query => query.queryKey[0] !== AUTH_USER_KEY,
-        });
+        queryClient.removeQueries();
         await navigate({ to: "/login", replace: true });
       } catch {
         showError("Failed to delete account");

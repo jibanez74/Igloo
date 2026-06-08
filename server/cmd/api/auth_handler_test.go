@@ -53,7 +53,7 @@ func decodeAuthUserResponse(t *testing.T, w *httptest.ResponseRecorder) authUser
 	return resp
 }
 
-func TestGetCurrentAuthUser_HTTPReturnsOKErrorWhenUnauthenticated(t *testing.T) {
+func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedWhenUnauthenticated(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	app.InitSession()
@@ -63,8 +63,8 @@ func TestGetCurrentAuthUser_HTTPReturnsOKErrorWhenUnauthenticated(t *testing.T) 
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
 	}
 
 	resp := decodeAuthUserResponse(t, w)
@@ -98,7 +98,7 @@ func TestGetCurrentAuthUser_HTTPReturnsCurrentUser(t *testing.T) {
 	}
 }
 
-func TestGetCurrentAuthUser_HTTPReturnsOKErrorForStaleSession(t *testing.T) {
+func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedForStaleSession(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	app.InitSession()
@@ -109,8 +109,8 @@ func TestGetCurrentAuthUser_HTTPReturnsOKErrorForStaleSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
 	}
 
 	resp := decodeAuthUserResponse(t, w)

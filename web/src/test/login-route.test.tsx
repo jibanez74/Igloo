@@ -8,6 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MOVIES_IN_THEATERS_KEY } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const toastMocks = vi.hoisted(() => ({
@@ -53,8 +54,8 @@ function authUser() {
   };
 }
 
-function mockLoginFetch() {
-  let currentUser: ReturnType<typeof authUser> | null = null;
+function mockLoginFetch(initialUser: ReturnType<typeof authUser> | null = null) {
+  let currentUser: ReturnType<typeof authUser> | null = initialUser;
 
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
@@ -65,7 +66,7 @@ function mockLoginFetch() {
         return jsonResponse({
           error: true,
           message: "not authorized",
-        });
+        }, 401);
       }
 
       return jsonResponse({
@@ -109,6 +110,44 @@ function mockLoginFetch() {
       });
     }
 
+    if (url === "/api/watch-rooms") {
+      return jsonResponse({
+        error: false,
+        data: { rooms: [] },
+      });
+    }
+
+    if (url === "/api/movies/latest") {
+      return jsonResponse({
+        error: false,
+        data: { movies: [] },
+      });
+    }
+
+    if (url === "/api/music/albums/latest") {
+      return jsonResponse({
+        error: false,
+        data: { albums: [] },
+      });
+    }
+
+    if (url === "/api/tmdb/movies/in-theaters") {
+      return jsonResponse({
+        error: false,
+        data: {
+          movies: [
+            {
+              id: 700,
+              title: "Theater Fresh",
+              poster_path: "",
+              vote_average: 7.2,
+              release_date: "2026-06-01",
+            },
+          ],
+        },
+      });
+    }
+
     return jsonResponse({
       error: true,
       message: `Unexpected request: ${method} ${url}`,
@@ -133,8 +172,18 @@ function createLoginQueryClient() {
 }
 
 async function renderLoginRoute(initialEntry: string) {
+  const result = await renderRoute(initialEntry);
+
+  await screen.findByRole("button", { name: "Sign in" });
+  return result;
+}
+
+async function renderRoute(
+  initialEntry: string,
+  initialUser: ReturnType<typeof authUser> | null = null,
+) {
   vi.stubGlobal("scrollTo", vi.fn());
-  const fetchMock = mockLoginFetch();
+  const fetchMock = mockLoginFetch(initialUser);
   const queryClient = createLoginQueryClient();
   const history = createMemoryHistory({
     initialEntries: [initialEntry],
@@ -157,8 +206,7 @@ async function renderLoginRoute(initialEntry: string) {
     </QueryClientProvider>,
   );
 
-  await screen.findByRole("button", { name: "Sign in" });
-  return { fetchMock, router };
+  return { fetchMock, queryClient, router };
 }
 
 async function signIn() {
@@ -179,6 +227,23 @@ afterEach(() => {
 });
 
 describe("login route redirects", () => {
+  it("redirects unauthenticated Home before loading in-theaters data", async () => {
+    const { fetchMock, router } = await renderLoginRoute("/");
+
+    expect(router.state.location.pathname).toBe("/login");
+    expect(
+      fetchMock.mock.calls.some(([input]) => {
+        return requestURL(input as RequestInfo | URL) === "/api/tmdb/movies/in-theaters";
+      }),
+    ).toBe(false);
+  });
+
+  it("renders in-theaters data for authenticated Home", async () => {
+    await renderRoute("/", authUser());
+
+    expect(await screen.findByText("Theater Fresh")).toBeInTheDocument();
+  });
+
   it("navigates to Movies after login when no explicit redirect is provided", async () => {
     const { router } = await renderLoginRoute("/login");
 
@@ -203,5 +268,38 @@ describe("login route redirects", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/settings/account");
     });
+  });
+
+  it("clears stale in-theaters data before redirecting to Home after login", async () => {
+    const { fetchMock, queryClient, router } = await renderLoginRoute(
+      "/login?redirect=/",
+    );
+    queryClient.setQueryData([MOVIES_IN_THEATERS_KEY], {
+      error: true,
+      message: "not authorized",
+    });
+
+    await signIn();
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
+    });
+    await waitFor(() => {
+      expect(queryClient.getQueryData([MOVIES_IN_THEATERS_KEY])).toMatchObject({
+        error: false,
+        data: {
+          movies: [
+            expect.objectContaining({
+              title: "Theater Fresh",
+            }),
+          ],
+        },
+      });
+    });
+    expect(
+      fetchMock.mock.calls.some(([input]) => {
+        return requestURL(input as RequestInfo | URL) === "/api/tmdb/movies/in-theaters";
+      }),
+    ).toBe(true);
   });
 });

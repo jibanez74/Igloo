@@ -126,6 +126,15 @@ export function authUserQueryOpts() {
   });
 }
 
+export function authUserGuardQueryOpts() {
+  return queryOptions({
+    queryKey: [AUTH_USER_KEY],
+    queryFn: getAuthUser,
+    staleTime: 0,
+    gcTime: GC_DEFAULT,
+  });
+}
+
 export function latestMoviesQueryOpts() {
   return queryOptions({
     queryKey: [LATEST_MOVIES_KEY],
