@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -17,6 +18,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
+
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("upstream unavailable")
+}
 
 func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	app := setupTestApp(t)
@@ -64,6 +71,78 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	}
 }
 
+func TestSearchTmdbMovies_HTTPMarksExistingLibraryMatches(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	ctx := context.Background()
+	existingMovie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+		Title:     "The Matrix",
+		FilePath:  "/movies/the-matrix.mkv",
+		FileName:  "the-matrix.mkv",
+		Size:      1,
+		Container: "mkv",
+		MimeType:  "video/x-matroska",
+		Adult:     false,
+		TmdbID:    helpers.NullInt64(603),
+	})
+	if err != nil {
+		t.Fatalf("insert existing movie: %v", err)
+	}
+
+	stub := &stubMovieScannerTmdb{
+		searchResults: []tmdb.TmdbMovie{
+			{TmdbID: 603, Title: "The Matrix", ReleaseDate: "1999-03-31", PosterPath: "/matrix.jpg"},
+			{TmdbID: 604, Title: "The Matrix Reloaded", ReleaseDate: "2003-05-15", PosterPath: "/reloaded.jpg"},
+		},
+	}
+	app.Tmdb = stub
+
+	router := chi.NewRouter()
+	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{
+		"title": "The Matrix",
+		"year": 1999
+	}`))
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Error bool `json:"error"`
+		Data  struct {
+			Results []struct {
+				TmdbID           int    `json:"tmdb_id"`
+				Title            string `json:"title"`
+				AlreadyInLibrary bool   `json:"already_in_library"`
+				LibraryMovieID   *int64 `json:"library_movie_id"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error {
+		t.Fatalf("expected success response: %+v", resp)
+	}
+	if len(resp.Data.Results) != 2 {
+		t.Fatalf("result count = %d, want 2", len(resp.Data.Results))
+	}
+	if !resp.Data.Results[0].AlreadyInLibrary {
+		t.Fatalf("expected first result to be flagged as already in library: %+v", resp.Data.Results[0])
+	}
+	if resp.Data.Results[0].LibraryMovieID == nil || *resp.Data.Results[0].LibraryMovieID != existingMovie.ID {
+		t.Fatalf("library_movie_id = %v, want %d", resp.Data.Results[0].LibraryMovieID, existingMovie.ID)
+	}
+	if len(stub.searchCalls) != 1 || len(stub.searchCalls[0].year) != 1 || stub.searchCalls[0].year[0] != 1999 {
+		t.Fatalf("expected TMDB search to receive year 1999, got %+v", stub.searchCalls)
+	}
+}
+
 func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -101,6 +180,22 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	}
 	if len(resp.Data.Results) != 1 || resp.Data.Results[0].TmdbID != 603 || resp.Data.Results[0].Title != "The Matrix" {
 		t.Fatalf("results = %+v, want single Matrix result", resp.Data.Results)
+	}
+}
+
+func TestSearchTmdbMovies_HTTPUnavailable(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	router := chi.NewRouter()
+	router.Post("/api/tmdb/movies/search", app.SearchTmdbMovies)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/tmdb/movies/search", strings.NewReader(`{"title":"Arrival"}`))
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503, body = %s", w.Code, w.Body.String())
 	}
 }
 
@@ -143,6 +238,182 @@ func TestGetMovieByTmdbID_HTTP(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("invalid id status = %d, want 400", w.Code)
 	}
+}
+
+func TestGetTmdbStatus_HTTP(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	router := chi.NewRouter()
+	router.Get("/api/tmdb/status", app.GetTmdbStatus)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/status", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var unavailableResp struct {
+		Error bool `json:"error"`
+		Data  struct {
+			Available bool `json:"available"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&unavailableResp); err != nil {
+		t.Fatalf("decode unavailable response: %v", err)
+	}
+	if unavailableResp.Data.Available {
+		t.Fatal("expected TMDB status to be unavailable when app.Tmdb is nil")
+	}
+
+	app.Tmdb = &stubMovieScannerTmdb{}
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/tmdb/status", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	var availableResp struct {
+		Error bool `json:"error"`
+		Data  struct {
+			Available bool `json:"available"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&availableResp); err != nil {
+		t.Fatalf("decode available response: %v", err)
+	}
+	if !availableResp.Data.Available {
+		t.Fatal("expected TMDB status to be available when app.Tmdb is configured")
+	}
+}
+
+func TestProxyTmdbImage_HTTPSuccessStreamsImage(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/w500/poster.jpg" {
+			t.Fatalf("upstream path = %q, want /w500/poster.jpg", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte{1, 2, 3, 4})
+	}))
+	defer upstream.Close()
+
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.TmdbImageBaseURL = upstream.URL
+	app.TmdbImageHTTPClient = upstream.Client()
+
+	router := chi.NewRouter()
+	router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/poster.jpg", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("content type = %q, want image/jpeg", got)
+	}
+	if got := w.Header().Get("Cache-Control"); got != "public, max-age=86400" {
+		t.Fatalf("cache control = %q, want upstream cache header", got)
+	}
+	if got := w.Body.Bytes(); string(got) != string([]byte{1, 2, 3, 4}) {
+		t.Fatalf("body = %#v, want image bytes", got)
+	}
+}
+
+func TestProxyTmdbImage_HTTPRejectsInvalidPath(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	router := chi.NewRouter()
+	router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+
+	tests := []string{
+		"/api/tmdb/images/w999/poster.jpg",
+		"/api/tmdb/images/w500/bad..jpg",
+		"/api/tmdb/images/w500/poster$.jpg",
+	}
+
+	for _, path := range tests {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, want 400, body = %s", path, w.Code, w.Body.String())
+		}
+
+		var resp helpers.JSONResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode invalid response: %v", err)
+		}
+		if !resp.Error {
+			t.Fatalf("%s response = %+v, want error", path, resp)
+		}
+	}
+}
+
+func TestProxyTmdbImage_HTTPReturnsErrorForUpstreamFailures(t *testing.T) {
+	t.Run("non-200", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "missing", http.StatusNotFound)
+		}))
+		defer upstream.Close()
+
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		app.TmdbImageBaseURL = upstream.URL
+		app.TmdbImageHTTPClient = upstream.Client()
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/missing.jpg", nil)
+		router := chi.NewRouter()
+		router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("status = %d, want 502, body = %s", w.Code, w.Body.String())
+		}
+		if got := w.Header().Get("Content-Type"); got != "application/json" {
+			t.Fatalf("content type = %q, want application/json", got)
+		}
+	})
+
+	t.Run("fetch error", func(t *testing.T) {
+		app := setupTestApp(t)
+		defer app.DB.Close()
+		app.TmdbImageBaseURL = "https://image.tmdb.org/t/p"
+		app.TmdbImageHTTPClient = &http.Client{Transport: failingRoundTripper{}}
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/tmdb/images/w500/poster.jpg", nil)
+		router := chi.NewRouter()
+		router.Get("/api/tmdb/images/{size}/{file}", app.ProxyTmdbImage)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("status = %d, want 502, body = %s", w.Code, w.Body.String())
+		}
+
+		body, err := io.ReadAll(w.Result().Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		var resp helpers.JSONResponse
+		if err := json.Unmarshal(body, &resp); err != nil {
+			t.Fatalf("decode fetch error response: %v\nbody=%s", err, string(body))
+		}
+		if !resp.Error {
+			t.Fatalf("response = %+v, want error", resp)
+		}
+	})
 }
 
 func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {

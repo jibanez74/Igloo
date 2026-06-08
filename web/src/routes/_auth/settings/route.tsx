@@ -19,7 +19,7 @@ import {
   SETTINGS_PAGE_VIEW_TRANSITION_NAME,
 } from "@/lib/constants";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
-import { authUserQueryOpts } from "@/lib/query-opts";
+import { authUserGuardQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
 import { computeSettingsLayoutState } from "@/lib/settings-layout";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +38,8 @@ const SETTINGS_TABS = [
 
 export const Route = createFileRoute("/_auth/settings")({
   beforeLoad: async ({ context, location }) => {
-    const authData = await context.queryClient.ensureQueryData(
-      authUserQueryOpts(),
+    const authData = await context.queryClient.fetchQuery(
+      authUserGuardQueryOpts(),
     );
     if (authData.error) {
       throw redirect({

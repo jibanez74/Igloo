@@ -46,6 +46,8 @@ type Application struct {
 	FFmpeg              ffmpeg.FFmpegInterface
 	Spotify             spotify.SpotifyInterface
 	Tmdb                tmdb.TmdbInterface
+	TmdbImageBaseURL    string
+	TmdbImageHTTPClient *http.Client
 	SessionManager      *scs.SessionManager
 	Wait                *sync.WaitGroup
 	Router              *chi.Mux
@@ -602,6 +604,7 @@ func (app *Application) registerAPIRoutes(r chi.Router) {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
 		r.Post("/auth/login", app.AuthenticateUser)
+		r.Get("/auth/user", app.GetCurrentAuthUser)
 		app.registerAuthenticatedAPIRoutes(r)
 	})
 }
@@ -612,6 +615,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 
 		app.registerAuthRoutes(r)
 		app.registerUserRoutes(r)
+		app.registerNotificationRoutes(r)
 		r.Get("/static/*", app.ServeStaticFiles)
 		app.registerTMDBRoutes(r)
 		app.registerSearchRoutes(r)
@@ -626,7 +630,6 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 
 func (app *Application) registerAuthRoutes(r chi.Router) {
 	r.Route("/auth", func(r chi.Router) {
-		r.Get("/user", app.GetCurrentAuthUser)
 		r.Delete("/logout", app.DestroySession)
 	})
 }
@@ -642,8 +645,17 @@ func (app *Application) registerUserRoutes(r chi.Router) {
 	})
 }
 
+func (app *Application) registerNotificationRoutes(r chi.Router) {
+	r.Route("/notifications", func(r chi.Router) {
+		r.Post("/", app.CreateNotification)
+	})
+}
+
 func (app *Application) registerTMDBRoutes(r chi.Router) {
 	r.Route("/tmdb", func(r chi.Router) {
+		r.Get("/status", app.GetTmdbStatus)
+		r.Get("/images/{size}/{file}", app.ProxyTmdbImage)
+		r.Post("/movies/search", app.SearchTmdbMovies)
 		r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
 		r.Get("/movies/{id}", app.GetMovieByTmdbID)
 	})

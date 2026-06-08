@@ -31,6 +31,7 @@ type Querier interface {
 	// Link movie to production company via junction table
 	CreateMovieProductionCompany(ctx context.Context, arg CreateMovieProductionCompanyParams) error
 	CreateMusicianAlbum(ctx context.Context, arg CreateMusicianAlbumParams) error
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error)
 	CreateSettings(ctx context.Context, arg CreateSettingsParams) (Setting, error)
 	CreateTrackGenre(ctx context.Context, arg CreateTrackGenreParams) error
@@ -102,6 +103,7 @@ type Querier interface {
 	GetLikedTrackIDsByUserID(ctx context.Context, userID int64) ([]int64, error)
 	GetLikedTracksForUser(ctx context.Context, arg GetLikedTracksForUserParams) ([]GetLikedTracksForUserRow, error)
 	GetMovieByID(ctx context.Context, id int64) (Movie, error)
+	GetMovieByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (GetMovieByTmdbIDRow, error)
 	// List all extra videos (trailers, special features) linked to a movie.
 	GetMovieExtraVideos(ctx context.Context, movieID int64) ([]ExtraVideo, error)
 	GetMovieForDirectStream(ctx context.Context, id int64) (GetMovieForDirectStreamRow, error)
@@ -168,6 +170,7 @@ type Querier interface {
 	GetUsersExcluding(ctx context.Context, arg GetUsersExcludingParams) ([]GetUsersExcludingRow, error)
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
+	GetVisibleNotification(ctx context.Context, arg GetVisibleNotificationParams) (GetVisibleNotificationRow, error)
 	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
 	GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
@@ -188,8 +191,10 @@ type Querier interface {
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
+	ListVisibleNotifications(ctx context.Context, arg ListVisibleNotificationsParams) ([]ListVisibleNotificationsRow, error)
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
 	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING

@@ -47,11 +47,13 @@ import {
   moviesGenresQueryOpts,
   moviesLibraryQueryOpts,
   moviesStatsQueryOpts,
+  tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import RequestMovieDialog from "@/components/RequestMovieDialog";
 
 const moviesSearchSchema = z.object({
   tab: z._default(
@@ -369,35 +371,80 @@ function MoreMenu({
   onOpenLikedMovies,
   onOpenMoviePlaylists,
 }: MoreMenuProps) {
+  const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [requestMovieOpen, setRequestMovieOpen] = useState(false);
+  const { data: tmdbStatusData, isLoading: tmdbStatusLoading } = useQuery(
+    tmdbStatusQueryOpts(),
+  );
+  const tmdbAvailable =
+    tmdbStatusData?.error === false ? tmdbStatusData.data.available : false;
+  const requestMovieDisabled = tmdbStatusLoading || !tmdbAvailable;
+  const requestMovieDescription = tmdbStatusLoading
+    ? "TMDB search status is still loading."
+    : "TMDB search is unavailable on this server.";
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-        aria-label="More options"
-      >
-        <MoreHorizontal className="size-5" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="border-slate-700 bg-slate-800"
-      >
-        <DropdownMenuItem
-          className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
-          onClick={onOpenLikedMovies}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          ref={moreOptionsButtonRef}
+          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          aria-label="More options"
         >
-          <Heart className="mr-2 size-4" aria-hidden="true" />
-          Liked movies
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
-          onClick={onOpenMoviePlaylists}
+          <MoreHorizontal className="size-5" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="border-slate-700 bg-slate-800"
         >
-          <ListVideo className="mr-2 size-4" aria-hidden="true" />
-          Movie playlists
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem
+            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            onClick={onOpenLikedMovies}
+          >
+            <Heart className="mr-2 size-4" aria-hidden="true" />
+            Liked movies
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            onClick={onOpenMoviePlaylists}
+          >
+            <ListVideo className="mr-2 size-4" aria-hidden="true" />
+            Movie playlists
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            disabled={requestMovieDisabled}
+            aria-label={
+              requestMovieDisabled
+                ? `Request Movie unavailable. ${requestMovieDescription}`
+                : "Request Movie"
+            }
+            title={requestMovieDisabled ? requestMovieDescription : undefined}
+            onSelect={(event) => {
+              if (requestMovieDisabled) {
+                event.preventDefault();
+                return;
+              }
+              setRequestMovieOpen(true);
+            }}
+          >
+            <Plus className="mr-2 size-4" aria-hidden="true" />
+            Request Movie
+            {requestMovieDisabled && (
+              <span className="sr-only"> {requestMovieDescription}</span>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {requestMovieOpen && (
+        <RequestMovieDialog
+          open={requestMovieOpen}
+          onOpenChange={setRequestMovieOpen}
+          restoreFocusRef={moreOptionsButtonRef}
+        />
+      )}
+    </>
   );
 }
 

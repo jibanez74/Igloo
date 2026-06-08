@@ -6,6 +6,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { readE2EEnv, type E2EEnv } from "./e2e-env";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -19,9 +21,7 @@ type AdminUser = {
   is_admin: boolean;
 };
 
-type WatchRoomEnv = {
-  email: string;
-  password: string;
+type WatchRoomEnv = E2EEnv & {
   movieId: number;
   responseTimeoutMs: number;
 };
@@ -41,17 +41,15 @@ function positiveIntEnv(name: string, fallback?: number) {
 }
 
 function readWatchRoomEnv(): WatchRoomEnv | null {
-  const email = process.env.E2E_ADMIN_EMAIL;
-  const password = process.env.E2E_ADMIN_PASSWORD;
+  const e2eEnv = readE2EEnv();
   const movieId = positiveIntEnv("E2E_WATCH_ROOM_MOVIE_ID");
 
-  if (!email || !password || !movieId) {
+  if (!movieId) {
     return null;
   }
 
   return {
-    email,
-    password,
+    ...e2eEnv,
     movieId,
     responseTimeoutMs:
       positiveIntEnv("E2E_WATCH_ROOM_RESPONSE_TIMEOUT_MS", 30_000) ?? 30_000,
@@ -277,16 +275,15 @@ test.describe.configure({ mode: "serial" });
 test.describe("Watch room realtime playback", () => {
   test.skip(
     !watchRoomEnv,
-    "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, and E2E_WATCH_ROOM_MOVIE_ID to run watch-room e2e tests.",
+    "Set E2E_WATCH_ROOM_MOVIE_ID to run watch-room e2e tests.",
   );
 
   test("syncs direct-room playback controls across owner and guest browsers", async ({
     browser,
   }) => {
     const env = watchRoomEnv!;
-    const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:8080";
-    const ownerContext = await browser.newContext({ baseURL });
-    const guestContext = await browser.newContext({ baseURL });
+    const ownerContext = await browser.newContext({ baseURL: env.baseURL });
+    const guestContext = await browser.newContext({ baseURL: env.baseURL });
     let guest: E2EGuest | null = null;
     let roomId: number | null = null;
 

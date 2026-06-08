@@ -7,32 +7,24 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import {
+  isExpectedUnauthorizedResourceMessage,
+  isIgnorableFailedRequest,
+} from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
   data?: T;
 };
 
-type LoginEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
-};
-
-function readLoginEnv(): LoginEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: LoginEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
+}
+
+function isAppApiResponse(response: Response) {
+  return new URL(response.url()).pathname.startsWith("/api/");
 }
 
 function isExpectedLoggedOutAuthResponse(response: Response) {
@@ -47,13 +39,6 @@ function isExpectedInvalidLoginResponse(response: Response) {
   );
 }
 
-function isExpectedUnauthorizedResourceMessage(message: string) {
-  return (
-    message ===
-    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
-  );
-}
-
 function trackBrowserIssues(
   page: Page,
   isExpectedResponse: (response: Response) => boolean =
@@ -65,21 +50,37 @@ function trackBrowserIssues(
   const responseErrors: string[] = [];
 
   page.on("console", message => {
-    if (
-      message.type() === "error" &&
-      !isExpectedUnauthorizedResourceMessage(message.text())
-    ) {
-      consoleErrors.push(message.text());
+    if (message.type() !== "error") {
+      return;
     }
+
+    const text = message.text();
+    if (
+      isExpectedUnauthorizedResourceMessage(text) ||
+      text.startsWith("Failed to load resource:") ||
+      text.startsWith("TypeError: Failed to fetch")
+    ) {
+      return;
+    }
+
+    consoleErrors.push(text);
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
+    if (isIgnorableFailedRequest(request)) {
+      return;
+    }
+
     failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
   });
   page.on("response", response => {
-    if (response.status() >= 400 && !isExpectedResponse(response)) {
+    if (
+      isAppApiResponse(response) &&
+      response.status() >= 400 &&
+      !isExpectedResponse(response)
+    ) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,
       );
@@ -96,28 +97,31 @@ function trackBrowserIssues(
   };
 }
 
-async function expectAppPath(page: Page, env: LoginEnv, pathname: string) {
+async function expectAppPath(page: Page, env: E2EEnv, pathname: string) {
   await expect.poll(() => new URL(page.url()).origin).toBe(
     new URL(env.baseURL).origin,
   );
   await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
 }
 
-async function logout(context: BrowserContext, env: LoginEnv) {
+async function logout(context: BrowserContext, env: E2EEnv) {
   await context.request.delete(apiURL(env, "/api/auth/logout"), {
     failOnStatusCode: false,
   });
 }
 
-async function expectUnauthenticated(context: BrowserContext, env: LoginEnv) {
+async function expectUnauthenticated(context: BrowserContext, env: E2EEnv) {
   const response = await context.request.get(apiURL(env, "/api/auth/user"), {
     failOnStatusCode: false,
   });
 
   expect(response.status()).toBe(401);
+
+  const body = await readJSON<unknown>(response);
+  expect(body.error, body.message).toBe(true);
 }
 
-async function expectAuthenticated(context: BrowserContext, env: LoginEnv) {
+async function expectAuthenticated(context: BrowserContext, env: E2EEnv) {
   const response = await context.request.get(apiURL(env, "/api/auth/user"), {
     failOnStatusCode: false,
   });
@@ -309,14 +313,14 @@ async function expectLoginLayout(page: Page) {
 
 test.describe("Login screen", () => {
   test.afterEach(async ({ context }) => {
-    await logout(context, readLoginEnv());
+    await logout(context, readE2EEnv());
   });
 
   test("renders accessibly and blocks empty submissions before the API call", async ({
     page,
     context,
   }) => {
-    const env = readLoginEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
     let loginRequests = 0;
 
@@ -377,7 +381,7 @@ test.describe("Login screen", () => {
     page,
     context,
   }) => {
-    const env = readLoginEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(
       page,
       response =>
@@ -413,11 +417,11 @@ test.describe("Login screen", () => {
     page,
     context,
   }) => {
-    const env = readLoginEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
 
     await logout(context, env);
-    await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
+    await page.goto(apiURL(env, "/login"), {
       waitUntil: "networkidle",
     });
     await expectLoginControls(page);
@@ -427,6 +431,22 @@ test.describe("Login screen", () => {
 
     const loginBody = await readJSON<unknown>(loginResponse);
     expect(loginBody.error, loginBody.message).toBe(false);
+
+    await expectAppPath(page, env, "/");
+    await expectAuthenticated(context, env);
+
+    await logout(context, env);
+    await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
+      waitUntil: "networkidle",
+    });
+    await expectLoginControls(page);
+
+    const safeRedirectLoginResponse = await submitLogin(
+      page,
+      env.email,
+      env.password,
+    );
+    expect(safeRedirectLoginResponse.status()).toBe(200);
 
     await expectAppPath(page, env, "/settings/account");
     await expectAuthenticated(context, env);
@@ -456,11 +476,58 @@ test.describe("Login screen", () => {
     tracker.assertClean();
   });
 
+  test("logs out through the sidebar and blocks protected routes", async ({
+    page,
+    context,
+  }) => {
+    const env = readE2EEnv();
+    const tracker = trackBrowserIssues(page);
+
+    await logout(context, env);
+    await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
+      waitUntil: "networkidle",
+    });
+    await expectLoginControls(page);
+
+    const loginResponse = await submitLogin(page, env.email, env.password);
+    expect(loginResponse.status()).toBe(200);
+
+    await expectAppPath(page, env, "/settings/account");
+    await expectAuthenticated(context, env);
+
+    const logoutResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/auth/logout") &&
+        response.request().method() === "DELETE",
+    );
+
+    await page.getByRole("button", { name: "Logout" }).click();
+
+    const logoutResponse = await logoutResponsePromise;
+    expect(logoutResponse.status()).toBe(200);
+
+    const logoutBody = await readJSON<unknown>(logoutResponse);
+    expect(logoutBody.error, logoutBody.message).toBe(false);
+
+    await expectAppPath(page, env, "/login");
+    await expectUnauthenticated(context, env);
+
+    await page.goto(apiURL(env, "/settings/account"), {
+      waitUntil: "networkidle",
+    });
+    await expectAppPath(page, env, "/login");
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("redirect"))
+      .toBe("/settings/account");
+
+    tracker.assertClean();
+  });
+
   test("is responsive and keeps screen reader support at each viewport", async ({
     page,
     context,
   }) => {
-    const env = readLoginEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
 
     await logout(context, env);

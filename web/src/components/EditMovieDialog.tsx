@@ -1,23 +1,20 @@
 import { useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Film, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
-  tmdbSearchMovies,
   identifyMovie,
   updateMovieMetadata,
 } from "@/lib/api";
 import {
   LIBRARY_MOVIE_DETAILS_KEY,
   MOVIE_TECHNICAL_DETAILS_KEY,
-  TMDB_POSTER_SIZE,
 } from "@/lib/constants";
-import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import TmdbMoviePicker from "@/components/TmdbMoviePicker";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +25,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import type {
   LibraryMovieDetailsMovieType,
-  TmdbSearchResultType,
   UpdateMovieMetadataRequest,
 } from "@/types";
 
@@ -102,51 +98,8 @@ function TmdbTab({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-
-  const [title, setTitle] = useState(movie.title);
-  const [year, setYear] = useState(String(unwrapInt(movie.year) ?? ""));
-  const [tmdbIdInput, setTmdbIdInput] = useState(
-    String(unwrapInt(movie.tmdb_id) ?? ""),
-  );
-  const [results, setResults] = useState<TmdbSearchResultType[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [applying, setApplying] = useState(false);
-
-  async function handleSearch() {
-    if (!title.trim() && !tmdbIdInput.trim()) return;
-    setSearching(true);
-    setResults([]);
-    setSelectedId(null);
-
-    const body: { title: string; year?: number; tmdb_id?: number } = {
-      title: title.trim(),
-    };
-    const y = parseInt(year, 10);
-    if (y > 0) body.year = y;
-    const tid = parseInt(tmdbIdInput, 10);
-    if (tid > 0) body.tmdb_id = tid;
-
-    const res = await tmdbSearchMovies(movieId, body);
-    setSearching(false);
-
-    if (res.error || !res.data?.results) {
-      toast.error(res.message || "TMDB search failed");
-      return;
-    }
-    setResults(res.data.results);
-    if (res.data.results.length === 0) {
-      toast.info("No results found");
-    }
-  }
-
-  async function handleApply() {
-    if (selectedId == null) return;
-    setApplying(true);
-
+  async function handleApply(selectedId: number) {
     const res = await identifyMovie(movieId, selectedId);
-    setApplying(false);
-
     if (res.error) {
       toast.error(res.message || "Failed to identify movie");
       return;
@@ -163,153 +116,14 @@ function TmdbTab({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="sm:col-span-1">
-          <Label htmlFor="tmdb-title" className="text-slate-300">
-            Title
-          </Label>
-          <Input
-            id="tmdb-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 border-slate-700 bg-slate-800 text-white"
-          />
-        </div>
-        <div>
-          <Label htmlFor="tmdb-year" className="text-slate-300">
-            Year
-          </Label>
-          <Input
-            id="tmdb-year"
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="mt-1 border-slate-700 bg-slate-800 text-white"
-          />
-        </div>
-        <div>
-          <Label htmlFor="tmdb-id" className="text-slate-300">
-            TMDB ID
-          </Label>
-          <Input
-            id="tmdb-id"
-            type="number"
-            value={tmdbIdInput}
-            onChange={(e) => setTmdbIdInput(e.target.value)}
-            placeholder="Optional"
-            className="mt-1 border-slate-700 bg-slate-800 text-white"
-          />
-        </div>
-      </div>
-
-      <Button
-        onClick={handleSearch}
-        disabled={searching || (!title.trim() && !tmdbIdInput.trim())}
-        className="w-full"
-      >
-        {searching ? (
-          <Spinner className="size-4" />
-        ) : (
-          <Search className="size-4" aria-hidden="true" />
-        )}
-        {searching ? "Searching…" : "Search TMDB"}
-      </Button>
-
-      {results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm text-slate-400">
-            {results.length} result{results.length !== 1 && "s"} — select one
-            to apply
-          </p>
-
-          <ul className="max-h-64 space-y-2 overflow-y-auto" role="listbox">
-            {results.map((r) => (
-              <TmdbResultCard
-                key={r.tmdb_id}
-                result={r}
-                selected={selectedId === r.tmdb_id}
-                onSelect={() => setSelectedId(r.tmdb_id)}
-              />
-            ))}
-          </ul>
-
-          <Button
-            onClick={handleApply}
-            disabled={selectedId == null || applying}
-            variant="accent"
-            className="w-full"
-          >
-            {applying && <Spinner className="size-4" />}
-            {applying ? "Applying…" : "Apply Selected"}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TmdbResultCard({
-  result,
-  selected,
-  onSelect,
-}: {
-  result: TmdbSearchResultType;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const posterUrl = result.poster_path
-    ? buildTmdbImageUrl(result.poster_path, TMDB_POSTER_SIZE)
-    : null;
-
-  const releaseYear = result.release_date?.slice(0, 4);
-
-  return (
-    <li
-      role="option"
-      aria-selected={selected}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      className={`flex cursor-pointer gap-3 rounded-lg border p-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 ${
-        selected
-          ? "border-amber-500 bg-amber-500/10"
-          : "border-slate-700 bg-slate-800/60 hover:border-slate-600"
-      }`}
-    >
-      {posterUrl ? (
-        <img
-          src={posterUrl}
-          alt=""
-          className="h-20 w-14 shrink-0 rounded-sm object-cover"
-        />
-      ) : (
-        <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-sm bg-slate-700">
-          <Film className="size-5 text-slate-500" aria-hidden="true" />
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-white">
-          {result.title}
-          {releaseYear && (
-            <span className="ml-1 text-slate-400">({releaseYear})</span>
-          )}
-        </p>
-        <p className="mt-0.5 text-xs text-slate-500">
-          TMDB ID: {result.tmdb_id}
-        </p>
-        {result.overview && (
-          <p className="mt-1 line-clamp-2 text-sm text-slate-400">
-            {result.overview}
-          </p>
-        )}
-      </div>
-    </li>
+    <TmdbMoviePicker
+      confirmLabel="Apply Selected"
+      initialTitle={movie.title}
+      initialYear={String(unwrapInt(movie.year) ?? "")}
+      initialTmdbId={String(unwrapInt(movie.tmdb_id) ?? "")}
+      onConfirm={async selectedResult => handleApply(selectedResult.tmdb_id)}
+      showTmdbIdInput
+    />
   );
 }
 

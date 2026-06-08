@@ -14,6 +14,15 @@ FROM movies
 WHERE id = ?
 LIMIT 1;
 
+-- name: GetMovieByTmdbID :one
+SELECT
+  id,
+  title,
+  year
+FROM movies
+WHERE tmdb_id = ?
+LIMIT 1;
+
 -- name: GetMoviesByIDs :many
 SELECT
   *

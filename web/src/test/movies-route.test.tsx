@@ -71,10 +71,11 @@ function playlist(id: number, name: string, movieCount: number) {
   };
 }
 
-function mockMoviesFetch() {
+function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
   const libraryMovies = [movie(1, "Arrival", 2016), movie(2, "Heat", 1995)];
   const likedMovies = [movie(3, "Moonlight", 2016)];
   const playlists = [playlist(11, "Weekend Picks", 2)];
+  const tmdbAvailable = options?.tmdbAvailable ?? true;
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
@@ -173,6 +174,15 @@ function mockMoviesFetch() {
       });
     }
 
+    if (url === "/api/tmdb/status") {
+      return jsonResponse({
+        error: false,
+        data: {
+          available: tmdbAvailable,
+        },
+      });
+    }
+
     return jsonResponse(
       {
         error: true,
@@ -199,9 +209,12 @@ function createMoviesQueryClient() {
   });
 }
 
-async function renderMoviesRoute(initialEntry: string) {
+async function renderMoviesRoute(
+  initialEntry: string,
+  options?: { tmdbAvailable?: boolean },
+) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockMoviesFetch();
+  mockMoviesFetch(options);
 
   const queryClient = createMoviesQueryClient();
   const history = createMemoryHistory({
@@ -421,5 +434,23 @@ describe("movies route focus restoration", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
     });
+  });
+
+  it("disables Request Movie when TMDB search is unavailable", async () => {
+    const user = userEvent.setup();
+
+    await renderMoviesRoute("/movies/", { tmdbAvailable: false });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const requestMovieItem = await screen.findByRole("menuitem", {
+      name: /Request Movie unavailable/i,
+    });
+
+    expect(requestMovieItem).toHaveAttribute("data-disabled");
+    expect(requestMovieItem).toHaveAttribute(
+      "title",
+      "TMDB search is unavailable on this server.",
+    );
   });
 });

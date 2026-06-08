@@ -73,10 +73,17 @@ const (
 	NOT_AUTHORIZED_MESSAGE      = "not authorized"
 	INVALID_CREDENTIALS_MESSAGE = "invalid email or password provided"
 
+	// notification titles (persisted enum values in notifications.title)
+	NOTIFICATION_TITLE_MOVIE_REQUEST = "movie_request"
+	NOTIFICATION_TITLE_ALBUM_REQUEST = "album_request"
+	NOTIFICATION_TITLE_TRACK_REQUEST = "track_request"
+	NOTIFICATION_TITLE_OTHER         = "other"
+
 	// constants for tmdb
 	TMDB_BASE_API_URL          = "https://api.themoviedb.org/3"
 	TMDB_IMAGE_BASE_URL        = "https://image.tmdb.org/t/p"
 	TMDB_IMAGE_SIZE            = "original"
+	TMDB_BACKDROP_SIZE         = "w1280"
 	TMDB_POSTER_SIZE           = "w500"
 	TMDB_PROFILE_SIZE          = "w185"
 	TMDB_LOGO_SIZE             = "w92"

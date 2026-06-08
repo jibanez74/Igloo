@@ -288,6 +288,8 @@ describe("Account settings", () => {
     );
     expect(requestsFor(requests, "DELETE", "/api/user")).toHaveLength(1);
     expect(requestsFor(requests, "DELETE", "/api/auth/logout")).toHaveLength(0);
-    expect(requestsFor(requests, "GET", "/api/auth/user")).toHaveLength(1);
+    expect(requestsFor(requests, "GET", "/api/auth/user").length).toBeGreaterThan(
+      0,
+    );
   });
 });

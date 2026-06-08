@@ -6,6 +6,9 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -25,24 +28,6 @@ type AdminUser = {
 type UsersData = {
   users: AdminUser[];
 };
-
-type UserSettingsEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
-};
-
-function readUserSettingsEnv(): UserSettingsEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@sample.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: UserSettingsEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
 
 async function readJSON<T>(response: APIResponse) {
   return (await response.json()) as ApiResponse<T>;
@@ -65,6 +50,10 @@ function trackBrowserIssues(page: Page) {
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
+    if (isIgnorableFailedRequest(request)) {
+      return;
+    }
+
     failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
@@ -89,7 +78,7 @@ function trackBrowserIssues(page: Page) {
 
 async function login(
   page: Page,
-  env: UserSettingsEnv,
+  env: E2EEnv,
   email = env.email,
   password = env.password,
 ) {
@@ -103,13 +92,13 @@ async function login(
   expect(body.error, body.message).toBe(false);
 }
 
-async function logout(page: Page, env: UserSettingsEnv) {
+async function logout(page: Page, env: E2EEnv) {
   await page.context().request.delete(apiURL(env, "/api/auth/logout"), {
     failOnStatusCode: false,
   });
 }
 
-async function fetchAdminUsers(page: Page, env: UserSettingsEnv) {
+async function fetchAdminUsers(page: Page, env: E2EEnv) {
   const response = await page.context().request.get(
     apiURL(env, "/api/admin/users"),
     { failOnStatusCode: false },
@@ -121,7 +110,7 @@ async function fetchAdminUsers(page: Page, env: UserSettingsEnv) {
   return body.data?.users ?? [];
 }
 
-async function deleteUser(page: Page, env: UserSettingsEnv, userId: number) {
+async function deleteUser(page: Page, env: E2EEnv, userId: number) {
   const response = await page.context().request.delete(
     apiURL(env, `/api/admin/users/${userId}`),
     { failOnStatusCode: false },
@@ -129,7 +118,7 @@ async function deleteUser(page: Page, env: UserSettingsEnv, userId: number) {
   expect(response.status()).toBe(200);
 }
 
-async function cleanupAuditUsers(page: Page, env: UserSettingsEnv, prefix: string) {
+async function cleanupAuditUsers(page: Page, env: E2EEnv, prefix: string) {
   const users = await fetchAdminUsers(page, env);
   for (const user of users) {
     if (user.email.startsWith(prefix)) {
@@ -138,7 +127,7 @@ async function cleanupAuditUsers(page: Page, env: UserSettingsEnv, prefix: strin
   }
 }
 
-async function expectAppPath(page: Page, env: UserSettingsEnv, pathname: string) {
+async function expectAppPath(page: Page, env: E2EEnv, pathname: string) {
   await expect.poll(() => new URL(page.url()).origin).toBe(
     new URL(env.baseURL).origin,
   );
@@ -151,7 +140,7 @@ test.describe("Users settings", () => {
   test("manages users accessibly without expected validation console noise", async ({
     page,
   }) => {
-    const env = readUserSettingsEnv();
+    const env = readE2EEnv();
     const stamp = Date.now();
     const prefix = `playwright-users-settings-${stamp}`;
     const name = `Playwright Users Settings ${stamp}`;

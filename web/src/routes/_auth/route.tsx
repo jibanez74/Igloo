@@ -1,10 +1,10 @@
 import { redirect, Outlet, createFileRoute } from "@tanstack/react-router";
-import { authUserQueryOpts } from "@/lib/query-opts";
+import { authUserGuardQueryOpts } from "@/lib/query-opts";
 import AppShell from "@/components/AppShell";
 
 export const Route = createFileRoute("/_auth")({
   beforeLoad: async ({ context, location }) => {
-    const res = await context.queryClient.ensureQueryData(authUserQueryOpts());
+    const res = await context.queryClient.fetchQuery(authUserGuardQueryOpts());
 
     if (res.error) {
       throw redirect({

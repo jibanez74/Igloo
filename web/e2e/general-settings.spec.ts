@@ -1,5 +1,8 @@
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -48,24 +51,6 @@ type GeneralSettingsRequest = {
   server_upload_mbps: number | null;
 };
 
-type GeneralSettingsEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
-};
-
-function readGeneralSettingsEnv(): GeneralSettingsEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: GeneralSettingsEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 function requestFromSettings(settings: GeneralSettings): GeneralSettingsRequest {
   return {
     tmdb_key: settings.tmdb_key ?? "",
@@ -99,7 +84,7 @@ async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
   return body.data!;
 }
 
-async function login(page: Page, env: GeneralSettingsEnv) {
+async function login(page: Page, env: E2EEnv) {
   const loginResponse = await page.context().request.post(apiURL(env, "/api/auth/login"), {
     data: {
       email: env.email,
@@ -118,7 +103,7 @@ async function login(page: Page, env: GeneralSettingsEnv) {
   expect(authResponse.status()).toBe(200);
 }
 
-async function fetchGeneralSettings(page: Page, env: GeneralSettingsEnv) {
+async function fetchGeneralSettings(page: Page, env: E2EEnv) {
   const response = await page.context().request.get(
     apiURL(env, "/api/settings/general"),
     { failOnStatusCode: false },
@@ -130,7 +115,7 @@ async function fetchGeneralSettings(page: Page, env: GeneralSettingsEnv) {
 
 async function restoreGeneralSettings(
   page: Page,
-  env: GeneralSettingsEnv,
+  env: E2EEnv,
   settings: GeneralSettingsRequest,
 ) {
   const response = await page.context().request.put(
@@ -333,7 +318,7 @@ test.describe("General settings", () => {
   test("updates integration settings accessibly and optimistically", async ({
     page,
   }) => {
-    const env = readGeneralSettingsEnv();
+    const env = readE2EEnv();
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     const failedRequests: string[] = [];
@@ -346,6 +331,10 @@ test.describe("General settings", () => {
     });
     page.on("pageerror", error => pageErrors.push(error.message));
     page.on("requestfailed", request => {
+      if (isIgnorableFailedRequest(request)) {
+        return;
+      }
+
       failedRequests.push(
         `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
       );

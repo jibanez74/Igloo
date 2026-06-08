@@ -4,20 +4,16 @@ import {
   type APIRequestContext,
   type APIResponse,
   type Page,
-  type Request,
   type Response,
 } from "@playwright/test";
+
+import { apiURL as appURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { isIgnorableFailedRequest } from "./e2e-browser-issues";
 
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
   data?: T;
-};
-
-type MoviesEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
 };
 
 type Region = {
@@ -42,37 +38,15 @@ const moviesGenresPath =
 const visibleMotionThreshold = 4; // Mean per-channel RGB delta across sampled tab-content frames; a heuristic floor where the fade reads as visibly moving instead of normal capture noise.
 const reducedMotionDriftThreshold = 2; // Mean per-channel RGB drift allowed with `prefers-reduced-motion`; a heuristic tolerance for screenshot/layout jitter while still treating the transition as effectively static.
 
-function readMoviesEnv(): MoviesEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function appURL(env: MoviesEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 function isAppApiResponse(response: Response) {
   return new URL(response.url()).pathname.startsWith("/api/");
-}
-
-function isIgnorableFailedRequest(request: Request) {
-  const failureText = request.failure()?.errorText ?? "";
-  const resourceType = request.resourceType();
-
-  return (
-    failureText.includes("net::ERR_ABORTED") &&
-    (resourceType === "image" || resourceType === "font")
-  );
 }
 
 async function readJSON<T>(response: APIResponse) {
   return (await response.json()) as ApiResponse<T>;
 }
 
-async function login(request: APIRequestContext, env: MoviesEnv) {
+async function login(request: APIRequestContext, env: E2EEnv) {
   const response = await request.post(appURL(env, "/api/auth/login"), {
     data: { email: env.email, password: env.password },
     failOnStatusCode: false,
@@ -258,7 +232,7 @@ test.describe("movies page", () => {
   test("loads, switches tabs, and opens liked movies from the overflow menu", async ({
     page,
   }) => {
-    const env = readMoviesEnv();
+    const env = readE2EEnv();
     await login(page.context().request, env);
 
     const browserIssues = trackBrowserIssues(page);
@@ -315,7 +289,7 @@ test.describe("movies page", () => {
   test("matches settings tab fade behavior and respects reduced motion", async ({
     page,
   }) => {
-    const env = readMoviesEnv();
+    const env = readE2EEnv();
     await login(page.context().request, env);
 
     const browserIssues = trackBrowserIssues(page);

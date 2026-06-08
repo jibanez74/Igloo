@@ -1,7 +1,7 @@
 import { TMDB_IMAGE_BASE } from "./constants";
 
 /**
- * Builds a full TMDB image URL: `{TMDB_IMAGE_BASE}/{size}{path}`.
+ * Builds a proxied TMDB image URL: `{TMDB_IMAGE_BASE}/{size}{path}`.
  * Normalizes `path` so a leading slash is present (TMDB returns paths like `/abc.jpg` or `abc.jpg`).
  * Returns an empty string when `path` is null, undefined, or empty.
  */

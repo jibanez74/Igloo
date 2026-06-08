@@ -10,6 +10,9 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -20,12 +23,6 @@ type LibrarySettings = {
   movies_dir: string | null;
   shows_dir: string | null;
   music_dir: string | null;
-};
-
-type LibrariesSettingsEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
 };
 
 const responsiveViewports = [
@@ -48,18 +45,6 @@ const requiredControlNames = [
   "Save library paths",
 ];
 
-function readLibrariesSettingsEnv(): LibrariesSettingsEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@sample.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: LibrariesSettingsEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
 }
@@ -73,7 +58,7 @@ async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
   return body.data!;
 }
 
-async function login(page: Page, env: LibrariesSettingsEnv) {
+async function login(page: Page, env: E2EEnv) {
   const response = await page.context().request.post(apiURL(env, "/api/auth/login"), {
     data: {
       email: env.email,
@@ -87,7 +72,7 @@ async function login(page: Page, env: LibrariesSettingsEnv) {
   expect(body.error, body.message).toBe(false);
 }
 
-async function fetchLibrarySettings(page: Page, env: LibrariesSettingsEnv) {
+async function fetchLibrarySettings(page: Page, env: E2EEnv) {
   const response = await page.context().request.get(apiURL(env, "/api/settings"), {
     failOnStatusCode: false,
   });
@@ -97,7 +82,7 @@ async function fetchLibrarySettings(page: Page, env: LibrariesSettingsEnv) {
 
 async function restoreLibrarySettings(
   page: Page,
-  env: LibrariesSettingsEnv,
+  env: E2EEnv,
   settings: LibrarySettings,
 ) {
   const response = await page.context().request.put(
@@ -130,6 +115,10 @@ function trackBrowserIssues(page: Page) {
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
+    if (isIgnorableFailedRequest(request)) {
+      return;
+    }
+
     failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
@@ -301,7 +290,7 @@ test.describe("Libraries settings", () => {
   test("manages library paths accessibly without console noise", async ({
     page,
   }) => {
-    const env = readLibrariesSettingsEnv();
+    const env = readE2EEnv();
     const tempRoot = await mkdtemp(join(tmpdir(), "igloo-libraries-settings-"));
     const paths = {
       movies: join(tempRoot, "movies"),

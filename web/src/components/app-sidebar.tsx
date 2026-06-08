@@ -25,11 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
 import { logout } from "@/lib/api";
-import {
-  AUTH_USER_KEY,
-  MOVIES_INDEX_DEFAULT_SEARCH,
-  PLAYBACK_SETTINGS_KEY,
-} from "@/lib/constants";
+import { MOVIES_INDEX_DEFAULT_SEARCH } from "@/lib/constants";
 import { showError } from "@/lib/toast-helpers";
 
 type NavItem = {
@@ -103,9 +99,7 @@ export default function AppSidebar({
       return;
     }
 
-    queryClient.removeQueries({ queryKey: [AUTH_USER_KEY] });
-    queryClient.removeQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
-    queryClient.invalidateQueries();
+    queryClient.removeQueries();
     navigate({ to: "/login", replace: true });
   };
 

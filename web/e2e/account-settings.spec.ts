@@ -8,6 +8,12 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import {
+  isExpectedUnauthorizedResourceMessage,
+  isIgnorableFailedRequest,
+} from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -26,12 +32,6 @@ type AdminUser = {
 
 type UsersData = {
   users: AdminUser[];
-};
-
-type AccountSettingsEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
 };
 
 const requiredAccountControlNames = [
@@ -54,18 +54,6 @@ const responsiveViewports = [
   { name: "desktop", width: 1440, height: 900 },
 ];
 
-function readAccountSettingsEnv(): AccountSettingsEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: AccountSettingsEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 function isAppApiResponse(response: Response) {
   return new URL(response.url()).pathname.startsWith("/api/");
 }
@@ -76,7 +64,7 @@ async function readJSON<T>(response: APIResponse) {
 
 async function login(
   request: APIRequestContext,
-  env: AccountSettingsEnv,
+  env: E2EEnv,
   email = env.email,
   password = env.password,
 ) {
@@ -90,7 +78,7 @@ async function login(
   expect(body.error, body.message).toBe(false);
 }
 
-async function logout(request: APIRequestContext, env: AccountSettingsEnv) {
+async function logout(request: APIRequestContext, env: E2EEnv) {
   await request.delete(apiURL(env, "/api/auth/logout"), {
     failOnStatusCode: false,
   });
@@ -98,7 +86,7 @@ async function logout(request: APIRequestContext, env: AccountSettingsEnv) {
 
 async function fetchAdminUsers(
   request: APIRequestContext,
-  env: AccountSettingsEnv,
+  env: E2EEnv,
 ) {
   const response = await request.get(apiURL(env, "/api/admin/users"), {
     failOnStatusCode: false,
@@ -112,7 +100,7 @@ async function fetchAdminUsers(
 
 async function deleteUser(
   request: APIRequestContext,
-  env: AccountSettingsEnv,
+  env: E2EEnv,
   userId: number,
 ) {
   const response = await request.delete(
@@ -124,7 +112,7 @@ async function deleteUser(
 
 async function cleanupAuditUsers(
   request: APIRequestContext,
-  env: AccountSettingsEnv,
+  env: E2EEnv,
   prefix: string,
 ) {
   await login(request, env);
@@ -143,12 +131,19 @@ function trackBrowserIssues(page: Page) {
   const responseErrors: string[] = [];
 
   page.on("console", message => {
-    if (message.type() === "error") {
+    if (
+      message.type() === "error" &&
+      !isExpectedUnauthorizedResourceMessage(message.text())
+    ) {
       consoleIssues.push(`${message.type()}: ${message.text()}`);
     }
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
+    if (isIgnorableFailedRequest(request)) {
+      return;
+    }
+
     failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
@@ -192,7 +187,7 @@ async function expectDescriptionIncludes(
 
 async function expectAppPath(
   page: Page,
-  env: AccountSettingsEnv,
+  env: E2EEnv,
   pathname: string,
 ) {
   await expect.poll(() => new URL(page.url()).origin).toBe(
@@ -417,7 +412,7 @@ test.describe("Account settings", () => {
     page,
     request,
   }) => {
-    const env = readAccountSettingsEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
     const stamp = Date.now();
     const prefix = `playwright-account-settings-${stamp}`;

@@ -6,6 +6,8 @@ import type {
   ApiResponseType,
   AuthUser,
   CreateMoviePlaylistRequest,
+  CreateNotificationRequest,
+  CreateNotificationResponseType,
   CreatePlaylistRequest,
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
@@ -37,6 +39,7 @@ import type {
   SettingsType,
   SimpleAlbumType,
   TheaterMovieType,
+  TmdbStatusType,
   TmdbSearchMoviesRequest,
   TopAlbumsResponseType,
   TopGenresResponseType,
@@ -182,6 +185,12 @@ export const deleteUserAccount = () =>
     method: "DELETE",
   });
 
+export const createNotification = (body: CreateNotificationRequest) =>
+  apiRequest<CreateNotificationResponseType>("/api/notifications", {
+    method: "POST",
+    body,
+  });
+
 // Home Page API
 export const getLatestAlbums = () =>
   apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
@@ -195,6 +204,9 @@ export const getMoviesInTheaters = () =>
 export const getMovieInTheaterDetails = (id: number) =>
   apiRequest<{ movie: MovieDetailsType }>(`/api/tmdb/movies/${id}`);
 
+export const getTmdbStatus = () =>
+  apiRequest<TmdbStatusType>("/api/tmdb/status");
+
 // movie details
 export const getMovieDetails = (id: number) =>
   apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
@@ -203,6 +215,12 @@ export const getMovieTechnicalDetails = (id: number) =>
   apiRequest<MovieTechnicalDetailsResponse>(
     `/api/movies/${id}/technical-details`,
   );
+
+export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
+  apiRequest<{ results: TmdbSearchResultType[] }>("/api/tmdb/movies/search", {
+    method: "POST",
+    body,
+  });
 
 export const tmdbSearchMovies = (
   movieId: number,
