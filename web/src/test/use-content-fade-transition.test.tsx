@@ -96,11 +96,13 @@ function HookHarness({
 }
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: defaultMatchMedia,
   });
-
 });
 
 describe("useContentFadeTransition", () => {

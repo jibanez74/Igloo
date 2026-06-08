@@ -301,7 +301,18 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
   await page.getByRole("button", { name: "Go to next page" }).click();
 
   await expect(page).toHaveURL(/albumsPage=2/);
-  await expect.poll(() => requestedAlbumRequests).toContainEqual("/api/music/albums?page=2&per_page=24");
+  await expect
+    .poll(() =>
+      requestedAlbumRequests.some(requestPath => {
+        const parsed = new URL(`http://localhost${requestPath}`);
+        return (
+          parsed.pathname === "/api/music/albums" &&
+          parsed.searchParams.get("page") === "2" &&
+          parsed.searchParams.get("per_page") === "24"
+        );
+      }),
+    )
+    .toBe(true);
   await expect(page.getByRole("link", { name: "Page Two Album by Second Page Artist" })).toBeVisible();
 });
 

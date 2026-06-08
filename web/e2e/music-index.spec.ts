@@ -368,7 +368,18 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
   await page.getByRole("button", { name: "Go to next page" }).click();
 
   await expect(page).toHaveURL(/musiciansPage=2/);
-  await expect.poll(() => requestedMusicianRequests).toContainEqual("/api/music/musicians?page=2&per_page=24");
+  await expect
+    .poll(() =>
+      requestedMusicianRequests.some(requestPath => {
+        const parsed = new URL(`http://localhost${requestPath}`);
+        return (
+          parsed.pathname === "/api/music/musicians" &&
+          parsed.searchParams.get("page") === "2" &&
+          parsed.searchParams.get("per_page") === "24"
+        );
+      }),
+    )
+    .toBe(true);
   await expect(page.getByRole("link", { name: "Northern Signal, 3 albums, 27 tracks" })).toBeVisible();
 });
 

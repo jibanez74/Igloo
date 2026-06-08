@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -465,6 +465,7 @@ function TracksTabContent() {
   // Ref to measure offset from top of page for scrollMargin
   const listRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const isFetchingNextRef = useRef(false);
   const [intersectionRoot, setIntersectionRoot] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -515,11 +516,29 @@ function TracksTabContent() {
   }, [virtualizer, virtualItems.length]);
 
   useEffect(() => {
+    if (!isFetchingNextPage) {
+      isFetchingNextRef.current = false;
+    }
+  }, [isFetchingNextPage]);
+
+  const requestNextPage = useCallback(() => {
+    if (isFetchingNextRef.current || isFetchingNextPage || !hasNextPage) {
+      return;
+    }
+
+    isFetchingNextRef.current = true;
+    void fetchNextPage().finally(() => {
+      isFetchingNextRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
     const target = loadMoreRef.current;
     if (
       !target ||
       !hasNextPage ||
       isFetchingNextPage ||
+      isFetchingNextRef.current ||
       typeof IntersectionObserver === "undefined"
     ) {
       return;
@@ -528,7 +547,7 @@ function TracksTabContent() {
     const observer = new IntersectionObserver(
       entries => {
         if (entries.some(entry => entry.isIntersecting)) {
-          fetchNextPage();
+          requestNextPage();
         }
       },
       {
@@ -541,10 +560,10 @@ function TracksTabContent() {
 
     return () => observer.disconnect();
   }, [
-    fetchNextPage,
     hasNextPage,
     intersectionRoot,
     isFetchingNextPage,
+    requestNextPage,
     virtualItems.length,
   ]);
 
@@ -558,16 +577,17 @@ function TracksTabContent() {
       lastItem &&
       lastItem.index >= virtualItems.length - 10 &&
       hasNextPage &&
-      !isFetchingNextPage
+      !isFetchingNextPage &&
+      !isFetchingNextRef.current
     ) {
-      fetchNextPage();
+      requestNextPage();
     }
   }, [
     renderedVirtualItems,
     virtualItems.length,
     hasNextPage,
     isFetchingNextPage,
-    fetchNextPage,
+    requestNextPage,
   ]);
 
   // Generate announcement for screen readers
