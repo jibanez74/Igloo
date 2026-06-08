@@ -13,6 +13,7 @@ Igloo is intended to run on user-managed hardware, usually inside a private netw
 - `docs/`: OpenAPI documentation, FFmpeg notes, roadmap, and project notes.
 
 Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
+Once this repo hits beta status, two new repos will be created for the TV and mobile clients.
 
 ## Current Status
 
@@ -232,12 +233,12 @@ When omitted, those environment variables default to the local dev values shown 
 
 ### HLS Transcoding E2E Checks
 
-The Playwright HLS suite targets an already-running Igloo instance. On the first run, install Chromium with `bun x playwright install chromium`. Set the base URL, admin credentials, and two scanned movie IDs before running it. One movie must be a 4K source; the second must use a different transcode profile.
+The Playwright HLS suite targets an already-running Igloo instance. On the first run, install Chromium with `bun x playwright install chromium`. Set two scanned movie IDs before running it. One movie must be a 4K source; the second must use a different transcode profile. You can override the base URL and admin credentials when needed.
 
 ```bash
 cd web
-E2E_BASE_URL=http://localhost:8080 \
-E2E_ADMIN_EMAIL=admin@sample.com \
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
 E2E_ADMIN_PASSWORD=AdminPassword \
 E2E_HLS_4K_MOVIE_ID=1 \
 E2E_HLS_SECOND_MOVIE_ID=2 \
@@ -248,12 +249,12 @@ Optional overrides are `E2E_HLS_4K_PROFILE`, `E2E_HLS_SECOND_PROFILE`, `E2E_HLS_
 
 ### Watch Room E2E Checks
 
-The Playwright watch-room suite also targets an already-running Igloo instance. It logs in as an admin, creates a temporary guest user and direct-play watch room, drives two browser contexts through the real HTTP and WebSocket flow, and stubs only browser media playback.
+The Playwright watch-room suite also targets an already-running Igloo instance. It logs in as an admin, creates a temporary guest user and direct-play watch room, drives two browser contexts through the real HTTP and WebSocket flow, and stubs only browser media playback. You can override the base URL and admin credentials when needed.
 
 ```bash
 cd web
-E2E_BASE_URL=http://localhost:8080 \
-E2E_ADMIN_EMAIL=admin@sample.com \
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
 E2E_ADMIN_PASSWORD=AdminPassword \
 E2E_WATCH_ROOM_MOVIE_ID=1 \
 bun run test:e2e:watch-room

@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
 
+import { readE2EEnv, type E2EEnv } from "./e2e-env";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -25,9 +27,7 @@ type HlsCase = {
   minimumSourceHeight?: number;
 };
 
-type HlsEnv = {
-  email: string;
-  password: string;
+type HlsEnv = Pick<E2EEnv, "email" | "password"> & {
   audioTrack: number;
   responseTimeoutMs: number;
   cases: HlsCase[];
@@ -64,20 +64,19 @@ function profileEnv(name: string, fallback: HlsProfile): HlsProfile {
 }
 
 function readHlsEnv(): HlsEnv | null {
-  const email = process.env.E2E_ADMIN_EMAIL;
-  const password = process.env.E2E_ADMIN_PASSWORD;
+  const e2eEnv = readE2EEnv();
   const fourKMovieId = positiveIntEnv("E2E_HLS_4K_MOVIE_ID");
   const secondMovieId = positiveIntEnv("E2E_HLS_SECOND_MOVIE_ID");
   const fourKProfile = profileEnv("E2E_HLS_4K_PROFILE", "2160p_16mbps");
   const secondProfile = profileEnv("E2E_HLS_SECOND_PROFILE", "720p_3mbps");
 
-  if (!email || !password || !fourKMovieId || !secondMovieId) {
+  if (!fourKMovieId || !secondMovieId) {
     return null;
   }
 
   return {
-    email,
-    password,
+    email: e2eEnv.email,
+    password: e2eEnv.password,
     audioTrack: positiveIntEnv("E2E_HLS_AUDIO_TRACK", 0) ?? 0,
     responseTimeoutMs:
       positiveIntEnv("E2E_HLS_RESPONSE_TIMEOUT_MS", 240_000) ?? 240_000,
@@ -283,7 +282,7 @@ test.describe.configure({ mode: "serial" });
 test.describe("HLS transcoding playback", () => {
   test.skip(
     !hlsEnv,
-    "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_HLS_4K_MOVIE_ID, and E2E_HLS_SECOND_MOVIE_ID to run HLS e2e tests.",
+    "Set E2E_HLS_4K_MOVIE_ID and E2E_HLS_SECOND_MOVIE_ID to run HLS e2e tests.",
   );
   test.beforeEach(async ({ page }) => {
     await login(page, hlsEnv!);

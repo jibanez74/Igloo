@@ -1,15 +1,11 @@
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
   data?: T;
-};
-
-type HeadMetadataEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
 };
 
 const BOOTSTRAP_DESCRIPTION =
@@ -19,23 +15,11 @@ const MOVIES_DESCRIPTION =
 const SETTINGS_DESCRIPTION =
   "Configure your Igloo media center settings and preferences.";
 
-function readHeadMetadataEnv(): HeadMetadataEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@example.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: HeadMetadataEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
-
 async function readJSON<T>(response: APIResponse) {
   return (await response.json()) as ApiResponse<T>;
 }
 
-async function login(page: Page, env: HeadMetadataEnv) {
+async function login(page: Page, env: E2EEnv) {
   const loginResponse = await page.context().request.post(
     apiURL(env, "/api/auth/login"),
     {
@@ -65,7 +49,7 @@ async function readActiveHeadMetadata(page: Page) {
 test("restores bootstrap metadata on routes without page-specific head tags", async ({
   page,
 }) => {
-  const env = readHeadMetadataEnv();
+  const env = readE2EEnv();
 
   await login(page, env);
   await page.goto(apiURL(env, "/movies"), { waitUntil: "networkidle" });

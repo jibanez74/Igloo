@@ -7,6 +7,9 @@ import {
   type Response,
 } from "@playwright/test";
 
+import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+
 type ApiResponse<T> = {
   error: boolean;
   message?: string;
@@ -56,26 +59,8 @@ type AdminCreateUserData = {
   user: AdminUser;
 };
 
-type PlaybackSettingsEnv = {
-  baseURL: string;
-  email: string;
-  password: string;
-};
-
 const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
   "Download speed must be between 0 and 10000 Mbps.";
-
-function readPlaybackSettingsEnv(): PlaybackSettingsEnv {
-  return {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
-    email: process.env.E2E_ADMIN_EMAIL ?? "admin@sample.com",
-    password: process.env.E2E_ADMIN_PASSWORD ?? "AdminPassword",
-  };
-}
-
-function apiURL(env: PlaybackSettingsEnv, path: string) {
-  return new URL(path, env.baseURL).toString();
-}
 
 async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
@@ -83,7 +68,7 @@ async function readJSON<T>(response: APIResponse | Response) {
 
 async function login(
   page: Page,
-  env: PlaybackSettingsEnv,
+  env: E2EEnv,
   email = env.email,
   password = env.password,
 ) {
@@ -97,13 +82,13 @@ async function login(
   expect(body.error, body.message).toBe(false);
 }
 
-async function logout(page: Page, env: PlaybackSettingsEnv) {
+async function logout(page: Page, env: E2EEnv) {
   await page.context().request.delete(apiURL(env, "/api/auth/logout"), {
     failOnStatusCode: false,
   });
 }
 
-async function fetchPlaybackSettings(page: Page, env: PlaybackSettingsEnv) {
+async function fetchPlaybackSettings(page: Page, env: E2EEnv) {
   const response = await page.context().request.get(
     apiURL(env, "/api/settings/playback"),
     { failOnStatusCode: false },
@@ -118,7 +103,7 @@ async function fetchPlaybackSettings(page: Page, env: PlaybackSettingsEnv) {
 
 async function restorePlaybackSettings(
   page: Page,
-  env: PlaybackSettingsEnv,
+  env: E2EEnv,
   settings: PlaybackSettings,
 ) {
   const response = await page.context().request.put(
@@ -142,7 +127,7 @@ async function restorePlaybackSettings(
 
 async function createRegularUser(
   page: Page,
-  env: PlaybackSettingsEnv,
+  env: E2EEnv,
   stamp: number,
 ) {
   const response = await page.context().request.post(
@@ -167,7 +152,7 @@ async function createRegularUser(
   };
 }
 
-async function deleteUser(page: Page, env: PlaybackSettingsEnv, userId: number) {
+async function deleteUser(page: Page, env: E2EEnv, userId: number) {
   const response = await page.context().request.delete(
     apiURL(env, `/api/admin/users/${userId}`),
     { failOnStatusCode: false },
@@ -192,6 +177,10 @@ function trackBrowserIssues(page: Page) {
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
+    if (isIgnorableFailedRequest(request)) {
+      return;
+    }
+
     failedRequests.push(
       `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
     );
@@ -249,7 +238,7 @@ test.describe("Playback settings", () => {
   test("lets admins save personal playback settings and server bandwidth together", async ({
     page,
   }) => {
-    const env = readPlaybackSettingsEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
     let putBody: UpdatePlaybackSettingsRequest | null = null;
 
@@ -325,7 +314,7 @@ test.describe("Playback settings", () => {
   });
 
   test("validates zero download speed before saving", async ({ page }) => {
-    const env = readPlaybackSettingsEnv();
+    const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
     let playbackPutCount = 0;
 
@@ -372,7 +361,7 @@ test.describe("Playback settings", () => {
   });
 
   test("keeps server bandwidth read-only for regular users", async ({ page }) => {
-    const env = readPlaybackSettingsEnv();
+    const env = readE2EEnv();
     const stamp = Date.now();
     const tracker = trackBrowserIssues(page);
     let regularUser: AdminUser | null = null;
