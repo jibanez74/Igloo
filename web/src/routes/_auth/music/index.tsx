@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
@@ -35,10 +36,14 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import {
   ALBUMS_PER_PAGE,
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
   MUSICIANS_PER_PAGE,
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
@@ -98,21 +103,57 @@ export const Route = createFileRoute("/_auth/music/")({
 function MusicPage() {
   const navigate = Route.useNavigate();
   const { tab, albumsPage, musiciansPage, playlistsView, likedTracksPage } = Route.useSearch();
+  const { isExiting, runTransition, usesContentAnimation } =
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
+      enableViewTransition: false,
+    });
 
   // React 19 document metadata
   const pageTitle = "Music Library - Igloo";
   const pageDescription = "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+  let topLevelTabContent = (
+    <AlbumsTabContent currentPage={albumsPage} perPage={ALBUMS_PER_PAGE} />
+  );
+
+  if (tab === "musicians") {
+    topLevelTabContent = <MusiciansTabContent currentPage={musiciansPage} />;
+  }
+
+  if (tab === "tracks") {
+    topLevelTabContent = <TracksTabContent />;
+  }
+
+  if (tab === "playlists") {
+    topLevelTabContent = (
+      <PlaylistsTabContent
+        playlistsView={playlistsView}
+        likedTracksPage={likedTracksPage}
+      />
+    );
+  }
 
   // Handle tab change - update URL while preserving other params
-  const handleTabChange = (newTab: string) => 
-    navigate({
-      to: "/music",
-      search: (prev: MusicSearchParams) => ({
-        ...prev,
-        tab: newTab as MusicSearchParams["tab"],
-      }),
-      replace: true,
+  const handleTabChange = (newTab: string) => {
+    const nextTab = newTab as MusicSearchParams["tab"];
+
+    runTransition({
+      shouldAnimate: nextTab !== tab,
+      onTransition: () =>
+        navigate({
+          to: "/music",
+          search: (prev: MusicSearchParams) => ({
+            ...prev,
+            tab: nextTab,
+          }),
+          replace: true,
+        }),
     });
+  };
+
+  const topLevelTabPanelClassName = cn(
+    usesContentAnimation &&
+      (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+  );
 
   return (
     <div className="min-w-0">
@@ -179,23 +220,10 @@ function MusicPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="musicians" className="mt-5 sm:mt-6">
-          <MusiciansTabContent currentPage={musiciansPage} />
-        </TabsContent>
-
-        <TabsContent value="albums" className="mt-5 sm:mt-6">
-          <AlbumsTabContent
-            currentPage={albumsPage}
-            perPage={ALBUMS_PER_PAGE}
-          />
-        </TabsContent>
-
-        <TabsContent value="tracks" className="mt-5 sm:mt-6">
-          <TracksTabContent />
-        </TabsContent>
-
-        <TabsContent value="playlists" className="mt-5 sm:mt-6">
-          <PlaylistsTabContent playlistsView={playlistsView} likedTracksPage={likedTracksPage} />
+        <TabsContent value={tab} className="mt-5 sm:mt-6">
+          <div key={tab} className={topLevelTabPanelClassName}>
+            {topLevelTabContent}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

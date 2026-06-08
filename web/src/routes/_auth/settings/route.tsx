@@ -16,7 +16,6 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
-  SETTINGS_PAGE_VIEW_TRANSITION_NAME,
 } from "@/lib/constants";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { authUserGuardQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
@@ -69,8 +68,9 @@ function SettingsLayout() {
     isExiting,
     runTransition,
     usesContentAnimation,
-    usesViewTransition,
-  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
+  } = useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
+    enableViewTransition: false,
+  });
 
   const { visibleTabs, currentTab } = computeSettingsLayoutState({
     isAdmin,
@@ -90,9 +90,6 @@ function SettingsLayout() {
         navigate({
           to: tab.path,
           replace: true,
-          viewTransition: usesViewTransition
-            ? { types: [SETTINGS_PAGE_VIEW_TRANSITION_NAME] }
-            : undefined,
         }),
     });
   };
@@ -154,7 +151,6 @@ function SettingsLayout() {
                 usesContentAnimation &&
                   (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
               )}
-              style={{ viewTransitionName: SETTINGS_PAGE_VIEW_TRANSITION_NAME }}
             >
               <Outlet />
             </div>
