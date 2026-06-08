@@ -423,11 +423,11 @@ function TrailerPage() {
               aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
             >
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-all"
+                className="absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-[width] duration-150 ease-out motion-reduce:transition-none"
                 style={{ width: `${progress}%` }}
               />
               <div
-                className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+                className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 motion-reduce:transition-none"
                 style={{ left: `calc(${progress}% - 6px)` }}
               />
             </div>

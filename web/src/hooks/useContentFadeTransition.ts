@@ -5,10 +5,6 @@ type RunContentFadeTransitionArgs = {
   shouldAnimate?: boolean;
 };
 
-type UseContentFadeTransitionOptions = {
-  enableViewTransition?: boolean;
-};
-
 function getPrefersReducedMotion() {
   if (typeof window === "undefined") {
     return false;
@@ -19,19 +15,12 @@ function getPrefersReducedMotion() {
 
 export function useContentFadeTransition(
   transitionMs: number,
-  { enableViewTransition = true }: UseContentFadeTransitionOptions = {},
 ) {
   const exitTimerRef = useRef<number | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     getPrefersReducedMotion,
   );
-  const supportsViewTransition =
-    enableViewTransition &&
-    typeof document !== "undefined" &&
-    "startViewTransition" in document;
-  const usesViewTransition = supportsViewTransition && !prefersReducedMotion;
-  const usesContentAnimation = !usesViewTransition;
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {
@@ -73,7 +62,7 @@ export function useContentFadeTransition(
   }: RunContentFadeTransitionArgs) => {
     clearPendingTransition();
 
-    if (!shouldAnimate || supportsViewTransition || prefersReducedMotion) {
+    if (!shouldAnimate || prefersReducedMotion) {
       void onTransition();
       return;
     }
@@ -88,8 +77,7 @@ export function useContentFadeTransition(
 
   return {
     isExiting,
-    usesContentAnimation,
-    usesViewTransition,
+    usesContentAnimation: true,
     runTransition,
   };
 }

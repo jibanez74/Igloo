@@ -5,15 +5,39 @@ import {
   createMemoryHistory,
   createRouter,
 } from "@tanstack/react-router";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
-function jsonResponse(body: unknown) {
-  return Promise.resolve({
-    status: 200,
-    json: async () => body,
-  } as Response);
+const { audioPlayerActionsMock } = vi.hoisted(() => ({
+  audioPlayerActionsMock: {
+    playAlbum: vi.fn(),
+    playTrack: vi.fn(),
+  },
+}));
+
+vi.mock("@/hooks/useAudioPlayerActions", () => ({
+  useAudioPlayerActions: () => audioPlayerActionsMock,
+}));
+
+vi.mock("@/hooks/useAudioPlayerState", () => ({
+  useAudioPlayerState: () => ({
+    currentTrack: null,
+    isPlaying: false,
+  }),
+}));
+
+function jsonResponse(body: unknown, status = 200) {
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
 }
+
+const defaultMatchMedia = window.matchMedia;
 
 function createSearchQueryClient() {
   return new QueryClient({
@@ -54,6 +78,39 @@ function mockSearchFetch() {
       });
     }
 
+    if (url === "/api/search?q=Casino") {
+      return jsonResponse({
+        error: false,
+        data: {
+          query: "Casino",
+          movies: {
+            results: [
+              {
+                id: 7,
+                title: "Casino Royale",
+                poster_path: { String: "", Valid: false },
+                year: { Int64: 2006, Valid: true },
+                certification: { String: "PG-13", Valid: true },
+              },
+            ],
+            total: 1,
+          },
+          albums: {
+            results: [],
+            total: 0,
+          },
+          musicians: {
+            results: [],
+            total: 0,
+          },
+          tracks: {
+            results: [],
+            total: 0,
+          },
+        },
+      });
+    }
+
     if (url.startsWith("/api/search/movies?")) {
       return jsonResponse({
         error: false,
@@ -72,6 +129,28 @@ function mockSearchFetch() {
           page: 3,
           per_page: 24,
           total_pages: 3,
+        },
+      });
+    }
+
+    if (url === "/api/search/albums?q=Casino&page=1&per_page=24") {
+      return jsonResponse({
+        error: false,
+        data: {
+          query: "Casino",
+          results: [
+            {
+              id: 12,
+              title: "Casino Original Soundtrack",
+              cover: { String: "", Valid: false },
+              musician: { String: "Various Artists", Valid: true },
+              year: { Int64: 1995, Valid: true },
+            },
+          ],
+          total: 1,
+          page: 1,
+          per_page: 24,
+          total_pages: 1,
         },
       });
     }
@@ -113,6 +192,17 @@ async function renderSearchRoute(initialEntry: string) {
   return { fetchMock, router };
 }
 
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: defaultMatchMedia,
+  });
+});
+
 describe("search route", () => {
   it("shows the server-clamped page for overlarge requested pages", async () => {
     window.scrollTo = vi.fn();
@@ -132,6 +222,37 @@ describe("search route", () => {
           method: "GET",
         }),
       );
+    });
+  });
+
+  it("delays swapping from all results to albums until the fade-out completes", async () => {
+    window.scrollTo = vi.fn();
+    const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    await renderSearchRoute("/search/?q=Casino&tab=all");
+
+    expect(screen.getByText("Casino Royale")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Albums" }));
+
+    expect(screen.getByText("Casino Royale")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Casino Original Soundtrack"),
+    ).not.toBeInTheDocument();
+
+    const transitionCallIndex = setTimeoutSpy.mock.calls.findIndex(
+      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
+    );
+
+    expect(transitionCallIndex).toBeGreaterThanOrEqual(0);
+    expect(screen.getByText("Casino Royale")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Casino Original Soundtrack"),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("Casino Original Soundtrack")).toBeInTheDocument();
     });
   });
 });

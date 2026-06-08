@@ -268,12 +268,17 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 /** Key crew: max writing-department rows before "Show all crew" */
 export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 
-/**
- * tw-animate-css enter for library movie details (same family as MovieCard / AlbumCard).
- * Stagger with `delay-*` + `motion-reduce:delay-0` on wrappers.
- */
-export const MOVIE_DETAILS_CONTENT_ENTER_CLASS =
+// Shared motion classes
+export const DETAIL_PAGE_CONTENT_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+export const CARD_INTERACTIVE_SURFACE_CLASS =
+  "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
+export const CARD_MEDIA_HOVER_CLASS =
+  "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
+export const CARD_OVERLAY_REVEAL_CLASS =
+  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
+export const CARD_ACTION_REVEAL_CLASS =
+  "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 
 // Shared content fade transitions
 export const CONTENT_FADE_TRANSITION_MS = 200;
@@ -281,10 +286,6 @@ export const CONTENT_FADE_ENTER_CLASS =
   "animate-in fade-in-0 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100";
 export const CONTENT_FADE_EXIT_CLASS =
   "animate-out fade-out-0 fill-mode-both duration-200 ease-in motion-reduce:animate-none motion-reduce:opacity-100";
-
-// Settings page transitions
-export const SETTINGS_PAGE_VIEW_TRANSITION_NAME = "settings-page";
-export const MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME = "movies-tab-panel";
 
 // watch rooms
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;

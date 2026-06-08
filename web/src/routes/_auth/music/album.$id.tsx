@@ -39,7 +39,7 @@ import type {
 import MediaNotFound from "@/components/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/AlbumDetailsCoverBlock";
-import { MOVIE_DETAILS_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 function SpotifyGlyph({ className }: { className?: string }) {
@@ -80,7 +80,7 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
         aria-valuemax={100}
       >
         <div
-          className="h-full rounded-full bg-green-500 transition-[width]"
+          className="h-full rounded-full bg-green-500 transition-[width] duration-150 ease-out motion-reduce:transition-none"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -345,14 +345,14 @@ function AlbumDetailsContent({
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      <div className={cn(MOVIE_DETAILS_CONTENT_ENTER_CLASS)}>
+      <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
         <AlbumDetailsBackdrop coverUrl={coverUrl} albumTitle={album.title} />
       </div>
 
       <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
         <div
           className={cn(
-            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "delay-75 motion-reduce:delay-0",
           )}
         >
@@ -530,7 +530,7 @@ function AlbumDetailsContent({
 
         <div
           className={cn(
-            MOVIE_DETAILS_CONTENT_ENTER_CLASS,
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
             "space-y-8 delay-150 motion-reduce:delay-0 sm:space-y-10",
           )}
         >

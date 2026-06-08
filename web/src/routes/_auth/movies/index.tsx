@@ -37,7 +37,6 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
-  MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME,
   MOVIES_PER_PAGE,
 } from "@/lib/constants";
 import {
@@ -147,17 +146,12 @@ function MoviesPage() {
   const playlistsTabTriggerRef = useRef<HTMLButtonElement | null>(null);
   const playlistsFocusIntentRef = useRef<PlaylistsFocusIntent | null>(null);
   const { isExiting, runTransition, usesContentAnimation } =
-    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS, {
-      enableViewTransition: false,
-    });
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   const topLevelTabPanelClassName = cn(
     usesContentAnimation &&
       (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
   );
-  const topLevelTabPanelStyle = {
-    viewTransitionName: MOVIES_TAB_PANEL_VIEW_TRANSITION_NAME,
-  } as const;
   const primeEnterLikedFocus = () => {
     playlistsFocusIntentRef.current = "enter-liked-from-toolbar";
   };
@@ -302,11 +296,7 @@ function MoviesPage() {
         </TabsList>
 
         <TabsContent value={tab} className="mt-5 sm:mt-6">
-          <div
-            key={tab}
-            className={topLevelTabPanelClassName}
-            style={topLevelTabPanelStyle}
-          >
+          <div key={tab} className={topLevelTabPanelClassName}>
             {topLevelTabContent}
           </div>
         </TabsContent>

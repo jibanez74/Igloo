@@ -483,7 +483,7 @@ export default function AudioPlayer({
           aria-label={`Now playing: ${track.title} by ${artist}`}
           onKeyDown={handleExpandedKeyDown}
           className="fixed inset-0 z-50 flex animate-in flex-col bg-linear-to-b from-slate-900 via-slate-800
-            to-slate-900 duration-300 zoom-in-95 fade-in slide-in-from-bottom-2"
+            to-slate-900 duration-200 zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
         >
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {announcement}
@@ -612,13 +612,13 @@ export default function AudioPlayer({
           role="region"
           aria-label="Audio player"
           className="fixed inset-x-0 bottom-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
-            backdrop-blur-lg duration-300 fade-in slide-in-from-bottom"
+            backdrop-blur-lg duration-200 fade-in slide-in-from-bottom motion-reduce:animate-none"
         >
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex items-center gap-4">
               <button
                 onClick={onExpand}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity duration-150 hover:opacity-80 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none motion-reduce:transition-none"
                 aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
               >
                 <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg">

@@ -9,6 +9,7 @@ import MovieCard from "@/components/MovieCard";
 import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
 import TrackItem from "@/components/TrackItem";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -25,7 +26,13 @@ import {
   searchMusiciansQueryOpts,
   searchTracksQueryOpts,
 } from "@/lib/query-opts";
-import { SEARCH_PER_PAGE } from "@/lib/constants";
+import {
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
+  SEARCH_PER_PAGE,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type {
   MoviesLibraryListItemType,
   SearchTab,
@@ -43,17 +50,26 @@ function SearchPage() {
   const navigate = Route.useNavigate();
   const { q, tab, page } = Route.useSearch();
   const trimmed = q.trim();
+  const { isExiting, runTransition, usesContentAnimation } =
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
-  const handleTabChange = (newTab: string) =>
-    navigate({
-      to: "/search",
-      search: (prev: SearchParams) => ({
-        ...prev,
-        tab: newTab as SearchTab,
-        page: 1,
-      }),
-      replace: true,
+  const handleTabChange = (newTab: string) => {
+    const nextTab = newTab as SearchTab;
+
+    runTransition({
+      shouldAnimate: nextTab !== tab,
+      onTransition: () =>
+        navigate({
+          to: "/search",
+          search: (prev: SearchParams) => ({
+            ...prev,
+            tab: nextTab,
+            page: 1,
+          }),
+          replace: true,
+        }),
     });
+  };
 
   if (!trimmed) {
     return (
@@ -75,6 +91,29 @@ function SearchPage() {
       </div>
     );
   }
+
+  let topLevelTabContent = <AllResultsTab q={trimmed} />;
+
+  if (tab === "movies") {
+    topLevelTabContent = <MoviesResultsTab q={trimmed} page={page} />;
+  }
+
+  if (tab === "albums") {
+    topLevelTabContent = <AlbumsResultsTab q={trimmed} page={page} />;
+  }
+
+  if (tab === "musicians") {
+    topLevelTabContent = <MusiciansResultsTab q={trimmed} page={page} />;
+  }
+
+  if (tab === "tracks") {
+    topLevelTabContent = <TracksResultsTab q={trimmed} page={page} />;
+  }
+
+  const topLevelTabPanelClassName = cn(
+    usesContentAnimation &&
+      (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+  );
 
   return (
     <div className="min-w-0">
@@ -131,20 +170,10 @@ function SearchPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-5 sm:mt-6">
-          <AllResultsTab q={trimmed} />
-        </TabsContent>
-        <TabsContent value="movies" className="mt-5 sm:mt-6">
-          <MoviesResultsTab q={trimmed} page={page} />
-        </TabsContent>
-        <TabsContent value="albums" className="mt-5 sm:mt-6">
-          <AlbumsResultsTab q={trimmed} page={page} />
-        </TabsContent>
-        <TabsContent value="musicians" className="mt-5 sm:mt-6">
-          <MusiciansResultsTab q={trimmed} page={page} />
-        </TabsContent>
-        <TabsContent value="tracks" className="mt-5 sm:mt-6">
-          <TracksResultsTab q={trimmed} page={page} />
+        <TabsContent value={tab} className="mt-5 sm:mt-6">
+          <div key={tab} className={topLevelTabPanelClassName}>
+            {topLevelTabContent}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

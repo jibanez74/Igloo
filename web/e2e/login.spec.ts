@@ -418,7 +418,7 @@ test.describe("Login screen", () => {
     context,
   }) => {
     const env = readE2EEnv();
-    const tracker = trackBrowserIssues(page);
+    let tracker = trackBrowserIssues(page);
 
     await logout(context, env);
     await page.goto(apiURL(env, "/login"), {
@@ -433,12 +433,15 @@ test.describe("Login screen", () => {
     expect(loginBody.error, loginBody.message).toBe(false);
 
     await expectAppPath(page, env, "/");
+    await page.waitForLoadState("networkidle");
     await expectAuthenticated(context, env);
+    tracker.assertClean();
 
     await logout(context, env);
     await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
       waitUntil: "networkidle",
     });
+    tracker = trackBrowserIssues(page);
     await expectLoginControls(page);
 
     const safeRedirectLoginResponse = await submitLogin(
@@ -450,6 +453,7 @@ test.describe("Login screen", () => {
 
     await expectAppPath(page, env, "/settings/account");
     await expectAuthenticated(context, env);
+    tracker.assertClean();
 
     await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
       waitUntil: "networkidle",
@@ -460,6 +464,7 @@ test.describe("Login screen", () => {
     await page.goto(apiURL(env, "/login?redirect=https://example.com"), {
       waitUntil: "networkidle",
     });
+    tracker = trackBrowserIssues(page);
     await expectLoginControls(page);
 
     const unsafeRedirectLoginResponse = await submitLogin(
@@ -469,6 +474,7 @@ test.describe("Login screen", () => {
     );
     expect(unsafeRedirectLoginResponse.status()).toBe(200);
     await expectAppPath(page, env, "/");
+    await page.waitForLoadState("networkidle");
 
     expect(new URL(page.url()).origin).toBe(new URL(env.baseURL).origin);
     await expectAuthenticated(context, env);

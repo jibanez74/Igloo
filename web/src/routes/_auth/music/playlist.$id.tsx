@@ -41,10 +41,12 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { formatDuration } from "@/lib/format";
 import {
+  DETAIL_PAGE_CONTENT_ENTER_CLASS,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { PlaylistTrackType } from "@/types";
 
 export const Route = createFileRoute("/_auth/music/playlist/$id")({
@@ -257,7 +259,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   return (
     <article
-      className="w-full min-w-0 animate-in overflow-x-hidden pb-6 duration-300 fade-in sm:pb-10"
+      className={cn(
+        DETAIL_PAGE_CONTENT_ENTER_CLASS,
+        "w-full min-w-0 overflow-x-hidden pb-6 sm:pb-10",
+      )}
       aria-labelledby="playlist-name"
     >
       {/* React 19 Document Metadata */}

@@ -1,9 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { ListMusic } from "lucide-react";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+} from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import type { PlaylistSummaryType } from "@/types";
 import { formatDuration } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 type PlaylistCardProps = {
   playlist: PlaylistSummaryType;
@@ -15,7 +20,12 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
   const coverUrl = getMediaImageUrl(unwrapString(cover_image));
 
   return (
-    <article className="group relative animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20">
+    <article
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+      )}
+    >
       <Link
         to="/music/playlist/$id"
         params={{ id: id.toString() }}
@@ -28,7 +38,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
             <img
               src={coverUrl}
               alt={name}
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
             <div className="flex size-full items-center justify-center bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/30">

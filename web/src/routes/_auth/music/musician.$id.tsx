@@ -20,6 +20,12 @@ import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import TrackItem from "@/components/TrackItem";
 import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  DETAIL_PAGE_CONTENT_ENTER_CLASS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type {
   MusicianAlbumType,
   MusicianDetailsResponseType,
@@ -174,7 +180,10 @@ function MusicianDetailsContent({
 
   return (
     <article
-      className="w-full min-w-0 animate-in overflow-x-hidden pb-6 duration-300 fade-in sm:pb-10"
+      className={cn(
+        DETAIL_PAGE_CONTENT_ENTER_CLASS,
+        "w-full min-w-0 overflow-x-hidden pb-6 sm:pb-10",
+      )}
       aria-labelledby="musician-name"
     >
       {/* React 19 Document Metadata */}
@@ -398,13 +407,14 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
   const year = unwrapInt(album.year);
 
   return (
-    <article className="group animate-in duration-300 fade-in">
+    <article className="group">
       <Link
         to="/music/album/$id"
         params={{ id: album.id.toString() }}
-        className="block overflow-hidden rounded-lg border border-slate-800 bg-slate-900 transition-all
-          hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20
-          focus:border-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        className={cn(
+          CARD_INTERACTIVE_SURFACE_CLASS,
+          "block overflow-hidden rounded-lg border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20 focus:border-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+        )}
         aria-label={`${album.title}${year ? `, ${year}` : ""}, ${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`}
       >
         {/* Album cover */}
@@ -413,7 +423,7 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
             <img
               src={coverUrl}
               alt={album.title}
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

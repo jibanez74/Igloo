@@ -3,9 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 
 const defaultMatchMedia = window.matchMedia;
-const originalStartViewTransition = (document as Document & {
-  startViewTransition?: unknown;
-}).startViewTransition;
 
 type MatchMediaChangeListener = () => void;
 
@@ -66,22 +63,19 @@ function createReducedMotionController(initialMatches: boolean) {
 }
 
 type HookHarnessProps = {
-  enableViewTransition?: boolean;
   onTransition: () => void;
   transitionMs?: number;
 };
 
 function HookHarness({
-  enableViewTransition = true,
   onTransition,
   transitionMs = 150,
 }: HookHarnessProps) {
   const {
     isExiting,
     usesContentAnimation,
-    usesViewTransition,
     runTransition,
-  } = useContentFadeTransition(transitionMs, { enableViewTransition });
+  } = useContentFadeTransition(transitionMs);
 
   return (
     <div>
@@ -89,7 +83,6 @@ function HookHarness({
       <div data-testid="uses-content-animation">
         {String(usesContentAnimation)}
       </div>
-      <div data-testid="uses-view-transition">{String(usesViewTransition)}</div>
       <button
         type="button"
         onClick={() => {
@@ -103,40 +96,27 @@ function HookHarness({
 }
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: defaultMatchMedia,
   });
-
-  if (originalStartViewTransition === undefined) {
-    delete (document as Document & { startViewTransition?: unknown })
-      .startViewTransition;
-  } else {
-    Object.defineProperty(document, "startViewTransition", {
-      configurable: true,
-      writable: true,
-      value: originalStartViewTransition,
-    });
-  }
 });
 
 describe("useContentFadeTransition", () => {
-  it("delays the transition when reduced motion is off and view transitions are disabled", async () => {
+  it("delays the transition when reduced motion is off", async () => {
     const reducedMotion = createReducedMotionController(false);
     const onTransition = vi.fn();
 
     vi.useFakeTimers();
 
     render(
-      <HookHarness
-        enableViewTransition={false}
-        onTransition={onTransition}
-        transitionMs={150}
-      />,
+      <HookHarness onTransition={onTransition} transitionMs={150} />,
     );
 
     expect(screen.getByTestId("uses-content-animation")).toHaveTextContent("true");
-    expect(screen.getByTestId("uses-view-transition")).toHaveTextContent("false");
     expect(reducedMotion.addEventListener).toHaveBeenCalledWith(
       "change",
       expect.any(Function),
@@ -166,11 +146,7 @@ describe("useContentFadeTransition", () => {
     const onTransition = vi.fn();
 
     render(
-      <HookHarness
-        enableViewTransition={false}
-        onTransition={onTransition}
-        transitionMs={150}
-      />,
+      <HookHarness onTransition={onTransition} transitionMs={150} />,
     );
 
     act(() => {
@@ -181,28 +157,6 @@ describe("useContentFadeTransition", () => {
 
     expect(onTransition).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("is-exiting")).toHaveTextContent("false");
-  });
-
-  it("switches away from view transitions when reduced motion changes at runtime", () => {
-    const reducedMotion = createReducedMotionController(false);
-    Object.defineProperty(document, "startViewTransition", {
-      configurable: true,
-      writable: true,
-      value: vi.fn(),
-    });
-    const onTransition = vi.fn();
-
-    render(<HookHarness onTransition={onTransition} transitionMs={150} />);
-
-    expect(screen.getByTestId("uses-view-transition")).toHaveTextContent("true");
-    expect(screen.getByTestId("uses-content-animation")).toHaveTextContent("false");
-
-    act(() => {
-      reducedMotion.setMatches(true);
-    });
-
-    expect(screen.getByTestId("uses-view-transition")).toHaveTextContent("false");
-    expect(screen.getByTestId("uses-content-animation")).toHaveTextContent("true");
   });
 
   it("cleans up the reduced-motion listener on unmount", () => {

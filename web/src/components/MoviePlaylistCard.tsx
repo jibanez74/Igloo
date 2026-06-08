@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { ListVideo } from "lucide-react";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+} from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { cn } from "@/lib/utils";
 import type { MoviePlaylistSummaryType } from "@/types";
 
 type MoviePlaylistCardProps = {
@@ -14,7 +19,12 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
   const movieNoun = movie_count === 1 ? "movie" : "movies";
 
   return (
-    <article className="group relative min-w-0 animate-in overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-300 fade-in hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20">
+    <article
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group relative min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+      )}
+    >
       <Link
         to="/movies/playlist/$id"
         params={{ id: id.toString() }}
@@ -26,7 +36,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
             <img
               src={coverUrl}
               alt=""
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
             <div className="flex size-full items-center justify-center bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/20">

@@ -56,7 +56,7 @@ export default function MoviePlayerControls({
     <footer
       className={
         chromeFullscreenMode
-          ? `absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-all duration-300 ease-out ${
+          ? `absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${
               controlsVisible
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none translate-y-full opacity-0"

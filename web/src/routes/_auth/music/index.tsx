@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
+import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
@@ -35,10 +36,14 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import {
   ALBUMS_PER_PAGE,
+  CONTENT_FADE_ENTER_CLASS,
+  CONTENT_FADE_EXIT_CLASS,
+  CONTENT_FADE_TRANSITION_MS,
   MUSICIANS_PER_PAGE,
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 import AlbumCard from "@/components/AlbumCard";
 import MusicianCard from "@/components/MusicianCard";
@@ -98,21 +103,55 @@ export const Route = createFileRoute("/_auth/music/")({
 function MusicPage() {
   const navigate = Route.useNavigate();
   const { tab, albumsPage, musiciansPage, playlistsView, likedTracksPage } = Route.useSearch();
+  const { isExiting, runTransition, usesContentAnimation } =
+    useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
   // React 19 document metadata
   const pageTitle = "Music Library - Igloo";
   const pageDescription = "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+  let topLevelTabContent = (
+    <AlbumsTabContent currentPage={albumsPage} perPage={ALBUMS_PER_PAGE} />
+  );
+
+  if (tab === "musicians") {
+    topLevelTabContent = <MusiciansTabContent currentPage={musiciansPage} />;
+  }
+
+  if (tab === "tracks") {
+    topLevelTabContent = <TracksTabContent />;
+  }
+
+  if (tab === "playlists") {
+    topLevelTabContent = (
+      <PlaylistsTabContent
+        playlistsView={playlistsView}
+        likedTracksPage={likedTracksPage}
+      />
+    );
+  }
 
   // Handle tab change - update URL while preserving other params
-  const handleTabChange = (newTab: string) => 
-    navigate({
-      to: "/music",
-      search: (prev: MusicSearchParams) => ({
-        ...prev,
-        tab: newTab as MusicSearchParams["tab"],
-      }),
-      replace: true,
+  const handleTabChange = (newTab: string) => {
+    const nextTab = newTab as MusicSearchParams["tab"];
+
+    runTransition({
+      shouldAnimate: nextTab !== tab,
+      onTransition: () =>
+        navigate({
+          to: "/music",
+          search: (prev: MusicSearchParams) => ({
+            ...prev,
+            tab: nextTab,
+          }),
+          replace: true,
+        }),
     });
+  };
+
+  const topLevelTabPanelClassName = cn(
+    usesContentAnimation &&
+      (isExiting ? CONTENT_FADE_EXIT_CLASS : CONTENT_FADE_ENTER_CLASS),
+  );
 
   return (
     <div className="min-w-0">
@@ -179,23 +218,10 @@ function MusicPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="musicians" className="mt-5 sm:mt-6">
-          <MusiciansTabContent currentPage={musiciansPage} />
-        </TabsContent>
-
-        <TabsContent value="albums" className="mt-5 sm:mt-6">
-          <AlbumsTabContent
-            currentPage={albumsPage}
-            perPage={ALBUMS_PER_PAGE}
-          />
-        </TabsContent>
-
-        <TabsContent value="tracks" className="mt-5 sm:mt-6">
-          <TracksTabContent />
-        </TabsContent>
-
-        <TabsContent value="playlists" className="mt-5 sm:mt-6">
-          <PlaylistsTabContent playlistsView={playlistsView} likedTracksPage={likedTracksPage} />
+        <TabsContent value={tab} className="mt-5 sm:mt-6">
+          <div key={tab} className={topLevelTabPanelClassName}>
+            {topLevelTabContent}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
@@ -438,13 +464,19 @@ function TracksTabContent() {
 
   // Ref to measure offset from top of page for scrollMargin
   const listRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const isFetchingNextRef = useRef(false);
+  const [intersectionRoot, setIntersectionRoot] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   // Measure scroll margin after mount
   useEffect(() => {
-    if (listRef.current) {
-      setScrollMargin(listRef.current.offsetTop);
-    }
+    const listElement = listRef.current;
+    if (!listElement) return;
+
+    const parent = findScrollParent(listElement);
+    setIntersectionRoot(parent);
+    setScrollMargin(listElement.offsetTop);
   }, []);
 
   // Get total tracks count from first page
@@ -479,6 +511,62 @@ function TracksTabContent() {
   // Get virtual items for dependency tracking
   const renderedVirtualItems = virtualizer.getVirtualItems();
 
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, virtualItems.length]);
+
+  useEffect(() => {
+    if (!isFetchingNextPage) {
+      isFetchingNextRef.current = false;
+    }
+  }, [isFetchingNextPage]);
+
+  const requestNextPage = useCallback(() => {
+    if (isFetchingNextRef.current || isFetchingNextPage || !hasNextPage) {
+      return;
+    }
+
+    isFetchingNextRef.current = true;
+    void fetchNextPage().finally(() => {
+      isFetchingNextRef.current = false;
+    });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (
+      !target ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isFetchingNextRef.current ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          requestNextPage();
+        }
+      },
+      {
+        root: intersectionRoot === document.documentElement ? null : intersectionRoot,
+        rootMargin: "800px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [
+    hasNextPage,
+    intersectionRoot,
+    isFetchingNextPage,
+    requestNextPage,
+    virtualItems.length,
+  ]);
+
   // Trigger infinite scroll when near the end
   useEffect(() => {
     if (renderedVirtualItems.length === 0) return;
@@ -489,16 +577,17 @@ function TracksTabContent() {
       lastItem &&
       lastItem.index >= virtualItems.length - 10 &&
       hasNextPage &&
-      !isFetchingNextPage
+      !isFetchingNextPage &&
+      !isFetchingNextRef.current
     ) {
-      fetchNextPage();
+      requestNextPage();
     }
   }, [
     renderedVirtualItems,
     virtualItems.length,
     hasNextPage,
     isFetchingNextPage,
-    fetchNextPage,
+    requestNextPage,
   ]);
 
   // Generate announcement for screen readers
@@ -544,6 +633,8 @@ function TracksTabContent() {
       <div
         ref={listRef}
         className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
+        role="list"
+        aria-label="Tracks"
       >
         <div
           style={{
@@ -560,6 +651,9 @@ function TracksTabContent() {
             return (
               <div
                 key={virtualRow.key}
+                role={item.type === "track" ? "listitem" : undefined}
+                aria-posinset={item.type === "track" ? item.trackIndex : undefined}
+                aria-setsize={item.type === "track" ? totalTracks : undefined}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -577,6 +671,18 @@ function TracksTabContent() {
               </div>
             );
           })}
+
+          <div
+            ref={loadMoreRef}
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: `${virtualizer.getTotalSize() - 1}px`,
+              width: "100%",
+              height: "1px",
+            }}
+          />
         </div>
 
         {isFetchingNextPage && (
@@ -657,9 +763,32 @@ function ShuffleButton() {
   );
 }
 
+function findScrollParent(element: HTMLElement) {
+  let parent = element.parentElement;
+
+  while (parent) {
+    const { overflowY } = window.getComputedStyle(parent);
+
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return parent;
+    }
+
+    parent = parent.parentElement;
+  }
+
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : document.documentElement;
+}
+
 function LetterHeader({ letter }: { letter: string }) {
   return (
-    <div className="animate-in border-b border-amber-500/20 bg-slate-800/50 px-4 py-3 duration-300 fade-in">
+    <div
+      className="border-b border-amber-500/20 bg-slate-800/50 px-4 py-3"
+      role="heading"
+      aria-level={3}
+      aria-label={`Tracks starting with ${letter}`}
+    >
       <span className="text-2xl font-bold text-amber-400">{letter}</span>
     </div>
   );
@@ -715,7 +844,7 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
   const items: VirtualItem[] = [];
   let currentLetter: string | null = null;
 
-  for (const track of tracks) {
+  tracks.forEach((track, index) => {
     const firstChar = track.title.charAt(0).toUpperCase();
     const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
 
@@ -725,8 +854,8 @@ function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {
       currentLetter = letter;
     }
 
-    items.push({ type: "track", track });
-  }
+    items.push({ type: "track", track, trackIndex: index + 1 });
+  });
 
   return items;
 }
