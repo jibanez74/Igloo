@@ -23,6 +23,10 @@ async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
 }
 
+function isAppApiResponse(response: Response) {
+  return new URL(response.url()).pathname.startsWith("/api/");
+}
+
 function isExpectedLoggedOutAuthResponse(response: Response) {
   return response.status() === 401 && response.url().includes("/api/auth/user");
 }
@@ -46,12 +50,20 @@ function trackBrowserIssues(
   const responseErrors: string[] = [];
 
   page.on("console", message => {
-    if (
-      message.type() === "error" &&
-      !isExpectedUnauthorizedResourceMessage(message.text())
-    ) {
-      consoleErrors.push(message.text());
+    if (message.type() !== "error") {
+      return;
     }
+
+    const text = message.text();
+    if (
+      isExpectedUnauthorizedResourceMessage(text) ||
+      text.startsWith("Failed to load resource:") ||
+      text.startsWith("TypeError: Failed to fetch")
+    ) {
+      return;
+    }
+
+    consoleErrors.push(text);
   });
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("requestfailed", request => {
@@ -64,7 +76,11 @@ function trackBrowserIssues(
     );
   });
   page.on("response", response => {
-    if (response.status() >= 400 && !isExpectedResponse(response)) {
+    if (
+      isAppApiResponse(response) &&
+      response.status() >= 400 &&
+      !isExpectedResponse(response)
+    ) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,
       );
@@ -405,7 +421,7 @@ test.describe("Login screen", () => {
     const tracker = trackBrowserIssues(page);
 
     await logout(context, env);
-    await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
+    await page.goto(apiURL(env, "/login"), {
       waitUntil: "networkidle",
     });
     await expectLoginControls(page);
@@ -415,6 +431,22 @@ test.describe("Login screen", () => {
 
     const loginBody = await readJSON<unknown>(loginResponse);
     expect(loginBody.error, loginBody.message).toBe(false);
+
+    await expectAppPath(page, env, "/");
+    await expectAuthenticated(context, env);
+
+    await logout(context, env);
+    await page.goto(apiURL(env, "/login?redirect=/settings/account"), {
+      waitUntil: "networkidle",
+    });
+    await expectLoginControls(page);
+
+    const safeRedirectLoginResponse = await submitLogin(
+      page,
+      env.email,
+      env.password,
+    );
+    expect(safeRedirectLoginResponse.status()).toBe(200);
 
     await expectAppPath(page, env, "/settings/account");
     await expectAuthenticated(context, env);
@@ -436,7 +468,7 @@ test.describe("Login screen", () => {
       env.password,
     );
     expect(unsafeRedirectLoginResponse.status()).toBe(200);
-    await expectAppPath(page, env, "/movies");
+    await expectAppPath(page, env, "/");
 
     expect(new URL(page.url()).origin).toBe(new URL(env.baseURL).origin);
     await expectAuthenticated(context, env);

@@ -5,8 +5,8 @@ import { getSafeRedirect } from "@/lib/redirect-utils";
 
 const loginSearchValidator = z.object({
   redirect: z.pipe(
-    z._default(z.catch(z.string(), "/movies"), "/movies"),
-    z.transform((url: string) => getSafeRedirect(url, "/movies")),
+    z._default(z.catch(z.string(), "/"), "/"),
+    z.transform((url: string) => getSafeRedirect(url, "/")),
   ),
 });
 

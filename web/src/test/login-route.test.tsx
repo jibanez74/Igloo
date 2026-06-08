@@ -244,13 +244,13 @@ describe("login route redirects", () => {
     expect(await screen.findByText("Theater Fresh")).toBeInTheDocument();
   });
 
-  it("navigates to Movies after login when no explicit redirect is provided", async () => {
+  it("navigates to Home after login when no explicit redirect is provided", async () => {
     const { router } = await renderLoginRoute("/login");
 
     await signIn();
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/movies");
+      expect(router.state.location.pathname).toBe("/");
     });
     expect(toastMocks.showSuccess).toHaveBeenCalledWith(
       "Welcome back!",
@@ -267,6 +267,18 @@ describe("login route redirects", () => {
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/settings/account");
+    });
+  });
+
+  it("falls back to Home after login when redirect is unsafe", async () => {
+    const { router } = await renderLoginRoute(
+      "/login?redirect=https://example.com",
+    );
+
+    await signIn();
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
     });
   });
 
