@@ -58,13 +58,27 @@ async function expectGenresSmoke(page: Page) {
   const emptyState = genresPanel.getByText(
     "No genres with movies in your library yet.",
   );
+  const genresList = genresPanel.getByRole("list", { name: "Movie genres" });
+
+  await expect
+    .poll(async () => {
+      if (await emptyState.isVisible()) {
+        return "empty";
+      }
+
+      if (await genresList.isVisible()) {
+        return "populated";
+      }
+
+      return "loading";
+    })
+    .not.toBe("loading");
 
   if (await emptyState.isVisible()) {
     await expect(emptyState).toBeVisible();
     return;
   }
 
-  const genresList = genresPanel.getByRole("list", { name: "Movie genres" });
   await expect(genresList).toBeVisible();
   await expect(genresList.getByRole("button").first()).toBeVisible();
 }
@@ -92,13 +106,28 @@ async function expectPlaylistsSmoke(page: Page) {
   const emptyPlaylistsHeading = playlistsPanel.getByRole("heading", {
     name: "No movie playlists yet",
   });
+  const firstPlaylistLink = playlistsPanel
+    .locator('a[href^="/movies/playlist/"]')
+    .first();
+
+  await expect
+    .poll(async () => {
+      if (await emptyPlaylistsHeading.isVisible()) {
+        return "empty";
+      }
+
+      if (await firstPlaylistLink.isVisible()) {
+        return "populated";
+      }
+
+      return "loading";
+    })
+    .not.toBe("loading");
 
   if (await emptyPlaylistsHeading.isVisible()) {
     await expect(emptyPlaylistsHeading).toBeVisible();
   } else {
-    await expect(
-      playlistsPanel.locator('a[href^="/movies/playlist/"]').first(),
-    ).toBeVisible();
+    await expect(firstPlaylistLink).toBeVisible();
   }
 
   await likedMoviesButton.click();
@@ -118,11 +147,28 @@ async function expectPlaylistsSmoke(page: Page) {
   const likedEmptyState = playlistsPanel.getByText(
     "You have not liked any movies yet.",
   );
+  const firstLikedMovieLink = playlistsPanel
+    .locator('a[href^="/movies/"]')
+    .first();
+
+  await expect
+    .poll(async () => {
+      if (await likedEmptyState.isVisible()) {
+        return "empty";
+      }
+
+      if (await firstLikedMovieLink.isVisible()) {
+        return "populated";
+      }
+
+      return "loading";
+    })
+    .not.toBe("loading");
 
   if (await likedEmptyState.isVisible()) {
     await expect(likedEmptyState).toBeVisible();
   } else {
-    await expect(playlistsPanel.locator('a[href^="/movies/"]').first()).toBeVisible();
+    await expect(firstLikedMovieLink).toBeVisible();
   }
 
   await backToPlaylistsButton.click();
