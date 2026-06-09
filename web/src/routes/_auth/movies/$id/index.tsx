@@ -119,7 +119,13 @@ function MovieDetailsPage() {
     );
   }
 
-  return <LibraryMovieDetailsContent movieId={movieId} payload={payload} />;
+  return (
+    <LibraryMovieDetailsContent
+      key={movieId}
+      movieId={movieId}
+      payload={payload}
+    />
+  );
 }
 
 function LibraryMovieDetailsContent({
