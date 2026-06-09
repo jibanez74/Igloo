@@ -31,6 +31,14 @@ type AudioPlayerProps = {
   isKeyboardSuspended?: boolean;
 };
 
+function mediaSessionSupported() {
+  return (
+    typeof navigator !== "undefined" &&
+    "mediaSession" in navigator &&
+    typeof navigator.mediaSession?.setPositionState === "function"
+  );
+}
+
 export default function AudioPlayer({
   track,
   tracks,
@@ -130,7 +138,13 @@ export default function AudioPlayer({
   };
 
   useEffect(() => {
-    if (!track || !("mediaSession" in navigator)) return;
+    if (
+      !track ||
+      !("mediaSession" in navigator) ||
+      typeof MediaMetadata === "undefined"
+    ) {
+      return;
+    }
 
     const artworkUrl = albumCover
       ? albumCover.startsWith("http")
@@ -252,15 +266,32 @@ export default function AudioPlayer({
   }, [audioRef, track]);
 
   const syncMediaSessionPosition = useEffectEvent((audio: HTMLAudioElement) => {
-    if (!("mediaSession" in navigator) || audio.duration <= 0) {
+    if (!mediaSessionSupported()) {
       return;
     }
 
-    navigator.mediaSession.setPositionState({
-      duration: audio.duration,
-      playbackRate: audio.playbackRate,
-      position: audio.currentTime,
-    });
+    const audioDuration = audio.duration;
+    if (!Number.isFinite(audioDuration) || audioDuration <= 0) {
+      return;
+    }
+
+    const currentPosition = Number.isFinite(audio.currentTime)
+      ? audio.currentTime
+      : 0;
+    const playbackRate =
+      Number.isFinite(audio.playbackRate) && audio.playbackRate > 0
+        ? audio.playbackRate
+        : 1;
+
+    try {
+      navigator.mediaSession.setPositionState?.({
+        duration: audioDuration,
+        playbackRate,
+        position: Math.max(0, Math.min(currentPosition, audioDuration)),
+      });
+    } catch {
+      // Some browsers expose Media Session but reject position updates.
+    }
   });
 
   const handleAudioPlay = useEffectEvent(() => {

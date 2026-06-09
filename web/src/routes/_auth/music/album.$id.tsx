@@ -140,7 +140,7 @@ function AlbumDetailsPage() {
     );
   }
 
-  return <AlbumDetailsContent {...data.data} />;
+  return <AlbumDetailsContent key={albumId} {...data.data} />;
 }
 
 function AlbumDetailsSkeleton() {
