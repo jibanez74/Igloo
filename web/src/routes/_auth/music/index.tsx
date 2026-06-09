@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { z } from "zod/mini";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
+import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
@@ -43,6 +44,10 @@ import {
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+import {
+  getOffsetWithinScrollContainer,
+  observeElementRectWithWindowFallback,
+} from "@/lib/scroll-container";
 import { cn } from "@/lib/utils";
 
 import AlbumCard from "@/components/AlbumCard";
@@ -458,26 +463,15 @@ function TracksTabContent() {
     useInfiniteQuery(tracksInfiniteQueryOpts());
 
   const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
+  const scrollContainer = useAppShellScrollContainer();
   const likedSet = new Set<number>(
     likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
   );
 
-  // Ref to measure offset from top of page for scrollMargin
   const listRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const isFetchingNextRef = useRef(false);
-  const [intersectionRoot, setIntersectionRoot] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-
-  // Measure scroll margin after mount
-  useEffect(() => {
-    const listElement = listRef.current;
-    if (!listElement) return;
-
-    const parent = findScrollParent(listElement);
-    setIntersectionRoot(parent);
-    setScrollMargin(listElement.offsetTop);
-  }, []);
 
   // Get total tracks count from first page
   const totalTracks =
@@ -492,9 +486,44 @@ function TracksTabContent() {
   // Convert to virtual items (tracks + letter headers)
   const virtualItems = flattenToVirtualItems(allTracks);
 
-  // Window virtualizer for efficient rendering
-  const virtualizer = useWindowVirtualizer({
+  useEffect(() => {
+    const listElement = listRef.current;
+    if (!listElement || !scrollContainer) {
+      return;
+    }
+
+    const updateScrollMargin = () => {
+      setScrollMargin(
+        getOffsetWithinScrollContainer(listElement, scrollContainer),
+      );
+    };
+
+    updateScrollMargin();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollMargin);
+
+    resizeObserver?.observe(listElement);
+    resizeObserver?.observe(scrollContainer);
+    window.addEventListener("resize", updateScrollMargin);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollMargin);
+    };
+  }, [scrollContainer, virtualItems.length]);
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
     count: virtualItems.length,
+    getScrollElement: () => scrollContainer,
+    initialRect: {
+      width: scrollContainer?.clientWidth ?? window.innerWidth,
+      height: scrollContainer?.clientHeight ?? window.innerHeight,
+    },
+    observeElementRect: observeElementRectWithWindowFallback,
 
     estimateSize: index => {
       const item = virtualItems[index];
@@ -513,7 +542,7 @@ function TracksTabContent() {
 
   useEffect(() => {
     virtualizer.measure();
-  }, [virtualizer, virtualItems.length]);
+  }, [scrollMargin, virtualizer, virtualItems.length]);
 
   useEffect(() => {
     if (!isFetchingNextPage) {
@@ -536,6 +565,7 @@ function TracksTabContent() {
     const target = loadMoreRef.current;
     if (
       !target ||
+      !scrollContainer ||
       !hasNextPage ||
       isFetchingNextPage ||
       isFetchingNextRef.current ||
@@ -551,7 +581,7 @@ function TracksTabContent() {
         }
       },
       {
-        root: intersectionRoot === document.documentElement ? null : intersectionRoot,
+        root: scrollContainer,
         rootMargin: "800px 0px",
       },
     );
@@ -561,9 +591,9 @@ function TracksTabContent() {
     return () => observer.disconnect();
   }, [
     hasNextPage,
-    intersectionRoot,
     isFetchingNextPage,
     requestNextPage,
+    scrollContainer,
     virtualItems.length,
   ]);
 
@@ -761,24 +791,6 @@ function ShuffleButton() {
       <span>Shuffle all</span>
     </button>
   );
-}
-
-function findScrollParent(element: HTMLElement) {
-  let parent = element.parentElement;
-
-  while (parent) {
-    const { overflowY } = window.getComputedStyle(parent);
-
-    if (overflowY === "auto" || overflowY === "scroll") {
-      return parent;
-    }
-
-    parent = parent.parentElement;
-  }
-
-  return document.scrollingElement instanceof HTMLElement
-    ? document.scrollingElement
-    : document.documentElement;
 }
 
 function LetterHeader({ letter }: { letter: string }) {

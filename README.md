@@ -197,6 +197,8 @@ From `web/`:
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
 | `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |
+| `bun run test:e2e:movies` | Run Playwright movie page checks against an existing server |
+| `bun run test:e2e:movies:index` | Run the mocked Playwright movie index checks against a local Vite frontend |
 | `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
@@ -215,6 +217,31 @@ bun run test:e2e:login
 ```
 
 When omitted, those environment variables default to the local dev values shown above.
+
+### Movies E2E Checks
+
+The live Playwright movies suite targets an already-running Igloo instance. It logs in through the real backend and verifies movie page navigation, liked movies access, and tab transition behavior.
+
+```bash
+cd web
+E2E_BASE_URL=http://localhost:3000 \
+E2E_ADMIN_EMAIL=admin@example.com \
+E2E_ADMIN_PASSWORD=AdminPassword \
+bun run test:e2e:movies
+```
+
+When omitted, those environment variables default to the local dev values shown above.
+
+### Movies Index Mocked E2E Checks
+
+The mocked Playwright movie index suite only needs the frontend running at `E2E_BASE_URL`. It stubs every `/api/**` movie-index request in Playwright, so a backend server is not required.
+
+```bash
+cd web
+bun run dev --host 127.0.0.1 --port 3000
+E2E_BASE_URL=http://127.0.0.1:3000 \
+bun run test:e2e:movies:index
+```
 
 ### General Settings E2E Checks
 

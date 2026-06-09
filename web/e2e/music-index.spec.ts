@@ -1,4 +1,9 @@
-import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  expectNoHorizontalOverflow,
+  expectPageHasNoHorizontalScroll,
+} from "./e2e-layout";
 
 type NullableString = {
   String: string;
@@ -172,12 +177,20 @@ const mockPlaylists = [
   },
 ];
 
-async function fulfillJSON(route: Route, body: unknown) {
+async function fulfillJSON(route: Route, body: unknown, status = 200) {
   await route.fulfill({
-    status: 200,
+    status,
     contentType: "application/json",
     body: JSON.stringify(body),
   });
+}
+
+function assertMockSuiteClean(
+  browserIssues: ReturnType<typeof trackBrowserIssues>,
+  unexpectedApiRequests: string[],
+) {
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
 }
 
 async function mockMusicIndexApi(
@@ -186,6 +199,7 @@ async function mockMusicIndexApi(
   createdPlaylistRequests: CreatePlaylistRequest[] = [],
 ) {
   const playlists = [...mockPlaylists];
+  const unexpectedApiRequests: string[] = [];
 
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
@@ -275,10 +289,9 @@ async function mockMusicIndexApi(
         return;
       }
 
-      await fulfillJSON(route, {
-        error: true,
-        message: `Unexpected playlists method: ${method}`,
-      });
+      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
+      unexpectedApiRequests.push(message);
+      await fulfillJSON(route, { error: true, message }, 405);
       return;
     }
 
@@ -313,49 +326,22 @@ async function mockMusicIndexApi(
       return;
     }
 
-    await fulfillJSON(route, {
-      error: true,
-      message: `Unexpected API request: ${url.pathname}`,
-    });
-  });
-}
-
-async function expectNoHorizontalOverflow(locator: Locator, label: string) {
-  const bounds = await locator.evaluate(element => {
-    const tolerance = 1;
-    const rect = element.getBoundingClientRect();
-    const clientWidth = document.documentElement.clientWidth;
-
-    return {
-      clientWidth,
-      fits: rect.left >= -tolerance && rect.right <= clientWidth + tolerance,
-      left: rect.left,
-      right: rect.right,
-      width: rect.width,
-    };
+    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
+    unexpectedApiRequests.push(message);
+    await fulfillJSON(route, { error: true, message }, 500);
   });
 
-  expect(bounds, `${label} should fit within the viewport`).toMatchObject({
-    fits: true,
-  });
-}
-
-async function expectPageHasNoHorizontalScroll(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    clientWidth: document.documentElement.clientWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-
-  expect(
-    dimensions.scrollWidth,
-    `page should not scroll horizontally: ${JSON.stringify(dimensions)}`,
-  ).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+  return unexpectedApiRequests;
 }
 
 test("musicians tab renders accessible count text and URL-backed pagination", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMusicIndexApi(page, requestedMusicianRequests);
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/music?tab=musicians");
 
@@ -381,12 +367,17 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Northern Signal, 3 albums, 27 tracks" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("music tabs avoid horizontal overflow on mobile", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMusicIndexApi(page, requestedMusicianRequests);
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/music?tab=albums");
 
@@ -476,12 +467,17 @@ test("music tabs avoid horizontal overflow on mobile", async ({ page }) => {
   await expectNoHorizontalOverflow(page.getByRole("button", { name: "More actions for Heartline" }), "liked track more actions");
   await expectNoHorizontalOverflow(page.getByRole("button", { name: "Play Heartline" }), "liked track play action");
   await expectNoHorizontalOverflow(page.getByRole("navigation", { name: "pagination" }), "liked tracks pagination");
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("tracks tab exposes accessible controls and action menu targets", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMusicIndexApi(page, requestedMusicianRequests);
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/music?tab=tracks");
 
@@ -504,13 +500,19 @@ test("tracks tab exposes accessible controls and action menu targets", async ({ 
   await expect(goToArtist).toBeVisible();
   await expect(goToAlbum).toHaveAttribute("href", "/music/album/10");
   await expect(goToArtist).toHaveAttribute("href", "/music/musician/20");
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists tab lists playlists and creates a playlist from the toolbar dialog", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
   const createdPlaylistRequests: CreatePlaylistRequest[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMusicIndexApi(page, requestedMusicianRequests, createdPlaylistRequests);
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+    createdPlaylistRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/music?tab=playlists");
 
@@ -553,12 +555,17 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   ]);
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists tab opens liked tracks subview with URL-backed pagination", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMusicIndexApi(page, requestedMusicianRequests);
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/music?tab=playlists");
 
@@ -588,4 +595,5 @@ test("playlists tab opens liked tracks subview with URL-backed pagination", asyn
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(page.getByRole("button", { name: "View liked tracks" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create new playlist" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });

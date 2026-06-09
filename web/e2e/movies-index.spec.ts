@@ -1,4 +1,9 @@
-import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
+import { trackBrowserIssues } from "./e2e-browser-issues";
+import {
+  expectNoHorizontalOverflow,
+  expectPageHasNoHorizontalScroll,
+} from "./e2e-layout";
 
 type NullableString = {
   String: string;
@@ -7,6 +12,11 @@ type NullableString = {
 
 type NullableInt64 = {
   Int64: number;
+  Valid: boolean;
+};
+
+type NullableFloat64 = {
+  Float64: number;
   Valid: boolean;
 };
 
@@ -27,6 +37,13 @@ function nullableString(value = ""): NullableString {
 function nullableInt64(value: number | null = null): NullableInt64 {
   return {
     Int64: value ?? 0,
+    Valid: value != null,
+  };
+}
+
+function nullableFloat64(value: number | null = null): NullableFloat64 {
+  return {
+    Float64: value ?? 0,
     Valid: value != null,
   };
 }
@@ -176,12 +193,70 @@ const initialPlaylists = [
   ),
 ];
 
-async function fulfillJSON(route: Route, body: unknown) {
+const mockMoviesById = new Map(
+  [
+    ...libraryPageOneMovies,
+    ...libraryPageTwoMovies,
+    ...actionPageOneMovies,
+    ...actionPageTwoMovies,
+    ...dramaPageOneMovies,
+    ...likedPageOneMovies,
+    ...likedPageTwoMovies,
+  ].map(movieEntry => [movieEntry.id, movieEntry]),
+);
+
+function movieDetails(movieSummary: ReturnType<typeof movie>) {
+  return {
+    movie: {
+      id: movieSummary.id,
+      title: movieSummary.title,
+      file_path: `/movies/${movieSummary.id}.mkv`,
+      file_name: `${movieSummary.title.toLowerCase().replaceAll(" ", "-")}.mkv`,
+      size: 0,
+      container: "matroska",
+      mime_type: "video/x-matroska",
+      adult: false,
+      tmdb_id: nullableInt64(movieSummary.id),
+      imdb_id: nullableString(`tt${movieSummary.id.toString().padStart(7, "0")}`),
+      poster_path: movieSummary.poster_path,
+      backdrop_path: nullableString(),
+      language: nullableString("en"),
+      year: movieSummary.year,
+      release_date: nullableString(`${movieSummary.year.Int64}-01-01`),
+      overview: nullableString(`${movieSummary.title} overview`),
+      tag_line: nullableString(),
+      certification: movieSummary.certification,
+      critic_rating: nullableFloat64(),
+      audience_rating: nullableFloat64(),
+      revenue: nullableFloat64(),
+      budget: nullableFloat64(),
+      run_time: nullableInt64(120),
+      duration: nullableFloat64(7200),
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    },
+    cast: [],
+    crew: [],
+    genres: [],
+    production_companies: [],
+    extra_videos: [],
+  };
+}
+
+async function fulfillJSON(route: Route, body: unknown, status = 200) {
   await route.fulfill({
-    status: 200,
+    status,
     contentType: "application/json",
     body: JSON.stringify(body),
   });
+}
+
+function assertMockSuiteClean(
+  browserIssues: ReturnType<typeof trackBrowserIssues>,
+  unexpectedApiRequests: string[],
+) {
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
 }
 
 async function mockMoviesApi(
@@ -191,6 +266,7 @@ async function mockMoviesApi(
   createdPlaylistRequests: CreateMoviePlaylistRequest[] = [],
 ) {
   const playlists = [...initialPlaylists];
+  const unexpectedApiRequests: string[] = [];
 
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
@@ -222,6 +298,27 @@ async function mockMoviesApi(
 
     if (url.pathname === "/api/movies/stats") {
       await fulfillJSON(route, apiResponse({ total_movies: 25 }));
+      return;
+    }
+
+    const movieDetailsMatch = url.pathname.match(/^\/api\/movies\/details\/(\d+)$/);
+    if (movieDetailsMatch) {
+      const movieId = Number(movieDetailsMatch[1]);
+      const movieSummary = mockMoviesById.get(movieId);
+
+      if (!movieSummary) {
+        await fulfillJSON(
+          route,
+          {
+            error: true,
+            message: `Movie ${movieId} not found`,
+          },
+          404,
+        );
+        return;
+      }
+
+      await fulfillJSON(route, apiResponse(movieDetails(movieSummary)));
       return;
     }
 
@@ -304,10 +401,70 @@ async function mockMoviesApi(
         return;
       }
 
-      await fulfillJSON(route, {
-        error: true,
-        message: `Unexpected playlists method: ${method}`,
-      });
+      const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
+      unexpectedApiRequests.push(message);
+      await fulfillJSON(route, { error: true, message }, 405);
+      return;
+    }
+
+    const playlistDetailsMatch = url.pathname.match(/^\/api\/movies\/playlists\/(\d+)$/);
+    if (playlistDetailsMatch) {
+      const playlistId = Number(playlistDetailsMatch[1]);
+      const playlist = playlists.find(candidate => candidate.id === playlistId);
+
+      if (!playlist) {
+        await fulfillJSON(
+          route,
+          {
+            error: true,
+            message: `Movie playlist ${playlistId} not found`,
+          },
+          404,
+        );
+        return;
+      }
+
+      const { movie_count, is_owner, can_edit, ...playlistRow } = playlist;
+      await fulfillJSON(route, apiResponse({
+        playlist: playlistRow,
+        movie_count,
+        is_owner,
+        can_edit,
+        collaborators: null,
+      }));
+      return;
+    }
+
+    const playlistMoviesMatch = url.pathname.match(
+      /^\/api\/movies\/playlists\/(\d+)\/movies$/,
+    );
+    if (playlistMoviesMatch) {
+      const playlistId = Number(playlistMoviesMatch[1]);
+      const playlist = playlists.find(candidate => candidate.id === playlistId);
+      const page = Number(url.searchParams.get("page") ?? "1");
+      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+
+      if (!playlist) {
+        await fulfillJSON(
+          route,
+          {
+            error: true,
+            message: `Movie playlist ${playlistId} not found`,
+          },
+          404,
+        );
+        return;
+      }
+
+      await fulfillJSON(route, apiResponse({
+        movies: [],
+        total: playlist.movie_count,
+        page,
+        per_page: perPage,
+        total_pages: Math.max(1, Math.ceil(playlist.movie_count / perPage)),
+        sort,
+      }));
       return;
     }
 
@@ -332,50 +489,24 @@ async function mockMoviesApi(
       return;
     }
 
-    await fulfillJSON(route, {
-      error: true,
-      message: `Unexpected API request: ${url.pathname}`,
-    });
-  });
-}
-
-async function expectNoHorizontalOverflow(locator: Locator, label: string) {
-  const bounds = await locator.evaluate(element => {
-    const tolerance = 1;
-    const rect = element.getBoundingClientRect();
-    const clientWidth = document.documentElement.clientWidth;
-
-    return {
-      clientWidth,
-      fits: rect.left >= -tolerance && rect.right <= clientWidth + tolerance,
-      left: rect.left,
-      right: rect.right,
-      width: rect.width,
-    };
+    const message = `Unexpected API request: ${method} ${url.pathname}${url.search}`;
+    unexpectedApiRequests.push(message);
+    await fulfillJSON(route, { error: true, message }, 500);
   });
 
-  expect(bounds, `${label} should fit within the viewport`).toMatchObject({
-    fits: true,
-  });
-}
-
-async function expectPageHasNoHorizontalScroll(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    clientWidth: document.documentElement.clientWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-
-  expect(
-    dimensions.scrollWidth,
-    `page should not scroll horizontally: ${JSON.stringify(dimensions)}`,
-  ).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+  return unexpectedApiRequests;
 }
 
 test("movies library shell and URL-backed tabs render accessibly", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(page, requestedLibraryRequests, requestedGenreRequests);
+  const unexpectedApiRequests = await mockMoviesApi(
+    page,
+    requestedLibraryRequests,
+    requestedGenreRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(moviesAllPath);
 
@@ -417,13 +548,19 @@ test("movies library shell and URL-backed tabs render accessibly", async ({ page
   await expect(page).toHaveURL(/tab=all/);
   await expect(allMoviesTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel", { name: "All Movies" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("all movies tab renders accessible movie cards and URL-backed pagination", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(page, requestedLibraryRequests, requestedGenreRequests);
+  const unexpectedApiRequests = await mockMoviesApi(
+    page,
+    requestedLibraryRequests,
+    requestedGenreRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(moviesAllPath);
 
@@ -467,13 +604,19 @@ test("all movies tab renders accessible movie cards and URL-backed pagination", 
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Verdant Run 2025", exact: true })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("genres tab renders accessible counts, filtering, and URL-backed pagination", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(page, requestedLibraryRequests, requestedGenreRequests);
+  const unexpectedApiRequests = await mockMoviesApi(
+    page,
+    requestedLibraryRequests,
+    requestedGenreRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(moviesGenresPath);
 
@@ -525,13 +668,19 @@ test("genres tab renders accessible counts, filtering, and URL-backed pagination
   await expect(genresList).toBeVisible();
   await expect(page.getByRole("link", { name: "Afterburn 2020", exact: true })).toHaveCount(0);
   await expect(actionButton).toBeFocused();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("movies tabs avoid horizontal overflow on mobile", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(page, requestedLibraryRequests, requestedGenreRequests);
+  const unexpectedApiRequests = await mockMoviesApi(
+    page,
+    requestedLibraryRequests,
+    requestedGenreRequests,
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(moviesAllPath);
 
@@ -613,14 +762,16 @@ test("movies tabs avoid horizontal overflow on mobile", async ({ page }) => {
   await expectNoHorizontalOverflow(likedMoviesGrid, "liked movies grid");
   await expectNoHorizontalOverflow(likedMovieCard, "liked movies card");
   await expectNoHorizontalOverflow(page.getByRole("navigation", { name: "pagination" }), "liked movies pagination");
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists tab lists playlists and creates a playlist from the toolbar dialog", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
   const createdPlaylistRequests: CreateMoviePlaylistRequest[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(
+  const unexpectedApiRequests = await mockMoviesApi(
     page,
     requestedLibraryRequests,
     requestedGenreRequests,
@@ -664,13 +815,19 @@ test("playlists tab lists playlists and creates a playlist from the toolbar dial
   await expect(dialog).toBeHidden();
   await expect(createPlaylistButton).toBeFocused();
   await expect(page.getByRole("link", { name: "Roadshow Queue, 0 movies" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
 test("playlists tab opens liked movies subview with URL-backed pagination", async ({ page }) => {
   const requestedLibraryRequests: string[] = [];
   const requestedGenreRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
 
-  await mockMoviesApi(page, requestedLibraryRequests, requestedGenreRequests);
+  const unexpectedApiRequests = await mockMoviesApi(
+    page,
+    requestedLibraryRequests,
+    requestedGenreRequests,
+  );
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(moviesPlaylistsPath);
 
@@ -697,4 +854,5 @@ test("playlists tab opens liked movies subview with URL-backed pagination", asyn
   await expect(page).toHaveURL(/tab=playlists/);
   await expect(page.getByRole("button", { name: "Liked movies" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New playlist" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
