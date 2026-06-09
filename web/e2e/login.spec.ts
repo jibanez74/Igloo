@@ -39,6 +39,16 @@ function isExpectedInvalidLoginResponse(response: Response) {
   );
 }
 
+function isExpectedInTheatersUnavailableResponse(response: Response) {
+  const url = new URL(response.url());
+
+  return (
+    response.status() === 503 &&
+    response.request().method() === "GET" &&
+    url.pathname === "/api/tmdb/movies/in-theaters"
+  );
+}
+
 function trackBrowserIssues(
   page: Page,
   isExpectedResponse: (response: Response) => boolean =
@@ -79,7 +89,8 @@ function trackBrowserIssues(
     if (
       isAppApiResponse(response) &&
       response.status() >= 400 &&
-      !isExpectedResponse(response)
+      !isExpectedResponse(response) &&
+      !isExpectedInTheatersUnavailableResponse(response)
     ) {
       responseErrors.push(
         `${response.status()} ${response.request().method()} ${response.url()}`,

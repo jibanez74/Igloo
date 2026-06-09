@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   showDeleted,
   showRemoved,
@@ -39,6 +39,7 @@ import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
 import { formatDuration } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -46,6 +47,10 @@ import {
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
+import {
+  getOffsetWithinScrollContainer,
+  observeElementRectWithWindowFallback,
+} from "@/lib/scroll-container";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrackType } from "@/types";
 
@@ -507,6 +512,7 @@ function PlaylistTracksList({
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
   const audioPlayerState = useAudioPlayerState();
+  const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -522,16 +528,44 @@ function PlaylistTracksList({
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
 
-  // Measure scroll margin after mount
   useEffect(() => {
-    if (listRef.current) {
-      setScrollMargin(listRef.current.offsetTop);
+    const listElement = listRef.current;
+    if (!listElement || !scrollContainer) {
+      return;
     }
-  }, []);
 
-  // Window virtualizer for efficient rendering (used for large playlists or read-only)
-  const virtualizer = useWindowVirtualizer({
+    const updateScrollMargin = () => {
+      setScrollMargin(
+        getOffsetWithinScrollContainer(listElement, scrollContainer),
+      );
+    };
+
+    updateScrollMargin();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollMargin);
+
+    resizeObserver?.observe(listElement);
+    resizeObserver?.observe(scrollContainer);
+    window.addEventListener("resize", updateScrollMargin);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollMargin);
+    };
+  }, [orderedTracks.length, scrollContainer]);
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
     count: orderedTracks.length,
+    getScrollElement: () => scrollContainer,
+    initialRect: {
+      width: scrollContainer?.clientWidth ?? window.innerWidth,
+      height: scrollContainer?.clientHeight ?? window.innerHeight,
+    },
+    observeElementRect: observeElementRectWithWindowFallback,
     estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
     overscan: 5,
     scrollMargin,
@@ -539,6 +573,10 @@ function PlaylistTracksList({
 
   // Get virtual items for dependency tracking
   const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [orderedTracks.length, scrollMargin, virtualizer]);
 
   // Trigger infinite scroll when near the end
   useEffect(() => {
