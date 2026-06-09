@@ -15,7 +15,7 @@
     "test:e2e:general-settings": "playwright test e2e/general-settings.spec.ts",
     "test:e2e:libraries-settings": "playwright test e2e/libraries-settings.spec.ts",
     "test:e2e:user-settings": "playwright test e2e/user-settings.spec.ts",
-    "test:e2e:movies": "playwright test e2e/movies.spec.ts",
+    "test:e2e:movies": "playwright test e2e/movies.spec.ts e2e/movies-index.spec.ts",
     "test:e2e:hls": "playwright test e2e/hls-transcode.spec.ts",
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",
     "preview": "vite preview"
