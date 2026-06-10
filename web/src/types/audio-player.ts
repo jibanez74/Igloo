@@ -19,9 +19,9 @@ export type PlayableTrackData = {
   codec: string;
   bit_rate: number;
   album_id: NullableInt64;
-  musician_id?: NullableInt64;
-  album_cover?: NullableString;
-  musician_name?: NullableString;
+  musician_id: NullableInt64;
+  album_cover: NullableString;
+  musician_name: NullableString;
 };
 
 // State for the global audio player

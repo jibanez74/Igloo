@@ -26,7 +26,7 @@ export function convertToAudioTrack(track: PlayableTrackData) {
     copyright: { String: "", Valid: false },
     language: { String: "", Valid: false },
     album_id: track.album_id,
-    musician_id: track.musician_id ?? { Int64: 0, Valid: false },
+    musician_id: track.musician_id,
     created_at: "",
     updated_at: "",
   };
@@ -38,8 +38,8 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   musician: string | null;
 } {
   return {
-    cover: track.album_cover?.Valid ? track.album_cover.String : null,
-    musician: track.musician_name?.Valid ? track.musician_name.String : null,
+    cover: track.album_cover.Valid ? track.album_cover.String : null,
+    musician: track.musician_name.Valid ? track.musician_name.String : null,
   };
 }
 
