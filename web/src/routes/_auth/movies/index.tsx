@@ -8,7 +8,6 @@ import {
 } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { z } from "zod/mini";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
@@ -53,33 +52,10 @@ import { isApiFailure } from "@/lib/is-api-failure";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/RequestMovieDialog";
-
-const moviesSearchSchema = z.object({
-  tab: z._default(
-    z.catch(z.enum(["all", "genres", "playlists"]), "all"),
-    "all",
-  ),
-  allPage: z._default(
-    z.catch(z.number().check(z.int(), z.positive()), 1),
-    1,
-  ),
-  sort: z._default(z.catch(z.enum(["asc", "desc"]), "asc"), "asc"),
-  genresPage: z._default(
-    z.catch(z.number().check(z.int(), z.positive()), 1),
-    1,
-  ),
-  genreId: z.catch(
-    z.optional(z.number().check(z.int(), z.positive())),
-    undefined,
-  ),
-  playlistsPage: z._default(
-    z.catch(z.number().check(z.int(), z.positive()), 1),
-    1,
-  ),
-  view: z.catch(z.optional(z.enum(["liked"])), undefined),
-});
-
-export type MoviesSearchParams = z.infer<typeof moviesSearchSchema>;
+import {
+  moviesSearchSchema,
+  type MoviesSearchParams,
+} from "@/types/route-search";
 
 export const Route = createFileRoute("/_auth/movies/")({
   validateSearch: moviesSearchSchema,

@@ -1,19 +1,4 @@
-import type { NullableInt64, NullableString } from "@/types";
-
-// Minimal track data needed for audio playback
-// This is the common shape that different track types can be converted from
-export type PlayableTrackData = {
-  id: number;
-  title: string;
-  file_path: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  musician_id?: NullableInt64;
-  album_cover?: NullableString;
-  musician_name?: NullableString;
-};
+import type { PlayableTrackData } from "@/types";
 
 // Convert minimal track data to a full TrackType for the audio player
 // Fills in default values for fields not needed for playback

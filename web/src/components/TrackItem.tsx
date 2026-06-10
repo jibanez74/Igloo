@@ -5,8 +5,7 @@ import { formatTrackDuration } from "@/lib/format";
 import { toggleLikeTrack } from "@/lib/api";
 import { LIKED_TRACK_IDS_KEY, LIKED_TRACKS_KEY } from "@/lib/constants";
 import TrackActionsMenu from "@/components/TrackActionsMenu";
-
-export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
+import type { TrackItemVariant } from "@/types";
 
 type TrackItemProps = {
   // Core track data

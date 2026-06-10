@@ -9,6 +9,8 @@ import type {
 
 export type { NullableFloat64, NullableInt64, NullableString } from "./nullable";
 
+export type TrackItemVariant = "album" | "musician" | "library" | "playlist";
+
 // Simplified album type for list views and cards
 export type SimpleAlbumType = {
   id: number;

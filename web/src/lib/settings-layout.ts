@@ -1,14 +1,9 @@
-export type SettingsTabId =
-  | "general"
-  | "account"
-  | "libraries"
-  | "playback"
-  | "users";
-
-export type SettingsTabDef = {
-  id: SettingsTabId;
-  path: string;
-};
+import type {
+  SettingsLayoutInput,
+  SettingsLayoutState,
+  SettingsTabDef,
+  SettingsTabId,
+} from "@/types";
 
 export const SETTINGS_TAB_PATHS: Record<SettingsTabId, string> = {
   general: "/settings",
@@ -23,19 +18,6 @@ export const ADMIN_ONLY_SETTINGS_TABS: ReadonlySet<SettingsTabId> = new Set([
   "libraries",
   "users",
 ]);
-
-export type SettingsLayoutInput<T extends SettingsTabDef> = {
-  isAdmin: boolean;
-  pathname: string;
-  tabs: readonly T[];
-};
-
-export type SettingsLayoutState<T extends SettingsTabDef> = {
-  visibleTabs: T[];
-  currentTab: SettingsTabId;
-  defaultTabPath: string;
-  redirectTo: string | null;
-};
 
 export function computeSettingsLayoutState<T extends SettingsTabDef>(
   input: SettingsLayoutInput<T>,

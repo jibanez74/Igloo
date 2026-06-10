@@ -24,7 +24,7 @@ import type {
   MoviePlaybackSyncTarget,
   StreamModeId,
   UseMoviePlaybackDataArgs,
-} from "@/types/playback";
+} from "@/types";
 
 export function useMoviePlaybackData({
   movieId,

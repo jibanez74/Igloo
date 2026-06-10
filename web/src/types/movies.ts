@@ -3,7 +3,7 @@ import type {
   NullableInt64,
   NullableString,
 } from "./nullable";
-import type { PlaylistCollaboratorType } from "@/types/music";
+import type { PlaylistCollaboratorType } from "./music";
 
 // Simple movie type for basic listings
 export type SimpleMovieType = {

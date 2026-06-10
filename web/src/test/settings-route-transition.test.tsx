@@ -147,8 +147,7 @@ afterEach(() => {
   });
 
   if (originalStartViewTransition === undefined) {
-    delete (document as Document & { startViewTransition?: unknown })
-      .startViewTransition;
+    Reflect.deleteProperty(document, "startViewTransition");
   } else {
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,

@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod/mini";
 import {
   searchAlbumsQueryOpts,
   searchAllQueryOpts,
@@ -8,23 +7,10 @@ import {
   searchTracksQueryOpts,
 } from "@/lib/query-opts";
 import { SEARCH_PER_PAGE } from "@/lib/constants";
-
-const searchSchema = z.object({
-  q: z._default(z.catch(z.string(), ""), ""),
-  tab: z._default(
-    z.catch(z.enum(["all", "movies", "albums", "musicians", "tracks"]), "all"),
-    "all",
-  ),
-  page: z._default(
-    z.catch(z.number().check(z.int(), z.positive()), 1),
-    1,
-  ),
-});
-
-export type SearchParams = z.infer<typeof searchSchema>;
+import { searchSearchSchema } from "@/types/route-search";
 
 export const Route = createFileRoute("/_auth/search/")({
-  validateSearch: searchSchema,
+  validateSearch: searchSearchSchema,
   loaderDeps: ({ search: { q, tab, page } }) => ({ q, tab, page }),
   loader: async ({ context, deps: { q, tab, page } }) => {
     const trimmed = q.trim();

@@ -1,6 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import TrackItem, { type TrackItemVariant } from "./TrackItem";
+import TrackItem from "./TrackItem";
+import type { TrackItemVariant } from "@/types";
 
 type SortableTrackItemProps = {
   // Sortable ID (must be unique)

@@ -177,13 +177,18 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         bit_rate: 4000000,
         width: 1920,
         height: 1080,
-        frame_rate: nullableString("24/1"),
+        coded_width: nullableInt64(1920),
+        coded_height: nullableInt64(1080),
         aspect_ratio: nullableString("16:9"),
-        pixel_format: nullableString("yuv420p"),
+        frame_rate: 24,
+        avg_frame_rate: nullableString("24/1"),
+        bit_depth: nullableInt64(8),
+        color_range: nullableString("tv"),
         color_space: nullableString("bt709"),
-        color_transfer: nullableString("bt709"),
         color_primaries: nullableString("bt709"),
-        hdr_format: nullableString(""),
+        color_transfer: nullableString("bt709"),
+        language: nullableString("en"),
+        title: nullableString("Main"),
       },
     ],
     audio_streams: [
@@ -192,13 +197,13 @@ function technicalDetailsResponse(id: number): MovieTechnicalDetailsResponse {
         movie_id: id,
         stream_index: 1,
         codec: "aac",
+        codec_profile: nullableString("LC"),
         bit_rate: 192000,
+        sample_rate: nullableInt64(48000),
         channels: 2,
         channel_layout: nullableString("stereo"),
-        sample_rate: 48000,
         language: nullableString("en"),
         title: nullableString("English"),
-        is_default: true,
       },
     ],
     subtitles: [],
@@ -438,7 +443,7 @@ describe("movie details route motion", () => {
 
     await act(async () => {
       await router.navigate({
-        to: "/movies/$id/",
+        to: "/movies/$id",
         params: { id: "58" },
       });
     });

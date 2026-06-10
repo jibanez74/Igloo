@@ -2,8 +2,11 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { PLAYBACK_SETTINGS_KEY } from "@/lib/constants";
 import { playbackSettingsQueryOpts } from "@/lib/query-opts";
+import type { ApiResponseType, PlaybackSettingsResponseType } from "@/types";
 
-function playbackSettingsResponse(preferredProfile: string) {
+function playbackSettingsResponse(
+  preferredProfile: string,
+): ApiResponseType<PlaybackSettingsResponseType> {
   return {
     error: false,
     data: {

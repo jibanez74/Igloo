@@ -1,17 +1,9 @@
 import { redirect, createFileRoute } from "@tanstack/react-router";
-import { z } from "zod/mini";
 import { authUserGuardQueryOpts } from "@/lib/query-opts";
-import { getSafeRedirect } from "@/lib/redirect-utils";
-
-const loginSearchValidator = z.object({
-  redirect: z.pipe(
-    z._default(z.catch(z.string(), "/"), "/"),
-    z.transform((url: string) => getSafeRedirect(url, "/")),
-  ),
-});
+import { loginSearchSchema } from "@/types/route-search";
 
 export const Route = createFileRoute("/login")({
-  validateSearch: loginSearchValidator,
+  validateSearch: loginSearchSchema,
   beforeLoad: async ({ context, search }) => {
     const res = await context.queryClient.fetchQuery(authUserGuardQueryOpts());
 

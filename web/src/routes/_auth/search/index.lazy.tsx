@@ -40,7 +40,7 @@ import type {
   SimpleMusicianType,
   TrackListItemType,
 } from "@/types";
-import type { SearchParams } from "./index";
+import type { SearchParams } from "@/types/route-search";
 
 export const Route = createLazyFileRoute("/_auth/search/")({
   component: SearchPage,

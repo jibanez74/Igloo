@@ -7,6 +7,7 @@ import {
 import type {
   AudioPlayerActions,
   AudioPlayerState,
+  PlayableTrackData,
 } from "@/types";
 import AudioPlayer from "@/components/AudioPlayer";
 import {
@@ -18,7 +19,6 @@ import {
   convertToAudioTrack,
   extractTrackMetadata,
   shuffleArray,
-  type PlayableTrackData,
 } from "@/lib/audio-utils";
 
 const MINIMUM_PLAY_SECONDS = 30;

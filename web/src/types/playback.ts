@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { STREAM_MODE_IDS } from "@/lib/constants";
-import type { PlaySearchParams } from "@/types/movie-play";
+import type { SubtitleType } from "./movies";
+import type { PlaySearchParams } from "./route-search";
 
 export type StreamModeId = (typeof STREAM_MODE_IDS)[number];
 
@@ -47,7 +48,7 @@ export type SubtitleTrackInfoOptions = {
   movieId: number;
   resolvedSubtitleTrack: number | null;
   techLoaded: boolean;
-  subtitleStreams: import("@/types/movies").SubtitleType[];
+  subtitleStreams: SubtitleType[];
 };
 
 export type RebaseOptions = {
