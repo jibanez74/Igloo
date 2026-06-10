@@ -113,6 +113,7 @@ export default function AppSidebar({
       <SidebarHeader className="border-b border-slate-800/50 p-4">
         <Link
           to="/"
+          preload={false}
           onClick={handleNavClick}
           aria-label="Igloo – Home"
           className="flex items-center gap-3 transition-opacity duration-150 hover:opacity-80 motion-reduce:transition-none"
@@ -150,6 +151,7 @@ export default function AppSidebar({
                     >
                       <Link
                         to={item.url}
+                        preload={item.url === "/" ? false : undefined}
                         search={
                           item.url === "/movies"
                             ? MOVIES_INDEX_DEFAULT_SEARCH
