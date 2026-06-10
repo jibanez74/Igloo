@@ -92,9 +92,15 @@ export type {
   UpdateMovieMetadataRequest,
 } from "./movies";
 
-// Movie playback route (search params)
-export type { PlaySearchParams } from "./movie-play";
-export { playSearchSchema } from "./movie-play";
+// Route search params
+export type {
+  LoginSearchParams,
+  TrailerSearchParams,
+  SearchParams,
+  MoviesSearchParams,
+  MusicSearchParams,
+  PlaySearchParams,
+} from "./route-search";
 
 // Library movie details page (UI sections)
 export type {
@@ -113,12 +119,23 @@ export type {
   MovieChaptersSectionProps,
 } from "./movie-details-page";
 
+export type {
+  MovieCastMemberView,
+  MovieCrewMemberView,
+  MovieGenreView,
+  MovieDetailsGridItemView,
+  MovieExtraVideoView,
+  MovieProductionCompanyView,
+  MovieDetailsView,
+} from "./movie-details-view";
+
 // Audio player types
 export type {
   AlbumInfoType,
   AudioPlayerState,
   AudioPlayerActions,
   AudioPlayerContextType,
+  PlayableTrackData,
 } from "./audio-player";
 
 // API and router types
@@ -156,6 +173,12 @@ export type {
   UpdatePlaybackSettingsResponseType,
 } from "./settings";
 
+export type {
+  SettingsLayoutInput,
+  SettingsLayoutState,
+  SettingsTabDef,
+  SettingsTabId,
+} from "./settings-layout";
 
 // Playback types
 export type {
@@ -174,6 +197,13 @@ export type {
   VideoPlayerProps,
 } from "./playback";
 
+export type {
+  UseYouTubePlayerOptions,
+  UseYouTubePlayerReturn,
+} from "./youtube-player";
+
+export type { SidebarContextProps } from "./sidebar";
+
 // Search types
 export type {
   SearchSection,
@@ -184,6 +214,8 @@ export type {
   SearchTracksResponseType,
   SearchTab,
 } from "./search";
+
+export type { TrackItemVariant } from "./music";
 
 // Watch room types
 export type {

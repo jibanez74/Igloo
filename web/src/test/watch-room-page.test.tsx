@@ -574,12 +574,12 @@ describe("WatchRoomPageContent", () => {
   });
 
   it("sends heartbeat pings while the realtime socket stays open", async () => {
-    let heartbeat: (() => void) | null = null;
+    const callbacks: { heartbeat?: () => void } = {};
     const setIntervalSpy = vi
       .spyOn(window, "setInterval")
       .mockImplementation((handler: TimerHandler) => {
         if (typeof handler === "function") {
-          heartbeat = handler;
+          callbacks.heartbeat = handler as () => void;
         }
         return 1;
       });
@@ -592,11 +592,15 @@ describe("WatchRoomPageContent", () => {
 
       await waitFor(() => {
         expect(FakeWebSocket.instances).toHaveLength(1);
-        expect(heartbeat).not.toBeNull();
+        expect(callbacks.heartbeat).toBeDefined();
       });
 
       const socket = FakeWebSocket.instances[0];
-      heartbeat?.();
+      const heartbeat = callbacks.heartbeat;
+      if (!heartbeat) {
+        throw new Error("Expected heartbeat callback to be registered.");
+      }
+      heartbeat();
 
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
         type: "ping",
@@ -627,12 +631,12 @@ describe("WatchRoomPageContent", () => {
       expect(screen.getByText("2 connected now")).toBeInTheDocument();
     });
 
-    let reconnect: (() => void) | null = null;
+    const callbacks: { reconnect?: () => void } = {};
     const setTimeoutSpy = vi
       .spyOn(window, "setTimeout")
       .mockImplementation((handler: TimerHandler, timeout?: number) => {
         if (timeout === 1000 && typeof handler === "function") {
-          reconnect = handler;
+          callbacks.reconnect = handler as () => void;
         }
         return 1;
       });
@@ -641,9 +645,12 @@ describe("WatchRoomPageContent", () => {
       act(() => {
         firstSocket.serverClose();
       });
-      expect(reconnect).not.toBeNull();
+      const reconnect = callbacks.reconnect;
+      if (!reconnect) {
+        throw new Error("Expected reconnect callback to be registered.");
+      }
       act(() => {
-        reconnect?.();
+        reconnect();
       });
     } finally {
       setTimeoutSpy.mockRestore();

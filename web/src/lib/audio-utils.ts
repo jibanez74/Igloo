@@ -1,19 +1,4 @@
-import type { NullableInt64, NullableString } from "@/types";
-
-// Minimal track data needed for audio playback
-// This is the common shape that different track types can be converted from
-export type PlayableTrackData = {
-  id: number;
-  title: string;
-  file_path: string;
-  duration: number;
-  codec: string;
-  bit_rate: number;
-  album_id: NullableInt64;
-  musician_id?: NullableInt64;
-  album_cover?: NullableString;
-  musician_name?: NullableString;
-};
+import type { PlayableTrackData } from "@/types";
 
 // Convert minimal track data to a full TrackType for the audio player
 // Fills in default values for fields not needed for playback
@@ -41,7 +26,7 @@ export function convertToAudioTrack(track: PlayableTrackData) {
     copyright: { String: "", Valid: false },
     language: { String: "", Valid: false },
     album_id: track.album_id,
-    musician_id: track.musician_id ?? { Int64: 0, Valid: false },
+    musician_id: track.musician_id,
     created_at: "",
     updated_at: "",
   };
@@ -53,8 +38,8 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   musician: string | null;
 } {
   return {
-    cover: track.album_cover?.Valid ? track.album_cover.String : null,
-    musician: track.musician_name?.Valid ? track.musician_name.String : null,
+    cover: track.album_cover.Valid ? track.album_cover.String : null,
+    musician: track.musician_name.Valid ? track.musician_name.String : null,
   };
 }
 

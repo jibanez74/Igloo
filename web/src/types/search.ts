@@ -1,9 +1,11 @@
 import type {
   MoviesLibraryListItemType,
+} from "./movies";
+import type {
   SimpleAlbumType,
   SimpleMusicianType,
   TrackListItemType,
-} from "@/types";
+} from "./music";
 
 export type SearchSection<T> = {
   results: T[];

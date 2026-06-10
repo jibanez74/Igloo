@@ -2,12 +2,26 @@
 // Types for the global audio player state and controls
 
 import type { TrackType } from "./music";
+import type { NullableInt64, NullableString } from "./nullable";
 
 // Album info passed to player when starting playback
 export type AlbumInfoType = {
   cover: string | null;
   title: string;
   musician: string | null;
+};
+
+export type PlayableTrackData = {
+  id: number;
+  title: string;
+  file_path: string;
+  duration: number;
+  codec: string;
+  bit_rate: number;
+  album_id: NullableInt64;
+  musician_id: NullableInt64;
+  album_cover: NullableString;
+  musician_name: NullableString;
 };
 
 // State for the global audio player

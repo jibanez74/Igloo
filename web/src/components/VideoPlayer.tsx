@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useRef } from "react";
-import type { RefObject } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import {
@@ -12,30 +11,7 @@ import {
   hlsStreamRecoveryKey,
   supportsNativeHLS,
 } from "@/lib/playback";
-
-type SubtitleTrackInfo = {
-  url: string;
-  label: string;
-  srclang: string;
-};
-
-type VideoPlayerProps = {
-  videoRef: RefObject<HTMLVideoElement | null>;
-  src: string;
-  title: string;
-  isFullscreen?: boolean;
-  onError: (message: string) => void;
-  onPlay?: () => void;
-  onPause?: () => void;
-  onEnded?: () => void;
-  onTimeUpdate?: (time: number) => void;
-  onDurationChange?: (duration: number) => void;
-  onNativeError?: (code: number | null | undefined) => void;
-  subtitleTrack?: SubtitleTrackInfo | null;
-  startSec?: number;
-  onStartApplied?: (time: number) => void;
-  onSessionLost?: (currentTime: number) => void;
-};
+import type { VideoPlayerProps } from "@/types";
 
 export default function VideoPlayer({
   videoRef,

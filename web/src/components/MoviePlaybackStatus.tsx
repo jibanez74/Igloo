@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import MoviePlaybackStatusScreen from "@/components/MoviePlaybackStatusScreen";
-import type { MoviePlaybackStatus } from "@/lib/movie-playback";
+import type { MoviePlaybackStatus } from "@/types";
 
 type PlaybackStatusViewProps = {
   status: Exclude<MoviePlaybackStatus, { kind: "ready" }>;

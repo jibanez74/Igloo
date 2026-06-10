@@ -1,4 +1,8 @@
 import { useRef, useState, useEffect, useId, useEffectEvent } from "react";
+import type {
+  UseYouTubePlayerOptions,
+  UseYouTubePlayerReturn,
+} from "@/types";
 
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const YOUTUBE_API_LOAD_TIMEOUT_MS = 15000;
@@ -144,37 +148,6 @@ function loadYouTubeAPI(): Promise<void> {
     };
   });
 }
-
-export type UseYouTubePlayerOptions = {
-  videoId: string | null;
-  autoplay?: boolean;
-  controls?: boolean;
-  onReady?: () => void;
-  onStateChange?: (state: YT.PlayerState) => void;
-  onError?: (error: YT.PlayerError) => void;
-  onEnd?: () => void;
-};
-
-export type UseYouTubePlayerReturn = {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  isReady: boolean;
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  volume: number;
-  isMuted: boolean;
-  error: string | null;
-  play: () => void;
-  pause: () => void;
-  togglePlay: () => void;
-  seekTo: (seconds: number) => void;
-  seekForward: (seconds: number) => void;
-  seekBackward: (seconds: number) => void;
-  setVolume: (volume: number) => void;
-  mute: () => void;
-  unmute: () => void;
-  toggleMute: () => void;
-};
 
 function getCurrentPlayerTime(player: YT.Player | null) {
   if (!player) return 0;

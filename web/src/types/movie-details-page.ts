@@ -1,4 +1,4 @@
-import type { PlaybackSettings } from "@/types/playback";
+import type { PlaybackSettings } from "./playback";
 import type {
   ChapterType,
   LibraryMovieDetailsMovieType,
