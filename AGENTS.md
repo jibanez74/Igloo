@@ -1,114 +1,142 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Overview
 
-Igloo is split into `server/` and `web/`. The Go backend lives in `server/cmd/api` with internal packages under `server/cmd/internal`; SQL schema and queries are in `server/sqlc`. The React/Vite client lives in `web/src`, with route modules in `web/src/routes`, shared UI in `web/src/components`, hooks in `web/src/hooks`, and utilities in `web/src/lib`. Frontend unit tests are in `web/src/test`; Playwright specs are in `web/e2e`. Project notes and OpenAPI artifacts live in `docs/`.
+Igloo is a self-hosted media center with a Go backend and a React/Vite web client.
 
-## Core Principles
+Igloo is designed for self-hosting on home servers and small personal infrastructure. Make technical decisions with local performance, predictable resource usage, and simple operations in mind. Do not assume deployment to large cloud platforms such as AWS, Azure, or Google Cloud unless explicitly requested.
 
-- Keep changes focused on the requested task.
-- Avoid touching unrelated code.
-- Preserve existing behavior unless the task explicitly requires changing it.
-- Do not introduce large architectural changes without being asked.
-- Apply the DRY principal where ever possible.
-- Do not write small functions that can just be in line operations
-- Prefer existing project patterns over new abstractions.
-- Avoid excessive comments.
-- Only add comments when the code is non-obvious or there is important context.
-- Avoid adding dependencies unless they are necessary to complete the task.
-- Do not add migrations or worry about backwards compatibility unless specifically requested. This application is not currently in production.
-- This application is meant for self-hosting, not cloud-first platforms like AWS.
-- Target platforms are Linux x64 and macOS ARM64.
-- Windows, Docker deployment, and other Linux architectures are not currently contemplated.
 
-## FFmpeg and ffprobe
+The project is split into:
 
-- The FFmpeg and ffprobe binaries used by this project come from the Jellyfin project forks/builds.
-- Be careful when changing media probing, transcoding, HLS, subtitle, or audio-track behavior.
-- Video and audio playback changes must be tested carefully.
+* `server/` — Go backend
+* `web/` — React/Vite frontend
+* `docs/` — project notes, OpenAPI artifacts, and supporting documentation
 
-## Jellyfin Reference
+The application targets Linux x64 and macOS ARM64. Windows, Docker deployment, and other Linux architectures are not currently supported.
 
-- Jellyfin may be used as a reference for media playback, FFmpeg usage, HLS behavior, metadata fetching, movies, and TV shows.
-- The local Jellyfin reference repository is located at:
+This project is not in production, so do not add migrations or preserve backwards compatibility unless specifically requested.
 
-  `/home/jose-ibanez/projects/jellyfin`
+## Core Rules
 
-- Use Jellyfin as a reference, not as a source to blindly copy.
-- The goal is to build a better, more accessible self-hosted media center, not to reimplement every Jellyfin feature.
+* Keep changes focused on the requested task.
+* Do not touch unrelated code.
+* Preserve existing behavior unless the task requires changing it.
+* Prefer existing project patterns over new abstractions.
+* Avoid large architectural changes unless explicitly requested.
+* Avoid unnecessary dependencies.
+* Apply DRY where it improves clarity, but do not over-abstract.
+* Do not extract tiny one-line helpers when inline code is clearer.
+* Avoid excessive comments.
+* Add comments only when the code is non-obvious or important context is needed.
 
-## Server
+## Project Structure
 
-- All handlers currently belong in the `main` package.
-- Shared/global constants should be placed in:
+### Server
 
-  `/server/cmd/internal/helpers/constants.go`
+The Go backend lives in:
 
-- Prefer small, focused handlers.
-- Check errors explicitly.
-- Avoid inline error assignment in `if` statements.
-- Prefer the Go standard library unless an existing dependency already solves the problem.
-- Do not add new dependencies unless clearly necessary.
+* `server/cmd/api`
+* `server/cmd/internal`
 
-## Web
+SQL schema and queries live in:
 
-- Use React 19 features where appropriate.
-- Screen reader support is essential.
-- Always use Bun as the package manager.
-- Use `@tanstack/react-router` for navigation.
-- Use `@tanstack/react-query` for server-state/data fetching.
-- Avoid manual memoization because this project uses the React Compiler.
-- Do not write deeply nested ternary statements.
-- Prefer clear conditional rendering over clever one-liners.
-- Use shadcn/ui and Tailwind CSS for styling.
+* `server/sqlc`
 
-### Web File Organization
+Server rules:
 
-- Constants go in:
+* Handlers currently belong in the `main` package.
+* Shared constants go in `server/cmd/internal/helpers/constants.go`.
+* Prefer small, focused handlers.
+* Check errors explicitly.
+* Avoid inline error assignment in `if` statements.
+* Prefer the Go standard library unless an existing dependency already solves the problem.
+* Do not add new dependencies unless clearly necessary.
 
-  `/web/src/lib/constants.ts`
+### Web
 
-- Helper functions and utilities go in:
+The React/Vite frontend lives in `web/src`.
 
-  `/web/src/lib`
+Important directories:
 
-- Shared types go in:
+* `web/src/routes` — route modules
+* `web/src/components` — shared components
+* `web/src/hooks` — React hooks
+* `web/src/lib` — utilities, helpers, and constants
+* `web/src/types` — shared TypeScript types
+* `web/src/test` — frontend unit tests
+* `web/e2e` — Playwright tests
 
-  `/web/src/types`
+Web rules:
 
-- Components go in:
-
-  `/web/src/components`
+* Always use Bun as the package manager.
+* Use React 19 features where appropriate.
+* Use `@tanstack/react-router` for navigation.
+* Use `@tanstack/react-query` for server state and data fetching.
+* Use shadcn/ui and Tailwind CSS for styling.
+* Avoid manual memoization because the project uses the React Compiler.
+* Avoid deeply nested ternary statements.
+* Prefer clear conditional rendering.
+* Use `async/await` instead of `.then()` and `.catch()` in application code.
+* Keep component props typed.
+* Use explicit shared types for API and domain models.
+* Avoid unnecessary state.
+* Prefer derived values over duplicated state.
+* Validate external data where appropriate.
 
 ## Accessibility
 
-- All interactive elements must have accessible names.
-- Do not create unlabeled icon-only buttons.
-- Keyboard navigation must work for interactive UI.
-- Do not rely on hover-only interactions.
-- Screen reader users must be able to understand and operate playback controls.
-- Prefer semantic HTML where possible.
-- Use ARIA only when semantic HTML is not enough.
-- When adding dialogs, menus, popovers, or custom controls, verify focus behavior.
-- Media controls, movie cards, navigation items, and settings controls must be understandable with a screen reader.
+Accessibility is a core requirement, not an enhancement.
 
-## TypeScript and React
+* Use semantic HTML whenever possible.
+* Use ARIA only when semantic HTML is not enough.
+* All interactive elements must have accessible names.
+* Do not create unlabeled icon-only buttons.
+* Keyboard navigation must work for interactive UI.
+* Do not rely on hover-only interactions.
+* Screen reader users must be able to understand and operate the interface.
+* Verify focus behavior when adding dialogs, menus, popovers, or custom controls.
+* Media controls, movie cards, navigation items, and settings controls must be understandable with a screen reader.
 
-- Use explicit shared types for API/domain models.
-- Keep component props typed.
-- Avoid unnecessary state.
-- Prefer derived values over duplicated state.
-- Use `async/await` instead of `.then()` and `.catch()` in application code.
-- Validate external data where appropriate.
-- Keep components focused and readable.
+## Media Playback
+
+Igloo uses FFmpeg and ffprobe binaries from the Jellyfin project builds/forks.
+
+Be careful when changing code related to:
+
+* Media probing
+* Direct streaming
+* HLS
+* Transcoding
+* Subtitles
+* Audio tracks
+* Video playback
+* Music playback
+
+Playback-related changes must be tested carefully.
+
+## Jellyfin Reference
+
+Jellyfin may be used as a reference for media playback, FFmpeg usage, HLS behavior, metadata fetching, movies, and TV shows.
+
+Local Jellyfin reference repository:
+
+```text
+/home/jose-ibanez/projects/jellyfin
+```
+
+Use Jellyfin as a reference, not as code to blindly copy.
+
+The goal is to build a better, more accessible self-hosted media center, not to reimplement every Jellyfin feature.
 
 ## Testing
 
-- After code changes, run the most relevant tests for the affected area.
-- For server changes, run the relevant Go tests.
-- For web changes, run the relevant type checks, lint checks, and tests.
-- Before completing large or risky changes, run the broader test suite when feasible.
-- If a test fails, evaluate whether the failure is caused by the code change or by an existing issue.
-- Do not change tests unless the test is incorrect or outdated and the application behavior is correct.
-- Use Playwright for end-to-end testing of the web application.
-- Features related to video playback, music playback, subtitles, audio tracks, transcoding, direct streaming, or HLS must be tested extensively.
+Run the most relevant tests for the affected area after making changes.
+
+* For server changes, run the relevant Go tests.
+* For web changes, run the relevant type checks, lint checks, and tests.
+* Use Playwright for end-to-end web testing.
+* Before completing large or risky changes, run the broader test suite when feasible.
+* If a test fails, determine whether the failure is caused by the change or by an existing issue.
+* Do not change tests unless the test is incorrect or outdated and the application behavior is correct.
+* Media playback, subtitles, audio tracks, transcoding, direct streaming, and HLS changes require extensive testing.

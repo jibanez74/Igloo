@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import {
   expectNoHorizontalOverflow,
@@ -111,6 +111,54 @@ const mockTracks = [
   },
 ];
 
+const mockMusicianDetails = {
+  musician: {
+    id: 1,
+    name: "Aurora Pines",
+    sort_name: "Aurora Pines",
+    summary: nullableString("Layered ambient pop with long descriptive copy for the tablet hero layout."),
+    spotify_popularity: {
+      Float64: 82,
+      Valid: true,
+    },
+    spotify_followers: nullableInt64(42000),
+    spotify_id: nullableString("spotify-aurora-pines"),
+    thumb: nullableString(),
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  },
+  albums: [
+    {
+      id: 10,
+      title: "Blue Record",
+      cover: nullableString(),
+      year: nullableInt64(2026),
+      release_date: nullableString("2026-01-01"),
+      spotify_popularity: {
+        Float64: 70,
+        Valid: true,
+      },
+      track_count: 2,
+    },
+  ],
+  tracks: mockTracks.map((track) => ({
+    id: track.id,
+    title: track.title,
+    sort_title: track.title,
+    duration: track.duration,
+    codec: track.codec,
+    bit_rate: track.bit_rate,
+    file_path: track.file_path,
+    track_index: track.id,
+    disc: 1,
+    album_id: track.album_id,
+    album_title: track.album_title,
+    album_cover: track.album_cover,
+  })),
+  genres: ["Ambient", "Pop", "Electronic"],
+  total_duration: 360000,
+};
+
 const likedTrackPages = {
   1: [
     {
@@ -197,6 +245,7 @@ async function mockMusicIndexApi(
   page: Page,
   requestedMusicianRequests: string[],
   createdPlaylistRequests: CreatePlaylistRequest[] = [],
+  requestedInTheatersRequests?: string[],
 ) {
   const playlists = [...mockPlaylists];
   const unexpectedApiRequests: string[] = [];
@@ -256,6 +305,19 @@ async function mockMusicIndexApi(
         total_pages: 2,
       }));
       return;
+    }
+
+    if (url.pathname === "/api/music/musicians/1") {
+      await fulfillJSON(route, apiResponse(mockMusicianDetails));
+      return;
+    }
+
+    if (url.pathname === "/api/tmdb/movies/in-theaters") {
+      if (requestedInTheatersRequests) {
+        requestedInTheatersRequests.push(`${url.pathname}${url.search}`);
+        await fulfillJSON(route, apiResponse({ movies: [] }));
+        return;
+      }
     }
 
     if (url.pathname === "/api/music/playlists") {
@@ -334,6 +396,19 @@ async function mockMusicIndexApi(
   return unexpectedApiRequests;
 }
 
+async function expectElementInsideViewport(page: Page, locator: Locator, label: string) {
+  const viewport = page.viewportSize();
+  const box = await locator.boundingBox();
+
+  expect(box, `${label} should have a layout box`).not.toBeNull();
+  expect(viewport, "viewport should be set before measuring layout").not.toBeNull();
+
+  if (!box || !viewport) return;
+
+  expect(box.x, `${label} left edge`).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width, `${label} right edge`).toBeLessThanOrEqual(viewport.width);
+}
+
 test("musicians tab renders accessible count text and URL-backed pagination", async ({ page }) => {
   const requestedMusicianRequests: string[] = [];
   const browserIssues = trackBrowserIssues(page);
@@ -367,6 +442,58 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Northern Signal, 3 albums, 27 tracks" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("musician details keeps hero controls inside tablet viewport", async ({ page }) => {
+  const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
+
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/music/musician/1");
+
+  const playAllButton = page.getByRole("button", {
+    name: "Play all 2 tracks by Aurora Pines",
+    exact: true,
+  });
+  const shuffleButton = page.getByRole("button", {
+    name: "Shuffle play all 2 tracks by Aurora Pines",
+    exact: true,
+  });
+
+  await expect(playAllButton).toBeVisible();
+  await expect(shuffleButton).toBeVisible();
+  await expectElementInsideViewport(page, playAllButton, "Play All button");
+  await expectElementInsideViewport(page, shuffleButton, "Shuffle button");
+  await expectPageHasNoHorizontalScroll(page);
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("Home sidebar links do not preload in-theaters data from music", async ({ page }) => {
+  const requestedMusicianRequests: string[] = [];
+  const requestedInTheatersRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
+
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+    [],
+    requestedInTheatersRequests,
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/music?tab=musicians");
+
+  await page.getByRole("link", { name: /Igloo.*Home/ }).hover();
+  await page.getByRole("link", { name: /Igloo.*Home/ }).focus();
+  await page.getByRole("link", { name: "Home", exact: true }).hover();
+  await page.getByRole("link", { name: "Home", exact: true }).focus();
+  await page.waitForTimeout(250);
+
+  expect(requestedInTheatersRequests).toEqual([]);
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
