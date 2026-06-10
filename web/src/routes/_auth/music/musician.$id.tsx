@@ -11,7 +11,10 @@ import {
   ListOrdered,
   ArrowLeft,
 } from "lucide-react";
-import { likedTrackIdsQueryOpts, musicianDetailsQueryOpts } from "@/lib/query-opts";
+import {
+  likedTrackIdsQueryOpts,
+  musicianDetailsQueryOpts,
+} from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,7 +39,7 @@ export const Route = createFileRoute("/_auth/music/musician/$id")({
   loader: async ({ context, params }) => {
     const musicianId = parseInt(params.id, 10);
     const data = await context.queryClient.ensureQueryData(
-      musicianDetailsQueryOpts(musicianId)
+      musicianDetailsQueryOpts(musicianId),
     );
 
     return data;
@@ -73,7 +76,7 @@ function MusicianDetailsPage() {
     );
   }
 
-  return <MusicianDetailsContent {...data.data} />;
+  return <MusicianDetailsContent key={data.data.musician.id} {...data.data} />;
 }
 
 function MusicianDetailsContent({
@@ -88,13 +91,16 @@ function MusicianDetailsContent({
 
   const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
   const likedSet = new Set<number>(
-    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : []
+    likedIdsData?.error === false
+      ? (likedIdsData.data.liked_track_ids ?? [])
+      : [],
   );
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const summary = unwrapString(musician.summary);
   const spotifyPopularityRaw = unwrapFloat(musician.spotify_popularity);
-  const spotifyPopularity = spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
+  const spotifyPopularity =
+    spotifyPopularityRaw !== null ? Math.round(spotifyPopularityRaw) : null;
   const spotifyFollowers = unwrapInt(musician.spotify_followers);
 
   // React 19 document metadata - dynamic based on musician
@@ -127,7 +133,7 @@ function MusicianDetailsContent({
         musician_id: { Int64: musician.id, Valid: true },
         album_cover: track.album_cover,
         musician_name: { String: musician.name, Valid: true },
-      })
+      }),
     );
   };
 
@@ -181,10 +187,7 @@ function MusicianDetailsContent({
 
   return (
     <article
-      className={cn(
-        DETAIL_PAGE_CONTENT_ENTER_CLASS,
-        "w-full min-w-0 overflow-x-hidden pb-6 sm:pb-10",
-      )}
+      className="w-full min-w-0 overflow-x-hidden pb-6 sm:pb-10"
       aria-labelledby="musician-name"
       aria-describedby={pageAnnouncementId}
     >
@@ -193,211 +196,270 @@ function MusicianDetailsContent({
       <meta name="description" content={pageDescription} />
 
       {/* Screen reader announcement */}
-      <span
-        id={pageAnnouncementId}
-        className="sr-only"
-      >
+      <span id={pageAnnouncementId} className="sr-only">
         {pageAnnouncement}
       </span>
 
-      {/* Header section */}
-      <header className="mb-10 flex flex-col gap-8 lg:flex-row">
-        {/* Musician thumbnail */}
-        <figure className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-48 overflow-hidden rounded-full border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-56 lg:w-64">
-            {thumbUrl ? (
-              <img
-                src={thumbUrl}
-                alt={musician.name}
-                className="size-full object-cover"
-              />
-            ) : (
-              <div
-                className="flex size-full items-center justify-center bg-slate-800"
-                role="img"
-                aria-label="No image available"
-              >
-                <User className="size-16 text-slate-600" aria-hidden="true" />
+      <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
+        <MusicianDetailsBackdrop thumbUrl={thumbUrl} />
+      </div>
+
+      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
+        <div
+          className={cn(
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
+            "delay-75 motion-reduce:delay-0",
+          )}
+        >
+          {/* Header section */}
+          <header className="mb-10 flex flex-col gap-8 lg:flex-row">
+            {/* Musician thumbnail */}
+            <figure className="mx-auto shrink-0 lg:mx-0">
+              <div className="aspect-square w-48 overflow-hidden rounded-full border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-56 lg:w-64">
+                {thumbUrl ? (
+                  <img
+                    src={thumbUrl}
+                    alt={musician.name}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="flex size-full items-center justify-center bg-slate-800"
+                    role="img"
+                    aria-label="No image available"
+                  >
+                    <User
+                      className="size-16 text-slate-600"
+                      aria-hidden="true"
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </figure>
+            </figure>
 
-        {/* Musician info */}
-        <div className="flex min-w-0 flex-1 flex-col text-center lg:text-left">
-          {/* Name */}
-          <h1
-            id="musician-name"
-            className="truncate text-2xl font-bold text-white sm:text-3xl md:text-4xl lg:text-5xl"
-            title={musician.name}
-          >
-            {musician.name}
-          </h1>
+            {/* Musician info */}
+            <div className="flex min-w-0 flex-1 flex-col text-center lg:text-left">
+              {/* Name */}
+              <h1
+                id="musician-name"
+                className="truncate text-2xl font-bold text-white sm:text-3xl md:text-4xl lg:text-5xl"
+                title={musician.name}
+              >
+                {musician.name}
+              </h1>
 
-          {/* Summary */}
-          {summary && (
-            <p className="mt-3 text-sm text-slate-400 sm:text-base lg:max-w-2xl">{summary}</p>
-          )}
+              {/* Summary */}
+              {summary && (
+                <p className="mt-3 text-sm text-slate-400 sm:text-base lg:max-w-2xl">
+                  {summary}
+                </p>
+              )}
 
-          {/* Genre tags */}
-          {genres.length > 0 && (
-            <ul
-              className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start"
-              aria-label={`Genres: ${genres.join(", ")}`}
-            >
-              {genres.map((genre) => (
-                <li
-                  key={genre}
-                  className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
+              {/* Genre tags */}
+              {genres.length > 0 && (
+                <ul
+                  className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start"
+                  aria-label={`Genres: ${genres.join(", ")}`}
                 >
-                  {genre}
+                  {genres.map((genre) => (
+                    <li
+                      key={genre}
+                      className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
+                    >
+                      {genre}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Stats row */}
+              <ul
+                className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-400 sm:text-base lg:justify-start"
+                aria-label="Musician statistics"
+              >
+                <li className="flex items-center gap-1.5">
+                  <Disc3 className="size-4 text-slate-400" aria-hidden="true" />
+                  <span>
+                    {albums.length} {albums.length === 1 ? "album" : "albums"}
+                  </span>
                 </li>
-              ))}
-            </ul>
-          )}
+                <li className="flex items-center gap-1.5">
+                  <Music className="size-4 text-slate-400" aria-hidden="true" />
+                  <span>
+                    {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+                  </span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Clock className="size-4 text-slate-400" aria-hidden="true" />
+                  <span>{formatDuration(total_duration)}</span>
+                </li>
+              </ul>
 
-          {/* Stats row */}
-          <ul
-            className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-400 sm:text-base lg:justify-start"
-            aria-label="Musician statistics"
-          >
-            <li className="flex items-center gap-1.5">
-              <Disc3 className="size-4 text-slate-400" aria-hidden="true" />
-              <span>
-                {albums.length} {albums.length === 1 ? "album" : "albums"}
-              </span>
-            </li>
-            <li className="flex items-center gap-1.5">
-              <Music className="size-4 text-slate-400" aria-hidden="true" />
-              <span>
-                {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-              </span>
-            </li>
-            <li className="flex items-center gap-1.5">
-              <Clock className="size-4 text-slate-400" aria-hidden="true" />
-              <span>{formatDuration(total_duration)}</span>
-            </li>
-          </ul>
-
-          {/* Play buttons */}
-          {tracks.length > 0 && (
-            <div className="mt-6 flex w-full flex-col flex-wrap justify-center gap-3 sm:flex-row lg:justify-start">
-              <button
-                onClick={handlePlayAll}
-                className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3
+              {/* Play buttons */}
+              {tracks.length > 0 && (
+                <div className="mt-6 flex w-full flex-col flex-wrap justify-center gap-3 sm:flex-row lg:justify-start">
+                  <button
+                    onClick={handlePlayAll}
+                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3
                   font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400
                   focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:w-auto"
-                aria-label={`Play all ${tracks.length} tracks by ${musician.name}`}
-              >
-                <Play className="size-4 fill-current" aria-hidden="true" />
-                Play All
-              </button>
-              <button
-                onClick={handleShufflePlay}
-                className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700
+                    aria-label={`Play all ${tracks.length} tracks by ${musician.name}`}
+                  >
+                    <Play className="size-4 fill-current" aria-hidden="true" />
+                    Play All
+                  </button>
+                  <button
+                    onClick={handleShufflePlay}
+                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700
                   px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600
                   focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:w-auto"
-                aria-label={`Shuffle play all ${tracks.length} tracks by ${musician.name}`}
-              >
-                <Shuffle className="size-4" aria-hidden="true" />
-                Shuffle
-              </button>
-            </div>
-          )}
+                    aria-label={`Shuffle play all ${tracks.length} tracks by ${musician.name}`}
+                  >
+                    <Shuffle className="size-4" aria-hidden="true" />
+                    Shuffle
+                  </button>
+                </div>
+              )}
 
-          {/* Spotify stats */}
-          {(spotifyPopularity !== null || spotifyFollowers !== null) && (
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400 sm:text-sm lg:justify-start">
-              <svg className="size-4 text-green-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-              </svg>
-              {spotifyPopularity !== null && (
-                <span>
-                  <span className="text-slate-400">Popularity:</span>{" "}
-                  <span className="font-medium text-green-400">
-                    {spotifyPopularity}
-                  </span>
-                </span>
-              )}
-              {spotifyFollowers !== null && (
-                <span>
-                  <span className="text-slate-400">Followers:</span>{" "}
-                  <span className="font-medium text-green-400">
-                    {formatFollowers(spotifyFollowers)}
-                  </span>
-                </span>
+              {/* Spotify stats */}
+              {(spotifyPopularity !== null || spotifyFollowers !== null) && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400 sm:text-sm lg:justify-start">
+                  <svg
+                    className="size-4 text-green-500"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                  {spotifyPopularity !== null && (
+                    <span>
+                      <span className="text-slate-400">Popularity:</span>{" "}
+                      <span className="font-medium text-green-400">
+                        {spotifyPopularity}
+                      </span>
+                    </span>
+                  )}
+                  {spotifyFollowers !== null && (
+                    <span>
+                      <span className="text-slate-400">Followers:</span>{" "}
+                      <span className="font-medium text-green-400">
+                        {formatFollowers(spotifyFollowers)}
+                      </span>
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </header>
         </div>
-      </header>
 
-      {/* Discography section */}
-      {albums.length > 0 && (
-        <section className="mb-10" aria-labelledby="discography-heading">
-          <h2
-            id="discography-heading"
-            className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
-          >
-            <Disc3 className="size-5 text-amber-400" aria-hidden="true" />
-            Discography
-          </h2>
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {albums.map((album) => (
-              <AlbumCard key={album.id} album={album} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* All Tracks section */}
-      {tracks.length > 0 && (
-        <section aria-labelledby="tracks-heading">
-          <h2
-            id="tracks-heading"
-            className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
-          >
-            <ListOrdered className="size-5 text-amber-400" aria-hidden="true" />
-            All Tracks
-          </h2>
-
-          <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
-            <div className="divide-y divide-slate-700/30">
-              {tracks.map((track) => (
-                <TrackItem
-                  key={track.id}
-                  id={track.id}
-                  title={track.title}
-                  duration={track.duration}
-                  subtitle={unwrapString(track.album_title) ?? "Unknown Album"}
-                  albumId={unwrapInt(track.album_id)}
-                  variant="musician"
-                  isLiked={likedSet.has(track.id)}
-                  isPlaying={isTrackPlaying(track)}
-                  isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
-                  onPlay={() => handlePlayTrack(track)}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Back link */}
-      <nav className="mt-8" aria-label="Page navigation">
-        <Link
-          to="/music"
-          search={{ tab: "musicians" }}
-          className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-slate-400 transition-colors
-            hover:text-amber-400 focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-          aria-label="Back to Musicians library"
+        <div
+          className={cn(
+            DETAIL_PAGE_CONTENT_ENTER_CLASS,
+            "space-y-10 delay-150 motion-reduce:delay-0",
+          )}
         >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Musicians
-        </Link>
-      </nav>
+          {/* Discography section */}
+          {albums.length > 0 && (
+            <section aria-labelledby="discography-heading">
+              <h2
+                id="discography-heading"
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
+              >
+                <Disc3 className="size-5 text-amber-400" aria-hidden="true" />
+                Discography
+              </h2>
+
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {albums.map((album) => (
+                  <AlbumCard key={album.id} album={album} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* All Tracks section */}
+          {tracks.length > 0 && (
+            <section aria-labelledby="tracks-heading">
+              <h2
+                id="tracks-heading"
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
+              >
+                <ListOrdered
+                  className="size-5 text-amber-400"
+                  aria-hidden="true"
+                />
+                All Tracks
+              </h2>
+
+              <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+                <div className="divide-y divide-slate-700/30">
+                  {tracks.map((track) => (
+                    <TrackItem
+                      key={track.id}
+                      id={track.id}
+                      title={track.title}
+                      duration={track.duration}
+                      subtitle={
+                        unwrapString(track.album_title) ?? "Unknown Album"
+                      }
+                      albumId={unwrapInt(track.album_id)}
+                      variant="musician"
+                      isLiked={likedSet.has(track.id)}
+                      isPlaying={isTrackPlaying(track)}
+                      isCurrentTrack={
+                        audioPlayerState.currentTrack?.id === track.id
+                      }
+                      onPlay={() => handlePlayTrack(track)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Back link */}
+          <nav aria-label="Page navigation">
+            <Link
+              to="/music"
+              search={{ tab: "musicians" }}
+              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-slate-400 transition-colors
+            hover:text-amber-400 focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+              aria-label="Back to Musicians library"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Back to Musicians
+            </Link>
+          </nav>
+        </div>
+      </div>
     </article>
+  );
+}
+
+function MusicianDetailsBackdrop({ thumbUrl }: { thumbUrl: string | null }) {
+  return (
+    <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
+      {thumbUrl ? (
+        <img
+          src={thumbUrl}
+          alt=""
+          className="h-44 w-full object-cover object-center sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48"
+        />
+      ) : (
+        <div className="flex h-44 w-full items-center justify-center bg-slate-800 sm:h-52 md:aspect-21/9 md:min-h-48">
+          <User
+            className="size-16 text-slate-600 opacity-40"
+            aria-hidden="true"
+          />
+        </div>
+      )}
+      <div
+        className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
+        aria-hidden="true"
+      />
+    </div>
   );
 }
 
