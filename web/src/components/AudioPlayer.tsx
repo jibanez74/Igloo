@@ -13,6 +13,12 @@ import { Spinner } from "@/components/ui/spinner";
 import type { TrackType } from "@/types";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
+import {
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_ENTER_CLASS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type AudioPlayerProps = {
   track: TrackType | null;
@@ -513,8 +519,10 @@ export default function AudioPlayer({
           aria-modal="true"
           aria-label={`Now playing: ${track.title} by ${artist}`}
           onKeyDown={handleExpandedKeyDown}
-          className="fixed inset-0 z-50 flex animate-in flex-col bg-linear-to-b from-slate-900 via-slate-800
-            to-slate-900 duration-200 zoom-in-95 fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-800 to-slate-900",
+          )}
         >
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {announcement}
@@ -523,7 +531,10 @@ export default function AudioPlayer({
           <header className="flex items-center justify-between px-6 py-4">
             <button
               onClick={onMinimize}
-              className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+              )}
               aria-label="Minimize player (Escape)"
             >
               <ChevronDown className="size-5" aria-hidden="true" />
@@ -537,7 +548,10 @@ export default function AudioPlayer({
             {onClose ? (
               <button
                 onClick={onClose}
-                className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label="Stop playback and close player"
               >
                 <X className="size-5" aria-hidden="true" />
@@ -591,7 +605,10 @@ export default function AudioPlayer({
               <button
                 onClick={playPrevious}
                 disabled={!hasPrevious}
-                className="flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                )}
                 aria-label={prevAriaLabel}
               >
                 <SkipBack className="size-6" aria-hidden="true" />
@@ -601,7 +618,10 @@ export default function AudioPlayer({
                 ref={playPauseButtonRef}
                 onClick={handleTogglePlay}
                 disabled={isLoading}
-                className="flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 transition-colors hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50",
+                )}
                 aria-label={isLoading ? "Loading" : playPauseAriaLabel}
               >
                 {isLoading ? (
@@ -616,7 +636,10 @@ export default function AudioPlayer({
               <button
                 onClick={playNext}
                 disabled={!hasNext}
-                className="flex size-14 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                )}
                 aria-label={nextAriaLabel}
               >
                 <SkipForward className="size-6" aria-hidden="true" />
@@ -642,14 +665,19 @@ export default function AudioPlayer({
         <div
           role="region"
           aria-label="Audio player"
-          className="fixed inset-x-0 bottom-0 z-40 animate-in border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50
-            backdrop-blur-lg duration-200 fade-in slide-in-from-bottom motion-reduce:animate-none"
+          className={cn(
+            MOTION_PLAYER_CHROME_ENTER_CLASS,
+            "fixed inset-x-0 bottom-0 z-40 border-t border-slate-700/50 bg-slate-900/95 shadow-2xl shadow-black/50 backdrop-blur-lg",
+          )}
         >
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex items-center gap-4">
               <button
                 onClick={onExpand}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition-opacity duration-150 hover:opacity-80 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none motion-reduce:transition-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
               >
                 <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg">
@@ -682,7 +710,10 @@ export default function AudioPlayer({
                 <button
                   onClick={playPrevious}
                   disabled={!hasPrevious}
-                  className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30"
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                  )}
                   aria-label={prevAriaLabel}
                 >
                   <SkipBack className="size-4" aria-hidden="true" />
@@ -691,7 +722,10 @@ export default function AudioPlayer({
                 <button
                   onClick={handleTogglePlay}
                   disabled={isLoading}
-                  className="flex size-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50"
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-12 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50",
+                  )}
                   aria-label={isLoading ? "Loading" : playPauseAriaLabel}
                 >
                   {isLoading ? (
@@ -706,7 +740,10 @@ export default function AudioPlayer({
                 <button
                   onClick={playNext}
                   disabled={!hasNext}
-                  className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30"
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                  )}
                   aria-label={nextAriaLabel}
                 >
                   <SkipForward className="size-4" aria-hidden="true" />
@@ -730,7 +767,10 @@ export default function AudioPlayer({
 
               <button
                 onClick={onExpand}
-                className="hidden size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "hidden size-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:flex",
+                )}
                 aria-label="Expand to fullscreen player"
               >
                 <ChevronUp className="size-4" aria-hidden="true" />
@@ -739,7 +779,10 @@ export default function AudioPlayer({
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="flex size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                  )}
                   aria-label="Stop playback and close player"
                 >
                   <X className="size-4" aria-hidden="true" />

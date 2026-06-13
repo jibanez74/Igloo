@@ -6,6 +6,15 @@ export function isIgnorableFailedRequest(request: Request) {
     return false;
   }
 
+  const url = new URL(request.url());
+  if (
+    request.method() === "GET" &&
+    url.pathname === "/api/auth/user" &&
+    request.resourceType() === "fetch"
+  ) {
+    return true;
+  }
+
   return ["font", "image", "script", "stylesheet"].includes(
     request.resourceType(),
   );

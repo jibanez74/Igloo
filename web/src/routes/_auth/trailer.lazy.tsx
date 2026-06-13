@@ -16,11 +16,18 @@ import {
   Maximize,
   Minimize,
 } from "lucide-react";
+import ProgressBar from "@/components/ProgressBar";
 import { Spinner } from "@/components/ui/spinner";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { toast } from "sonner";
+import { formatTimeSeconds } from "@/lib/format";
+import {
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_PANEL_CLASS,
+} from "@/lib/constants";
 import {
   canRequestElementFullscreen,
   exitDocumentFullscreen,
@@ -28,6 +35,7 @@ import {
   isDocumentFullscreenEntryLikely,
   requestElementFullscreen,
 } from "@/lib/fullscreen";
+import { cn } from "@/lib/utils";
 
 export const Route = createLazyFileRoute("/_auth/trailer")({
   component: TrailerPage,
@@ -86,6 +94,7 @@ function TrailerPage() {
     isMuted,
     error,
     togglePlay,
+    seekTo,
     seekForward,
     seekBackward,
     setVolume,
@@ -98,34 +107,6 @@ function TrailerPage() {
   });
 
   const announcement = isPlaying ? `Playing: ${title}` : `Paused: ${title}`;
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration) return;
-
-    const target = e.currentTarget;
-    const rect = target.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
-
-    const diff = newTime - currentTime;
-    if (diff > 0) {
-      seekForward(diff);
-    } else {
-      seekBackward(-diff);
-    }
-  };
-
-  const handleProgressKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      seekBackward(5);
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      seekForward(5);
-    }
-  };
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -173,8 +154,13 @@ function TrailerPage() {
   }, []);
 
   const handleKeyboardShortcut = useEffectEvent((e: KeyboardEvent) => {
-    const target = e.target as HTMLElement;
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
     if (
+      target.closest('[role="slider"]') ||
       target.tagName === "INPUT" ||
       target.tagName === "TEXTAREA" ||
       target.isContentEditable
@@ -275,7 +261,10 @@ function TrailerPage() {
         role="dialog"
         aria-modal="true"
         aria-label="Error playing trailer"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
+        className={cn(
+          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+        )}
       >
         <div className="max-w-md px-4 text-center">
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
@@ -288,7 +277,10 @@ function TrailerPage() {
           <button
             ref={closeButtonRef}
             onClick={handleClose}
-            className="rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className={cn(
+              MOTION_PLAYER_CHROME_BUTTON_CLASS,
+              "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+            )}
           >
             <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
@@ -305,7 +297,10 @@ function TrailerPage() {
         role="dialog"
         aria-modal="true"
         aria-label="No trailer available"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
+        className={cn(
+          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+        )}
       >
         <div className="max-w-md px-4 text-center">
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-slate-800">
@@ -320,7 +315,10 @@ function TrailerPage() {
           <button
             ref={closeButtonRef}
             onClick={handleClose}
-            className="rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className={cn(
+              MOTION_PLAYER_CHROME_BUTTON_CLASS,
+              "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+            )}
           >
             <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
             Go Back
@@ -336,7 +334,10 @@ function TrailerPage() {
         role="dialog"
         aria-modal="true"
         aria-label="Loading trailer"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
+        className={cn(
+          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+        )}
       >
         <div className="text-center">
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
@@ -358,7 +359,10 @@ function TrailerPage() {
       aria-modal="true"
       aria-label={title}
       onKeyDown={handleContainerKeyDown}
-      className="fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900"
+      className={cn(
+        MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+        "fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+      )}
     >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -370,7 +374,12 @@ function TrailerPage() {
         volume, M to mute, F for fullscreen, Escape to exit fullscreen or close.
       </p>
 
-      <header className="flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg">
+      <header
+        className={cn(
+          MOTION_PLAYER_CHROME_PANEL_CLASS,
+          "flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg",
+        )}
+      >
         <div className="flex items-center gap-3">
           <Film className="size-5 text-amber-400" aria-hidden="true" />
           <div>
@@ -383,7 +392,10 @@ function TrailerPage() {
         <button
           ref={closeButtonRef}
           onClick={handleClose}
-          className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          className={cn(
+            MOTION_PLAYER_CHROME_BUTTON_CLASS,
+            "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+          )}
           aria-label="Close trailer (Escape)"
         >
           <X className="size-5" aria-hidden="true" />
@@ -396,7 +408,12 @@ function TrailerPage() {
         </div>
 
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+          <div
+            className={cn(
+              MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+              "absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm",
+            )}
+          >
             <div className="text-center">
               <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-500/10">
                 <Spinner className="size-8 text-amber-400" />
@@ -407,40 +424,30 @@ function TrailerPage() {
         )}
       </div>
 
-      <footer className="border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg">
+      <footer
+        className={cn(
+          MOTION_PLAYER_CHROME_PANEL_CLASS,
+          "border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg",
+        )}
+      >
         <div className="mx-auto max-w-4xl">
-          <div className="mb-4" role="group" aria-label="Playback progress">
-            <div
-              onClick={handleProgressClick}
-              onKeyDown={handleProgressKeyDown}
-              tabIndex={0}
-              className="group relative h-1.5 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              role="slider"
-              aria-label="Seek through trailer"
-              aria-valuenow={Math.round(currentTime)}
-              aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
-              aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-            >
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-[width] duration-150 ease-out motion-reduce:transition-none"
-                style={{ width: `${progress}%` }}
-              />
-              <div
-                className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 motion-reduce:transition-none"
-                style={{ left: `calc(${progress}% - 6px)` }}
-              />
-            </div>
-          </div>
+          <ProgressBar
+            variant="trailer"
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={seekTo}
+            ariaLabel="Seek through trailer"
+            groupLabel="Playback progress"
+          />
 
           <div className="flex items-center justify-between">
             <div className="flex min-w-[100px] items-center gap-2">
               <span className="text-sm text-slate-400 tabular-nums">
-                {formatTime(currentTime)}
+                {formatTimeSeconds(currentTime)}
               </span>
               <span className="text-slate-600">/</span>
               <span className="text-sm text-slate-400 tabular-nums">
-                {formatTime(duration)}
+                {formatTimeSeconds(duration)}
               </span>
             </div>
 
@@ -451,7 +458,10 @@ function TrailerPage() {
             >
               <button
                 onClick={() => seekBackward(10)}
-                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                )}
                 aria-label="Rewind 10 seconds (J or Left Arrow)"
               >
                 <Rewind className="size-5" aria-hidden="true" />
@@ -459,7 +469,10 @@ function TrailerPage() {
 
               <button
                 onClick={togglePlay}
-                className="flex size-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label={
                   isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
                 }
@@ -473,7 +486,10 @@ function TrailerPage() {
 
               <button
                 onClick={() => seekForward(10)}
-                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                )}
                 aria-label="Forward 10 seconds (L or Right Arrow)"
               >
                 <FastForward className="size-5" aria-hidden="true" />
@@ -483,7 +499,10 @@ function TrailerPage() {
             <div className="flex min-w-[100px] items-center justify-end gap-2">
               <button
                 onClick={toggleMute}
-                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                )}
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
                 {isMuted || volume === 0 ? (
@@ -497,7 +516,10 @@ function TrailerPage() {
 
               <button
                 onClick={toggleFullscreen}
-                className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                )}
                 aria-label={
                   isBrowserFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
                 }
@@ -515,11 +537,4 @@ function TrailerPage() {
       </footer>
     </div>
   );
-}
-
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || isNaN(seconds)) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }

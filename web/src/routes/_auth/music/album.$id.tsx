@@ -39,7 +39,11 @@ import type {
 import MediaNotFound from "@/components/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/AlbumDetailsCoverBlock";
-import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import {
+  DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  MOTION_LOADING_STATE_CLASS,
+  MOTION_PROGRESS_FILL_CLASS,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 function SpotifyGlyph({ className }: { className?: string }) {
@@ -80,7 +84,10 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
         aria-valuemax={100}
       >
         <div
-          className="h-full rounded-full bg-green-500 transition-[width] duration-150 ease-out motion-reduce:transition-none"
+          className={cn(
+            "h-full rounded-full bg-green-500",
+            MOTION_PROGRESS_FILL_CLASS,
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -146,7 +153,7 @@ function AlbumDetailsPage() {
 function AlbumDetailsSkeleton() {
   return (
     <div
-      className="animate-pulse"
+      className={MOTION_LOADING_STATE_CLASS}
       role="status"
       aria-label="Loading album details"
     >

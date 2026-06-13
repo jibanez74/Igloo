@@ -15,7 +15,11 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { TMDB_POSTER_SIZE, WATCH_ROOM_SEEK_STEP_SEC } from "@/lib/constants";
+import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  TMDB_POSTER_SIZE,
+  WATCH_ROOM_SEEK_STEP_SEC,
+} from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { watchRoomQueryOpts } from "@/lib/query-opts";
@@ -513,7 +517,10 @@ function WatchRoomPlayerPanel({
               <button
                 type="button"
                 onClick={onSeekBackward}
-                className="inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 transition-colors hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label="Rewind 10 seconds"
               >
                 <Rewind className="size-5" aria-hidden="true" />
@@ -522,7 +529,10 @@ function WatchRoomPlayerPanel({
               <button
                 type="button"
                 onClick={onTogglePlay}
-                className="inline-flex size-13 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex size-13 items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label={playing ? "Pause playback" : "Play playback"}
               >
                 {playing ? (
@@ -535,7 +545,10 @@ function WatchRoomPlayerPanel({
               <button
                 type="button"
                 onClick={onSeekForward}
-                className="inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 transition-colors hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label="Fast-forward 10 seconds"
               >
                 <FastForward className="size-5" aria-hidden="true" />
@@ -551,7 +564,10 @@ function WatchRoomPlayerPanel({
               <button
                 type="button"
                 onClick={onToggleFullscreen}
-                className="inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 transition-colors hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
                 aria-label={
                   playerFullscreenMode
                     ? isImmersiveViewport && !isFullscreen

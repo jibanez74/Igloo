@@ -7,7 +7,11 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
+import {
+  CONTENT_FADE_TRANSITION_MS,
+  MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
+  MOTION_SETTINGS_SURFACE_CLASS,
+} from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const defaultMatchMedia = window.matchMedia;
@@ -197,5 +201,26 @@ describe("settings route tab transitions", () => {
       expect(screen.getByText("Profile Information")).toBeInTheDocument();
     });
     expect(startViewTransition).not.toHaveBeenCalled();
+  });
+
+  it("uses shared motion contracts for settings surfaces and switches", async () => {
+    await renderSettingsRoute("/settings");
+
+    const title = await screen.findByText("General Settings");
+    expect(title.closest('[data-slot="card"]')).toHaveClass(
+      ...MOTION_SETTINGS_SURFACE_CLASS.split(" "),
+    );
+
+    const savePanel =
+      screen.getByText("General settings").parentElement?.parentElement;
+    expect(savePanel).toHaveClass(...MOTION_SETTINGS_SURFACE_CLASS.split(" "));
+
+    const switchControl = screen.getByRole("switch", { name: "File logging" });
+    expect(switchControl).toHaveClass(
+      ...MOTION_SETTINGS_SURFACE_CLASS.split(" "),
+    );
+    expect(switchControl.firstElementChild).toHaveClass(
+      ...MOTION_CONTROL_THUMB_TRANSFORM_CLASS.split(" "),
+    );
   });
 });

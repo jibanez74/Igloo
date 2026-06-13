@@ -2,7 +2,12 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WatchRoomCard from "@/components/WatchRoomCard";
-import { WATCH_ROOM_KEY, WATCH_ROOMS_KEY } from "@/lib/constants";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  WATCH_ROOM_KEY,
+  WATCH_ROOMS_KEY,
+} from "@/lib/constants";
 import type { ApiResponseType, WatchRoomType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
 
@@ -96,6 +101,24 @@ function buildRoom(overrides: Partial<WatchRoomType> = {}): WatchRoomType {
 }
 
 describe("WatchRoomCard", () => {
+  it("uses the shared motion contracts for the card surface and poster", () => {
+    const { container } = renderWithQueryClient(
+      <WatchRoomCard
+        room={buildRoom({
+          movie_poster: "/moonfall.jpg",
+        })}
+      />,
+    );
+
+    const card = container.querySelector("article");
+    const poster = container.querySelector("img");
+
+    expect(card).toBeTruthy();
+    expect(card?.className).toContain(CARD_INTERACTIVE_SURFACE_CLASS);
+    expect(poster).toBeTruthy();
+    expect(poster?.className).toContain(CARD_MEDIA_HOVER_CLASS);
+  });
+
   it("shows the owner delete affordance only for owners", () => {
     const { rerender } = renderWithQueryClient(
       <WatchRoomCard room={buildRoom({ is_owner: true })} />,

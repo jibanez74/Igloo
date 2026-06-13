@@ -38,7 +38,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { GENERAL_SETTINGS_KEY, PLAYBACK_SETTINGS_KEY } from "@/lib/constants";
+import {
+  GENERAL_SETTINGS_KEY,
+  MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
+  MOTION_SETTINGS_SURFACE_CLASS,
+  PLAYBACK_SETTINGS_KEY,
+} from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
@@ -422,7 +427,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       noValidate
       className="max-w-5xl space-y-6"
     >
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Sliders className="size-5 text-amber-400" aria-hidden="true" />
@@ -434,7 +444,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardHeader>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Gauge className="size-5 text-amber-400" aria-hidden="true" />
@@ -488,7 +503,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <MonitorCog className="size-5 text-amber-400" aria-hidden="true" />
@@ -540,7 +560,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <KeyRound className="size-5 text-amber-400" aria-hidden="true" />
@@ -616,7 +641,12 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <HardDrive className="size-5 text-amber-400" aria-hidden="true" />
@@ -663,12 +693,18 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 transition-colors duration-200 sm:flex sm:items-center sm:justify-between sm:gap-4">
+      <div
+        className={cn(
+          "rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">General settings</p>
           <p
             className={cn(
-              "mt-1 text-sm transition-colors",
+              "mt-1 text-sm",
+              MOTION_SETTINGS_SURFACE_CLASS,
               validationMessage ? "text-red-300" : "text-slate-400",
             )}
             aria-live="polite"
@@ -729,7 +765,12 @@ function SwitchField({
   const descriptionId = `${id}-description`;
 
   return (
-    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 transition-colors duration-200 hover:border-slate-600/70">
+    <div
+      className={cn(
+        "rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 hover:border-slate-600/70",
+        MOTION_SETTINGS_SURFACE_CLASS,
+      )}
+    >
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
         <div
           className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-800"
@@ -749,7 +790,8 @@ function SwitchField({
           disabled={disabled}
           onClick={() => onCheckedChange(!checked)}
           className={cn(
-            "relative mt-1 h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            MOTION_SETTINGS_SURFACE_CLASS,
             checked
               ? "border-amber-400 bg-amber-500"
               : "border-slate-600 bg-slate-700",
@@ -758,7 +800,8 @@ function SwitchField({
           <span
             aria-hidden="true"
             className={cn(
-              "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform duration-200",
+              "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm",
+              MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
               checked ? "translate-x-5" : "translate-x-1",
             )}
           />

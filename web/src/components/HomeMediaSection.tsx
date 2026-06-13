@@ -4,6 +4,8 @@ import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
+import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type HomeMediaSectionProps<T> = {
   title: string;
@@ -39,21 +41,50 @@ export default function HomeMediaSection<T>({
   renderItem,
 }: HomeMediaSectionProps<T>) {
   const hasError = Boolean(errorMessage);
+  const sectionSummaryId = `${headingId}-summary`;
+  let sectionSummary = "";
+
+  if (isPending) {
+    sectionSummary = loadingLabel;
+  } else if (hasError && errorMessage) {
+    sectionSummary = errorMessage;
+  } else if (items.length > 0) {
+    sectionSummary = `${items.length} ${countLabel} available in ${title.toLowerCase()}.`;
+  } else {
+    sectionSummary = emptyDescription;
+  }
 
   return (
     <section
       role="region"
       aria-labelledby={headingId}
-      className="mt-6 md:mt-8"
+      aria-describedby={sectionSummaryId}
+      className={cn("mt-6 md:mt-8", MOTION_SECTION_ENTER_DELAYED_CLASS)}
     >
       <LiveAnnouncer message={announcementMessage} />
 
-      <h2
-        id={headingId}
-        className="mb-4 text-xl font-semibold tracking-tight text-white md:text-2xl"
-      >
-        {title}
-      </h2>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2
+            id={headingId}
+            className="text-xl font-semibold tracking-tight text-white md:text-2xl"
+          >
+            {title}
+          </h2>
+          <p
+            id={sectionSummaryId}
+            className="mt-1 text-sm text-slate-400"
+          >
+            {sectionSummary}
+          </p>
+        </div>
+
+        {!isPending && !hasError && items.length > 0 && (
+          <p className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300">
+            {items.length} {countLabel}
+          </p>
+        )}
+      </div>
 
       {isPending ? (
         <div
@@ -73,22 +104,13 @@ export default function HomeMediaSection<T>({
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : items.length > 0 ? (
-        <>
-          <span
-            tabIndex={0}
-            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-4 focus:py-2 focus:text-slate-900"
-            aria-label={`${title} section, ${items.length} ${countLabel}`}
-          >
-            {title} - {items.length} {countLabel}
-          </span>
-          <div className={gridClassName}>
-            {items.map((item, index) => (
-              <Fragment key={getKey(item, index)}>
-                {renderItem(item, index)}
-              </Fragment>
-            ))}
-          </div>
-        </>
+        <div className={gridClassName}>
+          {items.map((item, index) => (
+            <Fragment key={getKey(item, index)}>
+              {renderItem(item, index)}
+            </Fragment>
+          ))}
+        </div>
       ) : (
         <div className="py-12 text-center sm:py-16">
           <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-amber-500/20 bg-slate-800">

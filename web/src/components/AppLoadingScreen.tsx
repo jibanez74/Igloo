@@ -1,5 +1,7 @@
 import { Snowflake } from "lucide-react";
 import { useEffect, useState } from "react";
+import { MOTION_LOADING_STATE_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type AppLoadingScreenProps = {
   message?: string;
@@ -51,7 +53,7 @@ export default function AppLoadingScreen({
           <div className="px-6 py-8 text-center">
             <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-slate-800">
               <Snowflake
-                className="size-5 animate-pulse text-amber-400"
+                className={cn("size-5 text-amber-400", MOTION_LOADING_STATE_CLASS)}
                 aria-hidden="true"
               />
             </div>

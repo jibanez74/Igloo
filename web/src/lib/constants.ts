@@ -268,22 +268,72 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 /** Key crew: max writing-department rows before "Show all crew" */
 export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 
-// Shared motion classes
-export const DETAIL_PAGE_CONTENT_ENTER_CLASS =
+// Shared motion tokens and classes
+export const MOTION_DURATION_MICRO_MS = 150;
+export const MOTION_DURATION_STANDARD_MS = 200;
+export const MOTION_DURATION_PAGE_MS = 300;
+
+export const MOTION_MICRO_CONTROL_CLASS =
+  "transition-[background-color,border-color,color,box-shadow,opacity] duration-150 ease-out motion-reduce:transition-none";
+export const MOTION_MICRO_OPACITY_CLASS =
+  "transition-opacity duration-150 motion-reduce:transition-none";
+export const MOTION_PROGRESS_FILL_CLASS =
+  "transition-[width] duration-150 ease-out motion-reduce:transition-none";
+export const MOTION_PROGRESS_THUMB_REVEAL_CLASS = MOTION_MICRO_OPACITY_CLASS;
+export const MOTION_CONTROL_THUMB_TRANSFORM_CLASS =
+  "transition-transform duration-200 motion-reduce:transition-none";
+export const MOTION_SETTINGS_SURFACE_CLASS =
+  "transition-colors duration-200 motion-reduce:transition-none";
+export const MOTION_TRACK_ROW_CLASS =
+  "transition-[background-color,opacity,box-shadow] duration-150 motion-reduce:transition-none";
+export const MOTION_TRACK_PLAY_BUTTON_CLASS =
+  "transition-[background-color,opacity] duration-150 motion-reduce:transition-none";
+export const MOTION_TRACK_ICON_BUTTON_CLASS =
+  "transition-[color,opacity] duration-150 motion-reduce:transition-none";
+export const MOTION_TRACK_MENU_TRIGGER_CLASS =
+  "transition-colors duration-150 motion-reduce:transition-none";
+export const MOTION_ROW_SURFACE_CLASS =
+  "transition-[background-color,border-color,box-shadow] duration-200 ease-out motion-reduce:transition-colors";
+export const MOTION_PLAYER_CHROME_PANEL_CLASS =
+  "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
+export const MOTION_MEDIA_OVERLAY_CLASS =
+  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
+export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
+  "border-slate-700 bg-slate-900 shadow-2xl shadow-black/40 motion-reduce:animate-none";
+export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
+  "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:scale-100 motion-reduce:translate-y-0";
+export const MOTION_PLAYER_CHROME_ENTER_CLASS =
+  "animate-in fade-in slide-in-from-bottom fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+export const MOTION_PLAYER_CHROME_BUTTON_CLASS = MOTION_MICRO_CONTROL_CLASS;
+export const MOTION_PAGE_ENTER_CLASS =
   "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:translate-y-0";
+export const MOTION_SECTION_ENTER_CLASS =
+  "animate-in fade-in-0 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100";
+export const MOTION_SECTION_ENTER_DELAYED_CLASS =
+  "animate-in fade-in-0 fill-mode-both duration-200 ease-out delay-75 motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:delay-0";
+export const MOTION_LOADING_STATE_CLASS =
+  "animate-pulse motion-reduce:animate-none";
+export const MOTION_SPINNER_STATE_CLASS =
+  "animate-spin motion-reduce:animate-none";
+export const MOTION_DECORATIVE_PING_CLASS =
+  "animate-ping motion-reduce:animate-none";
+export const MOTION_DECORATIVE_BOUNCE_CLASS =
+  "animate-bounce motion-reduce:animate-none";
+export const MOTION_DECORATIVE_STATE_CLASS =
+  "transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none motion-reduce:transform-none";
+
+export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
 export const CARD_MEDIA_HOVER_CLASS =
   "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
-export const CARD_OVERLAY_REVEAL_CLASS =
-  "transition-opacity duration-200 ease-out motion-reduce:transition-none";
+export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;
 export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 
 // Shared content fade transitions
-export const CONTENT_FADE_TRANSITION_MS = 200;
-export const CONTENT_FADE_ENTER_CLASS =
-  "animate-in fade-in-0 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100";
+export const CONTENT_FADE_TRANSITION_MS = MOTION_DURATION_STANDARD_MS;
+export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
 export const CONTENT_FADE_EXIT_CLASS =
   "animate-out fade-out-0 fill-mode-both duration-200 ease-in motion-reduce:animate-none motion-reduce:opacity-100";
 

@@ -6,7 +6,6 @@ Igloo is a self-hosted media center with a Go backend and a React/Vite web clien
 
 Igloo is designed for self-hosting on home servers and small personal infrastructure. Make technical decisions with local performance, predictable resource usage, and simple operations in mind. Do not assume deployment to large cloud platforms such as AWS, Azure, or Google Cloud unless explicitly requested.
 
-
 The project is split into:
 
 * `server/` — Go backend
@@ -114,20 +113,6 @@ Be careful when changing code related to:
 * Music playback
 
 Playback-related changes must be tested carefully.
-
-## Jellyfin Reference
-
-Jellyfin may be used as a reference for media playback, FFmpeg usage, HLS behavior, metadata fetching, movies, and TV shows.
-
-Local Jellyfin reference repository:
-
-```text
-/home/jose-ibanez/projects/jellyfin
-```
-
-Use Jellyfin as a reference, not as code to blindly copy.
-
-The goal is to build a better, more accessible self-hosted media center, not to reimplement every Jellyfin feature.
 
 ## Testing
 

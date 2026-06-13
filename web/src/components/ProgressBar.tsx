@@ -1,14 +1,25 @@
 import { useRef } from "react";
 import { formatTimeSeconds } from "@/lib/format";
+import {
+  MOTION_PROGRESS_FILL_CLASS,
+  MOTION_PROGRESS_THUMB_REVEAL_CLASS,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-type ProgressBarVariant = "expanded" | "minimized" | "mobile" | "video";
+type ProgressBarVariant =
+  | "expanded"
+  | "minimized"
+  | "mobile"
+  | "video"
+  | "trailer";
 
 type ProgressBarProps = {
   currentTime: number;
   duration: number;
   onSeek: (newTime: number) => void;
   variant: ProgressBarVariant;
+  ariaLabel?: string;
+  groupLabel?: string;
 };
 
 // Variant-specific styles
@@ -27,7 +38,7 @@ const variantStyles: Record<
     container: "mb-6 w-full max-w-md",
     bar: "group relative h-2 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
     thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 motion-reduce:transition-none",
+      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
     timeText: "text-sm text-slate-400 tabular-nums",
     showTimes: true,
     timesLayout: "below",
@@ -36,7 +47,7 @@ const variantStyles: Record<
     container: "hidden max-w-md flex-1 items-center gap-3 sm:flex",
     bar: "group relative h-1.5 flex-1 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
     thumb:
-      "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 motion-reduce:transition-none",
+      "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
     timeText: "w-10 text-xs text-slate-400 tabular-nums",
     showTimes: true,
     timesLayout: "inline",
@@ -53,9 +64,18 @@ const variantStyles: Record<
     container: "mb-4 w-full",
     bar: "group relative h-2 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
     thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 motion-reduce:transition-none",
+      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
     timeText: "text-sm text-slate-400 tabular-nums",
     showTimes: true,
+    timesLayout: "below",
+  },
+  trailer: {
+    container: "mb-4 w-full",
+    bar: "group relative h-1.5 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+    thumb:
+      "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
+    timeText: "text-sm text-slate-400 tabular-nums",
+    showTimes: false,
     timesLayout: "below",
   },
 };
@@ -73,6 +93,8 @@ export default function ProgressBar({
   duration,
   onSeek,
   variant,
+  ariaLabel = "Seek through track",
+  groupLabel = "Playback progress",
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
   const activePointerIdRef = useRef<number | null>(null);
@@ -85,10 +107,13 @@ export default function ProgressBar({
   const progress = isSeekable ? (safeCurrentTime / safeDuration) * 100 : 0;
   const pageSeekStep = Math.min(30, Math.max(10, safeDuration * 0.1));
   const showThumb = Boolean(styles.thumb) && isSeekable;
-  const fillClassName =
+  const fillClassName = cn(
+    "absolute inset-y-0 left-0 rounded-full",
     variant === "video"
-      ? "absolute inset-y-0 left-0 rounded-full bg-cyan-400 transition-[width] duration-150 ease-out motion-reduce:transition-none"
-      : "absolute inset-y-0 left-0 rounded-full bg-amber-400 transition-[width] duration-150 ease-out motion-reduce:transition-none";
+      ? "bg-cyan-400"
+      : "bg-amber-400",
+    MOTION_PROGRESS_FILL_CLASS,
+  );
 
   const seekTo = (nextTime: number) => {
     if (!isSeekable) {
@@ -116,7 +141,7 @@ export default function ProgressBar({
     if (!isSeekable || !e.isPrimary || activePointerIdRef.current !== null) return;
 
     activePointerIdRef.current = e.pointerId;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     seekTo(getSeekTime(e));
   };
 
@@ -128,7 +153,10 @@ export default function ProgressBar({
 
   const releasePointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     const activePointerId = activePointerIdRef.current;
-    if (activePointerId !== null && e.currentTarget.hasPointerCapture(activePointerId)) {
+    if (
+      activePointerId !== null &&
+      e.currentTarget.hasPointerCapture?.(activePointerId)
+    ) {
       e.currentTarget.releasePointerCapture(activePointerId);
     }
     activePointerIdRef.current = null;
@@ -199,7 +227,7 @@ export default function ProgressBar({
         !isSeekable && "cursor-default opacity-60",
       )}
       role="slider"
-      aria-label="Seek through track"
+      aria-label={ariaLabel}
       aria-disabled={!isSeekable}
       aria-orientation="horizontal"
       aria-valuenow={Math.round(safeCurrentTime)}
@@ -217,7 +245,7 @@ export default function ProgressBar({
       />
       {showThumb && (
         <div
-          className={styles.thumb}
+          className={cn(styles.thumb, MOTION_PROGRESS_THUMB_REVEAL_CLASS)}
           style={{ left: `${progress}%` }}
         />
       )}
@@ -232,7 +260,7 @@ export default function ProgressBar({
       <div
         className={styles.container}
         role="group"
-        aria-label="Playback progress"
+        aria-label={groupLabel}
       >
         <span className={`${styles.timeText} text-right`} aria-hidden="true">
           {currentTimeLabel}
@@ -249,7 +277,7 @@ export default function ProgressBar({
     <div
       className={styles.container}
       role="group"
-      aria-label="Playback progress"
+      aria-label={groupLabel}
     >
       {slider}
       {styles.showTimes && (

@@ -7,7 +7,11 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
+import {
+  CONTENT_FADE_TRANSITION_MS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
+} from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
@@ -219,11 +223,17 @@ async function renderMusicRoute(initialEntry: string) {
     await router.load();
   });
 
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} context={{ queryClient }} />
     </QueryClientProvider>,
   );
+
+  return {
+    queryClient,
+    router,
+    ...view,
+  };
 }
 
 function setReducedMotionPreference(prefersReducedMotion: boolean) {
@@ -298,6 +308,30 @@ describe("music route tab transitions", () => {
         ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
       ),
     ).toBe(false);
+  });
+});
+
+describe("music route section motion", () => {
+  it("applies section entrance contracts without changing tab panel fade behavior", async () => {
+    await renderMusicRoute("/music/");
+
+    const heading = await screen.findByRole("heading", {
+      name: "Music Library",
+    });
+    const stats = screen.getByRole("region", {
+      name: "Library statistics: 1 albums, 5 tracks, 1 musicians",
+    });
+    const tabsRoot = screen.getByRole("tablist").closest('[data-slot="tabs"]');
+
+    expect(heading.closest("header")?.className).toContain(
+      MOTION_SECTION_ENTER_CLASS,
+    );
+    expect(stats.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
+    expect(tabsRoot?.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
+    expect(
+      screen.getByRole("tabpanel", { name: "Albums" }).firstElementChild
+        ?.className,
+    ).toContain(MOTION_SECTION_ENTER_CLASS);
   });
 });
 

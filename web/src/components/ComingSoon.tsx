@@ -1,5 +1,10 @@
-import { useEffect, useRef } from "react";
 import { Snowflake, Hammer, type LucideIcon } from "lucide-react";
+import {
+  MOTION_DECORATIVE_BOUNCE_CLASS,
+  MOTION_DECORATIVE_PING_CLASS,
+  MOTION_PAGE_ENTER_CLASS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type ComingSoonProps = {
   /** Page/feature title */
@@ -19,29 +24,6 @@ export default function ComingSoon({
   description = "We're working hard to bring you this feature. Check back soon for updates!",
   icon: Icon = Snowflake,
 }: ComingSoonProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Entrance animation
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Check for reduced motion preference
-    const prefersReduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-
-    if (prefersReduced) {
-      container.classList.remove("opacity-0", "translate-y-4");
-      return;
-    }
-
-    // Trigger animation on next frame
-    requestAnimationFrame(() => {
-      container.classList.remove("opacity-0", "translate-y-4");
-    });
-  }, []);
-
   // Accessible announcement for screen readers
   const announcement = `${title}. Under Development. ${description}`;
 
@@ -62,14 +44,17 @@ export default function ComingSoon({
         {title} - Under Development
       </span>
 
-      <div
-        ref={containerRef}
-        className="translate-y-4 opacity-0 transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none"
-      >
+      <div className={MOTION_PAGE_ENTER_CLASS}>
         {/* Animated icon container */}
         <div className="relative mx-auto mb-8" aria-hidden="true">
           {/* Outer glow ring */}
-          <div className="absolute inset-0 animate-ping rounded-full bg-amber-400/20" />
+          <div
+            data-motion="decorative"
+            className={cn(
+              "absolute inset-0 rounded-full bg-amber-400/20",
+              MOTION_DECORATIVE_PING_CLASS,
+            )}
+          />
 
           {/* Icon circle */}
           <div
@@ -125,15 +110,27 @@ export default function ComingSoon({
           aria-hidden="true"
         >
           <span
-            className="size-2 animate-bounce rounded-full bg-amber-400/60"
+            data-motion="decorative"
+            className={cn(
+              "size-2 rounded-full bg-amber-400/60",
+              MOTION_DECORATIVE_BOUNCE_CLASS,
+            )}
             style={{ animationDelay: "0ms" }}
           />
           <span
-            className="size-2 animate-bounce rounded-full bg-amber-400/60"
+            data-motion="decorative"
+            className={cn(
+              "size-2 rounded-full bg-amber-400/60",
+              MOTION_DECORATIVE_BOUNCE_CLASS,
+            )}
             style={{ animationDelay: "150ms" }}
           />
           <span
-            className="size-2 animate-bounce rounded-full bg-amber-400/60"
+            data-motion="decorative"
+            className={cn(
+              "size-2 rounded-full bg-amber-400/60",
+              MOTION_DECORATIVE_BOUNCE_CLASS,
+            )}
             style={{ animationDelay: "300ms" }}
           />
         </div>

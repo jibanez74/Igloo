@@ -10,9 +10,11 @@ import {
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
   SUBTITLE_TRACK_SELECT_OFF_VALUE,
   SUBTITLES_NONE_LABEL,
+  MOTION_MEDIA_DIALOG_SURFACE_CLASS,
 } from "@/lib/constants";
 import { preventDialogDismissIfRadixSelectContent } from "@/lib/dialog-select";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import { cn } from "@/lib/utils";
 import {
   describePlaybackExperience,
   formatPlaybackAudioLabel,
@@ -401,7 +403,7 @@ export default function PlaybackSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={setDialogSurfaceEl}
-        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        className={cn(MOTION_MEDIA_DIALOG_SURFACE_CLASS, "sm:max-w-md")}
         onPointerDownOutside={preventDialogDismissIfRadixSelectContent}
         onInteractOutside={preventDialogDismissIfRadixSelectContent}
         onCloseAutoFocus={event => {

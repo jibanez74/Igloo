@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
+import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 
 type ApiResponse<T> = {
   error: boolean;
@@ -268,6 +269,21 @@ async function videoCurrentTime(page: Page) {
   });
 }
 
+async function expectWatchRoomChrome(page: Page) {
+  await expect(
+    page.getByRole("button", { name: "Rewind 10 seconds" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Fast-forward 10 seconds" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Adjust volume" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fullscreen" })).toBeVisible();
+  await expectPageHasNoHorizontalScroll(page);
+}
+
 const watchRoomEnv = readWatchRoomEnv();
 
 test.describe.configure({ mode: "serial" });
@@ -319,6 +335,8 @@ test.describe("Watch room realtime playback", () => {
       await expect(guestPage.getByText("2 connected now")).toBeVisible({
         timeout: env.responseTimeoutMs,
       });
+      await expectWatchRoomChrome(ownerPage);
+      await expectWatchRoomChrome(guestPage);
 
       await ownerPage.getByRole("button", { name: "Play playback" }).click();
       await expect(

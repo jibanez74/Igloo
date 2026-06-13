@@ -39,6 +39,9 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  MOTION_LOADING_STATE_CLASS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSICIANS_PER_PAGE,
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
@@ -143,7 +146,7 @@ function MusicPage() {
       <meta name="description" content={pageDescription} />
 
       {/* Page header */}
-      <header className="mb-6 sm:mb-7">
+      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
           <Music className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
           <span>Music Library</span>
@@ -157,7 +160,11 @@ function MusicPage() {
       <LibraryStats />
 
       {/* Tabs - controlled by URL search param */}
-      <Tabs value={tab} onValueChange={handleTabChange}>
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        className={MOTION_SECTION_ENTER_DELAYED_CLASS}
+      >
         <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-4">
           <TabsTrigger
             value="musicians"
@@ -223,7 +230,10 @@ function LibraryStats() {
 
   return (
     <section
-      className="mb-5 flex flex-wrap gap-x-6 gap-y-3"
+      className={cn(
+        "mb-5 flex flex-wrap gap-x-6 gap-y-3",
+        MOTION_SECTION_ENTER_DELAYED_CLASS,
+      )}
       aria-label={statsLabel}
     >
       <div className="flex items-center gap-2" aria-hidden="true">
@@ -255,8 +265,8 @@ function MusiciansTabSkeleton() {
     <div>
       {/* Skeleton header */}
       <div className="mb-6 flex items-center justify-between">
-        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
-        <div className="h-4 w-20 animate-pulse rounded-sm bg-slate-800" />
+        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-4 w-20 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
       </div>
 
       {/* Skeleton grid - matches actual grid dimensions */}
@@ -264,7 +274,10 @@ function MusiciansTabSkeleton() {
         {Array.from({ length: MUSICIANS_PER_PAGE }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+            className={cn(
+              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           >
             <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-slate-800" />
             <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
@@ -1125,14 +1138,17 @@ function PlaylistsTabSkeleton() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
-        <div className="h-10 w-32 animate-pulse rounded-full bg-slate-800" />
+        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-10 w-32 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+            className={cn(
+              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           >
             <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
             <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />

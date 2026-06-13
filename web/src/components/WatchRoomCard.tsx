@@ -1,11 +1,16 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Film, Trash2, Users } from "lucide-react";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import {
+  CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_MEDIA_HOVER_CLASS,
+  TMDB_POSTER_SIZE,
+} from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
+import { cn } from "@/lib/utils";
 import type { WatchRoomType } from "@/types";
 
 type Props = {
@@ -41,7 +46,10 @@ export default function WatchRoomCard({ room }: Props) {
 
   return (
     <article
-      className="flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 transition-colors hover:border-slate-700"
+      className={cn(
+        CARD_INTERACTIVE_SURFACE_CLASS,
+        "group flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 focus-within:border-amber-500/40 focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-500/10",
+      )}
       aria-label={`Watch room: ${room.movie_title}`}
     >
       <div className="relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-800">
@@ -53,7 +61,7 @@ export default function WatchRoomCard({ room }: Props) {
             height={96}
             loading="lazy"
             decoding="async"
-            className="size-full object-cover"
+            className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
           />
         ) : (
           <div className="flex size-full items-center justify-center">

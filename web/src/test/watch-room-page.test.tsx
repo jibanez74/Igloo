@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { WatchRoomPage as WatchRoomPageContent } from "@/components/watch-room/WatchRoomPage";
 import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id.lazy";
+import { MOTION_PLAYER_CHROME_BUTTON_CLASS } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
 
@@ -533,6 +534,16 @@ describe("WatchRoomPageContent", () => {
     });
 
     const socket = FakeWebSocket.instances[0];
+    for (const name of [
+      "Rewind 10 seconds",
+      "Play playback",
+      "Fast-forward 10 seconds",
+      "Fullscreen",
+    ]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(
+        ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+      );
+    }
 
     await user.click(screen.getByRole("button", { name: /play playback/i }));
 
@@ -725,7 +736,9 @@ describe("WatchRoomPageContent", () => {
     expect(
       screen.getByRole("group", { name: /volume control/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /adjust volume/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /adjust volume/i })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
     expect(screen.getByText(/arrival/i)).toBeInTheDocument();
   });
 
