@@ -624,6 +624,57 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 	})
 }
 
+func TestSearchAlbums(t *testing.T) {
+	t.Run("returns error for empty album title", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		_, err := sc.SearchAlbums(context.Background(), "")
+		if err == nil {
+			t.Fatal("expected error for empty title, got nil")
+		}
+	})
+
+	t.Run("returns candidate albums from Spotify search", func(t *testing.T) {
+		var capturedQuery string
+		var capturedLimit string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/search") {
+				t.Fatalf("unexpected request path: %s", r.URL.Path)
+			}
+			capturedQuery = r.URL.Query().Get("q")
+			capturedLimit = r.URL.Query().Get("limit")
+			writeJSON(w, albumSearchJSON("album123", "Blue Record"))
+		}))
+
+		albums, err := sc.SearchAlbums(context.Background(), "  Blue Record  ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if capturedQuery != "Blue Record" {
+			t.Fatalf("query = %q, want trimmed album title", capturedQuery)
+		}
+		if capturedLimit != "10" {
+			t.Fatalf("limit = %q, want 10", capturedLimit)
+		}
+		if len(albums) != 1 || albums[0].ID.String() != "album123" || albums[0].Name != "Blue Record" {
+			t.Fatalf("albums = %+v, want Blue Record candidate", albums)
+		}
+	})
+
+	t.Run("returns empty slice when Spotify has no album results", func(t *testing.T) {
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, emptyAlbumSearchJSON())
+		}))
+
+		albums, err := sc.SearchAlbums(context.Background(), "Unknown Album")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(albums) != 0 {
+			t.Fatalf("albums length = %d, want 0", len(albums))
+		}
+	})
+}
+
 func TestSpotifyRequestsUseDeadlineWhenCallerHasNone(t *testing.T) {
 	sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Context().Deadline(); !ok {

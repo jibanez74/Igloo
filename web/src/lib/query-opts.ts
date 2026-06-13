@@ -28,6 +28,7 @@ import {
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
+  getSpotifyStatus,
   getPlaylistDetails,
   getPlaylists,
   getPlaylistTracks,
@@ -51,6 +52,7 @@ import {
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
+  SPOTIFY_STATUS_KEY,
   TMDB_STATUS_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
   MOVIE_PLAYLIST_DETAILS_KEY,
@@ -166,6 +168,15 @@ export function tmdbStatusQueryOpts() {
   return queryOptions({
     queryKey: [TMDB_STATUS_KEY],
     queryFn: getTmdbStatus,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function spotifyStatusQueryOpts() {
+  return queryOptions({
+    queryKey: [SPOTIFY_STATUS_KEY],
+    queryFn: getSpotifyStatus,
     staleTime: STALE_CATALOG,
     gcTime: GC_DEFAULT,
   });

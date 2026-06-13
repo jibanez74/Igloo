@@ -618,6 +618,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerNotificationRoutes(r)
 		r.Get("/static/*", app.ServeStaticFiles)
 		app.registerTMDBRoutes(r)
+		app.registerSpotifyRoutes(r)
 		app.registerSearchRoutes(r)
 		app.registerMovieRoutes(r)
 		r.Get("/users", app.GetUsers)
@@ -658,6 +659,13 @@ func (app *Application) registerTMDBRoutes(r chi.Router) {
 		r.Post("/movies/search", app.SearchTmdbMovies)
 		r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
 		r.Get("/movies/{id}", app.GetMovieByTmdbID)
+	})
+}
+
+func (app *Application) registerSpotifyRoutes(r chi.Router) {
+	r.Route("/spotify", func(r chi.Router) {
+		r.Get("/status", app.GetSpotifyStatus)
+		r.Post("/albums/search", app.SearchSpotifyAlbums)
 	})
 }
 

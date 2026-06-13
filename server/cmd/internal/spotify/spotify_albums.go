@@ -2,11 +2,32 @@ package spotify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/zmb3/spotify/v2"
 )
+
+func (s *spotifyClient) SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, errors.New("album title is required")
+	}
+
+	ctx, cancel := spotifyRequestContext(ctx)
+	defer cancel()
+
+	results, err := s.client.Search(ctx, title, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumRequestSearchLimit))
+	if err != nil {
+		return nil, fmt.Errorf("spotify album search failed: %w", err)
+	}
+	if results.Albums == nil {
+		return []spotify.SimpleAlbum{}, nil
+	}
+
+	return results.Albums.Albums, nil
+}
 
 func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error) {
 	title = strings.TrimSpace(title)

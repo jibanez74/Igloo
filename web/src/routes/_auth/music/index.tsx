@@ -8,6 +8,7 @@ import {
   Heart,
   List,
   ListMusic,
+  MoreHorizontal,
   Music,
   Play,
   Plus,
@@ -16,6 +17,12 @@ import {
   Users,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
@@ -29,6 +36,7 @@ import {
   musiciansPaginatedQueryOpts,
   musicStatsQueryOpts,
   playlistsQueryOpts,
+  spotifyStatusQueryOpts,
   tracksInfiniteQueryOpts,
 } from "@/lib/query-opts";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -58,6 +66,7 @@ import LibraryPagination from "@/components/LibraryPagination";
 import TrackItem from "@/components/TrackItem";
 import PlaylistCard from "@/components/PlaylistCard";
 import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
+import RequestAlbumDialog from "@/components/RequestAlbumDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 import {
   musicSearchSchema,
@@ -156,8 +165,16 @@ function MusicPage() {
         </p>
       </header>
 
-      {/* Library Stats */}
-      <LibraryStats />
+      {/* Stats + More dropdown */}
+      <div
+        className={cn(
+          "mb-5 flex flex-wrap items-center justify-between gap-3",
+          MOTION_SECTION_ENTER_DELAYED_CLASS,
+        )}
+      >
+        <LibraryStats />
+        <MoreMenu />
+      </div>
 
       {/* Tabs - controlled by URL search param */}
       <Tabs
@@ -231,7 +248,7 @@ function LibraryStats() {
   return (
     <section
       className={cn(
-        "mb-5 flex flex-wrap gap-x-6 gap-y-3",
+        "flex flex-wrap gap-x-6 gap-y-3",
         MOTION_SECTION_ENTER_DELAYED_CLASS,
       )}
       aria-label={statsLabel}
@@ -252,6 +269,72 @@ function LibraryStats() {
         <span className="text-slate-400">Musicians</span>
       </div>
     </section>
+  );
+}
+
+function MoreMenu() {
+  const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [requestAlbumOpen, setRequestAlbumOpen] = useState(false);
+  const { data: spotifyStatusData, isLoading: spotifyStatusLoading } = useQuery(
+    spotifyStatusQueryOpts(),
+  );
+  const spotifyAvailable =
+    spotifyStatusData?.error === false
+      ? spotifyStatusData.data.available
+      : false;
+  const requestAlbumDisabled = spotifyStatusLoading || !spotifyAvailable;
+  const requestAlbumDescription = spotifyStatusLoading
+    ? "Spotify search status is still loading."
+    : "Spotify search is unavailable on this server.";
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          ref={moreOptionsButtonRef}
+          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          aria-label="More options"
+        >
+          <MoreHorizontal className="size-5" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="border-slate-700 bg-slate-800"
+        >
+          <DropdownMenuItem
+            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            disabled={requestAlbumDisabled}
+            aria-label={
+              requestAlbumDisabled
+                ? `Request Album unavailable. ${requestAlbumDescription}`
+                : "Request Album"
+            }
+            title={requestAlbumDisabled ? requestAlbumDescription : undefined}
+            onSelect={event => {
+              if (requestAlbumDisabled) {
+                event.preventDefault();
+                return;
+              }
+              setRequestAlbumOpen(true);
+            }}
+          >
+            <Plus className="mr-2 size-4" aria-hidden="true" />
+            Request Album
+            {requestAlbumDisabled && (
+              <span className="sr-only"> {requestAlbumDescription}</span>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {requestAlbumOpen && (
+        <RequestAlbumDialog
+          open={requestAlbumOpen}
+          onOpenChange={setRequestAlbumOpen}
+          restoreFocusRef={moreOptionsButtonRef}
+        />
+      )}
+    </>
   );
 }
 
