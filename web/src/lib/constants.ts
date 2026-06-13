@@ -4,6 +4,7 @@ export const WATCH_ROOMS_KEY = "watch-rooms";
 export const WATCH_ROOM_KEY = "watch-room";
 export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
 export const TMDB_STATUS_KEY = "tmdb-status";
+export const SPOTIFY_STATUS_KEY = "spotify-status";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
 export const LATEST_SHOWS_KEY = "latest-shows";

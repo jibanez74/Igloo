@@ -64,6 +64,9 @@ import type {
   SearchAlbumsResponseType,
   SearchMusiciansResponseType,
   SearchTracksResponseType,
+  SpotifyAlbumSearchRequest,
+  SpotifyAlbumSearchResultType,
+  SpotifyStatusType,
 } from "@/types";
 import { MOVIES_PER_PAGE, SEARCH_PER_PAGE } from "@/lib/constants";
 
@@ -207,6 +210,9 @@ export const getMovieInTheaterDetails = (id: number) =>
 export const getTmdbStatus = () =>
   apiRequest<TmdbStatusType>("/api/tmdb/status");
 
+export const getSpotifyStatus = () =>
+  apiRequest<SpotifyStatusType>("/api/spotify/status");
+
 // movie details
 export const getMovieDetails = (id: number) =>
   apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
@@ -221,6 +227,15 @@ export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
     method: "POST",
     body,
   });
+
+export const searchSpotifyAlbums = (body: SpotifyAlbumSearchRequest) =>
+  apiRequest<{ results: SpotifyAlbumSearchResultType[] }>(
+    "/api/spotify/albums/search",
+    {
+      method: "POST",
+      body,
+    },
+  );
 
 export const tmdbSearchMovies = (
   movieId: number,

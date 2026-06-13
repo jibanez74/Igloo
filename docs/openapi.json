@@ -42,6 +42,10 @@
       "description": "TMDB-backed movie metadata"
     },
     {
+      "name": "Spotify",
+      "description": "Spotify-backed music metadata"
+    },
+    {
       "name": "Search",
       "description": "Library search"
     },
@@ -397,6 +401,58 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/spotify/status": {
+      "get": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Get Spotify availability",
+        "operationId": "getSpotifyStatus",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SpotifyStatusResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/spotify/albums/search": {
+      "post": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Search Spotify albums",
+        "operationId": "searchSpotifyAlbums",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SpotifySearchAlbumsRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SpotifyAlbumSearchResultsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3694,6 +3750,16 @@
           }
         }
       },
+      "SpotifySearchAlbumsRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SpotifySearchAlbumsRequest"
+            }
+          }
+        }
+      },
       "IdentifyMovieRequest": {
         "required": true,
         "content": {
@@ -4076,6 +4142,16 @@
           }
         }
       },
+      "SpotifyStatusResponse": {
+        "description": "Spotify availability response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SpotifyStatusEnvelope"
+            }
+          }
+        }
+      },
       "TmdbTheaterMoviesResponse": {
         "description": "TMDB in-theaters response.",
         "content": {
@@ -4102,6 +4178,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/TmdbSearchResultsEnvelope"
+            }
+          }
+        }
+      },
+      "SpotifyAlbumSearchResultsResponse": {
+        "description": "Spotify album search results response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SpotifyAlbumSearchResultsEnvelope"
             }
           }
         }
@@ -6800,6 +6886,57 @@
         },
         "additionalProperties": true
       },
+      "SpotifyAlbumSearchResult": {
+        "type": "object",
+        "required": [
+          "spotify_id",
+          "title",
+          "artist_names",
+          "release_date",
+          "album_type",
+          "total_tracks",
+          "cover_url",
+          "spotify_url",
+          "already_in_library"
+        ],
+        "properties": {
+          "spotify_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "artist_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "release_date": {
+            "type": "string"
+          },
+          "album_type": {
+            "type": "string"
+          },
+          "total_tracks": {
+            "type": "integer"
+          },
+          "cover_url": {
+            "type": "string"
+          },
+          "spotify_url": {
+            "type": "string"
+          },
+          "already_in_library": {
+            "type": "boolean"
+          },
+          "library_album_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
       "TmdbSearchMoviesRequest": {
         "type": "object",
         "properties": {
@@ -6811,6 +6948,19 @@
           },
           "tmdb_id": {
             "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpotifySearchAlbumsRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -6891,6 +7041,63 @@
                 "properties": {
                   "available": {
                     "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "SpotifyStatusEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "available"
+                ],
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "SpotifyAlbumSearchResultsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "results"
+                ],
+                "properties": {
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SpotifyAlbumSearchResult"
+                    }
                   }
                 },
                 "additionalProperties": false

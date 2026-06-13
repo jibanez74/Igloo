@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	spotifyArtistSearchLimit = 5
-	spotifyAlbumSearchLimit  = 5
-	spotifyArtistThreshold   = 78
-	spotifyAlbumThreshold    = 76
+	spotifyArtistSearchLimit       = 5
+	spotifyAlbumSearchLimit        = 5
+	spotifyAlbumRequestSearchLimit = 10
+	spotifyArtistThreshold         = 78
+	spotifyAlbumThreshold          = 76
 )
 
 var artistStopWords = map[string]struct{}{

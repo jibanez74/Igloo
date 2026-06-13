@@ -81,7 +81,12 @@ function track(id: number, title: string) {
   };
 }
 
-function mockMusicFetch() {
+type MockMusicFetchOptions = {
+  spotifyAvailable?: boolean;
+};
+
+function mockMusicFetch(options: MockMusicFetchOptions = {}) {
+  const spotifyAvailable = options.spotifyAvailable ?? true;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -98,6 +103,15 @@ function mockMusicFetch() {
             created_at: "2026-01-01T00:00:00Z",
             updated_at: "2026-01-01T00:00:00Z",
           },
+        },
+      });
+    }
+
+    if (url === "/api/spotify/status") {
+      return jsonResponse({
+        error: false,
+        data: {
+          available: spotifyAvailable,
         },
       });
     }
@@ -203,9 +217,12 @@ function createMusicQueryClient() {
   });
 }
 
-async function renderMusicRoute(initialEntry: string) {
+async function renderMusicRoute(
+  initialEntry: string,
+  options: MockMusicFetchOptions = {},
+) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockMusicFetch();
+  mockMusicFetch(options);
 
   const queryClient = createMusicQueryClient();
   const history = createMemoryHistory({
@@ -332,6 +349,44 @@ describe("music route section motion", () => {
       screen.getByRole("tabpanel", { name: "Albums" }).firstElementChild
         ?.className,
     ).toContain(MOTION_SECTION_ENTER_CLASS);
+  });
+});
+
+describe("music route more menu", () => {
+  it("opens the Request Album dialog from More options", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/");
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Request Album" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "Request Album" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Album title")).toHaveFocus();
+    });
+  });
+
+  it("disables Request Album when Spotify search is unavailable", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/", { spotifyAvailable: false });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+
+    const requestAlbumItem = await screen.findByRole("menuitem", {
+      name: /Request Album unavailable/i,
+    });
+
+    expect(requestAlbumItem).toHaveAttribute("data-disabled");
+    expect(requestAlbumItem).toHaveAttribute(
+      "title",
+      "Spotify search is unavailable on this server.",
+    );
   });
 });
 

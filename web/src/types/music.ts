@@ -145,6 +145,27 @@ export type AlbumsListResponseType = {
   total_pages: number;
 };
 
+export type SpotifyStatusType = {
+  available: boolean;
+};
+
+export type SpotifyAlbumSearchRequest = {
+  title: string;
+};
+
+export type SpotifyAlbumSearchResultType = {
+  spotify_id: string;
+  title: string;
+  artist_names: string[];
+  release_date: string;
+  album_type: string;
+  total_tracks: number;
+  cover_url: string;
+  spotify_url: string;
+  already_in_library: boolean;
+  library_album_id?: number;
+};
+
 // Simplified musician type for list views and cards
 export type SimpleMusicianType = {
   id: number;

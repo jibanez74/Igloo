@@ -16,6 +16,7 @@ const spotifyHTTPTimeout = 15 * time.Second
 
 type SpotifyInterface interface {
 	SearchAndGetAlbumDetails(ctx context.Context, title, artist string) (*spotify.FullAlbum, error)
+	SearchAlbums(ctx context.Context, title string) ([]spotify.SimpleAlbum, error)
 	SearchArtistByName(ctx context.Context, artistName string) (*spotify.FullArtist, error)
 	ClearAllCaches()
 }
