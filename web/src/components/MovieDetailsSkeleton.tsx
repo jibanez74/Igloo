@@ -1,7 +1,9 @@
+import { MOTION_LOADING_STATE_CLASS } from "@/lib/constants";
+
 export default function MovieDetailsSkeleton() {
   return (
     <div
-      className="animate-pulse"
+      className={MOTION_LOADING_STATE_CLASS}
       role="status"
       aria-label="Loading movie details"
     >

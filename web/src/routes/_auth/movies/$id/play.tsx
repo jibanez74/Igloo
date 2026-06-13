@@ -32,6 +32,8 @@ import {
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
 import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
   MOVIE_SEEK_STEP_SEC,
   MOVIE_VOLUME_STEP,
@@ -554,11 +556,13 @@ function PlayMoviePage() {
       <header
         className={
           chromeFullscreenMode
-            ? `absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${
+            ? cn(
+                MOTION_PLAYER_CHROME_PANEL_CLASS,
+                "absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg",
                 controlsVisible
                   ? "translate-y-0 opacity-100"
-                  : "pointer-events-none -translate-y-full opacity-0"
-              }`
+                  : "pointer-events-none -translate-y-full opacity-0",
+              )
             : "flex shrink-0 items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg"
         }
       >
@@ -571,7 +575,10 @@ function PlayMoviePage() {
         <button
           ref={backButtonRef}
           onClick={handleBack}
-          className="flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+          className={cn(
+            MOTION_PLAYER_CHROME_BUTTON_CLASS,
+            "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+          )}
           aria-label="Back to previous page"
         >
           <ArrowLeft className="size-5" aria-hidden="true" />

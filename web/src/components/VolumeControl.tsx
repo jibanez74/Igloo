@@ -1,5 +1,10 @@
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
+import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_PANEL_CLASS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type MediaElement = HTMLAudioElement | HTMLVideoElement;
 
@@ -164,7 +169,11 @@ export default function VolumeControl({
         <button
           type="button"
           onClick={toggleMute}
-          className={`flex size-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-white focus:ring-2 focus:outline-none ${styles.focusRing}`}
+          className={cn(
+            MOTION_PLAYER_CHROME_BUTTON_CLASS,
+            "flex size-10 items-center justify-center rounded-full text-slate-400 hover:text-white focus:ring-2 focus:outline-none",
+            styles.focusRing,
+          )}
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {getVolumeIcon()}
@@ -186,9 +195,12 @@ export default function VolumeControl({
         ref={triggerButtonRef}
         type="button"
         onClick={() => setIsMinimizedPanelOpen(open => !open)}
-        className={`flex size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:outline-none ${styles.focusRing} ${
-          isMinimizedPanelOpen && "bg-slate-800 text-white"
-        }`}
+        className={cn(
+          MOTION_PLAYER_CHROME_BUTTON_CLASS,
+          "flex size-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:outline-none",
+          styles.focusRing,
+          isMinimizedPanelOpen && "bg-slate-800 text-white",
+        )}
         aria-label="Adjust volume"
         aria-controls={panelId}
         aria-expanded={isMinimizedPanelOpen}
@@ -202,14 +214,21 @@ export default function VolumeControl({
           id={panelId}
           role="dialog"
           aria-label="Volume controls"
-          className="absolute right-0 bottom-full z-10 mb-2 w-40 rounded-lg border border-slate-700 bg-slate-900/95 p-3 shadow-lg backdrop-blur-sm"
+          className={cn(
+            MOTION_PLAYER_CHROME_PANEL_CLASS,
+            "absolute right-0 bottom-full z-10 mb-2 w-40 rounded-lg border border-slate-700 bg-slate-900/95 p-3 shadow-lg backdrop-blur-sm",
+          )}
         >
           <div className="mb-3 flex items-center justify-between gap-3">
             <button
               ref={minimizedMuteButtonRef}
               type="button"
               onClick={toggleMute}
-              className={`flex size-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:outline-none ${styles.focusRing}`}
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:outline-none",
+                styles.focusRing,
+              )}
               aria-label={isMuted ? "Unmute" : "Mute"}
             >
               {getVolumeIcon()}

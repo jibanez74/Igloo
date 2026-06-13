@@ -9,6 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import AddToPlaylistDialog from "@/components/AddToPlaylistDialog";
+import { MOTION_TRACK_MENU_TRIGGER_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 type TrackActionsMenuProps = {
   // Required for add to playlist
@@ -45,7 +47,10 @@ export default function TrackActionsMenu({
         <DropdownMenuTrigger asChild>
           <button
             ref={actionsButtonRef}
-            className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-700 hover:text-white",
+              MOTION_TRACK_MENU_TRIGGER_CLASS,
+            )}
             aria-label={`More actions for ${trackTitle}`}
           >
             <MoreVertical className="size-4" aria-hidden="true" />

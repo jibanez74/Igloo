@@ -8,6 +8,9 @@ function envInt(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+const hasExternalBaseURL = Boolean(process.env.E2E_BASE_URL);
+const defaultBaseURL = "http://127.0.0.1:3000";
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: envInt("E2E_HLS_TEST_TIMEOUT_MS", 600_000),
@@ -18,11 +21,28 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.E2E_BASE_URL ?? defaultBaseURL,
     trace: "retain-on-failure",
     video: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  webServer: hasExternalBaseURL
+    ? undefined
+    : [
+        {
+          command: "bun ./e2e/mock-api-server.ts",
+          url: "http://127.0.0.1:8080/health",
+          reuseExistingServer: false,
+          timeout: 30_000,
+        },
+        {
+          command:
+            "bun run dev --host 127.0.0.1 --port 3000 --strictPort --open=false",
+          url: defaultBaseURL,
+          reuseExistingServer: false,
+          timeout: 60_000,
+        },
+      ],
   projects: [
     {
       name: "chromium",

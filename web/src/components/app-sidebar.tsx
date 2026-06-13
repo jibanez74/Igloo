@@ -25,8 +25,12 @@ import {
 } from "@/components/ui/sidebar";
 import { useSidebar } from "@/components/ui/sidebar-context";
 import { logout } from "@/lib/api";
-import { MOVIES_INDEX_DEFAULT_SEARCH } from "@/lib/constants";
+import {
+  MOTION_MICRO_OPACITY_CLASS,
+  MOVIES_INDEX_DEFAULT_SEARCH,
+} from "@/lib/constants";
 import { showError } from "@/lib/toast-helpers";
+import { cn } from "@/lib/utils";
 
 type NavItem = {
   title: string;
@@ -116,7 +120,10 @@ export default function AppSidebar({
           preload={false}
           onClick={handleNavClick}
           aria-label="Igloo – Home"
-          className="flex items-center gap-3 transition-opacity duration-150 hover:opacity-80 motion-reduce:transition-none"
+          className={cn(
+            "flex items-center gap-3 hover:opacity-80",
+            MOTION_MICRO_OPACITY_CLASS,
+          )}
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20">
             <span className="text-lg font-bold">I</span>

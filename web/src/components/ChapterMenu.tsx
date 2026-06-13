@@ -5,7 +5,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_PANEL_CLASS,
+} from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { ChapterType } from "@/types";
 
 type ChapterMenuProps = {
@@ -40,7 +45,10 @@ export default function ChapterMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+        className={cn(
+          MOTION_PLAYER_CHROME_BUTTON_CLASS,
+          "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+        )}
         aria-label={`Chapters, ${chapters.length} chapters`}
       >
         <ListOrdered className="size-5" aria-hidden="true" />
@@ -50,7 +58,7 @@ export default function ChapterMenu({
         side="top"
         align="center"
         container={portalContainer}
-        className="max-h-72 overflow-y-auto"
+        className={cn(MOTION_PLAYER_CHROME_PANEL_CLASS, "max-h-72 overflow-y-auto")}
       >
         {chapters.map((chapter, index) => {
           const isActive = index === activeIndex;

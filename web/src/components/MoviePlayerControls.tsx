@@ -10,7 +10,12 @@ import {
 import ProgressBar from "@/components/ProgressBar";
 import ChapterMenu from "@/components/ChapterMenu";
 import VolumeControl from "@/components/VolumeControl";
+import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_PANEL_CLASS,
+} from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { ChapterType } from "@/types";
 
 type MoviePlayerControlsProps = {
@@ -56,11 +61,13 @@ export default function MoviePlayerControls({
     <footer
       className={
         chromeFullscreenMode
-          ? `absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none ${
+          ? cn(
+              MOTION_PLAYER_CHROME_PANEL_CLASS,
+              "absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg",
               controlsVisible
                 ? "translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-full opacity-0"
-            }`
+                : "pointer-events-none translate-y-full opacity-0",
+            )
           : "shrink-0 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg"
       }
     >
@@ -92,14 +99,20 @@ export default function MoviePlayerControls({
           >
             <button
               onClick={onSeekBackward}
-              className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+              )}
               aria-label="Seek backward 10 seconds"
             >
               <Rewind className="size-5" aria-hidden="true" />
             </button>
             <button
               onClick={onTogglePlay}
-              className="flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+              )}
               aria-label={playing ? "Pause" : "Play"}
             >
               {playing ? (
@@ -110,7 +123,10 @@ export default function MoviePlayerControls({
             </button>
             <button
               onClick={onSeekForward}
-              className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+              )}
               aria-label="Seek forward 10 seconds"
             >
               <FastForward className="size-5" aria-hidden="true" />
@@ -136,7 +152,10 @@ export default function MoviePlayerControls({
             />
             <button
               onClick={onToggleFullscreen}
-              className="flex size-10 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+              )}
               aria-label={
                 chromeFullscreenMode
                   ? isImmersiveViewport && !isFullscreen

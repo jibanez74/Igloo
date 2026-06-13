@@ -33,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   GENERAL_SETTINGS_KEY,
   LANGUAGE_NAMES,
+  MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
@@ -323,7 +324,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
       noValidate
       className="max-w-5xl space-y-6"
     >
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle
             role="heading"
@@ -340,7 +346,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardHeader>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Gauge className="size-5 text-amber-400" aria-hidden="true" />
@@ -381,7 +392,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Wifi className="size-5 text-amber-400" aria-hidden="true" />
@@ -441,7 +457,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle
             id={recommendationTitleId}
@@ -470,7 +491,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Play className="size-5 text-amber-400" aria-hidden="true" />
@@ -518,7 +544,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Languages className="size-5 text-amber-400" aria-hidden="true" />
@@ -566,7 +597,12 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-700/50 bg-slate-800/30 transition-colors duration-200">
+      <Card
+        className={cn(
+          "border-slate-700/50 bg-slate-800/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <Subtitles className="size-5 text-amber-400" aria-hidden="true" />
@@ -622,13 +658,19 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 transition-colors duration-200 sm:flex sm:items-center sm:justify-between sm:gap-4">
+      <div
+        className={cn(
+          "rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">Playback settings</p>
           <p
             id={statusId}
             className={cn(
-              "mt-1 text-sm transition-colors",
+              "mt-1 text-sm",
+              MOTION_SETTINGS_SURFACE_CLASS,
               validationMessage ? "text-red-300" : "text-slate-400",
             )}
             aria-live="polite"

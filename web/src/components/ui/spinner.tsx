@@ -1,5 +1,6 @@
 import { Loader2Icon } from "lucide-react"
 
+import { MOTION_SPINNER_STATE_CLASS } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 
 function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
@@ -7,7 +8,7 @@ function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
     <Loader2Icon
       role="status"
       aria-label="Loading"
-      className={cn("size-4 animate-spin", className)}
+      className={cn("size-4", MOTION_SPINNER_STATE_CLASS, className)}
       {...props}
     />
   )

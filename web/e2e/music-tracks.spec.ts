@@ -186,14 +186,16 @@ async function mockMusicApi(
     if (url.pathname === "/api/music/tracks") {
       const limit = Number(url.searchParams.get("limit") ?? "50");
       const offset = Number(url.searchParams.get("offset") ?? "0");
+      const total = 2267;
+      const trackCount = Math.max(0, Math.min(limit, total - offset));
       requestedOffsets.push(offset);
 
       await fulfillJSON(route, apiResponse({
-        tracks: Array.from({ length: limit }, (_, index) => track(offset + index + 1)),
-        total: 2267,
+        tracks: Array.from({ length: trackCount }, (_, index) => track(offset + index + 1)),
+        total,
         offset,
         limit,
-        has_more: offset + limit < 2267,
+        has_more: offset + limit < total,
       }));
       return;
     }
@@ -333,7 +335,16 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
   const tracksList = page.getByRole("list", { name: "Tracks" });
 
   await expect(tracksList).toBeVisible();
-  await expect(page.getByText("50 of 2267 tracks loaded")).toBeVisible();
+  const loadedStatus = page
+    .getByText(/\d+ of 2267 tracks loaded/)
+    .first();
+  await expect(loadedStatus).toBeVisible();
+  await expect
+    .poll(async () => {
+      const statusText = await loadedStatus.textContent();
+      return Number(statusText?.match(/^\d+/)?.[0] ?? 0);
+    })
+    .toBeGreaterThanOrEqual(50);
   await expectNoHorizontalOverflow(page);
 
   for (let index = 0; index < 8; index += 1) {

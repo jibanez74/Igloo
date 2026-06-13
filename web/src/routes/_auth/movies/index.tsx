@@ -36,6 +36,9 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  MOTION_LOADING_STATE_CLASS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
 } from "@/lib/constants";
 import {
@@ -215,7 +218,7 @@ function MoviesPage() {
       />
 
       {/* Page header */}
-      <header className="mb-6 sm:mb-7">
+      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
           <Film className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
           <span>Movie Library</span>
@@ -226,7 +229,12 @@ function MoviesPage() {
       </header>
 
       {/* Stats + More dropdown */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div
+        className={cn(
+          "mb-5 flex flex-wrap items-center justify-between gap-3",
+          MOTION_SECTION_ENTER_DELAYED_CLASS,
+        )}
+      >
         <MoviesStats />
         <MoreMenu
           onOpenLikedMovies={handleOpenLikedMovies}
@@ -235,7 +243,11 @@ function MoviesPage() {
       </div>
 
       {/* Tabs — controlled by URL search param */}
-      <Tabs value={tab} onValueChange={handleTabChange}>
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        className={MOTION_SECTION_ENTER_DELAYED_CLASS}
+      >
         <TabsList className="grid! h-auto w-full max-w-full grid-cols-3 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-3">
           <TabsTrigger
             value="all"
@@ -554,13 +566,16 @@ function AllMoviesTabSkeleton() {
   return (
     <div>
       <div className="mb-5 flex justify-end">
-        <div className="h-8 w-16 animate-pulse rounded-full bg-slate-800" />
+        <div className={cn("h-8 w-16 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: MOVIES_PER_PAGE }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+            className={cn(
+              "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           >
             <div className="aspect-2/3 bg-slate-800" />
             <div className="p-3">
@@ -861,7 +876,10 @@ function GenresTabSkeleton() {
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="min-h-20 animate-pulse rounded-lg border border-slate-800 bg-slate-900"
+            className={cn(
+              "min-h-20 rounded-lg border border-slate-800 bg-slate-900",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           />
         ))}
       </div>
@@ -1185,14 +1203,17 @@ function PlaylistsTabSkeleton() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div className="h-4 w-24 animate-pulse rounded-sm bg-slate-800" />
-        <div className="h-10 w-40 animate-pulse rounded-full bg-slate-800" />
+        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-10 w-40 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse rounded-xl border border-slate-800 bg-slate-900 p-4"
+            className={cn(
+              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           >
             <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
             <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />

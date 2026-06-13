@@ -3,7 +3,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
 import { toggleLikeTrack } from "@/lib/api";
-import { LIKED_TRACK_IDS_KEY, LIKED_TRACKS_KEY } from "@/lib/constants";
+import {
+  LIKED_TRACK_IDS_KEY,
+  LIKED_TRACKS_KEY,
+  MOTION_LOADING_STATE_CLASS,
+  MOTION_TRACK_ICON_BUTTON_CLASS,
+  MOTION_TRACK_MENU_TRIGGER_CLASS,
+  MOTION_TRACK_PLAY_BUTTON_CLASS,
+  MOTION_TRACK_ROW_CLASS,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import TrackActionsMenu from "@/components/TrackActionsMenu";
 import type { TrackItemVariant } from "@/types";
 
@@ -97,8 +106,10 @@ export default function TrackItem({
 
   // Play button visibility classes based on variant
   const getPlayButtonClasses = () => {
-    const baseClasses =
-      "flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 transition-[background-color,opacity] duration-150 hover:bg-amber-400 motion-reduce:transition-none";
+    const baseClasses = cn(
+      "flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400",
+      MOTION_TRACK_PLAY_BUTTON_CLASS,
+    );
 
     if (variant === "library" || variant === "playlist") {
       // Library and Playlist: always visible
@@ -107,32 +118,40 @@ export default function TrackItem({
 
     if (variant === "musician") {
       // Musician: always visible on mobile, hover on desktop
-      return `${baseClasses} ${
+      return cn(
+        baseClasses,
         isCurrentTrack
           ? "opacity-100"
-          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-      }`;
+          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
+      );
     }
 
     // Album: hover on desktop; always visible on touch / small screens
-    return `${baseClasses} ${
+    return cn(
+      baseClasses,
       isCurrentTrack
         ? "opacity-100"
-        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-    }`;
+        : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
+    );
   };
 
   return (
     <div
-      className={`group flex items-center gap-3 p-3 transition-[background-color,opacity,box-shadow] duration-150 hover:bg-slate-800/50 sm:gap-4 sm:px-4 ${
-        isCurrentTrack ? "bg-slate-800/40" : ""
-      } ${isDragging ? "opacity-50 shadow-lg ring-2 ring-amber-400/50" : ""}`}
+      className={cn(
+        "group flex items-center gap-3 p-3 hover:bg-slate-800/50 sm:gap-4 sm:px-4",
+        MOTION_TRACK_ROW_CLASS,
+        isCurrentTrack && "bg-slate-800/40",
+        isDragging && "opacity-50 shadow-lg ring-2 ring-amber-400/50",
+      )}
     >
       {/* Drag handle - only for draggable items */}
       {isDraggable && (
         <button
           {...dragHandleProps}
-          className="flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-300 active:cursor-grabbing"
+          className={cn(
+            "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-slate-400 hover:bg-slate-700 hover:text-slate-300 active:cursor-grabbing",
+            MOTION_TRACK_MENU_TRIGGER_CLASS,
+          )}
           aria-label="Drag to reorder"
         >
           <GripVertical className="size-4" aria-hidden="true" />
@@ -143,7 +162,10 @@ export default function TrackItem({
       {variant === "album" && trackIndex != null && (
         <span className="w-8 shrink-0 text-center font-mono text-sm">
           {isPlaying ? (
-            <Volume2 className="mx-auto size-4 animate-pulse text-amber-400" aria-hidden="true" />
+            <Volume2
+              className={cn("mx-auto size-4 text-amber-400", MOTION_LOADING_STATE_CLASS)}
+              aria-hidden="true"
+            />
           ) : (
             <span
               className={`${isCurrentTrack ? "text-amber-400" : "text-slate-400"} group-hover:text-amber-400`}
@@ -181,11 +203,14 @@ export default function TrackItem({
       <button
         onClick={handleLikeClick}
         disabled={isLikeLoading}
-        className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-[color,opacity] duration-150 motion-reduce:transition-none ${
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-full",
+          MOTION_TRACK_ICON_BUTTON_CLASS,
           isLiked
             ? "text-red-500 hover:text-red-400"
-            : "text-slate-400 hover:text-red-400"
-        } ${isLikeLoading ? "opacity-50" : ""}`}
+            : "text-slate-400 hover:text-red-400",
+          isLikeLoading && "opacity-50",
+        )}
         aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
       >
         <Heart

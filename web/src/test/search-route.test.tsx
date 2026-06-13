@@ -7,7 +7,11 @@ import {
 } from "@tanstack/react-router";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
+import {
+  CONTENT_FADE_TRANSITION_MS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
+} from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
@@ -183,13 +187,30 @@ async function renderSearchRoute(initialEntry: string) {
     await router.load();
   });
 
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} context={{ queryClient }} />
     </QueryClientProvider>,
   );
 
-  return { fetchMock, router };
+  return { fetchMock, router, ...view };
+}
+
+function setReducedMotionPreference(prefersReducedMotion: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches:
+        query === "(prefers-reduced-motion: reduce)" && prefersReducedMotion,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 }
 
 afterEach(() => {
@@ -204,6 +225,34 @@ afterEach(() => {
 });
 
 describe("search route", () => {
+  it("applies the base section entrance contract to the empty-search header", async () => {
+    await renderSearchRoute("/search/");
+
+    const heading = await screen.findByRole("heading", { name: "Search" });
+
+    expect(heading.closest("header")?.className).toContain(
+      MOTION_SECTION_ENTER_CLASS,
+    );
+  });
+
+  it("applies section entrance contracts to the results header and stable tabs root", async () => {
+    await renderSearchRoute("/search/?q=Casino&tab=all");
+
+    const heading = await screen.findByRole("heading", {
+      name: /Search results for/i,
+    });
+    const tabsRoot = screen.getByRole("tablist").closest('[data-slot="tabs"]');
+
+    expect(heading.closest("header")?.className).toContain(
+      MOTION_SECTION_ENTER_CLASS,
+    );
+    expect(tabsRoot?.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
+    expect(
+      screen.getByRole("tabpanel", { name: "All" }).firstElementChild
+        ?.className,
+    ).toContain(MOTION_SECTION_ENTER_CLASS);
+  });
+
   it("shows the server-clamped page for overlarge requested pages", async () => {
     window.scrollTo = vi.fn();
     const { fetchMock } = await renderSearchRoute(
@@ -254,5 +303,24 @@ describe("search route", () => {
     await waitFor(() => {
       expect(screen.getByText("Casino Original Soundtrack")).toBeInTheDocument();
     });
+  });
+
+  it("switches tabs without waiting when reduced motion is enabled", async () => {
+    setReducedMotionPreference(true);
+    const user = userEvent.setup();
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    await renderSearchRoute("/search/?q=Casino&tab=all");
+
+    await user.click(screen.getByRole("tab", { name: "Albums" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Casino Original Soundtrack")).toBeInTheDocument();
+    });
+    expect(
+      setTimeoutSpy.mock.calls.some(
+        ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
+      ),
+    ).toBe(false);
   });
 });

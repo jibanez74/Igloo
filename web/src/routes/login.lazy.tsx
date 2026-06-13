@@ -15,7 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { MOTION_PAGE_ENTER_CLASS } from "@/lib/constants";
 import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
+import { cn } from "@/lib/utils";
 
 const pageTitle = "Sign In - Igloo";
 const pageDescription = "Sign in to access your personal Igloo media library.";
@@ -89,8 +91,10 @@ function LoginPage() {
 
         <main className="relative z-10 flex min-h-screen items-center justify-center px-4">
           <Card
-            className="w-full max-w-md animate-in border-slate-800 bg-slate-900/80 shadow-xl
-               backdrop-blur-sm duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+            className={cn(
+              MOTION_PAGE_ENTER_CLASS,
+              "w-full max-w-md border-slate-800 bg-slate-900/80 shadow-xl backdrop-blur-sm",
+            )}
           >
             <CardHeader className="pb-2 text-center">
               <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-slate-800">

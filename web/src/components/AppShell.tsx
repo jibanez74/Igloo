@@ -12,11 +12,17 @@ export default function AppShell({ children }: PropsWithChildren) {
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(
     null,
   );
+  const handleSkipToContent = () => {
+    requestAnimationFrame(() => {
+      document.getElementById("main")?.focus();
+    });
+  };
 
   return (
     <SidebarProvider>
       <a
         href="#main"
+        onClick={handleSkipToContent}
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-3 focus:py-2 focus:text-slate-900"
       >
         Skip to content
@@ -24,7 +30,11 @@ export default function AppShell({ children }: PropsWithChildren) {
 
       <AppSidebar />
 
-      <SidebarInset id="main" className="bg-slate-900">
+      <SidebarInset
+        id="main"
+        tabIndex={-1}
+        className="bg-slate-900 focus:outline-none"
+      >
         <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-slate-800/50 bg-slate-900/95 px-4 backdrop-blur-sm md:px-6">
           <SidebarTrigger className="-ml-1 text-slate-300 hover:bg-slate-800 hover:text-white md:hidden" />
           <Header />

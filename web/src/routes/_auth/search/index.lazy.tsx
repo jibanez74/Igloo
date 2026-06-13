@@ -30,6 +30,9 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  MOTION_LOADING_STATE_CLASS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -75,7 +78,7 @@ function SearchPage() {
     return (
       <div className="min-w-0">
         <title>Search - Igloo</title>
-        <header className="mb-6 sm:mb-7">
+        <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
           <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
             <Search
               className="size-6 shrink-0 text-amber-400"
@@ -123,7 +126,7 @@ function SearchPage() {
         content={`Search results in your Igloo library for "${trimmed}".`}
       />
 
-      <header className="mb-6 sm:mb-7">
+      <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
         <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
           <Search
             className="size-6 shrink-0 text-amber-400"
@@ -136,7 +139,11 @@ function SearchPage() {
         </h1>
       </header>
 
-      <Tabs value={tab} onValueChange={handleTabChange}>
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        className={MOTION_SECTION_ENTER_DELAYED_CLASS}
+      >
         <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-5">
           <TabsTrigger
             value="all"
@@ -736,12 +743,15 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
 function CategorySkeleton() {
   return (
     <div>
-      <div className="mb-5 h-4 w-32 animate-pulse rounded-sm bg-slate-800" />
+      <div className={cn("mb-5 h-4 w-32 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
           <div
             key={i}
-            className="animate-pulse overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+            className={cn(
+              "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+              MOTION_LOADING_STATE_CLASS,
+            )}
           >
             <div className="aspect-2/3 bg-slate-800" />
             <div className="p-3">
@@ -760,12 +770,15 @@ function AllResultsSkeleton() {
     <div className="space-y-10">
       {Array.from({ length: 3 }).map((_, s) => (
         <div key={s}>
-          <div className="mb-4 h-6 w-40 animate-pulse rounded-sm bg-slate-800" />
+          <div className={cn("mb-4 h-6 w-40 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                className={cn(
+                  "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+                  MOTION_LOADING_STATE_CLASS,
+                )}
               >
                 <div className="aspect-2/3 bg-slate-800" />
                 <div className="p-3">

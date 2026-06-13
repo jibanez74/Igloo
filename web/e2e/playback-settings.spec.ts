@@ -232,6 +232,11 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function expectTabMovesFocus(page: Page, next: Locator) {
+  await page.keyboard.press("Tab");
+  await expect(next).toBeFocused();
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("Playback settings", () => {
@@ -275,6 +280,27 @@ test.describe("Playback settings", () => {
       await expect(serverInput).toBeVisible();
       await expectDescriptionIncludes(page, downloadInput, "Leave blank");
       await expectDescriptionIncludes(page, serverInput, "Leave blank");
+
+      await downloadInput.focus();
+      await expect(downloadInput).toBeFocused();
+      await expectTabMovesFocus(page, serverInput);
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Profile" }),
+      );
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Audio language" }),
+      );
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("combobox", { name: "Subtitle language" }),
+      );
+      await expectTabMovesFocus(page, page.getByRole("button", { name: "Reset" }));
+      await expectTabMovesFocus(
+        page,
+        page.getByRole("button", { name: "Save Settings" }),
+      );
 
       await downloadInput.fill("100");
       await serverInput.fill("5");

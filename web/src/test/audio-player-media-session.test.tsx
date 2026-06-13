@@ -1,7 +1,12 @@
 import { createRef } from "react";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "@/components/AudioPlayer";
+import {
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  MOTION_PLAYER_CHROME_ENTER_CLASS,
+} from "@/lib/constants";
 import type { TrackType } from "@/types";
 
 const originalMediaMetadataDescriptor = Object.getOwnPropertyDescriptor(
@@ -71,7 +76,13 @@ function setAudioNumber(
   });
 }
 
-function renderAudioPlayer() {
+function renderAudioPlayer({
+  isExpanded = false,
+  onClose,
+}: {
+  isExpanded?: boolean;
+  onClose?: () => void;
+} = {}) {
   const audioRef = createRef<HTMLAudioElement>();
   const currentTrack = track();
   const view = render(
@@ -85,9 +96,10 @@ function renderAudioPlayer() {
       audioRef={audioRef}
       isPlaying={false}
       onPlayStateChange={vi.fn()}
-      isExpanded={false}
+      isExpanded={isExpanded}
       onMinimize={vi.fn()}
       onExpand={vi.fn()}
+      onClose={onClose}
     />,
   );
 
@@ -229,5 +241,58 @@ describe("AudioPlayer Media Session", () => {
     });
 
     expect(() => renderAudioPlayer()).not.toThrow();
+  });
+
+  it("keeps minimized audio chrome labelled and reduced-motion safe", () => {
+    renderAudioPlayer({ onClose: vi.fn() });
+
+    expect(screen.getByRole("region", { name: "Audio player" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_ENTER_CLASS.split(" "),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: /expand player\. now playing: alabaster by the band/i,
+      }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(
+      screen.getByRole("button", { name: "No previous track" }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
+    expect(screen.getByRole("button", { name: "No next track" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
+    expect(
+      screen.getByRole("button", { name: "Stop playback and close player" }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+  });
+
+  it("keeps expanded audio chrome labelled and reduced-motion safe", () => {
+    renderAudioPlayer({ isExpanded: true, onClose: vi.fn() });
+
+    expect(
+      screen.getByRole("dialog", {
+        name: "Now playing: Alabaster by The Band",
+      }),
+    ).toHaveClass(...MOTION_MEDIA_OVERLAY_ENTER_CLASS.split(" "));
+    expect(
+      screen.getByRole("button", { name: "Minimize player (Escape)" }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(
+      screen.getByRole("button", { name: "Stop playback and close player" }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(
+      screen.getByRole("button", { name: "No previous track" }),
+    ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
+    expect(screen.getByRole("button", { name: "No next track" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
+    expect(screen.getByRole("button", { name: "Mute" })).toHaveClass(
+      ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
   });
 });

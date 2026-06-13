@@ -5,12 +5,20 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
 import WatchRoomCard from "@/components/WatchRoomCard";
+import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 export default function WatchRooms() {
   const { data, isPending } = useQuery(watchRoomsQueryOpts());
 
   const rooms = data && !data.error ? (data.data?.rooms ?? []) : [];
   const hasError = data && data.error;
+  const sectionDescriptionId = "watch-rooms-description";
+  const sectionSummaryId = "watch-rooms-summary";
+  const sectionDescribedBy =
+    !isPending && !hasError && rooms.length > 0
+      ? `${sectionDescriptionId} ${sectionSummaryId}`
+      : sectionDescriptionId;
   const announcementMessage = isPending
     ? undefined
     : hasError
@@ -28,7 +36,8 @@ export default function WatchRooms() {
     <section
       role="region"
       aria-labelledby="watch-rooms-heading"
-      className="mt-6 md:mt-8"
+      aria-describedby={sectionDescribedBy}
+      className={cn("mt-6 md:mt-8", MOTION_SECTION_ENTER_DELAYED_CLASS)}
     >
       <LiveAnnouncer message={announcementMessage} />
 
@@ -45,13 +54,19 @@ export default function WatchRooms() {
             >
               Watch Rooms
             </h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+            <p
+              id={sectionDescriptionId}
+              className="mt-2 max-w-2xl text-sm text-slate-300"
+            >
               Jump back into rooms you own or rooms other people invited you to.
             </p>
           </div>
 
           {!isPending && !hasError && rooms.length > 0 && (
-            <p className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300">
+            <p
+              id={sectionSummaryId}
+              className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300"
+            >
               {rooms.length} room{rooms.length === 1 ? "" : "s"}
             </p>
           )}
@@ -79,20 +94,11 @@ export default function WatchRooms() {
           </AlertDescription>
         </Alert>
       ) : (
-        <>
-          <span
-            tabIndex={0}
-            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-4 focus:py-2 focus:text-slate-900"
-            aria-label={`Watch Rooms section, ${rooms.length} room${rooms.length === 1 ? "" : "s"} available`}
-          >
-            Watch Rooms - {rooms.length} room{rooms.length === 1 ? "" : "s"}
-          </span>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rooms.map((room) => (
             <WatchRoomCard key={room.id} room={room} />
           ))}
-          </div>
-        </>
+        </div>
       )}
     </section>
   );

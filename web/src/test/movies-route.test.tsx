@@ -7,7 +7,11 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONTENT_FADE_TRANSITION_MS } from "@/lib/constants";
+import {
+  CONTENT_FADE_TRANSITION_MS,
+  MOTION_SECTION_ENTER_CLASS,
+  MOTION_SECTION_ENTER_DELAYED_CLASS,
+} from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const defaultMatchMedia = window.matchMedia;
@@ -232,11 +236,17 @@ async function renderMoviesRoute(
     await router.load();
   });
 
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} context={{ queryClient }} />
     </QueryClientProvider>,
   );
+
+  return {
+    queryClient,
+    router,
+    ...view,
+  };
 }
 
 function setReducedMotionPreference(prefersReducedMotion: boolean) {
@@ -356,6 +366,32 @@ describe("movies route tab transitions", () => {
     expect(
       setTimeoutSpy.mock.calls.some(([, delay]) => delay === CONTENT_FADE_TRANSITION_MS),
     ).toBe(false);
+  });
+});
+
+describe("movies route section motion", () => {
+  it("applies section entrance contracts without changing tab panel fade behavior", async () => {
+    await renderMoviesRoute("/movies/");
+
+    const heading = await screen.findByRole("heading", {
+      name: "Movie Library",
+    });
+    const stats = screen.getByRole("region", {
+      name: "Library statistics: 42 movies",
+    });
+    const tabsRoot = screen.getByRole("tablist").closest('[data-slot="tabs"]');
+
+    expect(heading.closest("header")?.className).toContain(
+      MOTION_SECTION_ENTER_CLASS,
+    );
+    expect(stats.parentElement?.className).toContain(
+      MOTION_SECTION_ENTER_DELAYED_CLASS,
+    );
+    expect(tabsRoot?.className).toContain(MOTION_SECTION_ENTER_DELAYED_CLASS);
+    expect(
+      screen.getByRole("tabpanel", { name: "All Movies" }).firstElementChild
+        ?.className,
+    ).toContain(MOTION_SECTION_ENTER_CLASS);
   });
 });
 
