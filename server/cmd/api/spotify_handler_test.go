@@ -204,6 +204,34 @@ func TestSearchSpotifyAlbums_HTTPMarksExistingLibraryMatches(t *testing.T) {
 	}
 }
 
+func TestSearchSpotifyAlbums_HTTPReturnsErrorWhenLibraryLookupFails(t *testing.T) {
+	app := setupTestApp(t)
+
+	app.Spotify = &spotifyHandlerStub{
+		albums: []spotifylib.SimpleAlbum{
+			{
+				ID:   spotifylib.ID("album123"),
+				Name: "Blue Record",
+			},
+		},
+	}
+	err := app.DB.Close()
+	if err != nil {
+		t.Fatalf("close database: %v", err)
+	}
+
+	router := chi.NewRouter()
+	router.Post("/api/spotify/albums/search", app.SearchSpotifyAlbums)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/spotify/albums/search", strings.NewReader(`{"title":"Blue Record"}`))
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500, body = %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSearchSpotifyAlbums_HTTPUnavailable(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

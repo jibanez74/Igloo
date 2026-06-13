@@ -47,19 +47,27 @@ export default function SpotifyAlbumPicker({
     setResults([]);
     setSelectedId(null);
 
-    const response = await searchFn({
-      title: trimmedTitle,
-    });
-    setSearching(false);
+    try {
+      const response = await searchFn({
+        title: trimmedTitle,
+      });
 
-    if (response.error || !response.data?.results) {
-      showActionFailed("search Spotify", response.message);
-      return;
-    }
+      if (response.error || !response.data?.results) {
+        showActionFailed("search Spotify", response.message);
+        return;
+      }
 
-    setResults(response.data.results);
-    if (response.data.results.length === 0) {
-      showInfo("No Spotify album matches found");
+      setResults(response.data.results);
+      if (response.data.results.length === 0) {
+        showInfo("No Spotify album matches found");
+      }
+    } catch {
+      showActionFailed(
+        "search Spotify",
+        "Unable to complete Spotify search right now.",
+      );
+    } finally {
+      setSearching(false);
     }
   }
 
@@ -69,6 +77,8 @@ export default function SpotifyAlbumPicker({
     setConfirming(true);
     try {
       await onConfirm(selectedResult);
+    } catch {
+      showActionFailed("send request", "Unable to complete this action right now.");
     } finally {
       setConfirming(false);
     }

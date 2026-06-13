@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strings"
@@ -62,10 +63,17 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	results, err := app.mapSpotifyAlbumSearchResults(r, albums)
+	if err != nil {
+		app.Logger.Error("failed to map spotify album search results", "error", err)
+		helpers.ErrorJSON(w, errors.New("failed to map Spotify album search results"), http.StatusInternalServerError)
+		return
+	}
+
 	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"results": app.mapSpotifyAlbumSearchResults(r, albums),
+			"results": results,
 		},
 	})
 }
@@ -79,7 +87,7 @@ func (app *Application) ensureSpotifyAvailable(w http.ResponseWriter) bool {
 	return false
 }
 
-func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotifylib.SimpleAlbum) []spotifyAlbumSearchResult {
+func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []spotifylib.SimpleAlbum) ([]spotifyAlbumSearchResult, error) {
 	mapped := make([]spotifyAlbumSearchResult, 0, len(albums))
 
 	for _, album := range albums {
@@ -104,13 +112,13 @@ func (app *Application) mapSpotifyAlbumSearchResults(r *http.Request, albums []s
 			result.AlreadyInLibrary = true
 			result.LibraryAlbumID = &existingAlbum.ID
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			app.Logger.Error("failed to look up existing album by spotify id", "error", err, "spotify_id", spotifyID)
+			return nil, fmt.Errorf("failed to look up existing album by spotify id %q: %w", spotifyID, err)
 		}
 
 		mapped = append(mapped, result)
 	}
 
-	return mapped
+	return mapped, nil
 }
 
 func spotifyAlbumArtistNames(artists []spotifylib.SimpleArtist) []string {

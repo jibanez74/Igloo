@@ -296,4 +296,51 @@ describe("RequestAlbumDialog", () => {
     });
     expect(apiMocks.createNotification).not.toHaveBeenCalled();
   });
+
+  it("clears the search loading state when Spotify search rejects", async () => {
+    apiMocks.searchSpotifyAlbums.mockRejectedValue(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText("Album title"), "Blue Record");
+    await user.click(screen.getByRole("button", { name: "Search Spotify" }));
+
+    await waitFor(() => {
+      expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
+        "search Spotify",
+        "Unable to complete Spotify search right now.",
+      );
+    });
+    expect(screen.getByRole("button", { name: "Search Spotify" }))
+      .toBeEnabled();
+  });
+
+  it("clears the confirm loading state when sending the album request rejects", async () => {
+    apiMocks.searchSpotifyAlbums.mockResolvedValue(
+      success({
+        results: [spotifyAlbumResult()],
+      }),
+    );
+    apiMocks.createNotification.mockRejectedValue(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText("Album title"), "Blue Record");
+    await user.click(screen.getByRole("button", { name: "Search Spotify" }));
+    await user.click(await screen.findByRole("option", { name: /Blue Record/i }));
+    await user.click(screen.getByRole("button", { name: "Send Request" }));
+
+    await waitFor(() => {
+      expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
+        "send request",
+        "Unable to complete this action right now.",
+      );
+    });
+    expect(screen.getByRole("button", { name: "Send Request" }))
+      .toBeEnabled();
+    expect(screen.getByRole("dialog", { name: "Request Album" }))
+      .toBeInTheDocument();
+  });
 });
