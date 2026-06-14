@@ -170,7 +170,6 @@ type Querier interface {
 	GetUsersExcluding(ctx context.Context, arg GetUsersExcludingParams) ([]GetUsersExcludingRow, error)
 	// Video streams for a movie (for technical details display).
 	GetVideoStreamsByMovieID(ctx context.Context, movieID int64) ([]VideoStream, error)
-	GetVisibleNotification(ctx context.Context, arg GetVisibleNotificationParams) (GetVisibleNotificationRow, error)
 	GetWatchRoomByID(ctx context.Context, id int64) (WatchRoom, error)
 	GetWatchRoomMemberByUserID(ctx context.Context, arg GetWatchRoomMemberByUserIDParams) (GetWatchRoomMemberByUserIDRow, error)
 	GetWatchRoomMembers(ctx context.Context, roomID int64) ([]GetWatchRoomMembersRow, error)
@@ -191,10 +190,8 @@ type Querier interface {
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
-	ListVisibleNotifications(ctx context.Context, arg ListVisibleNotificationsParams) ([]ListVisibleNotificationsRow, error)
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
-	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
 	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
