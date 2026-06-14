@@ -384,24 +384,6 @@ func TestTmdbMovieCertificationPrefersUSAndFallsBack(t *testing.T) {
 	}
 }
 
-func TestNewTmdbMovieSearchResult(t *testing.T) {
-	if got := NewTmdbMovieSearchResult(nil); got != (TmdbMovieSearchResult{}) {
-		t.Fatalf("nil mapping = %+v, want zero value", got)
-	}
-
-	got := NewTmdbMovieSearchResult(&TmdbMovie{
-		TmdbID:      603,
-		Title:       "The Matrix",
-		ReleaseDate: "1999-03-31",
-		Overview:    "Overview",
-		PosterPath:  "/poster.jpg",
-	})
-	if got.TmdbID != 603 || got.Title != "The Matrix" || got.ReleaseDate != "1999-03-31" ||
-		got.Overview != "Overview" || got.PosterPath != "/poster.jpg" {
-		t.Fatalf("mapped result = %+v", got)
-	}
-}
-
 func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 	client := &tmdbClient{retryBaseDelay: 100 * time.Millisecond}
 

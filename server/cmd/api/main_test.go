@@ -1088,20 +1088,3 @@ func TestInitDirs(t *testing.T) {
 		t.Errorf("expected missing shows directory not to be created, stat err=%v", err)
 	}
 }
-
-func TestNullString(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected sql.NullString
-	}{
-		{"", sql.NullString{Valid: false}},
-		{"value", sql.NullString{String: "value", Valid: true}},
-	}
-
-	for _, tt := range tests {
-		result := helpers.NullString(tt.input)
-		if result != tt.expected {
-			t.Errorf("NullString(%q) = %v, want %v", tt.input, result, tt.expected)
-		}
-	}
-}

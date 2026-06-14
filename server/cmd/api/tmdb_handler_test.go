@@ -54,7 +54,7 @@ func TestTmdbSearchMovies_HTTPSearchRanksResults(t *testing.T) {
 	var resp struct {
 		Error bool `json:"error"`
 		Data  struct {
-			Results []tmdb.TmdbMovieSearchResult `json:"results"`
+			Results []tmdbSearchResult `json:"results"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -172,7 +172,7 @@ func TestTmdbSearchMovies_HTTPByID(t *testing.T) {
 	var resp struct {
 		Error bool `json:"error"`
 		Data  struct {
-			Results []tmdb.TmdbMovieSearchResult `json:"results"`
+			Results []tmdbSearchResult `json:"results"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {

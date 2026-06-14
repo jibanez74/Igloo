@@ -242,6 +242,26 @@ func TestSearchArtistByName(t *testing.T) {
 		}
 	})
 
+	t.Run("treats unexpected cached artist value as cache miss", func(t *testing.T) {
+		callCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			writeJSON(w, artistSearchJSON("safeArtist123", "John Mayer"))
+		}))
+		sc.artistCache.Set("john mayer", "bad-cache-value", gocache.DefaultExpiration)
+
+		artist, err := sc.SearchArtistByName(context.Background(), "John Mayer")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if callCount != 1 {
+			t.Fatalf("callCount = %d, want cache miss and one search", callCount)
+		}
+		if string(artist.ID) != "safeArtist123" {
+			t.Fatalf("artist.ID = %q, want safeArtist123", artist.ID)
+		}
+	})
+
 	t.Run("cache key is case-insensitive", func(t *testing.T) {
 		callCount := 0
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,6 +343,25 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 		if !strings.Contains(capturedQuery, `artist:"Michael Jackson"`) {
 			t.Errorf("expected artist field filter in query, got: %s", capturedQuery)
+		}
+	})
+
+	t.Run("sanitizes double quotes in structured field query values", func(t *testing.T) {
+		var capturedQuery string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				capturedQuery = r.URL.Query().Get("q")
+				writeJSON(w, albumSearchJSON("q123", `Live "At Home"`))
+			} else {
+				writeJSON(w, fullAlbumJSON("q123", `Live "At Home"`))
+			}
+		}))
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), `Live "At Home"`, `The "Band"`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if capturedQuery != `album:"Live 'At Home'" artist:"The 'Band'"` {
+			t.Fatalf("query = %q, want sanitized field query", capturedQuery)
 		}
 	})
 
@@ -498,6 +537,34 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 	})
 
+	t.Run("sanitizes double quotes in fallback query", func(t *testing.T) {
+		searchCallCount := 0
+		var queriesUsed []string
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				searchCallCount++
+				queriesUsed = append(queriesUsed, r.URL.Query().Get("q"))
+				if searchCallCount == 1 {
+					writeJSON(w, emptyAlbumSearchJSON())
+				} else {
+					writeJSON(w, albumSearchJSON("quoteFallback123", `Live "At Home"`))
+				}
+			} else {
+				writeJSON(w, fullAlbumJSON("quoteFallback123", `Live "At Home"`))
+			}
+		}))
+		_, err := sc.SearchAndGetAlbumDetails(context.Background(), `Live "At Home"`, `The "Band"`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(queriesUsed) != 2 {
+			t.Fatalf("queriesUsed length = %d, want 2", len(queriesUsed))
+		}
+		if queriesUsed[1] != `Live 'At Home' The 'Band'` {
+			t.Fatalf("fallback query = %q, want sanitized plain query", queriesUsed[1])
+		}
+	})
+
 	t.Run("returns error when both field filter and fallback return no results", func(t *testing.T) {
 		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/search") {
@@ -535,6 +602,30 @@ func TestSearchAndGetAlbumDetails(t *testing.T) {
 		}
 		if first.ID != second.ID {
 			t.Error("cached result does not match original")
+		}
+	})
+
+	t.Run("treats unexpected cached album value as cache miss", func(t *testing.T) {
+		searchCallCount := 0
+		sc := newMockClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/search") {
+				searchCallCount++
+				writeJSON(w, albumSearchJSON("safeAlbum123", "Abbey Road"))
+			} else {
+				writeJSON(w, fullAlbumJSON("safeAlbum123", "Abbey Road"))
+			}
+		}))
+		sc.albumCache.Set("abbey road|the beatles", "bad-cache-value", gocache.DefaultExpiration)
+
+		album, err := sc.SearchAndGetAlbumDetails(context.Background(), "Abbey Road", "The Beatles")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if searchCallCount != 1 {
+			t.Fatalf("searchCallCount = %d, want cache miss and one search", searchCallCount)
+		}
+		if string(album.ID) != "safeAlbum123" {
+			t.Fatalf("album.ID = %q, want safeAlbum123", album.ID)
 		}
 	})
 
@@ -767,6 +858,51 @@ func TestNew(t *testing.T) {
 		}
 		if client == nil {
 			t.Fatal("expected non-nil client")
+		}
+	})
+
+	t.Run("reuses constructor token for first API request", func(t *testing.T) {
+		tokenExchangeCount := 0
+		searchCount := 0
+		httpClient := &http.Client{
+			Transport: &mockTransport{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.String() == "https://accounts.spotify.com/api/token":
+					tokenExchangeCount++
+					writeSpotifyTokenResponse(w, "validated-token")
+				case strings.HasSuffix(r.URL.Path, "/search"):
+					searchCount++
+					if got := r.Header.Get("Authorization"); got != "Bearer validated-token" {
+						t.Fatalf("Authorization = %q, want bearer token from constructor", got)
+					}
+					writeJSON(w, albumSearchJSON("reuse123", "Blue Record"))
+				default:
+					t.Fatalf("unexpected request URL: %s", r.URL.String())
+				}
+			})},
+		}
+		ctx := context.WithValue(context.Background(), interface{}(oauth2.HTTPClient), httpClient)
+
+		client, err := New(ctx, "client-id", "client-secret")
+		if err != nil {
+			t.Fatalf("expected constructor to succeed, got error: %v", err)
+		}
+		if tokenExchangeCount != 1 {
+			t.Fatalf("tokenExchangeCount after New = %d, want 1", tokenExchangeCount)
+		}
+
+		albums, err := client.SearchAlbums(context.Background(), "Blue Record")
+		if err != nil {
+			t.Fatalf("SearchAlbums failed: %v", err)
+		}
+		if len(albums) != 1 {
+			t.Fatalf("albums length = %d, want 1", len(albums))
+		}
+		if searchCount != 1 {
+			t.Fatalf("searchCount = %d, want 1", searchCount)
+		}
+		if tokenExchangeCount != 1 {
+			t.Fatalf("tokenExchangeCount after first request = %d, want reused constructor token", tokenExchangeCount)
 		}
 	})
 

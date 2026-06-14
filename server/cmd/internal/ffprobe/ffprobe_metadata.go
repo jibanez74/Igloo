@@ -194,7 +194,10 @@ func (f *ffprobe) runMetadata(filePath string, args ...string) (*FfprobeResult, 
 		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-			return nil, fmt.Errorf("ffprobe failed for %s: %w: %s", filePath, err, exitErr.Stderr)
+			stderr := strings.TrimSpace(string(exitErr.Stderr))
+			if stderr != "" {
+				return nil, fmt.Errorf("ffprobe failed for %s: %w: %s", filePath, err, stderr)
+			}
 		}
 		return nil, fmt.Errorf("ffprobe failed for %s: %w", filePath, err)
 	}
@@ -203,7 +206,7 @@ func (f *ffprobe) runMetadata(filePath string, args ...string) (*FfprobeResult, 
 
 	err = json.Unmarshal(output, &result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ffprobe output: %w", err)
+		return nil, fmt.Errorf("failed to parse ffprobe output for %s: %w", filePath, err)
 	}
 
 	if len(result.Streams) == 0 {
