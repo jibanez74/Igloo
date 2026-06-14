@@ -946,11 +946,20 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	if app.Settings.MoviesDir.String != existingMoviesDir {
 		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", existingMoviesDir, app.Settings.MoviesDir.String)
 	}
+	if !app.Settings.MoviesDir.Valid {
+		t.Error("Expected MoviesDir.Valid to remain true")
+	}
 	if app.Settings.ShowsDir.String != existingShowsDir {
 		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", existingShowsDir, app.Settings.ShowsDir.String)
 	}
+	if !app.Settings.ShowsDir.Valid {
+		t.Error("Expected ShowsDir.Valid to remain true")
+	}
 	if app.Settings.MusicDir.String != existingMusicDir {
 		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", existingMusicDir, app.Settings.MusicDir.String)
+	}
+	if !app.Settings.MusicDir.Valid {
+		t.Error("Expected MusicDir.Valid to remain true")
 	}
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
