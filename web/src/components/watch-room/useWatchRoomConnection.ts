@@ -38,7 +38,6 @@ export function useWatchRoomConnection({
 }: UseWatchRoomConnectionOptions) {
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<number | null>(null);
-  const announcementTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
@@ -51,12 +50,14 @@ export function useWatchRoomConnection({
   } | null>(null);
 
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [syncAnnouncement, setSyncAnnouncement] = useState<string | undefined>(
-    undefined,
-  );
+  const [syncAnnouncementState, setSyncAnnouncementState] = useState<
+    { text: string; token: number } | undefined
+  >(undefined);
   const [connectedUserIds, setConnectedUserIds] = useState<number[]>([]);
   const [connectionReady, setConnectionReady] = useState(false);
   const [reconnectKey, setReconnectKey] = useState(0);
+
+  const syncAnnouncement = syncAnnouncementState?.text;
 
   const clearHeartbeat = () => {
     if (heartbeatRef.current !== null) {
@@ -176,14 +177,10 @@ export function useWatchRoomConnection({
 
     const announcement = watchRoomAnnouncement(event, movieTitle);
     if (announcement) {
-      if (announcementTimeoutRef.current !== null) {
-        window.clearTimeout(announcementTimeoutRef.current);
-      }
-      setSyncAnnouncement(announcement);
-      announcementTimeoutRef.current = window.setTimeout(() => {
-        setSyncAnnouncement(undefined);
-        announcementTimeoutRef.current = null;
-      }, WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS);
+      setSyncAnnouncementState(currentAnnouncement => ({
+        text: announcement,
+        token: (currentAnnouncement?.token ?? 0) + 1,
+      }));
     }
 
     if (!event.playback) return;
@@ -304,12 +301,20 @@ export function useWatchRoomConnection({
   }, [currentRoomId, reconnectKey]);
 
   useEffect(() => {
+    if (!syncAnnouncementState) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setSyncAnnouncementState(currentAnnouncement => (
+        currentAnnouncement === syncAnnouncementState
+          ? undefined
+          : currentAnnouncement
+      ));
+    }, WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS);
+
     return () => {
-      if (announcementTimeoutRef.current !== null) {
-        window.clearTimeout(announcementTimeoutRef.current);
-      }
+      window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [syncAnnouncementState]);
 
   useEffect(() => {
     const video = videoRef.current;

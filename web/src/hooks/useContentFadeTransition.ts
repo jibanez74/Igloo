@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type RunContentFadeTransitionArgs = {
   onTransition: () => void | Promise<void>;
   shouldAnimate?: boolean;
+};
+
+type PendingContentFadeTransition = {
+  onTransition: () => void | Promise<void>;
 };
 
 function getPrefersReducedMotion() {
@@ -16,8 +20,9 @@ function getPrefersReducedMotion() {
 export function useContentFadeTransition(
   transitionMs: number,
 ) {
-  const exitTimerRef = useRef<number | null>(null);
   const [isExiting, setIsExiting] = useState(false);
+  const [pendingTransition, setPendingTransition] =
+    useState<PendingContentFadeTransition | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     getPrefersReducedMotion,
   );
@@ -41,18 +46,27 @@ export function useContentFadeTransition(
   }, []);
 
   useEffect(() => {
+    if (!pendingTransition) return;
+
+    let isCurrentTransition = true;
+    const timeoutId = window.setTimeout(() => {
+      if (!isCurrentTransition) return;
+
+      setIsExiting(false);
+      setPendingTransition(currentTransition => (
+        currentTransition === pendingTransition ? null : currentTransition
+      ));
+      void pendingTransition.onTransition();
+    }, transitionMs);
+
     return () => {
-      if (exitTimerRef.current !== null) {
-        window.clearTimeout(exitTimerRef.current);
-      }
+      isCurrentTransition = false;
+      window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [pendingTransition, transitionMs]);
 
   const clearPendingTransition = () => {
-    if (exitTimerRef.current !== null) {
-      window.clearTimeout(exitTimerRef.current);
-      exitTimerRef.current = null;
-    }
+    setPendingTransition(null);
     setIsExiting(false);
   };
 
@@ -68,11 +82,7 @@ export function useContentFadeTransition(
     }
 
     setIsExiting(true);
-    exitTimerRef.current = window.setTimeout(() => {
-      exitTimerRef.current = null;
-      setIsExiting(false);
-      void onTransition();
-    }, transitionMs);
+    setPendingTransition({ onTransition });
   };
 
   return {

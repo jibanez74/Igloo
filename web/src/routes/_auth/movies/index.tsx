@@ -610,17 +610,23 @@ function GenresTabContent({
   const genreButtonRefs = useRef(new Map<number, HTMLButtonElement>());
   const pendingRestoreGenreIdRef = useRef<number | null>(null);
 
-  const genresQuery = useQuery(moviesGenresQueryOpts());
-  const genresRes = genresQuery.data;
-  const genresLoading = genresQuery.isLoading;
+  const {
+    data: genresRes,
+    isError: genresError,
+    isLoading: genresLoading,
+    refetch: refetchGenres,
+  } = useQuery(moviesGenresQueryOpts());
 
   const genres = genresRes?.error === false ? genresRes.data.genres : [];
 
-  const moviesQuery = useQuery({
+  const {
+    data: moviesRes,
+    isError: moviesError,
+    isLoading: moviesLoading,
+    refetch: refetchMovies,
+  } = useQuery({
     ...moviesByGenreQueryOpts(genreId ?? 0, genresPage, MOVIES_PER_PAGE, sort),
   });
-  const moviesRes = moviesQuery.data;
-  const moviesLoading = moviesQuery.isLoading;
 
   const movies = moviesRes?.error === false ? moviesRes.data.movies : [];
   const totalPages =
@@ -704,7 +710,7 @@ function GenresTabContent({
     return <GenresTabSkeleton />;
   }
 
-  if (genresQuery.isError || isApiFailure(genresRes)) {
+  if (genresError || isApiFailure(genresRes)) {
     return (
       <MoviesLoadError
         message={
@@ -712,7 +718,7 @@ function GenresTabContent({
             ? genresRes.message
             : "Couldn’t load genres. Check your connection and try again."
         }
-        onRetry={() => void genresQuery.refetch()}
+        onRetry={() => void refetchGenres()}
       />
     );
   }
@@ -828,14 +834,14 @@ function GenresTabContent({
             </div>
           </div>
 
-          {moviesQuery.isError || isApiFailure(moviesRes) ? (
+          {moviesError || isApiFailure(moviesRes) ? (
             <MoviesLoadError
               message={
                 isApiFailure(moviesRes)
                   ? moviesRes.message
                   : "Couldn’t load movies for this genre. Check your connection and try again."
               }
-              onRetry={() => void moviesQuery.refetch()}
+              onRetry={() => void refetchMovies()}
             />
           ) : moviesLoading ? (
             <AllMoviesTabSkeleton />

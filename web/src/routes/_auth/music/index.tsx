@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowLeft,
   Disc3,
@@ -26,6 +25,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
+import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
@@ -537,15 +537,11 @@ function TracksTabContent() {
     useInfiniteQuery(tracksInfiniteQueryOpts());
 
   const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
-  const scrollContainer = useAppShellScrollContainer();
   const likedSet = new Set<number>(
     likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
   );
 
-  const listRef = useRef<HTMLDivElement>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   const isFetchingNextRef = useRef(false);
-  const [scrollMargin, setScrollMargin] = useState(0);
 
   // Get total tracks count from first page
   const totalTracks =
@@ -559,64 +555,6 @@ function TracksTabContent() {
 
   // Convert to virtual items (tracks + letter headers)
   const virtualItems = flattenToVirtualItems(allTracks);
-
-  useEffect(() => {
-    const listElement = listRef.current;
-    if (!listElement || !scrollContainer) {
-      return;
-    }
-
-    const updateScrollMargin = () => {
-      setScrollMargin(
-        getOffsetWithinScrollContainer(listElement, scrollContainer),
-      );
-    };
-
-    updateScrollMargin();
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateScrollMargin);
-
-    resizeObserver?.observe(listElement);
-    resizeObserver?.observe(scrollContainer);
-    window.addEventListener("resize", updateScrollMargin);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateScrollMargin);
-    };
-  }, [scrollContainer, virtualItems.length]);
-
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: virtualItems.length,
-    getScrollElement: () => scrollContainer,
-    initialRect: {
-      width: scrollContainer?.clientWidth ?? window.innerWidth,
-      height: scrollContainer?.clientHeight ?? window.innerHeight,
-    },
-    observeElementRect: observeElementRectWithWindowFallback,
-
-    estimateSize: index => {
-      const item = virtualItems[index];
-
-      return item?.type === "letter"
-        ? VIRTUAL_LIST_LETTER_HEIGHT
-        : VIRTUAL_LIST_TRACK_HEIGHT;
-    },
-
-    overscan: 5,
-    scrollMargin,
-  });
-
-  // Get virtual items for dependency tracking
-  const renderedVirtualItems = virtualizer.getVirtualItems();
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [scrollMargin, virtualizer, virtualItems.length]);
 
   useEffect(() => {
     if (!isFetchingNextPage) {
@@ -634,65 +572,6 @@ function TracksTabContent() {
       isFetchingNextRef.current = false;
     });
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (
-      !target ||
-      !scrollContainer ||
-      !hasNextPage ||
-      isFetchingNextPage ||
-      isFetchingNextRef.current ||
-      typeof IntersectionObserver === "undefined"
-    ) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) {
-          requestNextPage();
-        }
-      },
-      {
-        root: scrollContainer,
-        rootMargin: "800px 0px",
-      },
-    );
-
-    observer.observe(target);
-
-    return () => observer.disconnect();
-  }, [
-    hasNextPage,
-    isFetchingNextPage,
-    requestNextPage,
-    scrollContainer,
-    virtualItems.length,
-  ]);
-
-  // Trigger infinite scroll when near the end
-  useEffect(() => {
-    if (renderedVirtualItems.length === 0) return;
-
-    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
-
-    if (
-      lastItem &&
-      lastItem.index >= virtualItems.length - 10 &&
-      hasNextPage &&
-      !isFetchingNextPage &&
-      !isFetchingNextRef.current
-    ) {
-      requestNextPage();
-    }
-  }, [
-    renderedVirtualItems,
-    virtualItems.length,
-    hasNextPage,
-    isFetchingNextPage,
-    requestNextPage,
-  ]);
 
   // Generate announcement for screen readers
   const getAnnouncement = () => {
@@ -733,68 +612,215 @@ function TracksTabContent() {
         </div>
       </div>
 
-      {/* Virtualized tracks list */}
+      <VirtualizedTracksList
+        virtualItems={virtualItems}
+        likedSet={likedSet}
+        totalTracks={totalTracks}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        requestNextPage={requestNextPage}
+      />
+    </div>
+  );
+}
+
+type VirtualizedTracksListProps = {
+  virtualItems: VirtualItem[];
+  likedSet: Set<number>;
+  totalTracks: number;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  requestNextPage: () => void;
+};
+
+function VirtualizedTracksList({
+  virtualItems,
+  likedSet,
+  totalTracks,
+  hasNextPage,
+  isFetchingNextPage,
+  requestNextPage,
+}: VirtualizedTracksListProps) {
+  "use no memo";
+
+  const scrollContainer = useAppShellScrollContainer();
+  const listRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useEffect(() => {
+    const listElement = listRef.current;
+    if (!listElement || !scrollContainer) {
+      return;
+    }
+
+    const updateScrollMargin = () => {
+      setScrollMargin(
+        getOffsetWithinScrollContainer(listElement, scrollContainer),
+      );
+    };
+
+    updateScrollMargin();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollMargin);
+
+    resizeObserver?.observe(listElement);
+    resizeObserver?.observe(scrollContainer);
+    window.addEventListener("resize", updateScrollMargin);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollMargin);
+    };
+  }, [scrollContainer]);
+
+  const virtualizer = useElementVirtualizer({
+    count: virtualItems.length,
+    getScrollElement: () => scrollContainer,
+    initialRect: {
+      width: scrollContainer?.clientWidth ?? window.innerWidth,
+      height: scrollContainer?.clientHeight ?? window.innerHeight,
+    },
+    observeElementRect: observeElementRectWithWindowFallback,
+
+    estimateSize: index => {
+      const item = virtualItems[index];
+
+      return item?.type === "letter"
+        ? VIRTUAL_LIST_LETTER_HEIGHT
+        : VIRTUAL_LIST_TRACK_HEIGHT;
+    },
+
+    overscan: 5,
+    scrollMargin,
+  });
+
+  const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [scrollMargin, virtualizer, virtualItems.length]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (
+      !target ||
+      !scrollContainer ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          requestNextPage();
+        }
+      },
+      {
+        root: scrollContainer,
+        rootMargin: "800px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [
+    hasNextPage,
+    isFetchingNextPage,
+    requestNextPage,
+    scrollContainer,
+    virtualItems.length,
+  ]);
+
+  useEffect(() => {
+    if (renderedVirtualItems.length === 0) return;
+
+    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
+
+    if (
+      lastItem &&
+      lastItem.index >= virtualItems.length - 10 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      requestNextPage();
+    }
+  }, [
+    renderedVirtualItems,
+    virtualItems.length,
+    hasNextPage,
+    isFetchingNextPage,
+    requestNextPage,
+  ]);
+
+  return (
+    <div
+      ref={listRef}
+      className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
+      role="list"
+      aria-label="Tracks"
+    >
       <div
-        ref={listRef}
-        className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
-        role="list"
-        aria-label="Tracks"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: "100%",
+          position: "relative",
+        }}
       >
+        {renderedVirtualItems.map(virtualRow => {
+          const item = virtualItems[virtualRow.index];
+
+          if (!item) return null;
+
+          return (
+            <div
+              key={virtualRow.key}
+              role={item.type === "track" ? "listitem" : undefined}
+              aria-posinset={item.type === "track" ? item.trackIndex : undefined}
+              aria-setsize={item.type === "track" ? totalTracks : undefined}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+              }}
+            >
+              {item.type === "letter" ? (
+                <LetterHeader letter={item.letter} />
+              ) : (
+                <TrackListItem track={item.track} isLiked={likedSet.has(item.track.id)} />
+              )}
+            </div>
+          );
+        })}
+
         <div
+          ref={loadMoreRef}
+          aria-hidden="true"
           style={{
-            height: `${virtualizer.getTotalSize()}px`,
+            position: "absolute",
+            left: 0,
+            top: `${virtualizer.getTotalSize() - 1}px`,
             width: "100%",
-            position: "relative",
+            height: "1px",
           }}
-        >
-          {renderedVirtualItems.map(virtualRow => {
-            const item = virtualItems[virtualRow.index];
-
-            if (!item) return null;
-
-            return (
-              <div
-                key={virtualRow.key}
-                role={item.type === "track" ? "listitem" : undefined}
-                aria-posinset={item.type === "track" ? item.trackIndex : undefined}
-                aria-setsize={item.type === "track" ? totalTracks : undefined}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-                }}
-              >
-                {item.type === "letter" ? (
-                  <LetterHeader letter={item.letter} />
-                ) : (
-                  <TrackListItem track={item.track} isLiked={likedSet.has(item.track.id)} />
-                )}
-              </div>
-            );
-          })}
-
-          <div
-            ref={loadMoreRef}
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: 0,
-              top: `${virtualizer.getTotalSize() - 1}px`,
-              width: "100%",
-              height: "1px",
-            }}
-          />
-        </div>
-
-        {isFetchingNextPage && (
-          <div className="flex justify-center py-4">
-            <Spinner className="size-6 text-amber-400" />
-          </div>
-        )}
+        />
       </div>
+
+      {isFetchingNextPage && (
+        <div className="flex justify-center py-4">
+          <Spinner className="size-6 text-amber-400" />
+        </div>
+      )}
     </div>
   );
 }

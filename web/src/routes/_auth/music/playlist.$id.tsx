@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   showDeleted,
   showRemoved,
@@ -40,6 +39,7 @@ import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
+import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
 import { formatDuration } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -512,9 +512,6 @@ function PlaylistTracksList({
 }: PlaylistTracksListProps) {
   const audioPlayer = useAudioPlayerActions();
   const audioPlayerState = useAudioPlayerState();
-  const scrollContainer = useAppShellScrollContainer();
-  const listRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
 
   // Local optimistic order override keyed by track ids.
   const [optimisticTrackIds, setOptimisticTrackIds] = useState<number[] | null>(null);
@@ -527,78 +524,6 @@ function PlaylistTracksList({
           .map((trackId) => trackMap.get(trackId))
           .filter((track): track is PlaylistTrackType => track !== undefined)
       : tracks;
-
-  useEffect(() => {
-    const listElement = listRef.current;
-    if (!listElement || !scrollContainer) {
-      return;
-    }
-
-    const updateScrollMargin = () => {
-      setScrollMargin(
-        getOffsetWithinScrollContainer(listElement, scrollContainer),
-      );
-    };
-
-    updateScrollMargin();
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateScrollMargin);
-
-    resizeObserver?.observe(listElement);
-    resizeObserver?.observe(scrollContainer);
-    window.addEventListener("resize", updateScrollMargin);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateScrollMargin);
-    };
-  }, [orderedTracks.length, scrollContainer]);
-
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: orderedTracks.length,
-    getScrollElement: () => scrollContainer,
-    initialRect: {
-      width: scrollContainer?.clientWidth ?? window.innerWidth,
-      height: scrollContainer?.clientHeight ?? window.innerHeight,
-    },
-    observeElementRect: observeElementRectWithWindowFallback,
-    estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
-    overscan: 5,
-    scrollMargin,
-  });
-
-  // Get virtual items for dependency tracking
-  const renderedVirtualItems = virtualizer.getVirtualItems();
-
-  useEffect(() => {
-    virtualizer.measure();
-  }, [orderedTracks.length, scrollMargin, virtualizer]);
-
-  // Trigger infinite scroll when near the end
-  useEffect(() => {
-    if (renderedVirtualItems.length === 0) return;
-
-    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
-
-    if (
-      lastItem &&
-      lastItem.index >= orderedTracks.length - 10 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      fetchNextPage();
-    }
-  }, [
-    renderedVirtualItems,
-    orderedTracks.length,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  ]);
 
   const handlePlayTrack = (track: PlaylistTrackType) => {
     const audioTrack = convertToAudioTrack({
@@ -683,6 +608,122 @@ function PlaylistTracksList({
 
   // Use virtualized list for large playlists or read-only
   return (
+    <VirtualizedPlaylistTracksList
+      tracks={orderedTracks}
+      playlistId={playlistId}
+      canEdit={canEdit}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+      fetchNextPage={fetchNextPage}
+      onPlayTrack={handlePlayTrack}
+      onRemoveTrack={onRemoveTrack}
+      currentTrackId={audioPlayerState.currentTrack?.id}
+      isPlaying={audioPlayerState.isPlaying}
+    />
+  );
+}
+
+type VirtualizedPlaylistTracksListProps = {
+  tracks: PlaylistTrackType[];
+  playlistId: number;
+  canEdit: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => void;
+  onPlayTrack: (track: PlaylistTrackType) => void;
+  onRemoveTrack: (trackId: number) => void;
+  currentTrackId: number | undefined;
+  isPlaying: boolean;
+};
+
+function VirtualizedPlaylistTracksList({
+  tracks,
+  playlistId,
+  canEdit,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
+  onPlayTrack,
+  onRemoveTrack,
+  currentTrackId,
+  isPlaying,
+}: VirtualizedPlaylistTracksListProps) {
+  "use no memo";
+
+  const scrollContainer = useAppShellScrollContainer();
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useEffect(() => {
+    const listElement = listRef.current;
+    if (!listElement || !scrollContainer) {
+      return;
+    }
+
+    const updateScrollMargin = () => {
+      setScrollMargin(
+        getOffsetWithinScrollContainer(listElement, scrollContainer),
+      );
+    };
+
+    updateScrollMargin();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollMargin);
+
+    resizeObserver?.observe(listElement);
+    resizeObserver?.observe(scrollContainer);
+    window.addEventListener("resize", updateScrollMargin);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollMargin);
+    };
+  }, [scrollContainer]);
+
+  const virtualizer = useElementVirtualizer({
+    count: tracks.length,
+    getScrollElement: () => scrollContainer,
+    initialRect: {
+      width: scrollContainer?.clientWidth ?? window.innerWidth,
+      height: scrollContainer?.clientHeight ?? window.innerHeight,
+    },
+    observeElementRect: observeElementRectWithWindowFallback,
+    estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
+    overscan: 5,
+    scrollMargin,
+  });
+
+  const renderedVirtualItems = virtualizer.getVirtualItems();
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [tracks.length, scrollMargin, virtualizer]);
+
+  useEffect(() => {
+    if (renderedVirtualItems.length === 0) return;
+
+    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
+
+    if (
+      lastItem &&
+      lastItem.index >= tracks.length - 10 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage();
+    }
+  }, [
+    renderedVirtualItems,
+    tracks.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
+
+  return (
     <div
       ref={listRef}
       className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30"
@@ -695,7 +736,7 @@ function PlaylistTracksList({
         }}
       >
         {renderedVirtualItems.map((virtualRow) => {
-          const track = orderedTracks[virtualRow.index];
+          const track = tracks[virtualRow.index];
           if (!track) return null;
 
           return (
@@ -720,12 +761,9 @@ function PlaylistTracksList({
                 musicianId={unwrapInt(track.musician_id)}
                 musicianName={unwrapStringOrUndefined(track.musician_name)}
                 variant="playlist"
-                isPlaying={
-                  audioPlayerState.currentTrack?.id === track.id &&
-                  audioPlayerState.isPlaying
-                }
-                isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
-                onPlay={() => handlePlayTrack(track)}
+                isPlaying={currentTrackId === track.id && isPlaying}
+                isCurrentTrack={currentTrackId === track.id}
+                onPlay={() => onPlayTrack(track)}
                 showActionsMenu
                 playlistId={playlistId}
                 canRemoveFromPlaylist={canEdit}
