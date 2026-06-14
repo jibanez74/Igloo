@@ -29,7 +29,7 @@ export default function LibraryPagination({
 
   // Generate page numbers to display
   const getPageNumbers = () => {
-    const pages: (number | "ellipsis")[] = [];
+    const pages: (number | "start-ellipsis" | "end-ellipsis")[] = [];
     const maxVisible = 5;
 
     if (totalPages <= maxVisible + 2) {
@@ -42,7 +42,7 @@ export default function LibraryPagination({
       pages.push(1);
 
       if (currentPage > 3) {
-        pages.push("ellipsis");
+        pages.push("start-ellipsis");
       }
 
       // Show pages around current
@@ -54,7 +54,7 @@ export default function LibraryPagination({
       }
 
       if (currentPage < totalPages - 2) {
-        pages.push("ellipsis");
+        pages.push("end-ellipsis");
       }
 
       // Always show last page
@@ -77,9 +77,9 @@ export default function LibraryPagination({
           />
         </PaginationItem>
 
-        {pageNumbers.map((page, index) =>
-          page === "ellipsis" ? (
-            <PaginationItem key={`ellipsis-${index}`}>
+        {pageNumbers.map((page) =>
+          page === "start-ellipsis" || page === "end-ellipsis" ? (
+            <PaginationItem key={page}>
               <PaginationEllipsis />
             </PaginationItem>
           ) : (
