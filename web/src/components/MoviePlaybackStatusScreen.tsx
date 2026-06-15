@@ -20,6 +20,8 @@ type MoviePlaybackStatusScreenProps = {
   containerRef?: Ref<HTMLDivElement>;
 };
 
+const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
+
 const primaryActionClass =
   "inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none";
 const secondaryActionClass =
@@ -37,7 +39,7 @@ export default function MoviePlaybackStatusScreen({
   title,
   message,
   variant = "error",
-  actions = [],
+  actions = EMPTY_STATUS_ACTIONS,
   containerRef,
 }: MoviePlaybackStatusScreenProps) {
   const isLoading = variant === "loading";

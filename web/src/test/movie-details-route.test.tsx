@@ -5,18 +5,30 @@ import {
   createMemoryHistory,
   createRouter,
 } from "@tanstack/react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { DETAIL_PAGE_CONTENT_ENTER_CLASS } from "@/lib/constants";
+import {
+  AUTH_USER_KEY,
+  DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  PLAYBACK_SETTINGS_KEY,
+} from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import type {
+  ApiResponseType,
   AuthUser,
   LibraryMovieDetailsResponse,
   MovieTechnicalDetailsResponse,
   PlaybackSettingsType,
 } from "@/types";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const DETAIL_PAGE_ANIMATION_MARKER =
   "animate-in fade-in slide-in-from-bottom-2";
+
+function success<T extends Record<string, unknown>>(data: T): ApiResponseType<T> {
+  return {
+    error: false,
+    data,
+  };
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(
@@ -342,6 +354,13 @@ async function renderMovieDetailsRoute(initialEntry: string) {
   mockMovieDetailsFetch();
 
   const queryClient = createMovieDetailsQueryClient();
+  return renderMovieDetailsRouteWithQueryClient(initialEntry, queryClient);
+}
+
+async function renderMovieDetailsRouteWithQueryClient(
+  initialEntry: string,
+  queryClient: QueryClient,
+) {
   const history = createMemoryHistory({
     initialEntries: [initialEntry],
   });
@@ -386,6 +405,17 @@ function getLowerMotionWrapper(container: HTMLElement) {
   return getDetailMotionWrappers(container).find((element) =>
     element.className.includes("delay-150"),
   );
+}
+
+function getPlayLink() {
+  return screen.getByRole("link", { name: /^Play$/i });
+}
+
+function getPlayLinkMode() {
+  const href = getPlayLink().getAttribute("href");
+  expect(href).not.toBeNull();
+
+  return new URL(href ?? "", "http://localhost").searchParams.get("mode");
 }
 
 afterEach(() => {
@@ -464,5 +494,56 @@ describe("movie details route motion", () => {
     expect(
       screen.queryByText("Arrival overview for motion verification."),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("movie details route playback settings sync", () => {
+  it("uses the seeded smart default mode on the initial render", async () => {
+    vi.stubGlobal("scrollTo", vi.fn());
+    mockMovieDetailsFetch();
+
+    const queryClient = createMovieDetailsQueryClient();
+    queryClient.setQueryData([AUTH_USER_KEY], success({ user: authUser() }));
+    queryClient.setQueryData(
+      [PLAYBACK_SETTINGS_KEY, 1],
+      success({
+        settings: {
+          ...playbackSettings(),
+          preferred_profile: "1080p_8mbps",
+        },
+      }),
+    );
+
+    await renderMovieDetailsRouteWithQueryClient("/movies/57/", queryClient);
+
+    expect(
+      await screen.findByRole("heading", { name: /Arrival/i }),
+    ).toBeInTheDocument();
+    expect(getPlayLinkMode()).toBe("1080p_8mbps");
+  });
+
+  it("updates the play link when playback settings query data changes", async () => {
+    const { queryClient } = await renderMovieDetailsRoute("/movies/57/");
+
+    expect(
+      await screen.findByRole("heading", { name: /Arrival/i }),
+    ).toBeInTheDocument();
+    expect(getPlayLinkMode()).toBe("remux");
+
+    await act(async () => {
+      queryClient.setQueryData(
+        [PLAYBACK_SETTINGS_KEY, 1],
+        success({
+          settings: {
+            ...playbackSettings(),
+            preferred_profile: "1080p_8mbps",
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(getPlayLinkMode()).toBe("1080p_8mbps");
+    });
   });
 });

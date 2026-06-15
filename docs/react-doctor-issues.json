@@ -41,7 +41,7 @@
           "title": "Role used instead of HTML tag",
           "message": "Screen reader users get more reliable semantics from `<output>` than `role=\"status\"`, so use `<output>` instead.",
           "help": "Use the matching HTML element when one exists so browsers and assistive tech get native semantics.",
-          "line": 75,
+UU          "line": 75,
           "column": 9,
           "offset": 2415,
           "length": 13,

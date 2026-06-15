@@ -33,7 +33,6 @@ export default function VolumeControl({
 }: VolumeControlProps) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
-  const [previousVolume, setPreviousVolume] = useState(1);
   const [isMinimizedPanelOpen, setIsMinimizedPanelOpen] = useState(false);
 
   const styles = accentStyles[accent];
@@ -42,6 +41,7 @@ export default function VolumeControl({
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const minimizedMuteButtonRef = useRef<HTMLButtonElement | null>(null);
   const sliderRef = useRef<HTMLInputElement | null>(null);
+  const previousVolumeRef = useRef(1);
   const isExpanded = variant === "expanded";
   const currentVolume = isMuted ? 0 : volume;
   const volumePercent = Math.round(currentVolume * 100);
@@ -80,9 +80,9 @@ export default function VolumeControl({
     if (!media) return;
     if (isMuted) {
       media.muted = false;
-      media.volume = previousVolume || 0.5;
+      media.volume = previousVolumeRef.current || 0.5;
     } else {
-      setPreviousVolume(volume);
+      previousVolumeRef.current = volume;
       media.muted = true;
     }
   };
