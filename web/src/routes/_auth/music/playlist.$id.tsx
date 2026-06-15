@@ -487,7 +487,7 @@ type PlaylistTracksListProps = {
   canEdit: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => void;
+  fetchNextPage: () => Promise<unknown>;
   onRemoveTrack: (trackId: number) => void;
   onReorderTracks: (trackIds: number[]) => void;
   playlistName: string;
@@ -629,7 +629,7 @@ type VirtualizedPlaylistTracksListProps = {
   canEdit: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  fetchNextPage: () => void;
+  fetchNextPage: () => Promise<unknown>;
   onPlayTrack: (track: PlaylistTrackType) => void;
   onRemoveTrack: (trackId: number) => void;
   currentTrackId: number | undefined;
@@ -652,6 +652,7 @@ function VirtualizedPlaylistTracksList({
 
   const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
+  const isFetchingNextRef = useRef(false);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useEffect(() => {
@@ -703,6 +704,12 @@ function VirtualizedPlaylistTracksList({
   }, [tracks.length, scrollMargin, virtualizer]);
 
   useEffect(() => {
+    if (!isFetchingNextPage) {
+      isFetchingNextRef.current = false;
+    }
+  }, [isFetchingNextPage]);
+
+  useEffect(() => {
     if (renderedVirtualItems.length === 0) return;
 
     const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
@@ -711,9 +718,13 @@ function VirtualizedPlaylistTracksList({
       lastItem &&
       lastItem.index >= tracks.length - 10 &&
       hasNextPage &&
-      !isFetchingNextPage
+      !isFetchingNextPage &&
+      !isFetchingNextRef.current
     ) {
-      fetchNextPage();
+      isFetchingNextRef.current = true;
+      fetchNextPage().finally(() => {
+        isFetchingNextRef.current = false;
+      });
     }
   }, [
     renderedVirtualItems,

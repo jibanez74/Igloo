@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useReducer, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   Virtualizer,
   elementScroll,
@@ -31,7 +32,11 @@ export function useElementVirtualizer<
     scrollToFn: elementScroll,
     ...options,
     onChange: (instance, sync) => {
-      rerender();
+      if (sync) {
+        flushSync(rerender);
+      } else {
+        rerender();
+      }
       options.onChange?.(instance, sync);
     },
   };

@@ -20,7 +20,7 @@
     "test:e2e:hls": "playwright test e2e/hls-transcode.spec.ts",
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",
     "preview": "vite preview",
-    "doctor": "npx react-doctor@latest"
+    "doctor": "bun x react-doctor@0.5.5 --yes"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
