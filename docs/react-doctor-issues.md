@@ -3196,24 +3196,7 @@
   - Message: Each update to "prevSmartSubtitleTrack" redraws your component for nothing because this useState is set but never shown on screen.
   - Help: Use useRef instead of useState when the value is only set and never shown on screen. `ref.current = ...` updates it without redrawing the component.
 
-- [ ] `src/routes/_auth/movies/$id/play.tsx:161:9` - State only used in handlers
-  - File: `src/routes/_auth/movies/$id/play.tsx`
-  - Line: `161`
-  - Column: `9`
-  - Severity: `warning`
-  - Category: `Performance`
-  - Rule: `rerender-state-only-in-handlers`
-  - Message: Each update to "pendingAutoPlayOnLoad" redraws your component for nothing because this useState is set but never shown on screen.
-  - Help: Use useRef instead of useState when the value is only set and never shown on screen. `ref.current = ...` updates it without redrawing the component.
-- [ ] `src/routes/_auth/settings/index.lazy.tsx:220:9` - State only used in handlers
-  - File: `src/routes/_auth/settings/index.lazy.tsx`
-  - Line: `220`
-  - Column: `9`
-  - Severity: `warning`
-  - Category: `Performance`
-  - Rule: `rerender-state-only-in-handlers`
-  - Message: Each update to "syncedSettings" redraws your component for nothing because this useState is set but never shown on screen.
-  - Help: Use useRef instead of useState when the value is only set and never shown on screen. `ref.current = ...` updates it without redrawing the component.
+
 - [ ] `src/routes/_auth/settings/playback.lazy.tsx:188:9` - State only used in handlers
   - File: `src/routes/_auth/settings/playback.lazy.tsx`
   - Line: `188`

@@ -140,6 +140,7 @@ function PlayMoviePage() {
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   const hlsStopCleanupTimerRef = useRef<number | null>(null);
+  const pendingAutoPlayOnLoadRef = useRef(false);
 
   useEffect(() => {
     pause();
@@ -158,7 +159,6 @@ function PlayMoviePage() {
     () => getOrCreateMovieHlsPlaybackSessionId(movieId),
     [movieId],
   );
-  const [pendingAutoPlayOnLoad, setPendingAutoPlayOnLoad] = useState(false);
   const [chapterAnnouncement, setChapterAnnouncement] =
     useState<ChapterAnnouncement>({
       key: 0,
@@ -294,7 +294,7 @@ function PlayMoviePage() {
     const shouldResumePlayback = !!video && !video.paused && !video.ended;
 
     if (shouldResumePlayback) {
-      setPendingAutoPlayOnLoad(true);
+      pendingAutoPlayOnLoadRef.current = true;
     }
 
     if (options?.forceReload) {
@@ -398,7 +398,7 @@ function PlayMoviePage() {
   });
 
   useEffect(() => {
-    if (!pendingAutoPlayOnLoad) return;
+    if (!pendingAutoPlayOnLoadRef.current) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -408,7 +408,7 @@ function PlayMoviePage() {
       } catch {
         // Best-effort playback resume after rebasing the HLS session.
       } finally {
-        setPendingAutoPlayOnLoad(false);
+        pendingAutoPlayOnLoadRef.current = false;
       }
     };
 
@@ -421,7 +421,7 @@ function PlayMoviePage() {
     return () => {
       video.removeEventListener("canplay", resumePlayback);
     };
-  }, [pendingAutoPlayOnLoad, streamUrl]);
+  }, [streamUrl]);
 
   useEffect(() => {
     if (!isHlsPlayback || !(movieDurationSec && movieDurationSec > 0)) return;
