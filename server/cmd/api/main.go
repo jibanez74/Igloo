@@ -343,10 +343,9 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	dataDir := app.Config.effectiveDataDir()
-	logsDir := configuredLogsDir(dataDir)
-	staticDir := configuredStaticDir(dataDir)
-	transcodeDir := configuredTranscodeDir(dataDir)
+	logsDir := configuredLogsDir()
+	staticDir := configuredStaticDir()
+	transcodeDir := configuredTranscodeDir()
 
 	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
 	if hardwareAccelerationDevice == "" {

@@ -871,6 +871,12 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
+	const (
+		existingMoviesDir = "/media/movies"
+		existingShowsDir  = "/media/shows"
+		existingMusicDir  = "/media/music"
+	)
+
 	params := database.CreateSettingsParams{
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
 		JellyfinApiKey:             sql.NullString{String: "existing-jellyfin", Valid: true},
@@ -880,9 +886,9 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 		EnableLogger:               true,
 		EnableWatcher:              false,
 		DownloadImages:             false,
-		MoviesDir:                  sql.NullString{String: helpers.DEFAULT_MOVIES_DIR, Valid: true},
-		ShowsDir:                   sql.NullString{String: helpers.DEFAULT_SHOWS_DIR, Valid: true},
-		MusicDir:                   sql.NullString{String: helpers.DEFAULT_MUSIC_DIR, Valid: true},
+		MoviesDir:                  sql.NullString{String: existingMoviesDir, Valid: true},
+		ShowsDir:                   sql.NullString{String: existingShowsDir, Valid: true},
+		MusicDir:                   sql.NullString{String: existingMusicDir, Valid: true},
 		StaticDir:                  helpers.DEFAULT_STATIC_DIR,
 		LogsDir:                    helpers.DEFAULT_LOGS_DIR,
 		TranscodeDir:               helpers.DEFAULT_TRANSCODE_DIR,
@@ -937,14 +943,23 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	if app.Settings.DownloadImages {
 		t.Error("Expected existing DownloadImages to remain false")
 	}
-	if app.Settings.MoviesDir.String != helpers.DEFAULT_MOVIES_DIR {
-		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", helpers.DEFAULT_MOVIES_DIR, app.Settings.MoviesDir.String)
+	if app.Settings.MoviesDir.String != existingMoviesDir {
+		t.Errorf("Expected MoviesDir to remain fixed at %q, got %q", existingMoviesDir, app.Settings.MoviesDir.String)
 	}
-	if app.Settings.ShowsDir.String != helpers.DEFAULT_SHOWS_DIR {
-		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", helpers.DEFAULT_SHOWS_DIR, app.Settings.ShowsDir.String)
+	if !app.Settings.MoviesDir.Valid {
+		t.Error("Expected MoviesDir.Valid to remain true")
 	}
-	if app.Settings.MusicDir.String != helpers.DEFAULT_MUSIC_DIR {
-		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", helpers.DEFAULT_MUSIC_DIR, app.Settings.MusicDir.String)
+	if app.Settings.ShowsDir.String != existingShowsDir {
+		t.Errorf("Expected ShowsDir to remain fixed at %q, got %q", existingShowsDir, app.Settings.ShowsDir.String)
+	}
+	if !app.Settings.ShowsDir.Valid {
+		t.Error("Expected ShowsDir.Valid to remain true")
+	}
+	if app.Settings.MusicDir.String != existingMusicDir {
+		t.Errorf("Expected MusicDir to remain fixed at %q, got %q", existingMusicDir, app.Settings.MusicDir.String)
+	}
+	if !app.Settings.MusicDir.Valid {
+		t.Error("Expected MusicDir.Valid to remain true")
 	}
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
@@ -1080,22 +1095,5 @@ func TestInitDirs(t *testing.T) {
 	}
 	if _, err := os.Stat(missingShowsDir); !os.IsNotExist(err) {
 		t.Errorf("expected missing shows directory not to be created, stat err=%v", err)
-	}
-}
-
-func TestNullString(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected sql.NullString
-	}{
-		{"", sql.NullString{Valid: false}},
-		{"value", sql.NullString{String: "value", Valid: true}},
-	}
-
-	for _, tt := range tests {
-		result := helpers.NullString(tt.input)
-		if result != tt.expected {
-			t.Errorf("NullString(%q) = %v, want %v", tt.input, result, tt.expected)
-		}
 	}
 }

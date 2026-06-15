@@ -44,11 +44,13 @@ func New(ctx context.Context, clientID, clientSecret string) (SpotifyInterface, 
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 	}
 
-	if _, err := config.Token(ctx); err != nil {
+	tokenSource := config.TokenSource(ctx)
+	token, err := tokenSource.Token()
+	if err != nil {
 		return nil, fmt.Errorf("failed to get spotify token: %w", err)
 	}
 
-	httpClient := config.Client(ctx)
+	httpClient := oauth2.NewClient(ctx, oauth2.ReuseTokenSource(token, tokenSource))
 	client := spotify.New(httpClient)
 
 	return &spotifyClient{

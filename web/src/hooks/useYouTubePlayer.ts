@@ -189,6 +189,38 @@ function getPlayerMuted(player: YT.Player | null) {
   }
 }
 
+type YouTubePlayerState = {
+  playerIdentity: string;
+  isReady: boolean;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  volume: number;
+  isMuted: boolean;
+  error: string | null;
+};
+
+function getYouTubePlayerIdentity(
+  videoId: string | null,
+  autoplay: boolean,
+  controls: boolean,
+) {
+  return `${videoId ?? "none"}:${autoplay ? "autoplay" : "manual"}:${controls ? "controls" : "chromeless"}`;
+}
+
+function createInitialPlayerState(playerIdentity: string): YouTubePlayerState {
+  return {
+    playerIdentity,
+    isReady: false,
+    isPlaying: false,
+    currentTime: 0,
+    duration: 0,
+    volume: 100,
+    isMuted: false,
+    error: null,
+  };
+}
+
 export function useYouTubePlayer(
   options: UseYouTubePlayerOptions,
 ): UseYouTubePlayerReturn {
@@ -199,14 +231,26 @@ export function useYouTubePlayer(
   const uniqueId = useId();
   const playerIdRef = useRef(`yt-player-${uniqueId.replace(/:/g, "")}`);
   const progressIntervalRef = useRef<number | null>(null);
+  const playerIdentity = getYouTubePlayerIdentity(videoId, autoplay, controls);
+  const [playerState, setPlayerState] = useState(() =>
+    createInitialPlayerState(playerIdentity),
+  );
 
-  const [isReady, setIsReady] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(100);
-  const [isMuted, setIsMuted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  let currentPlayerState = playerState;
+  if (playerState.playerIdentity !== playerIdentity) {
+    currentPlayerState = createInitialPlayerState(playerIdentity);
+    setPlayerState(currentPlayerState);
+  }
+
+  const {
+    isReady,
+    isPlaying,
+    currentTime,
+    duration,
+    volume,
+    isMuted,
+    error,
+  } = currentPlayerState;
 
   const stopProgressTracking = useEffectEvent(() => {
     if (progressIntervalRef.current) {
@@ -224,10 +268,11 @@ export function useYouTubePlayer(
     const nextTime = getCurrentPlayerTime(player);
     const nextDuration = getCurrentPlayerDuration(player);
 
-    setCurrentTime(nextTime);
-    if (nextDuration > 0) {
-      setDuration(nextDuration);
-    }
+    setPlayerState(previous => ({
+      ...previous,
+      currentTime: nextTime,
+      duration: nextDuration > 0 ? nextDuration : previous.duration,
+    }));
   });
 
   const startProgressTracking = useEffectEvent(() => {
@@ -241,11 +286,14 @@ export function useYouTubePlayer(
   });
 
   const handlePlayerReady = useEffectEvent((event: YT.PlayerEvent) => {
-    setIsReady(true);
-    setError(null);
-    setDuration(event.target.getDuration() || 0);
-    setVolumeState(event.target.getVolume());
-    setIsMuted(event.target.isMuted());
+    setPlayerState(previous => ({
+      ...previous,
+      isReady: true,
+      error: null,
+      duration: event.target.getDuration() || 0,
+      volume: event.target.getVolume(),
+      isMuted: event.target.isMuted(),
+    }));
     options.onReady?.();
   });
 
@@ -253,7 +301,10 @@ export function useYouTubePlayer(
     (event: YT.OnStateChangeEvent) => {
       const state = event.data;
 
-      setIsPlaying(state === window.YT.PlayerState.PLAYING);
+      setPlayerState(previous => ({
+        ...previous,
+        isPlaying: state === window.YT.PlayerState.PLAYING,
+      }));
 
       if (state === window.YT.PlayerState.PLAYING) {
         startProgressTracking();
@@ -269,6 +320,10 @@ export function useYouTubePlayer(
       options.onStateChange?.(state);
     },
   );
+
+  const clearPlayerRef = useEffectEvent(() => {
+    playerRef.current = null;
+  });
 
   const handlePlayerError = useEffectEvent((event: YT.OnErrorEvent) => {
     const errorCode = event.data;
@@ -291,25 +346,22 @@ export function useYouTubePlayer(
     }
 
     stopProgressTracking();
-    setIsPlaying(false);
-    setError(errorMessage);
+    setPlayerState(previous => ({
+      ...previous,
+      isPlaying: false,
+      error: errorMessage,
+    }));
     options.onError?.(errorCode);
   });
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting state synchronously on video change is intentional for this external integration
-    setIsReady(false);
-    setIsPlaying(false);
-    setError(null);
-    setCurrentTime(0);
-    setDuration(0);
-
     if (!videoId || !containerRef.current) {
       stopProgressTracking();
       return;
     }
 
     let mounted = true;
+    let createdPlayer: YT.Player | null = null;
 
     const initPlayer = async () => {
       try {
@@ -320,7 +372,10 @@ export function useYouTubePlayer(
         }
 
         console.error("Failed to load YouTube API:", apiError);
-        setError("Failed to load the YouTube player.");
+        setPlayerState(previous => ({
+          ...previous,
+          error: "Failed to load the YouTube player.",
+        }));
         return;
       }
 
@@ -332,7 +387,7 @@ export function useYouTubePlayer(
       containerRef.current.appendChild(playerDiv);
 
       try {
-        playerRef.current = new window.YT.Player(playerIdRef.current, {
+        const player = new window.YT.Player(playerIdRef.current, {
           videoId,
           width: "100%",
           height: "100%",
@@ -360,9 +415,15 @@ export function useYouTubePlayer(
             },
           },
         });
+
+        createdPlayer = player;
+        playerRef.current = player;
       } catch (creationError) {
         console.error("Failed to create YouTube player:", creationError);
-        setError("Failed to load video player.");
+        setPlayerState(previous => ({
+          ...previous,
+          error: "Failed to load video player.",
+        }));
       }
     };
 
@@ -371,16 +432,16 @@ export function useYouTubePlayer(
     return () => {
       mounted = false;
       stopProgressTracking();
-      setIsPlaying(false);
 
-      if (playerRef.current) {
+      if (createdPlayer) {
         try {
-          playerRef.current.destroy();
+          createdPlayer.destroy();
         } catch {
           // Player might already be destroyed.
         }
-        playerRef.current = null;
       }
+
+      clearPlayerRef();
     };
   }, [videoId, autoplay, controls]);
 
@@ -424,7 +485,10 @@ export function useYouTubePlayer(
       playerDuration > 0 ? Math.min(playerDuration, Math.max(0, nextTime)) : Math.max(0, nextTime);
 
     player.seekTo(clampedTime, true);
-    setCurrentTime(clampedTime);
+    setPlayerState(previous => ({
+      ...previous,
+      currentTime: clampedTime,
+    }));
   };
 
   const seekForward = (seconds: number) => {
@@ -458,12 +522,18 @@ export function useYouTubePlayer(
     }
 
     player.setVolume(clampedVol);
-    setVolumeState(clampedVol);
+    let nextIsMuted = currentPlayerState.isMuted;
 
     if (clampedVol > 0 && getPlayerMuted(player)) {
       player.unMute();
-      setIsMuted(false);
+      nextIsMuted = false;
     }
+
+    setPlayerState(previous => ({
+      ...previous,
+      volume: clampedVol,
+      isMuted: nextIsMuted,
+    }));
   };
 
   const mute = () => {
@@ -473,7 +543,10 @@ export function useYouTubePlayer(
     }
 
     player.mute();
-    setIsMuted(true);
+    setPlayerState(previous => ({
+      ...previous,
+      isMuted: true,
+    }));
   };
 
   const unmute = () => {
@@ -483,7 +556,10 @@ export function useYouTubePlayer(
     }
 
     player.unMute();
-    setIsMuted(false);
+    setPlayerState(previous => ({
+      ...previous,
+      isMuted: false,
+    }));
   };
 
   const toggleMute = () => {
@@ -494,12 +570,18 @@ export function useYouTubePlayer(
 
     if (getPlayerMuted(player)) {
       player.unMute();
-      setIsMuted(false);
+      setPlayerState(previous => ({
+        ...previous,
+        isMuted: false,
+      }));
       return;
     }
 
     player.mute();
-    setIsMuted(true);
+    setPlayerState(previous => ({
+      ...previous,
+      isMuted: true,
+    }));
   };
 
   return {

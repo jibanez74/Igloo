@@ -52,12 +52,14 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 	defer cancel()
 
 	searchTitle := trimAlbumSearchTitle(title)
+	searchQueryTitle := sanitizeSpotifySearchQueryValue(searchTitle)
+	searchQueryArtist := sanitizeSpotifySearchQueryValue(artist)
 
 	var query string
 	if artist != "" {
-		query = fmt.Sprintf("album:\"%s\" artist:\"%s\"", searchTitle, artist)
+		query = fmt.Sprintf("album:\"%s\" artist:\"%s\"", searchQueryTitle, searchQueryArtist)
 	} else {
-		query = fmt.Sprintf("album:\"%s\"", searchTitle)
+		query = fmt.Sprintf("album:\"%s\"", searchQueryTitle)
 	}
 
 	results, err := s.client.Search(ctx, query, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))
@@ -106,9 +108,9 @@ func (s *spotifyClient) SearchAndGetAlbumDetails(ctx context.Context, title, art
 
 	var fallback string
 	if artist != "" {
-		fallback = searchTitle + " " + artist
+		fallback = searchQueryTitle + " " + searchQueryArtist
 	} else {
-		fallback = searchTitle
+		fallback = searchQueryTitle
 	}
 
 	results, err = s.client.Search(ctx, fallback, spotify.SearchTypeAlbum, spotify.Limit(spotifyAlbumSearchLimit))

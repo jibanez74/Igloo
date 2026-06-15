@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -34,7 +34,6 @@ import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
 import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
 import MovieChaptersSection from "@/components/MovieChaptersSection";
 import {
-  DEFAULT_PLAYBACK_SETTINGS,
   getAvailableModes,
   getDefaultPlaybackSettings,
   getPrimaryVideoStream,
@@ -177,31 +176,29 @@ function LibraryMovieDetailsContent({
     audioStreams,
     subtitleStreams,
   );
+  const smartMode = smartDefault.mode;
+  const smartAudioTrack = smartDefault.audioTrack;
+  const smartSubtitleTrack = smartDefault.subtitleTrack;
 
   const [playbackSettings, setPlaybackSettings] = useState<PlaybackSettings>(
-    DEFAULT_PLAYBACK_SETTINGS,
+    () => smartDefault,
   );
 
-  const [prevMovieId, setPrevMovieId] = useState(movieId);
-  const [prevSmartMode, setPrevSmartMode] = useState(smartDefault.mode);
-  const [prevSmartAudioTrack, setPrevSmartAudioTrack] = useState(
-    smartDefault.audioTrack,
-  );
-  const [prevSmartSubtitleTrack, setPrevSmartSubtitleTrack] = useState(
-    smartDefault.subtitleTrack,
-  );
-  if (
-    movieId !== prevMovieId ||
-    smartDefault.mode !== prevSmartMode ||
-    smartDefault.audioTrack !== prevSmartAudioTrack ||
-    smartDefault.subtitleTrack !== prevSmartSubtitleTrack
-  ) {
-    setPrevMovieId(movieId);
-    setPrevSmartMode(smartDefault.mode);
-    setPrevSmartAudioTrack(smartDefault.audioTrack);
-    setPrevSmartSubtitleTrack(smartDefault.subtitleTrack);
-    setPlaybackSettings(smartDefault);
-  }
+  useLayoutEffect(() => {
+    queueMicrotask(() => {
+      setPlaybackSettings((current) =>
+        current.mode === smartMode &&
+        current.audioTrack === smartAudioTrack &&
+        current.subtitleTrack === smartSubtitleTrack
+          ? current
+          : {
+              mode: smartMode,
+              audioTrack: smartAudioTrack,
+              subtitleTrack: smartSubtitleTrack,
+            },
+      );
+    });
+  }, [smartMode, smartAudioTrack, smartSubtitleTrack]);
 
   const { movie, cast, crew, genres, production_companies, extra_videos } =
     payload;

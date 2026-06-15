@@ -55,9 +55,6 @@ const (
 	DEFAULT_STATIC_DIR    = "static"
 	DEFAULT_LOGS_DIR      = "logs"
 	DEFAULT_TRANSCODE_DIR = "transcode"
-	DEFAULT_MOVIES_DIR    = "/media/movies"
-	DEFAULT_SHOWS_DIR     = "/media/shows"
-	DEFAULT_MUSIC_DIR     = "/media/music"
 
 	// env vars consumed at startup
 	ENV_DB_PATH               = "DB_PATH"
