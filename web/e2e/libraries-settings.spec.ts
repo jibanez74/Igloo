@@ -305,7 +305,25 @@ test.describe("Libraries settings", () => {
     const baseline = await fetchLibrarySettings(page, env);
     const tracker = trackBrowserIssues(page);
 
+    let movieScanRequests = 0;
     await page.route("**/api/settings/scan/**", async route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/api/settings/scan/movies") {
+        movieScanRequests += 1;
+      }
+
+      if (url.pathname === "/api/settings/scan/movies" && movieScanRequests === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: true,
+            message: "Failed to start movies scan.",
+          }),
+        });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -416,12 +434,31 @@ test.describe("Libraries settings", () => {
       await page.getByRole("button", { name: "Reset library paths" }).click();
       await expect(musicInput).toHaveValue(paths.music);
 
+      const moviesScanButton = page.getByRole("button", {
+        name: "Scan movies library",
+      });
+
       await Promise.all([
         page.waitForResponse(response => {
           const url = new URL(response.url());
           return url.pathname === "/api/settings/scan/movies";
         }),
-        page.getByRole("button", { name: "Scan movies library" }).click(),
+        moviesScanButton.click(),
+      ]);
+      await expect(
+        page.locator('p[aria-live="polite"]').filter({
+          hasText: "Failed to start movies scan.",
+        }),
+      ).toBeVisible();
+      await expect(moviesScanButton).toBeEnabled();
+      await expect(moviesScanButton).toHaveAttribute("aria-busy", "false");
+
+      await Promise.all([
+        page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/settings/scan/movies";
+        }),
+        moviesScanButton.click(),
       ]);
       await expect(
         page.locator('p[aria-live="polite"]').filter({

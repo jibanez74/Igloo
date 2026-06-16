@@ -274,9 +274,9 @@ function AlbumDetailsContent({
         "delete album",
         "An unexpected error occurred. Please try again.",
       );
+    } finally {
+      setIsDeleting(false);
     }
-
-    setIsDeleting(false);
   };
 
   // Build a map of track_id -> genre tags for easy lookup

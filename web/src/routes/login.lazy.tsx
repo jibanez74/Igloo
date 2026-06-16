@@ -66,9 +66,9 @@ function LoginPage() {
         "Login failed",
         "Something went wrong after sign-in. Please try again.",
       );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
 
   return (
