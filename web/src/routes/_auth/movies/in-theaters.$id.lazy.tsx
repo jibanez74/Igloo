@@ -61,10 +61,15 @@ function tmdbCrewToLibraryCrew(
 function tmdbYouTubeResultsToLibraryExtras(
   results: MovieDetailsType["videos"]["results"],
 ): LibraryMovieExtraVideoType[] {
-  const mapped: LibraryMovieExtraVideoType[] = results
-    .filter(v => v.site === "YouTube")
-    .map((v, index) => ({
-      id: index + 1,
+  const mapped: LibraryMovieExtraVideoType[] = [];
+  let id = 1;
+  for (const v of results) {
+    if (v.site !== "YouTube") {
+      continue;
+    }
+
+    mapped.push({
+      id,
       title: v.name,
       external_id: toNullableString(v.id),
       key: v.key,
@@ -73,7 +78,10 @@ function tmdbYouTubeResultsToLibraryExtras(
       official: v.official,
       created_at: "",
       updated_at: "",
-    }));
+    });
+    id += 1;
+  }
+
   return prepareYouTubeExtrasForDisplay(mapped);
 }
 

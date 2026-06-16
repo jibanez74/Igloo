@@ -89,10 +89,19 @@ export default function TmdbMoviePicker({
     if (selectedResult == null || isSelectedBlocked) return;
 
     setConfirming(true);
+    let caughtError: unknown;
+    let didFail = false;
+
     try {
       await onConfirm(selectedResult);
-    } finally {
-      setConfirming(false);
+    } catch (error) {
+      caughtError = error;
+      didFail = true;
+    }
+
+    setConfirming(false);
+    if (didFail) {
+      throw caughtError;
     }
   }
 

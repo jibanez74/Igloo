@@ -36,22 +36,21 @@ export default function DeleteMovieDialog({
 
       if (res.error) {
         toast.error(res.message || "Failed to delete movie");
-        return;
+      } else {
+        queryClient.invalidateQueries({ queryKey: [LATEST_MOVIES_KEY] });
+        queryClient.removeQueries({
+          queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
+        });
+
+        toast.success(`"${movieTitle}" deleted successfully`);
+        onOpenChange(false);
+        navigate({ to: "/" });
       }
-
-      queryClient.invalidateQueries({ queryKey: [LATEST_MOVIES_KEY] });
-      queryClient.removeQueries({
-        queryKey: [LIBRARY_MOVIE_DETAILS_KEY, movieId],
-      });
-
-      toast.success(`"${movieTitle}" deleted successfully`);
-      onOpenChange(false);
-      navigate({ to: "/" });
     } catch {
       toast.error("Failed to delete movie");
-    } finally {
-      setDeleting(false);
     }
+
+    setDeleting(false);
   }
 
   return (

@@ -52,9 +52,9 @@ export default function AlbumCard({ album }: AlbumCardProps) {
       console.error("Failed to load album:", error);
 
       showActionFailed("play album", "Something went wrong. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   const musicianName = unwrapString(musician);

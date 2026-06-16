@@ -54,21 +54,20 @@ export default function SpotifyAlbumPicker({
 
       if (response.error || !response.data?.results) {
         showActionFailed("search Spotify", response.message);
-        return;
-      }
-
-      setResults(response.data.results);
-      if (response.data.results.length === 0) {
-        showInfo("No Spotify album matches found");
+      } else {
+        setResults(response.data.results);
+        if (response.data.results.length === 0) {
+          showInfo("No Spotify album matches found");
+        }
       }
     } catch {
       showActionFailed(
         "search Spotify",
         "Unable to complete Spotify search right now.",
       );
-    } finally {
-      setSearching(false);
     }
+
+    setSearching(false);
   }
 
   async function handleConfirm() {
@@ -79,9 +78,9 @@ export default function SpotifyAlbumPicker({
       await onConfirm(selectedResult);
     } catch {
       showActionFailed("send request", "Unable to complete this action right now.");
-    } finally {
-      setConfirming(false);
     }
+
+    setConfirming(false);
   }
 
   return (

@@ -13,10 +13,19 @@ export function recommendedProfileId(
   if (!Number.isFinite(effective)) return null;
 
   const cap = effective * HEADROOM_FACTOR;
-  const sorted = [...profiles].sort((a, b) => b.video_mbps - a.video_mbps);
-  const match = sorted.find(p => p.video_mbps <= cap);
-  if (match) return match.id;
+  let match: PlaybackProfileType | null = null;
+  let lowest: PlaybackProfileType | null = null;
 
-  const lowest = sorted[sorted.length - 1];
-  return lowest ? lowest.id : null;
+  for (const profile of profiles) {
+    if (!lowest || profile.video_mbps <= lowest.video_mbps) {
+      lowest = profile;
+    }
+
+    if (profile.video_mbps > cap) continue;
+    if (!match || profile.video_mbps > match.video_mbps) {
+      match = profile;
+    }
+  }
+
+  return (match ?? lowest)?.id ?? null;
 }

@@ -8,6 +8,7 @@ import type {
   AudioPlayerActions,
   AudioPlayerState,
   PlayableTrackData,
+  TrackType,
 } from "@/types";
 import AudioPlayer from "@/components/AudioPlayer";
 import {
@@ -64,13 +65,20 @@ export function AudioPlayerProvider({
   const hasRecordedPlayRef = useRef(false);
   const currentTrackIdRef = useRef<number | null>(null);
 
-  const trackCoversRef = useRef<Map<number, string | null>>(new Map());
-  const trackMusiciansRef = useRef<Map<number, string | null>>(new Map());
+  const trackCoversRef = useRef<Map<number, string | null> | null>(null);
+  const trackMusiciansRef = useRef<Map<number, string | null> | null>(null);
 
   const playAllOffsetRef = useRef(0);
   const playAllTotalRef = useRef(0);
 
   const populateTrackMetadata = (tracks: PlayableTrackData[]) => {
+    if (trackCoversRef.current === null) {
+      trackCoversRef.current = new Map();
+    }
+    if (trackMusiciansRef.current === null) {
+      trackMusiciansRef.current = new Map();
+    }
+
     for (const track of tracks) {
       const { cover, musician } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
@@ -79,8 +87,8 @@ export function AudioPlayerProvider({
   };
 
   const clearMetadataRefs = () => {
-    trackCoversRef.current.clear();
-    trackMusiciansRef.current.clear();
+    trackCoversRef.current?.clear();
+    trackMusiciansRef.current?.clear();
     playAllOffsetRef.current = 0;
     playAllTotalRef.current = 0;
   };
@@ -119,32 +127,29 @@ export function AudioPlayerProvider({
       try {
         const response = await getShuffleTracks(50);
 
-        if (
-          isCancelled ||
-          response.error ||
-          response.data.tracks.length === 0
-        ) {
-          return;
-        }
+        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
+          const rawTracks = response.data.tracks;
+          const newTracks: TrackType[] = [];
+          for (const track of rawTracks) {
+            if (!queueState.shufflePlayedIds.has(track.id)) {
+              newTracks.push(convertToAudioTrack(track));
+            }
+          }
 
-        const rawTracks = response.data.tracks;
-        const newTracks = rawTracks
-          .filter(track => !queueState.shufflePlayedIds.has(track.id))
-          .map(convertToAudioTrack);
+          populateTrackMetadata(rawTracks);
 
-        populateTrackMetadata(rawTracks);
-
-        if (newTracks.length > 0) {
-          setQueueState(prev => ({
-            ...prev,
-            tracks: [...prev.tracks, ...newTracks],
-          }));
+          if (newTracks.length > 0) {
+            setQueueState(prev => ({
+              ...prev,
+              tracks: [...prev.tracks, ...newTracks],
+            }));
+          }
         }
       } catch {
         // Silently fail - user can continue with the current queue.
-      } finally {
-        isFetchingMoreRef.current = false;
       }
+
+      isFetchingMoreRef.current = false;
     };
 
     void fetchMoreShuffleTracks();
@@ -179,31 +184,25 @@ export function AudioPlayerProvider({
       try {
         const response = await getTracksPaginated(50, playAllOffsetRef.current);
 
-        if (
-          isCancelled ||
-          response.error ||
-          response.data.tracks.length === 0
-        ) {
-          return;
-        }
+        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
+          const rawTracks = response.data.tracks;
+          const newTracks = rawTracks.map(convertToAudioTrack);
 
-        const rawTracks = response.data.tracks;
-        const newTracks = rawTracks.map(convertToAudioTrack);
+          populateTrackMetadata(rawTracks);
+          playAllOffsetRef.current += rawTracks.length;
 
-        populateTrackMetadata(rawTracks);
-        playAllOffsetRef.current += rawTracks.length;
-
-        if (newTracks.length > 0) {
-          setQueueState(prev => ({
-            ...prev,
-            tracks: [...prev.tracks, ...newTracks],
-          }));
+          if (newTracks.length > 0) {
+            setQueueState(prev => ({
+              ...prev,
+              tracks: [...prev.tracks, ...newTracks],
+            }));
+          }
         }
       } catch {
         // Silently fail - user can continue with the current queue.
-      } finally {
-        isFetchingMoreRef.current = false;
       }
+
+      isFetchingMoreRef.current = false;
     };
 
     void fetchMorePlayAllTracks();
@@ -392,10 +391,10 @@ export function AudioPlayerProvider({
 
       const isSpecialMode = prev.isShuffleMode || prev.isPlayAllMode;
       const newAlbumCover = isSpecialMode
-        ? (trackCoversRef.current.get(track.id) ?? null)
+        ? (trackCoversRef.current?.get(track.id) ?? null)
         : prev.albumCover;
       const newMusicianName = isSpecialMode
-        ? (trackMusiciansRef.current.get(track.id) ?? null)
+        ? (trackMusiciansRef.current?.get(track.id) ?? null)
         : prev.musicianName;
 
       return {
