@@ -54,7 +54,18 @@ function authUser() {
   };
 }
 
-function mockLoginFetch(initialUser: ReturnType<typeof authUser> | null = null) {
+type MockLoginFetchOptions = {
+  initialUser?: ReturnType<typeof authUser> | null;
+  loginResponse?: {
+    body: unknown;
+    status?: number;
+  };
+};
+
+function mockLoginFetch({
+  initialUser = null,
+  loginResponse,
+}: MockLoginFetchOptions = {}) {
   let currentUser: ReturnType<typeof authUser> | null = initialUser;
 
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -76,6 +87,10 @@ function mockLoginFetch(initialUser: ReturnType<typeof authUser> | null = null) 
     }
 
     if (url === "/api/auth/login" && method === "POST") {
+      if (loginResponse) {
+        return jsonResponse(loginResponse.body, loginResponse.status ?? 200);
+      }
+
       currentUser = authUser();
       return jsonResponse({
         error: false,
@@ -180,10 +195,14 @@ async function renderLoginRoute(initialEntry: string) {
 
 async function renderRoute(
   initialEntry: string,
-  initialUser: ReturnType<typeof authUser> | null = null,
+  options: MockLoginFetchOptions | ReturnType<typeof authUser> | null = {},
 ) {
   vi.stubGlobal("scrollTo", vi.fn());
-  const fetchMock = mockLoginFetch(initialUser);
+  const fetchOptions =
+    options == null || "email" in options
+      ? { initialUser: options }
+      : options;
+  const fetchMock = mockLoginFetch(fetchOptions);
   const queryClient = createLoginQueryClient();
   const history = createMemoryHistory({
     initialEntries: [initialEntry],
@@ -256,6 +275,31 @@ describe("login route redirects", () => {
       "Welcome back!",
       "Hello Admin, welcome to your media library!",
     );
+  });
+
+  it("reenables login controls after an API error response", async () => {
+    const { router } = await renderRoute("/login", {
+      loginResponse: {
+        body: {
+          error: true,
+          message: "Invalid credentials",
+        },
+      },
+    });
+
+    await signIn();
+
+    await waitFor(() => {
+      expect(toastMocks.showError).toHaveBeenCalledWith(
+        "Login failed",
+        "Invalid credentials",
+      );
+    });
+
+    expect(router.state.location.pathname).toBe("/login");
+    expect(screen.getByLabelText("Email")).toBeEnabled();
+    expect(screen.getByLabelText("Password", { exact: true })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
   });
 
   it("honors an explicit safe redirect after login", async () => {

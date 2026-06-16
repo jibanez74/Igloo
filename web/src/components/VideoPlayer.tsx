@@ -13,6 +13,10 @@ import {
 } from "@/lib/playback";
 import type { VideoPlayerProps } from "@/types";
 
+function loadHlsLight() {
+  return import("hls.js/light");
+}
+
 export default function VideoPlayer({
   videoRef,
   src,
@@ -111,7 +115,7 @@ export default function VideoPlayer({
 
       void (async () => {
         try {
-          const { default: Hls } = await import("hls.js/light");
+          const { default: Hls } = await loadHlsLight();
           if (cancelled || !Hls.isSupported()) return;
 
           const hls = new Hls({

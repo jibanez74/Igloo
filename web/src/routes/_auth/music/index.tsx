@@ -837,9 +837,9 @@ function PlayAllButton() {
     } catch (error) {
       console.error("Failed to start playback:", error);
       showActionFailed("start playback", "Unable to start playing all tracks. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -871,9 +871,9 @@ function ShuffleButton() {
     } catch (error) {
       console.error("Failed to start shuffle playback:", error);
       showActionFailed("start shuffle", "Unable to start shuffle playback. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   return (

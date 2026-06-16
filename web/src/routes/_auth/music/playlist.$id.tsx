@@ -35,7 +35,7 @@ import {
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "@/lib/api";
-import { convertToAudioTrack } from "@/lib/audio-utils";
+import { convertToAudioTrack, shuffleArray } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
@@ -233,7 +233,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
   const handleShuffle = () => {
     if (!allTracks.length) return;
-    const shuffled = [...allTracks].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleArray(allTracks);
     const audioTracks = shuffled.map((track) =>
       convertToAudioTrack({
         id: track.id,

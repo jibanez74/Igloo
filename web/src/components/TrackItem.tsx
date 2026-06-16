@@ -99,9 +99,9 @@ export default function TrackItem({
       }
     } catch (error) {
       console.error("Failed to toggle like:", error);
-    } finally {
-      setIsLikeLoading(false);
     }
+
+    setIsLikeLoading(false);
   };
 
   // Play button visibility classes based on variant

@@ -407,9 +407,9 @@ function PlayMoviePage() {
         await video.play();
       } catch {
         // Best-effort playback resume after rebasing the HLS session.
-      } finally {
-        pendingAutoPlayOnLoadRef.current = false;
       }
+
+      pendingAutoPlayOnLoadRef.current = false;
     };
 
     if (video.readyState >= 2) {

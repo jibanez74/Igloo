@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
@@ -22,6 +23,11 @@ const { audioPlayerActionsMock } = vi.hoisted(() => ({
   },
 }));
 
+const toastMocks = vi.hoisted(() => ({
+  showActionFailed: vi.fn(),
+  showDeleted: vi.fn(),
+}));
+
 vi.mock("@/hooks/useAudioPlayerActions", () => ({
   useAudioPlayerActions: () => audioPlayerActionsMock,
 }));
@@ -31,6 +37,11 @@ vi.mock("@/hooks/useAudioPlayerState", () => ({
     currentTrack: null,
     isPlaying: false,
   }),
+}));
+
+vi.mock("@/lib/toast-helpers", () => ({
+  showActionFailed: toastMocks.showActionFailed,
+  showDeleted: toastMocks.showDeleted,
 }));
 
 function jsonResponse(body: unknown, status = 200) {
@@ -146,14 +157,24 @@ function albumDetailsResponse(
   };
 }
 
-function mockAlbumDetailsFetch() {
+type MockAlbumDetailsFetchOptions = {
+  deleteAlbumResponse?: {
+    body: unknown;
+    status?: number;
+  };
+};
+
+function mockAlbumDetailsFetch({
+  deleteAlbumResponse,
+}: MockAlbumDetailsFetchOptions = {}) {
   const detailsById = new Map<number, AlbumDetailsResponseType>([
     [42, albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster")],
     [43, albumDetailsResponse(43, "Red Record", "The Trio", "Ember")],
   ]);
 
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
+    const method = init?.method ?? "GET";
 
     if (url === "/api/auth/user") {
       return jsonResponse({
@@ -193,6 +214,15 @@ function mockAlbumDetailsFetch() {
       });
     }
 
+    if (url === "/api/music/albums/42" && method === "DELETE") {
+      return jsonResponse(
+        deleteAlbumResponse?.body ?? {
+          error: false,
+        },
+        deleteAlbumResponse?.status ?? 200,
+      );
+    }
+
     return jsonResponse(
       {
         error: true,
@@ -219,9 +249,12 @@ function createAlbumDetailsQueryClient() {
   });
 }
 
-async function renderAlbumDetailsRoute(initialEntry: string) {
+async function renderAlbumDetailsRoute(
+  initialEntry: string,
+  options?: MockAlbumDetailsFetchOptions,
+) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockAlbumDetailsFetch();
+  mockAlbumDetailsFetch(options);
 
   const queryClient = createAlbumDetailsQueryClient();
   const history = createMemoryHistory({
@@ -271,6 +304,7 @@ function getLowerMotionWrapper(container: HTMLElement) {
 }
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -342,5 +376,48 @@ describe("album details route motion", () => {
     expect(secondHeroWrapper).not.toBe(firstHeroWrapper);
     expect(screen.getByText("Ember")).toBeInTheDocument();
     expect(screen.queryByText("Alabaster")).not.toBeInTheDocument();
+  });
+});
+
+describe("album details deletion", () => {
+  it("keeps the delete dialog open and reenabled after an API error response", async () => {
+    const user = userEvent.setup();
+    const { router } = await renderAlbumDetailsRoute("/music/album/42", {
+      deleteAlbumResponse: {
+        body: {
+          error: true,
+          message: "Unable to delete album",
+        },
+      },
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete Album" }));
+
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Delete Album",
+    });
+    const confirmButton = screen.getByRole("button", {
+      name: "Delete Album",
+    });
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+
+    await user.click(confirmButton);
+
+    await waitFor(() => {
+      expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
+        "delete album",
+        "Unable to delete album",
+      );
+    });
+
+    expect(router.state.location.pathname).toBe("/music/album/42");
+    expect(dialog).toBeInTheDocument();
+    expect(confirmButton).toBeEnabled();
+    expect(cancelButton).toBeEnabled();
   });
 });

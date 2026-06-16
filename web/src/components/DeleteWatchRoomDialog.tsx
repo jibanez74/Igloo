@@ -62,38 +62,37 @@ export default function DeleteWatchRoomDialog({
       if (res.error) {
         onDeleteError?.();
         showActionFailed("close watch room", res.message);
-        return;
-      }
+      } else {
+        queryClient.setQueryData(
+          [WATCH_ROOMS_KEY],
+          (
+            existing:
+              | ApiResponseType<{ rooms: WatchRoomType[] }>
+              | undefined,
+          ) => removeDeletedRoomFromCache(existing, roomId),
+        );
+        queryClient.removeQueries({
+          queryKey: [WATCH_ROOM_KEY, roomId],
+          exact: true,
+        });
+        void queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
 
-      queryClient.setQueryData(
-        [WATCH_ROOMS_KEY],
-        (
-          existing:
-            | ApiResponseType<{ rooms: WatchRoomType[] }>
-            | undefined,
-        ) => removeDeletedRoomFromCache(existing, roomId),
-      );
-      queryClient.removeQueries({
-        queryKey: [WATCH_ROOM_KEY, roomId],
-        exact: true,
-      });
-      void queryClient.invalidateQueries({ queryKey: [WATCH_ROOMS_KEY] });
+        showSuccess(
+          "Watch room closed",
+          `"${movieTitle}" is no longer available.`,
+        );
+        deleteSucceeded = true;
 
-      showSuccess(
-        "Watch room closed",
-        `"${movieTitle}" is no longer available.`,
-      );
-      deleteSucceeded = true;
-
-      if (onDeleted) {
-        try {
-          await onDeleted();
-        } catch (error) {
-          console.error("DeleteWatchRoomDialog onDeleted failed", error);
-          showActionFailed(
-            "finish closing watch room",
-            "The room was closed, but the follow-up action failed.",
-          );
+        if (onDeleted) {
+          try {
+            await onDeleted();
+          } catch (error) {
+            console.error("DeleteWatchRoomDialog onDeleted failed", error);
+            showActionFailed(
+              "finish closing watch room",
+              "The room was closed, but the follow-up action failed.",
+            );
+          }
         }
       }
     } catch {
@@ -102,11 +101,11 @@ export default function DeleteWatchRoomDialog({
         "close watch room",
         "An unexpected error occurred. Please try again.",
       );
-    } finally {
-      setDeleting(false);
-      if (deleteSucceeded) {
-        onOpenChange(false);
-      }
+    }
+
+    setDeleting(false);
+    if (deleteSucceeded) {
+      onOpenChange(false);
     }
   }
 

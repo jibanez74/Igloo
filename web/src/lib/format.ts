@@ -18,6 +18,12 @@ const months = [
   "December",
 ];
 
+const usdCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 // takes in a date string and returns a formatted date string
 // format is month day, year
 export function formatDate(date: string) {
@@ -69,11 +75,7 @@ export function formatTimeSeconds(seconds: number) {
 // Format currency for budget/revenue (movie details)
 export function formatCurrency(amount: number): string {
   if (!amount) return "-";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return usdCurrencyFormatter.format(amount);
 }
 
 /** TMDB extra video `type` values → user-facing labels */
@@ -127,7 +129,7 @@ export function extraVideoTypeSortRank(type: string): number {
 export function prepareYouTubeExtrasForDisplay(
   videos: LibraryMovieExtraVideoType[],
 ): LibraryMovieExtraVideoType[] {
-  return [...videos.filter(v => isYouTubeExtraVideoSite(v.site))].sort(
+  return videos.filter(v => isYouTubeExtraVideoSite(v.site)).sort(
     (a, b) => {
       const byType =
         extraVideoTypeSortRank(a.type) - extraVideoTypeSortRank(b.type);

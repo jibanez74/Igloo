@@ -607,7 +607,7 @@ function GenresTabContent({
   fallbackFocusRef,
 }: GenresTabContentProps) {
   const navigate = Route.useNavigate();
-  const genreButtonRefs = useRef(new Map<number, HTMLButtonElement>());
+  const genreButtonRefs = useRef<Map<number, HTMLButtonElement> | null>(null);
   const pendingRestoreGenreIdRef = useRef<number | null>(null);
 
   const {
@@ -646,7 +646,7 @@ function GenresTabContent({
 
     pendingRestoreGenreIdRef.current = null;
     focusDialogRestoreTarget(
-      genreButtonRefs.current.get(restoreGenreId),
+      genreButtonRefs.current?.get(restoreGenreId),
       fallbackFocusRef.current,
     );
   }, [fallbackFocusRef, genreId]);
@@ -749,6 +749,9 @@ function GenresTabContent({
               <button
                 type="button"
                 ref={node => {
+                  if (genreButtonRefs.current === null) {
+                    genreButtonRefs.current = new Map();
+                  }
                   if (node) {
                     genreButtonRefs.current.set(g.genre_id, node);
                     return;
