@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import {
   Gauge,
@@ -185,17 +185,15 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const [form, setForm] = useState<UpdatePlaybackSettingsRequest>(() =>
     formFromSettings(settings),
   );
-  const syncedSettingsRef = useRef(settings);
+  const [syncedSettings, setSyncedSettings] = useState(settings);
   const [validationMessage, setValidationMessage] = useState("");
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
-    if (settings === syncedSettingsRef.current) return;
-
-    syncedSettingsRef.current = settings;
+  if (settings !== syncedSettings) {
+    setSyncedSettings(settings);
     setForm(formFromSettings(settings));
     setValidationMessage("");
-  }, [settings]);
+  }
 
   const updateMutation = useMutation({
     mutationFn: updatePlaybackSettings,

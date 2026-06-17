@@ -9,8 +9,10 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTENT_FADE_TRANSITION_MS,
+  GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
+  PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
@@ -66,6 +68,31 @@ function generalSettings() {
   };
 }
 
+function playbackSettings() {
+  return {
+    profiles: [
+      {
+        id: "720p_4mbps",
+        label: "720p - 4 Mbps",
+        height: 720,
+        video_mbps: 4,
+      },
+      {
+        id: "1080p_8mbps",
+        label: "1080p - 8 Mbps",
+        height: 1080,
+        video_mbps: 8,
+      },
+    ],
+    preferred_profile: null,
+    download_mbps: null,
+    server_upload_mbps: 20,
+    is_admin: true,
+    preferred_audio_language: null,
+    preferred_subtitle_language: null,
+  };
+}
+
 function mockSettingsFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
@@ -84,6 +111,15 @@ function mockSettingsFetch() {
         error: false,
         data: {
           settings: generalSettings(),
+        },
+      });
+    }
+
+    if (url === "/api/settings/playback") {
+      return jsonResponse({
+        error: false,
+        data: {
+          settings: playbackSettings(),
         },
       });
     }
@@ -138,6 +174,8 @@ async function renderSettingsRoute(initialEntry: string) {
       <RouterProvider router={router} context={{ queryClient }} />
     </QueryClientProvider>,
   );
+
+  return { queryClient, router };
 }
 
 afterEach(() => {
@@ -221,6 +259,92 @@ describe("settings route tab transitions", () => {
     );
     expect(switchControl.firstElementChild).toHaveClass(
       ...MOTION_CONTROL_THUMB_TRANSFORM_CLASS.split(" "),
+    );
+  });
+});
+
+describe("settings form query updates", () => {
+  it("resets the general settings form and validation when query data changes", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderSettingsRoute("/settings");
+
+    const staticDirectory = await screen.findByLabelText("Static directory");
+    await user.clear(staticDirectory);
+    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+
+    expect(
+      await screen.findByText("Static directory is required."),
+    ).toBeInTheDocument();
+    expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
+
+    await act(async () => {
+      queryClient.setQueryData([GENERAL_SETTINGS_KEY], {
+        error: false,
+        data: {
+          settings: {
+            ...generalSettings(),
+            static_dir: "/srv/igloo/static",
+            logs_dir: "/srv/igloo/logs",
+            transcode_dir: "/srv/igloo/transcode",
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Static directory")).toHaveValue(
+        "/srv/igloo/static",
+      );
+    });
+    expect(
+      screen.queryByText("Static directory is required."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Static directory")).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
+
+  it("resets the playback settings form and validation when query data changes", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderSettingsRoute("/settings/playback");
+
+    const downloadSpeed = await screen.findByLabelText("Download speed (Mbps)");
+    await user.clear(downloadSpeed);
+    await user.type(downloadSpeed, "10000");
+    await user.click(screen.getByRole("button", { name: "Save Settings" }));
+
+    expect(
+      await screen.findByText(
+        "Download speed must be between 0 and 10000 Mbps.",
+      ),
+    ).toBeInTheDocument();
+    expect(downloadSpeed).toHaveAttribute("aria-invalid", "true");
+
+    await act(async () => {
+      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, 1], {
+        error: false,
+        data: {
+          settings: {
+            ...playbackSettings(),
+            download_mbps: 22.5,
+            server_upload_mbps: 25,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(22.5);
+    });
+    expect(
+      screen.queryByText(
+        "Download speed must be between 0 and 10000 Mbps.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Download speed (Mbps)")).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
     );
   });
 });
