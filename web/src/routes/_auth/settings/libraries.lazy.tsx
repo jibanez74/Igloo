@@ -327,6 +327,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         const message = res.message || `Failed to start ${label} scan.`;
         setFeedback({ message, tone: "error" });
         showActionFailed(`scan ${label} library`, message);
+        setActiveScan(current => (current === scan ? null : current));
         return;
       }
 
@@ -343,7 +344,6 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       const message = `Failed to start ${label} scan.`;
       setFeedback({ message, tone: "error" });
       showActionFailed(`scan ${label} library`, message);
-    } finally {
       setActiveScan(current => (current === scan ? null : current));
     }
   };

@@ -275,6 +275,7 @@ function TrailerPage() {
           </h2>
           <p className="mb-6 text-slate-400">{error}</p>
           <button
+            type="button"
             ref={closeButtonRef}
             onClick={handleClose}
             className={cn(
@@ -313,6 +314,7 @@ function TrailerPage() {
             This movie doesn't have a trailer yet.
           </p>
           <button
+            type="button"
             ref={closeButtonRef}
             onClick={handleClose}
             className={cn(
@@ -390,6 +392,7 @@ function TrailerPage() {
           </div>
         </div>
         <button
+          type="button"
           ref={closeButtonRef}
           onClick={handleClose}
           className={cn(
@@ -457,6 +460,7 @@ function TrailerPage() {
               aria-label="Playback controls"
             >
               <button
+                type="button"
                 onClick={() => seekBackward(10)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -468,6 +472,7 @@ function TrailerPage() {
               </button>
 
               <button
+                type="button"
                 onClick={togglePlay}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -485,6 +490,7 @@ function TrailerPage() {
               </button>
 
               <button
+                type="button"
                 onClick={() => seekForward(10)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -498,6 +504,7 @@ function TrailerPage() {
 
             <div className="flex min-w-[100px] items-center justify-end gap-2">
               <button
+                type="button"
                 onClick={toggleMute}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -515,6 +522,7 @@ function TrailerPage() {
               </button>
 
               <button
+                type="button"
                 onClick={toggleFullscreen}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,

@@ -350,6 +350,33 @@ function PlayMoviePage() {
     pauseVideo();
   };
 
+  const handlePlaybackSurfaceClick = async (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (!chromeFullscreenMode) return;
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        "button,a,input,select,textarea,[role='button'],[role='slider']",
+      )
+    ) {
+      return;
+    }
+
+    await togglePlay();
+  };
+
+  const handlePlaybackSurfaceKeyDown = async (
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (!chromeFullscreenMode) return;
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    await togglePlay();
+  };
+
   const seek = (newTime: number) => {
     const video = videoRef.current;
     if (!video) return;
@@ -496,6 +523,49 @@ function PlayMoviePage() {
     enabled: !movieNotFound && !!movie && !playbackError && !modeUnavailable,
   });
 
+  const videoPlayer = (
+    <VideoPlayer
+      videoRef={videoRef}
+      src={streamUrl}
+      title={title}
+      isFullscreen={chromeFullscreenMode}
+      onError={(msg) => setPlaybackError(msg)}
+      onPlay={() => setPlaying(true)}
+      onPause={() => {
+        setPlaying(false);
+        void handlePauseSave();
+      }}
+      onEnded={() => {
+        setPlaying(false);
+        void handleEndedSave();
+      }}
+      onTimeUpdate={(time) => {
+        const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
+        currentTimeRef.current = absoluteTime;
+        setCurrentTime(absoluteTime);
+      }}
+      onDurationChange={(nextDuration) => {
+        const absoluteDuration = toAbsoluteDuration(
+          nextDuration,
+          playbackTiming,
+        );
+        durationRef.current = absoluteDuration;
+        setDuration(absoluteDuration);
+      }}
+      onNativeError={handleNativePlaybackError}
+      subtitleTrack={subtitleInfo}
+      startSec={isHlsPlayback ? hlsPlaybackOffset : start}
+      onStartApplied={(time) => {
+        const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
+        currentTimeRef.current = absoluteTime;
+        setCurrentTime(absoluteTime);
+      }}
+      onSessionLost={(time) =>
+        handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
+      }
+    />
+  );
+
   if (status.kind !== "ready") {
     return (
       <PlaybackStatusView
@@ -573,6 +643,7 @@ function PlayMoviePage() {
           </h1>
         </div>
         <button
+          type="button"
           ref={backButtonRef}
           onClick={handleBack}
           className={cn(
@@ -585,51 +656,20 @@ function PlayMoviePage() {
         </button>
       </header>
 
-      <div
-        className="flex min-h-0 flex-1 flex-col"
-        onClick={chromeFullscreenMode ? togglePlay : undefined}
-      >
-        <VideoPlayer
-          videoRef={videoRef}
-          src={streamUrl}
-          title={title}
-          isFullscreen={chromeFullscreenMode}
-          onError={(msg) => setPlaybackError(msg)}
-          onPlay={() => setPlaying(true)}
-          onPause={() => {
-            setPlaying(false);
-            void handlePauseSave();
-          }}
-          onEnded={() => {
-            setPlaying(false);
-            void handleEndedSave();
-          }}
-          onTimeUpdate={(time) => {
-            const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
-            currentTimeRef.current = absoluteTime;
-            setCurrentTime(absoluteTime);
-          }}
-          onDurationChange={(nextDuration) => {
-            const absoluteDuration = toAbsoluteDuration(
-              nextDuration,
-              playbackTiming,
-            );
-            durationRef.current = absoluteDuration;
-            setDuration(absoluteDuration);
-          }}
-          onNativeError={handleNativePlaybackError}
-          subtitleTrack={subtitleInfo}
-          startSec={isHlsPlayback ? hlsPlaybackOffset : start}
-          onStartApplied={(time) => {
-            const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
-            currentTimeRef.current = absoluteTime;
-            setCurrentTime(absoluteTime);
-          }}
-          onSessionLost={(time) =>
-            handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
-          }
-        />
-      </div>
+      {chromeFullscreenMode ? (
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          role="button"
+          tabIndex={0}
+          aria-label="Toggle movie playback"
+          onClick={handlePlaybackSurfaceClick}
+          onKeyDown={handlePlaybackSurfaceKeyDown}
+        >
+          {videoPlayer}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">{videoPlayer}</div>
+      )}
 
       <MoviePlayerControls
         chromeFullscreenMode={chromeFullscreenMode}

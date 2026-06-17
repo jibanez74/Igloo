@@ -121,6 +121,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
       {/* Play button - positioned over the cover image */}
       <button
+        type="button"
         onClick={handlePlayAlbum}
         disabled={isLoading}
         className={cn(

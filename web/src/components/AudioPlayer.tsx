@@ -530,6 +530,7 @@ export default function AudioPlayer({
 
           <header className="flex items-center justify-between px-6 py-4">
             <button
+              type="button"
               onClick={onMinimize}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -547,6 +548,7 @@ export default function AudioPlayer({
             </div>
             {onClose ? (
               <button
+                type="button"
                 onClick={onClose}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -603,6 +605,7 @@ export default function AudioPlayer({
               aria-label="Playback controls"
             >
               <button
+                type="button"
                 onClick={playPrevious}
                 disabled={!hasPrevious}
                 className={cn(
@@ -615,6 +618,7 @@ export default function AudioPlayer({
               </button>
 
               <button
+                type="button"
                 ref={playPauseButtonRef}
                 onClick={handleTogglePlay}
                 disabled={isLoading}
@@ -634,6 +638,7 @@ export default function AudioPlayer({
               </button>
 
               <button
+                type="button"
                 onClick={playNext}
                 disabled={!hasNext}
                 className={cn(
@@ -673,6 +678,7 @@ export default function AudioPlayer({
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex items-center gap-4">
               <button
+                type="button"
                 onClick={onExpand}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -708,6 +714,7 @@ export default function AudioPlayer({
                 aria-label="Playback controls"
               >
                 <button
+                  type="button"
                   onClick={playPrevious}
                   disabled={!hasPrevious}
                   className={cn(
@@ -720,6 +727,7 @@ export default function AudioPlayer({
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleTogglePlay}
                   disabled={isLoading}
                   className={cn(
@@ -738,6 +746,7 @@ export default function AudioPlayer({
                 </button>
 
                 <button
+                  type="button"
                   onClick={playNext}
                   disabled={!hasNext}
                   className={cn(
@@ -766,6 +775,7 @@ export default function AudioPlayer({
               </div>
 
               <button
+                type="button"
                 onClick={onExpand}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -778,6 +788,7 @@ export default function AudioPlayer({
 
               {onClose && (
                 <button
+                  type="button"
                   onClick={onClose}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,

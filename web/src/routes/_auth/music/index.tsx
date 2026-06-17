@@ -844,6 +844,7 @@ function PlayAllButton() {
 
   return (
     <button
+      type="button"
       onClick={handlePlayAll}
       disabled={isLoading}
       className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-700 px-3 py-2 font-medium text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50 sm:px-4"
@@ -878,6 +879,7 @@ function ShuffleButton() {
 
   return (
     <button
+      type="button"
       onClick={handleShuffle}
       disabled={isLoading}
       className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50 sm:px-4"
@@ -1289,6 +1291,7 @@ function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
         Create your first playlist to start organizing your favorite tracks.
       </p>
       <button
+        type="button"
         onClick={onCreateClick}
         className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3"
       >

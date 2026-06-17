@@ -46,6 +46,7 @@ export default function TrackActionsMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
+            type="button"
             ref={actionsButtonRef}
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-700 hover:text-white",
