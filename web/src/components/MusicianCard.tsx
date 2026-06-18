@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
 import {
@@ -17,15 +17,9 @@ type MusicianCardProps = {
 export default function MusicianCard({ musician }: MusicianCardProps) {
   const { id, name, thumb, album_count, track_count } = musician;
   const thumbUrl = getMediaImageUrl(unwrapString(thumb));
-  const [thumbLoadFailed, setThumbLoadFailed] = useState(false);
+  const [failedThumbUrl, setFailedThumbUrl] = useState<string | null>(null);
 
-  // Reset load-failed state when musician or thumb URL changes. Deferred to avoid
-  // synchronous setState in effect (react-hooks/set-state-in-effect).
-  useEffect(() => {
-    queueMicrotask(() => setThumbLoadFailed(false));
-  }, [id, thumbUrl]);
-
-  const showThumb = thumbUrl && !thumbLoadFailed;
+  const showThumb = thumbUrl && thumbUrl !== failedThumbUrl;
 
   return (
     <article
@@ -49,7 +43,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
               loading="lazy"
               decoding="async"
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-              onError={() => setThumbLoadFailed(true)}
+              onError={() => setFailedThumbUrl(thumbUrl)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

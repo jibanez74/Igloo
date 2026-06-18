@@ -98,6 +98,7 @@ export default function MoviePlayerControls({
             aria-label="Playback controls"
           >
             <button
+              type="button"
               onClick={onSeekBackward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -108,6 +109,7 @@ export default function MoviePlayerControls({
               <Rewind className="size-5" aria-hidden="true" />
             </button>
             <button
+              type="button"
               onClick={onTogglePlay}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -122,6 +124,7 @@ export default function MoviePlayerControls({
               )}
             </button>
             <button
+              type="button"
               onClick={onSeekForward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -151,6 +154,7 @@ export default function MoviePlayerControls({
               accent="cyan"
             />
             <button
+              type="button"
               onClick={onToggleFullscreen}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,

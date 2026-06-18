@@ -254,6 +254,7 @@ function AlbumDetailsContent({
           "delete album",
           result.message || "Unable to delete album. Please try again.",
         );
+        setIsDeleting(false);
         return;
       }
 
@@ -274,7 +275,6 @@ function AlbumDetailsContent({
         "delete album",
         "An unexpected error occurred. Please try again.",
       );
-    } finally {
       setIsDeleting(false);
     }
   };
@@ -450,6 +450,7 @@ function AlbumDetailsContent({
 
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
                 <button
+                  type="button"
                   onClick={handlePlayAlbum}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 sm:w-auto"
                 >
@@ -457,6 +458,7 @@ function AlbumDetailsContent({
                   Play Album
                 </button>
                 <button
+                  type="button"
                   onClick={handleShufflePlay}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600 sm:w-auto"
                   aria-label="Shuffle play album"
@@ -468,6 +470,7 @@ function AlbumDetailsContent({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
+                      type="button"
                       ref={moreOptionsButtonRef}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-600 sm:w-auto"
                       aria-label="More options"

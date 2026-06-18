@@ -299,6 +299,7 @@ function MusicianDetailsContent({
               {tracks.length > 0 && (
                 <div className="mt-6 flex w-full flex-col flex-wrap justify-center gap-3 sm:flex-row lg:justify-start">
                   <button
+                    type="button"
                     onClick={handlePlayAll}
                     className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3
                   font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400
@@ -309,6 +310,7 @@ function MusicianDetailsContent({
                     Play All
                   </button>
                   <button
+                    type="button"
                     onClick={handleShufflePlay}
                     className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700
                   px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600

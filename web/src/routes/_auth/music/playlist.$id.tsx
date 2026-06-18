@@ -347,6 +347,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {track_count > 0 && (
             <div className="mt-5 flex flex-col justify-center gap-2 sm:mt-6 sm:flex-row sm:gap-3 lg:justify-start">
               <button
+                type="button"
                 onClick={handlePlayAll}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Play all ${track_count} tracks`}
@@ -355,6 +356,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 Play All
               </button>
               <button
+                type="button"
                 onClick={handleShuffle}
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Shuffle all ${track_count} tracks`}
@@ -369,6 +371,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {is_owner && (
             <div className="mt-4 flex flex-wrap justify-center gap-3 sm:gap-4 lg:justify-start">
               <button
+                type="button"
                 ref={editButtonRef}
                 onClick={() => setShowEditDialog(true)}
                 className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-amber-400 focus:text-amber-400 focus:outline-none sm:gap-2 sm:text-sm"
@@ -379,6 +382,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 <span className="hidden sm:inline">Details</span>
               </button>
               <button
+                type="button"
                 ref={deleteButtonRef}
                 onClick={handleDeletePlaylist}
                 disabled={deleteMutation.isPending}

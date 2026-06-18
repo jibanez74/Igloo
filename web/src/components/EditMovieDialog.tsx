@@ -75,11 +75,11 @@ export default function EditMovieDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="tmdb">
+          <TabsContent key={`tmdb-${movieId}`} value="tmdb">
             <TmdbTab movieId={movieId} movie={movie} onOpenChange={onOpenChange} />
           </TabsContent>
 
-          <TabsContent value="manual">
+          <TabsContent key={`manual-${movieId}`} value="manual">
             <ManualTab movieId={movieId} movie={movie} onOpenChange={onOpenChange} />
           </TabsContent>
         </Tabs>

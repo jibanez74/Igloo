@@ -36,11 +36,11 @@ function LoginPage() {
   const loginHandler = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    try {
-      const formData = new FormData(e.currentTarget);
-      const email = formData.get("email") as string;
-      const password = formData.get("password") as string;
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
+    try {
       const res = await login(email, password);
 
       if (res.error) {
@@ -48,6 +48,7 @@ function LoginPage() {
           "Login failed",
           res.message || "An error occurred during login"
         );
+        setIsSubmitting(false);
         return;
       }
 
@@ -66,7 +67,6 @@ function LoginPage() {
         "Login failed",
         "Something went wrong after sign-in. Please try again.",
       );
-    } finally {
       setIsSubmitting(false);
     }
   };

@@ -359,6 +359,7 @@ function UsersSettings() {
 
       {dialog.type === "edit" && (
         <EditUserDialog
+          key={dialog.user.id}
           user={dialog.user}
           users={users}
           onClose={closeDialog}

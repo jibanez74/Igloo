@@ -520,6 +520,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
         )}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
+            type="button"
             onClick={handleSortToggle}
             className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
             aria-label={

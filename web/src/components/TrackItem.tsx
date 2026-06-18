@@ -147,6 +147,7 @@ export default function TrackItem({
       {/* Drag handle - only for draggable items */}
       {isDraggable && (
         <button
+          type="button"
           {...dragHandleProps}
           className={cn(
             "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-slate-400 hover:bg-slate-700 hover:text-slate-300 active:cursor-grabbing",
@@ -201,6 +202,7 @@ export default function TrackItem({
 
       {/* Like button */}
       <button
+        type="button"
         onClick={handleLikeClick}
         disabled={isLikeLoading}
         className={cn(
@@ -235,6 +237,7 @@ export default function TrackItem({
 
       {/* Play button - always on right */}
       <button
+        type="button"
         onClick={onPlay}
         className={getPlayButtonClasses()}
         aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
