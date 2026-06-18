@@ -355,11 +355,10 @@ function PlayMoviePage() {
   ) => {
     if (!chromeFullscreenMode) return;
     const target = event.target as HTMLElement;
-    if (
-      target.closest(
-        "button,a,input,select,textarea,[role='button'],[role='slider']",
-      )
-    ) {
+    const interactiveAncestor = target.closest(
+      "button,a,input,select,textarea,[role='button'],[role='slider']",
+    );
+    if (interactiveAncestor && interactiveAncestor !== event.currentTarget) {
       return;
     }
 

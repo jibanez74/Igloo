@@ -340,6 +340,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         `${label === "movies" ? "Movies" : "Music"} library scan has been initiated`,
       );
       invalidateScanQueries(queryClient, scan);
+      setActiveScan(current => (current === scan ? null : current));
     } catch {
       const message = `Failed to start ${label} scan.`;
       setFeedback({ message, tone: "error" });
