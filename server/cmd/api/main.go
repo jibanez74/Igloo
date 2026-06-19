@@ -64,8 +64,6 @@ type Application struct {
 	WatchRoomHub        *WatchRoomHub
 }
 
-var SQL = sqlc.Schema
-
 //go:embed all:webdist
 var FrontendFS embed.FS
 
@@ -128,11 +126,6 @@ func InitApp() (*Application, error) {
 	err = app.InitTables()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database tables: %v", err)
-	}
-
-	err = app.ensureSearchIndexesCurrent()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize search indexes: %v", err)
 	}
 
 	app.Queries, err = database.Prepare(ctx, app.DB)
@@ -315,7 +308,7 @@ func ensureDatabasePathWritable(dbPath string, databaseExists bool) error {
 }
 
 func (app *Application) InitTables() error {
-	_, err := app.DB.Exec(SQL)
+	_, err := app.DB.Exec(sqlc.Schema)
 	if err != nil {
 		return err
 	}
