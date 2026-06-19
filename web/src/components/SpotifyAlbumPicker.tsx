@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Disc3, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { searchSpotifyAlbums } from "@/lib/api";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
+import { cn } from "@/lib/utils";
 import type {
   ApiResponseType,
   SpotifyAlbumSearchRequest,
@@ -29,6 +30,7 @@ export default function SpotifyAlbumPicker({
   renderResultMeta,
   searchFn = searchSpotifyAlbums,
 }: SpotifyAlbumPickerProps) {
+  const pickerId = useId().replace(/:/g, "");
   const [title, setTitle] = useState(initialTitle);
   const [results, setResults] = useState<SpotifyAlbumSearchResultType[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -39,6 +41,52 @@ export default function SpotifyAlbumPicker({
   const selectedResult =
     results.find(result => result.spotify_id === selectedId) ?? null;
   const canSearch = trimmedTitle.length > 0;
+  const resultsGroupName = `${pickerId}-spotify-album-result`;
+  const resultsLabelId = `${pickerId}-spotify-results-label`;
+
+  function getResultInputId(spotifyId: string) {
+    return `${pickerId}-spotify-album-result-${spotifyId}`;
+  }
+
+  function handleResultArrowKey(
+    event: KeyboardEvent<HTMLInputElement>,
+    currentIndex: number,
+  ) {
+    if (
+      event.key === " "
+      || event.key === "Space"
+      || event.key === "Spacebar"
+      || event.code === "Space"
+    ) {
+      event.preventDefault();
+      setSelectedId(results[currentIndex].spotify_id);
+      return;
+    }
+
+    if (results.length < 2) {
+      return;
+    }
+
+    let nextIndex = currentIndex;
+
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % results.length;
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + results.length) % results.length;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextResult = results[nextIndex];
+    const nextInput = document.getElementById(getResultInputId(nextResult.spotify_id));
+    if (nextInput instanceof HTMLInputElement) {
+      nextInput.focus();
+    }
+
+    setSelectedId(nextResult.spotify_id);
+  }
 
   async function handleSearch() {
     if (!canSearch) return;
@@ -113,27 +161,34 @@ export default function SpotifyAlbumPicker({
       </Button>
 
       {results.length > 0 && (
-        <div className="space-y-2">
+        <fieldset className="space-y-2">
+          <legend id={resultsLabelId} className="sr-only">
+            Spotify album results
+          </legend>
           <p className="text-sm text-slate-400">
             {results.length} result{results.length === 1 ? "" : "s"} found
           </p>
 
-          <ul
-            className="max-h-72 space-y-2 overflow-y-auto"
-            role="listbox"
-            aria-label="Spotify album results"
-          >
-            {results.map(result => (
-              <SpotifyAlbumResultCard
-                key={result.spotify_id}
-                result={result}
-                selected={selectedId === result.spotify_id}
-                onSelect={() => setSelectedId(result.spotify_id)}
-                meta={renderResultMeta?.(result)}
-              />
-            ))}
+          <ul className="max-h-72 space-y-2 overflow-y-auto">
+            {results.map((result, index) => {
+              const meta = renderResultMeta?.(result);
+
+              return (
+                <SpotifyAlbumResultCard
+                  key={result.spotify_id}
+                  inputId={getResultInputId(result.spotify_id)}
+                  meta={meta}
+                  metaId={meta ? `${pickerId}-spotify-meta-${result.spotify_id}` : undefined}
+                  name={resultsGroupName}
+                  onKeyDown={event => handleResultArrowKey(event, index)}
+                  onSelect={() => setSelectedId(result.spotify_id)}
+                  result={result}
+                  selected={selectedId === result.spotify_id}
+                />
+              );
+            })}
           </ul>
-        </div>
+        </fieldset>
       )}
 
       <Button
@@ -150,12 +205,20 @@ export default function SpotifyAlbumPicker({
 }
 
 function SpotifyAlbumResultCard({
+  inputId,
   meta,
+  metaId,
+  name,
+  onKeyDown,
   onSelect,
   result,
   selected,
 }: {
+  inputId: string;
   meta?: ReactNode;
+  metaId?: string;
+  name: string;
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSelect: () => void;
   result: SpotifyAlbumSearchResultType;
   selected: boolean;
@@ -166,57 +229,66 @@ function SpotifyAlbumResultCard({
       : "Unknown artist";
   const releaseYear = result.release_date.slice(0, 4);
   const albumType = result.album_type ? result.album_type : "album";
+  const labelId = `${inputId}-label`;
 
   return (
     <li
-      role="option"
-      aria-selected={selected}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={event => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      className={`flex cursor-pointer gap-3 rounded-lg border p-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 ${
+      className={cn(
+        "overflow-hidden rounded-lg border transition-colors",
         selected
           ? "border-amber-500 bg-amber-500/10"
-          : "border-slate-700 bg-slate-800/60 hover:border-slate-600"
-      }`}
-    >
-      {result.cover_url ? (
-        <img
-          src={result.cover_url}
-          alt=""
-          className="size-20 shrink-0 rounded-sm object-cover"
-        />
-      ) : (
-        <div className="flex size-20 shrink-0 items-center justify-center rounded-sm bg-slate-700">
-          <Disc3 className="size-6 text-slate-500" aria-hidden="true" />
-        </div>
+          : "border-slate-700 bg-slate-800/60 hover:border-slate-600",
       )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-white">
-          {result.title}
-          {releaseYear && (
-            <span className="ml-1 text-slate-400">({releaseYear})</span>
-          )}
-        </p>
-        <p className="mt-0.5 truncate text-sm text-slate-400">
-          {artistsLabel}
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          Spotify ID: {result.spotify_id}
-        </p>
-        <p className="mt-0.5 text-xs text-slate-500">
-          {albumType}
-          {result.total_tracks > 0
-            ? ` - ${result.total_tracks} track${result.total_tracks === 1 ? "" : "s"}`
-            : ""}
-        </p>
-        {meta ? <div className="mt-2 text-sm">{meta}</div> : null}
-      </div>
+    >
+      <input
+        id={inputId}
+        type="radio"
+        name={name}
+        checked={selected}
+        onChange={onSelect}
+        onKeyDown={onKeyDown}
+        aria-labelledby={labelId}
+        aria-describedby={metaId}
+        className="peer sr-only"
+      />
+      <Label
+        id={labelId}
+        htmlFor={inputId}
+        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/60"
+      >
+        {result.cover_url ? (
+          <img
+            src={result.cover_url}
+            alt=""
+            className="size-20 shrink-0 rounded-sm object-cover"
+          />
+        ) : (
+          <div className="flex size-20 shrink-0 items-center justify-center rounded-sm bg-slate-700">
+            <Disc3 className="size-6 text-slate-500" aria-hidden="true" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-white">
+            {result.title}
+            {releaseYear && (
+              <span className="ml-1 text-slate-400">({releaseYear})</span>
+            )}
+          </p>
+          <p className="mt-0.5 truncate text-sm text-slate-400">
+            {artistsLabel}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Spotify ID: {result.spotify_id}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {albumType}
+            {result.total_tracks > 0
+              ? ` - ${result.total_tracks} track${result.total_tracks === 1 ? "" : "s"}`
+              : ""}
+          </p>
+        </div>
+      </Label>
+      {meta ? <div id={metaId} className="px-2 pb-2 pl-21 text-sm">{meta}</div> : null}
     </li>
   );
 }

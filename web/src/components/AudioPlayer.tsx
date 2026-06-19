@@ -10,6 +10,12 @@ import {
   Play,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFullscreenContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { TrackType } from "@/types";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
@@ -62,7 +68,8 @@ export default function AudioPlayer({
   isKeyboardSuspended = false,
 }: AudioPlayerProps) {
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
-  const expandedContainerRef = useRef<HTMLDivElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const shouldRestoreExpandFocusRef = useRef(false);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -92,56 +99,30 @@ export default function AudioPlayer({
     }
   };
 
+  const handleMinimize = () => {
+    shouldRestoreExpandFocusRef.current = true;
+    onMinimize();
+  };
+
   useEffect(() => {
-    if (!isExpanded || !playPauseButtonRef.current) {
+    if (isExpanded || !shouldRestoreExpandFocusRef.current) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      playPauseButtonRef.current?.focus();
-    }, 50);
+    shouldRestoreExpandFocusRef.current = false;
 
-    return () => clearTimeout(timer);
-  }, [isExpanded]);
-
-  useEffect(() => {
-    if (!isExpanded) return;
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onMinimize();
-      }
+    const focusExpandButton = () => {
+      expandButtonRef.current?.focus({ preventScroll: true });
     };
 
-    window.addEventListener("keydown", handleEscape);
-
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isExpanded, onMinimize]);
-
-  const handleExpandedKeyDown = (event: React.KeyboardEvent) => {
-    if (!isExpanded || !expandedContainerRef.current) return;
-
-    if (event.key !== "Tab") {
-      return;
+    if (typeof window.requestAnimationFrame === "function") {
+      const frame = window.requestAnimationFrame(focusExpandButton);
+      return () => window.cancelAnimationFrame(frame);
     }
 
-    const focusableElements =
-      expandedContainerRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
-
-    if (event.shiftKey && document.activeElement === firstElement) {
-      event.preventDefault();
-      lastElement?.focus();
-    } else if (!event.shiftKey && document.activeElement === lastElement) {
-      event.preventDefault();
-      firstElement?.focus();
-    }
-  };
+    const timer = window.setTimeout(focusExpandButton, 0);
+    return () => window.clearTimeout(timer);
+  }, [isExpanded]);
 
   useEffect(() => {
     if (
@@ -512,159 +493,179 @@ export default function AudioPlayer({
         {streamUrl && <source src={streamUrl} type={track.mime_type} />}
       </audio>
 
-      {isExpanded && (
-        <div
-          ref={expandedContainerRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Now playing: ${track.title} by ${artist}`}
-          onKeyDown={handleExpandedKeyDown}
-          className={cn(
-            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-800 to-slate-900",
-          )}
-        >
-          <div className="sr-only" aria-live="polite" aria-atomic="true">
-            {announcement}
-          </div>
+      <Dialog
+        open={isExpanded}
+        onOpenChange={open => {
+          if (!open) {
+            handleMinimize();
+          }
+        }}
+      >
+        {isExpanded && (
+          <DialogFullscreenContent
+            aria-label={`Now playing: ${track.title} by ${artist}`}
+            className={cn(
+              MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+              "flex flex-col bg-linear-to-b from-slate-900 via-slate-800 to-slate-900",
+            )}
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              playPauseButtonRef.current?.focus({ preventScroll: true });
+            }}
+            onCloseAutoFocus={event => {
+              event.preventDefault();
+            }}
+          >
+            <DialogTitle className="sr-only">
+              Now playing: {track.title} by {artist}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Fullscreen audio player with track controls, progress, and volume.
+              Press Escape to minimize.
+            </DialogDescription>
 
-          <header className="flex items-center justify-between px-6 py-4">
-            <button
-              type="button"
-              onClick={onMinimize}
-              className={cn(
-                MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
-              )}
-              aria-label="Minimize player (Escape)"
-            >
-              <ChevronDown className="size-5" aria-hidden="true" />
-            </button>
-            <div className="text-center" id="player-header">
-              <p className="text-xs tracking-widest text-slate-400 uppercase">
-                Now Playing
-              </p>
-              <p className="mt-0.5 text-sm text-slate-400">{albumTitle}</p>
+            <div className="sr-only" aria-live="polite" aria-atomic="true">
+              {announcement}
             </div>
-            {onClose ? (
+
+            <header className="flex items-center justify-between px-6 py-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleMinimize}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
                 )}
-                aria-label="Stop playback and close player"
+                aria-label="Minimize player (Escape)"
               >
-                <X className="size-5" aria-hidden="true" />
+                <ChevronDown className="size-5" aria-hidden="true" />
               </button>
-            ) : (
-              <div className="size-10" aria-hidden="true" />
-            )}
-          </header>
-
-          <main className="flex flex-1 flex-col items-center justify-center px-8 pb-8">
-            <figure className="mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96">
-              {albumCover ? (
-                <img
-                  src={albumCover}
-                  alt={`Album cover for ${albumTitle}`}
-                  className="size-full object-cover"
-                />
-              ) : (
-                <div
-                  className="flex size-full items-center justify-center bg-slate-800"
-                  role="img"
-                  aria-label="No album cover available"
+              <div className="text-center" id="player-header">
+                <p className="text-xs tracking-widest text-slate-400 uppercase">
+                  Now Playing
+                </p>
+                <p className="mt-0.5 text-sm text-slate-400">{albumTitle}</p>
+              </div>
+              {onClose ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                  )}
+                  aria-label="Stop playback and close player"
                 >
-                  <Disc3 className="size-24 text-slate-600" aria-hidden="true" />
-                </div>
+                  <X className="size-5" aria-hidden="true" />
+                </button>
+              ) : (
+                <div className="size-10" aria-hidden="true" />
               )}
-            </figure>
+            </header>
 
-            <div className="mb-8 max-w-md text-center">
-              <h1
-                id="track-title"
-                className="truncate text-2xl font-bold text-white sm:text-3xl"
-              >
-                {track.title}
-              </h1>
-              <p className="mt-1 truncate text-lg text-amber-400">{artist}</p>
-            </div>
-
-            <ProgressBar
-              currentTime={currentTime}
-              duration={duration}
-              onSeek={handleSeek}
-              variant="expanded"
-            />
-
-            <div
-              className="flex items-center gap-6"
-              role="group"
-              aria-label="Playback controls"
-            >
-              <button
-                type="button"
-                onClick={playPrevious}
-                disabled={!hasPrevious}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
-                )}
-                aria-label={prevAriaLabel}
-              >
-                <SkipBack className="size-6" aria-hidden="true" />
-              </button>
-
-              <button
-                type="button"
-                ref={playPauseButtonRef}
-                onClick={handleTogglePlay}
-                disabled={isLoading}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50",
-                )}
-                aria-label={isLoading ? "Loading" : playPauseAriaLabel}
-              >
-                {isLoading ? (
-                  <Spinner className="size-8" />
-                ) : isPlaying ? (
-                  <Pause className="size-8 fill-current" aria-hidden="true" />
+            <main className="flex flex-1 flex-col items-center justify-center px-8 pb-8">
+              <figure className="mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96">
+                {albumCover ? (
+                  <img
+                    src={albumCover}
+                    alt={`Album cover for ${albumTitle}`}
+                    className="size-full object-cover"
+                  />
                 ) : (
-                  <Play className="size-8 fill-current" aria-hidden="true" />
+                  <div
+                    className="flex size-full items-center justify-center bg-slate-800"
+                    role="img"
+                    aria-label="No album cover available"
+                  >
+                    <Disc3 className="size-24 text-slate-600" aria-hidden="true" />
+                  </div>
                 )}
-              </button>
+              </figure>
 
-              <button
-                type="button"
-                onClick={playNext}
-                disabled={!hasNext}
-                className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
-                )}
-                aria-label={nextAriaLabel}
-              >
-                <SkipForward className="size-6" aria-hidden="true" />
-              </button>
-            </div>
+              <div className="mb-8 max-w-md text-center">
+                <h1
+                  id="track-title"
+                  className="truncate text-2xl font-bold text-white sm:text-3xl"
+                >
+                  {track.title}
+                </h1>
+                <p className="mt-1 truncate text-lg text-amber-400">{artist}</p>
+              </div>
 
-            <div className="mt-6">
-              <VolumeControl
-                mediaRef={audioRef}
+              <ProgressBar
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={handleSeek}
                 variant="expanded"
-                accent="amber"
               />
-            </div>
 
-            <p className="mt-4 text-sm text-slate-400">
-              Track {currentIndex + 1} of {tracks.length}
-            </p>
-          </main>
-        </div>
-      )}
+              <div
+                className="flex items-center gap-6"
+                role="group"
+                aria-label="Playback controls"
+              >
+                <button
+                  type="button"
+                  onClick={playPrevious}
+                  disabled={!hasPrevious}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                  )}
+                  aria-label={prevAriaLabel}
+                >
+                  <SkipBack className="size-6" aria-hidden="true" />
+                </button>
+
+                <button
+                  type="button"
+                  ref={playPauseButtonRef}
+                  onClick={handleTogglePlay}
+                  disabled={isLoading}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-20 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-xl shadow-amber-500/30 hover:bg-amber-400 focus:ring-4 focus:ring-amber-400/50 focus:outline-none disabled:opacity-50",
+                  )}
+                  aria-label={isLoading ? "Loading" : playPauseAriaLabel}
+                >
+                  {isLoading ? (
+                    <Spinner className="size-8" />
+                  ) : isPlaying ? (
+                    <Pause className="size-8 fill-current" aria-hidden="true" />
+                  ) : (
+                    <Play className="size-8 fill-current" aria-hidden="true" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={playNext}
+                  disabled={!hasNext}
+                  className={cn(
+                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                    "flex size-14 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                  )}
+                  aria-label={nextAriaLabel}
+                >
+                  <SkipForward className="size-6" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="mt-6">
+                <VolumeControl
+                  mediaRef={audioRef}
+                  variant="expanded"
+                  accent="amber"
+                />
+              </div>
+
+              <p className="mt-4 text-sm text-slate-400">
+                Track {currentIndex + 1} of {tracks.length}
+              </p>
+            </main>
+          </DialogFullscreenContent>
+        )}
+      </Dialog>
 
       {!isExpanded && (
         <div
@@ -678,6 +679,7 @@ export default function AudioPlayer({
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex items-center gap-4">
               <button
+                ref={expandButtonRef}
                 type="button"
                 onClick={onExpand}
                 className={cn(

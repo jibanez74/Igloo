@@ -131,6 +131,31 @@ function formFromSettings(
   };
 }
 
+function formsMatchSettings(
+  form: UpdateGeneralSettingsRequest,
+  settings: GeneralSettingsType,
+) {
+  const settingsForm = formFromSettings(settings);
+  return (
+    form.tmdb_key === settingsForm.tmdb_key &&
+    form.immich_base_url === settingsForm.immich_base_url &&
+    form.immich_api_key === settingsForm.immich_api_key &&
+    form.jellyfin_base_url === settingsForm.jellyfin_base_url &&
+    form.jellyfin_api_key === settingsForm.jellyfin_api_key &&
+    form.spotify_client_id === settingsForm.spotify_client_id &&
+    form.spotify_client_secret === settingsForm.spotify_client_secret &&
+    form.hardware_acceleration_device ===
+      settingsForm.hardware_acceleration_device &&
+    form.enable_logger === settingsForm.enable_logger &&
+    form.enable_watcher === settingsForm.enable_watcher &&
+    form.download_images === settingsForm.download_images &&
+    form.static_dir === settingsForm.static_dir &&
+    form.logs_dir === settingsForm.logs_dir &&
+    form.transcode_dir === settingsForm.transcode_dir &&
+    form.server_upload_mbps === settingsForm.server_upload_mbps
+  );
+}
+
 function isHardwareAccelerationDevice(
   value: string,
 ): value is HardwareAccelerationDevice {
@@ -223,10 +248,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const [, startTransition] = useTransition();
 
   if (settings !== syncedSettings) {
+    const formIsClean = formsMatchSettings(form, syncedSettings);
     setSyncedSettings(settings);
-    setForm(formFromSettings(settings));
-    setValidationMessage("");
-    setValidationField(null);
+    if (formIsClean) {
+      setForm(formFromSettings(settings));
+      setValidationMessage("");
+      setValidationField(null);
+    }
   }
 
   const updateMutation = useMutation({
@@ -356,7 +384,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const resetForm = () => {
-    setForm(formFromSettings(settings));
+    setForm(formFromSettings(syncedSettings));
     setValidationMessage("");
     setValidationField(null);
   };

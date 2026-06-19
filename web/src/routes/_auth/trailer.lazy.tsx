@@ -18,6 +18,12 @@ import {
 } from "lucide-react";
 import ProgressBar from "@/components/ProgressBar";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFullscreenContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
@@ -72,6 +78,12 @@ function TrailerPage() {
 
   const title = media?.title ? `${media.title} - Trailer` : "Trailer";
 
+  const focusMainAfterNavigation = () => {
+    window.setTimeout(() => {
+      document.getElementById("main")?.focus({ preventScroll: true });
+    }, 0);
+  };
+
   const handleClose = () => {
     if (returnTo) {
       try {
@@ -82,6 +94,8 @@ function TrailerPage() {
     } else {
       navigate({ to: "/" });
     }
+
+    focusMainAfterNavigation();
   };
 
   const {
@@ -146,14 +160,11 @@ function TrailerPage() {
     });
   };
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      closeButtonRef.current?.focus();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, []);
-
   const handleKeyboardShortcut = useEffectEvent((e: KeyboardEvent) => {
+    if (e.defaultPrevented) {
+      return;
+    }
+
     const target = e.target;
     if (!(target instanceof HTMLElement)) {
       return;
@@ -214,14 +225,6 @@ function TrailerPage() {
         e.preventDefault();
         seekBackward(currentTime);
         break;
-      case "Escape":
-        e.preventDefault();
-        if (getFullscreenElement()) {
-          void exitDocumentFullscreen();
-          break;
-        }
-        handleClose();
-        break;
     }
   });
 
@@ -234,147 +237,159 @@ function TrailerPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab" && containerRef.current) {
-      const focusableElements =
-        containerRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        );
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault();
-        lastElement?.focus();
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault();
-        firstElement?.focus();
-      }
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      handleClose();
     }
+  };
+
+  const handleDialogOpenAutoFocus = (event: Event) => {
+    event.preventDefault();
+
+    const focusTarget = closeButtonRef.current ?? containerRef.current;
+    focusTarget?.focus({ preventScroll: true });
+  };
+
+  const handleDialogEscapeKeyDown = (event: KeyboardEvent) => {
+    if (!getFullscreenElement()) {
+      return;
+    }
+
+    event.preventDefault();
+    void exitDocumentFullscreen();
   };
 
   if (error) {
     return (
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Error playing trailer"
-        className={cn(
-          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
-        )}
-      >
-        <div className="max-w-md px-4 text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
+      <Dialog open onOpenChange={handleDialogOpenChange}>
+        <DialogFullscreenContent
+          ref={containerRef}
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+          )}
+          onOpenAutoFocus={handleDialogOpenAutoFocus}
+          onEscapeKeyDown={handleDialogEscapeKeyDown}
+        >
+          <div className="max-w-md px-4 text-center">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
+              <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
+            </div>
+            <DialogTitle className="mb-2 text-xl font-semibold text-white">
+              Unable to Play Trailer
+            </DialogTitle>
+            <DialogDescription className="mb-6 text-slate-400">
+              {error}
+            </DialogDescription>
+            <button
+              type="button"
+              ref={closeButtonRef}
+              onClick={handleClose}
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+              )}
+            >
+              <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+              Go Back
+            </button>
           </div>
-          <h2 className="mb-2 text-xl font-semibold text-white">
-            Unable to Play Trailer
-          </h2>
-          <p className="mb-6 text-slate-400">{error}</p>
-          <button
-            type="button"
-            ref={closeButtonRef}
-            onClick={handleClose}
-            className={cn(
-              MOTION_PLAYER_CHROME_BUTTON_CLASS,
-              "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
-            )}
-          >
-            <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-            Go Back
-          </button>
-        </div>
-      </div>
+        </DialogFullscreenContent>
+      </Dialog>
     );
   }
 
   if (!trailerKey && data) {
     return (
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="No trailer available"
-        className={cn(
-          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
-        )}
-      >
-        <div className="max-w-md px-4 text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-slate-800">
-            <Film className="size-10 text-slate-400" aria-hidden="true" />
+      <Dialog open onOpenChange={handleDialogOpenChange}>
+        <DialogFullscreenContent
+          ref={containerRef}
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+          )}
+          onOpenAutoFocus={handleDialogOpenAutoFocus}
+          onEscapeKeyDown={handleDialogEscapeKeyDown}
+        >
+          <div className="max-w-md px-4 text-center">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-slate-800">
+              <Film className="size-10 text-slate-400" aria-hidden="true" />
+            </div>
+            <DialogTitle className="mb-2 text-xl font-semibold text-white">
+              No Trailer Available
+            </DialogTitle>
+            <DialogDescription className="mb-6 text-slate-400">
+              This movie doesn't have a trailer yet.
+            </DialogDescription>
+            <button
+              type="button"
+              ref={closeButtonRef}
+              onClick={handleClose}
+              className={cn(
+                MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+              )}
+            >
+              <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+              Go Back
+            </button>
           </div>
-          <h2 className="mb-2 text-xl font-semibold text-white">
-            No Trailer Available
-          </h2>
-          <p className="mb-6 text-slate-400">
-            This movie doesn't have a trailer yet.
-          </p>
-          <button
-            type="button"
-            ref={closeButtonRef}
-            onClick={handleClose}
-            className={cn(
-              MOTION_PLAYER_CHROME_BUTTON_CLASS,
-              "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
-            )}
-          >
-            <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-            Go Back
-          </button>
-        </div>
-      </div>
+        </DialogFullscreenContent>
+      </Dialog>
     );
   }
 
   if (!trailerKey && !data) {
     return (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Loading trailer"
-        className={cn(
-          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-          "fixed inset-0 z-50 flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
-        )}
-      >
-        <div className="text-center">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
-            <Spinner className="size-10 text-amber-400" />
+      <Dialog open onOpenChange={handleDialogOpenChange}>
+        <DialogFullscreenContent
+          ref={containerRef}
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+          )}
+          onOpenAutoFocus={handleDialogOpenAutoFocus}
+          onEscapeKeyDown={handleDialogEscapeKeyDown}
+        >
+          <DialogTitle className="sr-only">Loading trailer</DialogTitle>
+          <DialogDescription className="sr-only">
+            Please wait while the trailer loads.
+          </DialogDescription>
+
+          <div className="text-center">
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
+              <Spinner className="size-10 text-amber-400" />
+            </div>
+            <p className="text-lg font-medium text-white">Loading trailer...</p>
+            <p className="mt-2 text-sm text-slate-400">Please wait</p>
           </div>
-          <p className="text-lg font-medium text-white">Loading trailer...</p>
-          <p className="mt-2 text-sm text-slate-400">Please wait</p>
-        </div>
-      </div>
+        </DialogFullscreenContent>
+      </Dialog>
     );
   }
 
   const isLoading = trailerKey && !isReady;
 
   return (
-    <div
-      ref={containerRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onKeyDown={handleContainerKeyDown}
-      className={cn(
-        MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-        "fixed inset-0 z-50 flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
-      )}
-    >
+    <Dialog open onOpenChange={handleDialogOpenChange}>
+      <DialogFullscreenContent
+        ref={containerRef}
+        className={cn(
+          MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+          "flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+        )}
+        onOpenAutoFocus={handleDialogOpenAutoFocus}
+        onEscapeKeyDown={handleDialogEscapeKeyDown}
+      >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
 
-      <p className="sr-only">
+      <DialogDescription className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or left arrow to rewind
         10 seconds, L or right arrow to forward 10 seconds, up/down arrows for
         volume, M to mute, F for fullscreen, Escape to exit fullscreen or close.
-      </p>
+      </DialogDescription>
 
       <header
         className={cn(
@@ -385,9 +400,9 @@ function TrailerPage() {
         <div className="flex items-center gap-3">
           <Film className="size-5 text-amber-400" aria-hidden="true" />
           <div>
-            <h1 className="truncate text-base font-semibold text-white">
+            <DialogTitle className="truncate text-base font-semibold text-white">
               {title}
-            </h1>
+            </DialogTitle>
             <p className="text-xs text-slate-400">Now Playing</p>
           </div>
         </div>
@@ -543,6 +558,7 @@ function TrailerPage() {
           </div>
         </div>
       </footer>
-    </div>
+      </DialogFullscreenContent>
+    </Dialog>
   );
 }

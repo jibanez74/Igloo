@@ -46,6 +46,8 @@ import {
 } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
+  ApiResponseType,
+  PlaybackSettingsResponseType,
   PlaybackSettingsType,
   UpdatePlaybackSettingsRequest,
 } from "@/types";
@@ -82,6 +84,21 @@ function formFromSettings(
   }
 
   return form;
+}
+
+function formsMatchSettings(
+  form: UpdatePlaybackSettingsRequest,
+  settings: PlaybackSettingsType,
+) {
+  const settingsForm = formFromSettings(settings);
+  return (
+    form.preferred_profile === settingsForm.preferred_profile &&
+    form.download_mbps === settingsForm.download_mbps &&
+    form.preferred_audio_language === settingsForm.preferred_audio_language &&
+    form.preferred_subtitle_language ===
+      settingsForm.preferred_subtitle_language &&
+    form.server_upload_mbps === settingsForm.server_upload_mbps
+  );
 }
 
 function validatePlaybackSettingsForm(
@@ -164,14 +181,17 @@ function PlaybackSettings() {
     return null;
   }
 
-  return <PlaybackSettingsForm settings={settings} />;
+  return <PlaybackSettingsForm settings={settings} userId={userId} />;
 }
 
 type PlaybackSettingsFormProps = {
   settings: PlaybackSettingsType;
+  userId: number;
 };
 
-function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
+type PlaybackSettingsQueryData = ApiResponseType<PlaybackSettingsResponseType>;
+
+function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
   const queryClient = useQueryClient();
   const downloadMbpsId = useId();
   const preferredProfileId = useId();
@@ -190,18 +210,46 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   const [, startTransition] = useTransition();
 
   if (settings !== syncedSettings) {
+    const formIsClean = formsMatchSettings(form, syncedSettings);
     setSyncedSettings(settings);
-    setForm(formFromSettings(settings));
-    setValidationMessage("");
+    if (formIsClean) {
+      setForm(formFromSettings(settings));
+      setValidationMessage("");
+    }
   }
 
   const updateMutation = useMutation({
     mutationFn: updatePlaybackSettings,
-    onSuccess: res => {
+    onSuccess: (res, nextSettings) => {
       if (res.error) {
         showActionFailed("save playback settings", res.message);
         return;
       }
+      queryClient.setQueryData<PlaybackSettingsQueryData>(
+        [PLAYBACK_SETTINGS_KEY, userId],
+        current => {
+          const currentSettings =
+            current?.error === false && current.data?.settings
+              ? current.data.settings
+              : syncedSettings;
+          const serverUpload =
+            nextSettings.server_upload_mbps !== undefined
+              ? nextSettings.server_upload_mbps
+              : currentSettings.server_upload_mbps;
+
+          return {
+            error: false,
+            message: res.message,
+            data: {
+              settings: {
+                ...currentSettings,
+                ...res.data.settings,
+                server_upload_mbps: serverUpload,
+              },
+            },
+          };
+        },
+      );
       queryClient.invalidateQueries({ queryKey: [PLAYBACK_SETTINGS_KEY] });
       queryClient.invalidateQueries({ queryKey: [GENERAL_SETTINGS_KEY] });
       showSuccess("Playback settings saved");
@@ -278,7 +326,7 @@ function PlaybackSettingsForm({ settings }: PlaybackSettingsFormProps) {
   };
 
   const resetForm = () => {
-    setForm(formFromSettings(settings));
+    setForm(formFromSettings(syncedSettings));
     setValidationMessage("");
   };
 
