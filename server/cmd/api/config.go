@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"igloo/cmd/internal/helpers"
-
-	"github.com/joho/godotenv"
 )
 
 type RuntimeConfig struct {
@@ -25,7 +23,7 @@ type RuntimeConfig struct {
 }
 
 func LoadRuntimeEnvFile() (string, bool, error) {
-	err := godotenv.Load(helpers.ENV_FILE)
+	err := helpers.LoadEnvFile(helpers.ENV_FILE)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", false, nil
