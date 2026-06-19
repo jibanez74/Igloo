@@ -278,7 +278,7 @@ async function mockMusicIndexApi(
       return;
     }
 
-    if (url.pathname === "/api/spotify/status") {
+    if (url.pathname === "/api/spotify/status" && method === "GET") {
       await fulfillJSON(route, apiResponse({ available: true }));
       return;
     }
