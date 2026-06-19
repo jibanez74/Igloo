@@ -233,12 +233,21 @@ describe("RequestMovieDialog", () => {
       });
     });
 
-    const option = await screen.findByRole("option", { name: /Coherence/i });
-    expect(screen.getByRole("button", { name: "Send Request" })).toBeDisabled();
+    const resultRadio = await screen.findByRole("radio", { name: /Coherence/i });
+    const sendRequestButton = screen.getByRole("button", { name: "Send Request" });
 
-    option.focus();
-    await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: "Send Request" }));
+    expect(sendRequestButton).toBeDisabled();
+
+    await user.tab();
+    expect(resultRadio).toHaveFocus();
+
+    await user.keyboard("{Space}");
+    await waitFor(() => {
+      expect(resultRadio).toBeChecked();
+      expect(sendRequestButton).toBeEnabled();
+    });
+
+    await user.click(sendRequestButton);
 
     await waitFor(() => {
       expect(apiMocks.createNotification).toHaveBeenCalledWith({
@@ -280,6 +289,13 @@ describe("RequestMovieDialog", () => {
       success({
         results: [
           tmdbResult({
+            tmdb_id: 603,
+            title: "The Matrix",
+            already_in_library: false,
+          }),
+          tmdbResult({
+            tmdb_id: 604,
+            title: "The Matrix Reloaded",
             already_in_library: true,
             library_movie_id: 22,
           }),
@@ -293,11 +309,32 @@ describe("RequestMovieDialog", () => {
     await user.type(screen.getByLabelText("Title"), "The Matrix");
     await user.click(screen.getByRole("button", { name: "Search TMDB" }));
 
-    await user.click(await screen.findByRole("option", { name: /The Matrix/i }));
+    const resultRadios = await screen.findAllByRole("radio");
+    const sendRequestButton = screen.getByRole("button", { name: "Send Request" });
+
+    await user.tab();
+    expect(resultRadios[0]).toHaveFocus();
+
+    await user.keyboard("{Space}");
+    await waitFor(() => {
+      expect(resultRadios[0]).toBeChecked();
+      expect(sendRequestButton).toBeEnabled();
+    });
+
+    await user.keyboard("{ArrowDown}");
+    expect(resultRadios[1]).toHaveFocus();
+    await waitFor(() => {
+      expect(resultRadios[1]).toBeChecked();
+      expect(sendRequestButton).toBeDisabled();
+    });
+
+    await user.tab();
 
     expect(screen.getByRole("link", { name: "Open existing movie" }))
+      .toHaveFocus();
+    expect(screen.getByRole("link", { name: "Open existing movie" }))
       .toHaveAttribute("href", "/movies/22");
-    expect(screen.getByRole("button", { name: "Send Request" })).toBeDisabled();
+    expect(sendRequestButton).toBeDisabled();
     expect(apiMocks.createNotification).not.toHaveBeenCalled();
   });
 });

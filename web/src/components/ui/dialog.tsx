@@ -78,6 +78,23 @@ function DialogContent({
   )
 }
 
+const DialogFullscreenContent = React.forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal data-slot="dialog-portal">
+    <DialogPrimitive.Content
+      ref={ref}
+      data-slot="dialog-fullscreen-content"
+      className={cn("fixed inset-0 z-50 outline-none", className)}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogFullscreenContent.displayName = "DialogFullscreenContent";
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -133,6 +150,7 @@ export {
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogFullscreenContent,
   DialogHeader,
   DialogOverlay,
   DialogPortal,

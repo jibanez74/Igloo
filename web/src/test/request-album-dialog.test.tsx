@@ -218,12 +218,21 @@ describe("RequestAlbumDialog", () => {
       });
     });
 
-    const option = await screen.findByRole("option", { name: /Hazel City/i });
-    expect(screen.getByRole("button", { name: "Send Request" })).toBeDisabled();
+    const resultRadio = await screen.findByRole("radio", { name: /Hazel City/i });
+    const sendRequestButton = screen.getByRole("button", { name: "Send Request" });
 
-    option.focus();
-    await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: "Send Request" }));
+    expect(sendRequestButton).toBeDisabled();
+
+    await user.tab();
+    expect(resultRadio).toHaveFocus();
+
+    await user.keyboard("{Space}");
+    await waitFor(() => {
+      expect(resultRadio).toBeChecked();
+      expect(sendRequestButton).toBeEnabled();
+    });
+
+    await user.click(sendRequestButton);
 
     await waitFor(() => {
       expect(apiMocks.createNotification).toHaveBeenCalledWith({
@@ -267,6 +276,13 @@ describe("RequestAlbumDialog", () => {
       success({
         results: [
           spotifyAlbumResult({
+            spotify_id: "album111",
+            title: "Green Light",
+            artist_names: ["Mia June"],
+            already_in_library: false,
+          }),
+          spotifyAlbumResult({
+            spotify_id: "album222",
             already_in_library: true,
             library_album_id: 33,
           }),
@@ -280,12 +296,24 @@ describe("RequestAlbumDialog", () => {
     await user.type(screen.getByLabelText("Album title"), "Blue Record");
     await user.click(screen.getByRole("button", { name: "Search Spotify" }));
 
-    await user.click(await screen.findByRole("option", { name: /Blue Record/i }));
+    const resultRadios = await screen.findAllByRole("radio");
+    const sendRequestButton = screen.getByRole("button", { name: "Send Request" });
+
+    await user.tab();
+    expect(resultRadios[0]).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(resultRadios[1]).toHaveFocus();
+    await waitFor(() => {
+      expect(resultRadios[1]).toBeChecked();
+      expect(sendRequestButton).toBeEnabled();
+    });
+
     expect(
       screen.getByText(/already in your library/i),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Send Request" }));
+    await user.click(sendRequestButton);
 
     await waitFor(() => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -329,7 +357,7 @@ describe("RequestAlbumDialog", () => {
 
     await user.type(screen.getByLabelText("Album title"), "Blue Record");
     await user.click(screen.getByRole("button", { name: "Search Spotify" }));
-    await user.click(await screen.findByRole("option", { name: /Blue Record/i }));
+    await user.click(await screen.findByRole("radio", { name: /Blue Record/i }));
     await user.click(screen.getByRole("button", { name: "Send Request" }));
 
     await waitFor(() => {

@@ -204,7 +204,6 @@ export default function VolumeControl({
         aria-label="Adjust volume"
         aria-controls={panelId}
         aria-expanded={isMinimizedPanelOpen}
-        aria-haspopup="dialog"
       >
         {getVolumeIcon()}
       </button>
@@ -212,7 +211,7 @@ export default function VolumeControl({
       {isMinimizedPanelOpen && (
         <div
           id={panelId}
-          role="dialog"
+          role="group"
           aria-label="Volume controls"
           className={cn(
             MOTION_PLAYER_CHROME_PANEL_CLASS,

@@ -1,5 +1,6 @@
-import { createRef } from "react";
+import { createRef, useRef, useState } from "react";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "@/components/AudioPlayer";
 import {
@@ -112,6 +113,33 @@ function renderAudioPlayer({
     ...view,
     audio,
   };
+}
+
+function AudioPlayerFocusHarness() {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentTrack = track();
+
+  return (
+    <>
+      <button type="button">Outside player</button>
+      <AudioPlayer
+        track={currentTrack}
+        tracks={[currentTrack]}
+        albumCover="/covers/7.jpg"
+        albumTitle="Blue Record"
+        musicianName="The Band"
+        onTrackChange={vi.fn()}
+        audioRef={audioRef}
+        isPlaying={false}
+        onPlayStateChange={vi.fn()}
+        isExpanded={isExpanded}
+        onMinimize={() => setIsExpanded(false)}
+        onExpand={() => setIsExpanded(true)}
+        onClose={vi.fn()}
+      />
+    </>
+  );
 }
 
 function mockMediaSession() {
@@ -294,5 +322,68 @@ describe("AudioPlayer Media Session", () => {
     expect(screen.getByRole("button", { name: "Mute" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
+  });
+
+  it("focuses playback controls when the expanded player opens", async () => {
+    renderAudioPlayer({ isExpanded: true, onClose: vi.fn() });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Play" })).toHaveFocus();
+    });
+  });
+
+  it("keeps tab focus inside the expanded player", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">Outside player</button>
+        <AudioPlayer
+          track={track()}
+          tracks={[track()]}
+          albumCover="/covers/7.jpg"
+          albumTitle="Blue Record"
+          musicianName="The Band"
+          onTrackChange={vi.fn()}
+          audioRef={createRef<HTMLAudioElement>()}
+          isPlaying={false}
+          onPlayStateChange={vi.fn()}
+          isExpanded
+          onMinimize={vi.fn()}
+          onExpand={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </>,
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Now playing: Alabaster by The Band",
+    });
+    const focusableElements = dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled])',
+    );
+    const lastElement = focusableElements[focusableElements.length - 1];
+    lastElement.focus();
+
+    await user.tab();
+
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("restores focus to the minimized expand control after Escape", async () => {
+    const user = userEvent.setup();
+    render(<AudioPlayerFocusHarness />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Play" })).toHaveFocus();
+    });
+
+    await user.keyboard("{Escape}");
+
+    const expandButton = await screen.findByRole("button", {
+      name: /expand player\. now playing: alabaster by the band/i,
+    });
+    await waitFor(() => {
+      expect(expandButton).toHaveFocus();
+    });
   });
 });

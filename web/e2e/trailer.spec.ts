@@ -174,4 +174,36 @@ test.describe("Trailer playback chrome", () => {
       browserIssues.assertClean();
     });
   }
+
+  test("keeps keyboard focus in the trailer dialog and closes on Escape", async ({
+    page,
+  }) => {
+    const env = readE2EEnv();
+    const browserIssues = trackBrowserIssues(page);
+
+    await login(page, env);
+    await mockYouTubePlayer(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
+      { waitUntil: "networkidle" },
+    );
+
+    await expectTrailerChrome(page);
+
+    const closeButton = page.getByRole("button", {
+      name: "Close trailer (Escape)",
+    });
+    const fullscreenButton = page.getByRole("button", { name: "Fullscreen (F)" });
+
+    await expect(closeButton).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(fullscreenButton).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(closeButton).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/$/);
+    browserIssues.assertClean();
+  });
 });

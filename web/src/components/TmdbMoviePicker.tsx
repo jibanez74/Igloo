@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Film, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { searchTmdbMovies } from "@/lib/api";
 import { TMDB_POSTER_SIZE } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
+import { cn } from "@/lib/utils";
 import type { ApiResponseType, TmdbSearchMoviesRequest, TmdbSearchResultType } from "@/types";
 
 type TmdbMoviePickerProps = {
@@ -37,6 +38,7 @@ export default function TmdbMoviePicker({
   searchFn = searchTmdbMovies,
   showTmdbIdInput = false,
 }: TmdbMoviePickerProps) {
+  const pickerId = useId().replace(/:/g, "");
   const [title, setTitle] = useState(initialTitle);
   const [year, setYear] = useState(initialYear);
   const [tmdbIdInput, setTmdbIdInput] = useState(initialTmdbId);
@@ -51,6 +53,52 @@ export default function TmdbMoviePicker({
       ? isResultBlocked(selectedResult)
       : false;
   const canSearch = title.trim().length > 0 || tmdbIdInput.trim().length > 0;
+  const resultsGroupName = `${pickerId}-tmdb-result`;
+  const resultsLabelId = `${pickerId}-tmdb-results-label`;
+
+  function getResultInputId(tmdbId: number) {
+    return `${pickerId}-tmdb-result-${tmdbId}`;
+  }
+
+  function handleResultArrowKey(
+    event: KeyboardEvent<HTMLInputElement>,
+    currentIndex: number,
+  ) {
+    if (
+      event.key === " "
+      || event.key === "Space"
+      || event.key === "Spacebar"
+      || event.code === "Space"
+    ) {
+      event.preventDefault();
+      setSelectedId(results[currentIndex].tmdb_id);
+      return;
+    }
+
+    if (results.length < 2) {
+      return;
+    }
+
+    let nextIndex = currentIndex;
+
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % results.length;
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + results.length) % results.length;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextResult = results[nextIndex];
+    const nextInput = document.getElementById(getResultInputId(nextResult.tmdb_id));
+    if (nextInput instanceof HTMLInputElement) {
+      nextInput.focus();
+    }
+
+    setSelectedId(nextResult.tmdb_id);
+  }
 
   async function handleSearch() {
     if (!canSearch) return;
@@ -162,23 +210,34 @@ export default function TmdbMoviePicker({
       </Button>
 
       {results.length > 0 && (
-        <div className="space-y-2">
+        <fieldset className="space-y-2">
+          <legend id={resultsLabelId} className="sr-only">
+            TMDB movie results
+          </legend>
           <p className="text-sm text-slate-400">
             {results.length} result{results.length === 1 ? "" : "s"} found
           </p>
 
-          <ul className="max-h-64 space-y-2 overflow-y-auto" role="listbox">
-            {results.map(result => (
-              <TmdbResultCard
-                key={result.tmdb_id}
-                result={result}
-                selected={selectedId === result.tmdb_id}
-                onSelect={() => setSelectedId(result.tmdb_id)}
-                meta={renderResultMeta?.(result)}
-              />
-            ))}
+          <ul className="max-h-64 space-y-2 overflow-y-auto">
+            {results.map((result, index) => {
+              const meta = renderResultMeta?.(result);
+
+              return (
+                <TmdbResultCard
+                  key={result.tmdb_id}
+                  inputId={getResultInputId(result.tmdb_id)}
+                  meta={meta}
+                  metaId={meta ? `${pickerId}-tmdb-meta-${result.tmdb_id}` : undefined}
+                  name={resultsGroupName}
+                  onKeyDown={event => handleResultArrowKey(event, index)}
+                  onSelect={() => setSelectedId(result.tmdb_id)}
+                  result={result}
+                  selected={selectedId === result.tmdb_id}
+                />
+              );
+            })}
           </ul>
-        </div>
+        </fieldset>
       )}
 
       <Button
@@ -195,12 +254,20 @@ export default function TmdbMoviePicker({
 }
 
 function TmdbResultCard({
+  inputId,
   meta,
+  metaId,
+  name,
+  onKeyDown,
   onSelect,
   result,
   selected,
 }: {
+  inputId: string;
   meta?: ReactNode;
+  metaId?: string;
+  name: string;
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onSelect: () => void;
   result: TmdbSearchResultType;
   selected: boolean;
@@ -209,53 +276,62 @@ function TmdbResultCard({
     ? buildTmdbImageUrl(result.poster_path, TMDB_POSTER_SIZE)
     : null;
   const releaseYear = result.release_date?.slice(0, 4);
+  const labelId = `${inputId}-label`;
 
   return (
     <li
-      role="option"
-      aria-selected={selected}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={event => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      className={`flex cursor-pointer gap-3 rounded-lg border p-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 ${
+      className={cn(
+        "overflow-hidden rounded-lg border transition-colors",
         selected
           ? "border-amber-500 bg-amber-500/10"
-          : "border-slate-700 bg-slate-800/60 hover:border-slate-600"
-      }`}
-    >
-      {posterUrl ? (
-        <img
-          src={posterUrl}
-          alt=""
-          className="h-20 w-14 shrink-0 rounded-sm object-cover"
-        />
-      ) : (
-        <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-sm bg-slate-700">
-          <Film className="size-5 text-slate-500" aria-hidden="true" />
-        </div>
+          : "border-slate-700 bg-slate-800/60 hover:border-slate-600",
       )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-white">
-          {result.title}
-          {releaseYear && (
-            <span className="ml-1 text-slate-400">({releaseYear})</span>
-          )}
-        </p>
-        <p className="mt-0.5 text-xs text-slate-500">
-          TMDB ID: {result.tmdb_id}
-        </p>
-        {result.overview && (
-          <p className="mt-1 line-clamp-2 text-sm text-slate-400">
-            {result.overview}
-          </p>
+    >
+      <input
+        id={inputId}
+        type="radio"
+        name={name}
+        checked={selected}
+        onChange={onSelect}
+        onKeyDown={onKeyDown}
+        aria-labelledby={labelId}
+        aria-describedby={metaId}
+        className="peer sr-only"
+      />
+      <Label
+        id={labelId}
+        htmlFor={inputId}
+        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/60"
+      >
+        {posterUrl ? (
+          <img
+            src={posterUrl}
+            alt=""
+            className="h-20 w-14 shrink-0 rounded-sm object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-sm bg-slate-700">
+            <Film className="size-5 text-slate-500" aria-hidden="true" />
+          </div>
         )}
-        {meta ? <div className="mt-2 text-sm">{meta}</div> : null}
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-white">
+            {result.title}
+            {releaseYear && (
+              <span className="ml-1 text-slate-400">({releaseYear})</span>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            TMDB ID: {result.tmdb_id}
+          </p>
+          {result.overview && (
+            <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+              {result.overview}
+            </p>
+          )}
+        </div>
+      </Label>
+      {meta ? <div id={metaId} className="px-2 pb-2 pl-19 text-sm">{meta}</div> : null}
     </li>
   );
 }

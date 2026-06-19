@@ -98,6 +98,7 @@ function TmdbTab({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+
   async function handleApply(selectedId: number) {
     const res = await identifyMovie(movieId, selectedId);
     if (res.error) {
