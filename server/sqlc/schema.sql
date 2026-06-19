@@ -47,13 +47,6 @@ CREATE TABLE
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_singleton ON settings ((1));
 
-CREATE TABLE
-  IF NOT EXISTS app_metadata (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
 -- musicians
 CREATE TABLE
   IF NOT EXISTS musicians (

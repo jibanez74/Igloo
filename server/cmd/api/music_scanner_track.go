@@ -69,9 +69,10 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
 
+	fileName := filepath.Base(file.path)
 	params := database.UpsertTrackParams{
 		FilePath: file.path,
-		FileName: filepath.Base(file.path),
+		FileName: fileName,
 		Size:     file.size,
 	}
 
@@ -79,7 +80,7 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	if tags.Title != "" {
 		params.Title = tags.Title
 	} else {
-		params.Title = filepath.Base(file.path)
+		params.Title = fileName
 	}
 
 	if tags.SortName != "" {
@@ -195,32 +196,15 @@ func (app *Application) resolveTrackMusicians(ctx context.Context, scan *musicSc
 	}
 
 	credits := parseCompoundArtistCredits(artistTag)
-	splitArtists := shouldSplitCompoundArtistCreditsLocally(credits)
-	var combined *resolvedMusician
-
-	if !splitArtists && credits.hasDelimiter && len(credits.parts) >= 2 {
+	if !shouldSplitCompoundArtistCreditsLocally(credits) {
 		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
 		if err != nil {
 			return nil, fmt.Errorf("musician failed: %w", err)
 		}
-		combined = musician
-		splitArtists = musician.splitCompoundOnNoMatch
-	}
 
-	if len(credits.parts) < 2 {
-		splitArtists = false
-	}
-
-	if !splitArtists {
-		if combined != nil {
-			return []resolvedMusician{*combined}, nil
+		if len(credits.parts) < 2 || !credits.hasDelimiter || !musician.splitCompoundOnNoMatch {
+			return []resolvedMusician{*musician}, nil
 		}
-
-		musician, err := app.resolveMusician(ctx, scan, artistTag, sortArtist)
-		if err != nil {
-			return nil, fmt.Errorf("musician failed: %w", err)
-		}
-		return []resolvedMusician{*musician}, nil
 	}
 
 	musicians := make([]resolvedMusician, 0, len(credits.parts))
@@ -242,11 +226,7 @@ func shouldSplitCompoundArtistCredits(err error) bool {
 		return false
 	}
 
-	return matchErr.Info.Reason == "no_results" || matchErr.Info.Reason == "score_below_threshold"
-}
-
-func splitCompoundArtistCredits(artistTag string) []string {
-	return parseCompoundArtistCredits(artistTag).parts
+	return musicSpotifyReasonSplitsCompound(matchErr.Info.Reason)
 }
 
 func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {

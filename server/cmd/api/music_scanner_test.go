@@ -1487,6 +1487,85 @@ func TestProcessMusicBatchClearsTrackGenresWhenGenreRemoved(t *testing.T) {
 	}
 }
 
+func TestProcessMusicBatchClearsArtistAlbumAndJoinRowsWhenTagsRemoved(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Removed Tags.m4a")
+	ffprobeStub := newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Removed Tags",
+			Artist: "Tagged Artist",
+			Album:  "Tagged Album",
+			Genre:  "Tagged Genre",
+		}),
+	})
+	app.Ffprobe = ffprobeStub
+
+	file := trackFile{path: trackPath, ext: "m4a", size: 5}
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 1 {
+		t.Fatalf("initial track_musicians count = %d, want 1", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_genres AS tg
+		INNER JOIN tracks AS t ON t.id = tg.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 1 {
+		t.Fatalf("initial track_genres count = %d, want 1", got)
+	}
+
+	ffprobeStub.results[trackPath] = testMusicMetadataWithTags(ffprobe.FormatTags{
+		Title: "Removed Tags",
+	})
+	file.size = 8
+
+	scanned, skipped, errCount = app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	var musicianID sql.NullInt64
+	var albumID sql.NullInt64
+	err := app.DB.QueryRow("SELECT musician_id, album_id FROM tracks WHERE file_path = ?", trackPath).Scan(&musicianID, &albumID)
+	if err != nil {
+		t.Fatalf("get rescanned track relationships: %v", err)
+	}
+	if musicianID.Valid {
+		t.Fatalf("track musician_id = %#v, want null after artist tag removal", musicianID)
+	}
+	if albumID.Valid {
+		t.Fatalf("track album_id = %#v, want null after album tag removal", albumID)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 0 {
+		t.Fatalf("track_musicians count after tag removal = %d, want 0", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_genres AS tg
+		INNER JOIN tracks AS t ON t.id = tg.track_id
+		WHERE t.file_path = ?
+	`, trackPath); got != 0 {
+		t.Fatalf("track_genres count after tag removal = %d, want 0", got)
+	}
+}
+
 func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -1545,6 +1624,152 @@ func TestProcessMusicBatchPersistsSpotifyMatchedRows(t *testing.T) {
 	}
 	if albumStatus != musicSpotifyStatusMatched || !albumSpotifyID.Valid || albumSpotifyID.String != "album123" {
 		t.Fatalf("album match = %s/%#v, want matched/album123", albumStatus, albumSpotifyID)
+	}
+}
+
+func TestProcessMusicBatchPersistsSpotifyMetadataAndGenres(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	app.Ffprobe = &countingMusicScannerFfprobe{result: testMusicMetadata()}
+	app.Spotify = &musicScannerSpotifyStub{
+		artist: &spotifylib.FullArtist{
+			SimpleArtist: spotifylib.SimpleArtist{
+				ID:   spotifylib.ID("artist-meta-123"),
+				Name: "Test Artist",
+			},
+			Popularity: 76,
+			Genres:     []string{"dream pop", "indie rock"},
+			Followers: spotifylib.Followers{
+				Count: 1500000,
+			},
+			Images: []spotifylib.Image{
+				{URL: "https://i.scdn.co/artist-meta.jpg"},
+			},
+		},
+		album: &spotifylib.FullAlbum{
+			SimpleAlbum: spotifylib.SimpleAlbum{
+				ID:                   spotifylib.ID("album-meta-123"),
+				Name:                 "Test Album",
+				ReleaseDate:          "2024-04-12",
+				ReleaseDatePrecision: "day",
+				TotalTracks:          10,
+				Images: []spotifylib.Image{
+					{URL: "https://i.scdn.co/album-meta.jpg"},
+				},
+			},
+			Popularity: 64,
+			Genres:     []string{"dream pop", "shoegaze"},
+		},
+	}
+
+	file := trackFile{
+		path: filepath.Join(t.TempDir(), "Test Track.m4a"),
+		ext:  "m4a",
+		size: 5,
+	}
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{file})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	var musicianSpotifyID sql.NullString
+	var musicianPopularity sql.NullFloat64
+	var musicianFollowers sql.NullInt64
+	var musicianSummary sql.NullString
+	var musicianThumb sql.NullString
+	err := app.DB.QueryRow(`
+		SELECT spotify_id, spotify_popularity, spotify_followers, summary, thumb
+		FROM musicians
+		WHERE name = ?
+	`, "Test Artist").Scan(&musicianSpotifyID, &musicianPopularity, &musicianFollowers, &musicianSummary, &musicianThumb)
+	if err != nil {
+		t.Fatalf("get musician metadata: %v", err)
+	}
+	if !musicianSpotifyID.Valid || musicianSpotifyID.String != "artist-meta-123" {
+		t.Fatalf("musician spotify_id = %#v, want artist-meta-123", musicianSpotifyID)
+	}
+	if !musicianPopularity.Valid || musicianPopularity.Float64 != 76 {
+		t.Fatalf("musician popularity = %#v, want 76", musicianPopularity)
+	}
+	if !musicianFollowers.Valid || musicianFollowers.Int64 != 1500000 {
+		t.Fatalf("musician followers = %#v, want 1500000", musicianFollowers)
+	}
+	wantSummary := "Test Artist known for dream pop, indie rock is a popular artist with 1.5M followers on Spotify."
+	if !musicianSummary.Valid || musicianSummary.String != wantSummary {
+		t.Fatalf("musician summary = %#v, want %q", musicianSummary, wantSummary)
+	}
+	if !musicianThumb.Valid || musicianThumb.String != "https://i.scdn.co/artist-meta.jpg" {
+		t.Fatalf("musician thumb = %#v, want Spotify artist image", musicianThumb)
+	}
+
+	var albumSpotifyID sql.NullString
+	var albumPopularity sql.NullFloat64
+	var totalTracks sql.NullInt64
+	var releaseDate sql.NullString
+	var year sql.NullInt64
+	var cover sql.NullString
+	err = app.DB.QueryRow(`
+		SELECT spotify_id, spotify_popularity, total_tracks, release_date, year, cover
+		FROM albums
+		WHERE title = ? AND musician = ?
+	`, "Test Album", "Test Artist").Scan(&albumSpotifyID, &albumPopularity, &totalTracks, &releaseDate, &year, &cover)
+	if err != nil {
+		t.Fatalf("get album metadata: %v", err)
+	}
+	if !albumSpotifyID.Valid || albumSpotifyID.String != "album-meta-123" {
+		t.Fatalf("album spotify_id = %#v, want album-meta-123", albumSpotifyID)
+	}
+	if !albumPopularity.Valid || albumPopularity.Float64 != 64 {
+		t.Fatalf("album popularity = %#v, want 64", albumPopularity)
+	}
+	if !totalTracks.Valid || totalTracks.Int64 != 10 {
+		t.Fatalf("album total_tracks = %#v, want 10", totalTracks)
+	}
+	if !releaseDate.Valid || releaseDate.String != "2024-04-12" {
+		t.Fatalf("album release_date = %#v, want 2024-04-12", releaseDate)
+	}
+	if !year.Valid || year.Int64 != 2024 {
+		t.Fatalf("album year = %#v, want 2024", year)
+	}
+	if !cover.Valid || cover.String != "https://i.scdn.co/album-meta.jpg" {
+		t.Fatalf("album cover = %#v, want Spotify album image", cover)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag IN (?, ?, ?)", "music", "dream pop", "indie rock", "shoegaze"); got != 3 {
+		t.Fatalf("Spotify genre count = %d, want 3", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM genres WHERE genre_type = ? AND tag = ?", "music", "dream pop"); got != 1 {
+		t.Fatalf("shared dream pop genre rows = %d, want 1", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM musician_genres AS mg
+		INNER JOIN musicians AS m ON m.id = mg.musician_id
+		INNER JOIN genres AS g ON g.id = mg.genre_id
+		WHERE m.name = ? AND g.tag IN (?, ?)
+	`, "Test Artist", "dream pop", "indie rock"); got != 2 {
+		t.Fatalf("musician_genres count = %d, want 2", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM album_genres AS ag
+		INNER JOIN albums AS a ON a.id = ag.album_id
+		INNER JOIN genres AS g ON g.id = ag.genre_id
+		WHERE a.title = ? AND a.musician = ? AND g.tag IN (?, ?)
+	`, "Test Album", "Test Artist", "dream pop", "shoegaze"); got != 2 {
+		t.Fatalf("album_genres count = %d, want 2", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM musician_genres AS mg
+		INNER JOIN musicians AS m ON m.id = mg.musician_id
+		INNER JOIN album_genres AS ag ON ag.genre_id = mg.genre_id
+		INNER JOIN albums AS a ON a.id = ag.album_id
+		INNER JOIN genres AS g ON g.id = mg.genre_id
+		WHERE m.name = ? AND a.title = ? AND a.musician = ? AND g.tag = ?
+	`, "Test Artist", "Test Album", "Test Artist", "dream pop"); got != 1 {
+		t.Fatalf("shared dream pop relationship count = %d, want 1", got)
 	}
 }
 
@@ -1863,6 +2088,66 @@ func TestProcessMusicBatchKeepsAmpersandOnlyArtistCombinedOffline(t *testing.T) 
 		WHERE t.file_path = ? AND m.name = ?
 	`, trackPath, "Brooks & Dunn"); got != 1 {
 		t.Fatalf("combined track_musicians count = %d, want 1", got)
+	}
+}
+
+func TestProcessMusicBatchSplitsAmpersandArtistAfterSpotifyNoMatch(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	trackPath := filepath.Join(t.TempDir(), "Spotify Split Artist.m4a")
+	app.Ffprobe = newMusicScannerFfprobeByPath(map[string]*ffprobe.FfprobeResult{
+		trackPath: testMusicMetadataWithTags(ffprobe.FormatTags{
+			Title:  "Spotify Split Artist",
+			Artist: "Artist One & Artist Two",
+		}),
+	})
+	app.Spotify = &musicScannerSpotifyStub{
+		artistErr: &spotifyapi.MatchError{
+			Info: spotifyapi.MatchDebugInfo{
+				Lookup: "artist",
+				Input:  "Artist One & Artist Two",
+				Reason: "no_results",
+			},
+		},
+	}
+
+	scanned, skipped, errCount := app.processMusicBatch(context.Background(), []trackFile{
+		{path: trackPath, ext: "m4a", size: 5},
+	})
+	if scanned != 1 || skipped != 0 || errCount != 0 {
+		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name = ?", "Artist One & Artist Two"); got != 0 {
+		t.Fatalf("combined musician count = %d, want 0", got)
+	}
+	if got := countMusicScannerRows(t, app.DB, "SELECT COUNT(*) FROM musicians WHERE name IN (?, ?)", "Artist One", "Artist Two"); got != 2 {
+		t.Fatalf("split musician count = %d, want 2", got)
+	}
+
+	var primaryArtist string
+	err := app.DB.QueryRow(`
+		SELECT m.name
+		FROM tracks AS t
+		INNER JOIN musicians AS m ON m.id = t.musician_id
+		WHERE t.file_path = ?
+	`, trackPath).Scan(&primaryArtist)
+	if err != nil {
+		t.Fatalf("get primary artist: %v", err)
+	}
+	if primaryArtist != "Artist One" {
+		t.Fatalf("primary artist = %q, want Artist One", primaryArtist)
+	}
+
+	if got := countMusicScannerRows(t, app.DB, `
+		SELECT COUNT(*)
+		FROM track_musicians AS tm
+		INNER JOIN tracks AS t ON t.id = tm.track_id
+		INNER JOIN musicians AS m ON m.id = tm.musician_id
+		WHERE t.file_path = ? AND m.name IN (?, ?)
+	`, trackPath, "Artist One", "Artist Two"); got != 2 {
+		t.Fatalf("track_musicians split artist count = %d, want 2", got)
 	}
 }
 
