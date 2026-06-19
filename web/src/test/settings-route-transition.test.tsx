@@ -13,6 +13,7 @@ import {
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
+  SETTINGS_KEY,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
@@ -93,6 +94,14 @@ function playbackSettings() {
   };
 }
 
+function librarySettings() {
+  return {
+    movies_dir: "/media/movies",
+    shows_dir: "/media/shows",
+    music_dir: "/media/music",
+  };
+}
+
 function mockSettingsFetch() {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
@@ -121,6 +130,13 @@ function mockSettingsFetch() {
         data: {
           settings: playbackSettings(),
         },
+      });
+    }
+
+    if (url === "/api/settings") {
+      return jsonResponse({
+        error: false,
+        data: librarySettings(),
       });
     }
 
@@ -264,18 +280,12 @@ describe("settings route tab transitions", () => {
 });
 
 describe("settings form query updates", () => {
-  it("resets the general settings form and validation when query data changes", async () => {
-    const user = userEvent.setup();
+  it("updates a clean general settings form when query data changes", async () => {
     const { queryClient } = await renderSettingsRoute("/settings");
 
-    const staticDirectory = await screen.findByLabelText("Static directory");
-    await user.clear(staticDirectory);
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
-
-    expect(
-      await screen.findByText("Static directory is required."),
-    ).toBeInTheDocument();
-    expect(staticDirectory).toHaveAttribute("aria-invalid", "true");
+    expect(await screen.findByLabelText("Static directory")).toHaveValue(
+      "/var/lib/igloo/static",
+    );
 
     await act(async () => {
       queryClient.setQueryData([GENERAL_SETTINGS_KEY], {
@@ -296,30 +306,104 @@ describe("settings form query updates", () => {
         "/srv/igloo/static",
       );
     });
-    expect(
-      screen.queryByText("Static directory is required."),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Static directory")).not.toHaveAttribute(
-      "aria-invalid",
-      "true",
+  });
+
+  it("preserves dirty general settings edits until reset", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderSettingsRoute("/settings");
+
+    const staticDirectory = await screen.findByLabelText("Static directory");
+    await user.clear(staticDirectory);
+    await user.type(staticDirectory, "/draft/static");
+
+    await act(async () => {
+      queryClient.setQueryData([GENERAL_SETTINGS_KEY], {
+        error: false,
+        data: {
+          settings: {
+            ...generalSettings(),
+            static_dir: "/srv/igloo/static",
+            logs_dir: "/srv/igloo/logs",
+            transcode_dir: "/srv/igloo/transcode",
+          },
+        },
+      });
+    });
+
+    expect(screen.getByLabelText("Static directory")).toHaveValue(
+      "/draft/static",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(screen.getByLabelText("Static directory")).toHaveValue(
+      "/srv/igloo/static",
     );
   });
 
-  it("resets the playback settings form and validation when query data changes", async () => {
+  it("updates a clean libraries settings form when query data changes", async () => {
+    const { queryClient } = await renderSettingsRoute("/settings/libraries");
+
+    expect(await screen.findByLabelText("Movies library path")).toHaveValue(
+      "/media/movies",
+    );
+
+    await act(async () => {
+      queryClient.setQueryData([SETTINGS_KEY], {
+        error: false,
+        data: {
+          ...librarySettings(),
+          movies_dir: "/srv/movies",
+          music_dir: "/srv/music",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Movies library path")).toHaveValue(
+        "/srv/movies",
+      );
+    });
+  });
+
+  it("preserves dirty library path edits until reset", async () => {
     const user = userEvent.setup();
+    const { queryClient } = await renderSettingsRoute("/settings/libraries");
+
+    const moviesPath = await screen.findByLabelText("Movies library path");
+    await user.clear(moviesPath);
+    await user.type(moviesPath, "/draft/movies");
+
+    await act(async () => {
+      queryClient.setQueryData([SETTINGS_KEY], {
+        error: false,
+        data: {
+          ...librarySettings(),
+          movies_dir: "/srv/movies",
+          music_dir: "/srv/music",
+        },
+      });
+    });
+
+    expect(screen.getByLabelText("Movies library path")).toHaveValue(
+      "/draft/movies",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Reset library paths" }),
+    );
+
+    expect(screen.getByLabelText("Movies library path")).toHaveValue(
+      "/srv/movies",
+    );
+  });
+
+  it("updates a clean playback settings form when query data changes", async () => {
     const { queryClient } = await renderSettingsRoute("/settings/playback");
 
-    const downloadSpeed = await screen.findByLabelText("Download speed (Mbps)");
-    await user.clear(downloadSpeed);
-    await user.type(downloadSpeed, "10000");
-    await user.click(screen.getByRole("button", { name: "Save Settings" }));
-
-    expect(
-      await screen.findByText(
-        "Download speed must be between 0 and 10000 Mbps.",
-      ),
-    ).toBeInTheDocument();
-    expect(downloadSpeed).toHaveAttribute("aria-invalid", "true");
+    expect(await screen.findByLabelText("Download speed (Mbps)")).toHaveValue(
+      null,
+    );
 
     await act(async () => {
       queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, 1], {
@@ -337,14 +421,33 @@ describe("settings form query updates", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(22.5);
     });
-    expect(
-      screen.queryByText(
-        "Download speed must be between 0 and 10000 Mbps.",
-      ),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Download speed (Mbps)")).not.toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
+  });
+
+  it("preserves dirty playback settings edits until reset", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = await renderSettingsRoute("/settings/playback");
+
+    const downloadSpeed = await screen.findByLabelText("Download speed (Mbps)");
+    await user.clear(downloadSpeed);
+    await user.type(downloadSpeed, "12.5");
+
+    await act(async () => {
+      queryClient.setQueryData([PLAYBACK_SETTINGS_KEY, 1], {
+        error: false,
+        data: {
+          settings: {
+            ...playbackSettings(),
+            download_mbps: 22.5,
+            server_upload_mbps: 25,
+          },
+        },
+      });
+    });
+
+    expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(12.5);
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(screen.getByLabelText("Download speed (Mbps)")).toHaveValue(22.5);
   });
 });

@@ -227,9 +227,12 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
   const hasChanges = formHasChanges(form, syncedSettings);
 
   if (settings !== syncedSettings) {
+    const formIsClean = !formHasChanges(form, syncedSettings);
     setSyncedSettings(settings);
-    setForm(formFromSettings(settings));
-    setValidationField(null);
+    if (formIsClean) {
+      setForm(formFromSettings(settings));
+      setValidationField(null);
+    }
   }
 
   const updateMutation = useMutation({
