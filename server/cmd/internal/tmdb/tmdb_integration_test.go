@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/joho/godotenv"
+	"igloo/cmd/internal/helpers"
 )
 
 func loadIntegrationEnv(t *testing.T) string {
@@ -18,9 +18,9 @@ func loadIntegrationEnv(t *testing.T) string {
 	_, currentFile, _, _ := runtime.Caller(0)
 	serverDir := filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..")
 	envPath := filepath.Join(serverDir, ".env")
-	err := godotenv.Load(envPath)
+	err := helpers.LoadEnvFile(envPath)
 	if err != nil {
-		_ = godotenv.Load()
+		_ = helpers.LoadEnvFile(helpers.ENV_FILE)
 	}
 
 	apiKey := os.Getenv("TMDB_API_KEY")

@@ -1,6 +1,6 @@
 import { SELECT_CONTENT_SLOT_SELECTOR } from "@/lib/constants";
 
-export function isTargetInsideRadixSelectContent(
+function isTargetInsideRadixSelectContent(
   target: EventTarget | null,
 ): boolean {
   return (

@@ -56,17 +56,6 @@ export function unwrapInt(
 }
 
 /**
- * Same as unwrapInt but returns undefined when not valid.
- */
-export function unwrapIntOrUndefined(
-  value: NullableInt64Like | number | null | undefined,
-): number | undefined {
-  if (value == null) return undefined;
-  if (typeof value === "number") return value;
-  return value.Valid ? value.Int64 : undefined;
-}
-
-/**
  * Returns a number or null. Accepts nullable object (Valid + Float64) or plain number.
  *
  * @example

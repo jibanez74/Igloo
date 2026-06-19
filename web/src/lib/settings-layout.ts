@@ -5,15 +5,7 @@ import type {
   SettingsTabId,
 } from "@/types";
 
-export const SETTINGS_TAB_PATHS: Record<SettingsTabId, string> = {
-  general: "/settings",
-  account: "/settings/account",
-  libraries: "/settings/libraries",
-  playback: "/settings/playback",
-  users: "/settings/users",
-};
-
-export const ADMIN_ONLY_SETTINGS_TABS: ReadonlySet<SettingsTabId> = new Set([
+const ADMIN_ONLY_SETTINGS_TABS: ReadonlySet<SettingsTabId> = new Set([
   "general",
   "libraries",
   "users",

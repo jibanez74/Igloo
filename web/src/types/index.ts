@@ -43,19 +43,6 @@ export type {
   PlaylistDetailResponseType,
   CreatePlaylistRequest,
   UpdatePlaylistRequest,
-  // User listening stats types
-  UserListeningStatsType,
-  TopTrackType,
-  TopMusicianType,
-  TopGenreType,
-  TopAlbumType,
-  RecentlyPlayedTrackType,
-  UserListeningStatsResponseType,
-  TopTracksResponseType,
-  TopMusiciansResponseType,
-  TopGenresResponseType,
-  TopAlbumsResponseType,
-  RecentlyPlayedResponseType,
 } from "./music";
 
 // Movie types
@@ -89,7 +76,6 @@ export type {
   MoviePlaylistsListResponseType,
   MoviePlaylistDetailResponseType,
   CreateMoviePlaylistRequest,
-  UpdateMoviePlaylistRequest,
   TmdbStatusType,
   TmdbSearchMoviesRequest,
   UpdateMovieMetadataRequest,
@@ -121,16 +107,6 @@ export type {
   MovieProductionCompaniesSectionProps,
   MovieChaptersSectionProps,
 } from "./movie-details-page";
-
-export type {
-  MovieCastMemberView,
-  MovieCrewMemberView,
-  MovieGenreView,
-  MovieDetailsGridItemView,
-  MovieExtraVideoView,
-  MovieProductionCompanyView,
-  MovieDetailsView,
-} from "./movie-details-view";
 
 // Audio player types
 export type {

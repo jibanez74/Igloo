@@ -60,6 +60,10 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		return nil, fmt.Errorf("source path is required")
 	}
 
+	if p.VideoStreamIndex < 0 {
+		return nil, fmt.Errorf("video stream index must be non-negative")
+	}
+
 	copyVideo := p.CopyVideo
 	if p.Profile == helpers.HLS_PROFILE_REMUX {
 		copyVideo = true

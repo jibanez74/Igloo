@@ -61,10 +61,6 @@ func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int6
 	return []byte("WEBVTT\n"), nil
 }
 
-func (f *fakeFFmpeg) ExtractAudioImage(_ context.Context, _ string, _ int64) ([]byte, error) {
-	return []byte("image"), nil
-}
-
 func (f *fakeFFmpeg) CallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -70,7 +70,7 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 		)
 		segmentData, readErr := os.ReadFile(filepath.Join(outDir, name))
 		if readErr != nil {
-			return RemuxValidationSummary{}, fmt.Errorf("read segment %d: %w", i, readErr)
+			return summary, fmt.Errorf("read segment %d: %w", i, readErr)
 		}
 
 		syncSamples, inspectErr := validateSegmentVideoTrack(
@@ -79,11 +79,14 @@ func ValidateRemuxSafety(outDir string, segmentCount int) (RemuxValidationSummar
 			nalLengthSize,
 		)
 		if inspectErr != nil {
-			return RemuxValidationSummary{}, fmt.Errorf("validate segment %d: %w", i, inspectErr)
+			return summary, fmt.Errorf("validate segment %d: %w", i, inspectErr)
 		}
 
 		summary.CheckedSegments++
 		summary.CheckedSyncSamples += syncSamples
+		if syncSamples == 0 {
+			return summary, fmt.Errorf("validate segment %d: no sync samples found", i)
+		}
 	}
 
 	return summary, nil
@@ -447,9 +450,15 @@ func parseTFHD(data []byte, moof mp4Box, tfhd mp4Box) (trackFragment, error) {
 	}
 
 	if flags&0x000002 != 0 {
+		if len(payload) < offset+4 {
+			return trackFragment{}, fmt.Errorf("invalid tfhd sample description index")
+		}
 		offset += 4
 	}
 	if flags&0x000008 != 0 {
+		if len(payload) < offset+4 {
+			return trackFragment{}, fmt.Errorf("invalid tfhd default sample duration")
+		}
 		offset += 4
 	}
 	if flags&0x000010 != 0 {
@@ -519,6 +528,9 @@ func parseTRUN(
 		var sampleFlags *uint32
 
 		if flags&0x000100 != 0 {
+			if len(payload) < offset+4 {
+				return trackRun{}, fmt.Errorf("invalid trun sample duration")
+			}
 			offset += 4
 		}
 		if flags&0x000200 != 0 {
@@ -538,6 +550,9 @@ func parseTRUN(
 			offset += 4
 		}
 		if flags&0x000800 != 0 {
+			if len(payload) < offset+4 {
+				return trackRun{}, fmt.Errorf("invalid trun sample composition time offset")
+			}
 			offset += 4
 		}
 

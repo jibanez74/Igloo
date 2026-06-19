@@ -1,6 +1,6 @@
 import type { PlaybackProfileType } from "@/types";
 
-export const HEADROOM_FACTOR = 0.8;
+const HEADROOM_FACTOR = 0.8;
 
 export function recommendedProfileId(
   profiles: PlaybackProfileType[],

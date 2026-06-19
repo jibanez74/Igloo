@@ -46,7 +46,7 @@ export const supportsNativeHLS = (() => {
   );
 })();
 
-export const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
+const DEFAULT_PLAYBACK_SETTINGS: PlaybackSettings = {
   mode: "direct",
   audioTrack: 0,
   subtitleTrack: null,
@@ -106,31 +106,6 @@ export function getAvailableModes(
     }
     return sourceHeight > 0 && m.maxHeight <= sourceHeight;
   });
-}
-
-/** Default mode from codecs, container, and source height (direct → remux → transcode). */
-export function getDefaultMode(
-  videoCodec: string,
-  audioCodec: string | undefined,
-  mimeType: string,
-  sourceHeight: number,
-): StreamModeId {
-  if (isVideoDirectPlayable(videoCodec)) {
-    if (isAudioDirectPlayable(audioCodec) && isContainerDirectPlayable(mimeType)) {
-      return "direct";
-    }
-    return "remux";
-  }
-
-  const transcodes = STREAM_MODES.filter(
-    (m) =>
-      m.type === "transcode" &&
-      sourceHeight > 0 &&
-      m.maxHeight <= sourceHeight,
-  );
-  if (transcodes.length > 0) return transcodes[0].id;
-
-  return "720p_3mbps";
 }
 
 function normalizeLang(raw: string | undefined): string | undefined {

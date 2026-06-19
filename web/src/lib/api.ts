@@ -33,7 +33,6 @@ import type {
   PlaylistsListResponseType,
   PlaylistSummaryType,
   PlaylistTracksResponseType,
-  RecentlyPlayedResponseType,
   LikedTracksResponseType,
   ShuffleTracksResponseType,
   SettingsType,
@@ -41,13 +40,8 @@ import type {
   TheaterMovieType,
   TmdbStatusType,
   TmdbSearchMoviesRequest,
-  TopAlbumsResponseType,
-  TopGenresResponseType,
-  TopMusiciansResponseType,
-  TopTracksResponseType,
   TracksListResponseType,
   UpdateMovieMetadataRequest,
-  UpdateMoviePlaylistRequest,
   UpdateGeneralSettingsRequest,
   UpdateGeneralSettingsResponseType,
   UpdateLibrarySettingsRequest,
@@ -55,7 +49,6 @@ import type {
   UpdatePlaybackSettingsRequest,
   UpdatePlaybackSettingsResponseType,
   UpdatePlaylistRequest,
-  UserListeningStatsResponseType,
   WatchRoomInviteUsersResponseType,
   WatchRoomResponseType,
   WatchRoomType,
@@ -87,6 +80,16 @@ type ApiRequestOptions = {
   method?: HttpMethod;
   body?: unknown;
 };
+
+function withQuery(path: string, params: Record<string, string | number | boolean>) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    query.set(key, String(value));
+  }
+
+  return `${path}?${query}`;
+}
 
 /**
  * Generic API request handler that consolidates error handling and fetch configuration.
@@ -237,15 +240,6 @@ export const searchSpotifyAlbums = (body: SpotifyAlbumSearchRequest) =>
     },
   );
 
-export const tmdbSearchMovies = (
-  movieId: number,
-  body: TmdbSearchMoviesRequest,
-) =>
-  apiRequest<{ results: TmdbSearchResultType[] }>(
-    `/api/movies/${movieId}/tmdb-search`,
-    { method: "POST", body },
-  );
-
 export const identifyMovie = (movieId: number, tmdbId: number) =>
   apiRequest<Record<string, never>>(`/api/movies/${movieId}/identify`, {
     method: "PUT",
@@ -277,7 +271,11 @@ export const getMoviesLibrary = (
   sort: "asc" | "desc" = "asc",
 ) =>
   apiRequest<MoviesLibraryPaginatedDataType>(
-    `/api/movies/library?page=${page}&per_page=${perPage}&sort=${sort}`,
+    withQuery("/api/movies/library", {
+      page,
+      per_page: perPage,
+      sort,
+    }),
   );
 
 export const getMovieGenresWithCounts = () =>
@@ -290,7 +288,11 @@ export const getMoviesByGenre = (
   sort: "asc" | "desc" = "asc",
 ) =>
   apiRequest<MoviesLibraryPaginatedDataType>(
-    `/api/movies/genres/${genreId}/movies?page=${page}&per_page=${perPage}&sort=${sort}`,
+    withQuery(`/api/movies/genres/${genreId}/movies`, {
+      page,
+      per_page: perPage,
+      sort,
+    }),
   );
 
 export const getMoviesStats = () =>
@@ -302,7 +304,11 @@ export const getLikedMovies = (
   sort: "asc" | "desc" = "asc",
 ) =>
   apiRequest<MoviesLibraryPaginatedDataType>(
-    `/api/movies/liked?page=${page}&per_page=${perPage}&sort=${sort}`,
+    withQuery("/api/movies/liked", {
+      page,
+      per_page: perPage,
+      sort,
+    }),
   );
 
 export const getMovieLikeStatus = (movieId: number) =>
@@ -354,7 +360,11 @@ export const getMoviePlaylistMovies = (
   sort: "asc" | "desc" = "asc",
 ) =>
   apiRequest<MoviesLibraryPaginatedDataType>(
-    `/api/movies/playlists/${playlistId}/movies?page=${page}&per_page=${perPage}&sort=${sort}`,
+    withQuery(`/api/movies/playlists/${playlistId}/movies`, {
+      page,
+      per_page: perPage,
+      sort,
+    }),
   );
 
 export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
@@ -362,41 +372,6 @@ export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
     method: "POST",
     body: data,
   });
-
-export const updateMoviePlaylist = (
-  id: number,
-  data: UpdateMoviePlaylistRequest,
-) =>
-  apiRequest<{ playlist: MoviePlaylistRowType }>(`/api/movies/playlists/${id}`, {
-    method: "PUT",
-    body: data,
-  });
-
-export const deleteMoviePlaylist = (id: number) =>
-  apiRequest<Record<string, never>>(`/api/movies/playlists/${id}`, {
-    method: "DELETE",
-  });
-
-export const addMoviesToMoviePlaylist = (
-  playlistId: number,
-  movieIds: number[],
-) =>
-  apiRequest<{ added: number; skipped: number }>(
-    `/api/movies/playlists/${playlistId}/movies`,
-    {
-      method: "POST",
-      body: { movie_ids: movieIds },
-    },
-  );
-
-export const removeMovieFromMoviePlaylist = (
-  playlistId: number,
-  movieId: number,
-) =>
-  apiRequest<Record<string, never>>(
-    `/api/movies/playlists/${playlistId}/movies/${movieId}`,
-    { method: "DELETE" },
-  );
 
 // Music API - Albums
 export const getAlbumDetails = (id: number) =>
@@ -409,7 +384,10 @@ export const deleteAlbum = (id: number) =>
 
 export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
   apiRequest<AlbumsListResponseType>(
-    `/api/music/albums?page=${page}&per_page=${perPage}`,
+    withQuery("/api/music/albums", {
+      page,
+      per_page: perPage,
+    }),
   );
 
 // ============================================================================
@@ -418,12 +396,12 @@ export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
 
 export const getTracksPaginated = (limit: number, offset: number) =>
   apiRequest<TracksListResponseType>(
-    `/api/music/tracks?limit=${limit}&offset=${offset}`,
+    withQuery("/api/music/tracks", { limit, offset }),
   );
 
 export const getShuffleTracks = (limit: number = 50) =>
   apiRequest<ShuffleTracksResponseType>(
-    `/api/music/tracks/shuffle?limit=${limit}`,
+    withQuery("/api/music/tracks/shuffle", { limit }),
   );
 
 export const toggleLikeTrack = (trackId: number) =>
@@ -434,7 +412,10 @@ export const toggleLikeTrack = (trackId: number) =>
 
 export const getLikedTracks = (page: number, perPage: number = 50) =>
   apiRequest<LikedTracksResponseType>(
-    `/api/music/tracks/liked?page=${page}&per_page=${perPage}`,
+    withQuery("/api/music/tracks/liked", {
+      page,
+      per_page: perPage,
+    }),
   );
 
 export const getLikedTrackIds = () =>
@@ -446,7 +427,10 @@ export const getLikedTrackIds = () =>
 
 export const getMusiciansPaginated = (page: number, perPage: number = 24) =>
   apiRequest<MusiciansListResponseType>(
-    `/api/music/musicians?page=${page}&per_page=${perPage}`,
+    withQuery("/api/music/musicians", {
+      page,
+      per_page: perPage,
+    }),
   );
 
 export const getMusicianDetails = (id: number) =>
@@ -471,7 +455,7 @@ export const getPlaylistDetails = (id: number) =>
 
 export const getPlaylistTracks = (id: number, limit: number, offset: number) =>
   apiRequest<PlaylistTracksResponseType>(
-    `/api/music/playlists/${id}/tracks?limit=${limit}&offset=${offset}`,
+    withQuery(`/api/music/playlists/${id}/tracks`, { limit, offset }),
   );
 
 export const createPlaylist = (data: CreatePlaylistRequest) =>
@@ -535,34 +519,6 @@ export const recordPlayEvent = (
       completed,
     },
   });
-
-export const getUserListeningStats = () =>
-  apiRequest<UserListeningStatsResponseType>("/api/music/user-stats/overview");
-
-export const getUserTopTracks = (limit: number = 20, offset: number = 0) =>
-  apiRequest<TopTracksResponseType>(
-    `/api/music/user-stats/top-tracks?limit=${limit}&offset=${offset}`,
-  );
-
-export const getUserTopMusicians = (limit: number = 10, offset: number = 0) =>
-  apiRequest<TopMusiciansResponseType>(
-    `/api/music/user-stats/top-musicians?limit=${limit}&offset=${offset}`,
-  );
-
-export const getUserTopGenres = (limit: number = 10) =>
-  apiRequest<TopGenresResponseType>(
-    `/api/music/user-stats/top-genres?limit=${limit}`,
-  );
-
-export const getUserTopAlbums = (limit: number = 10, offset: number = 0) =>
-  apiRequest<TopAlbumsResponseType>(
-    `/api/music/user-stats/top-albums?limit=${limit}&offset=${offset}`,
-  );
-
-export const getUserRecentlyPlayed = (limit: number = 20, offset: number = 0) =>
-  apiRequest<RecentlyPlayedResponseType>(
-    `/api/music/user-stats/recently-played?limit=${limit}&offset=${offset}`,
-  );
 
 // ============================================================================
 // Settings API
@@ -645,7 +601,7 @@ export const adminResetUserPassword = (id: number, password: string) =>
 
 export const searchAll = (q: string) =>
   apiRequest<SearchAllResponseType>(
-    `/api/search?q=${encodeURIComponent(q)}`,
+    withQuery("/api/search", { q }),
   );
 
 export const searchMovies = (
@@ -654,7 +610,11 @@ export const searchMovies = (
   perPage: number = SEARCH_PER_PAGE,
 ) =>
   apiRequest<SearchMoviesResponseType>(
-    `/api/search/movies?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+    withQuery("/api/search/movies", {
+      q,
+      page,
+      per_page: perPage,
+    }),
   );
 
 export const searchAlbums = (
@@ -663,7 +623,11 @@ export const searchAlbums = (
   perPage: number = SEARCH_PER_PAGE,
 ) =>
   apiRequest<SearchAlbumsResponseType>(
-    `/api/search/albums?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+    withQuery("/api/search/albums", {
+      q,
+      page,
+      per_page: perPage,
+    }),
   );
 
 export const searchMusicians = (
@@ -672,7 +636,11 @@ export const searchMusicians = (
   perPage: number = SEARCH_PER_PAGE,
 ) =>
   apiRequest<SearchMusiciansResponseType>(
-    `/api/search/musicians?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+    withQuery("/api/search/musicians", {
+      q,
+      page,
+      per_page: perPage,
+    }),
   );
 
 export const searchTracks = (
@@ -681,7 +649,11 @@ export const searchTracks = (
   perPage: number = SEARCH_PER_PAGE,
 ) =>
   apiRequest<SearchTracksResponseType>(
-    `/api/search/tracks?q=${encodeURIComponent(q)}&page=${page}&per_page=${perPage}`,
+    withQuery("/api/search/tracks", {
+      q,
+      page,
+      per_page: perPage,
+    }),
   );
 
 // Watch rooms API
