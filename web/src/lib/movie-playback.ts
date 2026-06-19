@@ -27,7 +27,7 @@ const HLS_PLAYBACK_SESSION_ID_PATTERN = new RegExp(
 
 type HlsPlaybackSessionStorage = Pick<Storage, "getItem" | "setItem">;
 
-export function movieHlsPlaybackSessionStorageKey(movieId: number): string {
+function movieHlsPlaybackSessionStorageKey(movieId: number): string {
   return MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX + String(movieId);
 }
 
@@ -111,7 +111,7 @@ export function deriveMoviePlaybackStatus(
   return { kind: "ready" };
 }
 
-export function createHlsPlaybackSessionId(): string {
+function createHlsPlaybackSessionId(): string {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }

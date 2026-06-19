@@ -89,14 +89,6 @@ export type CreateMoviePlaylistRequest = {
   movie_id?: number;
 };
 
-export type UpdateMoviePlaylistRequest = {
-  name: string;
-  description?: string;
-  cover_image?: string;
-  is_public?: boolean;
-  movie_id?: number | null;
-};
-
 // Cast member from TMDB credits
 export type CastMemberType = {
   id: number;

@@ -74,16 +74,6 @@ export function showActionFailed(action: string, errorMessage?: string) {
 }
 
 /**
- * Show an error toast for network/API errors.
- * @example showNetworkError("loading albums")
- */
-export function showNetworkError(action: string) {
-  toast.error(`Failed to ${action}`, {
-    description: "Please check your connection and try again.",
-  });
-}
-
-/**
  * Show an error toast for validation errors.
  * @example showValidationError("Name is required")
  */

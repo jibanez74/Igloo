@@ -7,7 +7,6 @@ export const TMDB_STATUS_KEY = "tmdb-status";
 export const SPOTIFY_STATUS_KEY = "spotify-status";
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
-export const LATEST_SHOWS_KEY = "latest-shows";
 export const LATEST_ALBUMS_KEY = "latest-albums";
 export const MOVIES_KEY = "movies";
 export const MOVIE_DETAILS_KEY = "movie-details";
@@ -45,7 +44,6 @@ export const TMDB_LOGO_SIZE = "w92";
 // pagination for music page
 export const ALBUMS_PER_PAGE = 24;
 export const MUSICIANS_PER_PAGE = 24;
-export const PLAYLISTS_PER_PAGE = 24;
 
 /** Default page size for GET /api/movies/library (matches server MOVIES_LIBRARY_DEFAULT_PER_PAGE). */
 export const MOVIES_PER_PAGE = 24;

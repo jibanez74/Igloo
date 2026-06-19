@@ -72,6 +72,13 @@ export function formatTimeSeconds(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+export function formatRuntimeMinutes(minutes: number | null | undefined): string | null {
+  if (minutes == null || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+}
+
 // Format currency for budget/revenue (movie details)
 export function formatCurrency(amount: number): string {
   if (!amount) return "-";
@@ -103,7 +110,7 @@ export function formatExtraVideoType(type: string): string {
 }
 
 /** API stores `site` as lowercase (`youtube`, `vimeo`, `other`). */
-export function isYouTubeExtraVideoSite(site: string): boolean {
+function isYouTubeExtraVideoSite(site: string): boolean {
   return site.trim().toLowerCase() === "youtube";
 }
 
@@ -111,7 +118,7 @@ export function isYouTubeExtraVideoSite(site: string): boolean {
  * Sort order for library extra video `type` (see `mapTmdbVideoType` on the server):
  * trailers first, then special features, then other/unknown.
  */
-export function extraVideoTypeSortRank(type: string): number {
+function extraVideoTypeSortRank(type: string): number {
   const key = type.trim().toLowerCase().replace(/-/g, "_");
   switch (key) {
     case "trailer":

@@ -430,6 +430,7 @@ describe("movie details route motion", () => {
     expect(
       await screen.findByRole("heading", { name: /Arrival/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText("1h 56m")).toBeInTheDocument();
 
     const wrappers = getDetailMotionWrappers(container);
     const heroWrapper = getHeroMotionWrapper(container);

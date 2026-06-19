@@ -24,7 +24,7 @@
  * isValidRedirect("https://evil.com") // false
  * isValidRedirect("javascript:alert(1)") // false
  */
-export function isValidRedirect(url: string): boolean {
+function isValidRedirect(url: string): boolean {
   // Must start with a single forward slash (relative path)
   if (!url.startsWith("/")) {
     return false;

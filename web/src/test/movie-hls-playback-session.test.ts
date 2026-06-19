@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getOrCreateMovieHlsPlaybackSessionId,
-  movieHlsPlaybackSessionStorageKey,
   stopMovieHlsPlaybackSession,
 } from "@/lib/movie-playback";
 
-type MemoryStorage = Pick<Storage, "getItem" | "setItem">;
+type MemoryStorage = Pick<Storage, "getItem" | "setItem"> & {
+  entries: () => [string, string][];
+};
 
 const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -16,6 +17,7 @@ function createMemoryStorage(initial: Record<string, string> = {}): MemoryStorag
     setItem: (key: string, value: string) => {
       values.set(key, value);
     },
+    entries: () => Array.from(values.entries()),
   };
 }
 
@@ -35,20 +37,32 @@ describe("movie HLS playback sessions", () => {
     expect(second).toBe(first);
   });
 
-  it("uses different storage keys for different movies", () => {
-    expect(movieHlsPlaybackSessionStorageKey(6)).not.toBe(
-      movieHlsPlaybackSessionStorageKey(7),
-    );
+  it("stores different sessions for different movies", () => {
+    const storage = createMemoryStorage();
+
+    const first = getOrCreateMovieHlsPlaybackSessionId(6, storage);
+    const second = getOrCreateMovieHlsPlaybackSessionId(7, storage);
+
+    expect(second).toMatch(uuidPattern);
+    expect(second).not.toBe(first);
+    expect(storage.entries()).toHaveLength(2);
+    expect(storage.entries().map(([, value]) => value)).toEqual([
+      first,
+      second,
+    ]);
   });
 
   it("replaces malformed stored values", () => {
-    const key = movieHlsPlaybackSessionStorageKey(6);
-    const storage = createMemoryStorage({ [key]: "bad-session" });
+    const storage = createMemoryStorage();
+    getOrCreateMovieHlsPlaybackSessionId(6, storage);
+    const [[key]] = storage.entries();
+    storage.setItem(key, "bad-session");
 
     const next = getOrCreateMovieHlsPlaybackSessionId(6, storage);
 
     expect(next).toMatch(uuidPattern);
     expect(next).not.toBe("bad-session");
+    expect(storage.getItem(key)).toBe(next);
   });
 
   it("falls back when storage is unavailable", () => {

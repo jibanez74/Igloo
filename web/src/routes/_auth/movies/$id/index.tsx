@@ -15,7 +15,10 @@ import {
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { prepareYouTubeExtrasForDisplay } from "@/lib/format";
+import {
+  formatRuntimeMinutes,
+  prepareYouTubeExtrasForDisplay,
+} from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
@@ -231,10 +234,7 @@ function LibraryMovieDetailsContent({
     ? overview.slice(0, 160)
     : `Watch ${movie.title} in your Igloo media library.`;
 
-  const runtime =
-    runTimeMins != null
-      ? `${Math.floor(runTimeMins / 60)}h ${runTimeMins % 60}m`
-      : null;
+  const runtime = formatRuntimeMinutes(runTimeMins);
 
   const castForSection = libraryCastToCastSection(cast);
 

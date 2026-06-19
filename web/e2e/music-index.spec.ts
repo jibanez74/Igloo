@@ -278,6 +278,11 @@ async function mockMusicIndexApi(
       return;
     }
 
+    if (url.pathname === "/api/spotify/status") {
+      await fulfillJSON(route, apiResponse({ available: true }));
+      return;
+    }
+
     if (url.pathname === "/api/music/albums") {
       const pageNumber = Number(url.searchParams.get("page") ?? "1");
       const perPage = Number(url.searchParams.get("per_page") ?? "24");
