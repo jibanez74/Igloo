@@ -11,7 +11,6 @@ import (
 type FFmpegInterface interface {
 	RunHLS(ctx context.Context, params HLSParams, onExit func(exitErr error, stderrTail []string)) (*exec.Cmd, error)
 	ExtractSubtitleAsWebVTT(ctx context.Context, sourcePath string, streamIndex int64) ([]byte, error)
-	ExtractAudioImage(ctx context.Context, sourcePath string, streamIndex int64) ([]byte, error)
 }
 
 type ffmpeg struct {

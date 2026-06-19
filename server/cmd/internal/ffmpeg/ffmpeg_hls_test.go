@@ -298,6 +298,23 @@ func TestBuildHLSArgs_EmptySourcePath(t *testing.T) {
 	}
 }
 
+func TestBuildHLSArgs_NegativeVideoStreamIndex(t *testing.T) {
+	_, err := buildHLSArgs(HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: -1,
+		AudioStreamIndex: 0,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+	})
+	if err == nil {
+		t.Fatal("expected error for negative VideoStreamIndex")
+	}
+	if !strings.Contains(err.Error(), "video stream index") {
+		t.Fatalf("error = %q, want video stream index validation", err.Error())
+	}
+}
+
 func TestBuildHLSArgs_SegmentFilenameInOutDir(t *testing.T) {
 	outDir := t.TempDir()
 	args := hlsArgs(t, HLSParams{
