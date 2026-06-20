@@ -40,9 +40,6 @@ export type AudioPlayerState = {
 
   // Whether "play all" mode is enabled (plays through entire library)
   isPlayAllMode: boolean;
-
-  // Set of track IDs already played during shuffle (to avoid repeats)
-  shufflePlayedIds: Set<number>;
 };
 
 // Actions available for the audio player
