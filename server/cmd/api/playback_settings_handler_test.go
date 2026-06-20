@@ -460,7 +460,6 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 	handler := app.SessionManager.LoadAndSave(r)
 
 	staticDir := t.TempDir()
-	logsDir := t.TempDir()
 	transcodeDir := t.TempDir()
 
 	marshalBody := func(t *testing.T, serverUploadMbps any) string {
@@ -471,11 +470,9 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 			"spotify_client_id":            "spotify-id",
 			"spotify_client_secret":        "spotify-secret",
 			"hardware_acceleration_device": "nvidia",
-			"enable_logger":                true,
 			"enable_watcher":               true,
 			"download_images":              true,
 			"static_dir":                   staticDir,
-			"logs_dir":                     logsDir,
 			"transcode_dir":                transcodeDir,
 			"server_upload_mbps":           serverUploadMbps,
 		})

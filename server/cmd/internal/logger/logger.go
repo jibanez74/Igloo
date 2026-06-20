@@ -3,7 +3,6 @@ package logger
 import (
 	"fmt"
 	"igloo/cmd/internal/helpers"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -16,11 +15,7 @@ type LoggerInterface interface {
 	Error(msg string, args ...any)
 }
 
-type logger struct {
-	*slog.Logger
-}
-
-var _ LoggerInterface = (*logger)(nil)
+var _ LoggerInterface = (*slog.Logger)(nil)
 
 type LoggerConfig struct {
 	Debug   bool
@@ -32,38 +27,31 @@ type LoggerConfig struct {
 // New creates a configured logger and cleanup function.
 // Production file logging requires an existing LogDir.
 func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
-	var w io.Writer
-	var closer func() error = func() error { return nil }
-
-	if cfg.Stdout {
-		w = os.Stdout
-
-		if cfg.Debug {
-			handler := slog.NewTextHandler(w, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})
-
-			return &logger{Logger: slog.New(handler)}, closer, nil
-		}
-
-		handler := slog.NewJSONHandler(w, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		})
-
-		return &logger{Logger: slog.New(handler)}, closer, nil
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("logger config is required")
 	}
 
+	closer := func() error { return nil }
+
 	if cfg.Debug {
-		w = os.Stdout
-		handler := slog.NewTextHandler(w, &slog.HandlerOptions{
+		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		})
 
-		return &logger{Logger: slog.New(handler)}, closer, nil
+		return slog.New(handler), closer, nil
 	}
 
-	if cfg.LogFile == "" {
-		cfg.LogFile = "app.log"
+	if cfg.Stdout {
+		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		})
+
+		return slog.New(handler), closer, nil
+	}
+
+	logFile := cfg.LogFile
+	if logFile == "" {
+		logFile = "app.log"
 	}
 
 	if cfg.LogDir == "" {
@@ -83,19 +71,18 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("log path is not a directory: %s", cfg.LogDir)
 	}
 
-	path := filepath.Join(cfg.LogDir, cfg.LogFile)
+	path := filepath.Join(cfg.LogDir, logFile)
 
 	rw, err := newRotatingWriter(path, helpers.LOGGER_MAX_LINES)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	w = rw
 	closer = rw.Close
 
-	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{
+	handler := slog.NewJSONHandler(rw, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 
-	return &logger{Logger: slog.New(handler)}, closer, nil
+	return slog.New(handler), closer, nil
 }

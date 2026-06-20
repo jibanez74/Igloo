@@ -12,18 +12,16 @@ INSERT INTO settings (
   spotify_client_id,
   spotify_client_secret,
   hardware_acceleration_device,
-  enable_logger,
   enable_watcher,
   download_images,
   movies_dir,
   shows_dir,
   music_dir,
   static_dir,
-  logs_dir,
   transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateGeneralSettings :one
@@ -37,11 +35,9 @@ SET
   spotify_client_id = ?,
   spotify_client_secret = ?,
   hardware_acceleration_device = ?,
-  enable_logger = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
-  logs_dir = ?,
   transcode_dir = ?,
   server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP

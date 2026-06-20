@@ -17,19 +17,17 @@ INSERT INTO settings (
   spotify_client_id,
   spotify_client_secret,
   hardware_acceleration_device,
-  enable_logger,
   enable_watcher,
   download_images,
   movies_dir,
   shows_dir,
   music_dir,
   static_dir,
-  logs_dir,
   transcode_dir
 )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 `
 
 type CreateSettingsParams struct {
@@ -38,14 +36,12 @@ type CreateSettingsParams struct {
 	SpotifyClientID            sql.NullString `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString `json:"hardware_acceleration_device"`
-	EnableLogger               bool           `json:"enable_logger"`
 	EnableWatcher              bool           `json:"enable_watcher"`
 	DownloadImages             bool           `json:"download_images"`
 	MoviesDir                  sql.NullString `json:"movies_dir"`
 	ShowsDir                   sql.NullString `json:"shows_dir"`
 	MusicDir                   sql.NullString `json:"music_dir"`
 	StaticDir                  string         `json:"static_dir"`
-	LogsDir                    string         `json:"logs_dir"`
 	TranscodeDir               string         `json:"transcode_dir"`
 }
 
@@ -56,14 +52,12 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
 		arg.HardwareAccelerationDevice,
-		arg.EnableLogger,
 		arg.EnableWatcher,
 		arg.DownloadImages,
 		arg.MoviesDir,
 		arg.ShowsDir,
 		arg.MusicDir,
 		arg.StaticDir,
-		arg.LogsDir,
 		arg.TranscodeDir,
 	)
 	var i Setting
@@ -77,7 +71,6 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
-		&i.EnableLogger,
 		&i.EnableWatcher,
 		&i.DownloadImages,
 		&i.MoviesDir,
@@ -85,7 +78,6 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 		&i.MusicDir,
 		&i.ServerUploadMbps,
 		&i.StaticDir,
-		&i.LogsDir,
 		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -95,7 +87,7 @@ func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) 
 
 const getSettings = `-- name: GetSettings :one
 SELECT
-  id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+  id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 FROM settings
 ORDER BY id
 LIMIT 1
@@ -114,7 +106,6 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
-		&i.EnableLogger,
 		&i.EnableWatcher,
 		&i.DownloadImages,
 		&i.MoviesDir,
@@ -122,7 +113,6 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.MusicDir,
 		&i.ServerUploadMbps,
 		&i.StaticDir,
-		&i.LogsDir,
 		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -141,11 +131,9 @@ SET
   spotify_client_id = ?,
   spotify_client_secret = ?,
   hardware_acceleration_device = ?,
-  enable_logger = ?,
   enable_watcher = ?,
   download_images = ?,
   static_dir = ?,
-  logs_dir = ?,
   transcode_dir = ?,
   server_upload_mbps = ?,
   updated_at = CURRENT_TIMESTAMP
@@ -155,7 +143,7 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 `
 
 type UpdateGeneralSettingsParams struct {
@@ -167,11 +155,9 @@ type UpdateGeneralSettingsParams struct {
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
-	EnableLogger               bool            `json:"enable_logger"`
 	EnableWatcher              bool            `json:"enable_watcher"`
 	DownloadImages             bool            `json:"download_images"`
 	StaticDir                  string          `json:"static_dir"`
-	LogsDir                    string          `json:"logs_dir"`
 	TranscodeDir               string          `json:"transcode_dir"`
 	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
 }
@@ -186,11 +172,9 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		arg.SpotifyClientID,
 		arg.SpotifyClientSecret,
 		arg.HardwareAccelerationDevice,
-		arg.EnableLogger,
 		arg.EnableWatcher,
 		arg.DownloadImages,
 		arg.StaticDir,
-		arg.LogsDir,
 		arg.TranscodeDir,
 		arg.ServerUploadMbps,
 	)
@@ -205,7 +189,6 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
-		&i.EnableLogger,
 		&i.EnableWatcher,
 		&i.DownloadImages,
 		&i.MoviesDir,
@@ -213,7 +196,6 @@ func (q *Queries) UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSe
 		&i.MusicDir,
 		&i.ServerUploadMbps,
 		&i.StaticDir,
-		&i.LogsDir,
 		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -234,7 +216,7 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 `
 
 type UpdateLibrarySettingsParams struct {
@@ -256,7 +238,6 @@ func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySe
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
-		&i.EnableLogger,
 		&i.EnableWatcher,
 		&i.DownloadImages,
 		&i.MoviesDir,
@@ -264,7 +245,6 @@ func (q *Queries) UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySe
 		&i.MusicDir,
 		&i.ServerUploadMbps,
 		&i.StaticDir,
-		&i.LogsDir,
 		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -283,7 +263,7 @@ WHERE id = (
   ORDER BY id
   LIMIT 1
 )
-RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_logger, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, logs_dir, transcode_dir, created_at, updated_at
+RETURNING id, tmdb_key, immich_base_url, immich_api_key, jellyfin_base_url, jellyfin_api_key, spotify_client_id, spotify_client_secret, hardware_acceleration_device, enable_watcher, download_images, movies_dir, shows_dir, music_dir, server_upload_mbps, static_dir, transcode_dir, created_at, updated_at
 `
 
 func (q *Queries) UpdatePlaybackServerUploadMbps(ctx context.Context, serverUploadMbps sql.NullFloat64) (Setting, error) {
@@ -299,7 +279,6 @@ func (q *Queries) UpdatePlaybackServerUploadMbps(ctx context.Context, serverUplo
 		&i.SpotifyClientID,
 		&i.SpotifyClientSecret,
 		&i.HardwareAccelerationDevice,
-		&i.EnableLogger,
 		&i.EnableWatcher,
 		&i.DownloadImages,
 		&i.MoviesDir,
@@ -307,7 +286,6 @@ func (q *Queries) UpdatePlaybackServerUploadMbps(ctx context.Context, serverUplo
 		&i.MusicDir,
 		&i.ServerUploadMbps,
 		&i.StaticDir,
-		&i.LogsDir,
 		&i.TranscodeDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,

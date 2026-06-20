@@ -21,11 +21,9 @@ export type GeneralSettingsType = {
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
   hardware_acceleration_device: HardwareAccelerationDevice;
-  enable_logger: boolean;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
-  logs_dir: string;
   transcode_dir: string;
   server_upload_mbps: number | null;
   restart_required?: boolean;
@@ -40,11 +38,9 @@ export type UpdateGeneralSettingsRequest = {
   spotify_client_id: string;
   spotify_client_secret: string;
   hardware_acceleration_device: HardwareAccelerationDevice;
-  enable_logger: boolean;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
-  logs_dir: string;
   transcode_dir: string;
   server_upload_mbps: number | null;
 };

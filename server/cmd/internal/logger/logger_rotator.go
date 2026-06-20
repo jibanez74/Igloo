@@ -3,6 +3,7 @@ package logger
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -10,7 +11,6 @@ import (
 
 // rotatingWriter keeps recent slog JSON entries in a bounded file.
 type rotatingWriter struct {
-	path     string
 	file     *os.File
 	buf      *bufio.Writer
 	mu       sync.Mutex
@@ -19,6 +19,10 @@ type rotatingWriter struct {
 }
 
 func newRotatingWriter(path string, maxLines int) (*rotatingWriter, error) {
+	if maxLines <= 0 {
+		return nil, fmt.Errorf("max lines must be positive")
+	}
+
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, err
@@ -31,7 +35,6 @@ func newRotatingWriter(path string, maxLines int) (*rotatingWriter, error) {
 	}
 
 	return &rotatingWriter{
-		path:     path,
 		file:     f,
 		buf:      bufio.NewWriter(f),
 		lines:    lines,
@@ -46,13 +49,26 @@ func countLines(f *os.File) (int, error) {
 	}
 
 	count := 0
-	scanner := bufio.NewScanner(f)
+	reader := bufio.NewReader(f)
 
-	for scanner.Scan() {
-		count++
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			count++
+		}
+
+		if err == nil {
+			continue
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		return 0, err
 	}
 
-	return count, scanner.Err()
+	return count, nil
 }
 
 // Write implements io.Writer. Each slog entry is one JSON line.
@@ -96,14 +112,7 @@ func (w *rotatingWriter) rotate() error {
 		return err
 	}
 
-	lines := make([]string, 0, w.lines)
-	scanner := bufio.NewScanner(w.file)
-
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	err = scanner.Err()
+	lines, err := readLines(w.file, w.lines)
 	if err != nil {
 		return err
 	}
@@ -144,6 +153,32 @@ func (w *rotatingWriter) rotate() error {
 	w.lines = len(lines)
 
 	return nil
+}
+
+func readLines(f *os.File, capacity int) ([]string, error) {
+	lines := make([]string, 0, capacity)
+	reader := bufio.NewReader(f)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+			lines = append(lines, line)
+		}
+
+		if err == nil {
+			continue
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		return nil, err
+	}
+
+	return lines, nil
 }
 
 func (w *rotatingWriter) Close() error {

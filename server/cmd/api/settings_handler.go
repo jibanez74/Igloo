@@ -29,11 +29,9 @@ type generalSettingsResponse struct {
 	SpotifyClientID            *string  `json:"spotify_client_id"`
 	SpotifyClientSecret        *string  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
-	EnableLogger               bool     `json:"enable_logger"`
 	EnableWatcher              bool     `json:"enable_watcher"`
 	DownloadImages             bool     `json:"download_images"`
 	StaticDir                  string   `json:"static_dir"`
-	LogsDir                    string   `json:"logs_dir"`
 	TranscodeDir               string   `json:"transcode_dir"`
 	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
 	RestartRequired            bool     `json:"restart_required,omitempty"`
@@ -48,11 +46,9 @@ type updateGeneralSettingsRequest struct {
 	SpotifyClientID            string   `json:"spotify_client_id"`
 	SpotifyClientSecret        string   `json:"spotify_client_secret"`
 	HardwareAccelerationDevice string   `json:"hardware_acceleration_device"`
-	EnableLogger               bool     `json:"enable_logger"`
 	EnableWatcher              bool     `json:"enable_watcher"`
 	DownloadImages             bool     `json:"download_images"`
 	StaticDir                  string   `json:"static_dir"`
-	LogsDir                    string   `json:"logs_dir"`
 	TranscodeDir               string   `json:"transcode_dir"`
 	ServerUploadMbps           *float64 `json:"server_upload_mbps"`
 }
@@ -84,11 +80,9 @@ func mapGeneralSettingsResponse(settings database.Setting, restartRequired bool)
 		SpotifyClientID:            helpers.StringPtrFromNull(settings.SpotifyClientID),
 		SpotifyClientSecret:        helpers.StringPtrFromNull(settings.SpotifyClientSecret),
 		HardwareAccelerationDevice: hardwareAccelerationDevice,
-		EnableLogger:               settings.EnableLogger,
 		EnableWatcher:              settings.EnableWatcher,
 		DownloadImages:             settings.DownloadImages,
 		StaticDir:                  settings.StaticDir,
-		LogsDir:                    settings.LogsDir,
 		TranscodeDir:               settings.TranscodeDir,
 		ServerUploadMbps:           helpers.Float64PtrFromNull(settings.ServerUploadMbps),
 		RestartRequired:            restartRequired,
@@ -182,7 +176,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 	req.SpotifyClientSecret = strings.TrimSpace(req.SpotifyClientSecret)
 	req.HardwareAccelerationDevice = strings.TrimSpace(req.HardwareAccelerationDevice)
 	req.StaticDir = strings.TrimSpace(req.StaticDir)
-	req.LogsDir = strings.TrimSpace(req.LogsDir)
 	req.TranscodeDir = strings.TrimSpace(req.TranscodeDir)
 
 	if !validateHardwareAccelerationDevice(req.HardwareAccelerationDevice) {
@@ -202,11 +195,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 
 	if req.StaticDir == "" {
 		helpers.ErrorJSON(w, errors.New("static directory is required"), http.StatusBadRequest)
-		return
-	}
-
-	if req.LogsDir == "" {
-		helpers.ErrorJSON(w, errors.New("logs directory is required"), http.StatusBadRequest)
 		return
 	}
 
@@ -243,13 +231,6 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err = helpers.GetOrCreateDir(req.LogsDir)
-	if err != nil {
-		app.Logger.Error("failed to validate logs directory", "error", err, "path", req.LogsDir)
-		helpers.ErrorJSON(w, errors.New("logs directory is not accessible"), http.StatusBadRequest)
-		return
-	}
-
 	_, err = helpers.GetOrCreateDir(req.TranscodeDir)
 	if err != nil {
 		app.Logger.Error("failed to validate transcode directory", "error", err, "path", req.TranscodeDir)
@@ -267,11 +248,9 @@ func (app *Application) UpdateGeneralSettings(w http.ResponseWriter, r *http.Req
 		SpotifyClientID:            helpers.NullString(req.SpotifyClientID),
 		SpotifyClientSecret:        helpers.NullString(req.SpotifyClientSecret),
 		HardwareAccelerationDevice: helpers.NullString(req.HardwareAccelerationDevice),
-		EnableLogger:               req.EnableLogger,
 		EnableWatcher:              req.EnableWatcher,
 		DownloadImages:             req.DownloadImages,
 		StaticDir:                  req.StaticDir,
-		LogsDir:                    req.LogsDir,
 		TranscodeDir:               req.TranscodeDir,
 		ServerUploadMbps:           helpers.NullFloat64FromPtr(req.ServerUploadMbps),
 	})
@@ -300,9 +279,7 @@ func generalSettingsRestartRequired(previous *database.Setting, next database.Se
 	}
 
 	return previous.StaticDir != next.StaticDir ||
-		previous.LogsDir != next.LogsDir ||
 		previous.TranscodeDir != next.TranscodeDir ||
-		previous.EnableLogger != next.EnableLogger ||
 		previous.TmdbKey != next.TmdbKey ||
 		previous.ImmichBaseUrl != next.ImmichBaseUrl ||
 		previous.ImmichApiKey != next.ImmichApiKey ||

@@ -31,7 +31,7 @@ func setupSettingsHTTPTestApp(t *testing.T) *Application {
 	return app
 }
 
-func generalSettingsBody(staticDir, logsDir string) string {
+func generalSettingsBody(staticDir string) string {
 	transcodeDir := filepath.Join(filepath.Dir(staticDir), "transcode")
 	return fmt.Sprintf(`{
 		"tmdb_key": "tmdb-key",
@@ -42,14 +42,12 @@ func generalSettingsBody(staticDir, logsDir string) string {
 		"spotify_client_id": "spotify-id",
 		"spotify_client_secret": "spotify-secret",
 		"hardware_acceleration_device": "nvidia",
-		"enable_logger": true,
 		"enable_watcher": true,
 		"download_images": true,
 		"static_dir": %q,
-		"logs_dir": %q,
 		"transcode_dir": %q,
 		"server_upload_mbps": 25
-	}`, staticDir, logsDir, transcodeDir)
+	}`, staticDir, transcodeDir)
 }
 
 func performUpdateGeneralSettings(app *Application, body string) *httptest.ResponseRecorder {
@@ -67,8 +65,7 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir, logsDir))
+	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -97,14 +94,11 @@ func TestUpdateGeneralSettings_UpdatesDatabaseAndApplicationSettings(t *testing.
 	if settings.HardwareAccelerationDevice.String != helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA {
 		t.Fatalf("expected hardware device nvidia, got %q", settings.HardwareAccelerationDevice.String)
 	}
-	if !settings.EnableLogger || !settings.EnableWatcher || !settings.DownloadImages {
+	if !settings.EnableWatcher || !settings.DownloadImages {
 		t.Fatal("expected boolean general settings to be enabled")
 	}
 	if settings.StaticDir != staticDir {
 		t.Fatalf("expected static dir %q, got %q", staticDir, settings.StaticDir)
-	}
-	if settings.LogsDir != logsDir {
-		t.Fatalf("expected logs dir %q, got %q", logsDir, settings.LogsDir)
 	}
 	if settings.TranscodeDir != filepath.Join(filepath.Dir(staticDir), "transcode") {
 		t.Fatalf("expected transcode dir to be saved, got %q", settings.TranscodeDir)
@@ -128,8 +122,7 @@ func TestUpdateGeneralSettings_RejectsInvalidServerUploadMbps(t *testing.T) {
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	body := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": -1`, 1)
+	body := strings.Replace(generalSettingsBody(staticDir), `"server_upload_mbps": 25`, `"server_upload_mbps": -1`, 1)
 	w := performUpdateGeneralSettings(app, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -166,8 +159,7 @@ func TestUpdateGeneralSettings_RejectsInvalidIntegrationBaseURLs(t *testing.T) {
 			defer app.DB.Close()
 
 			staticDir := filepath.Join(t.TempDir(), "static")
-			logsDir := filepath.Join(t.TempDir(), "logs")
-			body := strings.Replace(generalSettingsBody(staticDir, logsDir), tc.old, tc.new, 1)
+			body := strings.Replace(generalSettingsBody(staticDir), tc.old, tc.new, 1)
 			w := performUpdateGeneralSettings(app, body)
 
 			if w.Code != http.StatusBadRequest {
@@ -196,8 +188,7 @@ func TestUpdateGeneralSettings_ServerUploadMbpsBoundaries(t *testing.T) {
 			defer app.DB.Close()
 
 			staticDir := filepath.Join(t.TempDir(), "static")
-			logsDir := filepath.Join(t.TempDir(), "logs")
-			body := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": `+tc.value, 1)
+			body := strings.Replace(generalSettingsBody(staticDir), `"server_upload_mbps": 25`, `"server_upload_mbps": `+tc.value, 1)
 			w := performUpdateGeneralSettings(app, body)
 
 			if w.Code != tc.wantStatus {
@@ -222,13 +213,12 @@ func TestUpdateGeneralSettings_ClearsServerUploadMbpsWhenNull(t *testing.T) {
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir, logsDir))
+	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
 	if w.Code != http.StatusOK {
 		t.Fatalf("setup update: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	clearBody := strings.Replace(generalSettingsBody(staticDir, logsDir), `"server_upload_mbps": 25`, `"server_upload_mbps": null`, 1)
+	clearBody := strings.Replace(generalSettingsBody(staticDir), `"server_upload_mbps": 25`, `"server_upload_mbps": null`, 1)
 	w = performUpdateGeneralSettings(app, clearBody)
 	if w.Code != http.StatusOK {
 		t.Fatalf("clear update: expected 200, got %d: %s", w.Code, w.Body.String())
@@ -252,8 +242,7 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir, logsDir))
+	w := performUpdateGeneralSettings(app, generalSettingsBody(staticDir))
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected setup update 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -267,13 +256,11 @@ func TestUpdateGeneralSettings_ClearsOptionalStringSettings(t *testing.T) {
 		"spotify_client_id": "",
 		"spotify_client_secret": "",
 		"hardware_acceleration_device": "cpu",
-		"enable_logger": false,
 		"enable_watcher": false,
 		"download_images": false,
 		"static_dir": %q,
-		"logs_dir": %q,
 		"transcode_dir": %q
-	}`, staticDir, logsDir, filepath.Join(filepath.Dir(staticDir), "transcode"))
+	}`, staticDir, filepath.Join(filepath.Dir(staticDir), "transcode"))
 	w = performUpdateGeneralSettings(app, clearBody)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected clear update 200, got %d: %s", w.Code, w.Body.String())
@@ -296,8 +283,7 @@ func TestUpdateGeneralSettings_RejectsInvalidHardwareDevice(t *testing.T) {
 	defer app.DB.Close()
 
 	staticDir := filepath.Join(t.TempDir(), "static")
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	body := strings.Replace(generalSettingsBody(staticDir, logsDir), `"nvidia"`, `"unsupported"`, 1)
+	body := strings.Replace(generalSettingsBody(staticDir), `"nvidia"`, `"unsupported"`, 1)
 	w := performUpdateGeneralSettings(app, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -309,8 +295,7 @@ func TestUpdateGeneralSettings_RejectsEmptyRequiredDirectories(t *testing.T) {
 	app := setupSettingsHTTPTestApp(t)
 	defer app.DB.Close()
 
-	logsDir := filepath.Join(t.TempDir(), "logs")
-	w := performUpdateGeneralSettings(app, generalSettingsBody("", logsDir))
+	w := performUpdateGeneralSettings(app, generalSettingsBody(""))
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -481,7 +466,6 @@ func TestUpdateGeneralSettings_RejectsNonAdminUser(t *testing.T) {
 	handler := mountGeneralSettingsRouter(app, user.ID)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/general", strings.NewReader(generalSettingsBody(
 		filepath.Join(t.TempDir(), "static"),
-		filepath.Join(t.TempDir(), "logs"),
 	)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

@@ -59,11 +59,9 @@ function generalSettings() {
     spotify_client_id: null,
     spotify_client_secret: null,
     hardware_acceleration_device: "cpu",
-    enable_logger: true,
     enable_watcher: false,
     download_images: true,
     static_dir: "/var/lib/igloo/static",
-    logs_dir: "/var/lib/igloo/logs",
     transcode_dir: "/var/lib/igloo/transcode",
     server_upload_mbps: null,
   };
@@ -269,7 +267,7 @@ describe("settings route tab transitions", () => {
       screen.getByText("General settings").parentElement?.parentElement;
     expect(savePanel).toHaveClass(...MOTION_SETTINGS_SURFACE_CLASS.split(" "));
 
-    const switchControl = screen.getByRole("switch", { name: "File logging" });
+    const switchControl = screen.getByRole("switch", { name: "Library watcher" });
     expect(switchControl).toHaveClass(
       ...MOTION_SETTINGS_SURFACE_CLASS.split(" "),
     );
@@ -294,7 +292,6 @@ describe("settings form query updates", () => {
           settings: {
             ...generalSettings(),
             static_dir: "/srv/igloo/static",
-            logs_dir: "/srv/igloo/logs",
             transcode_dir: "/srv/igloo/transcode",
           },
         },
@@ -323,7 +320,6 @@ describe("settings form query updates", () => {
           settings: {
             ...generalSettings(),
             static_dir: "/srv/igloo/static",
-            logs_dir: "/srv/igloo/logs",
             transcode_dir: "/srv/igloo/transcode",
           },
         },

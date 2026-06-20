@@ -235,7 +235,6 @@ type Setting struct {
 	SpotifyClientID            sql.NullString  `json:"spotify_client_id"`
 	SpotifyClientSecret        sql.NullString  `json:"spotify_client_secret"`
 	HardwareAccelerationDevice sql.NullString  `json:"hardware_acceleration_device"`
-	EnableLogger               bool            `json:"enable_logger"`
 	EnableWatcher              bool            `json:"enable_watcher"`
 	DownloadImages             bool            `json:"download_images"`
 	MoviesDir                  sql.NullString  `json:"movies_dir"`
@@ -243,7 +242,6 @@ type Setting struct {
 	MusicDir                   sql.NullString  `json:"music_dir"`
 	ServerUploadMbps           sql.NullFloat64 `json:"server_upload_mbps"`
 	StaticDir                  string          `json:"static_dir"`
-	LogsDir                    string          `json:"logs_dir"`
 	TranscodeDir               string          `json:"transcode_dir"`
 	CreatedAt                  string          `json:"created_at"`
 	UpdatedAt                  string          `json:"updated_at"`

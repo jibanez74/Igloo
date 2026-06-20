@@ -333,10 +333,8 @@ func (app *Application) InitSettings(ctx context.Context) error {
 	app.Logger.Info("no settings found, creating default settings...")
 
 	downloadImages, _ := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
-	enableLogger, _ := strconv.ParseBool(os.Getenv("ENABLE_LOGGER"))
 	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
 
-	logsDir := configuredLogsDir()
 	staticDir := configuredStaticDir()
 	transcodeDir := configuredTranscodeDir()
 
@@ -351,14 +349,12 @@ func (app *Application) InitSettings(ctx context.Context) error {
 		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
 		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
 		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
-		EnableLogger:               enableLogger,
 		EnableWatcher:              enableWatcher,
 		DownloadImages:             downloadImages,
 		MoviesDir:                  optionalEnvSetting("MOVIES_DIR"),
 		ShowsDir:                   optionalEnvSetting("SHOWS_DIR"),
 		MusicDir:                   optionalEnvSetting("MUSIC_DIR"),
 		StaticDir:                  staticDir,
-		LogsDir:                    logsDir,
 		TranscodeDir:               transcodeDir,
 	}
 
@@ -393,17 +389,6 @@ func (app *Application) InitDirs() error {
 	_, err = helpers.GetOrCreateDir(filepath.Join(app.Settings.StaticDir, "musicians"))
 	if err != nil {
 		return fmt.Errorf("failed to initialize static/musicians: %w", err)
-	}
-
-	if app.Settings.LogsDir != "" {
-		created, err = helpers.GetOrCreateDir(app.Settings.LogsDir)
-		if err != nil {
-			return fmt.Errorf("failed to initialize logs directory: %w", err)
-		}
-
-		if created {
-			app.Logger.Info("created logs directory", "path", app.Settings.LogsDir)
-		}
 	}
 
 	transcodeDir := app.Settings.TranscodeDir

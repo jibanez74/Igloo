@@ -33,11 +33,9 @@ type GeneralSettings = {
   spotify_client_id: string | null;
   spotify_client_secret: string | null;
   hardware_acceleration_device: "cpu" | "apple" | "nvidia" | "intel";
-  enable_logger: boolean;
   enable_watcher: boolean;
   download_images: boolean;
   static_dir: string;
-  logs_dir: string;
   transcode_dir: string;
   server_upload_mbps: number | null;
 };
@@ -118,11 +116,9 @@ let generalSettings: GeneralSettings = {
   spotify_client_id: null,
   spotify_client_secret: null,
   hardware_acceleration_device: "cpu",
-  enable_logger: false,
   enable_watcher: true,
   download_images: true,
   static_dir: "/tmp/igloo/static",
-  logs_dir: "/tmp/igloo/logs",
   transcode_dir: "/tmp/igloo/transcodes",
   server_upload_mbps: null,
 };
@@ -1115,7 +1111,6 @@ async function handleSettingsRoutes(
           "hardware_acceleration_device",
           generalSettings.hardware_acceleration_device,
         ) as GeneralSettings["hardware_acceleration_device"],
-      enable_logger: booleanField(body, "enable_logger", generalSettings.enable_logger),
       enable_watcher: booleanField(
         body,
         "enable_watcher",
@@ -1127,7 +1122,6 @@ async function handleSettingsRoutes(
         generalSettings.download_images,
       ),
       static_dir: stringField(body, "static_dir", generalSettings.static_dir),
-      logs_dir: stringField(body, "logs_dir", generalSettings.logs_dir),
       transcode_dir: stringField(body, "transcode_dir", generalSettings.transcode_dir),
       server_upload_mbps: valueOrCurrent(
         nullableNumberField(body, "server_upload_mbps"),
