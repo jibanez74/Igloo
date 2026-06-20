@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -58,6 +59,42 @@ func TestNewRotatingWriter(t *testing.T) {
 		_, err := newRotatingWriter(path, 100)
 		if err == nil {
 			t.Error("expected error for invalid path")
+		}
+	})
+
+	t.Run("returns error for invalid max lines", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.log")
+
+		_, err := newRotatingWriter(path, 0)
+		if err == nil {
+			t.Fatal("expected error for invalid max lines")
+		}
+
+		if !strings.Contains(err.Error(), "max lines must be positive") {
+			t.Errorf("expected max lines error, got %v", err)
+		}
+	})
+
+	t.Run("counts existing long lines", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.log")
+
+		longLine := strings.Repeat("x", 70*1024)
+		content := longLine + "\nshort\n"
+		err := os.WriteFile(path, []byte(content), 0o644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		rw, err := newRotatingWriter(path, 100)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer rw.Close()
+
+		if rw.lines != 2 {
+			t.Errorf("expected 2 lines, got %d", rw.lines)
 		}
 	})
 }
@@ -215,6 +252,51 @@ func TestRotatingWriter_Rotate(t *testing.T) {
 		}
 	})
 
+	t.Run("keeps long retained line after rotation", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.log")
+
+		longLine := strings.Repeat("x", 70*1024)
+		content := "old\n" + longLine + "\nnewer\n"
+		err := os.WriteFile(path, []byte(content), 0o644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		rw, err := newRotatingWriter(path, 3)
+		if err != nil {
+			t.Fatalf("failed to create writer: %v", err)
+		}
+
+		_, err = rw.Write([]byte("final\n"))
+		if err != nil {
+			t.Fatalf("final write failed: %v", err)
+		}
+
+		err = rw.Close()
+		if err != nil {
+			t.Fatalf("close failed: %v", err)
+		}
+
+		rotated, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read file: %v", err)
+		}
+
+		lines := strings.Split(strings.TrimSuffix(string(rotated), "\n"), "\n")
+		if len(lines) != 3 {
+			t.Fatalf("expected 3 lines after rotation, got %d", len(lines))
+		}
+
+		if lines[0] != longLine {
+			t.Errorf("expected long retained line first")
+		}
+
+		if lines[2] != "final" {
+			t.Errorf("expected final line last, got %q", lines[2])
+		}
+	})
+
 	t.Run("handles multiple rotations", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "test.log")
@@ -331,6 +413,32 @@ func TestCountLines(t *testing.T) {
 			t.Errorf("expected 3 lines, got %d", count)
 		}
 	})
+
+	t.Run("counts long lines", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.log")
+
+		content := strings.Repeat("x", 70*1024) + "\nline2\n"
+		err := os.WriteFile(path, []byte(content), 0o644)
+		if err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatalf("failed to open file: %v", err)
+		}
+		defer f.Close()
+
+		count, err := countLines(f)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if count != 2 {
+			t.Errorf("expected 2 lines, got %d", count)
+		}
+	})
 }
 
 func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
@@ -344,21 +452,27 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 		}
 		defer rw.Close()
 
-		done := make(chan bool, 10)
+		errs := make(chan error, 100)
+		var wg sync.WaitGroup
+
 		for i := 0; i < 10; i++ {
-			go func(id int) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				for j := 0; j < 10; j++ {
 					_, err := rw.Write([]byte("concurrent write\n"))
 					if err != nil {
-						t.Errorf("goroutine %d write %d failed: %v", id, j, err)
+						errs <- err
 					}
 				}
-				done <- true
-			}(i)
+			}()
 		}
 
-		for i := 0; i < 10; i++ {
-			<-done
+		wg.Wait()
+		close(errs)
+
+		for err := range errs {
+			t.Errorf("concurrent write failed: %v", err)
 		}
 
 		if rw.lines != 100 {
@@ -377,21 +491,27 @@ func TestRotatingWriter_ConcurrentWrites(t *testing.T) {
 		}
 		defer rw.Close()
 
-		done := make(chan bool, 5)
+		errs := make(chan error, 100)
+		var wg sync.WaitGroup
+
 		for i := 0; i < 5; i++ {
-			go func(id int) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				for j := 0; j < 20; j++ {
 					_, err := rw.Write([]byte("concurrent\n"))
 					if err != nil {
-						t.Errorf("goroutine %d write %d failed: %v", id, j, err)
+						errs <- err
 					}
 				}
-				done <- true
-			}(i)
+			}()
 		}
 
-		for i := 0; i < 5; i++ {
-			<-done
+		wg.Wait()
+		close(errs)
+
+		for err := range errs {
+			t.Errorf("concurrent write failed: %v", err)
 		}
 
 		if rw.lines > maxLines {

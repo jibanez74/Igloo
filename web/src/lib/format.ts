@@ -72,6 +72,48 @@ export function formatTimeSeconds(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+// Format seconds into a clock timecode, including the hours field only when
+// needed: "1:23" under an hour, "1:05:23" once it crosses an hour. Use this for
+// long-form content (movies, chapter markers) where mm:ss would overflow into
+// confusing values like "65:23".
+export function formatTimecode(seconds: number) {
+  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
+
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+
+  if (hours > 0) {
+    return `${hours}:${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  }
+
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+// Format seconds into words a screen reader can read naturally, e.g.
+// "1 hour 5 minutes 23 seconds". Zero-valued fields are dropped, and a value of
+// zero reads as "0 seconds" rather than an empty string.
+export function formatSpokenTime(seconds: number) {
+  if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0 seconds";
+
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (mins > 0) parts.push(`${mins} ${mins === 1 ? "minute" : "minutes"}`);
+  if (secs > 0 || parts.length === 0) {
+    parts.push(`${secs} ${secs === 1 ? "second" : "seconds"}`);
+  }
+
+  return parts.join(" ");
+}
+
 export function formatRuntimeMinutes(minutes: number | null | undefined): string | null {
   if (minutes == null || minutes <= 0) return null;
   const hours = Math.floor(minutes / 60);

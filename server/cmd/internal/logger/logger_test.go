@@ -8,6 +8,17 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Run("returns error for nil config", func(t *testing.T) {
+		_, _, err := New(nil)
+		if err == nil {
+			t.Fatal("expected error for nil config")
+		}
+
+		if !strings.Contains(err.Error(), "logger config is required") {
+			t.Errorf("expected config required error, got %v", err)
+		}
+	})
+
 	t.Run("debug mode returns stdout logger", func(t *testing.T) {
 		cfg := &LoggerConfig{
 			Debug: true,
@@ -80,6 +91,27 @@ func TestNew(t *testing.T) {
 		if _, err := os.Stat(logPath); os.IsNotExist(err) {
 			t.Error("expected default log file 'app.log' to be created")
 		}
+
+		if cfg.LogFile != "" {
+			t.Errorf("expected config log file to stay empty, got %q", cfg.LogFile)
+		}
+	})
+
+	t.Run("stdout mode does not require log directory", func(t *testing.T) {
+		cfg := &LoggerConfig{
+			Stdout: true,
+			LogDir: "",
+		}
+
+		logger, closer, err := New(cfg)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		defer closer()
+
+		if logger == nil {
+			t.Fatal("expected logger to be non-nil")
+		}
 	})
 
 	t.Run("returns error when log directory is empty in production mode", func(t *testing.T) {
@@ -138,7 +170,7 @@ func TestNew(t *testing.T) {
 		}
 	})
 
-	t.Run("logger writes to file in production mode", func(t *testing.T) {
+	t.Run("production logger writes info and filters debug records", func(t *testing.T) {
 		dir := t.TempDir()
 
 		cfg := &LoggerConfig{
@@ -153,6 +185,7 @@ func TestNew(t *testing.T) {
 		}
 
 		logger.Info("test message", "key", "value")
+		logger.Debug("debug message", "key", "hidden")
 
 		err = closer()
 		if err != nil {
@@ -170,6 +203,10 @@ func TestNew(t *testing.T) {
 
 		if !strings.Contains(string(content), `"key":"value"`) {
 			t.Errorf("expected log file to contain key-value pair, got %s", string(content))
+		}
+
+		if strings.Contains(string(content), "debug message") {
+			t.Errorf("expected debug log to be filtered, got %s", string(content))
 		}
 	})
 
