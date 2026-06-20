@@ -14,7 +14,6 @@ import {
   Gauge,
   HardDrive,
   KeyRound,
-  Logs,
   MonitorCog,
   RotateCcw,
   Save,
@@ -121,11 +120,9 @@ function formFromSettings(
     spotify_client_id: settings.spotify_client_id ?? "",
     spotify_client_secret: settings.spotify_client_secret ?? "",
     hardware_acceleration_device: settings.hardware_acceleration_device,
-    enable_logger: settings.enable_logger,
     enable_watcher: settings.enable_watcher,
     download_images: settings.download_images,
     static_dir: settings.static_dir,
-    logs_dir: settings.logs_dir,
     transcode_dir: settings.transcode_dir,
     server_upload_mbps: settings.server_upload_mbps,
   };
@@ -146,11 +143,9 @@ function formsMatchSettings(
     form.spotify_client_secret === settingsForm.spotify_client_secret &&
     form.hardware_acceleration_device ===
       settingsForm.hardware_acceleration_device &&
-    form.enable_logger === settingsForm.enable_logger &&
     form.enable_watcher === settingsForm.enable_watcher &&
     form.download_images === settingsForm.download_images &&
     form.static_dir === settingsForm.static_dir &&
-    form.logs_dir === settingsForm.logs_dir &&
     form.transcode_dir === settingsForm.transcode_dir &&
     form.server_upload_mbps === settingsForm.server_upload_mbps
   );
@@ -233,9 +228,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const spotifyClientSecretId = useId();
   const hardwareDeviceId = useId();
   const staticDirId = useId();
-  const logsDirId = useId();
   const transcodeDirId = useId();
-  const enableLoggerId = useId();
   const enableWatcherId = useId();
   const downloadImagesId = useId();
 
@@ -294,11 +287,9 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 ),
                 hardware_acceleration_device:
                   nextSettings.hardware_acceleration_device,
-                enable_logger: nextSettings.enable_logger,
                 enable_watcher: nextSettings.enable_watcher,
                 download_images: nextSettings.download_images,
                 static_dir: nextSettings.static_dir,
-                logs_dir: nextSettings.logs_dir,
                 transcode_dir: nextSettings.transcode_dir,
                 server_upload_mbps: nextSettings.server_upload_mbps,
               },
@@ -358,14 +349,14 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   const handleTextChange = (
-    field: "static_dir" | "logs_dir" | "transcode_dir",
+    field: "static_dir" | "transcode_dir",
     value: string,
   ) => {
     setForm(current => ({ ...current, [field]: value }));
   };
 
   const handleToggleChange = (
-    field: "enable_logger" | "enable_watcher" | "download_images",
+    field: "enable_watcher" | "download_images",
     value: boolean,
   ) => {
     startTransition(() => {
@@ -408,10 +399,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       return { field: "static_dir", message: "Static directory is required." };
     }
 
-    if (form.logs_dir.trim() === "") {
-      return { field: "logs_dir", message: "Logs directory is required." };
-    }
-
     if (form.transcode_dir.trim() === "") {
       return {
         field: "transcode_dir",
@@ -444,7 +431,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       spotify_client_id: form.spotify_client_id.trim(),
       spotify_client_secret: form.spotify_client_secret.trim(),
       static_dir: form.static_dir.trim(),
-      logs_dir: form.logs_dir.trim(),
       transcode_dir: form.transcode_dir.trim(),
     });
   };
@@ -487,18 +473,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Control background services and metadata handling.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-3">
-          <SwitchField
-            id={enableLoggerId}
-            label="File logging"
-            description="Write application logs to the configured logs directory."
-            checked={form.enable_logger}
-            onCheckedChange={checked =>
-              handleToggleChange("enable_logger", checked)
-            }
-            icon={<Logs className="size-5 text-amber-400" aria-hidden="true" />}
-            disabled={updateMutation.isPending}
-          />
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <SwitchField
             id={enableWatcherId}
             label="Library watcher"
@@ -684,7 +659,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Configure application-owned storage outside media libraries.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 lg:grid-cols-3">
+        <CardContent className="grid gap-5 lg:grid-cols-2">
           <PathInput
             id={staticDirId}
             name="static_dir"
@@ -695,17 +670,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             icon={<FolderCog className="size-4" aria-hidden="true" />}
             required
             invalid={validationField === "static_dir"}
-          />
-          <PathInput
-            id={logsDirId}
-            name="logs_dir"
-            label="Logs directory"
-            value={form.logs_dir}
-            onChange={value => handleTextChange("logs_dir", value)}
-            disabled={updateMutation.isPending}
-            icon={<Logs className="size-4" aria-hidden="true" />}
-            required
-            invalid={validationField === "logs_dir"}
           />
           <PathInput
             id={transcodeDirId}
