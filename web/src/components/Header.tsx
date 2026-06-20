@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Search, Bell, Cast } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,21 +10,23 @@ export default function Header() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { q?: string };
   const [value, setValue] = useState(search.q ?? "");
+  const [prevQ, setPrevQ] = useState(search.q);
 
-  useEffect(() => {
-    queueMicrotask(() => setValue(search.q ?? ""));
-  }, [search.q]);
+  // Sync the input to the URL's q param when it changes (e.g. browser
+  // back/forward) by adjusting state during render — see React's
+  // "You Might Not Need an Effect".
+  if (search.q !== prevQ) {
+    setPrevQ(search.q);
+    setValue(search.q ?? "");
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Dismiss the mobile on-screen keyboard by removing focus from the input.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+
     const q = value.trim();
-    if (!q) {
-      navigate({
-        to: "/search",
-        search: { q: "", tab: "all", page: 1 },
-      });
-      return;
-    }
     navigate({
       to: "/search",
       search: { q, tab: "all", page: 1 },

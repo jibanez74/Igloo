@@ -50,6 +50,25 @@ export function useMovieWatchProgressSaver({
     };
   }, [movieId, currentTimeRef, durationRef]);
 
+  // In-app navigation (e.g. the Back button) fires neither pagehide nor a
+  // reliable pause event, so flush the latest position on unmount to avoid
+  // dropping progress accrued since the last interval tick.
+  useEffect(() => {
+    return () => {
+      // Intentionally read the live ref values at unmount time (not the values
+      // captured when the effect ran) so we flush the most recent position.
+      void persistMovieWatchProgress(
+        movieId,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        currentTimeRef.current,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        durationRef.current,
+      ).catch(() => {
+        // Best-effort flush on unmount; nothing left to surface the error to.
+      });
+    };
+  }, [movieId, currentTimeRef, durationRef]);
+
   const handlePauseSave = async () => {
     try {
       await persistMovieWatchProgress(

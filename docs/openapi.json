@@ -5321,11 +5321,9 @@
           "spotify_client_id",
           "spotify_client_secret",
           "hardware_acceleration_device",
-          "enable_logger",
           "enable_watcher",
           "download_images",
           "static_dir",
-          "logs_dir",
           "transcode_dir",
           "server_upload_mbps"
         ],
@@ -5377,9 +5375,6 @@
           "hardware_acceleration_device": {
             "$ref": "#/components/schemas/HardwareAccelerationDevice"
           },
-          "enable_logger": {
-            "type": "boolean"
-          },
           "enable_watcher": {
             "type": "boolean"
           },
@@ -5387,9 +5382,6 @@
             "type": "boolean"
           },
           "static_dir": {
-            "type": "string"
-          },
-          "logs_dir": {
             "type": "string"
           },
           "transcode_dir": {
@@ -5418,11 +5410,9 @@
           "spotify_client_id",
           "spotify_client_secret",
           "hardware_acceleration_device",
-          "enable_logger",
           "enable_watcher",
           "download_images",
           "static_dir",
-          "logs_dir",
           "transcode_dir",
           "server_upload_mbps"
         ],
@@ -5453,9 +5443,6 @@
           "hardware_acceleration_device": {
             "$ref": "#/components/schemas/HardwareAccelerationDevice"
           },
-          "enable_logger": {
-            "type": "boolean"
-          },
           "enable_watcher": {
             "type": "boolean"
           },
@@ -5463,9 +5450,6 @@
             "type": "boolean"
           },
           "static_dir": {
-            "type": "string"
-          },
-          "logs_dir": {
             "type": "string"
           },
           "transcode_dir": {

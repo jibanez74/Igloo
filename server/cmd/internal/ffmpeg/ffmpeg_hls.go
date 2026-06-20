@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -78,10 +77,13 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		}
 	}
 
+	// Thread count is intentionally left unset: libx264 (and the hardware
+	// encoders) auto-detect an appropriate value, which lets a single transcode
+	// use the whole machine. Total CPU pressure is bounded by the concurrency
+	// limiter in the api package, not by a per-process thread cap.
 	args := []string{
 		"-y", "-fflags", "+genpts",
 		"-analyzeduration", "5000000", "-probesize", "5000000",
-		"-threads", fmt.Sprintf("%d", max(1, runtime.NumCPU()/2)),
 	}
 
 	deviceDecision := ResolveHLSDevice(p.HWDevice, p.Capabilities)
@@ -227,6 +229,13 @@ func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []s
 		}
 	}
 
+	// For software encoders (and as a fallback when frame rate is unknown) we
+	// force keyframes on segment boundaries via an expression. This is kept even
+	// when -g/-keyint_min were set above: those make the GOP the right *size*,
+	// while -force_key_frames is what actually pins keyframes to the exact
+	// segment timestamps so every HLS segment starts on an IDR frame.
+	// -sc_threshold:v:0 0 disables libx264 scene-cut keyframes so it does not
+	// insert extra, unaligned IDR frames between the forced ones.
 	args = append(args,
 		"-force_key_frames:0",
 		fmt.Sprintf("expr:gte(t,n_forced*%d)", helpers.HLS_SEGMENT_TIME_SEC),

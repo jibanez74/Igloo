@@ -76,9 +76,36 @@ export default function AudioPlayer({
   const [isLoading, setIsLoading] = useState(false);
 
   const artist = musicianName || albumTitle;
-  const announcement = track
-    ? `${isPlaying ? "Now playing" : "Paused"}: ${track.title} by ${artist}`
-    : "";
+
+  // The dialog's accessible name already announces the current track on open, so
+  // the live region stays silent on first render and only speaks on subsequent
+  // play/pause toggles and track changes. We compare against the previous render
+  // (adjusting state during render, per the React "you might not need an effect"
+  // guidance) rather than seeding the live region with content on mount.
+  const [announcement, setAnnouncement] = useState("");
+  const [lastState, setLastState] = useState<{
+    trackId: TrackType["id"] | null;
+    isPlaying: boolean;
+  }>({ trackId: track?.id ?? null, isPlaying });
+
+  const currentTrackId = track?.id ?? null;
+  if (
+    currentTrackId !== lastState.trackId ||
+    isPlaying !== lastState.isPlaying
+  ) {
+    if (!track) {
+      setAnnouncement("");
+    } else if (lastState.trackId !== null) {
+      setAnnouncement(
+        track.id !== lastState.trackId
+          ? `Now playing: ${track.title} by ${artist}`
+          : isPlaying
+            ? "Playing"
+            : "Paused",
+      );
+    }
+    setLastState({ trackId: currentTrackId, isPlaying });
+  }
 
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
@@ -503,7 +530,6 @@ export default function AudioPlayer({
       >
         {isExpanded && (
           <DialogFullscreenContent
-            aria-label={`Now playing: ${track.title} by ${artist}`}
             className={cn(
               MOTION_MEDIA_OVERLAY_ENTER_CLASS,
               "flex flex-col bg-linear-to-b from-slate-900 via-slate-800 to-slate-900",
@@ -520,7 +546,6 @@ export default function AudioPlayer({
               Now playing: {track.title} by {artist}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Fullscreen audio player with track controls, progress, and volume.
               Press Escape to minimize.
             </DialogDescription>
 
@@ -564,7 +589,7 @@ export default function AudioPlayer({
             </header>
 
             <main className="flex flex-1 flex-col items-center justify-center px-8 pb-8">
-              <figure className="mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96">
+              <div className="mb-8 size-72 overflow-hidden rounded-2xl shadow-2xl shadow-black/50 sm:size-80 md:size-96">
                 {albumCover ? (
                   <img
                     src={albumCover}
@@ -580,7 +605,7 @@ export default function AudioPlayer({
                     <Disc3 className="size-24 text-slate-600" aria-hidden="true" />
                   </div>
                 )}
-              </figure>
+              </div>
 
               <div className="mb-8 max-w-md text-center">
                 <h1
@@ -688,11 +713,14 @@ export default function AudioPlayer({
                 )}
                 aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
               >
-                <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg">
+                <div
+                  className="size-12 shrink-0 overflow-hidden rounded-lg bg-slate-800 shadow-lg"
+                  aria-hidden="true"
+                >
                   {albumCover ? (
                     <img
                       src={albumCover}
-                      alt={albumTitle}
+                      alt=""
                       className="size-full object-cover"
                     />
                   ) : (
@@ -702,7 +730,7 @@ export default function AudioPlayer({
                   )}
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1" aria-hidden="true">
                   <p className="truncate text-sm font-medium text-white">
                     {track.title}
                   </p>
