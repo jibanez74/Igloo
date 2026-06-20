@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -97,23 +95,12 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		}
 	}
 
-	threadsIdx := indexOf(args, "-threads")
-	if threadsIdx < 0 {
-		t.Fatal("-threads flag missing from args")
-	}
-	if threadsIdx+1 >= len(args) {
-		t.Fatal("-threads flag has no value")
-	}
-	threadsVal, err := strconv.Atoi(args[threadsIdx+1])
-	if err != nil {
-		t.Fatalf("-threads value %q is not an integer: %v", args[threadsIdx+1], err)
-	}
-	if threadsVal < 1 {
-		t.Errorf("-threads = %d, want >= 1", threadsVal)
-	}
-	wantThreads := max(1, runtime.NumCPU()/2)
-	if threadsVal != wantThreads {
-		t.Errorf("-threads = %d, want %d (max(1, NumCPU/2))", threadsVal, wantThreads)
+	// No explicit -threads cap: libx264 auto-detects its thread count and the
+	// concurrency limiter bounds total CPU pressure. A stray -threads before -i
+	// would only throttle the decoder while leaving the encoder unbounded, so
+	// assert the flag is absent entirely.
+	if threadsIdx := indexOf(args, "-threads"); threadsIdx >= 0 {
+		t.Errorf("-threads should not be set, found at index %d: %s", threadsIdx, argStr)
 	}
 }
 
