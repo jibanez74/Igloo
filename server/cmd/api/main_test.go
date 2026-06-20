@@ -202,6 +202,32 @@ func TestCleanupStaleHLSTempDirsUsesConfiguredTranscodeDir(t *testing.T) {
 	}
 }
 
+func TestInitLogger_CreatesRuntimeLogsDirWhenFileLogging(t *testing.T) {
+	logsDir := filepath.Join(t.TempDir(), "logs")
+	app := &Application{
+		Config: RuntimeConfig{
+			LogsDir:     logsDir,
+			LogToStdout: false,
+		},
+	}
+
+	err := app.InitLogger()
+	if err != nil {
+		t.Fatalf("InitLogger failed: %v", err)
+	}
+	if app.LoggerCloser != nil {
+		defer app.LoggerCloser()
+	}
+
+	info, err := os.Stat(logsDir)
+	if err != nil {
+		t.Fatalf("expected logs directory to exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected %s to be a directory", logsDir)
+	}
+}
+
 func TestInitDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -489,16 +515,16 @@ func TestInitTables_SettingsSingleton(t *testing.T) {
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO settings (tmdb_key, static_dir, logs_dir)
-		VALUES ('first-key', 'first-static', 'first-logs')
+		INSERT INTO settings (tmdb_key, static_dir)
+		VALUES ('first-key', 'first-static')
 	`)
 	if err != nil {
 		t.Fatalf("insert first settings row: %v", err)
 	}
 
 	_, err = db.Exec(`
-		INSERT INTO settings (tmdb_key, static_dir, logs_dir)
-		VALUES ('second-key', 'second-static', 'second-logs')
+		INSERT INTO settings (tmdb_key, static_dir)
+		VALUES ('second-key', 'second-static')
 	`)
 	if err == nil {
 		t.Fatal("expected second settings insert to fail")
@@ -668,7 +694,6 @@ func clearSettingsEnv(t *testing.T) {
 		"SPOTIFY_CLIENT_ID",
 		"SPOTIFY_CLIENT_SECRET",
 		"HARDWARE_ACCELERATION_DEVICE",
-		"ENABLE_LOGGER",
 		"ENABLE_WATCHER",
 		"DOWNLOAD_IMAGES",
 		"STATIC_DIR",
@@ -701,9 +726,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != helpers.DEFAULT_LOGS_DIR {
-		t.Errorf("Expected LogsDir %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
-	}
 	if app.Settings.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
 		t.Errorf("Expected TranscodeDir %q, got %q", helpers.DEFAULT_TRANSCODE_DIR, app.Settings.TranscodeDir)
 	}
@@ -715,9 +737,6 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Error("Expected HardwareAccelerationDevice to be valid")
 	}
 
-	if app.Settings.EnableLogger != false {
-		t.Error("Expected EnableLogger to be false by default")
-	}
 	if app.Settings.EnableWatcher != false {
 		t.Error("Expected EnableWatcher to be false by default")
 	}
@@ -760,14 +779,12 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	t.Setenv("TMDB_API_KEY", "test-tmdb-key")
 	t.Setenv("JELLYFIN_API_KEY", "test-jellyfin-api-key")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
-	t.Setenv("ENABLE_LOGGER", "true")
 	t.Setenv("ENABLE_WATCHER", "true")
 	t.Setenv("DOWNLOAD_IMAGES", "true")
 	t.Setenv("MOVIES_DIR", "/host/movies")
 	t.Setenv("SHOWS_DIR", "/host/shows")
 	t.Setenv("MUSIC_DIR", "/host/music")
 	t.Setenv("STATIC_DIR", "/host/static")
-	t.Setenv("LOGS_DIR", "/host/logs")
 	t.Setenv("TRANSCODE_DIR", "/host/transcode")
 
 	ctx := context.Background()
@@ -798,16 +815,10 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	if app.Settings.StaticDir != "/host/static" {
 		t.Errorf("Expected StaticDir %q, got %q", "/host/static", app.Settings.StaticDir)
 	}
-	if app.Settings.LogsDir != "/host/logs" {
-		t.Errorf("Expected LogsDir %q, got %q", "/host/logs", app.Settings.LogsDir)
-	}
 	if app.Settings.TranscodeDir != "/host/transcode" {
 		t.Errorf("Expected TranscodeDir %q, got %q", "/host/transcode", app.Settings.TranscodeDir)
 	}
 
-	if app.Settings.EnableLogger != true {
-		t.Error("Expected EnableLogger to be true")
-	}
 	if app.Settings.EnableWatcher != true {
 		t.Error("Expected EnableWatcher to be true")
 	}
@@ -824,14 +835,12 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 		TmdbKey:                    sql.NullString{String: "existing-key", Valid: true},
 		JellyfinApiKey:             sql.NullString{Valid: false},
 		HardwareAccelerationDevice: sql.NullString{String: "nvidia", Valid: true},
-		EnableLogger:               true,
 		EnableWatcher:              false,
 		DownloadImages:             false,
 		MoviesDir:                  sql.NullString{Valid: false},
 		ShowsDir:                   sql.NullString{Valid: false},
 		MusicDir:                   sql.NullString{Valid: false},
 		StaticDir:                  "existing-static",
-		LogsDir:                    "existing-logs",
 		TranscodeDir:               "existing-transcode",
 	}
 	_, err := app.Queries.CreateSettings(context.Background(), params)
@@ -856,9 +865,6 @@ func TestInitSettings_LoadsExistingSettings(t *testing.T) {
 	if app.Settings.HardwareAccelerationDevice.String != "nvidia" {
 		t.Errorf("Expected HardwareAccelerationDevice 'nvidia', got '%s'", app.Settings.HardwareAccelerationDevice.String)
 	}
-	if app.Settings.EnableLogger != true {
-		t.Error("Expected EnableLogger to be true from existing settings")
-	}
 }
 
 func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
@@ -877,14 +883,12 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 		SpotifyClientID:            sql.NullString{String: "existing-spotify-id", Valid: true},
 		SpotifyClientSecret:        sql.NullString{String: "existing-spotify-secret", Valid: true},
 		HardwareAccelerationDevice: sql.NullString{String: "cpu", Valid: true},
-		EnableLogger:               true,
 		EnableWatcher:              false,
 		DownloadImages:             false,
 		MoviesDir:                  sql.NullString{String: existingMoviesDir, Valid: true},
 		ShowsDir:                   sql.NullString{String: existingShowsDir, Valid: true},
 		MusicDir:                   sql.NullString{String: existingMusicDir, Valid: true},
 		StaticDir:                  helpers.DEFAULT_STATIC_DIR,
-		LogsDir:                    helpers.DEFAULT_LOGS_DIR,
 		TranscodeDir:               helpers.DEFAULT_TRANSCODE_DIR,
 	}
 	_, err := app.Queries.CreateSettings(context.Background(), params)
@@ -898,14 +902,12 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	t.Setenv("SPOTIFY_CLIENT_ID", "override-spotify-id")
 	t.Setenv("SPOTIFY_CLIENT_SECRET", "override-spotify-secret")
 	t.Setenv("HARDWARE_ACCELERATION_DEVICE", "nvidia")
-	t.Setenv("ENABLE_LOGGER", "false")
 	t.Setenv("ENABLE_WATCHER", "true")
 	t.Setenv("DOWNLOAD_IMAGES", "true")
 	t.Setenv("MOVIES_DIR", "/override/movies")
 	t.Setenv("SHOWS_DIR", "/override/shows")
 	t.Setenv("MUSIC_DIR", "/override/music")
 	t.Setenv("STATIC_DIR", "/override/static")
-	t.Setenv("LOGS_DIR", "/override/logs")
 	t.Setenv("TRANSCODE_DIR", "/override/transcode")
 
 	err = app.InitSettings(context.Background())
@@ -927,9 +929,6 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	}
 	if app.Settings.HardwareAccelerationDevice.String != "cpu" {
 		t.Errorf("Expected existing hardware mode, got %q", app.Settings.HardwareAccelerationDevice.String)
-	}
-	if !app.Settings.EnableLogger {
-		t.Error("Expected existing EnableLogger to remain true")
 	}
 	if app.Settings.EnableWatcher {
 		t.Error("Expected existing EnableWatcher to remain false")
@@ -957,9 +956,6 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	}
 	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
 		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
-	}
-	if app.Settings.LogsDir != helpers.DEFAULT_LOGS_DIR {
-		t.Errorf("Expected LogsDir to remain fixed at %q, got %q", helpers.DEFAULT_LOGS_DIR, app.Settings.LogsDir)
 	}
 	if app.Settings.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
 		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", helpers.DEFAULT_TRANSCODE_DIR, app.Settings.TranscodeDir)
@@ -1040,7 +1036,6 @@ func TestInitDirs(t *testing.T) {
 
 	app.Settings = &database.Setting{
 		StaticDir:    filepath.Join(tmpDir, "static"),
-		LogsDir:      filepath.Join(tmpDir, "logs"),
 		TranscodeDir: filepath.Join(tmpDir, "transcode"),
 		MoviesDir: sql.NullString{
 			String: moviesDir,
@@ -1063,7 +1058,6 @@ func TestInitDirs(t *testing.T) {
 
 	for _, dir := range []string{
 		app.Settings.StaticDir,
-		app.Settings.LogsDir,
 		app.Settings.TranscodeDir,
 		filepath.Join(app.Settings.StaticDir, "albums"),
 		filepath.Join(app.Settings.StaticDir, "musicians"),

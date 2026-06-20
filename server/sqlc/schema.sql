@@ -31,7 +31,6 @@ CREATE TABLE
     hardware_acceleration_device TEXT CHECK (
       hardware_acceleration_device IN ('cpu', 'apple', 'nvidia', 'intel')
     ),
-    enable_logger BOOLEAN NOT NULL DEFAULT false,
     enable_watcher BOOLEAN NOT NULL DEFAULT false,
     download_images BOOLEAN NOT NULL DEFAULT false,
     movies_dir TEXT,
@@ -39,7 +38,6 @@ CREATE TABLE
     music_dir TEXT,
     server_upload_mbps REAL,
     static_dir TEXT NOT NULL DEFAULT 'static',
-    logs_dir TEXT NOT NULL DEFAULT 'logs',
     transcode_dir TEXT NOT NULL DEFAULT 'transcode',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
