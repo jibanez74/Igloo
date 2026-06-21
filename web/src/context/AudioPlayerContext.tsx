@@ -25,6 +25,7 @@ import {
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
+const MAX_SHUFFLE_FETCH_ATTEMPTS = 3;
 
 type QueueState = Omit<
   AudioPlayerState,
@@ -40,7 +41,6 @@ function createInitialQueueState(): QueueState {
     musicianName: null,
     isShuffleMode: false,
     isPlayAllMode: false,
-    shufflePlayedIds: new Set(),
   };
 }
 
@@ -124,29 +124,47 @@ export function AudioPlayerProvider({
     const fetchMoreShuffleTracks = async () => {
       isFetchingMoreRef.current = true;
 
-      try {
-        const response = await getShuffleTracks(50);
+      // The shuffle endpoint returns purely random tracks with no awareness of
+      // what we've already queued, so dedupe against the existing queue. Retry a
+      // few times when a batch is all duplicates so playback doesn't stall.
+      const knownIds = new Set(queueState.tracks.map(track => track.id));
+      const collected: TrackType[] = [];
+      let attempts = 0;
 
-        if (!isCancelled && !response.error && response.data.tracks.length > 0) {
-          const rawTracks = response.data.tracks;
-          const newTracks: TrackType[] = [];
-          for (const track of rawTracks) {
-            if (!queueState.shufflePlayedIds.has(track.id)) {
-              newTracks.push(convertToAudioTrack(track));
-            }
+      while (
+        attempts < MAX_SHUFFLE_FETCH_ATTEMPTS &&
+        collected.length === 0 &&
+        !isCancelled
+      ) {
+        attempts++;
+
+        try {
+          const response = await getShuffleTracks(50);
+
+          if (response.error || response.data.tracks.length === 0) {
+            break;
           }
 
+          const rawTracks = response.data.tracks;
           populateTrackMetadata(rawTracks);
 
-          if (newTracks.length > 0) {
-            setQueueState(prev => ({
-              ...prev,
-              tracks: [...prev.tracks, ...newTracks],
-            }));
+          for (const track of rawTracks) {
+            if (!knownIds.has(track.id)) {
+              knownIds.add(track.id);
+              collected.push(convertToAudioTrack(track));
+            }
           }
+        } catch {
+          // Silently fail - user can continue with the current queue.
+          break;
         }
-      } catch {
-        // Silently fail - user can continue with the current queue.
+      }
+
+      if (!isCancelled && collected.length > 0) {
+        setQueueState(prev => ({
+          ...prev,
+          tracks: [...prev.tracks, ...collected],
+        }));
       }
 
       isFetchingMoreRef.current = false;
@@ -160,8 +178,7 @@ export function AudioPlayerProvider({
   }, [
     queueState.isShuffleMode,
     currentTrackIndex,
-    queueState.tracks.length,
-    queueState.shufflePlayedIds,
+    queueState.tracks,
   ]);
 
   useEffect(() => {
@@ -280,7 +297,6 @@ export function AudioPlayerProvider({
       musicianName: albumInfo.musician,
       isShuffleMode: false,
       isPlayAllMode: false,
-      shufflePlayedIds: new Set(),
     });
     setIsExpanded(true);
   };
@@ -297,7 +313,6 @@ export function AudioPlayerProvider({
       musicianName: albumInfo.musician,
       isShuffleMode: false,
       isPlayAllMode: false,
-      shufflePlayedIds: new Set(),
     });
     setIsExpanded(true);
   };
@@ -316,7 +331,6 @@ export function AudioPlayerProvider({
       musicianName: albumInfo.musician,
       isShuffleMode: false,
       isPlayAllMode: false,
-      shufflePlayedIds: new Set(),
     });
     setIsExpanded(true);
   };
@@ -345,7 +359,6 @@ export function AudioPlayerProvider({
         musicianName: musician,
         isShuffleMode: true,
         isPlayAllMode: false,
-        shufflePlayedIds: new Set(),
       });
       setIsExpanded(true);
     };
@@ -377,18 +390,12 @@ export function AudioPlayerProvider({
         musicianName: musician,
         isShuffleMode: false,
         isPlayAllMode: true,
-        shufflePlayedIds: new Set(),
       });
       setIsExpanded(true);
     };
 
   const setTrack: AudioPlayerActions["setTrack"] = track => {
     setQueueState(prev => {
-      const newPlayedIds =
-        prev.isShuffleMode && prev.currentTrack
-          ? new Set(prev.shufflePlayedIds).add(prev.currentTrack.id)
-          : prev.shufflePlayedIds;
-
       const isSpecialMode = prev.isShuffleMode || prev.isPlayAllMode;
       const newAlbumCover = isSpecialMode
         ? (trackCoversRef.current?.get(track.id) ?? null)
@@ -400,7 +407,6 @@ export function AudioPlayerProvider({
       return {
         ...prev,
         currentTrack: track,
-        shufflePlayedIds: newPlayedIds,
         albumCover: newAlbumCover,
         musicianName: newMusicianName,
       };
