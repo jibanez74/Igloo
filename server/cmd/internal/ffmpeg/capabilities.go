@@ -81,13 +81,8 @@ func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
 	if !tonemap {
 		return true
 	}
-	if !c.SupportsFilter("tonemap_cuda") {
+	if !c.SupportsFilter("tonemap_cuda") || !c.SupportsNvidiaCUDATonemapOptions() {
 		return false
-	}
-	for _, option := range []string{"format", "p", "t", "m", "tonemap", "desat"} {
-		if !c.SupportsFilterOption("tonemap_cuda", option) {
-			return false
-		}
 	}
 	return c.NvidiaCUDATonemapRuntimeUsable
 }

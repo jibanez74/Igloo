@@ -431,7 +431,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		Profile:          params.EffectiveProfile,
 		VideoStreamIndex: videoStreamIndex,
 		AudioStreamIndex: audioStreamIndex,
-		HWDevice:         hwDevice,
+		HWDevice:         deviceDecision.Effective,
 		CopyVideo:        copyVideo,
 		CopyAudio:        copyAudio,
 		StartSec:         startSec,
