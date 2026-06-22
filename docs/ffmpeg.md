@@ -215,7 +215,7 @@ The FFmpeg encoder mapping is:
 | `cpu` | none | `libx264` | Any supported runtime |
 | `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | macOS with VideoToolbox-capable FFmpeg |
 | `nvidia` | `-hwaccel cuda -hwaccel_output_format cuda` when CUDA filters are available; otherwise software decode | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
-| `intel` | `-hwaccel qsv` | `h264_qsv` | Linux with Intel QSV support |
+| `intel` | software decode by default; QSV filter device only when SDR `scale_qsv` is probed usable | `h264_qsv` | Linux with Intel QSV support |
 
 NVIDIA adds:
 
@@ -226,10 +226,29 @@ NVIDIA adds:
 Intel adds:
 
 ```text
+-preset veryfast
 -look_ahead 1
+-forced_idr 1
 ```
 
-At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, and failed NVENC runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+Igloo only sends those Intel encoder options when the probed FFmpeg build lists them for `h264_qsv`.
+
+At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, and failed QSV runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+
+Intel QSV encode is checked with a short runtime encode probe, not just by looking for `h264_qsv` in `ffmpeg -encoders`. For SDR transcodes, Igloo normally uses software decode and software scaling into `nv12` frames before `h264_qsv` encode:
+
+```text
+scale=-2:<height>,format=nv12
+```
+
+If QSV encode is usable and FFmpeg also exposes `qsv`, `scale_qsv`, the `scale_qsv` `format` option, and a successful `scale_qsv` runtime probe, SDR transcodes use QSV scaling:
+
+```text
+-init_hw_device qsv=igloo_qsv -filter_hw_device igloo_qsv
+-vf format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=<height>:format=nv12
+```
+
+Igloo does not use `-hwaccel qsv` for the default Intel encode-only path.
 
 NVIDIA and Intel hardware acceleration require host drivers, device access, and an FFmpeg build with the matching encoder support. Apple VideoToolbox is available only on macOS builds with a VideoToolbox-capable FFmpeg binary.
 
@@ -258,10 +277,10 @@ format=gbrpf32le,
 zscale=p=bt709,
 tonemap=tonemap=hable:desat=0,
 zscale=t=bt709:m=bt709:r=tv,
-format=yuv420p
+format=<output_pixel_format>
 ```
 
-For NVIDIA HDR tone mapping, Igloo uses `tonemap_cuda` only when the probed FFmpeg build exposes the CUDA tone-map filter and the options Igloo needs. If not, NVIDIA falls back to software `zscale`/`tonemap` while still using `h264_nvenc` when the encoder is usable. Intel HDR tone mapping also uses the software filter chain with the hardware encoder. The software filter chain needs software frames; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
+CPU and NVIDIA software tone mapping output `yuv420p`; Intel outputs `nv12` for `h264_qsv`. For NVIDIA HDR tone mapping, Igloo uses `tonemap_cuda` only when the probed FFmpeg build exposes the CUDA tone-map filter and the options Igloo needs. If not, NVIDIA falls back to software `zscale`/`tonemap` while still using `h264_nvenc` when the encoder is usable. Intel HDR tone mapping also uses the software filter chain with the hardware encoder, and never uses `scale_qsv`. The software filter chain needs software frames; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
 
 The Hable tone curve is a practical default that gives reasonable SDR output for HDR movies without exposing tone-map tuning to users yet.
 

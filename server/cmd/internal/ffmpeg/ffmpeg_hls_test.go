@@ -27,6 +27,7 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 		Filters:                map[string]bool{},
 		HWAccels:               map[string]bool{},
 		FilterOptions:          map[string]map[string]bool{},
+		EncoderOptions:         map[string]map[string]bool{},
 		H264NVENCRuntimeUsable: true,
 	}
 
@@ -35,6 +36,13 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 		caps.Encoders["h264_videotoolbox"] = true
 	case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
 		caps.Encoders["h264_qsv"] = true
+		caps.HWAccels["qsv"] = true
+		caps.H264QSVRuntimeUsable = true
+		caps.EncoderOptions["h264_qsv"] = map[string]bool{
+			"look_ahead": true,
+			"forced_idr": true,
+			"preset":     true,
+		}
 	case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
 		caps.Encoders["h264_nvenc"] = true
 		caps.HWAccels["cuda"] = true
@@ -42,6 +50,14 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 		caps.FilterOptions["scale_cuda"] = map[string]bool{"format": true}
 	}
 
+	return caps
+}
+
+func hlsTestIntelQSVScaleCapabilities() Capabilities {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	caps.Filters["scale_qsv"] = true
+	caps.FilterOptions["scale_qsv"] = map[string]bool{"format": true}
+	caps.QSVScaleRuntimeUsable = true
 	return caps
 }
 
@@ -425,7 +441,7 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 		},
 		{
 			device:      helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
-			wantHWAccel: "qsv",
+			wantHWAccel: "",
 			wantEncoder: "h264_qsv",
 		},
 	}
@@ -485,6 +501,17 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 				if !strings.Contains(argStr, "-look_ahead 1") {
 					t.Errorf("intel path must include -look_ahead 1")
 				}
+				if !strings.Contains(argStr, "-forced_idr 1") {
+					t.Errorf("intel path must force IDR frames")
+				}
+				if !strings.Contains(argStr, "format=nv12") {
+					t.Errorf("intel path must feed h264_qsv nv12 frames")
+				}
+				for _, unexpected := range []string{"-hwaccel qsv", "-pix_fmt yuv420p"} {
+					if strings.Contains(argStr, unexpected) {
+						t.Errorf("intel encode-only path must not contain %q", unexpected)
+					}
+				}
 			case helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
 				for _, unexpected := range []string{"-sc_threshold", "-rc vbr", "-look_ahead"} {
 					if strings.Contains(argStr, unexpected) {
@@ -493,6 +520,131 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildHLSArgs_IntelSDRUsesQSVScaleWhenProbed(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     hlsTestIntelQSVScaleCapabilities(),
+	})
+	argStr := strings.Join(args, " ")
+
+	initIdx := indexOf(args, "-init_hw_device")
+	filterIdx := indexOf(args, "-filter_hw_device")
+	iIdx := indexOf(args, "-i")
+	if initIdx < 0 || filterIdx < 0 {
+		t.Fatalf("Intel QSV scale path must initialize and select a QSV device, got: %s", argStr)
+	}
+	if args[initIdx+1] != "qsv=igloo_qsv" {
+		t.Fatalf("-init_hw_device = %q, want qsv=igloo_qsv", args[initIdx+1])
+	}
+	if args[filterIdx+1] != "igloo_qsv" {
+		t.Fatalf("-filter_hw_device = %q, want igloo_qsv", args[filterIdx+1])
+	}
+	if !(initIdx < filterIdx && filterIdx < iIdx) {
+		t.Fatalf("QSV device setup must come before input, got: %s", argStr)
+	}
+
+	if !strings.Contains(argStr, "format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=720:format=nv12") {
+		t.Fatalf("Intel QSV scale path must upload nv12 frames and use scale_qsv, got: %s", argStr)
+	}
+	for _, unexpected := range []string{"-hwaccel qsv", "scale=-2:720", "-pix_fmt yuv420p"} {
+		if strings.Contains(argStr, unexpected) {
+			t.Fatalf("Intel QSV scale path must not contain %q, got: %s", unexpected, argStr)
+		}
+	}
+}
+
+func TestBuildHLSArgs_IntelSDRWithoutQSVScaleUsesSoftwareScale(t *testing.T) {
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL),
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "scale=-2:720,format=nv12") {
+		t.Fatalf("Intel encode-only path must use software scale into nv12, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "h264_qsv") {
+		t.Fatalf("Intel encode-only path must use h264_qsv, got: %s", argStr)
+	}
+	for _, unexpected := range []string{"-init_hw_device", "-filter_hw_device", "hwupload", "scale_qsv", "-hwaccel qsv", "-pix_fmt yuv420p"} {
+		if strings.Contains(argStr, unexpected) {
+			t.Fatalf("Intel encode-only path must not contain %q, got: %s", unexpected, argStr)
+		}
+	}
+}
+
+func TestBuildHLSArgs_IntelFallsBackToCPUWhenRuntimeProbeFails(t *testing.T) {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	caps.H264QSVRuntimeUsable = false
+	caps.H264QSVProbeError = "no qsv device"
+
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     caps,
+	})
+	argStr := strings.Join(args, " ")
+
+	for _, unexpected := range []string{"h264_qsv", "-look_ahead", "-forced_idr", "format=nv12", "-hwaccel qsv"} {
+		if strings.Contains(argStr, unexpected) {
+			t.Fatalf("failed QSV runtime probe must fall back to CPU and omit %q, got: %s", unexpected, argStr)
+		}
+	}
+	if !strings.Contains(argStr, "libx264") {
+		t.Fatalf("failed QSV runtime probe must use libx264, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "scale=-2:720,format=yuv420p") {
+		t.Fatalf("failed QSV runtime probe must use CPU software output format, got: %s", argStr)
+	}
+}
+
+func TestBuildHLSArgs_IntelUnsupportedEncoderOptionsAreOmitted(t *testing.T) {
+	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_INTEL)
+	caps.EncoderOptions["h264_qsv"] = map[string]bool{}
+
+	args := hlsArgs(t, HLSParams{
+		SourcePath:       "/s",
+		OutDir:           t.TempDir(),
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		CopyVideo:        false,
+		CopyAudio:        false,
+		Capabilities:     caps,
+	})
+	argStr := strings.Join(args, " ")
+
+	if !strings.Contains(argStr, "h264_qsv") {
+		t.Fatalf("Intel path must still use h264_qsv, got: %s", argStr)
+	}
+	for _, unexpected := range []string{"-preset", "-look_ahead", "-forced_idr"} {
+		if indexOf(args, unexpected) >= 0 {
+			t.Fatalf("unsupported QSV option %q must be omitted, got: %s", unexpected, argStr)
+		}
 	}
 }
 
@@ -1031,6 +1183,7 @@ func TestBuildHLSArgs_TonemapHDR_Intel(t *testing.T) {
 		CopyVideo:        false,
 		CopyAudio:        false,
 		TonemapHDR:       true,
+		Capabilities:     hlsTestIntelQSVScaleCapabilities(),
 	})
 	argStr := strings.Join(args, " ")
 
@@ -1040,8 +1193,16 @@ func TestBuildHLSArgs_TonemapHDR_Intel(t *testing.T) {
 	if !strings.Contains(argStr, "zscale") {
 		t.Error("Intel tone-mapping must use software zscale filter")
 	}
+	if !strings.Contains(argStr, "format=nv12") {
+		t.Error("Intel tone-mapping must convert software frames to nv12 for h264_qsv")
+	}
 	if !strings.Contains(argStr, "h264_qsv") {
 		t.Error("Intel encoder must still be h264_qsv")
+	}
+	for _, unexpected := range []string{"scale_qsv", "hwupload", "-init_hw_device", "-filter_hw_device"} {
+		if strings.Contains(argStr, unexpected) {
+			t.Errorf("Intel tone-mapping must not use QSV scale path element %q", unexpected)
+		}
 	}
 }
 
