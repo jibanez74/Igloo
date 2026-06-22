@@ -11,6 +11,7 @@ import (
 type FFmpegInterface interface {
 	RunHLS(ctx context.Context, params HLSParams, onExit func(exitErr error, stderrTail []string)) (*exec.Cmd, error)
 	ExtractSubtitleAsWebVTT(ctx context.Context, sourcePath string, streamIndex int64) ([]byte, error)
+	Capabilities() Capabilities
 }
 
 type ffmpeg struct {
@@ -19,6 +20,10 @@ type ffmpeg struct {
 }
 
 var _ FFmpegInterface = (*ffmpeg)(nil)
+
+func (f *ffmpeg) Capabilities() Capabilities {
+	return f.capabilities
+}
 
 var (
 	instance     *ffmpeg

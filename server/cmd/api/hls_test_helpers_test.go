@@ -61,6 +61,10 @@ func (f *fakeFFmpeg) ExtractSubtitleAsWebVTT(_ context.Context, _ string, _ int6
 	return []byte("WEBVTT\n"), nil
 }
 
+func (f *fakeFFmpeg) Capabilities() ffmpeg.Capabilities {
+	return ffmpeg.Capabilities{}
+}
+
 func (f *fakeFFmpeg) CallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

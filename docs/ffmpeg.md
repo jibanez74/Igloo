@@ -145,10 +145,10 @@ Transcode mode sets `-b:v`, `-maxrate`, and `-bufsize` from the selected profile
 CPU transcode uses:
 
 ```text
--c:v libx264 -preset veryfast -sc_threshold:v:0 0
+-c:v libx264 -preset fast -sc_threshold:v:0 0
 ```
 
-The `veryfast` preset is a practical default for self-hosted playback: it prioritizes real-time performance over maximum compression efficiency. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
+The `fast` preset is a practical default for self-hosted playback: it improves stream quality over faster x264 presets while keeping CPU use reasonable for home servers. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
 
 When the source frame rate is known and a hardware encoder is active, Igloo uses a fixed 4-second GOP:
 
@@ -189,10 +189,10 @@ If the selected audio codec is AAC, Igloo copies it:
 -c:a copy
 ```
 
-Otherwise, Igloo converts audio to stereo AAC at `256k`:
+Otherwise, Igloo converts audio to stereo AAC at `320k`:
 
 ```text
--c:a aac -ac 2 -b:a 256k
+-c:a aac -ac 2 -b:a 320k
 ```
 
 AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.
@@ -214,8 +214,8 @@ The FFmpeg encoder mapping is:
 | --- | --- | --- | --- |
 | `cpu` | none | `libx264` | Any supported runtime |
 | `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | macOS with VideoToolbox-capable FFmpeg |
-| `nvidia` | `-hwaccel cuda -hwaccel_output_format cuda` when CUDA filters are available; otherwise software decode | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
-| `intel` | `-hwaccel qsv` | `h264_qsv` | Linux with Intel QSV support |
+| `nvidia` | software decode; CUDA filter device only when `scale_cuda`/`tonemap_cuda` probes pass | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
+| `intel` | software decode by default; QSV filter device only when SDR `scale_qsv` is probed usable | `h264_qsv` | Linux with Intel QSV support |
 
 NVIDIA adds:
 
@@ -226,10 +226,44 @@ NVIDIA adds:
 Intel adds:
 
 ```text
+-preset veryfast
 -look_ahead 1
+-forced_idr 1
 ```
 
-At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, and key filter options. CPU, unknown devices, missing hardware encoders, and failed NVENC runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+Igloo only sends those Intel encoder options when the probed FFmpeg build lists them for `h264_qsv`.
+
+At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, and failed QSV runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+
+NVIDIA encode is checked with a short runtime encode probe, not just by looking for `h264_nvenc` in `ffmpeg -encoders`. Igloo does not use `-hwaccel cuda` for HLS because hardware decode support depends on the source codec and profile. For SDR transcodes, NVIDIA normally uses software decode and software scaling into `yuv420p` frames before `h264_nvenc` encode:
+
+```text
+scale=-2:<height>,format=yuv420p
+```
+
+If NVENC is usable and FFmpeg also exposes `cuda`, `hwupload`, `scale_cuda`, the `scale_cuda` `format` option, and a successful CUDA scale runtime probe, SDR transcodes use an explicit CUDA upload and CUDA scaling:
+
+```text
+-init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda
+-vf format=nv12,hwupload,scale_cuda=w=-2:h=<height>:format=yuv420p
+```
+
+Igloo does not use `-hwaccel cuda` for this path. Software decode avoids failing playback on files whose source decode path is unsupported by the GPU while still allowing CUDA filters and NVENC encode when those runtime probes pass.
+
+Intel QSV encode is checked with a short runtime encode probe, not just by looking for `h264_qsv` in `ffmpeg -encoders`. For SDR transcodes, Igloo normally uses software decode and software scaling into `nv12` frames before `h264_qsv` encode:
+
+```text
+scale=-2:<height>,format=nv12
+```
+
+If QSV encode is usable and FFmpeg also exposes `qsv`, `scale_qsv`, the `scale_qsv` `format` option, and a successful `scale_qsv` runtime probe, SDR transcodes use QSV scaling:
+
+```text
+-init_hw_device qsv=igloo_qsv -filter_hw_device igloo_qsv
+-vf format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=<height>:format=nv12
+```
+
+Igloo does not use `-hwaccel qsv` for the default Intel encode-only path.
 
 NVIDIA and Intel hardware acceleration require host drivers, device access, and an FFmpeg build with the matching encoder support. Apple VideoToolbox is available only on macOS builds with a VideoToolbox-capable FFmpeg binary.
 
@@ -258,10 +292,17 @@ format=gbrpf32le,
 zscale=p=bt709,
 tonemap=tonemap=hable:desat=0,
 zscale=t=bt709:m=bt709:r=tv,
-format=yuv420p
+format=<output_pixel_format>
 ```
 
-For NVIDIA HDR tone mapping, Igloo uses `tonemap_cuda` only when the probed FFmpeg build exposes the CUDA tone-map filter and the options Igloo needs. If not, NVIDIA falls back to software `zscale`/`tonemap` while still using `h264_nvenc` when the encoder is usable. Intel HDR tone mapping also uses the software filter chain with the hardware encoder. The software filter chain needs software frames; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
+CPU and NVIDIA software tone mapping output `yuv420p`; Intel outputs `nv12` for `h264_qsv`. For NVIDIA HDR tone mapping, Igloo uses an explicit CUDA upload plus `tonemap_cuda` only when the probed FFmpeg build exposes the CUDA scale/tone-map filters, the options Igloo needs, and successful CUDA scale and tone-map runtime probes:
+
+```text
+-init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda
+-vf format=p010le,hwupload,scale_cuda=w=-2:h=<height>:format=p010,tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0
+```
+
+If CUDA tone mapping is unavailable, NVIDIA falls back to software `zscale`/`tonemap` while still using `h264_nvenc` when the encoder is usable. Intel HDR tone mapping also uses the software filter chain with the hardware encoder, and never uses `scale_qsv`. The software filter chain needs software frames; forcing hardware decode there would complicate or break the filter pipeline. Keeping hardware encode still reduces CPU load on the final encode step.
 
 The Hable tone curve is a practical default that gives reasonable SDR output for HDR movies without exposing tone-map tuning to users yet.
 

@@ -16,6 +16,11 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+const (
+	hlsIntelQSVDeviceName   = "igloo_qsv"
+	hlsNvidiaCUDADeviceName = "igloo_cuda"
+)
+
 func isExpectedHLSStderrClose(err error) bool {
 	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
 }
@@ -39,8 +44,9 @@ type HLSParams struct {
 	Capabilities     Capabilities
 }
 
-// hlsHWTranscode maps hardware acceleration device IDs to FFmpeg -hwaccel and
-// -c:v encoder names. CPU and unknown devices fall back to libx264 (no -hwaccel).
+// hlsHWTranscode maps hardware acceleration device IDs to FFmpeg encoder names
+// and any direct decode flag used by that path. CPU and unknown devices fall
+// back to libx264.
 var hlsHWTranscodeByDevice = map[string]struct {
 	HWAccel string
 	Encoder string
@@ -91,14 +97,26 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	hw, hwKnown := hlsHWTranscodeByDevice[hwLower]
 	useNvidiaCUDAFilters := !copyVideo && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA &&
 		p.Capabilities.SupportsNvidiaCUDAFilters(p.TonemapHDR)
+	useIntelQSVScale := !copyVideo &&
+		hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_INTEL &&
+		!p.TonemapHDR &&
+		p.Capabilities.SupportsIntelQSVScale()
 
 	if !copyVideo {
+		if useNvidiaCUDAFilters {
+			args = append(args,
+				"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
+				"-filter_hw_device", hlsNvidiaCUDADeviceName,
+			)
+		}
+		if useIntelQSVScale {
+			args = append(args,
+				"-init_hw_device", "qsv="+hlsIntelQSVDeviceName,
+				"-filter_hw_device", hlsIntelQSVDeviceName,
+			)
+		}
 		switch {
-		case useNvidiaCUDAFilters:
-			args = append(args, "-hwaccel", "cuda", "-hwaccel_output_format", "cuda")
 		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
-			args = append(args, "-hwaccel", hw.HWAccel)
-		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_INTEL && !p.TonemapHDR:
 			args = append(args, "-hwaccel", hw.HWAccel)
 		}
 	}
@@ -133,9 +151,9 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
 			args = append(args, "-rc", "vbr", "-preset", "p4")
 		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
-			args = append(args, "-look_ahead", "1")
+			args = appendHLSIntelEncoderArgs(args, p.Capabilities)
 		case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
-			args = append(args, "-preset", "veryfast")
+			args = append(args, "-preset", "fast")
 		}
 
 		args = append(args,
@@ -144,8 +162,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			"-bufsize", cfg.Bufsize,
 		)
 
-		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, useNvidiaCUDAFilters))
-		if !useNvidiaCUDAFilters {
+		args = append(args, "-vf", hlsVideoFilter(cfg, hwLower, p.TonemapHDR, useNvidiaCUDAFilters, useIntelQSVScale))
+		if shouldSetHLSPixelFormat(encoder, useNvidiaCUDAFilters) {
 			args = append(args, "-pix_fmt", "yuv420p")
 		}
 		args = append(args,
@@ -160,7 +178,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		if p.CopyAudio {
 			args = append(args, "-c:a", "copy")
 		} else {
-			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "256k")
+			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "320k")
 		}
 	}
 
@@ -182,31 +200,72 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	return args, nil
 }
 
-func hlsVideoFilter(cfg helpers.HLSProfileConfig, hwDevice string, tonemapHDR bool, useNvidiaCUDAFilters bool) string {
+func appendHLSIntelEncoderArgs(args []string, caps Capabilities) []string {
+	if caps.SupportsEncoderOption("h264_qsv", "preset") {
+		args = append(args, "-preset", "veryfast")
+	}
+	if caps.SupportsEncoderOption("h264_qsv", "look_ahead") {
+		args = append(args, "-look_ahead", "1")
+	}
+	if caps.SupportsEncoderOption("h264_qsv", "forced_idr") {
+		args = append(args, "-forced_idr", "1")
+	}
+	return args
+}
+
+func shouldSetHLSPixelFormat(encoder string, useNvidiaCUDAFilters bool) bool {
+	if useNvidiaCUDAFilters {
+		return false
+	}
+	return !strings.EqualFold(encoder, "h264_qsv")
+}
+
+func hlsSoftwareOutputPixelFormat(hwDevice string) string {
+	if hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_INTEL {
+		return "nv12"
+	}
+	return "yuv420p"
+}
+
+func hlsVideoFilter(
+	cfg helpers.HLSProfileConfig,
+	hwDevice string,
+	tonemapHDR bool,
+	useNvidiaCUDAFilters bool,
+	useIntelQSVScale bool,
+) string {
 	switch {
 	case tonemapHDR && useNvidiaCUDAFilters:
 		return fmt.Sprintf(
-			"scale_cuda=w=-2:h=%d:format=p010,"+
+			"format=p010le,hwupload,scale_cuda=w=-2:h=%d:format=p010,"+
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 			cfg.Height,
 		)
 	case useNvidiaCUDAFilters:
-		return fmt.Sprintf("scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+		return fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+	case useIntelQSVScale:
+		return fmt.Sprintf(
+			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",
+			cfg.Height,
+		)
 	case tonemapHDR && hwDevice == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
 		return fmt.Sprintf(
 			"scale_vt=w=-2:h=%d:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709",
 			cfg.Height,
 		)
 	case tonemapHDR:
+		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
 		return fmt.Sprintf(
 			"zscale=w=-2:h=%d:t=linear:npl=100,format=gbrpf32le,"+
 				"zscale=p=bt709,tonemap=tonemap=hable:desat=0,"+
-				"zscale=t=bt709:m=bt709:r=tv,format=yuv420p,%s",
+				"zscale=t=bt709:m=bt709:r=tv,format=%s,%s",
 			cfg.Height,
+			outputFormat,
 			helpers.HLS_SDR_COLOR_PARAMS,
 		)
 	default:
-		return fmt.Sprintf("scale=-2:%d,format=yuv420p,%s", cfg.Height, helpers.HLS_SDR_COLOR_PARAMS)
+		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
+		return fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, helpers.HLS_SDR_COLOR_PARAMS)
 	}
 }
 
