@@ -236,12 +236,8 @@ func (c *Capabilities) recordFilterOptions(bin string, filter string, options []
 	}
 	for _, option := range options {
 		option = strings.ToLower(strings.TrimSpace(option))
-		c.FilterOptions[key][option] = ffmpegFilterHelpHasOption(output, option)
+		c.FilterOptions[key][option] = ffmpegHelpHasOption(output, option)
 	}
-}
-
-func ffmpegFilterHelpHasOption(output string, option string) bool {
-	return ffmpegHelpHasOption(output, option)
 }
 
 func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options []string) {
@@ -302,8 +298,8 @@ func probeNvidiaCUDAScale(bin string) (bool, string) {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
-		"-init_hw_device", "cuda=igloo_cuda",
-		"-filter_hw_device", "igloo_cuda",
+		"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
+		"-filter_hw_device", hlsNvidiaCUDADeviceName,
 		"-f", "lavfi",
 		"-i", "testsrc2=s=128x72:d=0.1",
 		"-frames:v", "1",
@@ -322,8 +318,8 @@ func probeNvidiaCUDATonemap(bin string) (bool, string) {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
-		"-init_hw_device", "cuda=igloo_cuda",
-		"-filter_hw_device", "igloo_cuda",
+		"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
+		"-filter_hw_device", hlsNvidiaCUDADeviceName,
 		"-f", "lavfi",
 		"-i", "testsrc2=s=128x72:d=0.1",
 		"-frames:v", "1",
@@ -360,8 +356,8 @@ func probeQSVScale(bin string) (bool, string) {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
-		"-init_hw_device", "qsv=igloo_qsv",
-		"-filter_hw_device", "igloo_qsv",
+		"-init_hw_device", "qsv="+hlsIntelQSVDeviceName,
+		"-filter_hw_device", hlsIntelQSVDeviceName,
 		"-f", "lavfi",
 		"-i", "testsrc2=s=128x72:d=0.1",
 		"-frames:v", "1",

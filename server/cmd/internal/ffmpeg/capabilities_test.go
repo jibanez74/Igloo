@@ -65,10 +65,10 @@ func TestFFmpegFilterHelpHasOptionMatchesOptionName(t *testing.T) {
    tonemap           <int>        ..FV....... Tonemap algorithm
 `
 
-	if !ffmpegFilterHelpHasOption(output, "format") {
+	if !ffmpegHelpHasOption(output, "format") {
 		t.Fatal("expected format option")
 	}
-	if ffmpegFilterHelpHasOption(output, "p") {
+	if ffmpegHelpHasOption(output, "p") {
 		t.Fatal("single-letter option must not match arbitrary words in help output")
 	}
 }
