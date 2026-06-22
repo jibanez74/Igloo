@@ -16,7 +16,10 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
-const hlsIntelQSVDeviceName = "igloo_qsv"
+const (
+	hlsIntelQSVDeviceName   = "igloo_qsv"
+	hlsNvidiaCUDADeviceName = "igloo_cuda"
+)
 
 func isExpectedHLSStderrClose(err error) bool {
 	return errors.Is(err, os.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
@@ -41,8 +44,9 @@ type HLSParams struct {
 	Capabilities     Capabilities
 }
 
-// hlsHWTranscode maps hardware acceleration device IDs to FFmpeg -hwaccel and
-// -c:v encoder names. CPU and unknown devices fall back to libx264 (no -hwaccel).
+// hlsHWTranscode maps hardware acceleration device IDs to FFmpeg encoder names
+// and any direct decode flag used by that path. CPU and unknown devices fall
+// back to libx264.
 var hlsHWTranscodeByDevice = map[string]struct {
 	HWAccel string
 	Encoder string
@@ -99,6 +103,12 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		p.Capabilities.SupportsIntelQSVScale()
 
 	if !copyVideo {
+		if useNvidiaCUDAFilters {
+			args = append(args,
+				"-init_hw_device", "cuda="+hlsNvidiaCUDADeviceName,
+				"-filter_hw_device", hlsNvidiaCUDADeviceName,
+			)
+		}
 		if useIntelQSVScale {
 			args = append(args,
 				"-init_hw_device", "qsv="+hlsIntelQSVDeviceName,
@@ -106,8 +116,6 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 			)
 		}
 		switch {
-		case useNvidiaCUDAFilters:
-			args = append(args, "-hwaccel", "cuda", "-hwaccel_output_format", "cuda")
 		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
 			args = append(args, "-hwaccel", hw.HWAccel)
 		}
@@ -145,7 +153,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		case helpers.HARDWARE_ACCELERATION_DEVICE_INTEL:
 			args = appendHLSIntelEncoderArgs(args, p.Capabilities)
 		case helpers.HARDWARE_ACCELERATION_DEVICE_CPU:
-			args = append(args, "-preset", "veryfast")
+			args = append(args, "-preset", "fast")
 		}
 
 		args = append(args,
@@ -229,12 +237,12 @@ func hlsVideoFilter(
 	switch {
 	case tonemapHDR && useNvidiaCUDAFilters:
 		return fmt.Sprintf(
-			"scale_cuda=w=-2:h=%d:format=p010,"+
+			"format=p010le,hwupload,scale_cuda=w=-2:h=%d:format=p010,"+
 				"tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 			cfg.Height,
 		)
 	case useNvidiaCUDAFilters:
-		return fmt.Sprintf("scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
+		return fmt.Sprintf("format=nv12,hwupload,scale_cuda=w=-2:h=%d:format=yuv420p", cfg.Height)
 	case useIntelQSVScale:
 		return fmt.Sprintf(
 			"format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=%d:format=nv12",

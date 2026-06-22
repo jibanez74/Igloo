@@ -13,18 +13,22 @@ import (
 const ffmpegProbeTimeout = 5 * time.Second
 
 type Capabilities struct {
-	Probed                 bool
-	Encoders               map[string]bool
-	Filters                map[string]bool
-	HWAccels               map[string]bool
-	FilterOptions          map[string]map[string]bool
-	EncoderOptions         map[string]map[string]bool
-	H264NVENCRuntimeUsable bool
-	H264NVENCProbeError    string
-	H264QSVRuntimeUsable   bool
-	H264QSVProbeError      string
-	QSVScaleRuntimeUsable  bool
-	QSVScaleProbeError     string
+	Probed                         bool
+	Encoders                       map[string]bool
+	Filters                        map[string]bool
+	HWAccels                       map[string]bool
+	FilterOptions                  map[string]map[string]bool
+	EncoderOptions                 map[string]map[string]bool
+	H264NVENCRuntimeUsable         bool
+	H264NVENCProbeError            string
+	NvidiaCUDAScaleRuntimeUsable   bool
+	NvidiaCUDAScaleProbeError      string
+	NvidiaCUDATonemapRuntimeUsable bool
+	NvidiaCUDATonemapProbeError    string
+	H264QSVRuntimeUsable           bool
+	H264QSVProbeError              string
+	QSVScaleRuntimeUsable          bool
+	QSVScaleProbeError             string
 }
 
 type HLSDeviceDecision struct {
@@ -65,7 +69,13 @@ func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
 	if !c.Probed {
 		return false
 	}
-	if !c.SupportsHWAccel("cuda") || !c.SupportsFilter("scale_cuda") || !c.SupportsFilterOption("scale_cuda", "format") {
+	if !c.SupportsEncoder("h264_nvenc") ||
+		!c.H264NVENCRuntimeUsable ||
+		!c.SupportsHWAccel("cuda") ||
+		!c.SupportsFilter("hwupload") ||
+		!c.SupportsFilter("scale_cuda") ||
+		!c.SupportsFilterOption("scale_cuda", "format") ||
+		!c.NvidiaCUDAScaleRuntimeUsable {
 		return false
 	}
 	if !tonemap {
@@ -79,7 +89,7 @@ func (c Capabilities) SupportsNvidiaCUDAFilters(tonemap bool) bool {
 			return false
 		}
 	}
-	return true
+	return c.NvidiaCUDATonemapRuntimeUsable
 }
 
 func (c Capabilities) SupportsIntelQSVScale() bool {
@@ -182,6 +192,18 @@ func probeCapabilities(bin string) Capabilities {
 
 	if caps.SupportsEncoder("h264_nvenc") {
 		caps.H264NVENCRuntimeUsable, caps.H264NVENCProbeError = probeH264NVENC(bin)
+		if caps.H264NVENCRuntimeUsable &&
+			caps.SupportsHWAccel("cuda") &&
+			caps.SupportsFilter("hwupload") &&
+			caps.SupportsFilter("scale_cuda") &&
+			caps.SupportsFilterOption("scale_cuda", "format") {
+			caps.NvidiaCUDAScaleRuntimeUsable, caps.NvidiaCUDAScaleProbeError = probeNvidiaCUDAScale(bin)
+		}
+		if caps.NvidiaCUDAScaleRuntimeUsable &&
+			caps.SupportsFilter("tonemap_cuda") &&
+			caps.SupportsNvidiaCUDATonemapOptions() {
+			caps.NvidiaCUDATonemapRuntimeUsable, caps.NvidiaCUDATonemapProbeError = probeNvidiaCUDATonemap(bin)
+		}
 	}
 	if caps.SupportsEncoder("h264_qsv") {
 		caps.H264QSVRuntimeUsable, caps.H264QSVProbeError = probeH264QSV(bin)
@@ -194,6 +216,15 @@ func probeCapabilities(bin string) Capabilities {
 	}
 
 	return caps
+}
+
+func (c Capabilities) SupportsNvidiaCUDATonemapOptions() bool {
+	for _, option := range []string{"format", "p", "t", "m", "tonemap", "desat"} {
+		if !c.SupportsFilterOption("tonemap_cuda", option) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Capabilities) recordFilterOptions(bin string, filter string, options []string) {
@@ -260,8 +291,48 @@ func probeH264NVENC(bin string) (bool, string) {
 		bin,
 		"-v", "error",
 		"-f", "lavfi",
-		"-i", "color=c=black:s=16x16:d=0.1",
+		"-i", "testsrc2=s=128x72:d=0.1",
 		"-frames:v", "1",
+		"-c:v", "h264_nvenc",
+		"-f", "null",
+		"-",
+	)
+	if err != nil {
+		return false, compactProbeError(err)
+	}
+	return true, ""
+}
+
+func probeNvidiaCUDAScale(bin string) (bool, string) {
+	_, err := runFFmpegProbe(
+		bin,
+		"-v", "error",
+		"-init_hw_device", "cuda=igloo_cuda",
+		"-filter_hw_device", "igloo_cuda",
+		"-f", "lavfi",
+		"-i", "testsrc2=s=128x72:d=0.1",
+		"-frames:v", "1",
+		"-vf", "format=nv12,hwupload,scale_cuda=w=-2:h=72:format=yuv420p",
+		"-c:v", "h264_nvenc",
+		"-f", "null",
+		"-",
+	)
+	if err != nil {
+		return false, compactProbeError(err)
+	}
+	return true, ""
+}
+
+func probeNvidiaCUDATonemap(bin string) (bool, string) {
+	_, err := runFFmpegProbe(
+		bin,
+		"-v", "error",
+		"-init_hw_device", "cuda=igloo_cuda",
+		"-filter_hw_device", "igloo_cuda",
+		"-f", "lavfi",
+		"-i", "testsrc2=s=128x72:d=0.1",
+		"-frames:v", "1",
+		"-vf", "format=p010le,hwupload,scale_cuda=w=-2:h=72:format=p010,tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0",
 		"-c:v", "h264_nvenc",
 		"-f", "null",
 		"-",

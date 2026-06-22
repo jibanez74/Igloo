@@ -317,6 +317,8 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		app.Settings.HardwareAccelerationDevice.String != "" {
 		hwDevice = app.Settings.HardwareAccelerationDevice.String
 	}
+	ffmpegCaps := app.FFmpeg.Capabilities()
+	deviceDecision := ffmpeg.ResolveHLSDevice(hwDevice, ffmpegCaps)
 
 	transcodeRoot := app.hlsTranscodeRoot()
 	if err := os.MkdirAll(transcodeRoot, 0o755); err != nil {
@@ -367,6 +369,9 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		"copy_audio", copyAudio,
 		"source_is_hdr", sourceIsHDR,
 		"tonemap_hdr", tonemapHDR,
+		"configured_hw_device", deviceDecision.Configured,
+		"effective_hw_device", deviceDecision.Effective,
+		"hw_fallback_reason", deviceDecision.Reason,
 	)
 
 	startTime := time.Now()
@@ -432,6 +437,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		StartSec:         startSec,
 		TonemapHDR:       tonemapHDR,
 		SourceFrameRate:  params.PrimaryVideo.FrameRate,
+		Capabilities:     ffmpegCaps,
 	}, onExit)
 	if err != nil {
 		releaseTranscode()

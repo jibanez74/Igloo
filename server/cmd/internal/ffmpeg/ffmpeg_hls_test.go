@@ -46,6 +46,7 @@ func hlsTestCapabilitiesForDevice(device string) Capabilities {
 	case helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA:
 		caps.Encoders["h264_nvenc"] = true
 		caps.HWAccels["cuda"] = true
+		caps.Filters["hwupload"] = true
 		caps.Filters["scale_cuda"] = true
 		caps.FilterOptions["scale_cuda"] = map[string]bool{"format": true}
 	}
@@ -63,6 +64,7 @@ func hlsTestIntelQSVScaleCapabilities() Capabilities {
 
 func hlsTestNvidiaCapabilities(tonemap bool) Capabilities {
 	caps := hlsTestCapabilitiesForDevice(helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA)
+	caps.NvidiaCUDAScaleRuntimeUsable = true
 	if tonemap {
 		caps.Filters["tonemap_cuda"] = true
 		caps.FilterOptions["tonemap_cuda"] = map[string]bool{
@@ -73,6 +75,7 @@ func hlsTestNvidiaCapabilities(tonemap bool) Capabilities {
 			"tonemap": true,
 			"desat":   true,
 		}
+		caps.NvidiaCUDATonemapRuntimeUsable = true
 	}
 	return caps
 }
@@ -98,7 +101,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	for _, want := range []string{
 		sourcePath, outDir, "fmp4", "event", "playlist.m3u8",
 		"-map 0:0", "-map 0:1",
-		"libx264", "-preset", "veryfast",
+		"libx264", "-preset", "fast",
 		"-sc_threshold", "0",
 		"-force_key_frames", "expr:gte(t,n_forced*4)",
 		"-c:a aac", "-ac", "2", "-b:a", "320k",
@@ -436,7 +439,7 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 		},
 		{
 			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			wantHWAccel: "cuda",
+			wantHWAccel: "",
 			wantEncoder: "h264_nvenc",
 		},
 		{
@@ -1086,11 +1089,26 @@ func TestBuildHLSArgs_NvidiaSDRUsesCUDAScaleWhenProbed(t *testing.T) {
 	})
 	argStr := strings.Join(args, " ")
 
-	if !strings.Contains(argStr, "-hwaccel cuda -hwaccel_output_format cuda") {
-		t.Fatalf("NVIDIA CUDA scale path must use CUDA hwaccel, got: %s", argStr)
+	initIdx := indexOf(args, "-init_hw_device")
+	filterIdx := indexOf(args, "-filter_hw_device")
+	iIdx := indexOf(args, "-i")
+	if initIdx < 0 || filterIdx < 0 {
+		t.Fatalf("NVIDIA CUDA scale path must initialize and select a CUDA filter device, got: %s", argStr)
 	}
-	if !strings.Contains(argStr, "scale_cuda=w=-2:h=720:format=yuv420p") {
-		t.Fatalf("NVIDIA CUDA scale path must use scale_cuda, got: %s", argStr)
+	if args[initIdx+1] != "cuda=igloo_cuda" {
+		t.Fatalf("-init_hw_device = %q, want cuda=igloo_cuda", args[initIdx+1])
+	}
+	if args[filterIdx+1] != "igloo_cuda" {
+		t.Fatalf("-filter_hw_device = %q, want igloo_cuda", args[filterIdx+1])
+	}
+	if !(initIdx < filterIdx && filterIdx < iIdx) {
+		t.Fatalf("CUDA device setup must come before input, got: %s", argStr)
+	}
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Fatalf("NVIDIA CUDA scale path must not force hardware decode, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p") {
+		t.Fatalf("NVIDIA CUDA scale path must upload software frames and use scale_cuda, got: %s", argStr)
 	}
 	if strings.Contains(argStr, "zscale") {
 		t.Fatal("SDR CUDA scale path must not use zscale")
@@ -1112,11 +1130,14 @@ func TestBuildHLSArgs_NvidiaHDRUsesCUDATonemapWhenProbed(t *testing.T) {
 	})
 	argStr := strings.Join(args, " ")
 
-	if !strings.Contains(argStr, "-hwaccel cuda -hwaccel_output_format cuda") {
-		t.Fatalf("NVIDIA CUDA tone-map path must use CUDA hwaccel, got: %s", argStr)
+	if !strings.Contains(argStr, "-init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda") {
+		t.Fatalf("NVIDIA CUDA tone-map path must initialize and select a CUDA filter device, got: %s", argStr)
 	}
-	if !strings.Contains(argStr, "scale_cuda=w=-2:h=720:format=p010") {
-		t.Fatalf("NVIDIA CUDA tone-map path must scale to p010 before tone-map, got: %s", argStr)
+	if indexOf(args, "-hwaccel") >= 0 {
+		t.Fatalf("NVIDIA CUDA tone-map path must not force hardware decode, got: %s", argStr)
+	}
+	if !strings.Contains(argStr, "format=p010le,hwupload,scale_cuda=w=-2:h=720:format=p010") {
+		t.Fatalf("NVIDIA CUDA tone-map path must upload p010 frames before tone-map, got: %s", argStr)
 	}
 	if !strings.Contains(argStr, "tonemap_cuda=format=yuv420p:p=bt709:t=bt709:m=bt709:tonemap=hable:desat=0") {
 		t.Fatalf("NVIDIA CUDA tone-map path must use tonemap_cuda, got: %s", argStr)

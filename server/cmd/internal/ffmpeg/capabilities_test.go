@@ -90,10 +90,13 @@ func TestFFmpegHelpHasOptionMatchesDashedOptionName(t *testing.T) {
 
 func TestSupportsNvidiaCUDAFiltersRequiresToneMapOptions(t *testing.T) {
 	caps := Capabilities{
-		Probed:        true,
-		HWAccels:      map[string]bool{"cuda": true},
-		Filters:       map[string]bool{"scale_cuda": true, "tonemap_cuda": true},
-		FilterOptions: map[string]map[string]bool{"scale_cuda": {"format": true}, "tonemap_cuda": {"format": true}},
+		Probed:                       true,
+		Encoders:                     map[string]bool{"h264_nvenc": true},
+		HWAccels:                     map[string]bool{"cuda": true},
+		Filters:                      map[string]bool{"hwupload": true, "scale_cuda": true, "tonemap_cuda": true},
+		FilterOptions:                map[string]map[string]bool{"scale_cuda": {"format": true}, "tonemap_cuda": {"format": true}},
+		H264NVENCRuntimeUsable:       true,
+		NvidiaCUDAScaleRuntimeUsable: true,
 	}
 
 	if !caps.SupportsNvidiaCUDAFilters(false) {
@@ -111,8 +114,32 @@ func TestSupportsNvidiaCUDAFiltersRequiresToneMapOptions(t *testing.T) {
 		"tonemap": true,
 		"desat":   true,
 	}
+	if caps.SupportsNvidiaCUDAFilters(true) {
+		t.Fatal("expected CUDA HDR tone-map support to require a runtime probe")
+	}
+	caps.NvidiaCUDATonemapRuntimeUsable = true
 	if !caps.SupportsNvidiaCUDAFilters(true) {
 		t.Fatal("expected CUDA HDR tone-map support when required options are present")
+	}
+}
+
+func TestSupportsNvidiaCUDAFiltersRequiresRuntimeScaleProbe(t *testing.T) {
+	caps := Capabilities{
+		Probed:                 true,
+		Encoders:               map[string]bool{"h264_nvenc": true},
+		HWAccels:               map[string]bool{"cuda": true},
+		Filters:                map[string]bool{"hwupload": true, "scale_cuda": true},
+		FilterOptions:          map[string]map[string]bool{"scale_cuda": {"format": true}},
+		H264NVENCRuntimeUsable: true,
+	}
+
+	if caps.SupportsNvidiaCUDAFilters(false) {
+		t.Fatal("expected CUDA scale support to require a runtime probe")
+	}
+
+	caps.NvidiaCUDAScaleRuntimeUsable = true
+	if !caps.SupportsNvidiaCUDAFilters(false) {
+		t.Fatal("expected CUDA scale support when static support and runtime probe are present")
 	}
 }
 
