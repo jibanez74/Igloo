@@ -85,7 +85,7 @@ func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 		"libx264", "-preset", "veryfast",
 		"-sc_threshold", "0",
 		"-force_key_frames", "expr:gte(t,n_forced*4)",
-		"-c:a aac", "-ac", "2", "-b:a", "256k",
+		"-c:a aac", "-ac", "2", "-b:a", "320k",
 		"scale=-2:1080",
 		"-avoid_negative_ts", "make_zero",
 		"-fflags", "+genpts",
@@ -558,8 +558,8 @@ func TestBuildHLSArgs_CopyVideoTranscodeAudio(t *testing.T) {
 	if !strings.Contains(argStr, "-ac 2") {
 		t.Error("audio should be downmixed to stereo")
 	}
-	if !strings.Contains(argStr, "-b:a 256k") {
-		t.Error("audio bitrate should be 256k")
+	if !strings.Contains(argStr, "-b:a 320k") {
+		t.Error("audio bitrate should be 320k")
 	}
 	for _, forbidden := range []string{"libx264", "-hwaccel", "scale=", "-b:v", "-maxrate", "-bufsize", "-sc_threshold", "-force_key_frames"} {
 		if strings.Contains(argStr, forbidden) {

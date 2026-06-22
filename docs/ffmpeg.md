@@ -189,10 +189,10 @@ If the selected audio codec is AAC, Igloo copies it:
 -c:a copy
 ```
 
-Otherwise, Igloo converts audio to stereo AAC at `256k`:
+Otherwise, Igloo converts audio to stereo AAC at `320k`:
 
 ```text
--c:a aac -ac 2 -b:a 256k
+-c:a aac -ac 2 -b:a 320k
 ```
 
 AAC is the safest baseline for browser HLS playback. Downmixing to stereo avoids playback failures on clients that do not support the source channel layout.

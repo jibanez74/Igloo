@@ -160,7 +160,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		if p.CopyAudio {
 			args = append(args, "-c:a", "copy")
 		} else {
-			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "256k")
+			args = append(args, "-c:a", "aac", "-ac", "2", "-b:a", "320k")
 		}
 	}
 
