@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
 import {
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -26,13 +33,42 @@ const accentStyles = {
   },
 } as const;
 
+type VolumeState = {
+  volume: number;
+  isMuted: boolean;
+};
+
+type VolumeAction = {
+  type: "sync";
+  volume: number;
+  isMuted: boolean;
+};
+
+const initialVolumeState: VolumeState = {
+  volume: 1,
+  isMuted: false,
+};
+
+function volumeReducer(state: VolumeState, action: VolumeAction): VolumeState {
+  if (state.volume === action.volume && state.isMuted === action.isMuted) {
+    return state;
+  }
+
+  return {
+    volume: action.volume,
+    isMuted: action.isMuted,
+  };
+}
+
 export default function VolumeControl({
   mediaRef,
   variant = "minimized",
   accent = "amber",
 }: VolumeControlProps) {
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [{ volume, isMuted }, dispatchVolume] = useReducer(
+    volumeReducer,
+    initialVolumeState,
+  );
   const [isMinimizedPanelOpen, setIsMinimizedPanelOpen] = useState(false);
 
   const styles = accentStyles[accent];
@@ -53,13 +89,15 @@ export default function VolumeControl({
     if (!media) return;
 
     const handleVolumeChange = () => {
-      setVolume(media.volume);
-      setIsMuted(media.muted);
+      dispatchVolume({
+        type: "sync",
+        volume: media.volume,
+        isMuted: media.muted,
+      });
     };
 
     media.addEventListener("volumechange", handleVolumeChange);
-    setVolume(media.volume);
-    setIsMuted(media.muted);
+    handleVolumeChange();
 
     return () => media.removeEventListener("volumechange", handleVolumeChange);
   }, [mediaRef]);
@@ -70,8 +108,11 @@ export default function VolumeControl({
     if (media) {
       media.volume = newVolume;
       media.muted = false;
-      setVolume(newVolume);
-      setIsMuted(false);
+      dispatchVolume({
+        type: "sync",
+        volume: newVolume,
+        isMuted: false,
+      });
     }
   };
 

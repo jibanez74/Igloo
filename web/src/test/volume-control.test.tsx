@@ -78,4 +78,41 @@ describe("VolumeControl", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  it("syncs volume and mute state from media volumechange events", async () => {
+    const user = userEvent.setup();
+    const { media } = renderVolumeControl();
+
+    media.volume = 0.42;
+    media.muted = true;
+    fireEvent(media, new Event("volumechange"));
+
+    await user.click(screen.getByRole("button", { name: "Adjust volume" }));
+
+    expect(screen.getByRole("button", { name: "Unmute" })).toBeVisible();
+    expect(screen.getByRole("slider", { name: "Volume" })).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+    expect(screen.getByText("0%")).toBeVisible();
+  });
+
+  it("unmutes media with a single grouped state update when the slider changes", async () => {
+    const user = userEvent.setup();
+    const { media } = renderVolumeControl();
+
+    media.volume = 0.4;
+    media.muted = true;
+    fireEvent(media, new Event("volumechange"));
+
+    await user.click(screen.getByRole("button", { name: "Adjust volume" }));
+
+    const slider = screen.getByRole("slider", { name: "Volume" });
+    fireEvent.change(slider, { target: { value: "0.25" } });
+
+    expect(media.volume).toBe(0.25);
+    expect(media.muted).toBe(false);
+    expect(slider).toHaveAttribute("aria-valuenow", "25");
+    expect(screen.getByRole("button", { name: "Mute" })).toBeVisible();
+  });
 });
