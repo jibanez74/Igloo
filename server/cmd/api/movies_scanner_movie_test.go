@@ -745,7 +745,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 }
 
-func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
+func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -763,7 +763,6 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 		t.Fatalf("upsert movie: %v", err)
 	}
 
-	scan := newMovieScanContext(nil)
 	firstCompanies := []struct {
 		ID            int    `json:"id"`
 		LogoPath      string `json:"logo_path"`
@@ -772,14 +771,14 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 	}{
 		{ID: 100, LogoPath: "/old-logo.png", Name: "Old Studio", OriginCountry: "US"},
 	}
-	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, firstCompanies); err != nil {
+	if err := app.processProductionCompanies(ctx, app.Queries, movie.ID, firstCompanies); err != nil {
 		t.Fatalf("process first production companies: %v", err)
 	}
 
 	firstVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "old-key", Name: "Old Trailer", Site: "YouTube", Type: "Trailer", Official: false},
 	}
-	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, firstVideos); err != nil {
+	if err := app.processExtraVideos(ctx, app.Queries, movie.ID, firstVideos); err != nil {
 		t.Fatalf("process first extra videos: %v", err)
 	}
 
@@ -791,14 +790,14 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 	}{
 		{ID: 100, LogoPath: "/new-logo.png", Name: "New Studio", OriginCountry: "GB"},
 	}
-	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, secondCompanies); err != nil {
+	if err := app.processProductionCompanies(ctx, app.Queries, movie.ID, secondCompanies); err != nil {
 		t.Fatalf("process second production companies: %v", err)
 	}
 
 	secondVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "new-key", Name: "New Featurette", Site: "Vimeo", Type: "Featurette", Official: true},
 	}
-	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, secondVideos); err != nil {
+	if err := app.processExtraVideos(ctx, app.Queries, movie.ID, secondVideos); err != nil {
 		t.Fatalf("process second extra videos: %v", err)
 	}
 

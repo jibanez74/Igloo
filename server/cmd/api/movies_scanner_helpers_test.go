@@ -147,7 +147,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Test Artist"
 		profilePath := "/test/profile.jpg"
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "Idempotent Artist"
 		profilePath := "/idempotent/profile.jpg"
 
-		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("First getOrCreateArtist failed: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestGetOrCreateArtist(t *testing.T) {
 			t.Fatal("First getOrCreateArtist returned nil artist")
 		}
 
-		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("Second getOrCreateArtist failed: %v", err)
 		}
@@ -191,22 +191,18 @@ func TestGetOrCreateArtist(t *testing.T) {
 		}
 	})
 
-	t.Run("cached artist refreshes mutable metadata", func(t *testing.T) {
+	t.Run("upsert refreshes mutable metadata", func(t *testing.T) {
 		tmdbID := 22222
-		scan := newMovieScanContext(nil)
 
-		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, scan, tmdbID, "Old Artist", "")
+		firstArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, "Old Artist", "")
 		if err != nil {
 			t.Fatalf("first getOrCreateArtist failed: %v", err)
 		}
 		if firstArtist == nil {
 			t.Fatal("first getOrCreateArtist returned nil artist")
 		}
-		if scan.artistIDs[tmdbID] != firstArtist.ID {
-			t.Fatalf("cached artist ID = %d, want %d", scan.artistIDs[tmdbID], firstArtist.ID)
-		}
 
-		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, scan, tmdbID, "New Artist", "/new/profile.jpg")
+		secondArtist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, "New Artist", "/new/profile.jpg")
 		if err != nil {
 			t.Fatalf("second getOrCreateArtist failed: %v", err)
 		}
@@ -236,116 +232,13 @@ func TestGetOrCreateArtist(t *testing.T) {
 		name := "No Profile Artist"
 		profilePath := ""
 
-		artist, err := app.getOrCreateArtist(ctx, app.Queries, nil, tmdbID, name, profilePath)
+		artist, err := app.getOrCreateArtist(ctx, app.Queries, tmdbID, name, profilePath)
 		if err != nil {
 			t.Fatalf("getOrCreateArtist failed: %v", err)
 		}
 
 		if artist.Profile.Valid {
 			t.Error("Expected profile to be invalid for empty path")
-		}
-	})
-}
-
-func TestManageSavepoint(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
-	if err != nil {
-		t.Fatalf("Failed to create test table: %v", err)
-	}
-
-	ctx := context.Background()
-
-	t.Run("successful function execution releases savepoint", func(t *testing.T) {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			t.Fatalf("Failed to begin transaction: %v", err)
-		}
-		defer tx.Rollback()
-
-		savepointName := "test_savepoint"
-		executed := false
-
-		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			executed = true
-			_, err := tx.ExecContext(ctx, "INSERT INTO test_table (value) VALUES ('test')")
-			return err
-		})
-
-		if err != nil {
-			t.Errorf("manageSavepoint returned error: %v", err)
-		}
-
-		if !executed {
-			t.Error("Function was not executed")
-		}
-
-		var count int
-		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_table").Scan(&count)
-		if err != nil {
-			t.Fatalf("Failed to query count: %v", err)
-		}
-		if count != 1 {
-			t.Errorf("Expected 1 row, got %d", count)
-		}
-	})
-
-	t.Run("function error rolls back savepoint", func(t *testing.T) {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			t.Fatalf("Failed to begin transaction: %v", err)
-		}
-		defer tx.Rollback()
-
-		savepointName := "test_savepoint_error"
-		testError := sql.ErrNoRows
-
-		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			_, err := tx.ExecContext(ctx, "INSERT INTO test_table (value) VALUES ('before error')")
-			if err != nil {
-				return err
-			}
-			return testError
-		})
-
-		if err == nil {
-			t.Error("Expected error from manageSavepoint")
-		}
-
-		if err != testError {
-			t.Errorf("Expected error %v, got %v", testError, err)
-		}
-
-		var count int
-		err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_table").Scan(&count)
-		if err != nil {
-			t.Fatalf("Failed to query count: %v", err)
-		}
-		if count != 0 {
-			t.Errorf("Expected 0 rows after rollback, got %d", count)
-		}
-	})
-
-	t.Run("savepoint creation failure returns error", func(t *testing.T) {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			t.Fatalf("Failed to begin transaction: %v", err)
-		}
-		tx.Rollback()
-
-		savepointName := "test_savepoint_fail"
-
-		err = manageSavepoint(ctx, tx, savepointName, func() error {
-			return nil
-		})
-
-		if err == nil {
-			t.Error("Expected error when savepoint creation fails")
 		}
 	})
 }

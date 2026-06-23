@@ -14,13 +14,7 @@ const (
 	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
 
 	// media scanner
-	SCANNER_BATCH_SIZE           = 54
-	MOVIE_RENAME_MATCH_THRESHOLD = 50.0
-	MOVIE_RENAME_TMDB_ID_SCORE   = 40.0
-	MOVIE_RENAME_TITLE_SCORE     = 18.0
-	MOVIE_RENAME_YEAR_SCORE      = 10.0
-	MOVIE_RENAME_SIZE_SCORE      = 14.0
-	MOVIE_RENAME_DURATION_SCORE  = 12.0
+	SCANNER_BATCH_SIZE = 54
 
 	// playlists — content_type discriminator (movies page / unified playlists table)
 	PLAYLIST_CONTENT_TYPE_TRACK = "track"

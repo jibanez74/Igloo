@@ -7,11 +7,15 @@ import (
 )
 
 type movieScanContext struct {
-	movieIndex           map[string]int64
-	artistIDs            map[int]int64
-	productionCompanyIDs map[int]int64
-	genreIDs             map[string]int64
-	extraVideoIDs        map[string]int64
+	// movieIndex maps cleaned file path -> file size for every movie already in
+	// the DB. It is read to skip unchanged files and is only written after a
+	// successful commit, never inside a transaction, so it is shared (not copied)
+	// across per-movie transactions.
+	movieIndex map[string]int64
+	// genreIDs memoizes genre tag -> id within a scan. It is written inside the
+	// per-movie transaction (getOrCreateMovieGenreID), so clone/mergeFrom isolate
+	// it until commit to avoid caching ids from a rolled-back transaction.
+	genreIDs map[string]int64
 }
 
 func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
@@ -19,31 +23,23 @@ func newMovieScanContext(movieIndex map[string]int64) *movieScanContext {
 		movieIndex = make(map[string]int64)
 	}
 
+	// Take ownership of movieIndex: loadMovieScanIndex already cleaned its keys
+	// and the caller discards its reference, so no defensive copy is needed.
 	return &movieScanContext{
-		movieIndex:           copyCleanPathInt64Map(movieIndex),
-		artistIDs:            make(map[int]int64),
-		productionCompanyIDs: make(map[int]int64),
-		genreIDs:             make(map[string]int64),
-		extraVideoIDs:        make(map[string]int64),
+		movieIndex: movieIndex,
+		genreIDs:   make(map[string]int64),
 	}
 }
 
 func (scan *movieScanContext) clone() *movieScanContext {
 	return &movieScanContext{
-		movieIndex:           copyCleanPathInt64Map(scan.movieIndex),
-		artistIDs:            maps.Clone(scan.artistIDs),
-		productionCompanyIDs: maps.Clone(scan.productionCompanyIDs),
-		genreIDs:             maps.Clone(scan.genreIDs),
-		extraVideoIDs:        maps.Clone(scan.extraVideoIDs),
+		movieIndex: scan.movieIndex, // shared; never written inside the transaction
+		genreIDs:   maps.Clone(scan.genreIDs),
 	}
 }
 
 func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
-	mergeCleanPathInt64Map(scan.movieIndex, other.movieIndex)
-	maps.Copy(scan.artistIDs, other.artistIDs)
-	maps.Copy(scan.productionCompanyIDs, other.productionCompanyIDs)
 	maps.Copy(scan.genreIDs, other.genreIDs)
-	maps.Copy(scan.extraVideoIDs, other.extraVideoIDs)
 }
 
 func (scan *movieScanContext) movieUnchanged(path string, size int64) bool {

@@ -41,16 +41,6 @@ var movieReleaseNoiseTokens = map[string]bool{
 	"yts": true, "ytsmx": true, "mx": true,
 }
 
-func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
-	resolved, err := app.resolveMovieFile(ctx, movieFile{path: path, ext: ext, size: fileSize})
-	if err != nil {
-		return err
-	}
-
-	_, err = app.persistResolvedMovieTx(ctx, qtx, newMovieScanContext(nil), resolved)
-	return err
-}
-
 func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*resolvedMovie, error) {
 	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.path))
 	if err != nil {
@@ -185,15 +175,15 @@ func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("delete existing crew failed: %w", err)
 		}
 
-		if err := app.processProductionCompanies(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.ProductionCompanies); err != nil {
+		if err := app.processProductionCompanies(ctx, qtx, movie.ID, resolved.tmdbMovie.ProductionCompanies); err != nil {
 			return 0, fmt.Errorf("process production companies failed: %w", err)
 		}
 
-		if err := app.processCast(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Cast); err != nil {
+		if err := app.processCast(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Cast); err != nil {
 			return 0, fmt.Errorf("process cast failed: %w", err)
 		}
 
-		if err := app.processCrew(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Crew); err != nil {
+		if err := app.processCrew(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Crew); err != nil {
 			return 0, fmt.Errorf("process crew failed: %w", err)
 		}
 
@@ -201,7 +191,7 @@ func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("process genres failed: %w", err)
 		}
 
-		if err := app.processExtraVideos(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Videos.Results); err != nil {
+		if err := app.processExtraVideos(ctx, qtx, movie.ID, resolved.tmdbMovie.Videos.Results); err != nil {
 			return 0, fmt.Errorf("process extra videos failed: %w", err)
 		}
 	}

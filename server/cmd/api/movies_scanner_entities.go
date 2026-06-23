@@ -12,7 +12,6 @@ import (
 func (app *Application) processProductionCompanies(
 	ctx context.Context,
 	qtx *database.Queries,
-	scan *movieScanContext,
 	movieID int64,
 	companies []struct {
 		ID            int    `json:"id"`
@@ -36,14 +35,9 @@ func (app *Application) processProductionCompanies(
 			return fmt.Errorf("upsert production company failed: %w", err)
 		}
 
-		companyID := upserted.ID
-		if scan != nil {
-			scan.productionCompanyIDs[company.ID] = companyID
-		}
-
 		err = qtx.CreateMovieProductionCompany(ctx, database.CreateMovieProductionCompanyParams{
 			MovieID:             movieID,
-			ProductionCompanyID: companyID,
+			ProductionCompanyID: upserted.ID,
 		})
 		if err != nil {
 			return fmt.Errorf("create movie production company relationship failed: %w", err)
@@ -56,7 +50,6 @@ func (app *Application) processProductionCompanies(
 func (app *Application) processCast(
 	ctx context.Context,
 	qtx *database.Queries,
-	scan *movieScanContext,
 	movieID int64,
 	cast []struct {
 		ID          int    `json:"id"`
@@ -67,7 +60,7 @@ func (app *Application) processCast(
 	},
 ) error {
 	for _, castMember := range cast {
-		artist, err := app.getOrCreateArtist(ctx, qtx, scan, castMember.ID, castMember.Name, castMember.ProfilePath)
+		artist, err := app.getOrCreateArtist(ctx, qtx, castMember.ID, castMember.Name, castMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
@@ -90,7 +83,6 @@ func (app *Application) processCast(
 func (app *Application) processCrew(
 	ctx context.Context,
 	qtx *database.Queries,
-	scan *movieScanContext,
 	movieID int64,
 	crew []struct {
 		ID          int    `json:"id"`
@@ -101,7 +93,7 @@ func (app *Application) processCrew(
 	},
 ) error {
 	for _, crewMember := range crew {
-		artist, err := app.getOrCreateArtist(ctx, qtx, scan, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
+		artist, err := app.getOrCreateArtist(ctx, qtx, crewMember.ID, crewMember.Name, crewMember.ProfilePath)
 		if err != nil {
 			return fmt.Errorf("get or create artist failed: %w", err)
 		}
@@ -146,7 +138,6 @@ func mapTmdbVideoSite(s string) string {
 func (app *Application) processExtraVideos(
 	ctx context.Context,
 	qtx *database.Queries,
-	scan *movieScanContext,
 	movieID int64,
 	results []tmdb.TmdbVideoResult,
 ) error {
@@ -177,14 +168,9 @@ func (app *Application) processExtraVideos(
 			return fmt.Errorf("upsert extra video failed: %w", err)
 		}
 
-		extraID := extra.ID
-		if scan != nil {
-			scan.extraVideoIDs[v.ID] = extraID
-		}
-
 		err = qtx.CreateMovieExtraVideo(ctx, database.CreateMovieExtraVideoParams{
 			MovieID:      movieID,
-			ExtraVideoID: extraID,
+			ExtraVideoID: extra.ID,
 		})
 
 		if err != nil {
