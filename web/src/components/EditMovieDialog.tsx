@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useEffect, useReducer, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -35,6 +35,164 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
 };
+
+const movieMetadataFields = [
+  "title",
+  "year",
+  "releaseDate",
+  "overview",
+  "tagLine",
+  "certification",
+  "posterPath",
+  "backdropPath",
+  "language",
+] as const;
+
+type MovieMetadataField = (typeof movieMetadataFields)[number];
+
+type MovieMetadataForm = Record<MovieMetadataField, string>;
+
+type MovieMetadataDirtyFields = Record<MovieMetadataField, boolean>;
+
+type MovieMetadataFormState = {
+  baseline: MovieMetadataForm;
+  draft: MovieMetadataForm;
+  dirty: MovieMetadataDirtyFields;
+};
+
+type MovieMetadataFormAction =
+  | {
+      type: "field";
+      field: MovieMetadataField;
+      value: string;
+    }
+  | {
+      type: "source";
+      baseline: MovieMetadataForm;
+    };
+
+function buildMovieMetadataForm(
+  movie: LibraryMovieDetailsMovieType,
+): MovieMetadataForm {
+  return {
+    title: movie.title,
+    year: String(unwrapInt(movie.year) ?? ""),
+    releaseDate: unwrapString(movie.release_date) ?? "",
+    overview: unwrapString(movie.overview) ?? "",
+    tagLine: unwrapString(movie.tag_line) ?? "",
+    certification: unwrapString(movie.certification) ?? "",
+    posterPath: unwrapString(movie.poster_path) ?? "",
+    backdropPath: unwrapString(movie.backdrop_path) ?? "",
+    language: unwrapString(movie.language) ?? "",
+  };
+}
+
+function movieMetadataFormsEqual(
+  first: MovieMetadataForm,
+  second: MovieMetadataForm,
+) {
+  return movieMetadataFields.every((field) => first[field] === second[field]);
+}
+
+function buildDirtyFields(
+  draft: MovieMetadataForm,
+  baseline: MovieMetadataForm,
+): MovieMetadataDirtyFields {
+  return movieMetadataFields.reduce((dirty, field) => {
+    dirty[field] = draft[field] !== baseline[field];
+    return dirty;
+  }, {} as MovieMetadataDirtyFields);
+}
+
+function mergeBackingMetadataIntoDraft(
+  draft: MovieMetadataForm,
+  dirty: MovieMetadataDirtyFields,
+  nextBaseline: MovieMetadataForm,
+): MovieMetadataForm {
+  return movieMetadataFields.reduce((nextDraft, field) => {
+    nextDraft[field] = dirty[field] ? draft[field] : nextBaseline[field];
+    return nextDraft;
+  }, {} as MovieMetadataForm);
+}
+
+function createMovieMetadataFormState(
+  movie: LibraryMovieDetailsMovieType,
+): MovieMetadataFormState {
+  const baseline = buildMovieMetadataForm(movie);
+  const draft = { ...baseline };
+
+  return {
+    baseline,
+    draft,
+    dirty: buildDirtyFields(draft, baseline),
+  };
+}
+
+function movieMetadataFormReducer(
+  state: MovieMetadataFormState,
+  action: MovieMetadataFormAction,
+): MovieMetadataFormState {
+  if (action.type === "field") {
+    const draft = {
+      ...state.draft,
+      [action.field]: action.value,
+    };
+    const dirty = {
+      ...state.dirty,
+      [action.field]: action.value !== state.baseline[action.field],
+    };
+
+    return {
+      ...state,
+      draft,
+      dirty,
+    };
+  }
+
+  if (movieMetadataFormsEqual(state.baseline, action.baseline)) {
+    return state;
+  }
+
+  const draft = mergeBackingMetadataIntoDraft(
+    state.draft,
+    state.dirty,
+    action.baseline,
+  );
+
+  return {
+    baseline: action.baseline,
+    draft,
+    dirty: buildDirtyFields(draft, action.baseline),
+  };
+}
+
+function buildUpdateMovieMetadataRequest(
+  draft: MovieMetadataForm,
+  baseline: MovieMetadataForm,
+): UpdateMovieMetadataRequest {
+  const body: UpdateMovieMetadataRequest = {};
+
+  if (draft.title !== baseline.title) body.title = draft.title;
+
+  const year = parseInt(draft.year, 10);
+  const baselineYear = parseInt(baseline.year, 10);
+  if (year > 0 && year !== baselineYear) body.year = year;
+  else if (!draft.year.trim() && baseline.year.trim()) body.year = 0;
+
+  if (draft.releaseDate !== baseline.releaseDate)
+    body.release_date = draft.releaseDate;
+  if (draft.overview !== baseline.overview) body.overview = draft.overview;
+  if (draft.tagLine !== baseline.tagLine) body.tag_line = draft.tagLine;
+  if (draft.certification !== baseline.certification)
+    body.certification = draft.certification;
+  if (draft.posterPath !== baseline.posterPath)
+    body.poster_path = draft.posterPath;
+  if (draft.backdropPath !== baseline.backdropPath)
+    body.backdrop_path = draft.backdropPath;
+  if (draft.language !== baseline.language) body.language = draft.language;
+
+  return body;
+}
 
 export default function EditMovieDialog({
   movieId,
@@ -139,57 +297,25 @@ function ManualTab({
 }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [form, dispatchForm] = useReducer(
+    movieMetadataFormReducer,
+    movie,
+    createMovieMetadataFormState,
+  );
 
-  const [title, setTitle] = useState(movie.title);
-  const [year, setYear] = useState(String(unwrapInt(movie.year) ?? ""));
-  const [releaseDate, setReleaseDate] = useState(
-    unwrapString(movie.release_date) ?? "",
-  );
-  const [overview, setOverview] = useState(
-    unwrapString(movie.overview) ?? "",
-  );
-  const [tagLine, setTagLine] = useState(unwrapString(movie.tag_line) ?? "");
-  const [certification, setCertification] = useState(
-    unwrapString(movie.certification) ?? "",
-  );
-  const [posterPath, setPosterPath] = useState(
-    unwrapString(movie.poster_path) ?? "",
-  );
-  const [backdropPath, setBackdropPath] = useState(
-    unwrapString(movie.backdrop_path) ?? "",
-  );
-  const [language, setLanguage] = useState(
-    unwrapString(movie.language) ?? "",
-  );
+  useEffect(() => {
+    dispatchForm({
+      type: "source",
+      baseline: buildMovieMetadataForm(movie),
+    });
+  }, [movie]);
+
+  const { draft, baseline } = form;
 
   async function handleSave() {
     setSaving(true);
 
-    const body: UpdateMovieMetadataRequest = {};
-    if (title !== movie.title) body.title = title;
-
-    const y = parseInt(year, 10);
-    const origYear = unwrapInt(movie.year);
-    if (y > 0 && y !== origYear) body.year = y;
-    else if (!year.trim() && origYear != null) body.year = 0;
-
-    const orig = (fn: typeof unwrapString, field: typeof movie.release_date) =>
-      fn(field) ?? "";
-
-    if (releaseDate !== orig(unwrapString, movie.release_date))
-      body.release_date = releaseDate;
-    if (overview !== orig(unwrapString, movie.overview))
-      body.overview = overview;
-    if (tagLine !== orig(unwrapString, movie.tag_line))
-      body.tag_line = tagLine;
-    if (certification !== orig(unwrapString, movie.certification))
-      body.certification = certification;
-    if (posterPath !== orig(unwrapString, movie.poster_path))
-      body.poster_path = posterPath;
-    if (backdropPath !== orig(unwrapString, movie.backdrop_path))
-      body.backdrop_path = backdropPath;
-    if (language !== orig(unwrapString, movie.language))
-      body.language = language;
+    const body = buildUpdateMovieMetadataRequest(draft, baseline);
 
     if (Object.keys(body).length === 0) {
       toast.info("No changes to save");
@@ -221,8 +347,14 @@ function ManualTab({
         <FieldGroup label="Title" htmlFor="manual-title">
           <Input
             id="manual-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={draft.title}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "title",
+                value: e.target.value,
+              })
+            }
             className="border-slate-700 bg-slate-800 text-white"
           />
         </FieldGroup>
@@ -230,8 +362,14 @@ function ManualTab({
           <Input
             id="manual-year"
             type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
+            value={draft.year}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "year",
+                value: e.target.value,
+              })
+            }
             className="border-slate-700 bg-slate-800 text-white"
           />
         </FieldGroup>
@@ -239,16 +377,28 @@ function ManualTab({
           <Input
             id="manual-release-date"
             type="date"
-            value={releaseDate}
-            onChange={(e) => setReleaseDate(e.target.value)}
+            value={draft.releaseDate}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "releaseDate",
+                value: e.target.value,
+              })
+            }
             className="border-slate-700 bg-slate-800 text-white"
           />
         </FieldGroup>
         <FieldGroup label="Certification" htmlFor="manual-certification">
           <Input
             id="manual-certification"
-            value={certification}
-            onChange={(e) => setCertification(e.target.value)}
+            value={draft.certification}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "certification",
+                value: e.target.value,
+              })
+            }
             placeholder="e.g. PG-13, R"
             className="border-slate-700 bg-slate-800 text-white"
           />
@@ -256,8 +406,14 @@ function ManualTab({
         <FieldGroup label="Language" htmlFor="manual-language">
           <Input
             id="manual-language"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            value={draft.language}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "language",
+                value: e.target.value,
+              })
+            }
             placeholder="e.g. en"
             className="border-slate-700 bg-slate-800 text-white"
           />
@@ -265,16 +421,28 @@ function ManualTab({
         <FieldGroup label="Tagline" htmlFor="manual-tagline">
           <Input
             id="manual-tagline"
-            value={tagLine}
-            onChange={(e) => setTagLine(e.target.value)}
+            value={draft.tagLine}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "tagLine",
+                value: e.target.value,
+              })
+            }
             className="border-slate-700 bg-slate-800 text-white"
           />
         </FieldGroup>
         <FieldGroup label="Poster Path" htmlFor="manual-poster">
           <Input
             id="manual-poster"
-            value={posterPath}
-            onChange={(e) => setPosterPath(e.target.value)}
+            value={draft.posterPath}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "posterPath",
+                value: e.target.value,
+              })
+            }
             placeholder="/abcdef.jpg"
             className="border-slate-700 bg-slate-800 text-white"
           />
@@ -282,8 +450,14 @@ function ManualTab({
         <FieldGroup label="Backdrop Path" htmlFor="manual-backdrop">
           <Input
             id="manual-backdrop"
-            value={backdropPath}
-            onChange={(e) => setBackdropPath(e.target.value)}
+            value={draft.backdropPath}
+            onChange={(e) =>
+              dispatchForm({
+                type: "field",
+                field: "backdropPath",
+                value: e.target.value,
+              })
+            }
             placeholder="/abcdef.jpg"
             className="border-slate-700 bg-slate-800 text-white"
           />
@@ -293,8 +467,14 @@ function ManualTab({
       <FieldGroup label="Overview" htmlFor="manual-overview">
         <textarea
           id="manual-overview"
-          value={overview}
-          onChange={(e) => setOverview(e.target.value)}
+          value={draft.overview}
+          onChange={(e) =>
+            dispatchForm({
+              type: "field",
+              field: "overview",
+              value: e.target.value,
+            })
+          }
           rows={4}
           className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />

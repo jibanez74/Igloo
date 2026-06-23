@@ -297,6 +297,7 @@ export default function MovieDetailsHeroActions({
       {user?.is_admin && editOpen && (
         <Suspense fallback={null}>
           <EditMovieDialog
+            key={movieId}
             movieId={movieId}
             movie={movie}
             open={editOpen}

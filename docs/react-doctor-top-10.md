@@ -117,6 +117,8 @@ React Doctor flagged event-like behavior handled through `useEffect`. The virtua
 
 Recommended fix: centralize infinite-scroll triggering so each page request is guarded once, preferably at the intersection boundary or virtualizer callback boundary. Keep explicit guards for `hasNextPage` and `isFetchingNextPage`.
 
+Follow-up: before changing this area, verify whether React 19 APIs or virtualizer-provided callbacks can simplify the pagination trigger without increasing duplicate fetch risk.
+
 ## 9. Simplify media control state updates that batch poorly
 
 Findings include:
