@@ -40,6 +40,7 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
 import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
+import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { formatDuration } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -656,7 +657,6 @@ function VirtualizedPlaylistTracksList({
 
   const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
-  const isFetchingNextRef = useRef(false);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useEffect(() => {
@@ -688,6 +688,14 @@ function VirtualizedPlaylistTracksList({
     };
   }, [scrollContainer]);
 
+  const onChange = useVirtualizedInfiniteLoader({
+    itemCount: tracks.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scopeKey: playlistId,
+  });
+
   const virtualizer = useElementVirtualizer({
     count: tracks.length,
     getScrollElement: () => scrollContainer,
@@ -699,6 +707,7 @@ function VirtualizedPlaylistTracksList({
     estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
     overscan: 5,
     scrollMargin,
+    onChange,
   });
 
   const renderedVirtualItems = virtualizer.getVirtualItems();
@@ -706,37 +715,6 @@ function VirtualizedPlaylistTracksList({
   useEffect(() => {
     virtualizer.measure();
   }, [tracks.length, scrollMargin, virtualizer]);
-
-  useEffect(() => {
-    if (!isFetchingNextPage) {
-      isFetchingNextRef.current = false;
-    }
-  }, [isFetchingNextPage]);
-
-  useEffect(() => {
-    if (renderedVirtualItems.length === 0) return;
-
-    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
-
-    if (
-      lastItem &&
-      lastItem.index >= tracks.length - 10 &&
-      hasNextPage &&
-      !isFetchingNextPage &&
-      !isFetchingNextRef.current
-    ) {
-      isFetchingNextRef.current = true;
-      fetchNextPage().finally(() => {
-        isFetchingNextRef.current = false;
-      });
-    }
-  }, [
-    renderedVirtualItems,
-    tracks.length,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  ]);
 
   return (
     <div

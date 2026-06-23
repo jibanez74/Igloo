@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -26,6 +26,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
 import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
+import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
@@ -541,8 +542,6 @@ function TracksTabContent() {
     likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
   );
 
-  const isFetchingNextRef = useRef(false);
-
   // Get total tracks count from first page
   const totalTracks =
     data?.pages[0]?.error === false ? (data.pages[0].data?.total ?? 0) : 0;
@@ -555,23 +554,6 @@ function TracksTabContent() {
 
   // Convert to virtual items (tracks + letter headers)
   const virtualItems = flattenToVirtualItems(allTracks);
-
-  useEffect(() => {
-    if (!isFetchingNextPage) {
-      isFetchingNextRef.current = false;
-    }
-  }, [isFetchingNextPage]);
-
-  const requestNextPage = useCallback(() => {
-    if (isFetchingNextRef.current || isFetchingNextPage || !hasNextPage) {
-      return;
-    }
-
-    isFetchingNextRef.current = true;
-    void fetchNextPage().finally(() => {
-      isFetchingNextRef.current = false;
-    });
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   // Generate announcement for screen readers
   const getAnnouncement = () => {
@@ -618,7 +600,7 @@ function TracksTabContent() {
         totalTracks={totalTracks}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
-        requestNextPage={requestNextPage}
+        fetchNextPage={fetchNextPage}
       />
     </div>
   );
@@ -630,7 +612,7 @@ type VirtualizedTracksListProps = {
   totalTracks: number;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  requestNextPage: () => void;
+  fetchNextPage: () => Promise<unknown>;
 };
 
 function VirtualizedTracksList({
@@ -639,13 +621,12 @@ function VirtualizedTracksList({
   totalTracks,
   hasNextPage,
   isFetchingNextPage,
-  requestNextPage,
+  fetchNextPage,
 }: VirtualizedTracksListProps) {
   "use no memo";
 
   const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useEffect(() => {
@@ -677,6 +658,14 @@ function VirtualizedTracksList({
     };
   }, [scrollContainer]);
 
+  const onChange = useVirtualizedInfiniteLoader({
+    itemCount: virtualItems.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scopeKey: "music-tracks",
+  });
+
   const virtualizer = useElementVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => scrollContainer,
@@ -696,6 +685,7 @@ function VirtualizedTracksList({
 
     overscan: 5,
     scrollMargin,
+    onChange,
   });
 
   const renderedVirtualItems = virtualizer.getVirtualItems();
@@ -703,62 +693,6 @@ function VirtualizedTracksList({
   useEffect(() => {
     virtualizer.measure();
   }, [scrollMargin, virtualizer, virtualItems.length]);
-
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (
-      !target ||
-      !scrollContainer ||
-      !hasNextPage ||
-      isFetchingNextPage ||
-      typeof IntersectionObserver === "undefined"
-    ) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) {
-          requestNextPage();
-        }
-      },
-      {
-        root: scrollContainer,
-        rootMargin: "800px 0px",
-      },
-    );
-
-    observer.observe(target);
-
-    return () => observer.disconnect();
-  }, [
-    hasNextPage,
-    isFetchingNextPage,
-    requestNextPage,
-    scrollContainer,
-    virtualItems.length,
-  ]);
-
-  useEffect(() => {
-    if (renderedVirtualItems.length === 0) return;
-
-    const lastItem = renderedVirtualItems[renderedVirtualItems.length - 1];
-
-    if (
-      lastItem &&
-      lastItem.index >= virtualItems.length - 10 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      requestNextPage();
-    }
-  }, [
-    renderedVirtualItems,
-    virtualItems.length,
-    hasNextPage,
-    isFetchingNextPage,
-    requestNextPage,
-  ]);
 
   return (
     <div
@@ -803,17 +737,6 @@ function VirtualizedTracksList({
           );
         })}
 
-        <div
-          ref={loadMoreRef}
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: 0,
-            top: `${virtualizer.getTotalSize() - 1}px`,
-            width: "100%",
-            height: "1px",
-          }}
-        />
       </div>
 
       {isFetchingNextPage && (

@@ -560,8 +560,8 @@ func (app *Application) InitRouter() {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
-	router.Use(middleware.Recoverer)
 	router.Use(app.RequestLogger)
+	router.Use(middleware.Recoverer)
 
 	app.registerWebSocketRoutes(router)
 
