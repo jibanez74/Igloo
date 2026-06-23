@@ -366,6 +366,7 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
 
   await expect.poll(() => requestedOffsets).toContainEqual(100);
   expect(requestedOffsets).toEqual(expect.arrayContaining([0, 50, 100]));
+  expect(requestedOffsets).toEqual([...new Set(requestedOffsets)]);
 
   await page.evaluate(() => {
     window.scrollTo(0, 0);

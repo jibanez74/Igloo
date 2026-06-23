@@ -36,32 +36,33 @@ import (
 )
 
 type Application struct {
-	DB                  *sql.DB
-	Queries             *database.Queries
-	Settings            *database.Setting
-	Config              RuntimeConfig
-	Logger              applogger.LoggerInterface
-	LoggerCloser        func() error
-	Ffprobe             ffprobe.FfprobeInterface
-	FFmpeg              ffmpeg.FFmpegInterface
-	Spotify             spotify.SpotifyInterface
-	Tmdb                tmdb.TmdbInterface
-	TmdbImageBaseURL    string
-	TmdbImageHTTPClient *http.Client
-	SessionManager      *scs.SessionManager
-	Wait                *sync.WaitGroup
-	Router              *chi.Mux
-	Server              *http.Server
-	ScannerDBMu         sync.Mutex
-	HLSSessionCache     *cache.Cache
-	HLSSessionGroup     singleflight.Group
-	HLSTranscodeLimiter *hlsTranscodeLimiter
-	PersonalHLSMu       sync.Mutex
-	RemuxSafetyCache    *cache.Cache
-	SubtitleVTTCache    *cache.Cache
-	RoomHLSTombstone    *cache.Cache
-	RoomHLSMu           sync.Mutex
-	WatchRoomHub        *WatchRoomHub
+	DB                   *sql.DB
+	Queries              *database.Queries
+	Settings             *database.Setting
+	Config               RuntimeConfig
+	Logger               applogger.LoggerInterface
+	LoggerCloser         func() error
+	Ffprobe              ffprobe.FfprobeInterface
+	FFmpeg               ffmpeg.FFmpegInterface
+	Spotify              spotify.SpotifyInterface
+	Tmdb                 tmdb.TmdbInterface
+	TmdbImageBaseURL     string
+	TmdbImageHTTPClient  *http.Client
+	SessionManager       *scs.SessionManager
+	Wait                 *sync.WaitGroup
+	Router               *chi.Mux
+	Server               *http.Server
+	ScannerDBMu          sync.Mutex
+	HLSSessionCache      *cache.Cache
+	HLSSessionGroup      singleflight.Group
+	HLSTranscodeLimiter  *hlsTranscodeLimiter
+	PersonalHLSMu        sync.Mutex
+	RemuxSafetyCache     *cache.Cache
+	SubtitleVTTCache     *cache.Cache
+	SubtitleExtractGroup singleflight.Group
+	RoomHLSTombstone     *cache.Cache
+	RoomHLSMu            sync.Mutex
+	WatchRoomHub         *WatchRoomHub
 }
 
 //go:embed all:webdist
@@ -95,7 +96,14 @@ func main() {
 
 	err = app.Server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		// InitApp already extracted the ffmpeg/ffprobe binaries and opened the
+		// database and logger, so a serve failure (e.g. port already in use) must
+		// run cleanup rather than exit bare.
+		app.Logger.Error("server failed to start", "error", err)
+		app.cleanupMediaBinaries()
+		app.closeDatabase()
+		app.closeLogger()
+		os.Exit(1)
 	}
 }
 
@@ -553,8 +561,8 @@ func (app *Application) InitRouter() {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
+	router.Use(app.RequestLogger)
 	router.Use(middleware.Recoverer)
-	router.Use(middleware.Logger)
 
 	app.registerWebSocketRoutes(router)
 
@@ -924,6 +932,14 @@ func (app *Application) cleanupMediaBinaries() {
 }
 
 func (app *Application) closeDatabase() {
+	// Close prepared statements before the connection that owns them.
+	if app.Queries != nil {
+		err := app.Queries.Close()
+		if err != nil {
+			app.Logger.Error("failed to close prepared statements", "error", err)
+		}
+	}
+
 	if app.DB != nil {
 		err := app.DB.Close()
 		if err != nil {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import type { RefObject } from "react";
 import { toast } from "sonner";
 import {
@@ -16,28 +16,41 @@ type VideoFullscreenOptions = {
   videoRef: RefObject<HTMLVideoElement | null>;
 };
 
+type FullscreenMode = "none" | "document" | "webkitVideo" | "immersiveViewport";
+
+function fullscreenModeReducer(
+  mode: FullscreenMode,
+  nextMode: FullscreenMode,
+): FullscreenMode {
+  return mode === nextMode ? mode : nextMode;
+}
+
 export function useVideoFullscreen({
   containerRef,
   videoRef,
 }: VideoFullscreenOptions) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isImmersiveViewport, setIsImmersiveViewport] = useState(false);
-  const fullscreenSourceRef = useRef<"none" | "document" | "webkitVideo">(
+  const [fullscreenMode, setFullscreenMode] = useReducer(
+    fullscreenModeReducer,
     "none",
   );
+  const fullscreenModeRef = useRef<FullscreenMode>("none");
+
+  const isFullscreen =
+    fullscreenMode === "document" || fullscreenMode === "webkitVideo";
+  const isImmersiveViewport = fullscreenMode === "immersiveViewport";
+  const chromeFullscreenMode = fullscreenMode !== "none";
 
   useEffect(() => {
     const onFullscreenChange = () => {
       const entering = !!getFullscreenElement();
       if (entering) {
-        fullscreenSourceRef.current = "document";
-        setIsFullscreen(true);
-        setIsImmersiveViewport(false);
+        fullscreenModeRef.current = "document";
+        setFullscreenMode("document");
       } else {
-        if (fullscreenSourceRef.current === "document") {
-          fullscreenSourceRef.current = "none";
+        if (fullscreenModeRef.current === "document") {
+          fullscreenModeRef.current = "none";
+          setFullscreenMode("none");
         }
-        setIsFullscreen(false);
       }
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
@@ -56,13 +69,12 @@ export function useVideoFullscreen({
     if (!video) return;
 
     const onWebKitBegin = () => {
-      fullscreenSourceRef.current = "webkitVideo";
-      setIsFullscreen(true);
-      setIsImmersiveViewport(false);
+      fullscreenModeRef.current = "webkitVideo";
+      setFullscreenMode("webkitVideo");
     };
     const onWebKitEnd = () => {
-      fullscreenSourceRef.current = "none";
-      setIsFullscreen(false);
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
     };
 
     video.addEventListener("webkitbeginfullscreen", onWebKitBegin);
@@ -91,12 +103,13 @@ export function useVideoFullscreen({
       void exitDocumentFullscreen();
       return;
     }
-    if (fullscreenSourceRef.current === "webkitVideo") {
+    if (fullscreenModeRef.current === "webkitVideo") {
       tryWebKitVideoExitFullscreen(video);
       return;
     }
-    if (isImmersiveViewport) {
-      setIsImmersiveViewport(false);
+    if (fullscreenModeRef.current === "immersiveViewport") {
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
       return;
     }
 
@@ -104,7 +117,8 @@ export function useVideoFullscreen({
       if (tryWebKitVideoEnterFullscreen(video)) {
         return;
       }
-      setIsImmersiveViewport(true);
+      fullscreenModeRef.current = "immersiveViewport";
+      setFullscreenMode("immersiveViewport");
       toast.info(
         "Full screen isn't available in this browser. Using expanded view instead.",
       );
@@ -132,14 +146,15 @@ export function useVideoFullscreen({
     }
     const video = videoRef.current;
     if (
-      fullscreenSourceRef.current === "webkitVideo" &&
+      fullscreenModeRef.current === "webkitVideo" &&
       video &&
       tryWebKitVideoExitFullscreen(video)
     ) {
       return true;
     }
-    if (isImmersiveViewport) {
-      setIsImmersiveViewport(false);
+    if (fullscreenModeRef.current === "immersiveViewport") {
+      fullscreenModeRef.current = "none";
+      setFullscreenMode("none");
       return true;
     }
     return false;
@@ -148,7 +163,7 @@ export function useVideoFullscreen({
   return {
     isFullscreen,
     isImmersiveViewport,
-    chromeFullscreenMode: isFullscreen || isImmersiveViewport,
+    chromeFullscreenMode,
     toggleFullscreen,
     exitFullscreenIfActive,
   };

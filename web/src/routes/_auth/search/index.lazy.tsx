@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Film, Disc3, User, Music } from "lucide-react";
@@ -397,7 +396,6 @@ function MoviesResultsTab({ q, page }: CategoryTabProps) {
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
       page={data?.error === false ? data.data.page : page}
-      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: MoviesLibraryListItemType[]) => (
@@ -438,7 +436,6 @@ function AlbumsResultsTab({ q, page }: CategoryTabProps) {
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
       page={data?.error === false ? data.data.page : page}
-      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: SimpleAlbumType[]) => (
@@ -479,7 +476,6 @@ function MusiciansResultsTab({ q, page }: CategoryTabProps) {
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
       page={data?.error === false ? data.data.page : page}
-      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: SimpleMusicianType[]) => (
@@ -520,7 +516,6 @@ function TracksResultsTab({ q, page }: CategoryTabProps) {
       results={data?.error === false ? data.data.results : []}
       total={data?.error === false ? data.data.total : 0}
       page={data?.error === false ? data.data.page : page}
-      requestedPage={page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
       renderGrid={(items: TrackListItemType[]) => (
@@ -550,7 +545,6 @@ type CategoryTabFrameProps<T> = {
   label: "movies" | "albums" | "musicians" | "tracks";
   q: string;
   page: number;
-  requestedPage: number;
   isLoading: boolean;
   isError: boolean;
   isApiFailure: boolean;
@@ -567,7 +561,6 @@ function CategoryTabFrame<T>({
   label,
   q,
   page,
-  requestedPage,
   isLoading,
   isError,
   isApiFailure: isFailure,
@@ -579,16 +572,6 @@ function CategoryTabFrame<T>({
   onPageChange,
   renderGrid,
 }: CategoryTabFrameProps<T>) {
-  useEffect(() => {
-    if (isLoading || isError || isFailure || totalPages === 0) {
-      return;
-    }
-
-    if (requestedPage > totalPages) {
-      onPageChange(totalPages);
-    }
-  }, [isLoading, isError, isFailure, onPageChange, requestedPage, totalPages]);
-
   if (isLoading) {
     return <CategorySkeleton />;
   }

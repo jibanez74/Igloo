@@ -180,6 +180,21 @@ function requestsFor(
 }
 
 describe("Account settings", () => {
+  it("keeps the hidden username autocomplete helper labeled for password managers", async () => {
+    await renderAccountRoute();
+
+    const usernameHelper = document.querySelector(
+      'input[name="username"][autocomplete="username"]',
+    );
+
+    expect(usernameHelper).toBeInstanceOf(HTMLInputElement);
+    expect(usernameHelper).toHaveAttribute("type", "email");
+    expect(usernameHelper).toHaveAttribute("aria-label", "Account email");
+    expect(usernameHelper).toHaveAttribute("hidden");
+    expect(usernameHelper).toHaveAttribute("readonly");
+    expect(usernameHelper).toHaveValue("dana@example.com");
+  });
+
   it("exposes short password validation to assistive technology", async () => {
     const user = userEvent.setup();
     const { requests } = await renderAccountRoute();

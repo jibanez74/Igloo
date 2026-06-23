@@ -9,7 +9,7 @@ import {
   MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD,
   MOVIE_WATCH_PROGRESS_MIN_SECONDS,
 } from "@/lib/constants";
-import { STREAM_MODES, formatSubtitleLabel } from "@/lib/playback";
+import { STREAM_MODES, formatSubtitleLabel, normalizeLang } from "@/lib/playback";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
   MoviePlaybackStatus,
@@ -221,7 +221,7 @@ export function buildMovieSubtitleTrackInfo({
   return {
     url: `/api/movies/${movieId}/subtitles/${resolvedSubtitleTrack}/web.vtt`,
     label: formatSubtitleLabel(sub, resolvedSubtitleTrack),
-    srclang: unwrapStringOrUndefined(sub.language) ?? "",
+    srclang: normalizeLang(unwrapStringOrUndefined(sub.language)) ?? "",
   };
 }
 

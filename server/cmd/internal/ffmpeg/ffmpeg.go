@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"sync"
 
@@ -45,6 +46,15 @@ func New() (FFmpegInterface, error) {
 	binPath, err := resolveBinaryPath()
 	if err != nil {
 		return nil, err
+	}
+
+	// Confirm the binary actually executes before accepting it. The individual
+	// capability probes below tolerate failures, so without this a corrupt,
+	// wrong-arch, or non-executable ffmpeg would boot with empty capabilities and
+	// only fail at the first transcode. The server must not boot without a working
+	// ffmpeg.
+	if _, err := runFFmpegProbe(binPath, "-version"); err != nil {
+		return nil, fmt.Errorf("ffmpeg binary at %s is not executable: %w", binPath, err)
 	}
 
 	instance = &ffmpeg{

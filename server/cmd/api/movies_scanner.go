@@ -28,6 +28,47 @@ type movieRenameIndex struct {
   byTitleYear      map[string][]database.GetMovieScanIndexRow
   bySize           map[int64][]database.GetMovieScanIndexRow
   byDurationBucket map[int64][]database.GetMovieScanIndexRow
+  // titleByID memoizes the normalized rename title per movie ID so that
+  // movieRenameTitle (filename parse + normalize) runs at most once per row
+  // across index building, candidate lookup, and scoring.
+  titleByID map[int64]string
+}
+
+// title returns the normalized rename title for a row, computing it at most
+// once per row. With no cache map (zero-value index) it falls back to an
+// uncached computation.
+func (index movieRenameIndex) title(movie database.GetMovieScanIndexRow) string {
+  if index.titleByID == nil {
+    return movieRenameTitle(movie)
+  }
+  if cached, ok := index.titleByID[movie.ID]; ok {
+    return cached
+  }
+  title := movieRenameTitle(movie)
+  index.titleByID[movie.ID] = title
+  return title
+}
+
+// titleYearKey builds the title|year lookup key using the memoized title.
+func (index movieRenameIndex) titleYearKey(movie database.GetMovieScanIndexRow) string {
+  title := index.title(movie)
+  if title == "" {
+    return ""
+  }
+  if movie.Year.Valid {
+    return fmt.Sprintf("%s|%d", title, movie.Year.Int64)
+  }
+  return title
+}
+
+// score mirrors scoreMovieRenameCandidate but feeds it the memoized titles.
+func (index movieRenameIndex) score(missingMovie, candidateMovie database.GetMovieScanIndexRow) float64 {
+  return scoreMovieRenameCandidateWithTitles(
+    missingMovie,
+    candidateMovie,
+    index.title(missingMovie),
+    index.title(candidateMovie),
+  )
 }
 
 func (app *Application) ScanMoviesLibrary() {
@@ -133,18 +174,6 @@ func (app *Application) runMovieScan() {
 
   app.Logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s",
     moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
-}
-
-func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int, processed []string) {
-  scanIndex, err := app.loadMovieScanIndex(ctx)
-  if err != nil {
-    app.Logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
-    return 0, 0, 1, nil
-  }
-
-  scan := newMovieScanContext(scanIndex)
-  scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, files)
-  return scanned, skipped, errCount, nil
 }
 
 func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan *movieScanContext, files []movieFile) (scanned, skipped, errCount int) {
@@ -360,6 +389,7 @@ func buildMovieRenameIndex(processedMoviesByPath map[string]database.GetMovieSca
     byTitleYear:      make(map[string][]database.GetMovieScanIndexRow),
     bySize:           make(map[int64][]database.GetMovieScanIndexRow),
     byDurationBucket: make(map[int64][]database.GetMovieScanIndexRow),
+    titleByID:        make(map[int64]string, len(processedMoviesByPath)),
   }
 
   for _, movie := range processedMoviesByPath {
@@ -367,7 +397,7 @@ func buildMovieRenameIndex(processedMoviesByPath map[string]database.GetMovieSca
       index.byTmdbID[movie.TmdbID.Int64] = append(index.byTmdbID[movie.TmdbID.Int64], movie)
     }
 
-    titleYearKey := movieRenameTitleYearKey(movie)
+    titleYearKey := index.titleYearKey(movie)
     if titleYearKey != "" {
       index.byTitleYear[titleYearKey] = append(index.byTitleYear[titleYearKey], movie)
     }
@@ -402,7 +432,7 @@ func findMovieRenameCandidate(
       continue
     }
 
-    score := scoreMovieRenameCandidate(missingMovie, candidateMovie)
+    score := renameIndex.score(missingMovie, candidateMovie)
     if score < helpers.MOVIE_RENAME_MATCH_THRESHOLD {
       continue
     }
@@ -427,6 +457,18 @@ func findMovieRenameCandidate(
 }
 
 func scoreMovieRenameCandidate(missingMovie, candidateMovie database.GetMovieScanIndexRow) float64 {
+  return scoreMovieRenameCandidateWithTitles(
+    missingMovie,
+    candidateMovie,
+    movieRenameTitle(missingMovie),
+    movieRenameTitle(candidateMovie),
+  )
+}
+
+func scoreMovieRenameCandidateWithTitles(
+  missingMovie, candidateMovie database.GetMovieScanIndexRow,
+  missingTitle, candidateTitle string,
+) float64 {
   score := 0.0
 
   if missingMovie.TmdbID.Valid && candidateMovie.TmdbID.Valid {
@@ -436,8 +478,6 @@ func scoreMovieRenameCandidate(missingMovie, candidateMovie database.GetMovieSca
     score += helpers.MOVIE_RENAME_TMDB_ID_SCORE
   }
 
-  missingTitle := movieRenameTitle(missingMovie)
-  candidateTitle := movieRenameTitle(candidateMovie)
   switch {
   case missingTitle != "" && missingTitle == candidateTitle:
     score += helpers.MOVIE_RENAME_TITLE_SCORE
@@ -475,17 +515,6 @@ func movieRenameTitle(movie database.GetMovieScanIndexRow) string {
   return normalizeComparableMovieTitle(movie.Title)
 }
 
-func movieRenameTitleYearKey(movie database.GetMovieScanIndexRow) string {
-  title := movieRenameTitle(movie)
-  if title == "" {
-    return ""
-  }
-  if movie.Year.Valid {
-    return fmt.Sprintf("%s|%d", title, movie.Year.Int64)
-  }
-  return title
-}
-
 func movieRenameDurationBucket(movie database.GetMovieScanIndexRow) (int64, bool) {
   if !movie.Duration.Valid {
     return 0, false
@@ -498,7 +527,7 @@ func removeMovieRenameCandidate(index movieRenameIndex, movie database.GetMovieS
     index.byTmdbID[movie.TmdbID.Int64] = removeMovieRenameRow(index.byTmdbID[movie.TmdbID.Int64], movie.ID)
   }
 
-  titleYearKey := movieRenameTitleYearKey(movie)
+  titleYearKey := index.titleYearKey(movie)
   if titleYearKey != "" {
     index.byTitleYear[titleYearKey] = removeMovieRenameRow(index.byTitleYear[titleYearKey], movie.ID)
   }
@@ -534,7 +563,7 @@ func (index movieRenameIndex) lookupCandidates(missingMovie database.GetMovieSca
     appendCandidates(index.byTmdbID[missingMovie.TmdbID.Int64])
   }
 
-  titleYearKey := movieRenameTitleYearKey(missingMovie)
+  titleYearKey := index.titleYearKey(missingMovie)
   if titleYearKey != "" {
     appendCandidates(index.byTitleYear[titleYearKey])
   }

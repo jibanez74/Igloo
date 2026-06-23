@@ -869,14 +869,15 @@ function AccountSettings() {
               type="email"
               name="username"
               autoComplete="username"
+              aria-label="Account email"
               value={emailValue}
               readOnly
               hidden
             />
-          <div className="space-y-2">
-            <Label htmlFor={currentPasswordId} className="text-slate-300">
-              Current Password
-            </Label>
+            <div className="space-y-2">
+              <Label htmlFor={currentPasswordId} className="text-slate-300">
+                Current Password
+              </Label>
             <Input
               id={currentPasswordId}
               type="password"

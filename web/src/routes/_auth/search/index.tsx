@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   searchAlbumsQueryOpts,
   searchAllQueryOpts,
@@ -8,6 +8,35 @@ import {
 } from "@/lib/query-opts";
 import { SEARCH_PER_PAGE } from "@/lib/constants";
 import { searchSearchSchema } from "@/types/route-search";
+import type { SearchTab } from "@/types";
+
+type PagedSearchTab = Exclude<SearchTab, "all">;
+
+function redirectToLastSearchPage({
+  q,
+  tab,
+  requestedPage,
+  totalPages,
+}: {
+  q: string;
+  tab: PagedSearchTab;
+  requestedPage: number;
+  totalPages: number;
+}) {
+  if (totalPages === 0 || requestedPage <= totalPages) {
+    return;
+  }
+
+  throw redirect({
+    to: "/search",
+    search: {
+      q,
+      tab,
+      page: totalPages,
+    },
+    replace: true,
+  });
+}
 
 export const Route = createFileRoute("/_auth/search/")({
   validateSearch: searchSearchSchema,
@@ -23,33 +52,69 @@ export const Route = createFileRoute("/_auth/search/")({
     }
 
     if (tab === "movies") {
-      await queryClient.ensureQueryData(
+      const result = await queryClient.ensureQueryData(
         searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE),
       );
+
+      if (result.error === false) {
+        redirectToLastSearchPage({
+          q: trimmed,
+          tab,
+          requestedPage: page,
+          totalPages: result.data.total_pages,
+        });
+      }
 
       return;
     }
 
     if (tab === "albums") {
-      await queryClient.ensureQueryData(
+      const result = await queryClient.ensureQueryData(
         searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
       );
+
+      if (result.error === false) {
+        redirectToLastSearchPage({
+          q: trimmed,
+          tab,
+          requestedPage: page,
+          totalPages: result.data.total_pages,
+        });
+      }
 
       return;
     }
 
     if (tab === "musicians") {
-      await queryClient.ensureQueryData(
+      const result = await queryClient.ensureQueryData(
         searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE),
       );
+
+      if (result.error === false) {
+        redirectToLastSearchPage({
+          q: trimmed,
+          tab,
+          requestedPage: page,
+          totalPages: result.data.total_pages,
+        });
+      }
 
       return;
     }
 
     if (tab === "tracks") {
-      await queryClient.ensureQueryData(
+      const result = await queryClient.ensureQueryData(
         searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE),
       );
+
+      if (result.error === false) {
+        redirectToLastSearchPage({
+          q: trimmed,
+          tab,
+          requestedPage: page,
+          totalPages: result.data.total_pages,
+        });
+      }
     }
   },
 });

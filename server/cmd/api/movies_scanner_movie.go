@@ -337,8 +337,8 @@ func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovi
 		}
 	}
 
-	score += minFloat(movie.Popularity/25, 8)
-	score += minFloat(movie.VoteAverage/2, 5)
+	score += min(movie.Popularity/25, 8)
+	score += min(movie.VoteAverage/2, 5)
 
 	return score
 }
@@ -377,7 +377,7 @@ func tokenOverlapScore(a, b string) float64 {
 		}
 	}
 
-	denominator := maxInt(len(aTokens), len(bTokens))
+	denominator := max(len(aTokens), len(bTokens))
 	return float64(matches) / float64(denominator)
 }
 
@@ -394,7 +394,7 @@ func clampTmdbConfidence(score float64) float64 {
 
 func summarizeTmdbCandidates(results []tmdb.TmdbMovie, targetTitle string, targetYear int) string {
 	scored := rankTmdbMatches(results, targetTitle, targetYear)
-	limit := minInt(len(scored), 3)
+	limit := min(len(scored), 3)
 	parts := make([]string, 0, limit)
 	for i := 0; i < limit; i++ {
 		parts = append(parts, fmt.Sprintf("%s (%s, %.1f)", scored[i].Movie.Title, scored[i].Movie.ReleaseDate, scored[i].Confidence))
@@ -419,25 +419,4 @@ func absInt(n int) int {
 		return -n
 	}
 	return n
-}
-
-func minFloat(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

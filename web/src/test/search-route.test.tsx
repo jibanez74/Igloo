@@ -255,7 +255,7 @@ describe("search route", () => {
 
   it("shows the server-clamped page for overlarge requested pages", async () => {
     window.scrollTo = vi.fn();
-    const { fetchMock } = await renderSearchRoute(
+    const { fetchMock, router } = await renderSearchRoute(
       "/search/?q=Casino&tab=movies&page=999",
     );
 
@@ -271,6 +271,14 @@ describe("search route", () => {
           method: "GET",
         }),
       );
+    });
+
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({
+        q: "Casino",
+        tab: "movies",
+        page: 3,
+      });
     });
   });
 

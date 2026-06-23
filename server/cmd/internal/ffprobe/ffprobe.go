@@ -1,10 +1,17 @@
 package ffprobe
 
 import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
 	"sync"
+	"time"
 
 	"igloo/cmd/internal/mediabin"
 )
+
+const versionCheckTimeout = 5 * time.Second
 
 type FfprobeInterface interface {
 	GetMetadata(filePath string) (*FfprobeResult, error)
@@ -39,9 +46,31 @@ func New() (FfprobeInterface, error) {
 		return nil, err
 	}
 
+	// Confirm the binary actually executes; path resolution alone does not catch a
+	// corrupt, wrong-arch, or non-executable ffprobe. The server must not boot
+	// without a working ffprobe.
+	if err := verifyExecutable(binPath); err != nil {
+		return nil, fmt.Errorf("ffprobe binary at %s is not executable: %w", binPath, err)
+	}
+
 	instance = &ffprobe{bin: binPath}
 
 	return instance, nil
+}
+
+func verifyExecutable(binPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
+	defer cancel()
+
+	output, err := exec.CommandContext(ctx, binPath, "-version").CombinedOutput()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	return nil
 }
 
 // Cleanup removes the extracted binary and its temp directory.
