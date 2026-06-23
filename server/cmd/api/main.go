@@ -36,32 +36,33 @@ import (
 )
 
 type Application struct {
-	DB                  *sql.DB
-	Queries             *database.Queries
-	Settings            *database.Setting
-	Config              RuntimeConfig
-	Logger              applogger.LoggerInterface
-	LoggerCloser        func() error
-	Ffprobe             ffprobe.FfprobeInterface
-	FFmpeg              ffmpeg.FFmpegInterface
-	Spotify             spotify.SpotifyInterface
-	Tmdb                tmdb.TmdbInterface
-	TmdbImageBaseURL    string
-	TmdbImageHTTPClient *http.Client
-	SessionManager      *scs.SessionManager
-	Wait                *sync.WaitGroup
-	Router              *chi.Mux
-	Server              *http.Server
-	ScannerDBMu         sync.Mutex
-	HLSSessionCache     *cache.Cache
-	HLSSessionGroup     singleflight.Group
-	HLSTranscodeLimiter *hlsTranscodeLimiter
-	PersonalHLSMu       sync.Mutex
-	RemuxSafetyCache    *cache.Cache
-	SubtitleVTTCache    *cache.Cache
-	RoomHLSTombstone    *cache.Cache
-	RoomHLSMu           sync.Mutex
-	WatchRoomHub        *WatchRoomHub
+	DB                   *sql.DB
+	Queries              *database.Queries
+	Settings             *database.Setting
+	Config               RuntimeConfig
+	Logger               applogger.LoggerInterface
+	LoggerCloser         func() error
+	Ffprobe              ffprobe.FfprobeInterface
+	FFmpeg               ffmpeg.FFmpegInterface
+	Spotify              spotify.SpotifyInterface
+	Tmdb                 tmdb.TmdbInterface
+	TmdbImageBaseURL     string
+	TmdbImageHTTPClient  *http.Client
+	SessionManager       *scs.SessionManager
+	Wait                 *sync.WaitGroup
+	Router               *chi.Mux
+	Server               *http.Server
+	ScannerDBMu          sync.Mutex
+	HLSSessionCache      *cache.Cache
+	HLSSessionGroup      singleflight.Group
+	HLSTranscodeLimiter  *hlsTranscodeLimiter
+	PersonalHLSMu        sync.Mutex
+	RemuxSafetyCache     *cache.Cache
+	SubtitleVTTCache     *cache.Cache
+	SubtitleExtractGroup singleflight.Group
+	RoomHLSTombstone     *cache.Cache
+	RoomHLSMu            sync.Mutex
+	WatchRoomHub         *WatchRoomHub
 }
 
 //go:embed all:webdist

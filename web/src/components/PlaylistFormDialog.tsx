@@ -202,6 +202,8 @@ function PlaylistForm({
   };
 
   const inputIdPrefix = mode === "edit" ? "edit-" : "";
+  const descriptionId = `${inputIdPrefix}playlist-description`;
+  const descriptionLabelId = `${descriptionId}-label`;
 
   return (
     <DialogContent
@@ -245,14 +247,16 @@ function PlaylistForm({
 
         <div className="space-y-2">
           <Label
-            htmlFor={`${inputIdPrefix}playlist-description`}
+            id={descriptionLabelId}
+            htmlFor={descriptionId}
             className="text-slate-200"
           >
             Description{" "}
             <span className="text-sm text-slate-400">(optional)</span>
           </Label>
           <textarea
-            id={`${inputIdPrefix}playlist-description`}
+            id={descriptionId}
+            aria-labelledby={descriptionLabelId}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."

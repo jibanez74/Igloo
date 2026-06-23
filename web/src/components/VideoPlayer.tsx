@@ -233,7 +233,6 @@ export default function VideoPlayer({
     track.src = sub.url;
     track.srclang = sub.srclang;
     track.label = sub.label;
-    track.default = true;
     track.setAttribute("data-subtitle", "");
     video.appendChild(track);
     track.track.mode = "showing";

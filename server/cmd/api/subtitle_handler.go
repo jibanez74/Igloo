@@ -89,7 +89,23 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), helpers.SUBTITLE_EXTRACT_TIMEOUT)
 	defer cancel()
 
-	out, err := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, movie.FilePath, sub.StreamIndex)
+	// Collapse concurrent extractions of the same track (e.g. every watch-room
+	// participant requesting the same .vtt at once) into a single ffmpeg run.
+	v, err, _ := app.SubtitleExtractGroup.Do(cacheKey, func() (interface{}, error) {
+		if cached, found := app.SubtitleVTTCache.Get(cacheKey); found {
+			if vtt, ok := cached.([]byte); ok {
+				return vtt, nil
+			}
+		}
+
+		out, extractErr := app.FFmpeg.ExtractSubtitleAsWebVTT(ctx, movie.FilePath, sub.StreamIndex)
+		if extractErr != nil {
+			return nil, extractErr
+		}
+
+		app.SubtitleVTTCache.Set(cacheKey, out, helpers.SUBTITLE_CACHE_TTL)
+		return out, nil
+	})
 	if err != nil {
 		app.Logger.Error("subtitle extraction failed",
 			"error", err,
@@ -101,7 +117,16 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.SubtitleVTTCache.Set(cacheKey, out, helpers.SUBTITLE_CACHE_TTL)
+	out, ok := v.([]byte)
+	if !ok {
+		app.Logger.Error("subtitle extraction returned unexpected type",
+			"got_type", fmt.Sprintf("%T", v),
+			"movie_id", movieID,
+			"stream_index", sub.StreamIndex,
+		)
+		helpers.ErrorJSON(w, errors.New("failed to extract subtitle track"))
+		return
+	}
 
 	w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
 	w.Header().Set("Cache-Control", "no-cache")

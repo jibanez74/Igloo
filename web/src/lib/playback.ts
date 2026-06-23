@@ -108,7 +108,7 @@ export function getAvailableModes(
   });
 }
 
-function normalizeLang(raw: string | undefined): string | undefined {
+export function normalizeLang(raw: string | undefined): string | undefined {
   const lower = raw?.trim().toLowerCase();
   if (!lower) return undefined;
   if (lower.length === 2) return lower;

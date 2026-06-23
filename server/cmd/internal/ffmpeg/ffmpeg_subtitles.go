@@ -17,7 +17,6 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 ) ([]byte, error) {
 	args := []string{
 		"-v", "error",
-		"-y",
 		"-i", sourcePath,
 		"-map", fmt.Sprintf("0:%d", streamIndex),
 		"-c:s", "webvtt",

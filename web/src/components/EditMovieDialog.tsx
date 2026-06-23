@@ -311,6 +311,7 @@ function ManualTab({
   }, [movie]);
 
   const { draft, baseline } = form;
+  const overviewLabelId = "manual-overview-label";
 
   async function handleSave() {
     setSaving(true);
@@ -464,9 +465,14 @@ function ManualTab({
         </FieldGroup>
       </div>
 
-      <FieldGroup label="Overview" htmlFor="manual-overview">
+      <FieldGroup
+        label="Overview"
+        htmlFor="manual-overview"
+        labelId={overviewLabelId}
+      >
         <textarea
           id="manual-overview"
+          aria-labelledby={overviewLabelId}
           value={draft.overview}
           onChange={(e) =>
             dispatchForm({
@@ -496,15 +502,17 @@ function ManualTab({
 function FieldGroup({
   label,
   htmlFor,
+  labelId,
   children,
 }: {
   label: string;
   htmlFor: string;
+  labelId?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <Label htmlFor={htmlFor} className="text-slate-300">
+      <Label id={labelId} htmlFor={htmlFor} className="text-slate-300">
         {label}
       </Label>
       <div className="mt-1">{children}</div>

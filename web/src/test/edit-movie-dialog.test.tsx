@@ -242,6 +242,7 @@ describe("EditMovieDialog", () => {
     await openManualTab(user);
     expect(getManualInput("Title")).toHaveValue("Inception");
     expect(getManualInput("Year").value).toBe("2010");
+    expect(getManualOverviewInput()).toHaveAccessibleName("Overview");
     expect(getManualOverviewInput()).toHaveValue(
       "A thief steals secrets through dreams.",
     );

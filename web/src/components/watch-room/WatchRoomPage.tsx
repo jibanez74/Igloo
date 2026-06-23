@@ -22,7 +22,11 @@ import {
 } from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
-import { watchRoomQueryOpts } from "@/lib/query-opts";
+import {
+  movieTechnicalDetailsQueryOpts,
+  watchRoomQueryOpts,
+} from "@/lib/query-opts";
+import { buildMovieSubtitleTrackInfo } from "@/lib/movie-playback";
 import { watchRoomStreamUrl } from "@/lib/watch-room";
 import { cn } from "@/lib/utils";
 import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
@@ -93,14 +97,22 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     onRoomDeleted: () => navigate({ to: "/", replace: true }),
   });
 
-  const subtitleTrack =
-    room && room.subtitle_track !== null
-      ? {
-          url: `/api/movies/${room.movie_id}/subtitles/${room.subtitle_track}/web.vtt`,
-          label: `Subtitle track ${room.subtitle_track + 1}`,
-          srclang: "",
-        }
-      : null;
+  const subtitleTrackIndex = room?.subtitle_track ?? null;
+  const techDetailsOpts = movieTechnicalDetailsQueryOpts(room?.movie_id ?? 0);
+  const { data: techData } = useQuery({
+    ...techDetailsOpts,
+    enabled: (room?.movie_id ?? 0) > 0 && subtitleTrackIndex !== null,
+  });
+  const techLoaded = techData?.data != null;
+  const subtitleStreams = techData?.data?.subtitles ?? [];
+  const subtitleTrack = room
+    ? buildMovieSubtitleTrackInfo({
+        movieId: room.movie_id,
+        resolvedSubtitleTrack: subtitleTrackIndex,
+        techLoaded,
+        subtitleStreams,
+      })
+    : null;
 
   const playVideo = async () => {
     const video = videoRef.current;
