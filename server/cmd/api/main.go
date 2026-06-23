@@ -95,7 +95,14 @@ func main() {
 
 	err = app.Server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		// InitApp already extracted the ffmpeg/ffprobe binaries and opened the
+		// database and logger, so a serve failure (e.g. port already in use) must
+		// run cleanup rather than exit bare.
+		app.Logger.Error("server failed to start", "error", err)
+		app.cleanupMediaBinaries()
+		app.closeDatabase()
+		app.closeLogger()
+		os.Exit(1)
 	}
 }
 
@@ -554,7 +561,7 @@ func (app *Application) InitRouter() {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
-	router.Use(middleware.Logger)
+	router.Use(app.RequestLogger)
 
 	app.registerWebSocketRoutes(router)
 
@@ -924,6 +931,14 @@ func (app *Application) cleanupMediaBinaries() {
 }
 
 func (app *Application) closeDatabase() {
+	// Close prepared statements before the connection that owns them.
+	if app.Queries != nil {
+		err := app.Queries.Close()
+		if err != nil {
+			app.Logger.Error("failed to close prepared statements", "error", err)
+		}
+	}
+
 	if app.DB != nil {
 		err := app.DB.Close()
 		if err != nil {
