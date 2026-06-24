@@ -68,7 +68,7 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 }
 
 func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := normalizedMusicCacheKey(name, sortName)
+	cacheKey := helpers.NormalizedScanCacheKey(name, sortName)
 	if musicianID, ok := scan.musicianIDs[cacheKey]; ok {
 		return &resolvedMusician{
 			name:          name,
@@ -103,7 +103,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		}
 	}
 
-	spotifyKey := normalizedMusicCacheKey(name)
+	spotifyKey := helpers.NormalizedScanCacheKey(name)
 	if cachedMiss, ok := scan.spotifyArtistMisses[spotifyKey]; ok {
 		resolved.spotifyMatch = &cachedMiss
 		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
@@ -139,7 +139,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 }
 
 func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
-	cacheKey := normalizedMusicCacheKey(title, albumArtist)
+	cacheKey := helpers.NormalizedScanCacheKey(title, albumArtist)
 	if albumID, ok := scan.albumIDs[cacheKey]; ok {
 		return &resolvedAlbum{
 			title:         title,
@@ -178,7 +178,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		}
 	}
 
-	spotifyKey := normalizedMusicCacheKey(title, albumArtist)
+	spotifyKey := helpers.NormalizedScanCacheKey(title, albumArtist)
 	if cachedMiss, ok := scan.spotifyAlbumMisses[spotifyKey]; ok {
 		resolved.spotifyMatch = &cachedMiss
 		return resolved, nil
@@ -239,6 +239,9 @@ func (app *Application) findExistingAlbum(ctx context.Context, title, albumArtis
 func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicScanContext, resolved *resolvedTrack) (int64, error) {
 	txScan := scan.clone()
 
+	app.ScannerDBMu.Lock()
+	defer app.ScannerDBMu.Unlock()
+
 	tx, err := app.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to start music track transaction: %w", err)
@@ -256,7 +259,10 @@ func (app *Application) persistResolvedTrack(ctx context.Context, scan *musicSca
 		return 0, fmt.Errorf("failed to commit music track transaction: %w", err)
 	}
 
-	txScan.trackIndex[filepath.Clean(resolved.filePath)] = resolved.fileSize
+	// trackIndex is shared (never written inside the transaction) and is only
+	// updated here, after a successful commit, so a track whose transaction
+	// failed is never recorded as scanned/unchanged.
+	scan.trackIndex[filepath.Clean(resolved.filePath)] = resolved.fileSize
 	scan.mergeFrom(txScan)
 
 	return trackID, nil
@@ -366,7 +372,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 }
 
 func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
-	cacheKey := normalizedMusicCacheKey(input.name, input.sortName)
+	cacheKey := helpers.NormalizedScanCacheKey(input.name, input.sortName)
 	if musicianID, ok := scan.musicianIDs[cacheKey]; ok {
 		return musicianID, nil
 	}
@@ -378,7 +384,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 		spotifyID := sql.NullString{String: input.spotifyArtist.ID.String(), Valid: true}
 		musician, err = qtx.GetMusicianBySpotifyID(ctx, spotifyID)
 		if err == nil {
-			musician, err = app.updateMusicianThumbIfChanged(ctx, qtx, musician, firstArtistImageURL(input.spotifyArtist))
+			musician, err = app.updateMusicianThumbIfChanged(ctx, qtx, musician, firstImageURL(input.spotifyArtist.Images))
 			if err != nil {
 				return 0, err
 			}
@@ -400,7 +406,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 			SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyArtist.Popularity)),
 			SpotifyFollowers:  helpers.NullInt64(int64(input.spotifyArtist.Followers.Count)),
 			SpotifyID:         spotifyID,
-			Thumb:             helpers.NullString(firstArtistImageURL(input.spotifyArtist)),
+			Thumb:             helpers.NullString(firstImageURL(input.spotifyArtist.Images)),
 		}
 		musician, err = qtx.UpsertMusician(ctx, params)
 		if err != nil {
@@ -439,7 +445,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 }
 
 func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
-	cacheKey := normalizedMusicCacheKey(input.title, input.albumArtist)
+	cacheKey := helpers.NormalizedScanCacheKey(input.title, input.albumArtist)
 	if albumID, ok := scan.albumIDs[cacheKey]; ok {
 		return albumID, nil
 	}
@@ -451,7 +457,7 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 		spotifyID := sql.NullString{String: input.spotifyAlbum.ID.String(), Valid: true}
 		album, err = qtx.GetAlbumBySpotifyID(ctx, spotifyID)
 		if err == nil {
-			album, err = app.updateAlbumCoverIfChanged(ctx, qtx, album, firstAlbumImageURL(input.spotifyAlbum))
+			album, err = app.updateAlbumCoverIfChanged(ctx, qtx, album, firstImageURL(input.spotifyAlbum.Images))
 			if err != nil {
 				return 0, err
 			}
@@ -472,7 +478,7 @@ func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries,
 			SpotifyID:         spotifyID,
 			SpotifyPopularity: helpers.NullFloat64(float64(input.spotifyAlbum.Popularity)),
 			TotalTracks:       helpers.NullInt64(int64(input.spotifyAlbum.TotalTracks)),
-			Cover:             helpers.NullString(firstAlbumImageURL(input.spotifyAlbum)),
+			Cover:             helpers.NullString(firstImageURL(input.spotifyAlbum.Images)),
 		}
 
 		releaseDate := input.spotifyAlbum.ReleaseDateTime()
@@ -625,7 +631,7 @@ func (app *Application) processSpotifyEntityGenres(
 }
 
 func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
-	cacheKey := normalizedMusicCacheKey(tag, "music")
+	cacheKey := helpers.NormalizedScanCacheKey(tag, "music")
 	if genreID, ok := scan.genreIDs[cacheKey]; ok {
 		return genreID, nil
 	}
@@ -814,18 +820,10 @@ func musicSpotifyReasonSplitsCompound(reason string) bool {
 	return reason == musicSpotifyReasonNoResults || reason == musicSpotifyReasonScoreBelowThreshold
 }
 
-func firstArtistImageURL(artist *spotifylib.FullArtist) string {
-	if artist == nil || len(artist.Images) == 0 {
+func firstImageURL(images []spotifylib.Image) string {
+	if len(images) == 0 {
 		return ""
 	}
 
-	return artist.Images[0].URL
-}
-
-func firstAlbumImageURL(album *spotifylib.FullAlbum) string {
-	if album == nil || len(album.Images) == 0 {
-		return ""
-	}
-
-	return album.Images[0].URL
+	return images[0].URL
 }

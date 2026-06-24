@@ -10,14 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 var (
-	movieScanMutex  sync.Mutex
-	isMovieScanning bool
-	musicScanMutex  sync.Mutex
-	isMusicScanning bool
+	movieScanGuard helpers.ScanGuard
+	musicScanGuard helpers.ScanGuard
 )
 
 type generalSettingsResponse struct {
@@ -367,7 +364,7 @@ func (app *Application) TriggerMusicScan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !tryBeginMusicScan() {
+	if !musicScanGuard.TryBegin() {
 		helpers.ErrorJSON(w, errors.New("music library scan is already in progress"), http.StatusConflict)
 		return
 	}
@@ -393,7 +390,7 @@ func (app *Application) TriggerMovieScan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !tryBeginMovieScan() {
+	if !movieScanGuard.TryBegin() {
 		helpers.ErrorJSON(w, errors.New("movie library scan is already in progress"), http.StatusConflict)
 		return
 	}

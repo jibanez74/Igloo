@@ -678,27 +678,15 @@ func (q *Queries) GetMovieGenresWithCounts(ctx context.Context) ([]GetMovieGenre
 
 const getMovieScanIndex = `-- name: GetMovieScanIndex :many
 SELECT
-  id,
-  title,
   file_path,
-  file_name,
-  size,
-  tmdb_id,
-  year,
-  duration
+  size
 FROM movies
 ORDER BY id
 `
 
 type GetMovieScanIndexRow struct {
-	ID       int64           `json:"id"`
-	Title    string          `json:"title"`
-	FilePath string          `json:"file_path"`
-	FileName string          `json:"file_name"`
-	Size     int64           `json:"size"`
-	TmdbID   sql.NullInt64   `json:"tmdb_id"`
-	Year     sql.NullInt64   `json:"year"`
-	Duration sql.NullFloat64 `json:"duration"`
+	FilePath string `json:"file_path"`
+	Size     int64  `json:"size"`
 }
 
 func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow, error) {
@@ -710,16 +698,7 @@ func (q *Queries) GetMovieScanIndex(ctx context.Context) ([]GetMovieScanIndexRow
 	items := []GetMovieScanIndexRow{}
 	for rows.Next() {
 		var i GetMovieScanIndexRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.FilePath,
-			&i.FileName,
-			&i.Size,
-			&i.TmdbID,
-			&i.Year,
-			&i.Duration,
-		); err != nil {
+		if err := rows.Scan(&i.FilePath, &i.Size); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

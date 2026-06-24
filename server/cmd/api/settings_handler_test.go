@@ -398,11 +398,11 @@ func TestTriggerMusicScanRejectsAlreadyRunningScan(t *testing.T) {
 	defer app.DB.Close()
 	app.Settings.MusicDir = sql.NullString{String: t.TempDir(), Valid: true}
 
-	finishMusicScan()
-	if !tryBeginMusicScan() {
+	musicScanGuard.Finish()
+	if !musicScanGuard.TryBegin() {
 		t.Fatal("failed to acquire music scan guard")
 	}
-	defer finishMusicScan()
+	defer musicScanGuard.Finish()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/music", nil)
 	w := httptest.NewRecorder()
@@ -419,11 +419,11 @@ func TestTriggerMovieScanRejectsAlreadyRunningScan(t *testing.T) {
 	defer app.DB.Close()
 	app.Settings.MoviesDir = sql.NullString{String: t.TempDir(), Valid: true}
 
-	finishMovieScan()
-	if !tryBeginMovieScan() {
+	movieScanGuard.Finish()
+	if !movieScanGuard.TryBegin() {
 		t.Fatal("failed to acquire movie scan guard")
 	}
-	defer finishMovieScan()
+	defer movieScanGuard.Finish()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/scan/movies", nil)
 	w := httptest.NewRecorder()

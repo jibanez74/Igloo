@@ -31,14 +31,8 @@ WHERE id IN (sqlc.slice(ids));
 
 -- name: GetMovieScanIndex :many
 SELECT
-  id,
-  title,
   file_path,
-  file_name,
-  size,
-  tmdb_id,
-  year,
-  duration
+  size
 FROM movies
 ORDER BY id;
 

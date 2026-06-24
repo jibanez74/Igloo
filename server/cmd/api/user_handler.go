@@ -9,10 +9,40 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 )
+
+// userResponseMap is the canonical JSON shape for the authenticated user object
+// returned by the auth and user endpoints. It takes explicit fields because the
+// sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. Avatar is
+// kept as the raw sql.NullString to preserve the existing serialized shape.
+func userResponseMap(id int64, name, email string, isAdmin bool, avatar sql.NullString, createdAt, updatedAt string) map[string]any {
+	return map[string]any{
+		"id":         id,
+		"name":       name,
+		"email":      email,
+		"is_admin":   isAdmin,
+		"avatar":     avatar,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
+	}
+}
+
+// validatePassword enforces the shared password length bounds. label is the noun
+// used in the error message (e.g. "password" or "new password").
+func validatePassword(password, label string) error {
+	passwordLength := utf8.RuneCountInString(password)
+	if passwordLength < 9 {
+		return fmt.Errorf("%s must be at least 9 characters", label)
+	}
+	if passwordLength > 128 {
+		return fmt.Errorf("%s must be 128 characters or less", label)
+	}
+	return nil
+}
 
 type UpdateUserNameRequest struct {
 	Name string `json:"name"`
@@ -54,15 +84,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": map[string]any{
-				"id":         user.ID,
-				"name":       user.Name,
-				"email":      user.Email,
-				"is_admin":   user.IsAdmin,
-				"avatar":     user.Avatar,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-			},
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -115,15 +137,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": map[string]any{
-				"id":         user.ID,
-				"name":       user.Name,
-				"email":      user.Email,
-				"is_admin":   user.IsAdmin,
-				"avatar":     user.Avatar,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-			},
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -153,13 +167,8 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if len(req.NewPassword) < 9 {
-		helpers.ErrorJSON(w, errors.New("new password must be at least 9 characters"), http.StatusBadRequest)
-		return
-	}
-
-	if len(req.NewPassword) > 128 {
-		helpers.ErrorJSON(w, errors.New("new password must be 128 characters or less"), http.StatusBadRequest)
+	if err := validatePassword(req.NewPassword, "new password"); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -259,15 +268,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": map[string]any{
-				"id":         user.ID,
-				"name":       user.Name,
-				"email":      user.Email,
-				"is_admin":   user.IsAdmin,
-				"avatar":     user.Avatar,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-			},
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -388,15 +389,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		Error:   false,
 		Message: "Avatar uploaded successfully",
 		Data: map[string]any{
-			"user": map[string]any{
-				"id":         user.ID,
-				"name":       user.Name,
-				"email":      user.Email,
-				"is_admin":   user.IsAdmin,
-				"avatar":     user.Avatar,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-			},
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 

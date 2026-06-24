@@ -41,20 +41,10 @@ var movieReleaseNoiseTokens = map[string]bool{
 	"yts": true, "ytsmx": true, "mx": true,
 }
 
-func (app *Application) processMovieFile(ctx context.Context, qtx *database.Queries, path, ext string, fileSize int64) error {
-	resolved, err := app.resolveMovieFile(ctx, movieFile{path: path, ext: ext, size: fileSize})
+func (app *Application) resolveMovieFile(ctx context.Context, file helpers.ScanFile) (*resolvedMovie, error) {
+	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.Path))
 	if err != nil {
-		return err
-	}
-
-	_, err = app.persistResolvedMovieTx(ctx, qtx, newMovieScanContext(nil), resolved)
-	return err
-}
-
-func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*resolvedMovie, error) {
-	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.path))
-	if err != nil {
-		baseName := filepath.Base(file.path)
+		baseName := filepath.Base(file.Path)
 		ext := filepath.Ext(baseName)
 		titleYear = &helpers.TitleYearResponse{
 			Title: strings.TrimSuffix(baseName, ext),
@@ -86,7 +76,7 @@ func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*
 					if bestMatch.Confidence < 70 {
 						app.Logger.Warn(
 							"low-confidence TMDB movie match",
-							"path", file.path,
+							"path", file.Path,
 							"parsed_title", searchTitle,
 							"parsed_year", titleYear.Year,
 							"tmdb_id", bestMatch.Movie.TmdbID,
@@ -101,22 +91,22 @@ func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*
 		}
 	}
 
-	info, err := app.Ffprobe.GetMetadata(file.path)
+	info, err := app.Ffprobe.GetMetadata(file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := mime.TypeByExtension("." + file.ext)
+	mimeType := mime.TypeByExtension("." + file.Ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 
 	params := database.UpsertMovieParams{
 		Title:     titleYear.Title,
-		FilePath:  file.path,
-		FileName:  filepath.Base(file.path),
-		Size:      file.size,
-		Container: file.ext,
+		FilePath:  file.Path,
+		FileName:  filepath.Base(file.Path),
+		Size:      file.Size,
+		Container: file.Ext,
 		MimeType:  mimeType,
 		Adult:     false,
 	}
@@ -185,15 +175,15 @@ func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("delete existing crew failed: %w", err)
 		}
 
-		if err := app.processProductionCompanies(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.ProductionCompanies); err != nil {
+		if err := app.processProductionCompanies(ctx, qtx, movie.ID, resolved.tmdbMovie.ProductionCompanies); err != nil {
 			return 0, fmt.Errorf("process production companies failed: %w", err)
 		}
 
-		if err := app.processCast(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Cast); err != nil {
+		if err := app.processCast(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Cast); err != nil {
 			return 0, fmt.Errorf("process cast failed: %w", err)
 		}
 
-		if err := app.processCrew(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Credits.Crew); err != nil {
+		if err := app.processCrew(ctx, qtx, movie.ID, resolved.tmdbMovie.Credits.Crew); err != nil {
 			return 0, fmt.Errorf("process crew failed: %w", err)
 		}
 
@@ -201,7 +191,7 @@ func (app *Application) persistResolvedMovieTx(ctx context.Context, qtx *databas
 			return 0, fmt.Errorf("process genres failed: %w", err)
 		}
 
-		if err := app.processExtraVideos(ctx, qtx, scan, movie.ID, resolved.tmdbMovie.Videos.Results); err != nil {
+		if err := app.processExtraVideos(ctx, qtx, movie.ID, resolved.tmdbMovie.Videos.Results); err != nil {
 			return 0, fmt.Errorf("process extra videos failed: %w", err)
 		}
 	}

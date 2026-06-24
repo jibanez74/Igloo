@@ -1,8 +1,8 @@
 package main
 
 import (
+	"igloo/cmd/internal/helpers"
 	"maps"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -27,8 +27,10 @@ func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
 		trackIndex = make(map[string]int64)
 	}
 
+	// Take ownership of trackIndex: loadMusicScanIndex already cleaned its keys
+	// and the caller discards its reference, so no defensive copy is needed.
 	return &musicScanContext{
-		trackIndex:                   copyCleanPathInt64Map(trackIndex),
+		trackIndex:                   trackIndex,
 		musicianIDs:                  make(map[string]int64),
 		albumIDs:                     make(map[string]int64),
 		genreIDs:                     make(map[string]int64),
@@ -45,7 +47,7 @@ func newMusicScanContext(trackIndex map[string]int64) *musicScanContext {
 
 func (scan *musicScanContext) clone() *musicScanContext {
 	return &musicScanContext{
-		trackIndex:                   copyCleanPathInt64Map(scan.trackIndex),
+		trackIndex:                   scan.trackIndex, // shared; never written inside the transaction
 		musicianIDs:                  maps.Clone(scan.musicianIDs),
 		albumIDs:                     maps.Clone(scan.albumIDs),
 		genreIDs:                     maps.Clone(scan.genreIDs),
@@ -61,7 +63,6 @@ func (scan *musicScanContext) clone() *musicScanContext {
 }
 
 func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
-	mergeCleanPathInt64Map(scan.trackIndex, other.trackIndex)
 	maps.Copy(scan.musicianIDs, other.musicianIDs)
 	maps.Copy(scan.albumIDs, other.albumIDs)
 	maps.Copy(scan.genreIDs, other.genreIDs)
@@ -76,33 +77,9 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 }
 
 func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
-	existingSize, ok := scan.trackIndex[filepath.Clean(path)]
-	return ok && existingSize == size
-}
-
-func normalizedMusicCacheKey(parts ...string) string {
-	normalized := make([]string, 0, len(parts))
-	for _, part := range parts {
-		normalized = append(normalized, strings.ToLower(strings.TrimSpace(part)))
-	}
-
-	return strings.Join(normalized, "\x00")
+	return helpers.ScanIndexUnchanged(scan.trackIndex, path, size)
 }
 
 func musicIDPairKey(left, right int64) string {
 	return strings.Join([]string{strconv.FormatInt(left, 10), strconv.FormatInt(right, 10)}, "\x00")
-}
-
-func copyCleanPathInt64Map(input map[string]int64) map[string]int64 {
-	output := make(map[string]int64, len(input))
-	for key, value := range input {
-		output[filepath.Clean(key)] = value
-	}
-	return output
-}
-
-func mergeCleanPathInt64Map(target, source map[string]int64) {
-	for key, value := range source {
-		target[filepath.Clean(key)] = value
-	}
 }

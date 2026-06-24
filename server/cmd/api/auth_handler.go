@@ -93,15 +93,7 @@ func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Reques
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": map[string]any{
-				"id":         user.ID,
-				"name":       user.Name,
-				"email":      user.Email,
-				"is_admin":   user.IsAdmin,
-				"avatar":     user.Avatar,
-				"created_at": user.CreatedAt,
-				"updated_at": user.UpdatedAt,
-			},
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 

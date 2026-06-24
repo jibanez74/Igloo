@@ -416,8 +416,8 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 	app.Tmdb = tmdbStub
 	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4", "12345")}
 
-	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, newMovieScanContext(nil), []movieFile{
-		{path: path, ext: "mkv", size: 5},
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, newMovieScanContext(nil), []helpers.ScanFile{
+		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -629,16 +629,16 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 
 	scan := newMovieScanContext(nil)
-	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, scan, []movieFile{
-		{path: path, ext: "mkv", size: 5},
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, scan, []helpers.ScanFile{
+		{Path: path, Ext: "mkv", Size: 5},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("first scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
 	}
 
 	tmdbStub.detailMovies[1000] = secondDetails
-	scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, []movieFile{
-		{path: path, ext: "mkv", size: 6},
+	scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, []helpers.ScanFile{
+		{Path: path, Ext: "mkv", Size: 6},
 	})
 	if scanned != 1 || skipped != 0 || errCount != 0 {
 		t.Fatalf("second scan result scanned=%d skipped=%d errors=%d, want 1/0/0", scanned, skipped, errCount)
@@ -745,7 +745,7 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	}
 }
 
-func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
+func TestMovieScannerEntityUpsertRefreshesMutableMetadata(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -763,7 +763,6 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 		t.Fatalf("upsert movie: %v", err)
 	}
 
-	scan := newMovieScanContext(nil)
 	firstCompanies := []struct {
 		ID            int    `json:"id"`
 		LogoPath      string `json:"logo_path"`
@@ -772,14 +771,14 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 	}{
 		{ID: 100, LogoPath: "/old-logo.png", Name: "Old Studio", OriginCountry: "US"},
 	}
-	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, firstCompanies); err != nil {
+	if err := app.processProductionCompanies(ctx, app.Queries, movie.ID, firstCompanies); err != nil {
 		t.Fatalf("process first production companies: %v", err)
 	}
 
 	firstVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "old-key", Name: "Old Trailer", Site: "YouTube", Type: "Trailer", Official: false},
 	}
-	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, firstVideos); err != nil {
+	if err := app.processExtraVideos(ctx, app.Queries, movie.ID, firstVideos); err != nil {
 		t.Fatalf("process first extra videos: %v", err)
 	}
 
@@ -791,14 +790,14 @@ func TestMovieScannerEntityCachesRefreshMutableMetadata(t *testing.T) {
 	}{
 		{ID: 100, LogoPath: "/new-logo.png", Name: "New Studio", OriginCountry: "GB"},
 	}
-	if err := app.processProductionCompanies(ctx, app.Queries, scan, movie.ID, secondCompanies); err != nil {
+	if err := app.processProductionCompanies(ctx, app.Queries, movie.ID, secondCompanies); err != nil {
 		t.Fatalf("process second production companies: %v", err)
 	}
 
 	secondVideos := []tmdb.TmdbVideoResult{
 		{ID: "video-1", Key: "new-key", Name: "New Featurette", Site: "Vimeo", Type: "Featurette", Official: true},
 	}
-	if err := app.processExtraVideos(ctx, app.Queries, scan, movie.ID, secondVideos); err != nil {
+	if err := app.processExtraVideos(ctx, app.Queries, movie.ID, secondVideos); err != nil {
 		t.Fatalf("process second extra videos: %v", err)
 	}
 
@@ -832,10 +831,10 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	defer app.DB.Close()
 
 	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
-	resolved, err := app.resolveMovieFile(context.Background(), movieFile{
-		path: "/movies/Local.Only.2024.mkv",
-		ext:  "mkv",
-		size: 321,
+	resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
+		Path: "/movies/Local.Only.2024.mkv",
+		Ext:  "mkv",
+		Size: 321,
 	})
 	if err != nil {
 		t.Fatalf("resolve movie without tmdb: %v", err)
@@ -869,10 +868,10 @@ func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
 	app.Tmdb = tmdbStub
 	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
 
-	resolved, err := app.resolveMovieFile(context.Background(), movieFile{
-		path: "/movies/Detail.Fails.2022.mkv",
-		ext:  "mkv",
-		size: 123,
+	resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
+		Path: "/movies/Detail.Fails.2022.mkv",
+		Ext:  "mkv",
+		Size: 123,
 	})
 	if err != nil {
 		t.Fatalf("resolve movie with failing tmdb detail: %v", err)
