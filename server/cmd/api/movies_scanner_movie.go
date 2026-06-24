@@ -41,10 +41,10 @@ var movieReleaseNoiseTokens = map[string]bool{
 	"yts": true, "ytsmx": true, "mx": true,
 }
 
-func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*resolvedMovie, error) {
-	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.path))
+func (app *Application) resolveMovieFile(ctx context.Context, file helpers.ScanFile) (*resolvedMovie, error) {
+	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.Path))
 	if err != nil {
-		baseName := filepath.Base(file.path)
+		baseName := filepath.Base(file.Path)
 		ext := filepath.Ext(baseName)
 		titleYear = &helpers.TitleYearResponse{
 			Title: strings.TrimSuffix(baseName, ext),
@@ -76,7 +76,7 @@ func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*
 					if bestMatch.Confidence < 70 {
 						app.Logger.Warn(
 							"low-confidence TMDB movie match",
-							"path", file.path,
+							"path", file.Path,
 							"parsed_title", searchTitle,
 							"parsed_year", titleYear.Year,
 							"tmdb_id", bestMatch.Movie.TmdbID,
@@ -91,22 +91,22 @@ func (app *Application) resolveMovieFile(ctx context.Context, file movieFile) (*
 		}
 	}
 
-	info, err := app.Ffprobe.GetMetadata(file.path)
+	info, err := app.Ffprobe.GetMetadata(file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed (required): %w", err)
 	}
 
-	mimeType := mime.TypeByExtension("." + file.ext)
+	mimeType := mime.TypeByExtension("." + file.Ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 
 	params := database.UpsertMovieParams{
 		Title:     titleYear.Title,
-		FilePath:  file.path,
-		FileName:  filepath.Base(file.path),
-		Size:      file.size,
-		Container: file.ext,
+		FilePath:  file.Path,
+		FileName:  filepath.Base(file.Path),
+		Size:      file.Size,
+		Container: file.Ext,
 		MimeType:  mimeType,
 		Adult:     false,
 	}

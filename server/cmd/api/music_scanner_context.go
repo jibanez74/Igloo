@@ -1,8 +1,8 @@
 package main
 
 import (
+	"igloo/cmd/internal/helpers"
 	"maps"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -77,8 +77,7 @@ func (scan *musicScanContext) mergeFrom(other *musicScanContext) {
 }
 
 func (scan *musicScanContext) trackUnchanged(path string, size int64) bool {
-	existingSize, ok := scan.trackIndex[filepath.Clean(path)]
-	return ok && existingSize == size
+	return helpers.ScanIndexUnchanged(scan.trackIndex, path, size)
 }
 
 func musicIDPairKey(left, right int64) string {

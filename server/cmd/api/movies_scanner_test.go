@@ -18,7 +18,7 @@ import (
 // processMoviesBatch is a test-only helper that loads the scan index and runs a
 // single batch through processMoviesBatchWithContext, mirroring music's
 // processMusicBatch test helper.
-func (app *Application) processMoviesBatch(ctx context.Context, files []movieFile) (scanned, skipped, errCount int, processed []string) {
+func (app *Application) processMoviesBatch(ctx context.Context, files []helpers.ScanFile) (scanned, skipped, errCount int, processed []string) {
 	scanIndex, err := app.loadMovieScanIndex(ctx)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
@@ -154,8 +154,8 @@ func TestProcessMoviesBatchWithContextSkipsUnchangedWithoutFfprobe(t *testing.T)
 	app.Ffprobe = ffprobeStub
 
 	scan := newMovieScanContext(map[string]int64{path: 5})
-	scanned, skipped, errCount := app.processMoviesBatchWithContext(context.Background(), scan, []movieFile{
-		{path: path, ext: "mkv", size: 5},
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(context.Background(), scan, []helpers.ScanFile{
+		{Path: path, Ext: "mkv", Size: 5},
 	})
 
 	if scanned != 0 || skipped != 1 || errCount != 0 {
@@ -196,8 +196,8 @@ func TestProcessMoviesBatchRollsBackInvalidMovieFile(t *testing.T) {
 	}
 	app.Tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
-	scanned, skipped, errCount := app.processMoviesBatchWithContext(context.Background(), newMovieScanContext(nil), []movieFile{
-		{path: path, ext: "mkv", size: 5},
+	scanned, skipped, errCount := app.processMoviesBatchWithContext(context.Background(), newMovieScanContext(nil), []helpers.ScanFile{
+		{Path: path, Ext: "mkv", Size: 5},
 	})
 
 	if scanned != 0 || skipped != 0 || errCount != 1 {
@@ -244,15 +244,15 @@ func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	app.Tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
 	moviesDir := t.TempDir()
-	files := []movieFile{
-		{path: filepath.Join(moviesDir, "Sample Movie (2020).mov"), ext: "mov", size: 5},
-		{path: filepath.Join(moviesDir, "Sample Movie (2021).m4v"), ext: "m4v", size: 5},
-		{path: filepath.Join(moviesDir, "Sample Movie (2022).webm"), ext: "webm", size: 5},
+	files := []helpers.ScanFile{
+		{Path: filepath.Join(moviesDir, "Sample Movie (2020).mov"), Ext: "mov", Size: 5},
+		{Path: filepath.Join(moviesDir, "Sample Movie (2021).m4v"), Ext: "m4v", Size: 5},
+		{Path: filepath.Join(moviesDir, "Sample Movie (2022).webm"), Ext: "webm", Size: 5},
 	}
 	for _, file := range files {
-		err := os.WriteFile(file.path, []byte("movie"), 0o644)
+		err := os.WriteFile(file.Path, []byte("movie"), 0o644)
 		if err != nil {
-			t.Fatalf("write movie %s: %v", file.path, err)
+			t.Fatalf("write movie %s: %v", file.Path, err)
 		}
 	}
 
@@ -268,12 +268,12 @@ func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
 			FROM movies
 			WHERE file_path = ?
 			LIMIT 1
-		`, file.path).Scan(&container)
+		`, file.Path).Scan(&container)
 		if err != nil {
-			t.Fatalf("get movie %s: %v", file.path, err)
+			t.Fatalf("get movie %s: %v", file.Path, err)
 		}
-		if container != file.ext {
-			t.Fatalf("movie container = %q, want %q", container, file.ext)
+		if container != file.Ext {
+			t.Fatalf("movie container = %q, want %q", container, file.Ext)
 		}
 	}
 }

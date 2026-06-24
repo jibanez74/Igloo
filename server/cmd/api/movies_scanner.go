@@ -3,17 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"io/fs"
 	"path/filepath"
 	"time"
 )
-
-type movieFile struct {
-	path string
-	ext  string
-	size int64
-}
 
 func (app *Application) ScanMoviesLibrary() {
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
@@ -21,7 +15,7 @@ func (app *Application) ScanMoviesLibrary() {
 		return
 	}
 
-	if !tryBeginMovieScan() {
+	if !movieScanGuard.TryBegin() {
 		app.Logger.Warn("movie library scan is already in progress")
 		return
 	}
@@ -36,7 +30,7 @@ func (app *Application) runMovieScan() {
 	if app.Wait != nil {
 		defer app.Wait.Done()
 	}
-	defer finishMovieScan()
+	defer movieScanGuard.Finish()
 
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
 		app.Logger.Error("movies directory not configured")
@@ -58,78 +52,63 @@ func (app *Application) runMovieScan() {
 	}
 	scan := newMovieScanContext(scanIndex)
 
-	batch := make([]movieFile, 0, helpers.SCANNER_BATCH_SIZE)
+	batch := make([]helpers.ScanFile, 0, helpers.SCANNER_BATCH_SIZE)
+	flushBatch := func() {
+		if len(batch) == 0 {
+			return
+		}
 
-	err = filepath.WalkDir(app.Settings.MoviesDir.String, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if path == app.Settings.MoviesDir.String {
-				return err
+		scanned, skipped, errors := app.processMoviesBatchWithContext(ctx, scan, batch)
+		moviesScanned += scanned
+		moviesSkipped += skipped
+		errorCount += errors
+		batch = batch[:0]
+	}
+
+	err = helpers.WalkMediaLibrary(
+		app.Settings.MoviesDir.String,
+		helpers.ValidVideoExtensions,
+		func(err error) {
+			app.Logger.Error(err.Error())
+			errorCount++
+		},
+		func(file helpers.ScanFile) error {
+			if scan.movieUnchanged(file.Path, file.Size) {
+				moviesSkipped++
+				return nil
 			}
-			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
-			errorCount++
+
+			batch = append(batch, file)
+
+			if len(batch) >= helpers.SCANNER_BATCH_SIZE {
+				flushBatch()
+			}
+
 			return nil
-		}
-
-		if entry.IsDir() {
-			return nil
-		}
-
-		ext := helpers.GetFileExtension(path)
-		if !helpers.ValidVideoExtensions[ext] {
-			return nil
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("failed to get file info for %s: %s", path, err.Error()))
-			errorCount++
-			return nil
-		}
-
-		if scan.movieUnchanged(path, info.Size()) {
-			moviesSkipped++
-			return nil
-		}
-
-		batch = append(batch, movieFile{path: path, ext: ext, size: info.Size()})
-
-		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
-			scanned, skipped, errors := app.processMoviesBatchWithContext(ctx, scan, batch)
-			moviesScanned += scanned
-			moviesSkipped += skipped
-			errorCount += errors
-			batch = batch[:0]
-		}
-
-		return nil
-	})
+		},
+	)
 
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("unexpected error walking movies directory: %s", err.Error()))
 		return
 	}
 
-	if len(batch) > 0 {
-		scanned, skipped, errors := app.processMoviesBatchWithContext(ctx, scan, batch)
-		moviesScanned += scanned
-		moviesSkipped += skipped
-		errorCount += errors
-	}
+	flushBatch()
 
 	app.Logger.Info(fmt.Sprintf("movies scanner completed: %d scanned, %d skipped, %d errors in %s",
 		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan *movieScanContext, files []movieFile) (scanned, skipped, errCount int) {
+func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan *movieScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
-		if scan.movieUnchanged(file.path, file.size) {
+		if scan.movieUnchanged(file.Path, file.Size) {
 			skipped++
 			continue
 		}
 
 		err := app.processMovie(ctx, scan, file)
 		if err != nil {
-			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.path, err.Error()))
+			app.Logger.Error(fmt.Sprintf("failed to process %s: %s", file.Path, err.Error()))
 			errCount++
 			continue
 		}
@@ -140,7 +119,7 @@ func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan 
 	return scanned, skipped, errCount
 }
 
-func (app *Application) processMovie(ctx context.Context, scan *movieScanContext, file movieFile) error {
+func (app *Application) processMovie(ctx context.Context, scan *movieScanContext, file helpers.ScanFile) error {
 	resolved, err := app.resolveMovieFile(ctx, file)
 	if err != nil {
 		return err
@@ -188,28 +167,7 @@ func (app *Application) loadMovieScanIndex(ctx context.Context) (map[string]int6
 		return nil, err
 	}
 
-	index := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		index[filepath.Clean(row.FilePath)] = row.Size
-	}
-
-	return index, nil
-}
-
-func tryBeginMovieScan() bool {
-	movieScanMutex.Lock()
-	defer movieScanMutex.Unlock()
-
-	if isMovieScanning {
-		return false
-	}
-
-	isMovieScanning = true
-	return true
-}
-
-func finishMovieScan() {
-	movieScanMutex.Lock()
-	isMovieScanning = false
-	movieScanMutex.Unlock()
+	return helpers.BuildScanIndex(rows, func(row database.GetMovieScanIndexRow) (string, int64) {
+		return row.FilePath, row.Size
+	}), nil
 }

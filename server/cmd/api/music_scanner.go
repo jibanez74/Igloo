@@ -3,17 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-	"io/fs"
-	"path/filepath"
 	"time"
 )
-
-type trackFile struct {
-	path string
-	ext  string
-	size int64
-}
 
 func (app *Application) MusicScanLibrary() {
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
@@ -21,7 +14,7 @@ func (app *Application) MusicScanLibrary() {
 		return
 	}
 
-	if !tryBeginMusicScan() {
+	if !musicScanGuard.TryBegin() {
 		app.Logger.Warn("music library scan is already in progress")
 		return
 	}
@@ -36,7 +29,7 @@ func (app *Application) runMusicScan() {
 	if app.Wait != nil {
 		defer app.Wait.Done()
 	}
-	defer finishMusicScan()
+	defer musicScanGuard.Finish()
 
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
 		app.Logger.Error("music directory not configured")
@@ -50,7 +43,7 @@ func (app *Application) runMusicScan() {
 	tracksScanned := 0
 	tracksSkipped := 0
 	startTime := time.Now()
-	batch := make([]trackFile, 0, helpers.SCANNER_BATCH_SIZE)
+	batch := make([]helpers.ScanFile, 0, helpers.SCANNER_BATCH_SIZE)
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
@@ -69,50 +62,28 @@ func (app *Application) runMusicScan() {
 		batch = batch[:0]
 	}
 
-	err = filepath.WalkDir(app.Settings.MusicDir.String, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if path == app.Settings.MusicDir.String {
-				return err
+	err = helpers.WalkMediaLibrary(
+		app.Settings.MusicDir.String,
+		helpers.ValidAudioExtensions,
+		func(err error) {
+			app.Logger.Error(err.Error())
+			errorCount++
+		},
+		func(file helpers.ScanFile) error {
+			if scan.trackUnchanged(file.Path, file.Size) {
+				tracksSkipped++
+				return nil
 			}
-			app.Logger.Error(fmt.Sprintf("error walking directory: %s", err.Error()))
-			errorCount++
+
+			batch = append(batch, file)
+
+			if len(batch) >= helpers.SCANNER_BATCH_SIZE {
+				flushBatch()
+			}
+
 			return nil
-		}
-
-		if entry.IsDir() {
-			return nil
-		}
-
-		ext := helpers.GetFileExtension(path)
-		if !helpers.ValidAudioExtensions[ext] {
-			return nil
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			app.Logger.Error(fmt.Sprintf("failed to get file info for %s: %s", path, err.Error()))
-			errorCount++
-			return nil
-		}
-		size := info.Size()
-
-		if scan.trackUnchanged(path, size) {
-			tracksSkipped++
-			return nil
-		}
-
-		batch = append(batch, trackFile{
-			path: path,
-			ext:  ext,
-			size: size,
-		})
-
-		if len(batch) >= helpers.SCANNER_BATCH_SIZE {
-			flushBatch()
-		}
-
-		return nil
-	})
+		},
+	)
 
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("unexpected error walking music directory: %s", err.Error()))
@@ -125,9 +96,9 @@ func (app *Application) runMusicScan() {
 		tracksScanned, tracksSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
-func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *musicScanContext, files []trackFile) (scanned, skipped, errCount int) {
+func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *musicScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
-		if scan.trackUnchanged(file.path, file.size) {
+		if scan.trackUnchanged(file.Path, file.Size) {
 			skipped++
 			continue
 		}
@@ -140,7 +111,7 @@ func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *
 
 		_, err = app.persistResolvedTrack(ctx, scan, resolved)
 		if err != nil {
-			app.Logger.Warn("failed to persist music track", "path", file.path, "error", err)
+			app.Logger.Warn("failed to persist music track", "path", file.Path, "error", err)
 			errCount++
 			continue
 		}
@@ -157,28 +128,7 @@ func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int6
 		return nil, err
 	}
 
-	index := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		index[filepath.Clean(row.FilePath)] = row.Size
-	}
-
-	return index, nil
-}
-
-func tryBeginMusicScan() bool {
-	musicScanMutex.Lock()
-	defer musicScanMutex.Unlock()
-
-	if isMusicScanning {
-		return false
-	}
-
-	isMusicScanning = true
-	return true
-}
-
-func finishMusicScan() {
-	musicScanMutex.Lock()
-	isMusicScanning = false
-	musicScanMutex.Unlock()
+	return helpers.BuildScanIndex(rows, func(row database.ListMusicTrackScanIndexRow) (string, int64) {
+		return row.FilePath, row.Size
+	}), nil
 }

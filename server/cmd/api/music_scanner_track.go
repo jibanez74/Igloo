@@ -63,17 +63,17 @@ type compoundArtistCredits struct {
 	hasDuplicate bool
 }
 
-func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file trackFile) (*resolvedTrack, error) {
-	info, err := app.Ffprobe.GetAudioMetadata(file.path)
+func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanContext, file helpers.ScanFile) (*resolvedTrack, error) {
+	info, err := app.Ffprobe.GetAudioMetadata(file.Path)
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
 
-	fileName := filepath.Base(file.path)
+	fileName := filepath.Base(file.Path)
 	params := database.UpsertTrackParams{
-		FilePath: file.path,
+		FilePath: file.Path,
 		FileName: fileName,
-		Size:     file.size,
+		Size:     file.Size,
 	}
 
 	tags := info.Format.Tags
@@ -89,8 +89,8 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 		params.SortTitle = params.Title
 	}
 
-	params.Container = file.ext
-	mimeType, ok := helpers.AudioMimeTypes[file.ext]
+	params.Container = file.Ext
+	mimeType, ok := helpers.AudioMimeTypes[file.Ext]
 	if ok {
 		params.MimeType = mimeType
 	}
@@ -157,8 +157,8 @@ func (app *Application) resolveTrackFile(ctx context.Context, scan *musicScanCon
 	resolved := &resolvedTrack{
 		params:   params,
 		genreTag: tags.Genre,
-		filePath: file.path,
-		fileSize: file.size,
+		filePath: file.Path,
+		fileSize: file.Size,
 	}
 
 	if tags.Artist != "" {
@@ -262,7 +262,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 				continue
 			}
 
-			cacheKey := normalizedScanCacheKey(part)
+			cacheKey := helpers.NormalizedScanCacheKey(part)
 			if _, exists := seen[cacheKey]; exists {
 				credits.hasDuplicate = true
 				continue

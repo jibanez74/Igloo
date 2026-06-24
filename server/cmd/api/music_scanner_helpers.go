@@ -68,7 +68,7 @@ func generateMusicianSummary(artist *spotifylib.FullArtist) string {
 }
 
 func (app *Application) resolveMusician(ctx context.Context, scan *musicScanContext, name, sortName string) (*resolvedMusician, error) {
-	cacheKey := normalizedScanCacheKey(name, sortName)
+	cacheKey := helpers.NormalizedScanCacheKey(name, sortName)
 	if musicianID, ok := scan.musicianIDs[cacheKey]; ok {
 		return &resolvedMusician{
 			name:          name,
@@ -103,7 +103,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 		}
 	}
 
-	spotifyKey := normalizedScanCacheKey(name)
+	spotifyKey := helpers.NormalizedScanCacheKey(name)
 	if cachedMiss, ok := scan.spotifyArtistMisses[spotifyKey]; ok {
 		resolved.spotifyMatch = &cachedMiss
 		resolved.splitCompoundOnNoMatch = musicSpotifyMatchSplitsCompound(cachedMiss.status, cachedMiss.reason)
@@ -139,7 +139,7 @@ func (app *Application) resolveMusician(ctx context.Context, scan *musicScanCont
 }
 
 func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext, title, sortTitle, albumArtist string) (*resolvedAlbum, error) {
-	cacheKey := normalizedScanCacheKey(title, albumArtist)
+	cacheKey := helpers.NormalizedScanCacheKey(title, albumArtist)
 	if albumID, ok := scan.albumIDs[cacheKey]; ok {
 		return &resolvedAlbum{
 			title:         title,
@@ -178,7 +178,7 @@ func (app *Application) resolveAlbum(ctx context.Context, scan *musicScanContext
 		}
 	}
 
-	spotifyKey := normalizedScanCacheKey(title, albumArtist)
+	spotifyKey := helpers.NormalizedScanCacheKey(title, albumArtist)
 	if cachedMiss, ok := scan.spotifyAlbumMisses[spotifyKey]; ok {
 		resolved.spotifyMatch = &cachedMiss
 		return resolved, nil
@@ -372,7 +372,7 @@ func (app *Application) persistResolvedTrackTx(ctx context.Context, qtx *databas
 }
 
 func (app *Application) persistMusician(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedMusician) (int64, error) {
-	cacheKey := normalizedScanCacheKey(input.name, input.sortName)
+	cacheKey := helpers.NormalizedScanCacheKey(input.name, input.sortName)
 	if musicianID, ok := scan.musicianIDs[cacheKey]; ok {
 		return musicianID, nil
 	}
@@ -445,7 +445,7 @@ func (app *Application) persistMusician(ctx context.Context, qtx *database.Queri
 }
 
 func (app *Application) persistAlbum(ctx context.Context, qtx *database.Queries, scan *musicScanContext, input resolvedAlbum) (int64, error) {
-	cacheKey := normalizedScanCacheKey(input.title, input.albumArtist)
+	cacheKey := helpers.NormalizedScanCacheKey(input.title, input.albumArtist)
 	if albumID, ok := scan.albumIDs[cacheKey]; ok {
 		return albumID, nil
 	}
@@ -631,7 +631,7 @@ func (app *Application) processSpotifyEntityGenres(
 }
 
 func (app *Application) getOrCreateMusicGenreID(ctx context.Context, qtx *database.Queries, scan *musicScanContext, tag string) (int64, error) {
-	cacheKey := normalizedScanCacheKey(tag, "music")
+	cacheKey := helpers.NormalizedScanCacheKey(tag, "music")
 	if genreID, ok := scan.genreIDs[cacheKey]; ok {
 		return genreID, nil
 	}

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"igloo/cmd/internal/helpers"
 	"maps"
-	"path/filepath"
 )
 
 type movieScanContext struct {
@@ -42,6 +42,5 @@ func (scan *movieScanContext) mergeFrom(other *movieScanContext) {
 }
 
 func (scan *movieScanContext) movieUnchanged(path string, size int64) bool {
-	existingSize, ok := scan.movieIndex[filepath.Clean(path)]
-	return ok && existingSize == size
+	return helpers.ScanIndexUnchanged(scan.movieIndex, path, size)
 }

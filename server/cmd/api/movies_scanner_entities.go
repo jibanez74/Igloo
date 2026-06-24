@@ -216,7 +216,7 @@ func (app *Application) processMovieGenres(
 }
 
 func (app *Application) getOrCreateMovieGenreID(ctx context.Context, qtx *database.Queries, scan *movieScanContext, tag string) (int64, error) {
-	cacheKey := normalizedScanCacheKey(tag, "movie")
+	cacheKey := helpers.NormalizedScanCacheKey(tag, "movie")
 	if scan != nil {
 		if genreID, ok := scan.genreIDs[cacheKey]; ok {
 			return genreID, nil
