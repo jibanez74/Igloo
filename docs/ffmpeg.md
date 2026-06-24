@@ -14,6 +14,10 @@ Direct file streaming is separate from this flow. When the client can play a sou
 
 Release builds use embedded FFmpeg and ffprobe binaries. Platform-specific files under `server/cmd/internal/ffmpeg/` and `server/cmd/internal/ffprobe/` use `//go:embed` to include the binary payload at compile time. At startup, Igloo extracts each binary into an operating-system temp directory such as `igloo-ffmpeg-*` or `igloo-ffprobe-*`, marks it executable, and keeps a singleton wrapper pointing at the extracted path.
 
+Igloo uses Jellyfin FFmpeg builds for release payloads, not generic upstream FFmpeg builds. The Linux x64 payloads currently checked into this repository report `7.1.4-Jellyfin`. As of 2026-06-24, Jellyfin's current non-prerelease `jellyfin-ffmpeg` line is `7.1.4`, while its `8.1.1` line is a prerelease for the next major Jellyfin release. Upstream FFmpeg has newer stable branch releases, but embedded Igloo payloads should follow the stable Jellyfin FFmpeg line unless a change is intentionally testing a prerelease build.
+
+When refreshing payloads, update both `ffmpeg_<platform>` and `ffprobe_<platform>` from the same Jellyfin FFmpeg release. Linux x64 builds use `ffmpeg_linux_amd64` and `ffprobe_linux_amd64`; macOS ARM64 builds expect matching `ffmpeg_darwin_arm64` and `ffprobe_darwin_arm64` payload files. `make build` checks that the payload files for the current native platform exist before compiling.
+
 Development and CI can use the `externalbin` build tag instead. With that tag, the wrappers do not extract embedded binaries. They resolve tools in this order:
 
 - `IGLOO_FFMPEG_PATH` or `IGLOO_FFPROBE_PATH`
@@ -26,7 +30,7 @@ The split exists for practical reasons:
 - Hardware acceleration still depends on the host runtime, drivers, and FFmpeg build support.
 - The wrappers give the application a stable internal interface even though the binary source differs by build mode.
 
-Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
+Both wrappers are singletons. `ffmpeg.New()` and `ffprobe.New()` return the same instance after first initialization. Each wrapper verifies the resolved binary with `-version` before accepting it, so a corrupt, wrong-architecture, or non-executable binary fails during startup instead of during the first scan or transcode. On shutdown, `ffmpeg.Cleanup()` and `ffprobe.Cleanup()` remove extracted temp directories in embedded mode and reset the singleton state. In `externalbin` mode there is no extracted directory, so cleanup only resets the wrapper instance.
 
 ## Metadata Scanning
 
@@ -46,11 +50,13 @@ For music, Igloo uses ffprobe to populate track metadata such as title, sort tit
 
 The scanner stores stream data in SQLite so playback does not need to run ffprobe on every HLS request. That is intentional. HLS session creation reads movie, video stream, and audio stream rows from the database and starts FFmpeg from that stored metadata. This keeps playback startup predictable and avoids probing the same file repeatedly while users are trying to watch something.
 
-`ffprobe.GetMetadata` runs:
+Movie scans use `ffprobe.GetMetadata`, which runs:
 
 ```bash
 ffprobe -v quiet -print_format json -show_streams -show_format -show_chapters <file>
 ```
+
+Music scans use `ffprobe.GetAudioMetadata`, which limits `-show_entries` to the audio format, stream, and tag fields needed by the music scanner.
 
 The quiet JSON output keeps parsing deterministic and avoids mixing log text with structured data. Igloo rejects results with no streams because a scanned media item without streams cannot be played or indexed reliably.
 
@@ -58,15 +64,15 @@ The quiet JSON output keeps parsing deterministic and avoids mixing log text wit
 
 Browser HLS playback is built around on-demand FFmpeg sessions.
 
-When a client requests:
+When a client requests a personal HLS playlist:
 
 ```text
-/api/movies/{id}/hls/{profile}/playlist.m3u8
+/api/movies/{id}/hls/{profile}/playlist.m3u8?playback_session=<uuid>&start=<seconds>&audio_track=<index>
 ```
 
-Igloo loads the movie and stream metadata from the database, creates a temp directory, starts FFmpeg in the background, caches the session, and returns a VOD-style playlist to the browser. Segment requests then read files from the session temp directory as FFmpeg produces them.
+`audio_track` is omitted for video-only movies. Igloo loads the movie and stream metadata from the database, creates a temp directory, starts FFmpeg in the background, caches the session, and returns a VOD-style playlist to the browser. Segment requests then read files from the session temp directory as FFmpeg produces them.
 
-HLS sessions are keyed by movie ID, requested profile, audio track, and start time. If the same request arrives again, Igloo refreshes the cached session TTL and reuses the process. If the requested start time changes, the old session is evicted and a new FFmpeg process starts at the new offset. Concurrent creation is deduplicated with singleflight so multiple near-simultaneous manifest requests do not start duplicate transcodes for the same session.
+Personal HLS sessions are keyed by movie ID, requested profile, audio track, playback session ID, and start time. If the same request arrives again, Igloo refreshes the cached session TTL and reuses the process. When a new personal session is created for the same movie, user, and playback session ID, older sessions for that playback session are cleaned up so seeks and reloads do not leave extra FFmpeg processes running. Concurrent creation is deduplicated with singleflight so multiple near-simultaneous manifest requests do not start duplicate transcodes for the same session.
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, or server shutdown stops the process and removes the temp directory.
 
@@ -82,6 +88,7 @@ The FFmpeg HLS command uses:
 - `-hls_segment_type fmp4`
 - `-hls_fmp4_init_filename init.mp4`
 - `-hls_segment_filename segment_%d.m4s`
+- `-hls_segment_options movflags=+frag_discont`
 - `-hls_playlist_type event`
 - `-hls_list_size 0`
 - `-hls_time 4`
@@ -93,9 +100,9 @@ The generated files match the HTTP handlers:
 - `segment_1.m4s`
 - `playlist.m3u8`
 
-fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable.
+fMP4 HLS is used because modern browser players handle it well and it works naturally with copied H.264 video, transcoded H.264 video, and AAC audio. A short 4-second target segment gives acceptable startup and seek behavior while keeping the number of segment files manageable. FFmpeg also receives `movflags=+frag_discont` for fMP4 segment output so independent fragments tolerate discontinuities across rebased sessions and copy-video boundaries.
 
-FFmpeg writes an event playlist while encoding. Igloo exposes a VOD-style playlist to clients. During encoding, Igloo generates a complete VOD playlist from the known movie duration so hls.js sees a seekable on-demand asset instead of a live/event stream. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
+FFmpeg writes an event playlist while encoding. Igloo exposes a VOD-style playlist to clients. During encoding, Igloo generates a complete VOD playlist from the known movie duration so hls.js sees a seekable on-demand asset instead of a live/event stream. Generated VOD playlists use a target duration of 8 seconds for transcodes and 30 seconds for copy-video sessions, because copied video can only split on source keyframe boundaries. After FFmpeg exits successfully, Igloo finalizes the FFmpeg playlist by switching it to VOD and appending `#EXT-X-ENDLIST` when needed.
 
 The manifest handler rewrites playlist asset URLs so each `init.mp4` and `segment_N.m4s` URL includes the selected audio track and session query parameters. This keeps HLS asset requests tied to the same session configuration that created the manifest.
 
@@ -142,7 +149,7 @@ Allowed HLS profiles are centralized in `server/cmd/internal/helpers/hls_profile
 
 Transcode mode sets `-b:v`, `-maxrate`, and `-bufsize` from the selected profile. It scales video to the profile height with width `-2`, which preserves aspect ratio while keeping the output width divisible by two for H.264 encoders.
 
-CPU transcode uses:
+All video transcodes set `-profile:v high`, profile bitrate, maxrate, bufsize, SDR color metadata, and an H.264 encoder. CPU transcode uses:
 
 ```text
 -c:v libx264 -preset fast -sc_threshold:v:0 0
@@ -150,13 +157,13 @@ CPU transcode uses:
 
 The `fast` preset is a practical default for self-hosted playback: it improves stream quality over faster x264 presets while keeping CPU use reasonable for home servers. Scene-cut insertion is disabled for CPU transcodes because Igloo aligns keyframes on the HLS segment cadence. Predictable keyframes make HLS segmentation and seeking more reliable.
 
-When the source frame rate is known and a hardware encoder is active, Igloo uses a fixed 4-second GOP:
+When the source frame rate is known, Igloo sets a fixed 4-second GOP:
 
 ```text
 -g:v:0 <segment_time*fps> -keyint_min:v:0 <segment_time*fps>
 ```
 
-Other video transcode paths use forced keyframe expressions:
+Hardware encoders rely on that fixed GOP when the frame rate is known. Software transcodes, and hardware transcodes with unknown frame rate, also use forced keyframe expressions:
 
 ```text
 -force_key_frames:0 expr:gte(t,n_forced*4)
@@ -168,20 +175,21 @@ FFmpeg also runs with:
 
 - `-fflags +genpts` to generate timestamps when sources have missing or awkward presentation timestamps.
 - `-analyzeduration 5000000` and `-probesize 5000000` to give FFmpeg enough input data to identify streams without making startup unbounded.
-- `-threads max(1, runtime.NumCPU()/2)` to avoid letting one transcode consume every CPU core on a home server.
 - `-avoid_negative_ts make_zero` to normalize output timestamps.
 - `-max_muxing_queue_size 1024` to tolerate sources with stream timing that would otherwise overflow FFmpeg's muxing queue.
 
+Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. Total pressure on a home server is bounded by the HLS transcode limiter instead: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS FFmpeg sessions, and the default is `max(1, runtime.NumCPU()/4)`.
+
 ## Audio Handling
 
-HLS sessions map exactly one video stream and one audio stream:
+HLS sessions always map one video stream and map one audio stream when the movie has audio:
 
 ```text
 -map 0:<video_stream_index>
 -map 0:<audio_stream_index>
 ```
 
-The stream indices are absolute ffprobe stream indices stored during scanning. Igloo does not rely on FFmpeg's relative stream numbering at playback time.
+For video-only movies, Igloo omits the audio map and audio codec options. The stream indices are absolute ffprobe stream indices stored during scanning. Igloo does not rely on FFmpeg's relative stream numbering at playback time.
 
 If the selected audio codec is AAC, Igloo copies it:
 
@@ -233,7 +241,7 @@ Intel adds:
 
 Igloo only sends those Intel encoder options when the probed FFmpeg build lists them for `h264_qsv`.
 
-At startup, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, and failed QSV runtime probes fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
+At startup, after the `-version` executability check, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, encoder options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, failed QSV runtime probes, and missing Apple VideoToolbox encoder support fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
 
 NVIDIA encode is checked with a short runtime encode probe, not just by looking for `h264_nvenc` in `ffmpeg -encoders`. Igloo does not use `-hwaccel cuda` for HLS because hardware decode support depends on the source codec and profile. For SDR transcodes, NVIDIA normally uses software decode and software scaling into `yuv420p` frames before `h264_nvenc` encode:
 
@@ -375,6 +383,7 @@ For binary deployments:
 
 - `TRANSCODE_DIR` seeds the Settings transcode directory on first launch; after that, edit it from Settings.
 - HLS temp output is written below the Settings transcode directory.
+- `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS FFmpeg sessions. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
 For local development:
@@ -398,6 +407,7 @@ For failures:
 
 When changing FFmpeg or ffprobe behavior:
 
+- Check the embedded payload version with `ffmpeg -version` and `ffprobe -version` after refreshing binaries. Prefer the current stable Jellyfin FFmpeg release line for release payloads; do not switch to a generic upstream FFmpeg build or Jellyfin prerelease branch without a specific reason.
 - Keep argument construction covered by tests in `server/cmd/internal/ffmpeg/ffmpeg_hls_test.go`.
 - Keep remux validation covered by `remux_validator` tests when changing fMP4 safety behavior.
 - Keep HLS handler and playlist tests updated when changing playlist shape, filenames, query parameters, readiness rules, or resume behavior.

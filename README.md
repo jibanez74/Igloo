@@ -10,7 +10,7 @@ Igloo is intended to run on user-managed hardware, usually inside a private netw
 
 - `server/`: Go backend, chi API, SQLite startup schema, media scanning, playback endpoints, HLS support, database access, and FFmpeg/ffprobe integration.
 - `web/`: React web client for browser-based library management, administration, and playback.
-- `docs/`: OpenAPI documentation, FFmpeg notes, roadmap, and project notes.
+- `docs/`: OpenAPI artifacts, OpenAPI maintenance notes, and FFmpeg operational notes.
 
 Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
 
@@ -21,8 +21,9 @@ What works today:
 - Movie library scanning with local metadata, optional TMDB enrichment, posters/backdrops, trailers where available, cast/crew details, technical stream details, and admin metadata editing.
 - Movie playback through direct streaming, remuxed HLS, transcoded HLS, WebVTT subtitle extraction, audio/subtitle track selection, watch progress, likes, and movie playlists.
 - Music library scanning with albums, tracks, musicians, cover art, optional Spotify enrichment, multi-artist track relationships, music playlists with collaborators, liked tracks, playback, and listening statistics.
+- Library-wide search across movies, albums, musicians, and tracks.
 - Watch rooms for shared movie playback, including direct stream and HLS room playback with WebSocket synchronization.
-- Session-based accounts, admin user management, user account settings, library path settings, general server settings, and per-user playback preferences.
+- Session-based accounts, admin user management, user account settings, avatar upload, library path settings, general server settings, and per-user playback preferences.
 - A React web client served by the Go server in production and by Vite during development.
 - OpenAPI documentation in `docs/openapi.json`, with a route coverage test to keep the spec aligned with the Go router.
 
@@ -33,8 +34,6 @@ Current limitations:
 - Metadata providers are optional; without TMDB or Spotify, Igloo relies on local file metadata.
 - Full backend tests require a SQLite build with FTS5 enabled.
 
-See [docs/roadmap.md](docs/roadmap.md) for planned work and known follow-up items.
-
 ## Quick Start
 
 Use a packaged binary for your platform:
@@ -42,21 +41,38 @@ Use a packaged binary for your platform:
 ```bash
 tar -xzf igloo-server-linux-amd64.tar.gz
 cd igloo-server-linux-amd64
-cp .env.example .env
-./igloo-server
 ```
 
 On Apple Silicon, use the `igloo-server-darwin-arm64.tar.gz` package instead.
 
-Before first start, edit `.env`:
+Before first start, create a `.env` file in the directory where you will start the binary:
+
+```env
+PORT=8080
+SESSION_COOKIE_SECURE=false
+DEFAULT_ADMIN_EMAIL=admin@example.com
+DEFAULT_ADMIN_PASSWORD=change-this-password
+DB_PATH=./db/igloo.db
+MOVIES_DIR=/path/to/movies
+MUSIC_DIR=/path/to/music
+TRANSCODE_DIR=./transcode
+```
+
+Adjust these values before running Igloo:
 
 - Set `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
 - Set `SESSION_COOKIE_SECURE=false` when testing over plain HTTP, such as `http://localhost:8080`.
 - Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
-- Optionally set `MOVIES_DIR` and `MUSIC_DIR` to seed library paths on first launch. You can also configure paths later from Settings.
+- Optionally set `MOVIES_DIR` and `MUSIC_DIR` to seed library paths on first launch. You can also configure movie, TV show, and music paths later from Settings.
 - Each configured media directory must already exist. Igloo will not create empty media library directories.
 
-Start Igloo from the directory that contains `.env`. Igloo listens on `PORT`, defaulting to `8080`.
+Start Igloo from the directory that contains `.env`:
+
+```bash
+./igloo-server
+```
+
+Igloo listens on `PORT`, defaulting to `8080`.
 
 ## Configuration
 
@@ -78,14 +94,14 @@ The most important variables are:
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
-| `JELLYFIN_API_KEY` | First-run default for optional Jellyfin API integration work; not required for current core features |
+| `JELLYFIN_API_KEY` | First-run default for optional Jellyfin integration settings; not required for current core features |
 | `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
 | `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
 | `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
 | `HLS_MAX_CPU_TRANSCODES` | Optional startup limit for concurrent CPU transcodes |
 | `DEBUG` | Optional startup flag for debug logging |
 
-See [.env.example](.env.example) for the full reference.
+Use this table as the current environment reference.
 
 Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH`, `PORT`, `SESSION_COOKIE_SECURE`, `LOG_TO_STDOUT`, `HLS_MAX_CPU_TRANSCODES`, and `DEBUG` stay startup-driven.
 
@@ -107,18 +123,14 @@ Prerequisites:
 - `ffmpeg` and `ffprobe` on your `PATH` for `make dev` and backend tests
 - Local embedded ffmpeg/ffprobe payload files only when building release binaries
 
-Create your environment file:
-
-```bash
-cp .env.example .env
-```
-
-For local development, use:
+Create or edit a root `.env` file for local development:
 
 ```env
 DEBUG=true
 PORT=8080
 SESSION_COOKIE_SECURE=false
+DEFAULT_ADMIN_EMAIL=admin@example.com
+DEFAULT_ADMIN_PASSWORD=AdminPassword
 DB_PATH=./db/igloo.db
 TRANSCODE_DIR=./transcode
 ```
@@ -197,12 +209,18 @@ From `web/`:
 | `bun run test` | Run Vitest |
 | `bun run test:e2e` | Run all Playwright specs against an existing server |
 | `bun run test:e2e:login` | Run Playwright login screen checks against an existing server |
+| `bun run test:e2e:account-settings` | Run Playwright account settings checks against an existing server |
+| `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
+| `bun run test:e2e:libraries-settings` | Run Playwright library settings checks against an existing server |
+| `bun run test:e2e:user-settings` | Run Playwright admin user settings checks against an existing server |
 | `bun run test:e2e:movies` | Run Playwright movie page checks against an existing server |
 | `bun run test:e2e:movies:index` | Run the mocked Playwright movie index checks against a local Vite frontend |
-| `bun run test:e2e:general-settings` | Run Playwright General Settings checks against an existing server |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |
+| `bun run doctor` | Run React Doctor against the web app |
+
+Additional Playwright specs currently cover home, movie details, music index and tracks, search, trailer playback, playback settings, head metadata, motion, and browser issue checks. Run an individual spec with `bun run test:e2e -- e2e/<name>.spec.ts`.
 
 ### Login E2E Checks
 
@@ -363,7 +381,7 @@ TMDB_API_KEY=your_tmdb_v3_key go test -v -tags integration ./cmd/internal/tmdb
 
 ## CI and Releases
 
-GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root. Release packages are expected to include the built binary and `.env.example`; web assets and media tool payloads are embedded into the binary during the native build.
+GitHub Actions runs backend tests plus frontend linting and build checks. Production binaries are built with `make build` from the repository root. Web assets and media tool payloads are embedded into the binary during the native build; runtime configuration comes from the process environment or a `.env` file in the working directory.
 
 ## AI Coding Agent Notes
 
