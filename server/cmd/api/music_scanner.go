@@ -159,7 +159,7 @@ func (app *Application) loadMusicScanIndex(ctx context.Context) (map[string]int6
 
 	index := make(map[string]int64, len(rows))
 	for _, row := range rows {
-		index[row.FilePath] = row.Size
+		index[filepath.Clean(row.FilePath)] = row.Size
 	}
 
 	return index, nil

@@ -262,7 +262,7 @@ func parseCompoundArtistCredits(artistTag string) compoundArtistCredits {
 				continue
 			}
 
-			cacheKey := normalizedMusicCacheKey(part)
+			cacheKey := normalizedScanCacheKey(part)
 			if _, exists := seen[cacheKey]; exists {
 				credits.hasDuplicate = true
 				continue
