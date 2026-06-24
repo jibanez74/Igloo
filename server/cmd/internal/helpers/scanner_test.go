@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"sync"
 	"testing"
@@ -150,16 +151,12 @@ func TestWalkMediaLibrary(t *testing.T) {
 	}
 
 	sort.Slice(got, func(i, j int) bool { return got[i].Path < got[j].Path })
-	if len(got) != 2 {
-		t.Fatalf("got %d files, want 2: %+v", len(got), got)
+	want := []ScanFile{
+		{Path: filepath.Join(root, "movie.mkv"), Ext: "mkv", Size: 1},
+		{Path: filepath.Join(root, "nested", "clip.mp4"), Ext: "mp4", Size: 2},
 	}
-	if got[0].Ext != "mkv" && got[0].Ext != "mp4" {
-		t.Errorf("unexpected ext %q", got[0].Ext)
-	}
-	for _, f := range got {
-		if f.Size == 0 {
-			t.Errorf("file %q has zero size", f.Path)
-		}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("files = %+v, want %+v", got, want)
 	}
 }
 

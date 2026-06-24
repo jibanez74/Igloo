@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -33,10 +34,11 @@ func userResponseMap(id int64, name, email string, isAdmin bool, avatar sql.Null
 // validatePassword enforces the shared password length bounds. label is the noun
 // used in the error message (e.g. "password" or "new password").
 func validatePassword(password, label string) error {
-	if len(password) < 9 {
+	passwordLength := utf8.RuneCountInString(password)
+	if passwordLength < 9 {
 		return fmt.Errorf("%s must be at least 9 characters", label)
 	}
-	if len(password) > 128 {
+	if passwordLength > 128 {
 		return fmt.Errorf("%s must be 128 characters or less", label)
 	}
 	return nil

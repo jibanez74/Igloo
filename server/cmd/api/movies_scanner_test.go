@@ -237,28 +237,34 @@ func TestRunMovieScanPreservesMissingMovieRows(t *testing.T) {
 	}
 }
 
-func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
+func TestRunMovieScan_AcceptsConfiguredVideoExtensions(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
-	app.Ffprobe = &stubMovieScannerFfprobe{result: testMovieMetadata()}
-	app.Tmdb = &stubMovieScannerTmdb{searchErr: errors.New("tmdb unavailable")}
 
 	moviesDir := t.TempDir()
-	files := []helpers.ScanFile{
-		{Path: filepath.Join(moviesDir, "Sample Movie (2020).mov"), Ext: "mov", Size: 5},
-		{Path: filepath.Join(moviesDir, "Sample Movie (2021).m4v"), Ext: "m4v", Size: 5},
-		{Path: filepath.Join(moviesDir, "Sample Movie (2022).webm"), Ext: "webm", Size: 5},
+	files := []struct {
+		path string
+		ext  string
+	}{
+		{path: filepath.Join(moviesDir, "Sample Movie (2020).mov"), ext: "mov"},
+		{path: filepath.Join(moviesDir, "Sample Movie (2021).m4v"), ext: "m4v"},
+		{path: filepath.Join(moviesDir, "Sample Movie (2022).webm"), ext: "webm"},
 	}
 	for _, file := range files {
-		err := os.WriteFile(file.Path, []byte("movie"), 0o644)
+		err := os.WriteFile(file.path, []byte("movie"), 0o644)
 		if err != nil {
-			t.Fatalf("write movie %s: %v", file.Path, err)
+			t.Fatalf("write movie %s: %v", file.path, err)
 		}
 	}
 
-	scanned, skipped, errCount, _ := app.processMoviesBatch(context.Background(), files)
-	if scanned != len(files) || skipped != 0 || errCount != 0 {
-		t.Fatalf("scan result scanned=%d skipped=%d errors=%d, want %d/0/0", scanned, skipped, errCount, len(files))
+	ffprobeStub := &stubMovieScannerFfprobe{result: testMovieMetadata()}
+	app.Ffprobe = ffprobeStub
+	app.Settings = &database.Setting{MoviesDir: sql.NullString{String: moviesDir, Valid: true}}
+
+	app.runMovieScan()
+
+	if ffprobeStub.calls != len(files) {
+		t.Fatalf("ffprobe calls = %d, want %d", ffprobeStub.calls, len(files))
 	}
 
 	for _, file := range files {
@@ -268,12 +274,12 @@ func TestProcessMoviesBatch_AcceptsConfiguredVideoExtensions(t *testing.T) {
 			FROM movies
 			WHERE file_path = ?
 			LIMIT 1
-		`, file.Path).Scan(&container)
+		`, file.path).Scan(&container)
 		if err != nil {
-			t.Fatalf("get movie %s: %v", file.Path, err)
+			t.Fatalf("get movie %s: %v", file.path, err)
 		}
-		if container != file.Ext {
-			t.Fatalf("movie container = %q, want %q", container, file.Ext)
+		if container != file.ext {
+			t.Fatalf("movie container = %q, want %q", container, file.ext)
 		}
 	}
 }
