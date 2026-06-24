@@ -93,13 +93,8 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if len(req.Password) < 9 {
-		helpers.ErrorJSON(w, errors.New("password must be at least 9 characters"), http.StatusBadRequest)
-		return
-	}
-
-	if len(req.Password) > 128 {
-		helpers.ErrorJSON(w, errors.New("password must be 128 characters or less"), http.StatusBadRequest)
+	if err := validatePassword(req.Password, "password"); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -359,13 +354,8 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if len(req.Password) < 9 {
-		helpers.ErrorJSON(w, errors.New("password must be at least 9 characters"), http.StatusBadRequest)
-		return
-	}
-
-	if len(req.Password) > 128 {
-		helpers.ErrorJSON(w, errors.New("password must be 128 characters or less"), http.StatusBadRequest)
+	if err := validatePassword(req.Password, "password"); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
