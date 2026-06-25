@@ -14,6 +14,7 @@ const (
 	spotifyArtistSearchLimit       = 5
 	spotifyAlbumSearchLimit        = 5
 	spotifyAlbumRequestSearchLimit = 10
+	spotifyTrackRequestSearchLimit = 10
 	spotifyArtistThreshold         = 78
 	spotifyAlbumThreshold          = 76
 )

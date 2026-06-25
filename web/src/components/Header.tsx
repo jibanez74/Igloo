@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Search, Bell, Cast } from "lucide-react";
+import { Search, Cast } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import NotificationBell from "@/components/NotificationBell";
 import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 export default function Header() {
@@ -64,14 +65,7 @@ export default function Header() {
 
       {/* Utility buttons */}
       <nav className="ml-auto flex shrink-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Notifications"
-          className="text-slate-300 hover:bg-slate-800 hover:text-white"
-        >
-          <Bell aria-hidden="true" />
-        </Button>
+        <NotificationBell />
 
         <Button
           variant="ghost"

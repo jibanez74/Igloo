@@ -363,6 +363,24 @@
       }
     },
     "/api/notifications/": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List notifications for the current user",
+        "operationId": "listNotifications",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/NotificationsListResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
       "post": {
         "tags": [
           "Notifications"
@@ -381,6 +399,105 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get the unread notification count for the current user",
+        "operationId": "getUnreadNotificationCount",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UnreadNotificationCountResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all visible notifications as read",
+        "operationId": "markAllNotificationsRead",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark a notification as read",
+        "operationId": "markNotificationRead",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}": {
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Delete a notification",
+        "operationId": "deleteNotification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -441,6 +558,38 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/SpotifyAlbumSearchResultsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/spotify/tracks/search": {
+      "post": {
+        "tags": [
+          "Spotify"
+        ],
+        "summary": "Search Spotify tracks",
+        "operationId": "searchSpotifyTracks",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SpotifySearchTracksRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SpotifyTrackSearchResultsResponse"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -3760,6 +3909,16 @@
           }
         }
       },
+      "SpotifySearchTracksRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SpotifySearchTracksRequest"
+            }
+          }
+        }
+      },
       "IdentifyMovieRequest": {
         "required": true,
         "content": {
@@ -4132,6 +4291,26 @@
           }
         }
       },
+      "NotificationsListResponse": {
+        "description": "List of notifications visible to the current user with the unread count.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NotificationsListEnvelope"
+            }
+          }
+        }
+      },
+      "UnreadNotificationCountResponse": {
+        "description": "Unread notification count for the current user.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UnreadNotificationCountEnvelope"
+            }
+          }
+        }
+      },
       "TmdbStatusResponse": {
         "description": "TMDB availability response.",
         "content": {
@@ -4188,6 +4367,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/SpotifyAlbumSearchResultsEnvelope"
+            }
+          }
+        }
+      },
+      "SpotifyTrackSearchResultsResponse": {
+        "description": "Spotify track search results response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SpotifyTrackSearchResultsEnvelope"
             }
           }
         }
@@ -6802,6 +6991,120 @@
           }
         ]
       },
+      "NotificationListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "message",
+          "is_admin",
+          "is_read",
+          "created_by_name",
+          "user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string",
+            "enum": [
+              "movie_request",
+              "album_request",
+              "track_request",
+              "other"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "is_admin": {
+            "type": "boolean"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "created_by_name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationsListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "notifications",
+                  "unread_count"
+                ],
+                "properties": {
+                  "notifications": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NotificationListItem"
+                    }
+                  },
+                  "unread_count": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "UnreadNotificationCountEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "unread_count"
+                ],
+                "properties": {
+                  "unread_count": {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
       "TheaterMovie": {
         "type": "object",
         "required": [
@@ -6921,6 +7224,49 @@
         },
         "additionalProperties": false
       },
+      "SpotifyTrackSearchResult": {
+        "type": "object",
+        "required": [
+          "spotify_id",
+          "title",
+          "artist_names",
+          "album_name",
+          "release_date",
+          "duration_ms",
+          "cover_url",
+          "spotify_url"
+        ],
+        "properties": {
+          "spotify_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "artist_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "album_name": {
+            "type": "string"
+          },
+          "release_date": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "cover_url": {
+            "type": "string"
+          },
+          "spotify_url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "TmdbSearchMoviesRequest": {
         "type": "object",
         "properties": {
@@ -6937,6 +7283,19 @@
         "additionalProperties": false
       },
       "SpotifySearchAlbumsRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpotifySearchTracksRequest": {
         "type": "object",
         "required": [
           "title"
@@ -7081,6 +7440,36 @@
                     "type": "array",
                     "items": {
                       "$ref": "#/components/schemas/SpotifyAlbumSearchResult"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "SpotifyTrackSearchResultsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "results"
+                ],
+                "properties": {
+                  "results": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SpotifyTrackSearchResult"
                     }
                   }
                 },

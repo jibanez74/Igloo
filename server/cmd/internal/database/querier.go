@@ -20,6 +20,7 @@ type Querier interface {
 	CountMoviesForGenre(ctx context.Context, genreID int64) (int64, error)
 	CountPlaylistMovies(ctx context.Context, playlistID int64) (int64, error)
 	CountPlaylistTracks(ctx context.Context, playlistID int64) (int64, error)
+	CountUnreadNotificationsForUser(ctx context.Context, arg CountUnreadNotificationsForUserParams) (int64, error)
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
@@ -60,6 +61,7 @@ type Querier interface {
 	// Delete all video streams for a movie
 	DeleteMovieVideoStreams(ctx context.Context, movieID int64) error
 	DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error
+	DeleteNotificationForUser(ctx context.Context, arg DeleteNotificationForUserParams) (int64, error)
 	DeletePlaylist(ctx context.Context, arg DeletePlaylistParams) error
 	// Deletes all genre relationships for a track.
 	DeleteTrackGenres(ctx context.Context, trackID int64) error
@@ -190,8 +192,16 @@ type Querier interface {
 	LikeMovie(ctx context.Context, arg LikeMovieParams) error
 	LikeTrack(ctx context.Context, arg LikeTrackParams) error
 	ListMusicTrackScanIndex(ctx context.Context) ([]ListMusicTrackScanIndexRow, error)
+	// Notifications visible to the viewer: those targeted at them, plus the admin
+	// request queue when the viewer is an admin. Read state comes from a left join
+	// against notification_reads for this viewer.
+	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error)
+	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
+	// Idempotent and relevance-gated: only records a read when the notification is
+	// actually visible to the viewer.
+	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
 	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING

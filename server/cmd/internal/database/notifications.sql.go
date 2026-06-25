@@ -10,6 +10,32 @@ import (
 	"database/sql"
 )
 
+const countUnreadNotificationsForUser = `-- name: CountUnreadNotificationsForUser :one
+SELECT
+  COUNT(*) AS unread_count
+FROM notifications AS n
+LEFT JOIN notification_reads AS nr
+  ON nr.notification_id = n.id
+  AND nr.user_id = ?1
+WHERE nr.notification_id IS NULL
+  AND (
+    n.user_id = ?1
+    OR (?2 AND n.is_admin = true)
+  )
+`
+
+type CountUnreadNotificationsForUserParams struct {
+	UserID        int64       `json:"user_id"`
+	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
+}
+
+func (q *Queries) CountUnreadNotificationsForUser(ctx context.Context, arg CountUnreadNotificationsForUserParams) (int64, error) {
+	row := q.queryRow(ctx, q.countUnreadNotificationsForUserStmt, countUnreadNotificationsForUser, arg.UserID, arg.ViewerIsAdmin)
+	var unread_count int64
+	err := row.Scan(&unread_count)
+	return unread_count, err
+}
+
 const createNotification = `-- name: CreateNotification :one
 INSERT INTO notifications (
   created_by_user_id,
@@ -50,4 +76,151 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteNotificationForUser = `-- name: DeleteNotificationForUser :execrows
+DELETE FROM notifications
+WHERE id = ?1
+  AND (
+    user_id = ?2
+    OR (?3 AND is_admin = true)
+  )
+`
+
+type DeleteNotificationForUserParams struct {
+	NotificationID int64         `json:"notification_id"`
+	UserID         sql.NullInt64 `json:"user_id"`
+	ViewerIsAdmin  interface{}   `json:"viewer_is_admin"`
+}
+
+func (q *Queries) DeleteNotificationForUser(ctx context.Context, arg DeleteNotificationForUserParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteNotificationForUserStmt, deleteNotificationForUser, arg.NotificationID, arg.UserID, arg.ViewerIsAdmin)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const listNotificationsForUser = `-- name: ListNotificationsForUser :many
+SELECT
+  n.id,
+  n.created_by_user_id,
+  n.user_id,
+  n.title,
+  n.message,
+  n.is_admin,
+  n.created_at,
+  n.updated_at,
+  creator.name AS created_by_name,
+  CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
+FROM notifications AS n
+LEFT JOIN users AS creator
+  ON creator.id = n.created_by_user_id
+LEFT JOIN notification_reads AS nr
+  ON nr.notification_id = n.id
+  AND nr.user_id = ?1
+WHERE n.user_id = ?1
+  OR (?2 AND n.is_admin = true)
+ORDER BY n.created_at DESC
+LIMIT ?3
+`
+
+type ListNotificationsForUserParams struct {
+	UserID        int64       `json:"user_id"`
+	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
+	RowLimit      int64       `json:"row_limit"`
+}
+
+type ListNotificationsForUserRow struct {
+	ID              int64          `json:"id"`
+	CreatedByUserID int64          `json:"created_by_user_id"`
+	UserID          sql.NullInt64  `json:"user_id"`
+	Title           string         `json:"title"`
+	Message         string         `json:"message"`
+	IsAdmin         bool           `json:"is_admin"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
+	CreatedByName   sql.NullString `json:"created_by_name"`
+	IsRead          bool           `json:"is_read"`
+}
+
+// Notifications visible to the viewer: those targeted at them, plus the admin
+// request queue when the viewer is an admin. Read state comes from a left join
+// against notification_reads for this viewer.
+func (q *Queries) ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]ListNotificationsForUserRow, error) {
+	rows, err := q.query(ctx, q.listNotificationsForUserStmt, listNotificationsForUser, arg.UserID, arg.ViewerIsAdmin, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNotificationsForUserRow{}
+	for rows.Next() {
+		var i ListNotificationsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedByUserID,
+			&i.UserID,
+			&i.Title,
+			&i.Message,
+			&i.IsAdmin,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedByName,
+			&i.IsRead,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markAllNotificationsReadForUser = `-- name: MarkAllNotificationsReadForUser :exec
+INSERT INTO notification_reads (notification_id, user_id)
+SELECT n.id, ?1
+FROM notifications AS n
+WHERE n.user_id = ?1
+  OR (?2 AND n.is_admin = true)
+ON CONFLICT (notification_id, user_id) DO NOTHING
+`
+
+type MarkAllNotificationsReadForUserParams struct {
+	UserID        int64       `json:"user_id"`
+	ViewerIsAdmin interface{} `json:"viewer_is_admin"`
+}
+
+func (q *Queries) MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error {
+	_, err := q.exec(ctx, q.markAllNotificationsReadForUserStmt, markAllNotificationsReadForUser, arg.UserID, arg.ViewerIsAdmin)
+	return err
+}
+
+const markNotificationReadForUser = `-- name: MarkNotificationReadForUser :exec
+INSERT INTO notification_reads (notification_id, user_id)
+SELECT n.id, ?1
+FROM notifications AS n
+WHERE n.id = ?2
+  AND (
+    n.user_id = ?1
+    OR (?3 AND n.is_admin = true)
+  )
+ON CONFLICT (notification_id, user_id) DO NOTHING
+`
+
+type MarkNotificationReadForUserParams struct {
+	UserID         int64       `json:"user_id"`
+	NotificationID int64       `json:"notification_id"`
+	ViewerIsAdmin  interface{} `json:"viewer_is_admin"`
+}
+
+// Idempotent and relevance-gated: only records a read when the notification is
+// actually visible to the viewer.
+func (q *Queries) MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error {
+	_, err := q.exec(ctx, q.markNotificationReadForUserStmt, markNotificationReadForUser, arg.UserID, arg.NotificationID, arg.ViewerIsAdmin)
+	return err
 }

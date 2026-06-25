@@ -166,6 +166,21 @@ export type SpotifyAlbumSearchResultType = {
   library_album_id?: number;
 };
 
+export type SpotifyTrackSearchRequest = {
+  title: string;
+};
+
+export type SpotifyTrackSearchResultType = {
+  spotify_id: string;
+  title: string;
+  artist_names: string[];
+  album_name: string;
+  release_date: string;
+  duration_ms: number;
+  cover_url: string;
+  spotify_url: string;
+};
+
 // Simplified musician type for list views and cards
 export type SimpleMusicianType = {
   id: number;

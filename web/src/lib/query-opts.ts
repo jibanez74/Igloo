@@ -28,6 +28,8 @@ import {
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
+  getNotifications,
+  getUnreadNotificationCount,
   getSpotifyStatus,
   getPlaylistDetails,
   getPlaylists,
@@ -45,6 +47,8 @@ import {
 } from "@/lib/api";
 import {
   ADMIN_USERS_KEY,
+  NOTIFICATIONS_KEY,
+  NOTIFICATIONS_UNREAD_COUNT_KEY,
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   AUTH_USER_KEY,
@@ -125,6 +129,26 @@ export function authUserQueryOpts() {
     queryFn: getAuthUser,
     staleTime: STALE_1M,
     gcTime: GC_DEFAULT,
+  });
+}
+
+export function notificationsQueryOpts() {
+  return queryOptions({
+    queryKey: [NOTIFICATIONS_KEY],
+    queryFn: getNotifications,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function unreadNotificationCountQueryOpts() {
+  return queryOptions({
+    queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
+    queryFn: getUnreadNotificationCount,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+    // Poll so the bell badge reflects new requests without a manual refresh.
+    refetchInterval: 30_000,
   });
 }
 

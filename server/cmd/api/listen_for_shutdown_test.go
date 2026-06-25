@@ -44,6 +44,10 @@ func (s *shutdownTestSpotify) SearchAlbums(_ context.Context, _ string) ([]spoti
 	return nil, nil
 }
 
+func (s *shutdownTestSpotify) SearchTracks(_ context.Context, _ string) ([]spotify.FullTrack, error) {
+	return nil, nil
+}
+
 func (s *shutdownTestSpotify) SearchArtistByName(_ context.Context, _ string) (*spotify.FullArtist, error) {
 	return nil, nil
 }
