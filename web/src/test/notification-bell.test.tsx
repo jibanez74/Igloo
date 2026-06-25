@@ -152,6 +152,31 @@ describe("NotificationBell", () => {
     });
   });
 
+  it("syncs stale unread count state from the fetched notification list", async () => {
+    apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(0));
+    apiMocks.getNotifications.mockResolvedValue(listResponse([notification()]));
+
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Notifications" }),
+    );
+
+    expect(await screen.findByText("Requester wants Dune")).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Notifications, 1 unread" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Mark all read" }),
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.markAllNotificationsRead).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("marks all notifications read", async () => {
     const user = userEvent.setup();
     renderBell();

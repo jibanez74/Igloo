@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,11 @@ import {
 } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { NotificationListItemType } from "@/types";
+import type {
+  ApiResponseType,
+  NotificationListItemType,
+  UnreadNotificationCountResponseType,
+} from "@/types";
 
 const NOTIFICATION_TITLE_LABELS: Record<string, string> = {
   movie_request: "Movie request",
@@ -58,7 +62,7 @@ export default function NotificationBell() {
   const queryClient = useQueryClient();
 
   const countQuery = useQuery(unreadNotificationCountQueryOpts());
-  const unreadCount =
+  const countUnreadCount =
     countQuery.data?.error === false ? countQuery.data.data.unread_count : 0;
 
   // Only fetch the full list while the panel is open.
@@ -68,6 +72,24 @@ export default function NotificationBell() {
   });
   const notifications =
     listQuery.data?.error === false ? listQuery.data.data.notifications : [];
+  const listUnreadCount =
+    open && listQuery.data?.error === false
+      ? listQuery.data.data.unread_count
+      : undefined;
+  const unreadCount = listUnreadCount ?? countUnreadCount;
+
+  useEffect(() => {
+    if (listQuery.data?.error !== false) {
+      return;
+    }
+
+    queryClient.setQueryData<
+      ApiResponseType<UnreadNotificationCountResponseType>
+    >([NOTIFICATIONS_UNREAD_COUNT_KEY], {
+      error: false,
+      data: { unread_count: listQuery.data.data.unread_count },
+    });
+  }, [listQuery.data, queryClient]);
 
   function invalidateNotifications() {
     void queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] });
