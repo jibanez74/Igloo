@@ -33,16 +33,27 @@ var ValidVideoExtensions = map[string]bool{
 	"webm": true,
 }
 
-var knownNonYearTokens = map[string]bool{
+var movieReleaseNoiseTokens = map[string]bool{
 	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
-	"bluray": true, "webrip": true, "web-dl": true, "webdl": true,
-	"h264": true, "h265": true, "x264": true, "x265": true, "hevc": true,
-	"aac": true, "ac3": true, "dts": true, "mkv": true, "mp4": true,
-	"remux": true, "repack": true, "proper": true, "extended": true,
+	"bluray": true, "brrip": true, "webrip": true, "web": true, "web-dl": true, "webdl": true,
+	"dvdrip": true, "hdrip": true, "remux": true, "repack": true, "proper": true, "remastered": true,
+	"extended": true,
+	"h264":     true, "h265": true, "x264": true, "x265": true, "hevc": true, "av1": true,
+	"10bit": true, "8bit": true, "hdr": true, "sdr": true,
+	"aac": true, "aac5": true, "aac51": true, "ddp": true, "ac3": true, "dts": true,
+	"dtshd": true, "atmos": true, "truehd": true,
+	"mkv": true, "mp4": true,
+	"yts": true, "ytsmx": true, "mx": true,
 }
 
 func isReasonableYear(n int) bool {
 	return n >= 1900 && n <= 2100
+}
+
+// IsMovieReleaseNoiseToken reports whether token is a movie release or codec marker
+// that should not be treated as part of a movie title.
+func IsMovieReleaseNoiseToken(token string) bool {
+	return movieReleaseNoiseTokens[strings.ToLower(strings.TrimSpace(token))]
 }
 
 func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
@@ -75,7 +86,7 @@ func GetTitleAndYearFromFileName(fileName string) (*TitleYearResponse, error) {
 	parts := strings.Split(s, ".")
 	for i := len(parts) - 1; i >= 0; i-- {
 		tok := strings.TrimSpace(parts[i])
-		if knownNonYearTokens[strings.ToLower(tok)] {
+		if IsMovieReleaseNoiseToken(tok) {
 			continue
 		}
 		if len(tok) != 4 {
