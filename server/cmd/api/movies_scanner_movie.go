@@ -30,17 +30,6 @@ type resolvedMovie struct {
 	fileSize  int64
 }
 
-var movieReleaseNoiseTokens = map[string]bool{
-	"1080p": true, "720p": true, "480p": true, "2160p": true, "4k": true,
-	"bluray": true, "brrip": true, "webrip": true, "web": true, "webdl": true, "web-dl": true,
-	"dvdrip": true, "hdrip": true, "remux": true, "repack": true, "proper": true, "remastered": true,
-	"x264": true, "x265": true, "h264": true, "h265": true, "hevc": true, "av1": true,
-	"10bit": true, "8bit": true, "hdr": true, "sdr": true,
-	"aac": true, "aac5": true, "aac51": true, "ddp": true, "ac3": true, "dts": true, "dtshd": true,
-	"atmos": true, "truehd": true,
-	"yts": true, "ytsmx": true, "mx": true,
-}
-
 func (app *Application) resolveMovieFile(ctx context.Context, file helpers.ScanFile) (*resolvedMovie, error) {
 	titleYear, err := helpers.GetTitleAndYearFromFileName(filepath.Base(file.Path))
 	if err != nil {
@@ -262,7 +251,7 @@ func normalizeMovieTitleForSearch(title string) string {
 		if token == "" {
 			continue
 		}
-		if movieReleaseNoiseTokens[token] {
+		if helpers.IsMovieReleaseNoiseToken(token) {
 			continue
 		}
 		if isBracketedReleaseGroupToken(token) {
