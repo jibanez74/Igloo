@@ -362,7 +362,7 @@
         }
       }
     },
-    "/api/notifications/": {
+    "/api/notifications": {
       "get": {
         "tags": [
           "Notifications"

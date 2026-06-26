@@ -23,12 +23,7 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	router := chi.NewRouter()
-	router.Post("/api/notifications", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user.ID)
-		app.CreateNotification(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := notificationTestServer(app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -78,12 +73,7 @@ func TestCreateNotification_HTTPRejectsInvalidTitle(t *testing.T) {
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	router := chi.NewRouter()
-	router.Post("/api/notifications", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user.ID)
-		app.CreateNotification(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := notificationTestServer(app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -105,12 +95,7 @@ func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
 
 	user := createTestUser(t, app, "Requester", "requester@example.com", false)
 
-	router := chi.NewRouter()
-	router.Post("/api/notifications", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user.ID)
-		app.CreateNotification(w, r)
-	})
-	handler := app.SessionManager.LoadAndSave(router)
+	handler := notificationTestServer(app, user.ID)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
@@ -125,18 +110,40 @@ func TestCreateNotification_HTTPRejectsEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestCreateNotification_HTTPRejectsNonAdminWithoutTargetUser(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	user := createTestUser(t, app, "Requester", "requester@example.com", false)
+	handler := notificationTestServer(app, user.ID)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications", strings.NewReader(`{
+		"title": "movie_request",
+		"message": "Requester: requester@example.com",
+		"isAdmin": false
+	}`))
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body = %s", w.Code, w.Body.String())
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if !resp.Error || resp.Message != "non-admin notifications require a target user" {
+		t.Fatalf("response = %+v, want non-admin target-user error", resp)
+	}
+}
+
 // notificationTestServer wires the notification routes behind a session that is
 // always authenticated as userID, so handlers that read chi URL params and the
 // session user work end to end.
 func notificationTestServer(app *Application, userID int64) http.Handler {
 	router := chi.NewRouter()
-	router.Route("/api/notifications", func(r chi.Router) {
-		r.Get("/", app.ListNotifications)
-		r.Get("/unread-count", app.GetUnreadNotificationCount)
-		r.Post("/read-all", app.MarkAllNotificationsRead)
-		r.Post("/{id}/read", app.MarkNotificationRead)
-		r.Delete("/{id}", app.DeleteNotification)
-	})
 
 	withUser := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +152,15 @@ func notificationTestServer(app *Application, userID int64) http.Handler {
 		})
 	}
 
-	return app.SessionManager.LoadAndSave(withUser(router))
+	router.Group(func(r chi.Router) {
+		r.Use(withUser)
+		r.Use(app.IsAuth)
+		r.Route("/api", func(r chi.Router) {
+			app.registerNotificationRoutes(r)
+		})
+	})
+
+	return app.SessionManager.LoadAndSave(router)
 }
 
 type notificationListResponse struct {
@@ -219,6 +234,63 @@ func TestListNotifications_AdminSeesQueueRequesterDoesNot(t *testing.T) {
 	}
 	if len(requesterResp.Data.Notifications) != 0 || requesterResp.Data.UnreadCount != 0 {
 		t.Fatalf("requester saw admin queue: %d notifications, unread %d", len(requesterResp.Data.Notifications), requesterResp.Data.UnreadCount)
+	}
+}
+
+func TestListNotifications_AcceptsCanonicalNoTrailingSlash(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+
+	admin := createTestUser(t, app, "Admin", "admin@example.com", true)
+	requester := createTestUser(t, app, "Requester", "requester@example.com", false)
+	seedAdminQueueNotification(t, app, requester.ID, "Requester: Requester")
+
+	w := httptest.NewRecorder()
+	notificationTestServer(app, admin.ID).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/notifications", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	var resp notificationListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if len(resp.Data.Notifications) != 1 {
+		t.Fatalf("notifications = %d, want 1, body = %s", len(resp.Data.Notifications), w.Body.String())
+	}
+}
+
+func TestListNotifications_ReturnsUnauthorizedForStaleSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	cookie := newAuthSessionCookie(t, app, 999)
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+
+	var resp helpers.JSONResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if !resp.Error || resp.Message != helpers.NOT_AUTHORIZED_MESSAGE {
+		t.Fatalf("response = %+v, want not authorized error", resp)
+	}
+
+	ctx, err := app.SessionManager.Load(context.Background(), cookie.Value)
+	if err != nil {
+		t.Fatalf("load session after stale request: %v", err)
+	}
+	if app.SessionManager.Exists(ctx, helpers.COOKIE_USER_ID) {
+		t.Fatal("stale session still has a user id after notification request")
 	}
 }
 

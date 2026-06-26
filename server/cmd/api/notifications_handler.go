@@ -43,18 +43,13 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 		userID = &id
 	}
 
-	var createdByName string
-	if row.CreatedByName.Valid {
-		createdByName = row.CreatedByName.String
-	}
-
 	return notificationResponse{
 		ID:            row.ID,
 		Title:         row.Title,
 		Message:       row.Message,
 		IsAdmin:       row.IsAdmin,
 		IsRead:        row.IsRead,
-		CreatedByName: createdByName,
+		CreatedByName: row.CreatedByName,
 		UserID:        userID,
 		CreatedAt:     row.CreatedAt,
 	}
@@ -66,6 +61,15 @@ func newNotificationResponse(row database.ListNotificationsForUserRow) notificat
 func (app *Application) notificationViewerIsAdmin(w http.ResponseWriter, r *http.Request, userID int64) (bool, bool) {
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			destroyErr := app.SessionManager.Destroy(r.Context())
+			if destroyErr != nil {
+				app.Logger.Error("failed to destroy stale notification session", "error", destroyErr, "user_id", userID)
+			}
+			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			return false, false
+		}
+
 		app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return false, false
@@ -103,6 +107,11 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 	if req.Message == "" {
 		helpers.ErrorJSON(w, errors.New("message is required"), http.StatusBadRequest)
+		return
+	}
+
+	if !req.IsAdmin {
+		helpers.ErrorJSON(w, errors.New("non-admin notifications require a target user"), http.StatusBadRequest)
 		return
 	}
 

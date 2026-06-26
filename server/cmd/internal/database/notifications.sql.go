@@ -114,7 +114,7 @@ SELECT
   creator.name AS created_by_name,
   CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
 FROM notifications AS n
-LEFT JOIN users AS creator
+INNER JOIN users AS creator
   ON creator.id = n.created_by_user_id
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id
@@ -132,16 +132,16 @@ type ListNotificationsForUserParams struct {
 }
 
 type ListNotificationsForUserRow struct {
-	ID              int64          `json:"id"`
-	CreatedByUserID int64          `json:"created_by_user_id"`
-	UserID          sql.NullInt64  `json:"user_id"`
-	Title           string         `json:"title"`
-	Message         string         `json:"message"`
-	IsAdmin         bool           `json:"is_admin"`
-	CreatedAt       string         `json:"created_at"`
-	UpdatedAt       string         `json:"updated_at"`
-	CreatedByName   sql.NullString `json:"created_by_name"`
-	IsRead          bool           `json:"is_read"`
+	ID              int64         `json:"id"`
+	CreatedByUserID int64         `json:"created_by_user_id"`
+	UserID          sql.NullInt64 `json:"user_id"`
+	Title           string        `json:"title"`
+	Message         string        `json:"message"`
+	IsAdmin         bool          `json:"is_admin"`
+	CreatedAt       string        `json:"created_at"`
+	UpdatedAt       string        `json:"updated_at"`
+	CreatedByName   string        `json:"created_by_name"`
+	IsRead          bool          `json:"is_read"`
 }
 
 // Notifications visible to the viewer: those targeted at them, plus the admin

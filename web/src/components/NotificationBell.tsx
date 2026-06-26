@@ -62,24 +62,26 @@ export default function NotificationBell() {
   const queryClient = useQueryClient();
 
   const countQuery = useQuery(unreadNotificationCountQueryOpts());
-  const countUnreadCount =
-    countQuery.data?.error === false ? countQuery.data.data.unread_count : 0;
+  const countUnreadCount = countQuery.data?.data.unread_count ?? 0;
 
   // Only fetch the full list while the panel is open.
   const listQuery = useQuery({
     ...notificationsQueryOpts(),
     enabled: open,
   });
-  const notifications =
-    listQuery.data?.error === false ? listQuery.data.data.notifications : [];
+  const notifications = listQuery.data?.data.notifications ?? [];
   const listUnreadCount =
-    open && listQuery.data?.error === false
-      ? listQuery.data.data.unread_count
-      : undefined;
+    open && listQuery.data ? listQuery.data.data.unread_count : undefined;
   const unreadCount = listUnreadCount ?? countUnreadCount;
+  const showRefreshError = countQuery.isError || (open && listQuery.isError);
+  const showInitialLoading = listQuery.isLoading && !listQuery.data;
+  const showEmptyState =
+    !listQuery.isError &&
+    !!listQuery.data &&
+    notifications.length === 0;
 
   useEffect(() => {
-    if (listQuery.data?.error !== false) {
+    if (!listQuery.data) {
       return;
     }
 
@@ -183,15 +185,23 @@ export default function NotificationBell() {
         </div>
 
         <div className="max-h-96 overflow-y-auto">
-          {listQuery.isLoading ? (
+          {showRefreshError && (
+            <p
+              role="alert"
+              className="border-b border-slate-800 px-4 py-3 text-sm text-amber-300"
+            >
+              Unable to refresh notifications.
+            </p>
+          )}
+          {showInitialLoading ? (
             <div className="flex items-center justify-center py-10">
               <Spinner aria-label="Loading notifications" />
             </div>
-          ) : notifications.length === 0 ? (
+          ) : showEmptyState ? (
             <p className="px-4 py-10 text-center text-sm text-slate-400">
               You&apos;re all caught up.
             </p>
-          ) : (
+          ) : notifications.length > 0 ? (
             <ul className="divide-y divide-slate-800">
               {notifications.map((notification) => (
                 <li
@@ -242,7 +252,7 @@ export default function NotificationBell() {
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

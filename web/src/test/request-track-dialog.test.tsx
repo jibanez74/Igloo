@@ -104,7 +104,7 @@ function notificationResponse(): ApiResponseType<CreateNotificationResponseType>
       created_by_user_id: 9,
       user_id: null,
       title: "track_request",
-      message: "Requester: Music Fan <music-fan@example.com>",
+      message: "Requester: Music Fan",
       is_admin: true,
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
@@ -222,7 +222,7 @@ describe("RequestTrackDialog", () => {
         title: "track_request",
         isAdmin: true,
         message: [
-          "Requester: Music Fan <music-fan@example.com>",
+          "Requester: Music Fan",
           "Track: Hazel City",
           "Artists: Nina Vega",
           "Album: City Lights",

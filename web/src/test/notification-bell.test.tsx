@@ -59,6 +59,15 @@ function success<T extends Record<string, unknown>>(data: T): ApiResponseType<T>
   };
 }
 
+function failure<T extends Record<string, unknown>>(
+  message = "Unable to complete request",
+): ApiResponseType<T> {
+  return {
+    error: true,
+    message,
+  };
+}
+
 function notification(
   overrides: Partial<NotificationListItemType> = {},
 ): NotificationListItemType {
@@ -222,5 +231,69 @@ describe("NotificationBell", () => {
     await user.click(trigger);
 
     expect(await screen.findByText("You're all caught up.")).toBeVisible();
+  });
+
+  it("shows an alert for notification error envelopes without showing the empty state", async () => {
+    apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(0));
+    apiMocks.getNotifications.mockResolvedValue(
+      failure<NotificationsListResponseType>(),
+    );
+
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Notifications" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to refresh notifications.",
+    );
+    expect(screen.queryByText("You're all caught up.")).not.toBeInTheDocument();
+  });
+
+  it("does not show the empty state when notification refresh rejects", async () => {
+    apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(0));
+    apiMocks.getNotifications.mockRejectedValue(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Notifications" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to refresh notifications.",
+    );
+    expect(screen.queryByText("You're all caught up.")).not.toBeInTheDocument();
+  });
+
+  it("preserves the previous successful list after a later refresh failure", async () => {
+    apiMocks.getNotifications
+      .mockResolvedValueOnce(listResponse([notification()]))
+      .mockResolvedValueOnce(failure<NotificationsListResponseType>());
+
+    const user = userEvent.setup();
+    renderBell();
+
+    const trigger = await screen.findByRole("button", {
+      name: "Notifications, 1 unread",
+    });
+    await user.click(trigger);
+
+    expect(await screen.findByText("Requester wants Dune")).toBeVisible();
+
+    await user.click(trigger);
+    await user.click(trigger);
+
+    await waitFor(() => {
+      expect(apiMocks.getNotifications).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to refresh notifications.",
+    );
+    expect(screen.getByText("Requester wants Dune")).toBeVisible();
+    expect(screen.queryByText("You're all caught up.")).not.toBeInTheDocument();
   });
 });

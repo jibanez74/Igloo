@@ -25,7 +25,7 @@ SELECT
   creator.name AS created_by_name,
   CAST((nr.notification_id IS NOT NULL) AS BOOLEAN) AS is_read
 FROM notifications AS n
-LEFT JOIN users AS creator
+INNER JOIN users AS creator
   ON creator.id = n.created_by_user_id
 LEFT JOIN notification_reads AS nr
   ON nr.notification_id = n.id

@@ -38,8 +38,11 @@ func TestOpenAPIDocumentsRegisteredAPIRoutes(t *testing.T) {
 	}
 
 	documented := make(map[string]map[string]bool, len(doc.Paths))
-	for path, methods := range doc.Paths {
-		documented[path] = make(map[string]bool, len(methods))
+	for rawPath, methods := range doc.Paths {
+		path := normalizeRouteForOpenAPI(rawPath)
+		if documented[path] == nil {
+			documented[path] = make(map[string]bool, len(methods))
+		}
 		for method := range methods {
 			if isOpenAPIHTTPMethod(method) {
 				documented[path][strings.ToUpper(method)] = true
@@ -100,6 +103,10 @@ func TestOpenAPIDocumentsRegisteredAPIRoutes(t *testing.T) {
 func normalizeRouteForOpenAPI(route string) string {
 	if route == "/api/static/*" {
 		return "/api/static/{path}"
+	}
+
+	if strings.HasPrefix(route, "/api/") && route != "/api/" {
+		return strings.TrimRight(route, "/")
 	}
 
 	return route

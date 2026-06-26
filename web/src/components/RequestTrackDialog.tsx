@@ -47,7 +47,7 @@ export default function RequestTrackDialog({
       `https://open.spotify.com/track/${selectedResult.spotify_id}`;
     const artists = selectedResult.artist_names.join(", ");
     const lines = [
-      `Requester: ${requester.name} <${requester.email}>`,
+      `Requester: ${requester.name}`,
       `Track: ${selectedResult.title}`,
       artists ? `Artists: ${artists}` : null,
       selectedResult.album_name ? `Album: ${selectedResult.album_name}` : null,
