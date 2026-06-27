@@ -68,6 +68,7 @@ import TrackItem from "@/components/TrackItem";
 import PlaylistCard from "@/components/PlaylistCard";
 import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import RequestAlbumDialog from "@/components/RequestAlbumDialog";
+import RequestTrackDialog from "@/components/RequestTrackDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 import {
   musicSearchSchema,
@@ -276,6 +277,7 @@ function LibraryStats() {
 function MoreMenu() {
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const [requestAlbumOpen, setRequestAlbumOpen] = useState(false);
+  const [requestTrackOpen, setRequestTrackOpen] = useState(false);
   const { data: spotifyStatusData, isLoading: spotifyStatusLoading } = useQuery(
     spotifyStatusQueryOpts(),
   );
@@ -283,8 +285,8 @@ function MoreMenu() {
     spotifyStatusData?.error === false
       ? spotifyStatusData.data.available
       : false;
-  const requestAlbumDisabled = spotifyStatusLoading || !spotifyAvailable;
-  const requestAlbumDescription = spotifyStatusLoading
+  const spotifyRequestDisabled = spotifyStatusLoading || !spotifyAvailable;
+  const spotifyRequestDescription = spotifyStatusLoading
     ? "Spotify search status is still loading."
     : "Spotify search is unavailable on this server.";
 
@@ -304,15 +306,15 @@ function MoreMenu() {
         >
           <DropdownMenuItem
             className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
-            disabled={requestAlbumDisabled}
+            disabled={spotifyRequestDisabled}
             aria-label={
-              requestAlbumDisabled
-                ? `Request Album unavailable. ${requestAlbumDescription}`
+              spotifyRequestDisabled
+                ? `Request Album unavailable. ${spotifyRequestDescription}`
                 : "Request Album"
             }
-            title={requestAlbumDisabled ? requestAlbumDescription : undefined}
+            title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
             onSelect={event => {
-              if (requestAlbumDisabled) {
+              if (spotifyRequestDisabled) {
                 event.preventDefault();
                 return;
               }
@@ -321,8 +323,31 @@ function MoreMenu() {
           >
             <Plus className="mr-2 size-4" aria-hidden="true" />
             Request Album
-            {requestAlbumDisabled && (
-              <span className="sr-only"> {requestAlbumDescription}</span>
+            {spotifyRequestDisabled && (
+              <span className="sr-only"> {spotifyRequestDescription}</span>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            disabled={spotifyRequestDisabled}
+            aria-label={
+              spotifyRequestDisabled
+                ? `Request Track unavailable. ${spotifyRequestDescription}`
+                : "Request Track"
+            }
+            title={spotifyRequestDisabled ? spotifyRequestDescription : undefined}
+            onSelect={event => {
+              if (spotifyRequestDisabled) {
+                event.preventDefault();
+                return;
+              }
+              setRequestTrackOpen(true);
+            }}
+          >
+            <Plus className="mr-2 size-4" aria-hidden="true" />
+            Request Track
+            {spotifyRequestDisabled && (
+              <span className="sr-only"> {spotifyRequestDescription}</span>
             )}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -332,6 +357,14 @@ function MoreMenu() {
         <RequestAlbumDialog
           open={requestAlbumOpen}
           onOpenChange={setRequestAlbumOpen}
+          restoreFocusRef={moreOptionsButtonRef}
+        />
+      )}
+
+      {requestTrackOpen && (
+        <RequestTrackDialog
+          open={requestTrackOpen}
+          onOpenChange={setRequestTrackOpen}
           restoreFocusRef={moreOptionsButtonRef}
         />
       )}

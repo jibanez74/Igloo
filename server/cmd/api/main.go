@@ -633,7 +633,12 @@ func (app *Application) registerUserRoutes(r chi.Router) {
 
 func (app *Application) registerNotificationRoutes(r chi.Router) {
 	r.Route("/notifications", func(r chi.Router) {
+		r.Get("/", app.ListNotifications)
 		r.Post("/", app.CreateNotification)
+		r.Get("/unread-count", app.GetUnreadNotificationCount)
+		r.Post("/read-all", app.MarkAllNotificationsRead)
+		r.Post("/{id}/read", app.MarkNotificationRead)
+		r.Delete("/{id}", app.DeleteNotification)
 	})
 }
 
@@ -651,6 +656,7 @@ func (app *Application) registerSpotifyRoutes(r chi.Router) {
 	r.Route("/spotify", func(r chi.Router) {
 		r.Get("/status", app.GetSpotifyStatus)
 		r.Post("/albums/search", app.SearchSpotifyAlbums)
+		r.Post("/tracks/search", app.SearchSpotifyTracks)
 	})
 }
 

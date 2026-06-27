@@ -1,5 +1,7 @@
 // keys for queries
 export const AUTH_USER_KEY = "auth-user";
+export const NOTIFICATIONS_KEY = "notifications";
+export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
 export const WATCH_ROOMS_KEY = "watch-rooms";
 export const WATCH_ROOM_KEY = "watch-room";
 export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";

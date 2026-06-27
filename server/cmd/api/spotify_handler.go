@@ -78,6 +78,84 @@ func (app *Application) SearchSpotifyAlbums(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+type spotifyTrackSearchPayload struct {
+	Title string `json:"title"`
+}
+
+type spotifyTrackSearchResult struct {
+	SpotifyID   string   `json:"spotify_id"`
+	Title       string   `json:"title"`
+	ArtistNames []string `json:"artist_names"`
+	AlbumName   string   `json:"album_name"`
+	ReleaseDate string   `json:"release_date"`
+	DurationMs  int      `json:"duration_ms"`
+	CoverURL    string   `json:"cover_url"`
+	SpotifyURL  string   `json:"spotify_url"`
+}
+
+// SearchSpotifyTracks backs the "Request Track" picker. Unlike albums, tracks
+// have no spotify_id in the library, so results omit an "already in library"
+// flag.
+func (app *Application) SearchSpotifyTracks(w http.ResponseWriter, r *http.Request) {
+	if !app.ensureSpotifyAvailable(w) {
+		return
+	}
+
+	var payload spotifyTrackSearchPayload
+
+	err := helpers.ReadJSON(w, r, &payload, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	payload.Title = strings.TrimSpace(payload.Title)
+	if payload.Title == "" {
+		helpers.ErrorJSON(w, errors.New("title is required"), http.StatusBadRequest)
+		return
+	}
+
+	tracks, err := app.Spotify.SearchTracks(r.Context(), payload.Title)
+	if err != nil {
+		app.Logger.Error("spotify track search failed", "error", err, "title", payload.Title)
+		helpers.ErrorJSON(w, errors.New("Spotify track search failed"), http.StatusBadGateway)
+		return
+	}
+
+	results := mapSpotifyTrackSearchResults(tracks)
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"results": results,
+		},
+	})
+}
+
+func mapSpotifyTrackSearchResults(tracks []spotifylib.FullTrack) []spotifyTrackSearchResult {
+	mapped := make([]spotifyTrackSearchResult, 0, len(tracks))
+
+	for _, track := range tracks {
+		spotifyID := track.ID.String()
+		if spotifyID == "" {
+			continue
+		}
+
+		mapped = append(mapped, spotifyTrackSearchResult{
+			SpotifyID:   spotifyID,
+			Title:       track.Name,
+			ArtistNames: spotifyAlbumArtistNames(track.Artists),
+			AlbumName:   track.Album.Name,
+			ReleaseDate: track.Album.ReleaseDate,
+			DurationMs:  int(track.Duration),
+			CoverURL:    firstSpotifyAlbumImageURL(track.Album.Images),
+			SpotifyURL:  track.ExternalURLs["spotify"],
+		})
+	}
+
+	return mapped
+}
+
 func (app *Application) ensureSpotifyAvailable(w http.ResponseWriter) bool {
 	if app.Spotify != nil {
 		return true

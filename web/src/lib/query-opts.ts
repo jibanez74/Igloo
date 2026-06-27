@@ -28,6 +28,8 @@ import {
   getMusicianDetails,
   getMusiciansPaginated,
   getMusicStats,
+  getNotifications,
+  getUnreadNotificationCount,
   getSpotifyStatus,
   getPlaylistDetails,
   getPlaylists,
@@ -45,6 +47,8 @@ import {
 } from "@/lib/api";
 import {
   ADMIN_USERS_KEY,
+  NOTIFICATIONS_KEY,
+  NOTIFICATIONS_UNREAD_COUNT_KEY,
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   AUTH_USER_KEY,
@@ -110,6 +114,24 @@ const STALE_30S = 30_000;
 const GC_DEFAULT = 10 * MIN;
 const GC_LONG = 30 * MIN;
 
+async function getNotificationsForQuery() {
+  const response = await getNotifications();
+  if (response.error) {
+    throw new Error(response.message);
+  }
+
+  return response;
+}
+
+async function getUnreadNotificationCountForQuery() {
+  const response = await getUnreadNotificationCount();
+  if (response.error) {
+    throw new Error(response.message);
+  }
+
+  return response;
+}
+
 export function adminUsersQueryOpts() {
   return queryOptions({
     queryKey: [ADMIN_USERS_KEY],
@@ -125,6 +147,26 @@ export function authUserQueryOpts() {
     queryFn: getAuthUser,
     staleTime: STALE_1M,
     gcTime: GC_DEFAULT,
+  });
+}
+
+export function notificationsQueryOpts() {
+  return queryOptions({
+    queryKey: [NOTIFICATIONS_KEY],
+    queryFn: getNotificationsForQuery,
+    staleTime: 0,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function unreadNotificationCountQueryOpts() {
+  return queryOptions({
+    queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
+    queryFn: getUnreadNotificationCountForQuery,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+    // Poll so the bell badge reflects new requests without a manual refresh.
+    refetchInterval: 30_000,
   });
 }
 

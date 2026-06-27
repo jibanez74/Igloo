@@ -206,6 +206,10 @@ func (s *musicScannerSpotifyStub) SearchAlbums(_ context.Context, _ string) ([]s
 	return nil, nil
 }
 
+func (s *musicScannerSpotifyStub) SearchTracks(_ context.Context, _ string) ([]spotifylib.FullTrack, error) {
+	return nil, nil
+}
+
 func (s *musicScannerSpotifyStub) ClearAllCaches() {
 	s.clearCalls++
 }

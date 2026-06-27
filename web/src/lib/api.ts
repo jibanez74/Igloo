@@ -8,6 +8,8 @@ import type {
   CreateMoviePlaylistRequest,
   CreateNotificationRequest,
   CreateNotificationResponseType,
+  NotificationsListResponseType,
+  UnreadNotificationCountResponseType,
   CreatePlaylistRequest,
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
@@ -59,6 +61,8 @@ import type {
   SearchTracksResponseType,
   SpotifyAlbumSearchRequest,
   SpotifyAlbumSearchResultType,
+  SpotifyTrackSearchRequest,
+  SpotifyTrackSearchResultType,
   SpotifyStatusType,
 } from "@/types";
 import { MOVIES_PER_PAGE, SEARCH_PER_PAGE } from "@/lib/constants";
@@ -197,6 +201,23 @@ export const createNotification = (body: CreateNotificationRequest) =>
     body,
   });
 
+export const getNotifications = () =>
+  apiRequest<NotificationsListResponseType>("/api/notifications");
+
+export const getUnreadNotificationCount = () =>
+  apiRequest<UnreadNotificationCountResponseType>(
+    "/api/notifications/unread-count",
+  );
+
+export const markNotificationRead = (id: number) =>
+  apiRequest(`/api/notifications/${id}/read`, { method: "POST" });
+
+export const markAllNotificationsRead = () =>
+  apiRequest("/api/notifications/read-all", { method: "POST" });
+
+export const deleteNotification = (id: number) =>
+  apiRequest(`/api/notifications/${id}`, { method: "DELETE" });
+
 // Home Page API
 export const getLatestAlbums = () =>
   apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
@@ -234,6 +255,15 @@ export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
 export const searchSpotifyAlbums = (body: SpotifyAlbumSearchRequest) =>
   apiRequest<{ results: SpotifyAlbumSearchResultType[] }>(
     "/api/spotify/albums/search",
+    {
+      method: "POST",
+      body,
+    },
+  );
+
+export const searchSpotifyTracks = (body: SpotifyTrackSearchRequest) =>
+  apiRequest<{ results: SpotifyTrackSearchResultType[] }>(
+    "/api/spotify/tracks/search",
     {
       method: "POST",
       body,

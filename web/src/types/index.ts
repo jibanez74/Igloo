@@ -24,6 +24,8 @@ export type {
   SpotifyStatusType,
   SpotifyAlbumSearchRequest,
   SpotifyAlbumSearchResultType,
+  SpotifyTrackSearchRequest,
+  SpotifyTrackSearchResultType,
   SimpleMusicianType,
   MusiciansListResponseType,
   VirtualItemLetter,
@@ -133,6 +135,9 @@ export type {
   NotificationType,
   CreateNotificationRequest,
   CreateNotificationResponseType,
+  NotificationListItemType,
+  NotificationsListResponseType,
+  UnreadNotificationCountResponseType,
 } from "./notifications";
 
 // Settings types

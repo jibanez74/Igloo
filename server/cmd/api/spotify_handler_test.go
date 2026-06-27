@@ -19,6 +19,7 @@ import (
 
 type spotifyHandlerStub struct {
 	albums       []spotifylib.SimpleAlbum
+	tracks       []spotifylib.FullTrack
 	searchErr    error
 	searchTitles []string
 }
@@ -34,6 +35,15 @@ func (s *spotifyHandlerStub) SearchAlbums(_ context.Context, title string) ([]sp
 	}
 
 	return s.albums, nil
+}
+
+func (s *spotifyHandlerStub) SearchTracks(_ context.Context, title string) ([]spotifylib.FullTrack, error) {
+	s.searchTitles = append(s.searchTitles, title)
+	if s.searchErr != nil {
+		return nil, s.searchErr
+	}
+
+	return s.tracks, nil
 }
 
 func (s *spotifyHandlerStub) SearchArtistByName(_ context.Context, _ string) (*spotifylib.FullArtist, error) {
