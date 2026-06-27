@@ -83,7 +83,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
                       <span className="block text-slate-400">
                         {c.job}
                         {c.department ? (
-                          <span className="text-slate-500">
+                          <span className="text-slate-400">
                             {" "}
                             · {c.department}
                           </span>

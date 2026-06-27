@@ -15,6 +15,7 @@ import {
   Volume2,
   Maximize,
   Minimize,
+  RotateCcw,
 } from "lucide-react";
 import ProgressBar from "@/components/ProgressBar";
 import { Spinner } from "@/components/ui/spinner";
@@ -113,6 +114,7 @@ function TrailerPage() {
     seekBackward,
     setVolume,
     toggleMute,
+    retry,
   } = useYouTubePlayer({
     videoId: trailerKey,
     autoplay: true,
@@ -281,18 +283,31 @@ function TrailerPage() {
             <DialogDescription className="mb-6 text-slate-400">
               {error}
             </DialogDescription>
-            <button
-              type="button"
-              ref={closeButtonRef}
-              onClick={handleClose}
-              className={cn(
-                MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
-              )}
-            >
-              <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
-              Go Back
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                ref={closeButtonRef}
+                onClick={retry}
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex items-center rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
+              >
+                <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
+                className={cn(
+                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+                  "inline-flex items-center rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                )}
+              >
+                <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+                Go Back
+              </button>
+            </div>
           </div>
         </DialogFullscreenContent>
       </Dialog>

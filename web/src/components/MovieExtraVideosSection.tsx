@@ -20,7 +20,7 @@ export default function MovieExtraVideosSection({
       <h2
         id="extra-videos-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-white outline-none sm:text-xl md:text-2xl"
+        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
       >
         Extra Videos
       </h2>

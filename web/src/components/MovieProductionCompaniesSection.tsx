@@ -33,7 +33,7 @@ export default function MovieProductionCompaniesSection({
                   className="h-8 w-auto max-w-24 object-contain"
                 />
               ) : (
-                <span className="text-sm text-slate-500">No logo</span>
+                <span className="text-sm text-slate-400">No logo</span>
               )}
               <span className="text-sm font-medium text-white">{pc.name}</span>
             </li>

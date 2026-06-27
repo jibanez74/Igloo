@@ -4,14 +4,14 @@ import type { MovieDetailsMetadataChipsProps } from "@/types";
 
 function criticRatingColor(score: number) {
   if (score >= 7) return "bg-amber-500 text-slate-900";
-  if (score >= 5) return "bg-amber-600/70 text-white";
-  return "bg-slate-500 text-white";
+  if (score >= 5) return "bg-amber-600 text-slate-900";
+  return "bg-slate-600 text-white";
 }
 
 function audienceRatingColor(score: number) {
-  if (score >= 7) return "bg-violet-500 text-white";
-  if (score >= 5) return "bg-violet-600/70 text-white";
-  return "bg-slate-500 text-white";
+  if (score >= 7) return "bg-violet-600 text-white";
+  if (score >= 5) return "bg-violet-700 text-white";
+  return "bg-slate-600 text-white";
 }
 
 export default function MovieDetailsMetadataChips({
