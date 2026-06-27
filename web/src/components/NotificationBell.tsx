@@ -203,54 +203,90 @@ export default function NotificationBell() {
             </p>
           ) : notifications.length > 0 ? (
             <ul className="divide-y divide-slate-800">
-              {notifications.map((notification) => (
-                <li
-                  key={notification.id}
-                  className={cn(
-                    "flex items-start gap-2 px-4 py-3",
-                    notification.is_read ? "bg-transparent" : "bg-slate-800/40",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleItemClick(notification)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      {!notification.is_read && (
-                        <span
-                          aria-hidden="true"
-                          className="size-2 shrink-0 rounded-full bg-amber-400"
-                        />
-                      )}
-                      <span className="truncate text-sm font-medium text-white">
-                        {notificationTitleLabel(notification.title)}
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs text-slate-500">
-                        {formatRelativeTime(notification.created_at)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs whitespace-pre-line text-slate-300">
-                      {notification.message}
-                    </p>
-                    {notification.created_by_name && (
-                      <p className="mt-1 text-xs text-slate-500">
-                        From {notification.created_by_name}
-                      </p>
-                    )}
-                  </button>
+              {notifications.map((notification) => {
+                const titleLabel = notificationTitleLabel(notification.title);
+                const readStateLabel = notification.is_read ? "Read" : "Unread";
+                const relativeTimeLabel = formatRelativeTime(
+                  notification.created_at,
+                );
+                const messageLabel = notification.message
+                  .replace(/\s+/g, " ")
+                  .trim();
+                const itemLabelParts = [
+                  `${readStateLabel} notification`,
+                  titleLabel,
+                ];
+                const dismissLabelParts = [
+                  `Dismiss ${readStateLabel.toLowerCase()} notification`,
+                  titleLabel,
+                ];
 
-                  <button
-                    type="button"
-                    onClick={() => deleteMutation.mutate(notification.id)}
-                    disabled={deleteMutation.isPending}
-                    aria-label="Dismiss notification"
-                    className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                if (notification.created_by_name) {
+                  itemLabelParts.push(`from ${notification.created_by_name}`);
+                  dismissLabelParts.push(`from ${notification.created_by_name}`);
+                }
+
+                if (messageLabel) {
+                  itemLabelParts.push(messageLabel);
+                  dismissLabelParts.push(messageLabel);
+                }
+
+                if (relativeTimeLabel) {
+                  itemLabelParts.push(relativeTimeLabel);
+                }
+
+                return (
+                  <li
+                    key={notification.id}
+                    className={cn(
+                      "flex items-start gap-2 px-4 py-3",
+                      notification.is_read
+                        ? "bg-transparent"
+                        : "bg-slate-800/40",
+                    )}
                   >
-                    <X aria-hidden="true" className="size-4" />
-                  </button>
-                </li>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => handleItemClick(notification)}
+                      aria-label={itemLabelParts.join(", ")}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        {!notification.is_read && (
+                          <span
+                            aria-hidden="true"
+                            className="size-2 shrink-0 rounded-full bg-amber-400"
+                          />
+                        )}
+                        <span className="truncate text-sm font-medium text-white">
+                          {titleLabel}
+                        </span>
+                        <span className="ml-auto shrink-0 text-xs text-slate-500">
+                          {relativeTimeLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs whitespace-pre-line text-slate-300">
+                        {notification.message}
+                      </p>
+                      {notification.created_by_name && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          From {notification.created_by_name}
+                        </p>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteMutation.mutate(notification.id)}
+                      disabled={deleteMutation.isPending}
+                      aria-label={dismissLabelParts.join(", ")}
+                      className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                    >
+                      <X aria-hidden="true" className="size-4" />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
         </div>

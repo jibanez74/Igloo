@@ -161,6 +161,49 @@ describe("NotificationBell", () => {
     });
   });
 
+  it("exposes read state and notification context to assistive tech", async () => {
+    apiMocks.getNotifications.mockResolvedValue(
+      listResponse([
+        notification(),
+        notification({
+          id: 2,
+          title: "album_request",
+          message: "Requester wants Random Access Memories",
+          is_read: true,
+          created_by_name: "Album Fan",
+        }),
+      ]),
+    );
+
+    const user = userEvent.setup();
+    renderBell();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Notifications, 1 unread" }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: /^Unread notification, Movie request, from Music Fan, Requester wants Dune/,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: /^Read notification, Album request, from Album Fan, Requester wants Random Access Memories/,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Dismiss unread notification, Movie request, from Music Fan, Requester wants Dune",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Dismiss read notification, Album request, from Album Fan, Requester wants Random Access Memories",
+      }),
+    ).toBeVisible();
+  });
+
   it("syncs stale unread count state from the fetched notification list", async () => {
     apiMocks.getUnreadNotificationCount.mockResolvedValue(countResponse(0));
     apiMocks.getNotifications.mockResolvedValue(listResponse([notification()]));
@@ -212,7 +255,9 @@ describe("NotificationBell", () => {
     );
 
     await user.click(
-      await screen.findByRole("button", { name: "Dismiss notification" }),
+      await screen.findByRole("button", {
+        name: "Dismiss unread notification, Movie request, from Music Fan, Requester wants Dune",
+      }),
     );
 
     await waitFor(() => {
