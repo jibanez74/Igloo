@@ -1758,6 +1758,26 @@ function handleSearchRoutes(
   return false;
 }
 
+function handleNotificationRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
+    sendSuccess(response, { unread_count: 0 });
+    return true;
+  }
+
+  if (url.pathname === "/api/notifications" && method === "GET") {
+    sendSuccess(response, { notifications: [], unread_count: 0 });
+    return true;
+  }
+
+  return false;
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse) {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
@@ -1807,6 +1827,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (handleTmdbRoutes(request, response, url)) return;
       if (handleWatchRoomRoutes(request, response, url, user)) return;
       if (handleSearchRoutes(request, response, url)) return;
+      if (handleNotificationRoutes(request, response, url)) return;
     }
 
     if (url.pathname.startsWith("/api/")) {

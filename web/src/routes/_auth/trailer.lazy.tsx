@@ -173,9 +173,9 @@ function TrailerPage() {
     }
 
     if (
-      target.closest('[role="slider"]') ||
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
+      target.closest(
+        'button, a[href], input, textarea, select, [role="slider"]',
+      ) ||
       target.isContentEditable
     ) {
       return;
