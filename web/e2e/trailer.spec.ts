@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
+import { mockYouTubePlayer } from "./mock-youtube-player";
 
 async function login(page: Page, env: E2EEnv) {
   const response = await page.context().request.post(
@@ -15,126 +16,6 @@ async function login(page: Page, env: E2EEnv) {
     },
   );
   expect(response.status()).toBe(200);
-}
-
-type MockYouTubePlayerOptions = {
-  failFirstLoad?: boolean;
-};
-
-async function mockYouTubePlayer(
-  page: Page,
-  { failFirstLoad = false }: MockYouTubePlayerOptions = {},
-) {
-  await page.addInitScript(({ failFirstLoad }) => {
-    type FakePlayerEvent = { target: FakePlayer };
-    type FakePlayerStateEvent = { data: number; target: FakePlayer };
-    type FakePlayerErrorEvent = { data: number; target: FakePlayer };
-    type FakePlayerEvents = {
-      onReady?: (event: FakePlayerEvent) => void;
-      onStateChange?: (event: FakePlayerStateEvent) => void;
-      onError?: (event: FakePlayerErrorEvent) => void;
-    };
-    let playerCreations = 0;
-
-    class FakePlayer {
-      currentTime = 0;
-      duration = 148;
-      muted = false;
-      volume = 80;
-      state = window.YT.PlayerState.CUED;
-      events: FakePlayerEvents;
-
-      constructor(_id: string, options: YT.PlayerOptions) {
-        this.events = options.events ?? {};
-        playerCreations += 1;
-
-        window.setTimeout(() => {
-          if (failFirstLoad && playerCreations === 1) {
-            this.events.onError?.({
-              data: window.YT.PlayerError.HTML5_ERROR,
-              target: this,
-            });
-            return;
-          }
-
-          this.events.onReady?.({ target: this });
-        }, 0);
-      }
-
-      getCurrentTime() {
-        return this.currentTime;
-      }
-
-      getDuration() {
-        return this.duration;
-      }
-
-      getVolume() {
-        return this.volume;
-      }
-
-      isMuted() {
-        return this.muted;
-      }
-
-      getPlayerState() {
-        return this.state;
-      }
-
-      playVideo() {
-        this.state = window.YT.PlayerState.PLAYING;
-        this.events.onStateChange?.({
-          data: this.state,
-          target: this,
-        });
-      }
-
-      pauseVideo() {
-        this.state = window.YT.PlayerState.PAUSED;
-        this.events.onStateChange?.({
-          data: this.state,
-          target: this,
-        });
-      }
-
-      seekTo(seconds: number) {
-        this.currentTime = Math.max(0, Math.min(this.duration, seconds));
-      }
-
-      setVolume(volume: number) {
-        this.volume = Math.max(0, Math.min(100, volume));
-      }
-
-      mute() {
-        this.muted = true;
-      }
-
-      unMute() {
-        this.muted = false;
-      }
-
-      destroy() {}
-    }
-
-    window.YT = {
-      Player: FakePlayer as unknown as typeof YT.Player,
-      PlayerState: {
-        UNSTARTED: -1,
-        ENDED: 0,
-        PLAYING: 1,
-        PAUSED: 2,
-        BUFFERING: 3,
-        CUED: 5,
-      },
-      PlayerError: {
-        INVALID_PARAM: 2,
-        HTML5_ERROR: 5,
-        NOT_FOUND: 100,
-        NOT_ALLOWED: 101,
-        NOT_ALLOWED_DISGUISE: 150,
-      },
-    };
-  }, { failFirstLoad });
 }
 
 async function expectTrailerChrome(page: Page) {

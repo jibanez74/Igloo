@@ -215,6 +215,7 @@ From `web/`:
 | `bun run test:e2e:user-settings` | Run Playwright admin user settings checks against an existing server |
 | `bun run test:e2e:movies` | Run Playwright movie page checks against an existing server |
 | `bun run test:e2e:movies:index` | Run the mocked Playwright movie index checks against a local Vite frontend |
+| `bun run test:e2e:movie-extra-videos` | Run the mocked Playwright movie extra videos checks (section + YouTube player) against a local Vite frontend |
 | `bun run test:e2e:hls` | Run opt-in Playwright HLS transcoding checks against an existing server |
 | `bun run test:e2e:watch-room` | Run opt-in Playwright watch-room sync checks against an existing server |
 | `bun run preview` | Preview the production build |

@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
+import { mockYouTubePlayer } from "./mock-youtube-player";
 
 type NullableString = {
   String: string;
@@ -60,11 +61,10 @@ function assertMockSuiteClean(
   browserIssues.assertClean();
 }
 
-const moviesAllPath =
-  "/movies?tab=all&allPage=1&sort=asc&genresPage=1&playlistsPage=1";
 const movieId = 711;
-const chapterStartSeconds = 372;
+const moviePath = `/movies/${movieId}`;
 const extraVideoKey = "signal-fire-trailer";
+const extraVideoTitle = "Official Trailer";
 
 const libraryMovie = {
   id: movieId,
@@ -126,15 +126,6 @@ const movieDetailsPayload = {
       artist_name: "Jordan Lee",
       artist_profile: nullableString("/jordan-lee.jpg"),
     },
-    {
-      id: 11,
-      movie_id: movieId,
-      artist_id: 2002,
-      job: "Writer",
-      department: "Writing",
-      artist_name: "Casey North",
-      artist_profile: nullableString("/casey-north.jpg"),
-    },
   ],
   genres: [
     {
@@ -154,7 +145,7 @@ const movieDetailsPayload = {
   extra_videos: [
     {
       id: 30,
-      title: "Official Trailer",
+      title: extraVideoTitle,
       external_id: nullableString("yt-signal-fire-trailer"),
       key: extraVideoKey,
       type: "trailer",
@@ -201,15 +192,7 @@ const technicalDetailsPayload = {
     },
   ],
   subtitles: [],
-  chapters: [
-    {
-      id: 50,
-      title: "Opening Credits",
-      start_time: chapterStartSeconds,
-      thumb: nullableString("/opening-credits.jpg"),
-      movie_id: nullableInt64(movieId),
-    },
-  ],
+  chapters: [],
 };
 
 async function mockMovieDetailsApi(page: Page) {
@@ -223,7 +206,7 @@ async function mockMovieDetailsApi(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
-        body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#f59e0b"/><rect x="14" y="14" width="132" height="212" rx="12" fill="#0f172a"/><circle cx="80" cy="78" r="26" fill="#f8fafc"/><rect x="34" y="146" width="92" height="14" rx="7" fill="#f8fafc"/><rect x="42" y="170" width="76" height="10" rx="5" fill="#fbbf24"/></svg>`,
+        body: `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240"><rect width="160" height="240" fill="#f59e0b"/><rect x="14" y="14" width="132" height="212" rx="12" fill="#0f172a"/></svg>`,
       });
       return;
     }
@@ -329,113 +312,19 @@ async function mockMovieDetailsApi(page: Page) {
   return unexpectedApiRequests;
 }
 
-test("movie details page renders the mocked success path from the movies index", async ({
+test("plays a movie extra video in the YouTube player and returns to the details page", async ({
   page,
 }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockMovieDetailsApi(page);
+  await mockYouTubePlayer(page);
 
   await page.setViewportSize({ width: 1440, height: 1200 });
-  await page.goto(moviesAllPath);
-
-  await expect(page).toHaveTitle("Movies - Igloo");
-  await expect(
-    page.getByRole("heading", { name: "Movie Library", level: 1 }),
-  ).toBeVisible();
-
-  const movieTitleLink = page.getByRole("link", {
-    name: "Signal Fire 2024",
-    exact: true,
-  });
-  await expect(movieTitleLink).toBeVisible();
-  await movieTitleLink.focus();
-  await page.keyboard.press("Enter");
+  await page.goto(moviePath);
 
   await expect(page).toHaveTitle("Signal Fire (2024) - Igloo");
-  expect(new URL(page.url()).pathname).toMatch(/^\/movies\/711\/?$/);
 
-  await expect(
-    page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "A rescue pilot returns to a coastal town and uncovers the wildfire cover-up that drove her family apart.",
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("img", { name: "Movie poster for Signal Fire" }),
-  ).toBeVisible();
-
-  const metadataRow = page.getByRole("list", { name: "Movie details" });
-  await expect(metadataRow).toBeVisible();
-  await expect(metadataRow).toContainText("PG-13");
-  await expect(metadataRow).toContainText("2h 6m");
-  await expect(metadataRow).toContainText("July 4, 2024");
-
-  const playLink = page.getByRole("link", { name: "Play" });
-  const watchButton = page.getByRole("button", {
-    name: "Mark movie as watched",
-  });
-  const likeButton = page.getByRole("button", { name: "Like this movie" });
-  const moreOptionsButton = page.getByRole("button", { name: "More options" });
-
-  await expect(playLink).toBeVisible();
-  await expect(watchButton).toBeVisible();
-  await expect(likeButton).toBeVisible();
-  await expect(moreOptionsButton).toBeVisible();
-
-  const skipLinksNav = page.getByRole("navigation", { name: "Skip to section" });
-  await expect(skipLinksNav).toHaveCount(1);
-
-  for (const [label, href] of [
-    ["Skip to movie info", "#movie-title"],
-    ["Skip to overview", "#overview-heading"],
-    ["Skip to key crew", "#crew-heading"],
-    ["Skip to cast", "#cast-heading"],
-    ["Skip to chapters", "#chapters-heading"],
-    ["Skip to details", "#details-heading"],
-    ["Skip to extra videos", "#extra-videos-heading"],
-    ["Skip to production companies", "#companies-heading"],
-  ] as const) {
-    await expect(skipLinksNav.getByRole("link", { name: label })).toHaveAttribute(
-      "href",
-      href,
-    );
-  }
-
-  await expect(page.getByRole("heading", { name: "Key Crew" })).toBeVisible();
-  await expect(page.getByText("Jordan Lee")).toBeVisible();
-  await expect(page.getByText("Casey North")).toBeVisible();
-
-  await expect(page.getByRole("heading", { name: "Cast" })).toBeVisible();
-  await expect(
-    page.getByRole("article", { name: "Alex Vega as Mara Voss" }),
-  ).toBeVisible();
-
-  await expect(page.getByRole("heading", { name: "Chapters" })).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: "Chapters, 1 total" }),
-  ).toBeVisible();
-
-  await expect(
-    page.getByRole("heading", { name: "Additional Details" }),
-  ).toBeVisible();
-  const additionalDetailsSection = page.locator("section", {
-    has: page.getByRole("heading", { name: "Additional Details" }),
-  });
-  await expect(
-    additionalDetailsSection.getByText("Original Language"),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("en", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("$95,000,000"),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("$215,000,000"),
-  ).toBeVisible();
-
+  // The Extra Videos section renders the movie's YouTube clips.
   await expect(
     page.getByRole("heading", { name: "Extra Videos" }),
   ).toBeVisible();
@@ -443,39 +332,31 @@ test("movie details page renders the mocked success path from the movies index",
     page.getByRole("list", { name: "Extra videos, 1 clips" }),
   ).toBeVisible();
 
-  await expect(
-    page.getByRole("heading", { name: "Production Companies" }),
-  ).toBeVisible();
-  await expect(page.getByText("Northwind Pictures")).toBeVisible();
-
-  const playHref = await playLink.getAttribute("href");
-  expect(playHref).not.toBeNull();
-  const playUrl = new URL(playHref ?? "", "http://localhost");
-  expect(playUrl.pathname).toBe(`/movies/${movieId}/play`);
-  expect(playUrl.searchParams.get("mode")).toBe("direct");
-  expect(playUrl.searchParams.get("audio_track")).toBe("0");
-  expect(playUrl.searchParams.get("subtitle_track")).toBeNull();
-
-  const chapterLink = page.getByRole("link", { name: /Opening Credits/i });
-  await expect(chapterLink).toBeVisible();
-  const chapterHref = await chapterLink.getAttribute("href");
-  expect(chapterHref).not.toBeNull();
-  const chapterUrl = new URL(chapterHref ?? "", "http://localhost");
-  expect(chapterUrl.pathname).toBe(`/movies/${movieId}/play`);
-  expect(chapterUrl.searchParams.get("mode")).toBe("direct");
-  expect(chapterUrl.searchParams.get("audio_track")).toBe("0");
-  expect(chapterUrl.searchParams.get("start")).toBe(
-    String(chapterStartSeconds),
-  );
-
   const extraVideoLink = page.getByRole("link", { name: /Official Trailer/i });
   await expect(extraVideoLink).toBeVisible();
-  const extraVideoHref = await extraVideoLink.getAttribute("href");
-  expect(extraVideoHref).not.toBeNull();
-  const extraVideoUrl = new URL(extraVideoHref ?? "", "http://localhost");
-  expect(extraVideoUrl.pathname).toBe("/trailer");
-  expect(extraVideoUrl.searchParams.get("videoKey")).toBe(extraVideoKey);
-  expect(extraVideoUrl.searchParams.get("returnTo")).toBe(`/movies/${movieId}`);
+  await extraVideoLink.click();
+
+  // Clicking the clip opens the shared trailer dialog with the YouTube player.
+  await expect(page).toHaveURL(
+    `/trailer?videoKey=${extraVideoKey}&returnTo=${encodeURIComponent(moviePath)}`,
+  );
+  await expect(page.getByRole("dialog", { name: "Trailer" })).toBeVisible();
+
+  const playButton = page.getByRole("button", { name: "Play (Space or K)" });
+  await expect(playButton).toBeVisible();
+
+  // Starting playback flips the control to Pause, proving the player is playing.
+  await playButton.click();
+  await expect(
+    page.getByRole("button", { name: "Pause (Space or K)" }),
+  ).toBeVisible();
+
+  // Closing the player returns to the originating movie details page.
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(moviePath);
+  await expect(
+    page.getByRole("heading", { name: /Signal Fire/i, level: 1 }),
+  ).toBeVisible();
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
