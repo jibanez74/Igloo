@@ -136,6 +136,11 @@ async function mockMusicApi(
       return;
     }
 
+    if (url.pathname === "/api/notifications/unread-count") {
+      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
+      return;
+    }
+
     if (url.pathname === "/api/music/stats") {
       await fulfillJSON(route, apiResponse({
         total_albums: 3,

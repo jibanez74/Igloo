@@ -101,6 +101,11 @@ async function mockHomeApi(page: Page) {
       return;
     }
 
+    if (pathname === "/api/notifications/unread-count") {
+      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
+      return;
+    }
+
     if (pathname === "/api/watch-rooms") {
       await fulfillJSON(route, apiResponse({
         rooms: [

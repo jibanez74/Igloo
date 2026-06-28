@@ -29,6 +29,7 @@ describe("App boot loading", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     document.documentElement.removeAttribute("data-app-ready");
+    document.documentElement.classList.remove("dark");
     document.body.innerHTML = "";
   });
 
@@ -56,6 +57,7 @@ describe("App boot loading", () => {
       "data-app-ready",
       "true",
     );
+    expect(document.documentElement).toHaveClass("dark");
     expect(document.getElementById("initial-splash")).toBeInTheDocument();
 
     act(() => {

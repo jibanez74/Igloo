@@ -14,6 +14,7 @@ export default function AppBoot({ queryClient }: AppBootProps) {
     const root = document.documentElement;
     const splash = document.getElementById("initial-splash");
 
+    root.classList.add("dark");
     root.setAttribute("data-app-ready", "true");
 
     if (!splash) {
