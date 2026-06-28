@@ -18,7 +18,7 @@ export default function MovieAdditionalDetailsSection({
       <h2
         id="details-heading"
         tabIndex={-1}
-        className="mb-4 text-lg font-semibold text-white outline-none sm:text-xl"
+        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
       >
         Additional Details
       </h2>

@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { RefCallback } from "react";
 
 export type UseYouTubePlayerOptions = {
   videoId: string | null;
@@ -11,7 +11,7 @@ export type UseYouTubePlayerOptions = {
 };
 
 export type UseYouTubePlayerReturn = {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefCallback<HTMLDivElement>;
   isReady: boolean;
   isPlaying: boolean;
   currentTime: number;
@@ -29,4 +29,5 @@ export type UseYouTubePlayerReturn = {
   mute: () => void;
   unmute: () => void;
   toggleMute: () => void;
+  retry: () => void;
 };

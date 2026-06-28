@@ -1,4 +1,11 @@
-import { useRef, useState, useEffect, useId, useEffectEvent } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+  useId,
+  useEffectEvent,
+  useCallback,
+} from "react";
 import type {
   UseYouTubePlayerOptions,
   UseYouTubePlayerReturn,
@@ -6,6 +13,7 @@ import type {
 
 const YOUTUBE_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const YOUTUBE_API_LOAD_TIMEOUT_MS = 15000;
+const YOUTUBE_PLAYER_READY_TIMEOUT_MS = 12000;
 const YOUTUBE_IFRAME_API_ERROR_ATTR = "data-yt-api-load-error";
 
 let apiLoading = false;
@@ -204,8 +212,9 @@ function getYouTubePlayerIdentity(
   videoId: string | null,
   autoplay: boolean,
   controls: boolean,
+  reloadKey: number,
 ) {
-  return `${videoId ?? "none"}:${autoplay ? "autoplay" : "manual"}:${controls ? "controls" : "chromeless"}`;
+  return `${videoId ?? "none"}:${autoplay ? "autoplay" : "manual"}:${controls ? "controls" : "chromeless"}:${reloadKey}`;
 }
 
 function createInitialPlayerState(playerIdentity: string): YouTubePlayerState {
@@ -227,11 +236,25 @@ export function useYouTubePlayer(
   const { videoId, autoplay = true, controls = true } = options;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Boolean state mirrors whether the container node is attached, so the init
+  // effect re-runs the moment the DOM node mounts (the node lives in a ref so we
+  // can mutate it directly; state only exists to re-trigger the effect).
+  const [containerReady, setContainerReady] = useState(false);
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    setContainerReady(node != null);
+  }, []);
   const playerRef = useRef<YT.Player | null>(null);
   const uniqueId = useId();
   const playerIdRef = useRef(`yt-player-${uniqueId.replace(/:/g, "")}`);
   const progressIntervalRef = useRef<number | null>(null);
-  const playerIdentity = getYouTubePlayerIdentity(videoId, autoplay, controls);
+  const [reloadKey, setReloadKey] = useState(0);
+  const playerIdentity = getYouTubePlayerIdentity(
+    videoId,
+    autoplay,
+    controls,
+    reloadKey,
+  );
   const [playerState, setPlayerState] = useState(() =>
     createInitialPlayerState(playerIdentity),
   );
@@ -355,13 +378,21 @@ export function useYouTubePlayer(
   });
 
   useEffect(() => {
-    if (!videoId || !containerRef.current) {
+    if (!videoId || !containerReady || !containerRef.current) {
       stopProgressTracking();
       return;
     }
 
     let mounted = true;
     let createdPlayer: YT.Player | null = null;
+    let readyTimeoutId: number | null = null;
+
+    const clearReadyTimeout = () => {
+      if (readyTimeoutId !== null) {
+        window.clearTimeout(readyTimeoutId);
+        readyTimeoutId = null;
+      }
+    };
 
     const initPlayer = async () => {
       try {
@@ -381,13 +412,15 @@ export function useYouTubePlayer(
 
       if (!mounted || !containerRef.current) return;
 
+      // Include reloadKey so a retry mounts a fresh element for the new player.
+      const elementId = `${playerIdRef.current}-${reloadKey}`;
       const playerDiv = document.createElement("div");
-      playerDiv.id = playerIdRef.current;
+      playerDiv.id = elementId;
       containerRef.current.innerHTML = "";
       containerRef.current.appendChild(playerDiv);
 
       try {
-        const player = new window.YT.Player(playerIdRef.current, {
+        const player = new window.YT.Player(elementId, {
           videoId,
           width: "100%",
           height: "100%",
@@ -403,6 +436,7 @@ export function useYouTubePlayer(
           events: {
             onReady: event => {
               if (!mounted) return;
+              clearReadyTimeout();
               handlePlayerReady(event);
             },
             onStateChange: event => {
@@ -411,6 +445,7 @@ export function useYouTubePlayer(
             },
             onError: event => {
               if (!mounted) return;
+              clearReadyTimeout();
               handlePlayerError(event);
             },
           },
@@ -418,6 +453,22 @@ export function useYouTubePlayer(
 
         createdPlayer = player;
         playerRef.current = player;
+
+        // Watchdog: if the embed never reaches `onReady` (e.g. the YouTube
+        // iframe is blocked by an ad blocker or a network issue), surface an
+        // actionable error instead of an indefinite loading spinner.
+        readyTimeoutId = window.setTimeout(() => {
+          if (!mounted) return;
+          setPlayerState(previous =>
+            previous.isReady || previous.error
+              ? previous
+              : {
+                  ...previous,
+                  error:
+                    "The video player took too long to load. It may be blocked by an ad blocker or browser extension.",
+                },
+          );
+        }, YOUTUBE_PLAYER_READY_TIMEOUT_MS);
       } catch (creationError) {
         console.error("Failed to create YouTube player:", creationError);
         setPlayerState(previous => ({
@@ -431,6 +482,7 @@ export function useYouTubePlayer(
 
     return () => {
       mounted = false;
+      clearReadyTimeout();
       stopProgressTracking();
 
       if (createdPlayer) {
@@ -443,7 +495,7 @@ export function useYouTubePlayer(
 
       clearPlayerRef();
     };
-  }, [videoId, autoplay, controls]);
+  }, [videoId, autoplay, controls, containerReady, reloadKey]);
 
   const play = () => {
     playerRef.current?.playVideo();
@@ -584,8 +636,12 @@ export function useYouTubePlayer(
     }));
   };
 
+  const retry = () => {
+    setReloadKey(previous => previous + 1);
+  };
+
   return {
-    containerRef,
+    containerRef: setContainerRef,
     isReady,
     isPlaying,
     currentTime,
@@ -603,5 +659,6 @@ export function useYouTubePlayer(
     mute,
     unmute,
     toggleMute,
+    retry,
   };
 }

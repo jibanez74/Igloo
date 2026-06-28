@@ -17,14 +17,24 @@ async function login(page: Page, env: E2EEnv) {
   expect(response.status()).toBe(200);
 }
 
-async function mockYouTubePlayer(page: Page) {
-  await page.addInitScript(() => {
+type MockYouTubePlayerOptions = {
+  failFirstLoad?: boolean;
+};
+
+async function mockYouTubePlayer(
+  page: Page,
+  { failFirstLoad = false }: MockYouTubePlayerOptions = {},
+) {
+  await page.addInitScript(({ failFirstLoad }) => {
     type FakePlayerEvent = { target: FakePlayer };
     type FakePlayerStateEvent = { data: number; target: FakePlayer };
+    type FakePlayerErrorEvent = { data: number; target: FakePlayer };
     type FakePlayerEvents = {
       onReady?: (event: FakePlayerEvent) => void;
       onStateChange?: (event: FakePlayerStateEvent) => void;
+      onError?: (event: FakePlayerErrorEvent) => void;
     };
+    let playerCreations = 0;
 
     class FakePlayer {
       currentTime = 0;
@@ -36,7 +46,17 @@ async function mockYouTubePlayer(page: Page) {
 
       constructor(_id: string, options: YT.PlayerOptions) {
         this.events = options.events ?? {};
+        playerCreations += 1;
+
         window.setTimeout(() => {
+          if (failFirstLoad && playerCreations === 1) {
+            this.events.onError?.({
+              data: window.YT.PlayerError.HTML5_ERROR,
+              target: this,
+            });
+            return;
+          }
+
           this.events.onReady?.({ target: this });
         }, 0);
       }
@@ -114,7 +134,7 @@ async function mockYouTubePlayer(page: Page) {
         NOT_ALLOWED_DISGUISE: 150,
       },
     };
-  });
+  }, { failFirstLoad });
 }
 
 async function expectTrailerChrome(page: Page) {
@@ -167,7 +187,7 @@ test.describe("Trailer playback chrome", () => {
           env,
           "/trailer?videoKey=signal-fire-trailer&returnTo=/movies/101",
         ),
-        { waitUntil: "networkidle" },
+        { waitUntil: "domcontentloaded" },
       );
 
       await expectTrailerChrome(page);
@@ -186,7 +206,7 @@ test.describe("Trailer playback chrome", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(
       apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
-      { waitUntil: "networkidle" },
+      { waitUntil: "domcontentloaded" },
     );
 
     await expectTrailerChrome(page);
@@ -204,6 +224,61 @@ test.describe("Trailer playback chrome", () => {
 
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/$/);
+    browserIssues.assertClean();
+  });
+
+  test("lets Space activate the focused retry button after a playback error", async ({
+    page,
+  }) => {
+    const env = readE2EEnv();
+    const browserIssues = trackBrowserIssues(page);
+
+    await login(page, env);
+    await mockYouTubePlayer(page, { failFirstLoad: true });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
+      { waitUntil: "domcontentloaded" },
+    );
+
+    await expect(
+      page.getByRole("dialog", { name: "Unable to Play Trailer" }),
+    ).toBeVisible();
+
+    const retryButton = page.getByRole("button", { name: "Try Again" });
+
+    await retryButton.focus();
+    await expect(retryButton).toBeFocused();
+    await page.keyboard.press("Space");
+    await expectTrailerChrome(page);
+    browserIssues.assertClean();
+  });
+
+  test("keeps Space as a playback shortcut outside interactive controls", async ({
+    page,
+  }) => {
+    const env = readE2EEnv();
+    const browserIssues = trackBrowserIssues(page);
+
+    await login(page, env);
+    await mockYouTubePlayer(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      apiURL(env, "/trailer?videoKey=signal-fire-trailer&returnTo=/"),
+      { waitUntil: "domcontentloaded" },
+    );
+
+    await expectTrailerChrome(page);
+
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
+    await page.keyboard.press("Space");
+    await expect(
+      page.getByRole("button", { name: "Pause (Space or K)" }),
+    ).toBeVisible();
     browserIssues.assertClean();
   });
 });
