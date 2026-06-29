@@ -25,9 +25,9 @@ export default function MovieCard({ movie }: MovieCardProps) {
   const year = release_date ? new Date(release_date).getFullYear() : null;
 
   const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-amber-500 text-slate-900"; // Strong
-    if (score >= 5) return "bg-amber-400/80 text-slate-900"; // Mid
-    return "bg-slate-500 text-white"; // Low
+    if (score >= 7) return "bg-aurora text-aurora-foreground"; // Strong
+    if (score >= 5) return "bg-aurora/80 text-aurora-foreground"; // Mid
+    return "bg-muted text-foreground"; // Low
   };
 
   return (
@@ -44,7 +44,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}
-        <div className="relative aspect-2/3 bg-slate-800">
+        <div className="relative aspect-2/3 bg-muted">
           {posterUrl ? (
             <img
               src={posterUrl}
@@ -58,7 +58,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <Film className="size-10 text-slate-600" aria-hidden="true" />
+              <Film className="size-10 text-muted-foreground" aria-hidden="true" />
             </div>
           )}
 
@@ -83,7 +83,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
             {title}
           </h3>
           {year && (
-            <p className="mt-0.5 text-xs text-slate-300 drop-shadow-lg">
+            <p className="mt-0.5 text-xs text-white/80 drop-shadow-lg">
               {year}
             </p>
           )}

@@ -33,7 +33,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
         className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
         aria-label={`${name}, ${movie_count} ${movieNoun}`}
       >
-        <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-slate-800">
+        <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
           {coverUrl ? (
             <img
               src={coverUrl}
@@ -41,19 +41,19 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
-            <div className="flex size-full items-center justify-center bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/20">
-              <ListVideo className="size-10 text-amber-200/30" aria-hidden="true" />
+            <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/10">
+              <ListVideo className="size-10 text-primary/30" aria-hidden="true" />
             </div>
           )}
           {is_owner && (
-            <div className="absolute top-2 right-2 rounded-full bg-amber-500/90 px-2 py-0.5 text-xs font-medium text-slate-900">
+            <div className="absolute top-2 right-2 rounded-full bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
               Owner
             </div>
           )}
         </div>
         <div className="text-center">
-          <h3 className="truncate text-sm font-semibold text-white">{name}</h3>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {movie_count} {movieNoun}
           </p>
         </div>

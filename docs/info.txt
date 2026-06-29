@@ -1,0 +1,86 @@
+`expo-video` does **not define its own codec support** the way VLC or FFmpeg would. It uses the native platform player:
+
+* **Android / Android TV / Fire TV:** ExoPlayer / Android Media3, backed mostly by Android platform decoders.
+* **iOS / tvOS / Apple TV:** AVPlayer / AVFoundation.
+* **Web:** browser media support.
+
+Expo’s docs list `expo-video` as supporting Android, iOS, tvOS, and Web, and its source type includes progressive, HLS, DASH, and SmoothStreaming modes. ([Expo Documentation][1])
+
+## Practical codec support
+
+### Video codecs likely to work
+
+For a media-center app, the realistic safe set is:
+
+| Codec            |                                                                  Android TV / Fire TV |                         Apple TV / tvOS | Notes                                                     |
+| ---------------- | ------------------------------------------------------------------------------------: | --------------------------------------: | --------------------------------------------------------- |
+| **H.264 / AVC**  |                                                                                   Yes |                                     Yes | Safest universal choice.                                  |
+| **H.265 / HEVC** | Usually yes on modern Android TV; Android TV baseline support is stronger than phones |                  Yes on modern Apple TV | Device/profile/level dependent.                           |
+| **VP8**          |                                                                        Yes on Android |              Not a good Apple TV target | Mostly useful for WebM/Android.                           |
+| **VP9**          |                                                                  Common on Android TV |              Not a good Apple TV target | Good for Android/YouTube-like pipelines, not Apple-first. |
+| **AV1**          |                             Android support depends heavily on device/Android version | Newer Apple devices only; not universal | Not safe as your only encode.                             |
+
+Android’s platform docs list H.264, H.265/HEVC, VP8, VP9, and AV1 support, but also warn that support varies by device and form factor. ([Android Developers][2]) ExoPlayer also says sample-format support depends on Android platform decoders by default. ([Android Developers][3])
+
+### Audio codecs likely to work
+
+| Codec                           |                                                      Android TV / Fire TV |                           Apple TV / tvOS | Notes                                         |
+| ------------------------------- | ------------------------------------------------------------------------: | ----------------------------------------: | --------------------------------------------- |
+| **AAC-LC**                      |                                                                       Yes |                                       Yes | Safest universal audio codec.                 |
+| **HE-AAC**                      |                                                                       Yes |                                       Yes | Good for low bitrate audio.                   |
+| **MP3**                         |                                                                       Yes |                               Usually yes | Fine, but not ideal for video files.          |
+| **Opus**                        |                                                               Android yes | Not reliable for Apple TV native playback | Avoid for universal TV playback.              |
+| **Vorbis**                      |                                                               Android yes |                 Not reliable for Apple TV | Avoid for universal TV playback.              |
+| **FLAC**                        | Android support exists but limited; multichannel is not a safe assumption |       Apple supports FLAC in HLS contexts | Not ideal as primary TV-app audio.            |
+| **AC-3 / Dolby Digital**        |                                                          Device dependent |     Supported in Apple HLS authoring spec | Useful for 5.1 compatibility.                 |
+| **E-AC-3 / Dolby Digital Plus** |                                                          Device dependent |     Supported in Apple HLS authoring spec | Common streaming 5.1 / Atmos carrier.         |
+| **DTS / DTS-HD**                |                            Not safe without custom/native decoder support |                                  Not safe | Do not assume `expo-video` will play it.      |
+| **TrueHD**                      |                                                                  Not safe |                                  Not safe | Do not assume support. Transcode/remux audio. |
+
+Android’s standard audio table includes AAC, HE-AAC, xHE-AAC, MP3, FLAC, Opus, Vorbis, and PCM/WAV, but support details vary by container and device. ([Android Developers][2]) Apple’s HLS authoring spec includes AAC-LC, HE-AAC, Apple Lossless, FLAC, Dolby Digital / AC-3, and Dolby Digital Plus / E-AC-3 among supported multichannel audio codecs. ([Apple Developer][4])
+
+## Important for your Igloo/media-center use case
+
+For **direct play**, `expo-video` is not equivalent to VLC, Kodi, or a Jellyfin client with FFmpeg-backed fallback. It will not magically decode every MKV/Blu-ray-style file.
+
+The safest universal output target is:
+
+```text
+Container/stream: HLS or MP4
+Video: H.264
+Audio: AAC-LC stereo
+Optional surround track: AC-3 or E-AC-3 5.1
+Subtitles: WebVTT for HLS
+```
+
+For higher quality TV playback:
+
+```text
+Container/stream: HLS
+Video: H.264 + HEVC variants
+Audio: AAC stereo + E-AC-3 5.1 when supported
+```
+
+For Android TV only, you can be more flexible with MKV, WebM, VP9, Opus, etc., because ExoPlayer supports many progressive containers including MP4, M4A, WebM, Matroska/MKV, MP3, Ogg, WAV, MPEG-TS, FLV, ADTS, FLAC, and AMR. ([Android Developers][3]) But for a cross-platform TV app, you should not build your direct-play strategy around MKV + DTS/TrueHD.
+
+## Bottom line
+
+For your project, assume:
+
+```text
+Direct play safe:
+H.264 + AAC in MP4/HLS
+
+Direct play likely on many TVs:
+HEVC + AAC/E-AC-3 in MP4/HLS
+
+Needs fallback/transcoding:
+DTS, DTS-HD, TrueHD, many MKV files, obscure subtitle formats, unsupported HEVC profiles, some HDR/Dolby Vision cases
+```
+
+So `expo-video` can work for a TV media app, but your backend still needs the same kind of compatibility decision layer you were already designing: detect the client, inspect video/audio/subtitle tracks, then direct play, remux, or transcode depending on what the device can actually handle.
+
+[1]: https://docs.expo.dev/versions/latest/sdk/video/?utm_source=chatgpt.com "Video (expo-video)"
+[2]: https://developer.android.com/media/platform/supported-formats "Supported media formats  |  Android media  |  Android Developers"
+[3]: https://developer.android.com/media/media3/exoplayer/supported-formats "Supported formats  |  Android media  |  Android Developers"
+[4]: https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices?utm_source=chatgpt.com "HTTP Live Streaming (HLS) authoring specification for ..."
