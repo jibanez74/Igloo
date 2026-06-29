@@ -32,7 +32,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
       <h2
         id="crew-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-white outline-none sm:text-xl"
+        className="mb-3 text-lg font-semibold text-foreground outline-none sm:text-xl"
       >
         Key Crew
       </h2>
@@ -40,16 +40,16 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
           {director && (
             <p key={director.id} className="rounded-lg">
-              <span className="block text-sm text-slate-400">Director</span>
-              <span className="block font-semibold text-white">
+              <span className="block text-sm text-muted-foreground">Director</span>
+              <span className="block font-semibold text-foreground">
                 {director.artist_name}
               </span>
             </p>
           )}
           {writers.map(writer => (
             <p key={writer.id} className="rounded-lg">
-              <span className="block text-sm text-slate-400">{writer.job}</span>
-              <span className="block font-semibold text-white">
+              <span className="block text-sm text-muted-foreground">{writer.job}</span>
+              <span className="block font-semibold text-foreground">
                 {writer.artist_name}
               </span>
             </p>
@@ -74,22 +74,22 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
             <div
               id="crew-full-list"
               aria-label={`Full crew list, ${remainingCrew.length} credits`}
-              className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-amber-500/15 bg-slate-900/40 px-3 py-2 sm:px-4"
+              className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-primary/15 bg-card/40 px-3 py-2 sm:px-4"
             >
               <ul className="list-none space-y-3">
                 {remainingCrew.map(c => (
                   <li key={c.id}>
                     <p className="text-sm">
-                      <span className="block text-slate-400">
+                      <span className="block text-muted-foreground">
                         {c.job}
                         {c.department ? (
-                          <span className="text-slate-400">
+                          <span className="text-muted-foreground">
                             {" "}
                             · {c.department}
                           </span>
                         ) : null}
                       </span>
-                      <span className="font-semibold text-white">
+                      <span className="font-semibold text-foreground">
                         {c.artist_name}
                       </span>
                     </p>

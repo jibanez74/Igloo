@@ -13,7 +13,7 @@ export default function MovieDetailsGenresList({
       {genres.map(genre => (
         <li
           key={genre.id}
-          className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
+          className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
         >
           {genre.tag}
         </li>

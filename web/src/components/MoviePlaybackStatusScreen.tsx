@@ -23,9 +23,9 @@ type MoviePlaybackStatusScreenProps = {
 const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
 
 const primaryActionClass =
-  "inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-cyan-500/20 transition-colors hover:bg-cyan-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none";
+  "inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none";
 const secondaryActionClass =
-  "inline-flex items-center gap-2 rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none";
+  "inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none";
 
 function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {
   if (icon === "retry") {
@@ -47,11 +47,11 @@ export default function MoviePlaybackStatusScreen({
   return (
     <div
       ref={containerRef}
-      className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4"
+      className="flex min-h-screen flex-col items-center justify-center bg-background px-4"
     >
       <div className={isLoading ? "text-center" : "max-w-md text-center"}>
         {isLoading ? (
-          <Spinner className="mx-auto mb-6 size-10 text-cyan-400" />
+          <Spinner className="mx-auto mb-6 size-10 text-primary" />
         ) : (
           <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
@@ -59,13 +59,13 @@ export default function MoviePlaybackStatusScreen({
         )}
 
         {title ? (
-          <h1 className="mb-2 text-xl font-semibold text-white">{title}</h1>
+          <h1 className="mb-2 text-xl font-semibold text-foreground">{title}</h1>
         ) : null}
         <p
           className={
             isLoading
-              ? "text-lg font-medium text-white"
-              : "mb-6 text-slate-400"
+              ? "text-lg font-medium text-foreground"
+              : "mb-6 text-muted-foreground"
           }
         >
           {message}

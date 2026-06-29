@@ -14,7 +14,7 @@ export function MoviesLoadError({
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2 text-sm font-medium text-amber-400 underline hover:text-amber-300"
+        className="mt-2 text-sm font-medium text-primary underline hover:text-primary/80"
       >
         Try again
       </button>
