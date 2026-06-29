@@ -1,132 +1,118 @@
-Yes — **on Nvidia Shield / Android TV, MKV direct playback is realistic**, including through `expo-video`, **as long as the tracks inside the MKV are supported by the device/player**.
+No. **`expo-video` will not secretly transcode, remux, or convert codecs.** It is a playback layer, not a media-processing layer. On Android TV it delegates playback to the native Android/ExoPlayer/Media3 stack, and Expo describes it as a cross-platform native video component rather than a transcoder. ([Expo Documentation][1])
 
-The key distinction is:
-
-```text
-MKV container support ≠ every codec inside the MKV is supported
-```
-
-Android’s platform media docs list **Matroska / `.mkv` support** going back to Android 4.0+, and ExoPlayer/Media3 also supports Matroska as a progressive container. ([Android Developers][1])
-
-## What this means for `expo-video`
-
-`expo-video` on Android uses the native Android media stack/ExoPlayer-style playback path. So on an Nvidia Shield, you should be able to direct play URLs like:
-
-```tsx
-const player = useVideoPlayer({
-  uri: "http://your-server.local/api/videos/123/direct",
-}, player => {
-  player.play();
-});
-```
-
-And that URL can point to an `.mkv` file, provided your Go backend serves it correctly with range requests.
-
-## What will probably direct play well on Nvidia Shield
-
-These are realistic direct-play candidates:
+But there is an important distinction:
 
 ```text
-MKV + H.264 + AAC
-MKV + H.264 + AC-3
-MKV + H.264 + E-AC-3
-MKV + H.265/HEVC + AAC
-MKV + H.265/HEVC + AC-3 / E-AC-3
-MKV + VP9 + Opus
+expo-video will not convert the file.
+The Android/Shield audio pipeline may decode, passthrough, downmix, or fail depending on device/audio settings.
 ```
 
-The Nvidia Shield is much stronger than a generic Android TV stick, so it can direct play many files that weaker devices cannot.
+## What can happen with TrueHD Atmos
 
-## What may still fail
-
-These are the cases where `expo-video` may not be enough:
+For a file like:
 
 ```text
-MKV + DTS
-MKV + DTS-HD MA
-MKV + TrueHD
-MKV + PGS subtitles
-MKV + ASS/SSA subtitles
-MKV + unusual HEVC profile/level
-MKV + Dolby Vision profile not supported by the device/player path
+MKV
+Video: HEVC
+Audio: Dolby TrueHD 7.1 Atmos
 ```
 
-The file may open, but you could get:
+`expo-video` itself should not convert that TrueHD track to AAC, AC-3, or stereo. However, the playback path has to support **bitstream passthrough**. ExoPlayer/Media3 format support depends on the platform/device decoders and audio capabilities. Google’s Media3/ExoPlayer docs explicitly say contained audio/video sample formats must also be supported, and Dolby’s Android TV guidance points developers to ExoPlayer APIs for detecting Dolby Audio/Atmos capabilities. ([Android Developers][2])
+
+So the real question is not “will Expo convert it?” The real question is:
 
 ```text
-video with no audio
-audio with black screen
-no subtitle rendering
-track-selection issues
-complete playback failure
+Will the native Android player path used by expo-video expose/pass through TrueHD Atmos correctly on Nvidia Shield?
 ```
 
-Android/ExoPlayer support depends on device decoders and platform capabilities, not just the React Native package. Google’s ExoPlayer docs explicitly frame sample-format support around the Android platform’s available decoders. ([Android Developers][2])
+That is the part I would not assume without testing.
 
-## For Igloo, the direct-play rule should be track-based
+## Your Shield + Sonos Arc setup
 
-Do not decide direct playback only by file extension.
+Your hardware setup can be capable of TrueHD Atmos passthrough, especially if the chain is:
 
-Bad:
-
-```ts
-if (file.endsWith(".mkv")) {
-  directPlay();
-}
+```text
+Nvidia Shield Pro
+→ TV HDMI input
+→ TV eARC enabled
+→ Sonos Arc
 ```
 
-Better:
+or:
 
-```ts
-if (
-  container === "mkv" &&
-  videoCodecSupportedByClient(videoCodec) &&
-  audioCodecSupportedByClient(audioCodec) &&
-  subtitlesSupportedByClient(subtitleCodec)
-) {
-  directPlay();
-} else if (
-  containerNeedsChangeOnly ||
-  audioNeedsTranscodeOnly ||
-  subtitlesNeedExtraction
-) {
-  remuxOrAudioTranscode();
-} else {
-  fullTranscode();
-}
+```text
+Nvidia Shield Pro
+→ HDMI switch/receiver
+→ Sonos Arc / TV eARC path
 ```
 
-For the Nvidia Shield client profile, you can be more permissive than for Apple TV or web.
+But the app still has to request/play the track in a way that allows passthrough. Plex, Kodi, Emby, and similar apps usually expose explicit passthrough settings. For example, Plex users commonly need to set passthrough to HDMI for Dolby TrueHD passthrough to work instead of having the server transcode or the client decode/downmix. ([Reddit][3]) Sonos community guidance also points to enabling passthrough and eARC in the TV audio settings, with the sending device’s audio settings also mattering. ([Sonos Community][4])
 
-## Recommended Nvidia Shield profile
+## The risk with `expo-video`
 
-For an Android TV / Nvidia Shield profile, I would model it roughly like this:
+The risk is **not hidden transcoding**.
+
+The risk is that `expo-video` may not give you enough low-level Android/ExoPlayer control to force or configure passthrough behavior the same way Plex/Kodi/Emby do.
+
+Possible outcomes:
+
+```text
+Best case:
+MKV + TrueHD Atmos direct plays and Sonos reports Dolby Atmos / TrueHD Atmos.
+
+Acceptable fallback:
+Video direct plays, but audio fails; your backend transcodes only audio to E-AC-3 or AC-3.
+
+Bad fallback:
+Android decodes/downmixes to PCM/stereo or no audio, and expo-video does not expose enough controls to fix it.
+```
+
+## What I would do for Igloo
+
+For Nvidia Shield, I would create a dedicated playback profile:
 
 ```ts
 const nvidiaShieldProfile = {
-  containers: ["mp4", "mkv", "webm", "ts"],
-  videoCodecs: ["h264", "hevc", "vp8", "vp9", "av1"], // AV1 depends on Shield model
-  audioCodecs: ["aac", "mp3", "ac3", "eac3", "opus", "vorbis", "flac"],
-  unsafeAudioCodecs: ["dts", "dts_hd", "truehd"],
-  subtitleCodecs: ["webvtt", "srt"],
-  unsafeSubtitleCodecs: ["pgs", "ass", "ssa"],
+  allowMkvDirectPlay: true,
+  allowHevcDirectPlay: true,
+  allowTrueHdPassthroughAttempt: true,
+  fallbackAudioCodec: "eac3",
 };
 ```
 
-For `dts`, `dts_hd`, and `truehd`, I would not assume reliable direct play through `expo-video`. You can test specific Shield behavior, but for a self-hosted media app you should keep a fallback path.
-
-## Practical backend strategy
-
-For Nvidia Shield:
+Then use this logic:
 
 ```text
-1. Try direct play for MKV when video/audio/subtitles are compatible.
-2. If only audio is incompatible, keep the video and transcode audio to AAC or AC-3.
-3. If subtitles are PGS/ASS and must be burned in, transcode video.
-4. If the video codec/profile is unsupported, full transcode.
+1. If client is Nvidia Shield and user enabled passthrough:
+   Try direct play for MKV + TrueHD Atmos.
+
+2. If playback fails or the user disables passthrough:
+   Keep the video stream untouched.
+   Transcode only audio to E-AC-3 5.1 or AC-3 5.1.
+
+3. If subtitles require burn-in:
+   Full transcode only when necessary.
 ```
 
-So the answer is: **yes, you can support MKV direct playback on Nvidia Shield with `expo-video`, but only for compatible track combinations.** It should be a client-profile decision, not a global rule.
+For the server, do **not** transcode TrueHD automatically just because the codec is TrueHD. Let the Shield profile attempt direct play first.
 
-[1]: https://developer.android.com/media/platform/supported-formats?utm_source=chatgpt.com "Supported media formats"
+## Recommendation
+
+For your specific setup, `expo-video` is worth testing, but I would not commit to it until you test these files:
+
+```text
+MKV + HEVC + TrueHD 7.1 Atmos
+MKV + HEVC + E-AC-3 Atmos
+MKV + HEVC + DTS-HD MA
+MKV + HEVC + AC-3 5.1
+MKV + HEVC + AAC stereo
+```
+
+Then check what the Sonos app reports during playback.
+
+The most important result is whether `expo-video` can pass through **TrueHD Atmos** on the Shield. If it cannot, that does not mean the Shield cannot do it; it means your app/player path may need deeper native ExoPlayer configuration, `react-native-video`, a custom native module, or an external-player option like Kodi.
+
+[1]: https://docs.expo.dev/versions/latest/sdk/video/?utm_source=chatgpt.com "Video (expo-video)"
 [2]: https://developer.android.com/media/media3/exoplayer/supported-formats?utm_source=chatgpt.com "Supported formats | Android media"
+[3]: https://www.reddit.com/r/PleX/comments/1eus6gw/dolby_truehd_passthrough_on_nvidia_shield/?utm_source=chatgpt.com "Dolby TrueHD passthrough on Nvidia Shield : r/PleX"
+[4]: https://en.community.sonos.com/home-theater-228993/sonos-arc-with-nvidia-shield-for-truehd-atmos-via-media-server-6853059?utm_source=chatgpt.com "Sonos Arc with Nvidia Shield for TrueHD Atmos via media ..."

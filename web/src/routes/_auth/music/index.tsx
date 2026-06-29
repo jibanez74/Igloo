@@ -158,11 +158,11 @@ function MusicPage() {
 
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          <Music className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
+        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+          <Music className="size-6 shrink-0 text-primary" aria-hidden="true" />
           <span>Music Library</span>
         </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-slate-400 md:text-base">
+        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
           Browse your collection of musicians, albums, and tracks
         </p>
       </header>
@@ -184,10 +184,10 @@ function MusicPage() {
         onValueChange={handleTabChange}
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
-        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-4">
+        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-4">
           <TabsTrigger
             value="musicians"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <Users
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -197,7 +197,7 @@ function MusicPage() {
           </TabsTrigger>
           <TabsTrigger
             value="albums"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <Disc3
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -207,7 +207,7 @@ function MusicPage() {
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <List
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -217,7 +217,7 @@ function MusicPage() {
           </TabsTrigger>
           <TabsTrigger
             value="playlists"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <ListMusic
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -256,19 +256,19 @@ function LibraryStats() {
       aria-label={statsLabel}
     >
       <div className="flex items-center gap-2" aria-hidden="true">
-        <Disc3 className="size-4 text-amber-400" />
-        <span className="font-medium text-white">{albumCount}</span>
-        <span className="text-slate-400">Albums</span>
+        <Disc3 className="size-4 text-primary" />
+        <span className="font-medium text-foreground">{albumCount}</span>
+        <span className="text-muted-foreground">Albums</span>
       </div>
       <div className="flex items-center gap-2" aria-hidden="true">
-        <Music className="size-4 text-amber-400" />
-        <span className="font-medium text-white">{trackCount}</span>
-        <span className="text-slate-400">Tracks</span>
+        <Music className="size-4 text-primary" />
+        <span className="font-medium text-foreground">{trackCount}</span>
+        <span className="text-muted-foreground">Tracks</span>
       </div>
       <div className="flex items-center gap-2" aria-hidden="true">
-        <User className="size-4 text-amber-400" />
-        <span className="font-medium text-white">{musicianCount}</span>
-        <span className="text-slate-400">Musicians</span>
+        <User className="size-4 text-primary" />
+        <span className="font-medium text-foreground">{musicianCount}</span>
+        <span className="text-muted-foreground">Musicians</span>
       </div>
     </section>
   );
@@ -295,17 +295,17 @@ function MoreMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
-          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
+          className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
           aria-label="More options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="border-slate-700 bg-slate-800"
+          className="border-border bg-muted"
         >
           <DropdownMenuItem
-            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             disabled={spotifyRequestDisabled}
             aria-label={
               spotifyRequestDisabled
@@ -328,7 +328,7 @@ function MoreMenu() {
             )}
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             disabled={spotifyRequestDisabled}
             aria-label={
               spotifyRequestDisabled
@@ -382,8 +382,8 @@ function MusiciansTabSkeleton() {
     <div>
       {/* Skeleton header */}
       <div className="mb-6 flex items-center justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-4 w-20 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-4 w-20 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
       </div>
 
       {/* Skeleton grid - matches actual grid dimensions */}
@@ -392,13 +392,13 @@ function MusiciansTabSkeleton() {
           <div
             key={i}
             className={cn(
-              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              "rounded-xl border border-border bg-card p-4",
               MOTION_LOADING_STATE_CLASS,
             )}
           >
-            <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-slate-800" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
-            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+            <div className="mx-auto mb-3 aspect-square w-full max-w-32 rounded-full bg-muted" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
+            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-muted" />
           </div>
         ))}
       </div>
@@ -443,7 +443,7 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
 
   if (musicians.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <Users className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No musicians found in your library.</p>
       </div>
@@ -456,7 +456,7 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
       <LiveAnnouncer message={getAnnouncement()} />
       {hasMultiplePages && (
         <div className="mb-5 flex justify-end">
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages}
           </span>
         </div>
@@ -520,7 +520,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12" role="status" aria-label="Loading albums">
-        <Spinner className="size-8 text-amber-400" />
+        <Spinner className="size-8 text-primary" />
         <span className="sr-only">Loading albums...</span>
       </div>
     );
@@ -528,7 +528,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
 
   if (albums.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <Disc3 className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No albums found in your library.</p>
       </div>
@@ -541,7 +541,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
       <LiveAnnouncer message={getAnnouncement()} />
       {hasMultiplePages && (
         <div className="mb-5 flex justify-end">
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages}
           </span>
         </div>
@@ -599,7 +599,7 @@ function TracksTabContent() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12" role="status" aria-label="Loading tracks">
-        <Spinner className="size-8 text-amber-400" />
+        <Spinner className="size-8 text-primary" />
         <span className="sr-only">Loading tracks...</span>
       </div>
     );
@@ -607,7 +607,7 @@ function TracksTabContent() {
 
   if (allTracks.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <Music className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No tracks found in your library.</p>
       </div>
@@ -730,7 +730,7 @@ function VirtualizedTracksList({
   return (
     <div
       ref={listRef}
-      className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50"
+      className="overflow-hidden rounded-lg border border-border bg-card/50"
       role="list"
       aria-label="Tracks"
     >
@@ -774,7 +774,7 @@ function VirtualizedTracksList({
 
       {isFetchingNextPage && (
         <div className="flex justify-center py-4">
-          <Spinner className="size-6 text-amber-400" />
+          <Spinner className="size-6 text-primary" />
         </div>
       )}
     </div>
@@ -803,7 +803,7 @@ function PlayAllButton() {
       type="button"
       onClick={handlePlayAll}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-700 px-3 py-2 font-medium text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
+      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-3 py-2 font-medium text-foreground transition-colors hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
       aria-label="Play all tracks"
     >
       {isLoading ? (
@@ -838,7 +838,7 @@ function ShuffleButton() {
       type="button"
       onClick={handleShuffle}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
+      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
       aria-label="Shuffle all tracks"
     >
       {isLoading ? (
@@ -854,12 +854,12 @@ function ShuffleButton() {
 function LetterHeader({ letter }: { letter: string }) {
   return (
     <div
-      className="border-b border-amber-500/20 bg-slate-800/50 px-4 py-3"
+      className="border-b border-primary/20 bg-muted/50 px-4 py-3"
       role="heading"
       aria-level={3}
       aria-label={`Tracks starting with ${letter}`}
     >
-      <span className="text-2xl font-bold text-amber-400">{letter}</span>
+      <span className="text-2xl font-bold text-primary">{letter}</span>
     </div>
   );
 }
@@ -999,14 +999,14 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
       <LiveAnnouncer message={getAnnouncement()} />
       {/* Header with count and create button */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-slate-400">
+        <span className="text-sm text-muted-foreground">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={handleShowLiked}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
             aria-label="View liked tracks"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
@@ -1016,7 +1016,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
             type="button"
             ref={createPlaylistRestoreRef}
             onClick={handleCreateOpen}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-4"
             aria-label="Create new playlist"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
@@ -1116,7 +1116,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   if (isLoading) {
     return (
       <div className="flex justify-center py-12" role="status" aria-label="Loading liked tracks">
-        <Spinner className="size-8 text-amber-400" />
+        <Spinner className="size-8 text-primary" />
         <span className="sr-only">Loading liked tracks...</span>
       </div>
     );
@@ -1132,36 +1132,36 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
           <button
             type="button"
             onClick={onExit}
-            className="flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
+            className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none"
             aria-label="Back to playlists"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             Playlists
           </button>
-          <span className="text-slate-600" aria-hidden="true">/</span>
-          <h2 className="flex items-center gap-2 font-semibold text-white">
+          <span className="text-muted-foreground" aria-hidden="true">/</span>
+          <h2 className="flex items-center gap-2 font-semibold text-foreground">
             <Heart className="size-4 fill-current text-red-400" aria-hidden="true" />
             Liked Tracks
           </h2>
         </div>
-        <span className="text-sm text-slate-400">
+        <span className="text-sm text-muted-foreground">
           {total} {total === 1 ? "track" : "tracks"}
         </span>
       </div>
 
       {/* Track list or empty state */}
       {tracks.length === 0 ? (
-        <div className="rounded-xl border border-amber-500/10 bg-slate-800/30 py-12 text-center">
-          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40">
-            <Heart className="size-6 text-slate-500" aria-hidden="true" />
+        <div className="rounded-xl border border-primary/10 bg-muted/30 py-12 text-center">
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
+            <Heart className="size-6 text-muted-foreground" aria-hidden="true" />
           </div>
-          <p className="text-slate-300">No liked tracks yet.</p>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="text-muted-foreground">No liked tracks yet.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
             Tap the heart icon on any track to add it here.
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+        <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
           {tracks.map((track) => (
             <TrackItem
               key={track.id}
@@ -1205,21 +1205,21 @@ function PlaylistsTabSkeleton() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-10 w-32 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              "rounded-xl border border-border bg-card p-4",
               MOTION_LOADING_STATE_CLASS,
             )}
           >
-            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
-            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-muted" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
+            <div className="mx-auto mt-2 h-3 w-1/2 rounded-sm bg-muted" />
           </div>
         ))}
       </div>
@@ -1234,22 +1234,22 @@ type EmptyPlaylistsStateProps = {
 function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/30 shadow-lg shadow-amber-500/5 sm:size-24">
+      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/30 shadow-lg shadow-primary/5 sm:size-24">
         <ListMusic
-          className="size-8 text-amber-200/40 sm:size-10"
+          className="size-8 text-primary/40 sm:size-10"
           aria-hidden="true"
         />
       </div>
-      <h3 className="mb-2 text-xl font-semibold text-white">
+      <h3 className="mb-2 text-xl font-semibold text-foreground">
         No playlists yet
       </h3>
-      <p className="mb-5 max-w-sm text-slate-400 sm:mb-6">
+      <p className="mb-5 max-w-sm text-muted-foreground sm:mb-6">
         Create your first playlist to start organizing your favorite tracks.
       </p>
       <button
         type="button"
         onClick={onCreateClick}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
       >
         <Plus className="size-4" aria-hidden="true" />
         Create your first playlist

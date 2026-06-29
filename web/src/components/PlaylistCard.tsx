@@ -35,7 +35,7 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
         aria-label={`${name}, ${track_count} tracks, ${formatDuration(total_duration)}`}
       >
         {/* Playlist cover - square with aspect-square to prevent CLS */}
-        <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-slate-800">
+        <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">
           {coverUrl ? (
             <img
               src={coverUrl}
@@ -43,14 +43,14 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
             />
           ) : (
-            <div className="flex size-full items-center justify-center bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/30">
-              <ListMusic className="size-10 text-cyan-200/30" aria-hidden="true" />
+            <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/10">
+              <ListMusic className="size-10 text-primary/30" aria-hidden="true" />
             </div>
           )}
 
           {/* Owner badge */}
           {is_owner && (
-            <div className="absolute top-2 right-2 rounded-full bg-amber-500/90 px-2 py-0.5 text-xs font-medium text-slate-900">
+            <div className="absolute top-2 right-2 rounded-full bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
               Owner
             </div>
           )}
@@ -58,8 +58,8 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
 
         {/* Playlist info */}
         <div className="text-center">
-          <h3 className="truncate text-sm font-semibold text-white">{name}</h3>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {track_count} {track_count === 1 ? "track" : "tracks"}
             {total_duration > 0 && ` · ${formatDuration(total_duration)}`}
           </p>

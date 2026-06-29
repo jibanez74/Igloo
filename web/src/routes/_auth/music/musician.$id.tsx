@@ -69,7 +69,7 @@ function MusicianDetailsPage() {
   if (!data.data?.musician) {
     return (
       <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-slate-300">
+        <h2 className="text-xl font-semibold text-muted-foreground">
           Musician not found
         </h2>
       </div>
@@ -215,7 +215,7 @@ function MusicianDetailsContent({
           <header className="mb-10 flex flex-col gap-8 lg:flex-row">
             {/* Musician thumbnail */}
             <figure className="mx-auto shrink-0 lg:mx-0">
-              <div className="aspect-square w-48 overflow-hidden rounded-full border border-amber-500/20 shadow-2xl shadow-amber-500/10 md:w-56 lg:w-64">
+              <div className="aspect-square w-48 overflow-hidden rounded-full border border-primary/20 shadow-2xl shadow-primary/10 md:w-56 lg:w-64">
                 {thumbUrl ? (
                   <img
                     src={thumbUrl}
@@ -224,12 +224,12 @@ function MusicianDetailsContent({
                   />
                 ) : (
                   <div
-                    className="flex size-full items-center justify-center bg-slate-800"
+                    className="flex size-full items-center justify-center bg-muted"
                     role="img"
                     aria-label="No image available"
                   >
                     <User
-                      className="size-16 text-slate-600"
+                      className="size-16 text-muted-foreground"
                       aria-hidden="true"
                     />
                   </div>
@@ -242,7 +242,7 @@ function MusicianDetailsContent({
               {/* Name */}
               <h1
                 id="musician-name"
-                className="truncate text-2xl font-bold text-white sm:text-3xl md:text-4xl lg:text-5xl"
+                className="truncate text-2xl font-bold text-foreground sm:text-3xl md:text-4xl lg:text-5xl"
                 title={musician.name}
               >
                 {musician.name}
@@ -250,7 +250,7 @@ function MusicianDetailsContent({
 
               {/* Summary */}
               {summary && (
-                <p className="mt-3 text-sm text-slate-400 sm:text-base lg:max-w-2xl">
+                <p className="mt-3 text-sm text-muted-foreground sm:text-base lg:max-w-2xl">
                   {summary}
                 </p>
               )}
@@ -264,7 +264,7 @@ function MusicianDetailsContent({
                   {genres.map((genre) => (
                     <li
                       key={genre}
-                      className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
+                      className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
                     >
                       {genre}
                     </li>
@@ -274,23 +274,23 @@ function MusicianDetailsContent({
 
               {/* Stats row */}
               <ul
-                className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-slate-400 sm:text-base lg:justify-start"
+                className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground sm:text-base lg:justify-start"
                 aria-label="Musician statistics"
               >
                 <li className="flex items-center gap-1.5">
-                  <Disc3 className="size-4 text-slate-400" aria-hidden="true" />
+                  <Disc3 className="size-4 text-muted-foreground" aria-hidden="true" />
                   <span>
                     {albums.length} {albums.length === 1 ? "album" : "albums"}
                   </span>
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Music className="size-4 text-slate-400" aria-hidden="true" />
+                  <Music className="size-4 text-muted-foreground" aria-hidden="true" />
                   <span>
                     {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
                   </span>
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Clock className="size-4 text-slate-400" aria-hidden="true" />
+                  <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
                   <span>{formatDuration(total_duration)}</span>
                 </li>
               </ul>
@@ -301,8 +301,8 @@ function MusicianDetailsContent({
                   <button
                     type="button"
                     onClick={handlePlayAll}
-                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3
-                  font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400
+                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-primary px-6 py-3
+                  font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90
                   focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:w-auto"
                     aria-label={`Play all ${tracks.length} tracks by ${musician.name}`}
                   >
@@ -312,8 +312,8 @@ function MusicianDetailsContent({
                   <button
                     type="button"
                     onClick={handleShufflePlay}
-                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700
-                  px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600
+                    className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-border bg-accent
+                  px-6 py-3 font-semibold text-foreground transition-colors hover:bg-accent
                   focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:w-auto"
                     aria-label={`Shuffle play all ${tracks.length} tracks by ${musician.name}`}
                   >
@@ -325,7 +325,7 @@ function MusicianDetailsContent({
 
               {/* Spotify stats */}
               {(spotifyPopularity !== null || spotifyFollowers !== null) && (
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-400 sm:text-sm lg:justify-start">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground sm:text-sm lg:justify-start">
                   <svg
                     className="size-4 text-green-500"
                     viewBox="0 0 24 24"
@@ -336,7 +336,7 @@ function MusicianDetailsContent({
                   </svg>
                   {spotifyPopularity !== null && (
                     <span>
-                      <span className="text-slate-400">Popularity:</span>{" "}
+                      <span className="text-muted-foreground">Popularity:</span>{" "}
                       <span className="font-medium text-green-400">
                         {spotifyPopularity}
                       </span>
@@ -344,7 +344,7 @@ function MusicianDetailsContent({
                   )}
                   {spotifyFollowers !== null && (
                     <span>
-                      <span className="text-slate-400">Followers:</span>{" "}
+                      <span className="text-muted-foreground">Followers:</span>{" "}
                       <span className="font-medium text-green-400">
                         {formatFollowers(spotifyFollowers)}
                       </span>
@@ -367,9 +367,9 @@ function MusicianDetailsContent({
             <section aria-labelledby="discography-heading">
               <h2
                 id="discography-heading"
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
               >
-                <Disc3 className="size-5 text-amber-400" aria-hidden="true" />
+                <Disc3 className="size-5 text-primary" aria-hidden="true" />
                 Discography
               </h2>
 
@@ -386,16 +386,16 @@ function MusicianDetailsContent({
             <section aria-labelledby="tracks-heading">
               <h2
                 id="tracks-heading"
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
               >
                 <ListOrdered
-                  className="size-5 text-amber-400"
+                  className="size-5 text-primary"
                   aria-hidden="true"
                 />
                 All Tracks
               </h2>
 
-              <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+              <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
                 <div className="divide-y divide-slate-700/30">
                   {tracks.map((track) => (
                     <TrackItem
@@ -426,8 +426,8 @@ function MusicianDetailsContent({
             <Link
               to="/music"
               search={{ tab: "musicians" }}
-              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-slate-400 transition-colors
-            hover:text-amber-400 focus:text-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
+              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground transition-colors
+            hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none"
               aria-label="Back to Musicians library"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
@@ -450,15 +450,15 @@ function MusicianDetailsBackdrop({ thumbUrl }: { thumbUrl: string | null }) {
           className="h-44 w-full object-cover object-center sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48"
         />
       ) : (
-        <div className="flex h-44 w-full items-center justify-center bg-slate-800 sm:h-52 md:aspect-21/9 md:min-h-48">
+        <div className="flex h-44 w-full items-center justify-center bg-muted sm:h-52 md:aspect-21/9 md:min-h-48">
           <User
-            className="size-16 text-slate-600 opacity-40"
+            className="size-16 text-muted-foreground opacity-40"
             aria-hidden="true"
           />
         </div>
       )}
       <div
-        className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
+        className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent"
         aria-hidden="true"
       />
     </div>
@@ -476,12 +476,12 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
         params={{ id: album.id.toString() }}
         className={cn(
           CARD_INTERACTIVE_SURFACE_CLASS,
-          "block overflow-hidden rounded-lg border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-none",
+          "block overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-none",
         )}
         aria-label={`${album.title}${year ? `, ${year}` : ""}, ${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`}
       >
         {/* Album cover */}
-        <div className="aspect-square overflow-hidden bg-slate-800">
+        <div className="aspect-square overflow-hidden bg-muted">
           {coverUrl ? (
             <img
               src={coverUrl}
@@ -490,17 +490,17 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <Disc3 className="size-10 text-slate-600" aria-hidden="true" />
+              <Disc3 className="size-10 text-muted-foreground" aria-hidden="true" />
             </div>
           )}
         </div>
 
         {/* Album info */}
         <div className="p-3">
-          <h3 className="truncate text-sm font-semibold text-white">
+          <h3 className="truncate text-sm font-semibold text-foreground">
             {album.title}
           </h3>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {year && <span>{year} · </span>}
             {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
           </p>

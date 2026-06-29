@@ -74,7 +74,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         aria-label={`${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >
         {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
-        <div className="relative aspect-square bg-slate-800">
+        <div className="relative aspect-square bg-muted">
           {showCover ? (
             <img
               src={coverUrl}
@@ -90,7 +90,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <Music className="size-10 text-slate-600" aria-hidden="true" />
+              <Music className="size-10 text-muted-foreground" aria-hidden="true" />
             </div>
           )}
 
@@ -106,11 +106,11 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
         {/* Album info */}
         <div className="min-h-17 p-3">
-          <h3 className="line-clamp-2 text-sm/tight font-semibold text-white">
+          <h3 className="line-clamp-2 text-sm/tight font-semibold text-foreground">
             {title}
           </h3>
           {musicianName && (
-            <p className="mt-1 truncate text-xs text-slate-400">
+            <p className="mt-1 truncate text-xs text-muted-foreground">
               {musicianName}
             </p>
           )}
@@ -124,7 +124,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         disabled={isLoading}
         className={cn(
           CARD_ACTION_REVEAL_CLASS,
-          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50",
+          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50",
         )}
         aria-label={`Play ${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >

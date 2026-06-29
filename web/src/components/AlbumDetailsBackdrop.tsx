@@ -20,14 +20,14 @@ export default function AlbumDetailsBackdrop({
         />
       ) : (
         <div
-          className="flex h-44 w-full items-center justify-center bg-slate-800 sm:h-52 md:aspect-21/9 md:min-h-48"
+          className="flex h-44 w-full items-center justify-center bg-muted sm:h-52 md:aspect-21/9 md:min-h-48"
           aria-hidden="true"
         >
-          <Disc3 className="size-16 text-slate-600 opacity-40" aria-hidden="true" />
+          <Disc3 className="size-16 text-muted-foreground opacity-40" aria-hidden="true" />
         </div>
       )}
       <div
-        className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent"
+        className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent"
         aria-hidden="true"
       />
       <span className="sr-only">Album artwork for {albumTitle}</span>

@@ -127,7 +127,7 @@ export default function DraggableTrackList({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+    <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -143,7 +143,7 @@ export default function DraggableTrackList({
           items={sortableIds}
           strategy={verticalListSortingStrategy}
         >
-          <div className="divide-y divide-slate-700/30">
+          <div className="divide-y divide-border/30">
             {tracks.map((track) => (
               <SortableTrackItem
                 key={track.id}
@@ -172,7 +172,7 @@ export default function DraggableTrackList({
         {/* Drag overlay for better visual feedback */}
         <DragOverlay>
           {activeTrack ? (
-            <div className="rounded-lg bg-slate-900 shadow-2xl ring-2 ring-ring">
+            <div className="rounded-lg bg-card shadow-2xl ring-2 ring-ring">
               <TrackItem
                 id={activeTrack.id}
                 title={activeTrack.title}
