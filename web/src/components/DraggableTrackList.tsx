@@ -172,7 +172,7 @@ export default function DraggableTrackList({
         {/* Drag overlay for better visual feedback */}
         <DragOverlay>
           {activeTrack ? (
-            <div className="rounded-lg bg-slate-900 shadow-2xl ring-2 ring-amber-400">
+            <div className="rounded-lg bg-slate-900 shadow-2xl ring-2 ring-ring">
               <TrackItem
                 id={activeTrack.id}
                 title={activeTrack.title}

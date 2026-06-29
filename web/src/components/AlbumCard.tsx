@@ -11,6 +11,7 @@ import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
+  CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -62,17 +63,14 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
   return (
     <article
-      className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
-      )}
+      className={cn(CARD_INTERACTIVE_SURFACE_CLASS, CARD_SURFACE_CLASS)}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
       <Link
         to="/music/album/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-amber-400 focus:outline-none focus:ring-inset"
+        className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
         aria-label={`${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >
         {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
@@ -126,7 +124,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         disabled={isLoading}
         className={cn(
           CARD_ACTION_REVEAL_CLASS,
-          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50",
+          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50",
         )}
         aria-label={`Play ${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >

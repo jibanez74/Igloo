@@ -428,7 +428,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   ? `${downloadMbpsId}-description ${statusId}`
                   : `${downloadMbpsId}-description`
               }
-              className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+              className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
             />
             <p
               id={`${downloadMbpsId}-description`}
@@ -480,7 +480,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                     ? `${serverUploadMbpsId}-description ${statusId}`
                     : `${serverUploadMbpsId}-description`
                 }
-                className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+                className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
               />
               <p
                 id={`${serverUploadMbpsId}-description`}
@@ -566,7 +566,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredProfileId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-amber-400/30"
+                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="Use recommended" />
               </SelectTrigger>
@@ -619,7 +619,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredAudioLanguageId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-amber-400/30"
+                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
@@ -674,7 +674,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredSubtitleLanguageId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-amber-400/30"
+                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>

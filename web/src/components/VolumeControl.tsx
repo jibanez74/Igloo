@@ -24,11 +24,11 @@ type VolumeControlProps = {
 
 const accentStyles = {
   amber: {
-    focusRing: "focus:ring-amber-400",
+    focusRing: "focus:ring-ring",
     slider: "accent-amber-400",
   },
   cyan: {
-    focusRing: "focus:ring-cyan-400",
+    focusRing: "focus:ring-ring",
     slider: "accent-cyan-400",
   },
 } as const;

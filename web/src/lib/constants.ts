@@ -183,7 +183,7 @@ export const SUBTITLES_NONE_LABEL = "None";
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
-  "w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50";
+  "w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
   "w-full min-w-0 border-slate-700 bg-slate-800 text-white";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
@@ -326,6 +326,9 @@ export const MOTION_DECORATIVE_STATE_CLASS =
 export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
+/** Shared media-card chrome: tokenized surface + glacier hover glow. */
+export const CARD_SURFACE_CLASS =
+  "group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20";
 export const CARD_MEDIA_HOVER_CLASS =
   "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
 export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;

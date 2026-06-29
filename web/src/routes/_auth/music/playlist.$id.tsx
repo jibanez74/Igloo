@@ -278,7 +278,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       {/* Screen reader announcement */}
       <span
         tabIndex={0}
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-ring focus:outline-none"
         aria-label={pageAnnouncement}
       >
         {playlist.name} - {track_count} tracks
@@ -350,7 +350,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handlePlayAll}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Play all ${track_count} tracks`}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />
@@ -359,7 +359,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handleShuffle}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
                 <Shuffle className="size-4" aria-hidden="true" />
@@ -448,7 +448,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         <Link
           to="/music"
           search={{ tab: "playlists" }}
-          className="inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          className="inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
           aria-label="Back to Playlists"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />

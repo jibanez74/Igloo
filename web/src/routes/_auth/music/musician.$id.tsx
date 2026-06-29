@@ -303,7 +303,7 @@ function MusicianDetailsContent({
                     onClick={handlePlayAll}
                     className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3
                   font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400
-                  focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:w-auto"
+                  focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:w-auto"
                     aria-label={`Play all ${tracks.length} tracks by ${musician.name}`}
                   >
                     <Play className="size-4 fill-current" aria-hidden="true" />
@@ -314,7 +314,7 @@ function MusicianDetailsContent({
                     onClick={handleShufflePlay}
                     className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700
                   px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600
-                  focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:w-auto"
+                  focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:w-auto"
                     aria-label={`Shuffle play all ${tracks.length} tracks by ${musician.name}`}
                   >
                     <Shuffle className="size-4" aria-hidden="true" />
@@ -427,7 +427,7 @@ function MusicianDetailsContent({
               to="/music"
               search={{ tab: "musicians" }}
               className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-slate-400 transition-colors
-            hover:text-amber-400 focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            hover:text-amber-400 focus:text-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
               aria-label="Back to Musicians library"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
@@ -476,7 +476,7 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
         params={{ id: album.id.toString() }}
         className={cn(
           CARD_INTERACTIVE_SURFACE_CLASS,
-          "block overflow-hidden rounded-lg border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20 focus:border-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+          "block overflow-hidden rounded-lg border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-none",
         )}
         aria-label={`${album.title}${year ? `, ${year}` : ""}, ${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`}
       >

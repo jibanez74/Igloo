@@ -295,7 +295,7 @@ function MoreMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
-          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
           aria-label="More options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />
@@ -803,7 +803,7 @@ function PlayAllButton() {
       type="button"
       onClick={handlePlayAll}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-700 px-3 py-2 font-medium text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50 sm:px-4"
+      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-700 px-3 py-2 font-medium text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
       aria-label="Play all tracks"
     >
       {isLoading ? (
@@ -838,7 +838,7 @@ function ShuffleButton() {
       type="button"
       onClick={handleShuffle}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none disabled:opacity-50 sm:px-4"
+      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
       aria-label="Shuffle all tracks"
     >
       {isLoading ? (
@@ -1006,7 +1006,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
           <button
             type="button"
             onClick={handleShowLiked}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
             aria-label="View liked tracks"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
@@ -1016,7 +1016,7 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
             type="button"
             ref={createPlaylistRestoreRef}
             onClick={handleCreateOpen}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-4"
             aria-label="Create new playlist"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
@@ -1132,7 +1132,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
           <button
             type="button"
             onClick={onExit}
-            className="flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            className="flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
             aria-label="Back to playlists"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
@@ -1249,7 +1249,7 @@ function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
       <button
         type="button"
         onClick={onCreateClick}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
       >
         <Plus className="size-4" aria-hidden="true" />
         Create your first playlist

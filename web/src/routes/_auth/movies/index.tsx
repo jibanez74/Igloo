@@ -366,7 +366,7 @@ function MoreMenu({
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
-          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
           aria-label="More options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />
@@ -522,7 +522,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
           <button
             type="button"
             onClick={handleSortToggle}
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
             aria-label={
               sort === "asc"
                 ? "Sorted A to Z, click to sort Z to A"
@@ -760,7 +760,7 @@ function GenresTabContent({
                   genreButtonRefs.current.delete(g.genre_id);
                 }}
                 onClick={() => handleSelectGenre(g.genre_id)}
-                className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none ${
                   hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3"
                 } ${
                   selected
@@ -800,7 +800,7 @@ function GenresTabContent({
               <button
                 type="button"
                 onClick={handleClearGenre}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none"
                 aria-label="Clear genre filter"
               >
                 <X className="size-3.5" aria-hidden="true" />
@@ -816,7 +816,7 @@ function GenresTabContent({
               <button
                 type="button"
                 onClick={handleSortToggle}
-                className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
                 aria-label={
                   sort === "asc"
                     ? "Sorted A to Z, click to sort Z to A"
@@ -1006,7 +1006,7 @@ function PlaylistsTabContent({
                 replace: true,
               });
             }}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
             Liked movies
@@ -1014,7 +1014,7 @@ function PlaylistsTabContent({
           <button
             type="button"
             onClick={handleCreateOpen}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
             New playlist
@@ -1170,7 +1170,7 @@ function LikedMoviesInPlaylistsTab({
           <button
             type="button"
             onClick={handleSortToggle}
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
             aria-label={
               sort === "asc"
                 ? "Sorted A to Z, click to sort Z to A"
@@ -1257,7 +1257,7 @@ function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {
       <button
         type="button"
         onClick={onCreate}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
       >
         <Plus className="size-4" aria-hidden="true" />
         Create your first playlist

@@ -141,7 +141,7 @@ export default function TrackItem({
         "group flex items-center gap-3 p-3 hover:bg-slate-800/50 sm:gap-4 sm:px-4",
         MOTION_TRACK_ROW_CLASS,
         isCurrentTrack && "bg-slate-800/40",
-        isDragging && "opacity-50 shadow-lg ring-2 ring-amber-400/50",
+        isDragging && "opacity-50 shadow-lg ring-2 ring-ring/50",
       )}
     >
       {/* Drag handle - only for draggable items */}

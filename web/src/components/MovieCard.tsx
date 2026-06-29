@@ -7,6 +7,7 @@ import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
+  CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -35,7 +36,8 @@ export default function MovieCard({ movie }: MovieCardProps) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20",
+        CARD_SURFACE_CLASS,
+        "min-w-0 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
       )}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
@@ -44,7 +46,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
         <Link
           to="/movies/$id"
           params={{ id: String(id) }}
-          className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-label={ariaTitle}
         >
           {/* Poster with 2:3 aspect ratio (standard movie poster) */}
@@ -96,7 +98,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
         params={{ id: String(id) }}
         className={cn(
           CARD_ACTION_REVEAL_CLASS,
-          "absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+          "absolute top-1/2 left-1/2 z-10 flex size-14 -translate-1/2 scale-90 items-center justify-center rounded-full bg-amber-500 text-slate-900 opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-amber-400 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
         )}
         aria-label={`Play ${ariaTitle}`}
       >

@@ -532,7 +532,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             >
               <SelectTrigger
                 id={hardwareDeviceId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-amber-400/30"
+                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -782,7 +782,7 @@ function SwitchField({
           disabled={disabled}
           onClick={() => onCheckedChange(!checked)}
           className={cn(
-            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
             MOTION_SETTINGS_SURFACE_CLASS,
             checked
               ? "border-amber-400 bg-amber-500"
@@ -853,7 +853,7 @@ function URLInput({
         aria-describedby={descriptionId}
         aria-invalid={invalid || undefined}
         autoComplete="off"
-        className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+        className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
       />
       <p id={descriptionId} className="text-sm text-slate-400">
         Use http:// or https://. Leave blank to clear this value.
@@ -886,7 +886,7 @@ function SecretInput({
           disabled={disabled}
           aria-describedby={descriptionId}
           autoComplete="off"
-          className="h-10 border-slate-600 bg-slate-950/60 pr-11 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+          className="h-10 border-slate-600 bg-slate-950/60 pr-11 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
         />
         <Button
           type="button"
@@ -954,7 +954,7 @@ function PathInput({
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}
           aria-describedby={descriptionId}
-          className="h-10 border-slate-600 bg-slate-950/60 pl-10 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+          className="h-10 border-slate-600 bg-slate-950/60 pl-10 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
         />
       </div>
       <p id={descriptionId} className="text-sm text-slate-400">

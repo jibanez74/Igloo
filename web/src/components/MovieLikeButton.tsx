@@ -141,7 +141,7 @@ export default function MovieLikeButton({
       }}
       disabled={mutation.isPending || isLoading}
       className={cn(
-        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:opacity-60",
+        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:ring-2 focus:ring-ring focus:outline-none disabled:opacity-60",
         className,
       )}
       aria-label={label}

@@ -254,7 +254,7 @@ function SpotifyAlbumResultCard({
       <Label
         id={labelId}
         htmlFor={inputId}
-        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/60"
+        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-ring/60"
       >
         {result.cover_url ? (
           <img

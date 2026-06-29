@@ -773,7 +773,7 @@ function AccountSettings() {
                 <label
                   htmlFor={avatarUploadId}
                   className={cn(
-                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors peer-focus-visible:border-amber-400/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-amber-400/20",
+                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors peer-focus-visible:border-ring/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/20",
                     lightInputClassName,
                     uploadAvatarMutation.isPending
                       ? "cursor-not-allowed opacity-70"

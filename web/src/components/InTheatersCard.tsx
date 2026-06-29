@@ -3,6 +3,7 @@ import { Film, Star } from "lucide-react";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -33,13 +34,13 @@ export default function MovieCard({ movie }: MovieCardProps) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/20",
+        CARD_SURFACE_CLASS,
       )}
     >
       <Link
         to="/movies/in-theaters/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        className="block rounded-xl focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}

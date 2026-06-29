@@ -3,6 +3,7 @@ import { ListMusic } from "lucide-react";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -23,13 +24,14 @@ export default function PlaylistCard({ playlist }: PlaylistCardProps) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+        CARD_SURFACE_CLASS,
+        "p-4",
       )}
     >
       <Link
         to="/music/playlist/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-amber-400 focus:outline-none focus:ring-inset"
+        className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
         aria-label={`${name}, ${track_count} tracks, ${formatDuration(total_duration)}`}
       >
         {/* Playlist cover - square with aspect-square to prevent CLS */}

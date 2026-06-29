@@ -349,7 +349,7 @@ function AllSection({
           <Link
             to="/search"
             search={{ q, tab, page: 1 }}
-            className="text-sm font-medium text-amber-400 hover:underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            className="text-sm font-medium text-amber-400 hover:underline focus:ring-2 focus:ring-ring focus:outline-none"
           >
             See all {total.toLocaleString()} {title.toLowerCase()} →
           </Link>
@@ -715,7 +715,7 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:outline-none"
       >
         Try again
       </button>

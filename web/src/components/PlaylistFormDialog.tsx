@@ -239,7 +239,7 @@ function PlaylistForm({
             onChange={(e) => setName(e.target.value)}
             placeholder="My Playlist"
             maxLength={255}
-            className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500"
+            className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus:border-ring focus:ring-ring"
             disabled={mutation.isPending}
             autoFocus
           />
@@ -262,7 +262,7 @@ function PlaylistForm({
             placeholder="Add a description..."
             maxLength={1000}
             rows={3}
-            className="w-full resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 focus:outline-none disabled:opacity-50"
+            className="w-full resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
             disabled={mutation.isPending}
           />
         </div>

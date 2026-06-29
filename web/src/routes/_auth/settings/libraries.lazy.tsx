@@ -559,7 +559,7 @@ function LibraryPathSection({
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"
-            className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+            className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
           />
           <p id={descriptionId} className="text-sm text-slate-400">
             Enter a directory path readable by the Igloo server. Leave blank to

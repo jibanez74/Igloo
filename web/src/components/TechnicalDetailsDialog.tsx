@@ -261,7 +261,7 @@ export default function TechnicalDetailsDialog({
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className="text-white outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="text-white outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Technical details
           </DialogTitle>

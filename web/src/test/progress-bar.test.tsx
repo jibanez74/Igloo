@@ -102,7 +102,7 @@ describe("ProgressBar", () => {
     const thumb = fill?.nextElementSibling;
 
     expect(group).toHaveClass("mb-4", "w-full");
-    expect(slider).toHaveClass("h-1.5", "focus:ring-amber-400");
+    expect(slider).toHaveClass("h-1.5", "focus:ring-ring");
     expect(fill).toHaveClass(
       "bg-amber-400",
       ...MOTION_PROGRESS_FILL_CLASS.split(" "),

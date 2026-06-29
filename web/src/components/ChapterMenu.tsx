@@ -59,7 +59,7 @@ export default function ChapterMenu({
       <DropdownMenuTrigger
         className={cn(
           MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+          "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none",
         )}
         aria-label={`Chapters, ${chapters.length} ${
           chapters.length === 1 ? "chapter" : "chapters"

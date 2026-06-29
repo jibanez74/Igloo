@@ -20,9 +20,11 @@ const buttonVariants = cva(
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
         accent:
-          "bg-amber-500 text-slate-900 shadow-md hover:bg-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-offset-background",
+          "bg-primary text-primary-foreground shadow-md hover:bg-primary/90",
         "accent-pill":
-          "rounded-full bg-amber-500 text-slate-900 shadow-md hover:bg-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-offset-background",
+          "rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90",
+        aurora:
+          "bg-aurora text-aurora-foreground shadow-md hover:bg-aurora/90",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

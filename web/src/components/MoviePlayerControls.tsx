@@ -102,7 +102,7 @@ export default function MoviePlayerControls({
               onClick={onSeekBackward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label="Seek backward 10 seconds"
             >
@@ -113,7 +113,7 @@ export default function MoviePlayerControls({
               onClick={onTogglePlay}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                "flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
               )}
               aria-label={playing ? "Pause" : "Play"}
             >
@@ -128,7 +128,7 @@ export default function MoviePlayerControls({
               onClick={onSeekForward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label="Seek forward 10 seconds"
             >
@@ -158,7 +158,7 @@ export default function MoviePlayerControls({
               onClick={onToggleFullscreen}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label={
                 chromeFullscreenMode

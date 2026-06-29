@@ -41,7 +41,7 @@ export default function CastSection({
         {displayedCast.map((actor, index) => (
           <li
             key={actor.id}
-            className="w-32 shrink-0 overflow-hidden rounded-lg border border-amber-500/20 bg-slate-800/50 transition-colors focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/50 hover:border-amber-500/40"
+            className="w-32 shrink-0 overflow-hidden rounded-lg border border-amber-500/20 bg-slate-800/50 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-amber-500/40"
           >
             <article
               tabIndex={0}

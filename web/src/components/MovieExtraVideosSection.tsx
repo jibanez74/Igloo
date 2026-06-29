@@ -46,7 +46,7 @@ export default function MovieExtraVideosSection({
               className={cn(
                 "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors",
                 "hover:border-amber-500/40 hover:bg-slate-800",
-                "focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:outline-none",
+                "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
                 "sm:min-h-0",
               )}
             >
