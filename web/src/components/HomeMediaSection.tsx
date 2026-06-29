@@ -67,20 +67,20 @@ export default function HomeMediaSection<T>({
         <div className="min-w-0">
           <h2
             id={headingId}
-            className="text-xl font-semibold tracking-tight text-white md:text-2xl"
+            className="text-xl font-semibold tracking-tight text-foreground md:text-2xl"
           >
             {title}
           </h2>
           <p
             id={sectionSummaryId}
-            className="mt-1 text-sm text-slate-400"
+            className="mt-1 text-sm text-muted-foreground"
           >
             {sectionSummary}
           </p>
         </div>
 
         {!isPending && !hasError && items.length > 0 && (
-          <p className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1 text-xs font-medium text-slate-300">
+          <p className="rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground">
             {items.length} {countLabel}
           </p>
         )}
@@ -92,7 +92,7 @@ export default function HomeMediaSection<T>({
           role="status"
           aria-label={loadingLabel}
         >
-          <Spinner className="size-8 text-amber-400" />
+          <Spinner className="size-8 text-primary" />
         </div>
       ) : hasError ? (
         <Alert
@@ -113,13 +113,13 @@ export default function HomeMediaSection<T>({
         </div>
       ) : (
         <div className="py-12 text-center sm:py-16">
-          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-amber-500/20 bg-slate-800">
-            <EmptyIcon className="size-6 text-amber-600" aria-hidden="true" />
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-primary/20 bg-muted">
+            <EmptyIcon className="size-6 text-primary" aria-hidden="true" />
           </div>
-          <h3 className="mb-2 text-lg font-semibold text-slate-300">
+          <h3 className="mb-2 text-lg font-semibold text-foreground">
             {emptyTitle}
           </h3>
-          <p className="mx-auto max-w-md px-4 text-slate-400 sm:px-0">
+          <p className="mx-auto max-w-md px-4 text-muted-foreground sm:px-0">
             {emptyDescription}
           </p>
         </div>
