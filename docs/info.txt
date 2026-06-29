@@ -1,115 +1,132 @@
-The biggest difference is this:
+Yes — **on Nvidia Shield / Android TV, MKV direct playback is realistic**, including through `expo-video`, **as long as the tracks inside the MKV are supported by the device/player**.
 
-**`expo-video` is the Expo-native video API. `react-native-video` is the older, more customizable community player.** Both rely on native players underneath, so codec support is mostly the same class of problem: ExoPlayer/Media3 on Android and AVPlayer on iOS/tvOS.
-
-## Core comparison
-
-| Area                | `expo-video`                                                                                              | `react-native-video`                                                                                  |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Best fit            | Expo apps, especially Expo Router / Expo TV projects                                                      | Bare React Native or Expo projects that need deeper player control                                    |
-| Underlying player   | Native platform player through Expo module                                                                | ExoPlayer on Android, AVPlayer on iOS/tvOS, HTML5 on web                                              |
-| TV compatibility    | Official Expo docs list Android, iOS, tvOS, and Web support for `expo-video`                              | v6 docs mention AVPlayer for iOS/tvOS, but current v7 repo marks TV support as TODO/in progress       |
-| Setup               | Easier in Expo; `npx expo install expo-video`                                                             | More native setup; has Expo plugin support but is still more custom                                   |
-| API style           | Modern hook-based API: `useVideoPlayer`, `VideoView`, player events                                       | Traditional `<Video>` component in v6; v7 introduces newer API but is still active development        |
-| Track control       | Supports available audio/subtitle track events and track selection APIs, but the API is more Expo-managed | Usually exposes more low-level control for buffering, events, tracks, DRM, ads, and playback behavior |
-| DRM                 | Supports DRM configuration, but less battle-tested for complex OTT needs                                  | Stronger history around Widevine/FairPlay and production streaming use cases                          |
-| Offline / downloads | Has caching support on Android/iOS, with limitations                                                      | Offline/download support often involves extra/commercial SDK pieces                                   |
-| Maintenance path    | Maintained by Expo, aligned with Expo SDK releases                                                        | Maintained by TheWidlarzGroup/community; v6 stable, v7 active development                             |
-
-Expo’s TV guide says Expo apps can target Android TV and Apple TV by using the `react-native-tvos` package, and the `expo-video` docs list Android, iOS, tvOS, and Web support. ([Expo Documentation][1]) `react-native-video` v6 describes itself as using ExoPlayer on Android and AVPlayer on iOS/tvOS, with features like subtitles, DRM, PiP, and embedded controls. ([docs.thewidlarzgroup.com][2])
-
-## For your media-center use case
-
-For **Igloo**, I would think about it this way:
-
-### Use `expo-video` if you want the cleaner Expo path
-
-Choose `expo-video` if your TV client is going to stay close to the Expo ecosystem:
-
-```ts
-import { useVideoPlayer, VideoView } from "expo-video";
-```
-
-It is probably the better default if you are using:
+The key distinction is:
 
 ```text
-Expo
-Expo Router
-react-native-tvos
-Android TV + Apple TV targets
-simple custom controls
-HLS/MP4 playback
-server-side compatibility decisions
+MKV container support ≠ every codec inside the MKV is supported
 ```
 
-This fits your architecture well because your Go backend already handles media analysis, transcoding, remuxing, and streaming decisions. In that setup, the client does not need to be a powerful universal decoder. It needs to be a reliable native player for compatible streams.
+Android’s platform media docs list **Matroska / `.mkv` support** going back to Android 4.0+, and ExoPlayer/Media3 also supports Matroska as a progressive container. ([Android Developers][1])
 
-### Use `react-native-video` if you need deeper playback control
+## What this means for `expo-video`
 
-Choose `react-native-video` if you need more direct control over things like:
-
-```text
-buffer configuration
-DRM edge cases
-custom track selection
-low-level player events
-analytics / QoE reporting
-advanced HLS/DASH behavior
-more mature production streaming examples
-```
-
-The package has a longer history in React Native streaming apps and explicitly advertises HLS, DASH, SmoothStreaming, DRM, offline playback, and advanced playback control. ([GitHub][3])
-
-The caution is that `react-native-video` is in a transition period: v6 is maintained, while v7 is active development and the repo warns that v7 can have breaking changes and missing features. ([GitHub][3]) For TV specifically, I would test carefully before committing.
-
-## Code style difference
-
-With `expo-video`, the mental model is:
+`expo-video` on Android uses the native Android media stack/ExoPlayer-style playback path. So on an Nvidia Shield, you should be able to direct play URLs like:
 
 ```tsx
-const player = useVideoPlayer(source, player => {
+const player = useVideoPlayer({
+  uri: "http://your-server.local/api/videos/123/direct",
+}, player => {
   player.play();
 });
-
-return <VideoView player={player} />;
 ```
 
-With `react-native-video` v6, the model is more like:
+And that URL can point to an `.mkv` file, provided your Go backend serves it correctly with range requests.
 
-```tsx
-<Video
-  source={{ uri }}
-  onBuffer={handleBuffer}
-  onError={handleError}
-  controls
-/>
-```
+## What will probably direct play well on Nvidia Shield
 
-So `expo-video` feels more like a modern Expo module with a player object. `react-native-video` feels more like a classic React Native component with many props and callbacks.
-
-## My recommendation for you
-
-For your current direction, I would start with **`expo-video`** unless you hit a specific limitation.
-
-Reason: your project is self-hosted, your backend already controls the media pipeline, and you care about Android TV/tvOS compatibility. The cleaner strategy is:
+These are realistic direct-play candidates:
 
 ```text
-Client:
-expo-video + custom TV-friendly controls
-
-Backend:
-decide direct play vs remux vs transcode
-
-Preferred stream output:
-HLS or MP4
-H.264 / HEVC where supported
-AAC stereo
-optional AC-3 / E-AC-3 surround
-WebVTT subtitles
+MKV + H.264 + AAC
+MKV + H.264 + AC-3
+MKV + H.264 + E-AC-3
+MKV + H.265/HEVC + AAC
+MKV + H.265/HEVC + AC-3 / E-AC-3
+MKV + VP9 + Opus
 ```
 
-Move to `react-native-video` only if `expo-video` blocks you on a concrete requirement, such as track selection behavior, buffering controls, DRM, subtitle rendering, or specific TV remote-control/player-control integration.
+The Nvidia Shield is much stronger than a generic Android TV stick, so it can direct play many files that weaker devices cannot.
 
-[1]: https://docs.expo.dev/guides/building-for-tv/ "Build Expo apps for TV - Expo Documentation"
-[2]: https://docs.thewidlarzgroup.com/react-native-video/docs/v6/intro/ "Intro | React Native Video"
-[3]: https://github.com/TheWidlarzGroup/react-native-video "GitHub - TheWidlarzGroup/react-native-video: A <Video /> component for react-native · GitHub"
+## What may still fail
+
+These are the cases where `expo-video` may not be enough:
+
+```text
+MKV + DTS
+MKV + DTS-HD MA
+MKV + TrueHD
+MKV + PGS subtitles
+MKV + ASS/SSA subtitles
+MKV + unusual HEVC profile/level
+MKV + Dolby Vision profile not supported by the device/player path
+```
+
+The file may open, but you could get:
+
+```text
+video with no audio
+audio with black screen
+no subtitle rendering
+track-selection issues
+complete playback failure
+```
+
+Android/ExoPlayer support depends on device decoders and platform capabilities, not just the React Native package. Google’s ExoPlayer docs explicitly frame sample-format support around the Android platform’s available decoders. ([Android Developers][2])
+
+## For Igloo, the direct-play rule should be track-based
+
+Do not decide direct playback only by file extension.
+
+Bad:
+
+```ts
+if (file.endsWith(".mkv")) {
+  directPlay();
+}
+```
+
+Better:
+
+```ts
+if (
+  container === "mkv" &&
+  videoCodecSupportedByClient(videoCodec) &&
+  audioCodecSupportedByClient(audioCodec) &&
+  subtitlesSupportedByClient(subtitleCodec)
+) {
+  directPlay();
+} else if (
+  containerNeedsChangeOnly ||
+  audioNeedsTranscodeOnly ||
+  subtitlesNeedExtraction
+) {
+  remuxOrAudioTranscode();
+} else {
+  fullTranscode();
+}
+```
+
+For the Nvidia Shield client profile, you can be more permissive than for Apple TV or web.
+
+## Recommended Nvidia Shield profile
+
+For an Android TV / Nvidia Shield profile, I would model it roughly like this:
+
+```ts
+const nvidiaShieldProfile = {
+  containers: ["mp4", "mkv", "webm", "ts"],
+  videoCodecs: ["h264", "hevc", "vp8", "vp9", "av1"], // AV1 depends on Shield model
+  audioCodecs: ["aac", "mp3", "ac3", "eac3", "opus", "vorbis", "flac"],
+  unsafeAudioCodecs: ["dts", "dts_hd", "truehd"],
+  subtitleCodecs: ["webvtt", "srt"],
+  unsafeSubtitleCodecs: ["pgs", "ass", "ssa"],
+};
+```
+
+For `dts`, `dts_hd`, and `truehd`, I would not assume reliable direct play through `expo-video`. You can test specific Shield behavior, but for a self-hosted media app you should keep a fallback path.
+
+## Practical backend strategy
+
+For Nvidia Shield:
+
+```text
+1. Try direct play for MKV when video/audio/subtitles are compatible.
+2. If only audio is incompatible, keep the video and transcode audio to AAC or AC-3.
+3. If subtitles are PGS/ASS and must be burned in, transcode video.
+4. If the video codec/profile is unsupported, full transcode.
+```
+
+So the answer is: **yes, you can support MKV direct playback on Nvidia Shield with `expo-video`, but only for compatible track combinations.** It should be a client-profile decision, not a global rule.
+
+[1]: https://developer.android.com/media/platform/supported-formats?utm_source=chatgpt.com "Supported media formats"
+[2]: https://developer.android.com/media/media3/exoplayer/supported-formats?utm_source=chatgpt.com "Supported formats | Android media"

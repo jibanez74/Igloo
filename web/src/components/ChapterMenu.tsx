@@ -59,7 +59,7 @@ export default function ChapterMenu({
       <DropdownMenuTrigger
         className={cn(
           MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:outline-none",
+          "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
         )}
         aria-label={`Chapters, ${chapters.length} ${
           chapters.length === 1 ? "chapter" : "chapters"
@@ -100,7 +100,7 @@ export default function ChapterMenu({
               onSelect={() => onSelectChapter(chapter.start_time, label)}
             >
               {isActive ? (
-                <Check className="size-4 text-cyan-400" aria-hidden="true" />
+                <Check className="size-4 text-primary" aria-hidden="true" />
               ) : (
                 <span className="size-4" aria-hidden="true" />
               )}

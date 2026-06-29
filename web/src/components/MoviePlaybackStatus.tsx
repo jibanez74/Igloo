@@ -50,7 +50,7 @@ export default function PlaybackStatusView({
           title="Quality not available"
           message={
             <>
-              <strong className="text-slate-200">{status.modeLabel}</strong> is
+              <strong className="text-foreground">{status.modeLabel}</strong> is
               not available for this movie. Go back and choose a different
               quality in Playback Settings.
             </>
