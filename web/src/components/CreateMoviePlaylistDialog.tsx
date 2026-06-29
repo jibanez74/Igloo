@@ -93,7 +93,7 @@ export default function CreateMoviePlaylistDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        className="border-border bg-card sm:max-w-md"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -105,35 +105,35 @@ export default function CreateMoviePlaylistDialog({
       >
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="text-white">New movie playlist</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-foreground">New movie playlist</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Create a playlist for movies. Track playlists stay on the Music page.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="movie-pl-name" className="text-slate-300">
+              <Label htmlFor="movie-pl-name" className="text-muted-foreground">
                 Name
               </Label>
               <Input
                 id="movie-pl-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="border-slate-600 bg-slate-800 text-white"
+                className="border-border bg-muted text-foreground"
                 placeholder="My watchlist"
                 autoComplete="off"
                 maxLength={255}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="movie-pl-desc" className="text-slate-300">
+              <Label htmlFor="movie-pl-desc" className="text-muted-foreground">
                 Description (optional)
               </Label>
               <Input
                 id="movie-pl-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="border-slate-600 bg-slate-800 text-white"
+                className="border-border bg-muted text-foreground"
                 placeholder="Optional notes"
                 autoComplete="off"
                 maxLength={1000}
@@ -144,7 +144,7 @@ export default function CreateMoviePlaylistDialog({
             <Button
               type="button"
               variant="ghost"
-              className="text-slate-400"
+              className="text-muted-foreground"
               onClick={() => handleOpenChange(false)}
             >
               Cancel
@@ -152,7 +152,7 @@ export default function CreateMoviePlaylistDialog({
             <Button
               type="submit"
               disabled={mutation.isPending}
-              className="bg-amber-500 text-slate-900 hover:bg-amber-400"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {mutation.isPending ? (
                 <>

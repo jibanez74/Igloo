@@ -42,7 +42,7 @@ function SectionHeading({
   return (
     <h3
       id={id}
-      className="mb-3 text-sm font-semibold tracking-wide text-amber-400/90 uppercase"
+      className="mb-3 text-sm font-semibold tracking-wide text-primary/90 uppercase"
     >
       {children}
     </h3>
@@ -59,9 +59,9 @@ function DetailRow({
 }) {
   if (!value) return null;
   return (
-    <p className="m-0 flex flex-col gap-0.5 border-b border-slate-700/50 py-2 text-sm last:border-b-0 sm:flex-row sm:justify-between sm:gap-x-4">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 sm:text-right">{value}</span>
+    <p className="m-0 flex flex-col gap-0.5 border-b border-border/50 py-2 text-sm last:border-b-0 sm:flex-row sm:justify-between sm:gap-x-4">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground sm:text-right">{value}</span>
     </p>
   );
 }
@@ -77,21 +77,21 @@ function VideoStreamCard({ stream }: { stream: VideoStreamType }) {
 
   return (
     <div
-      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      className="rounded-lg border border-border bg-muted/60 p-3"
       aria-labelledby={headingId}
     >
       <h4
         id={headingId}
-        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-foreground"
       >
         <span>Video stream {stream.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
+          <span className="rounded-sm bg-accent px-1.5 py-0.5 text-xs font-normal text-muted-foreground uppercase">
             {language}
           </span>
         )}
         {title && (
-          <span className="text-sm font-normal text-slate-400">({title})</span>
+          <span className="text-sm font-normal text-muted-foreground">({title})</span>
         )}
       </h4>
       <div className="space-y-0">
@@ -131,21 +131,21 @@ function AudioStreamCard({ stream }: { stream: AudioStreamType }) {
 
   return (
     <div
-      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      className="rounded-lg border border-border bg-muted/60 p-3"
       aria-labelledby={headingId}
     >
       <h4
         id={headingId}
-        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-foreground"
       >
         <span>Audio stream {stream.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
+          <span className="rounded-sm bg-accent px-1.5 py-0.5 text-xs font-normal text-muted-foreground uppercase">
             {language}
           </span>
         )}
         {title && (
-          <span className="text-sm font-normal text-slate-400">({title})</span>
+          <span className="text-sm font-normal text-muted-foreground">({title})</span>
         )}
       </h4>
       <div className="space-y-0">
@@ -185,21 +185,21 @@ function SubtitleCard({ subtitle }: { subtitle: SubtitleType }) {
 
   return (
     <div
-      className="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
+      className="rounded-lg border border-border bg-muted/60 p-3"
       aria-labelledby={headingId}
     >
       <h4
         id={headingId}
-        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-white"
+        className="mb-2 flex flex-wrap items-center gap-2 text-base font-medium text-foreground"
       >
         <span>Subtitle stream {subtitle.stream_index}</span>
         {language && (
-          <span className="rounded-sm bg-slate-700 px-1.5 py-0.5 text-xs font-normal text-slate-300 uppercase">
+          <span className="rounded-sm bg-accent px-1.5 py-0.5 text-xs font-normal text-muted-foreground uppercase">
             {language}
           </span>
         )}
         {title && (
-          <span className="text-sm font-normal text-slate-400">({title})</span>
+          <span className="text-sm font-normal text-muted-foreground">({title})</span>
         )}
       </h4>
       <div className="space-y-0">
@@ -245,7 +245,7 @@ export default function TechnicalDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
+        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={
           restoreFocusRef
@@ -261,11 +261,11 @@ export default function TechnicalDetailsDialog({
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className="text-white outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Technical details
           </DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogDescription className="text-muted-foreground">
             Scanner-detected file and stream information. Each line below states
             what is being described, then its value—for example, file size and
             the container format. Use headings to move between sections.
@@ -274,7 +274,7 @@ export default function TechnicalDetailsDialog({
 
         {isPending && (
           <div className="flex justify-center py-8" role="status" aria-live="polite">
-            <Spinner className="size-6 text-amber-400" aria-hidden="true" />
+            <Spinner className="size-6 text-primary" aria-hidden="true" />
             <span className="sr-only">Loading technical details</span>
           </div>
         )}
@@ -292,7 +292,7 @@ export default function TechnicalDetailsDialog({
               className="rounded-lg outline-none"
             >
               <SectionHeading id="td-file">File</SectionHeading>
-              <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              <div className="rounded-lg border border-border bg-muted/60 p-3">
                 <div className="space-y-0">
                   <DetailRow
                     label="File name"
@@ -401,7 +401,7 @@ export default function TechnicalDetailsDialog({
             {details.video_streams.length === 0 &&
               details.audio_streams.length === 0 &&
               details.subtitles.length === 0 && (
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   No video, audio, or subtitle streams were reported for this file.
                 </p>
               )}

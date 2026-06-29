@@ -226,9 +226,9 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     <div
       ref={containerRef}
       className={cn(
-        "min-h-screen bg-slate-950 text-white [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        "min-h-screen bg-background text-foreground [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
-          "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-slate-950",
+          "fixed inset-0 z-50 min-h-dvh w-full overflow-auto bg-background",
       )}
     >
       <title>{room.movie_title} Watch Room - Igloo</title>
@@ -327,10 +327,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
 function WatchRoomLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="text-center">
-        <Spinner className="mx-auto mb-4 size-10 text-amber-400" />
-        <p className="text-lg font-medium text-white">Loading watch room...</p>
+        <Spinner className="mx-auto mb-4 size-10 text-primary" />
+        <p className="text-lg font-medium text-foreground">Loading watch room...</p>
       </div>
     </div>
   );
@@ -346,19 +346,19 @@ export function WatchRoomUnavailable({
   onBackHome,
 }: WatchRoomUnavailableProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="max-w-md text-center">
         <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
           <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
         </div>
-        <h1 className="mb-2 text-xl font-semibold text-white">
+        <h1 className="mb-2 text-xl font-semibold text-foreground">
           Watch room unavailable
         </h1>
-        <p className="mb-6 text-slate-400">{message}</p>
+        <p className="mb-6 text-muted-foreground">{message}</p>
         <button
           type="button"
           onClick={onBackHome}
-          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
+          className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
         >
           <ArrowLeft className="size-5" aria-hidden="true" />
           Back home
@@ -386,17 +386,17 @@ function WatchRoomHeader({
   onLeave,
 }: WatchRoomHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+    <header className="flex flex-col gap-4 rounded-2xl border border-border bg-card/90 p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-amber-300 uppercase">
+          <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
             <Radio className="size-3.5" aria-hidden="true" />
             Shared Watch Room
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
             {room.movie_title}
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             Hosted by {room.owner.name}. Everyone in this room shares the same
             playback.
           </p>
@@ -409,7 +409,7 @@ function WatchRoomHeader({
               type="button"
               variant="destructive"
               size="sm"
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-red-600 text-foreground hover:bg-red-700"
               aria-label={`Close watch room for ${room.movie_title}`}
               onClick={onDelete}
             >
@@ -421,7 +421,7 @@ function WatchRoomHeader({
           <button
             type="button"
             onClick={onLeave}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             Leave room
@@ -429,13 +429,13 @@ function WatchRoomHeader({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
-        <span className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+        <span className="rounded-full border border-border bg-background/60 px-3 py-1">
           {connectionReady
             ? "Realtime sync connected"
             : "Connecting realtime sync..."}
         </span>
-        <span className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1">
+        <span className="rounded-full border border-border bg-background/60 px-3 py-1">
           {connectedCount} connected now
         </span>
       </div>
@@ -495,7 +495,7 @@ function WatchRoomPlayerPanel({
   onToggleFullscreen,
 }: WatchRoomPlayerPanelProps) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card/90">
       <div
         className={cn(
           "flex min-h-[50vh] flex-col",
@@ -516,7 +516,7 @@ function WatchRoomPlayerPanel({
           subtitleTrack={subtitleTrack}
         />
 
-        <div className="border-t border-slate-800 p-4 sm:p-5">
+        <div className="border-t border-border p-4 sm:p-5">
           <ProgressBar
             currentTime={currentTime}
             duration={duration}
@@ -531,7 +531,7 @@ function WatchRoomPlayerPanel({
                 onClick={onSeekBackward}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
                 aria-label="Rewind 10 seconds"
               >
@@ -543,7 +543,7 @@ function WatchRoomPlayerPanel({
                 onClick={onTogglePlay}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-13 items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-13 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
                 aria-label={playing ? "Pause playback" : "Play playback"}
               >
@@ -559,7 +559,7 @@ function WatchRoomPlayerPanel({
                 onClick={onSeekForward}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
                 aria-label="Fast-forward 10 seconds"
               >
@@ -568,7 +568,7 @@ function WatchRoomPlayerPanel({
             </div>
 
             <div className="flex items-center gap-4">
-              <p className="text-sm font-medium text-slate-300">
+              <p className="text-sm font-medium text-muted-foreground">
                 {formatTimeSeconds(currentTime)} /{" "}
                 {formatTimeSeconds(duration)}
               </p>
@@ -578,7 +578,7 @@ function WatchRoomPlayerPanel({
                 onClick={onToggleFullscreen}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-slate-700 bg-slate-950/60 text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
                 aria-label={
                   playerFullscreenMode
@@ -623,9 +623,9 @@ function WatchRoomMembersPanel({
   connectedUserIds,
 }: WatchRoomMembersPanelProps) {
   return (
-    <aside className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5">
-      <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-        <Users className="size-5 text-amber-400" aria-hidden="true" />
+    <aside className="rounded-2xl border border-border bg-card/90 p-4 sm:p-5">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <Users className="size-5 text-primary" aria-hidden="true" />
         People in this room
       </h2>
 
@@ -633,7 +633,7 @@ function WatchRoomMembersPanel({
         <img
           src={posterUrl}
           alt=""
-          className="mt-4 aspect-2/3 w-28 rounded-xl border border-slate-800 object-cover"
+          className="mt-4 aspect-2/3 w-28 rounded-xl border border-border object-cover"
         />
       )}
 
@@ -643,13 +643,13 @@ function WatchRoomMembersPanel({
           return (
             <li
               key={member.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-100">
+                <p className="truncate text-sm font-medium text-foreground">
                   {member.name}
                   {member.id === ownerId ? (
-                    <span className="ml-2 text-xs text-amber-300">Host</span>
+                    <span className="ml-2 text-xs text-primary">Host</span>
                   ) : null}
                 </p>
               </div>
@@ -658,7 +658,7 @@ function WatchRoomMembersPanel({
                   "rounded-full px-2 py-1 text-xs font-medium",
                   isConnected
                     ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-slate-800 text-slate-400",
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 {isConnected ? "Connected" : "Away"}

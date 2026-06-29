@@ -100,7 +100,7 @@ export default function RequestAlbumDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
+        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -111,8 +111,8 @@ export default function RequestAlbumDialog({
         }
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Request Album</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogTitle className="text-foreground">Request Album</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Search Spotify, pick the exact album you want, and send the request to an admin.
           </DialogDescription>
         </DialogHeader>
@@ -127,7 +127,7 @@ export default function RequestAlbumDialog({
             }
 
             return (
-              <p className="text-amber-300">
+              <p className="text-primary">
                 This album is already in your library. Submitting will open the existing album page.
               </p>
             );

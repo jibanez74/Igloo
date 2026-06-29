@@ -75,7 +75,7 @@ export default function RequestMovieDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
+        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -86,8 +86,8 @@ export default function RequestMovieDialog({
         }
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Request Movie</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogTitle className="text-foreground">Request Movie</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Search TMDB, pick the exact movie you want, and send the request to an admin.
           </DialogDescription>
         </DialogHeader>
@@ -104,13 +104,13 @@ export default function RequestMovieDialog({
             }
 
             return (
-              <p className="text-amber-300">
+              <p className="text-primary">
                 This movie is already in your library.
                 {" "}
                 <Link
                   to="/movies/$id"
                   params={{ id: String(result.library_movie_id) }}
-                  className="underline decoration-amber-300/60 underline-offset-2 hover:text-amber-200"
+                  className="underline decoration-primary/60 underline-offset-2 hover:text-primary"
                 >
                   Open existing movie
                 </Link>

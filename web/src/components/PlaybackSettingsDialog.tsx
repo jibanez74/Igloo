@@ -118,8 +118,8 @@ function PlaybackSettingsDialogForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="text-white">Playback Settings</DialogTitle>
-        <DialogDescription className="text-slate-400">
+        <DialogTitle className="text-foreground">Playback Settings</DialogTitle>
+        <DialogDescription className="text-muted-foreground">
           Choose how the movie is prepared for your browser and which soundtrack
           to use.
         </DialogDescription>
@@ -127,7 +127,7 @@ function PlaybackSettingsDialogForm({
 
       <div className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="video-quality" className="text-slate-200">
+          <Label htmlFor="video-quality" className="text-foreground">
             Playback
           </Label>
           {prefersCoarsePointer ? (
@@ -168,7 +168,7 @@ function PlaybackSettingsDialogForm({
                   <SelectItem
                     key={m.id}
                     value={m.id}
-                    className="text-slate-200"
+                    className="text-foreground"
                   >
                     {m.label}
                   </SelectItem>
@@ -179,7 +179,7 @@ function PlaybackSettingsDialogForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="audio-track" className="text-slate-200">
+          <Label htmlFor="audio-track" className="text-foreground">
             Audio Track
           </Label>
           {prefersCoarsePointer ? (
@@ -228,7 +228,7 @@ function PlaybackSettingsDialogForm({
                       <SelectItem
                         key={stream.id}
                         value={String(index)}
-                        className="text-slate-200"
+                        className="text-foreground"
                       >
                         {label}
                       </SelectItem>
@@ -237,7 +237,7 @@ function PlaybackSettingsDialogForm({
                 ) : (
                   <SelectItem
                     value={AUDIO_TRACK_SELECT_DEFAULT_VALUE}
-                    className="text-slate-200"
+                    className="text-foreground"
                   >
                     {AUDIO_TRACK_DEFAULT_LABEL}
                   </SelectItem>
@@ -248,7 +248,7 @@ function PlaybackSettingsDialogForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="subtitles" className="text-slate-200">
+          <Label htmlFor="subtitles" className="text-foreground">
             Subtitles
           </Label>
           {prefersCoarsePointer ? (
@@ -311,7 +311,7 @@ function PlaybackSettingsDialogForm({
               >
                 <SelectItem
                   value={SUBTITLE_TRACK_SELECT_OFF_VALUE}
-                  className="text-slate-200"
+                  className="text-foreground"
                 >
                   {SUBTITLES_NONE_LABEL}
                 </SelectItem>
@@ -323,7 +323,7 @@ function PlaybackSettingsDialogForm({
                       key={stream.id}
                       value={String(index)}
                       disabled={bitmap}
-                      className={bitmap ? "text-slate-500" : "text-slate-200"}
+                      className={bitmap ? "text-muted-foreground" : "text-foreground"}
                     >
                       {bitmap ? `${label} (image-based)` : label}
                     </SelectItem>
@@ -335,7 +335,7 @@ function PlaybackSettingsDialogForm({
         </div>
       </div>
 
-      <p className="mt-1 text-sm/relaxed text-slate-400" aria-live="polite">
+      <p className="mt-1 text-sm/relaxed text-muted-foreground" aria-live="polite">
         {summaryText}
       </p>
 
@@ -344,7 +344,7 @@ function PlaybackSettingsDialogForm({
           type="button"
           variant="outline"
           onClick={onCancel}
-          className="border-slate-600 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+          className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           Cancel
         </Button>

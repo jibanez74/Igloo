@@ -157,20 +157,20 @@ export default function TmdbMoviePicker({
     <div className="space-y-4">
       <div className={`grid gap-3 ${showTmdbIdInput ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <div className={showTmdbIdInput ? "sm:col-span-1" : ""}>
-          <Label htmlFor="tmdb-title" className="text-slate-300">
+          <Label htmlFor="tmdb-title" className="text-muted-foreground">
             Title
           </Label>
           <Input
             id="tmdb-title"
             value={title}
             onChange={event => setTitle(event.target.value)}
-            className="mt-1 border-slate-700 bg-slate-800 text-white"
+            className="mt-1 border-border bg-muted text-foreground"
             autoComplete="off"
             autoFocus
           />
         </div>
         <div>
-          <Label htmlFor="tmdb-year" className="text-slate-300">
+          <Label htmlFor="tmdb-year" className="text-muted-foreground">
             Year
           </Label>
           <Input
@@ -178,13 +178,13 @@ export default function TmdbMoviePicker({
             type="number"
             value={year}
             onChange={event => setYear(event.target.value)}
-            className="mt-1 border-slate-700 bg-slate-800 text-white"
+            className="mt-1 border-border bg-muted text-foreground"
             inputMode="numeric"
           />
         </div>
         {showTmdbIdInput && (
           <div>
-            <Label htmlFor="tmdb-id" className="text-slate-300">
+            <Label htmlFor="tmdb-id" className="text-muted-foreground">
               TMDB ID
             </Label>
             <Input
@@ -193,7 +193,7 @@ export default function TmdbMoviePicker({
               value={tmdbIdInput}
               onChange={event => setTmdbIdInput(event.target.value)}
               placeholder="Optional"
-              className="mt-1 border-slate-700 bg-slate-800 text-white"
+              className="mt-1 border-border bg-muted text-foreground"
               inputMode="numeric"
             />
           </div>
@@ -214,7 +214,7 @@ export default function TmdbMoviePicker({
           <legend id={resultsLabelId} className="sr-only">
             TMDB movie results
           </legend>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             {results.length} result{results.length === 1 ? "" : "s"} found
           </p>
 
@@ -283,8 +283,8 @@ function TmdbResultCard({
       className={cn(
         "overflow-hidden rounded-lg border transition-colors",
         selected
-          ? "border-amber-500 bg-amber-500/10"
-          : "border-slate-700 bg-slate-800/60 hover:border-slate-600",
+          ? "border-primary bg-primary/10"
+          : "border-border bg-muted/60 hover:border-border",
       )}
     >
       <input
@@ -310,22 +310,22 @@ function TmdbResultCard({
             className="h-20 w-14 shrink-0 rounded-sm object-cover"
           />
         ) : (
-          <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-sm bg-slate-700">
-            <Film className="size-5 text-slate-500" aria-hidden="true" />
+          <div className="flex h-20 w-14 shrink-0 items-center justify-center rounded-sm bg-accent">
+            <Film className="size-5 text-muted-foreground" aria-hidden="true" />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-white">
+          <p className="truncate font-medium text-foreground">
             {result.title}
             {releaseYear && (
-              <span className="ml-1 text-slate-400">({releaseYear})</span>
+              <span className="ml-1 text-muted-foreground">({releaseYear})</span>
             )}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             TMDB ID: {result.tmdb_id}
           </p>
           {result.overview && (
-            <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
               {result.overview}
             </p>
           )}

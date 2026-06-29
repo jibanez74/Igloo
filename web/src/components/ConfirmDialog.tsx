@@ -54,7 +54,7 @@ export default function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent
-        className={cn("border-slate-700 bg-slate-900", className)}
+        className={cn("border-border bg-card", className)}
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -66,12 +66,12 @@ export default function ConfirmDialog({
       >
         <AlertDialogHeader>
           <AlertDialogTitle
-            className={variant === "destructive" ? "text-red-400" : "text-white"}
+            className={variant === "destructive" ? "text-red-400" : "text-foreground"}
           >
             {title}
           </AlertDialogTitle>
           {description ? (
-            <AlertDialogDescription className="text-slate-400">
+            <AlertDialogDescription className="text-muted-foreground">
               {description}
             </AlertDialogDescription>
           ) : null}
@@ -82,7 +82,7 @@ export default function ConfirmDialog({
         <AlertDialogFooter>
           <AlertDialogCancel
             disabled={pending}
-            className="border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+            className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             {cancelLabel}
           </AlertDialogCancel>
@@ -91,7 +91,7 @@ export default function ConfirmDialog({
             variant={variant}
             onClick={onConfirm}
             disabled={pending || confirmDisabled}
-            className={variant === "destructive" ? "bg-red-600 text-white hover:bg-red-700" : undefined}
+            className={variant === "destructive" ? "bg-red-600 text-foreground hover:bg-red-700" : undefined}
           >
             {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
             {pending ? `${confirmLabel}...` : confirmLabel}

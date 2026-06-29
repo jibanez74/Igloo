@@ -117,7 +117,7 @@ export default function DeleteWatchRoomDialog({
       description={
         <>
           This will close the watch room for{" "}
-          <strong className="text-slate-200">{movieTitle}</strong> and remove
+          <strong className="text-foreground">{movieTitle}</strong> and remove
           all members. This action cannot be undone.
         </>
       }

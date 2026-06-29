@@ -570,7 +570,7 @@ function AlbumDetailsContent({
                       </span>
                     </div>
                   )}
-                  <div className="divide-y divide-slate-700/30">
+                  <div className="divide-y divide-border/30">
                     {tracksByDisc[discNum].map((track: TrackType) => (
                       <TrackItem
                         key={track.id}

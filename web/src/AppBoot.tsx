@@ -40,15 +40,15 @@ export default function AppBoot({ queryClient }: AppBootProps) {
           richColors
           toastOptions={{
             classNames: {
-              toast: "bg-slate-800 border-slate-700 text-slate-100 shadow-xl",
-              title: "text-slate-100 font-medium",
-              description: "text-slate-400",
+              toast: "bg-muted border-border text-foreground shadow-xl",
+              title: "text-foreground font-medium",
+              description: "text-muted-foreground",
               closeButton:
-                "bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600 hover:text-slate-100",
+                "bg-accent border-border text-muted-foreground hover:bg-muted hover:text-foreground",
               success:
                 "bg-emerald-900/90 border-emerald-700/50 text-emerald-100",
               error: "bg-red-900/90 border-red-700/50 text-red-100",
-              info: "bg-slate-800 border-amber-500/30 text-slate-100",
+              info: "bg-muted border-primary/30 text-foreground",
             },
           }}
         />

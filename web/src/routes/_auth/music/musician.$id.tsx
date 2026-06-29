@@ -396,7 +396,7 @@ function MusicianDetailsContent({
               </h2>
 
               <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
-                <div className="divide-y divide-slate-700/30">
+                <div className="divide-y divide-border/30">
                   {tracks.map((track) => (
                     <TrackItem
                       key={track.id}

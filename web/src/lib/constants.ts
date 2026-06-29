@@ -183,11 +183,11 @@ export const SUBTITLES_NONE_LABEL = "None";
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
-  "w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
-  "w-full min-w-0 border-slate-700 bg-slate-800 text-white";
+  "w-full min-w-0 border-border bg-muted text-foreground";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
-  "z-100 border-slate-700 bg-slate-800";
+  "z-100 border-border bg-muted";
 
 // subtitle codecs that are image-based and cannot be converted to WebVTT
 export const BITMAP_SUBTITLE_CODECS = [
@@ -300,7 +300,7 @@ export const MOTION_PLAYER_CHROME_PANEL_CLASS =
 export const MOTION_MEDIA_OVERLAY_CLASS =
   "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 export const MOTION_MEDIA_DIALOG_SURFACE_CLASS =
-  "border-slate-700 bg-slate-900 shadow-2xl shadow-black/40 motion-reduce:animate-none";
+  "border-border bg-card shadow-2xl shadow-black/40 motion-reduce:animate-none";
 export const MOTION_MEDIA_OVERLAY_ENTER_CLASS =
   "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 fill-mode-both duration-200 ease-out motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:scale-100 motion-reduce:translate-y-0";
 export const MOTION_PLAYER_CHROME_ENTER_CLASS =

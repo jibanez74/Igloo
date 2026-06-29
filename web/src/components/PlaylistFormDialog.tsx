@@ -207,7 +207,7 @@ function PlaylistForm({
 
   return (
     <DialogContent
-      className="border-slate-700 bg-slate-900 sm:max-w-md"
+      className="border-border bg-card sm:max-w-md"
       onCloseAutoFocus={
         restoreFocusRef
           ? event => {
@@ -218,8 +218,8 @@ function PlaylistForm({
       }
     >
       <DialogHeader>
-        <DialogTitle className="text-white">{config.title}</DialogTitle>
-        <DialogDescription className="text-slate-400">
+        <DialogTitle className="text-foreground">{config.title}</DialogTitle>
+        <DialogDescription className="text-muted-foreground">
           {config.description}
         </DialogDescription>
       </DialogHeader>
@@ -228,9 +228,9 @@ function PlaylistForm({
         <div className="space-y-2">
           <Label
             htmlFor={`${inputIdPrefix}playlist-name`}
-            className="text-slate-200"
+            className="text-foreground"
           >
-            Name <span className="text-amber-400">*</span>
+            Name <span className="text-primary">*</span>
           </Label>
           <Input
             id={`${inputIdPrefix}playlist-name`}
@@ -239,7 +239,7 @@ function PlaylistForm({
             onChange={(e) => setName(e.target.value)}
             placeholder="My Playlist"
             maxLength={255}
-            className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500 focus:border-ring focus:ring-ring"
+            className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-ring"
             disabled={mutation.isPending}
             autoFocus
           />
@@ -249,10 +249,10 @@ function PlaylistForm({
           <Label
             id={descriptionLabelId}
             htmlFor={descriptionId}
-            className="text-slate-200"
+            className="text-foreground"
           >
             Description{" "}
-            <span className="text-sm text-slate-400">(optional)</span>
+            <span className="text-sm text-muted-foreground">(optional)</span>
           </Label>
           <textarea
             id={descriptionId}
@@ -262,7 +262,7 @@ function PlaylistForm({
             placeholder="Add a description..."
             maxLength={1000}
             rows={3}
-            className="w-full resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
+            className="w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
             disabled={mutation.isPending}
           />
         </div>
@@ -273,7 +273,7 @@ function PlaylistForm({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={mutation.isPending}
-            className="border-slate-600 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+            className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Cancel
           </Button>
