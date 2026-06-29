@@ -9,6 +9,21 @@
     data-igloo-bootstrap-description
     content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
   <meta name="theme-color" content="#0A1322" />
+  <!-- Anti-flash: apply the stored theme before any CSS paints. Mirrors
+       src/lib/theme.ts (THEME_STORAGE_KEY "igloo-theme", theme-color hexes);
+       keep the two in sync. Defaults to dark. -->
+  <script>
+    (function () {
+      try {
+        var light = localStorage.getItem("igloo-theme") === "light";
+        document.documentElement.classList.toggle("dark", !light);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", light ? "#F2F7FC" : "#0A1322");
+      } catch (e) {
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>

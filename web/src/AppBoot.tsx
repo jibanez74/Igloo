@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { SPLASH_REMOVE_DELAY_MS } from "@/lib/app-boot";
+import { applyTheme, getStoredTheme } from "@/lib/theme";
 import App from "./App";
 import { AudioPlayerProvider } from "./context/AudioPlayerContext";
 
@@ -14,7 +15,7 @@ export default function AppBoot({ queryClient }: AppBootProps) {
     const root = document.documentElement;
     const splash = document.getElementById("initial-splash");
 
-    root.classList.add("dark");
+    applyTheme(getStoredTheme());
     root.setAttribute("data-app-ready", "true");
 
     if (!splash) {
