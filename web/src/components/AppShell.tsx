@@ -23,7 +23,7 @@ export default function AppShell({ children }: PropsWithChildren) {
       <a
         href="#main"
         onClick={handleSkipToContent}
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-amber-400 focus:px-3 focus:py-2 focus:text-slate-900"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
       >
         Skip to content
       </a>
@@ -33,10 +33,10 @@ export default function AppShell({ children }: PropsWithChildren) {
       <SidebarInset
         id="main"
         tabIndex={-1}
-        className="bg-slate-900 focus:outline-none"
+        className="bg-background focus:outline-none"
       >
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-slate-800/50 bg-slate-900/95 px-4 backdrop-blur-sm md:px-6">
-          <SidebarTrigger className="-ml-1 text-slate-300 hover:bg-slate-800 hover:text-white md:hidden" />
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
+          <SidebarTrigger className="-ml-1 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />
           <Header />
         </header>
 
