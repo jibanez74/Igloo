@@ -147,11 +147,14 @@ This is what the user actually sees today:
 | Accent (cool, scattered) | `cyan-400/500` `#22D3EE`/`#06B6D4` | player/progress/music only |
 | Success / Error | `emerald-*` / `red-*` (toasts), `destructive` token | |
 
-### 5.3 Proposed igloo palette (canonical — see `igloo-theme.ts`)
+### 5.3 Igloo palette (current — see `igloo-theme.ts`)
 
-Direction chosen: **cool glacier primary + sparing amber aurora.** Dark-first. Hex values; the
-doc derives OKLCH on adoption. Contrast ratios computed against the noted background
-(WCAG 2.1 — AA = 4.5:1 normal text / 3:1 large+UI; AAA = 7:1).
+Direction chosen: **cool glacier primary + sparing amber aurora.** Dark-first. **Now
+implemented** in `web/src/assets/styles.css` as OKLCH tokens — the `.dark` block holds this
+dark igloo palette and `:root` holds a matching light igloo palette (the app boots dark; a
+theme toggle will switch them). The hex values below are the source of intent; contrast ratios
+are computed against the noted background (WCAG 2.1 — AA = 4.5:1 normal text / 3:1 large+UI;
+AAA = 7:1) and are guarded in CI by `web/src/test/contrast.test.ts`.
 
 | Role | Token | Hex | Contrast check |
 | --- | --- | --- | --- |
@@ -181,6 +184,10 @@ doc derives OKLCH on adoption. Contrast ratios computed against the noted backgr
 ratings / score badges, "In theaters", and occasional celebratory highlights. Everything that
 is currently amber-by-default moves to **glacier**: primary CTAs, focus rings, card hover glow,
 the sidebar logo, active-nav icon. This keeps a single cool identity with a deliberate warm spark.
+
+> **Baseline screenshots:** the `docs/design/` captures are pre-migration ("before") shots.
+> Recapturing them as the new igloo baseline is a deferred follow-up (best done against a
+> running app once the theme toggle lands).
 
 ---
 

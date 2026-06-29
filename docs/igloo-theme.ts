@@ -1,8 +1,9 @@
 /**
  * Igloo design tokens — canonical theme for the React Native client.
  *
- * This is the single source of truth for the *proposed* "igloo / Alaska cool"
- * visual identity (see docs/design-system.md). It is intentionally framework-free
+ * This is the single source of truth for the "igloo / Alaska cool" visual
+ * identity (see docs/design-system.md). The web client implements this palette as
+ * OKLCH tokens in web/src/assets/styles.css. It is intentionally framework-free
  * (no React Native imports) so it can be type-checked standalone and consumed by a
  * plain `StyleSheet`-based RN app:
  *
