@@ -374,7 +374,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     >
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
@@ -382,12 +382,12 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
           <CardTitle
             role="heading"
             aria-level={2}
-            className="flex items-center gap-2 text-white"
+            className="flex items-center gap-2 text-foreground"
           >
-            <Play className="size-5 text-amber-400" aria-hidden="true" />
+            <Play className="size-5 text-primary" aria-hidden="true" />
             Playback Settings
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Tell Igloo about your connection so it can pick the right stream
             quality for you.
           </CardDescription>
@@ -396,16 +396,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Gauge className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Gauge className="size-5 text-primary" aria-hidden="true" />
             Your network speed
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Used to recommend a stream profile for your viewing.
           </CardDescription>
         </CardHeader>
@@ -428,11 +428,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   ? `${downloadMbpsId}-description ${statusId}`
                   : `${downloadMbpsId}-description`
               }
-              className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
+              className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
             />
             <p
               id={`${downloadMbpsId}-description`}
-              className="text-sm text-slate-400"
+              className="text-sm text-muted-foreground"
             >
               Leave blank if unsure.
             </p>
@@ -442,16 +442,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Wifi className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Wifi className="size-5 text-primary" aria-hidden="true" />
             Server upload cap
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             The home server&apos;s outbound bandwidth limit, applied when you
             stream from outside the home network.
           </CardDescription>
@@ -480,23 +480,23 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                     ? `${serverUploadMbpsId}-description ${statusId}`
                     : `${serverUploadMbpsId}-description`
                 }
-                className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
+                className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
               />
               <p
                 id={`${serverUploadMbpsId}-description`}
-                className="text-sm text-slate-400"
+                className="text-sm text-muted-foreground"
               >
                 Leave blank if the server should be uncapped.
               </p>
             </div>
           ) : (
             <>
-              <p className="text-sm text-white">
+              <p className="text-sm text-foreground">
                 {settings.server_upload_mbps != null
                   ? `${settings.server_upload_mbps} Mbps`
                   : "Not set (uncapped)"}
               </p>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Set by the server administrator. Affects your recommendation
                 when streaming from outside the home network.
               </p>
@@ -507,19 +507,19 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
           <CardTitle
             id={recommendationTitleId}
-            className="flex items-center gap-2 text-white"
+            className="flex items-center gap-2 text-foreground"
           >
-            <Sliders className="size-5 text-amber-400" aria-hidden="true" />
+            <Sliders className="size-5 text-primary" aria-hidden="true" />
             Recommended profile
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Calculated from your download speed and the server upload cap, with
             20% headroom for audio and overhead.
           </CardDescription>
@@ -530,7 +530,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             role="region"
             aria-labelledby={recommendationTitleId}
             aria-live="polite"
-            className="text-sm text-white"
+            className="text-sm text-foreground"
           >
             {recommendedProfile
               ? `Recommended: ${recommendedProfile.label}`
@@ -541,16 +541,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Play className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Play className="size-5 text-primary" aria-hidden="true" />
             Preferred profile
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             The default profile when you start a stream. You can still pick a
             different one per video.
           </CardDescription>
@@ -566,14 +566,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredProfileId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
+                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="Use recommended" />
               </SelectTrigger>
-              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+              <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
                   value={NO_PROFILE_VALUE}
-                  className="focus:bg-slate-800 focus:text-white"
+                  className="focus:bg-muted focus:text-foreground"
                 >
                   Use recommended
                 </SelectItem>
@@ -581,7 +581,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={profile.id}
                     value={profile.id}
-                    className="focus:bg-slate-800 focus:text-white"
+                    className="focus:bg-muted focus:text-foreground"
                   >
                     {profile.label}
                   </SelectItem>
@@ -594,16 +594,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Languages className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Languages className="size-5 text-primary" aria-hidden="true" />
             Preferred audio language
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Igloo will pick the matching audio track when a movie has one. You
             can still change it per video.
           </CardDescription>
@@ -619,14 +619,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredAudioLanguageId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
+                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
-              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+              <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
                   value={NO_LANGUAGE_VALUE}
-                  className="focus:bg-slate-800 focus:text-white"
+                  className="focus:bg-muted focus:text-foreground"
                 >
                   No preference
                 </SelectItem>
@@ -634,7 +634,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={code}
                     value={code}
-                    className="focus:bg-slate-800 focus:text-white"
+                    className="focus:bg-muted focus:text-foreground"
                   >
                     {name}
                   </SelectItem>
@@ -647,16 +647,16 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Subtitles className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Subtitles className="size-5 text-primary" aria-hidden="true" />
             Preferred subtitles
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Pick a default subtitle language, or always start with subtitles
             off.
           </CardDescription>
@@ -674,20 +674,20 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredSubtitleLanguageId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-ring/30"
+                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
-              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+              <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
                   value={NO_LANGUAGE_VALUE}
-                  className="focus:bg-slate-800 focus:text-white"
+                  className="focus:bg-muted focus:text-foreground"
                 >
                   No preference
                 </SelectItem>
                 <SelectItem
                   value={SUBTITLE_OFF_VALUE}
-                  className="focus:bg-slate-800 focus:text-white"
+                  className="focus:bg-muted focus:text-foreground"
                 >
                   Always off
                 </SelectItem>
@@ -695,7 +695,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={code}
                     value={code}
-                    className="focus:bg-slate-800 focus:text-white"
+                    className="focus:bg-muted focus:text-foreground"
                   >
                     {name}
                   </SelectItem>
@@ -708,18 +708,18 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
 
       <div
         className={cn(
-          "rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          "rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white">Playback settings</p>
+          <p className="text-sm font-medium text-foreground">Playback settings</p>
           <p
             id={statusId}
             className={cn(
               "mt-1 text-sm",
               MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-red-300" : "text-slate-400",
+              validationMessage ? "text-red-300" : "text-muted-foreground",
             )}
             aria-live="polite"
           >
@@ -733,7 +733,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             variant="outline"
             onClick={resetForm}
             disabled={updateMutation.isPending}
-            className="border-slate-600 bg-slate-800/90 text-slate-100 hover:bg-slate-700 hover:text-white"
+            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
           >
             <RotateCcw className="size-4" aria-hidden="true" />
             Reset
@@ -765,10 +765,10 @@ function PlaybackSettingsLoading() {
       role="status"
       aria-labelledby={loadingId}
     >
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-slate-300">
-            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Spinner className="size-5 text-primary" aria-hidden="true" />
             <span id={loadingId}>Loading playback settings...</span>
           </div>
         </CardContent>

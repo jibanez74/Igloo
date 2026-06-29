@@ -1,118 +1,170 @@
-No. **`expo-video` will not secretly transcode, remux, or convert codecs.** It is a playback layer, not a media-processing layer. On Android TV it delegates playback to the native Android/ExoPlayer/Media3 stack, and Expo describes it as a cross-platform native video component rather than a transcoder. ([Expo Documentation][1])
+At least from the current public `expo-video` docs: **no, there is no `app.json` / config-plugin option for enabling HDMI audio passthrough, TrueHD passthrough, tunneled playback, or ExoPlayer audio-sink behavior.**
 
-But there is an important distinction:
+The `expo-video` config plugin currently documents only:
 
-```text
-expo-video will not convert the file.
-The Android/Shield audio pipeline may decode, passthrough, downmix, or fail depending on device/audio settings.
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ]
+    ]
+  }
+}
 ```
 
-## What can happen with TrueHD Atmos
+Those options affect background playback and Picture-in-Picture, not surround passthrough. Expo’s docs list only `supportsBackgroundPlayback` and `supportsPictureInPicture` as configurable plugin properties. ([Expo Documentation][1])
 
-For a file like:
+## What actually needs to be configured
 
-```text
-MKV
-Video: HEVC
-Audio: Dolby TrueHD 7.1 Atmos
-```
-
-`expo-video` itself should not convert that TrueHD track to AAC, AC-3, or stereo. However, the playback path has to support **bitstream passthrough**. ExoPlayer/Media3 format support depends on the platform/device decoders and audio capabilities. Google’s Media3/ExoPlayer docs explicitly say contained audio/video sample formats must also be supported, and Dolby’s Android TV guidance points developers to ExoPlayer APIs for detecting Dolby Audio/Atmos capabilities. ([Android Developers][2])
-
-So the real question is not “will Expo convert it?” The real question is:
+For passthrough to work, there are usually three layers:
 
 ```text
-Will the native Android player path used by expo-video expose/pass through TrueHD Atmos correctly on Nvidia Shield?
+1. Hardware / HDMI chain
+2. Android TV / Nvidia Shield audio settings
+3. The app/player implementation
 ```
 
-That is the part I would not assume without testing.
+### 1. Hardware chain
 
-## Your Shield + Sonos Arc setup
-
-Your hardware setup can be capable of TrueHD Atmos passthrough, especially if the chain is:
+For TrueHD Atmos, the safest path is usually:
 
 ```text
-Nvidia Shield Pro
-→ TV HDMI input
-→ TV eARC enabled
-→ Sonos Arc
+Nvidia Shield
+→ HDMI input on TV or receiver
+→ eARC to Sonos Arc
 ```
 
-or:
+Important: **regular ARC is not enough for TrueHD Atmos.** You need **eARC** for lossless TrueHD passthrough. Regular ARC is normally limited to Dolby Digital, DTS, and sometimes Dolby Digital Plus Atmos.
+
+### 2. Nvidia Shield / TV settings
+
+On the Shield, you usually want something like:
 
 ```text
-Nvidia Shield Pro
-→ HDMI switch/receiver
-→ Sonos Arc / TV eARC path
+Settings
+→ Device Preferences
+→ Display & Sound
+→ Advanced sound settings
+→ Available formats
+→ Auto, or Manual with Dolby TrueHD enabled
 ```
 
-But the app still has to request/play the track in a way that allows passthrough. Plex, Kodi, Emby, and similar apps usually expose explicit passthrough settings. For example, Plex users commonly need to set passthrough to HDMI for Dolby TrueHD passthrough to work instead of having the server transcode or the client decode/downmix. ([Reddit][3]) Sonos community guidance also points to enabling passthrough and eARC in the TV audio settings, with the sending device’s audio settings also mattering. ([Sonos Community][4])
-
-## The risk with `expo-video`
-
-The risk is **not hidden transcoding**.
-
-The risk is that `expo-video` may not give you enough low-level Android/ExoPlayer control to force or configure passthrough behavior the same way Plex/Kodi/Emby do.
-
-Possible outcomes:
+Also check:
 
 ```text
-Best case:
-MKV + TrueHD Atmos direct plays and Sonos reports Dolby Atmos / TrueHD Atmos.
-
-Acceptable fallback:
-Video direct plays, but audio fails; your backend transcodes only audio to E-AC-3 or AC-3.
-
-Bad fallback:
-Android decodes/downmixes to PCM/stereo or no audio, and expo-video does not expose enough controls to fix it.
+Dolby audio processing: Off
+Match content audio resolution: On, if available
 ```
 
-## What I would do for Igloo
+On the TV, you usually want:
 
-For Nvidia Shield, I would create a dedicated playback profile:
+```text
+eARC: On
+Digital sound output: Pass Through / Bitstream / Auto
+HDMI input audio format: Bitstream
+```
+
+The exact wording depends on the TV brand.
+
+### 3. App/player implementation
+
+This is the part that matters for `expo-video`.
+
+`expo-video` is wrapping the native player path. On Android, that means the behavior ultimately depends on Android/Media3/ExoPlayer and the device’s audio capabilities. Google’s ExoPlayer docs state that format support depends on both container support and the underlying platform/device support for the actual audio/video sample formats. ([Android Developers][2])
+
+For basic Dolby playback, Dolby’s Android TV guidance says that if the device supports Dolby Audio/Atmos, apps can use ExoPlayer APIs to play the content. The catch is that advanced passthrough behavior may still require lower-level player configuration. ([Dolby Professional Support][3])
+
+## The specific missing feature
+
+The feature you are probably thinking of is not an Expo config-plugin flag. It would be something closer to native ExoPlayer/Media3 configuration, such as:
+
+```kotlin
+DefaultRenderersFactory(context)
+  .setEnableAudioTrackPlaybackParams(true)
+```
+
+or, in some players, a user-facing setting like:
+
+```text
+Enable audio passthrough
+Enable tunneled playback
+Prefer device decoders
+Use IEC passthrough
+```
+
+Some Android TV apps expose this directly. For example, third-party player discussions around TrueHD often mention **tunneled playback** or explicit passthrough toggles. Amazon’s Fire TV documentation also describes tunnel-mode playback as a native decoder/player configuration, not a manifest or Expo-style JSON setting. ([Developer Portal Master][4])
+
+## What this means for Igloo
+
+With stock `expo-video`, you can probably do this:
+
+```text
+Try to direct-play MKV + TrueHD on Nvidia Shield.
+Let the Android player path decide whether it can open the track.
+```
+
+But you probably **cannot** do this from `app.json`:
+
+```text
+Force TrueHD passthrough.
+Enable passthrough mode.
+Enable tunneled playback.
+Choose IEC/raw audio output.
+Configure ExoPlayer's AudioSink.
+```
+
+So your realistic options are:
+
+| Option                                 | What it gives you                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Use stock `expo-video`**             | Simple Expo integration; test whether Shield passthrough works by default.                                                           |
+| **Use `react-native-video`**           | Possibly more access to Android ExoPlayer behavior, but verify whether it exposes the exact passthrough/tunneling controls you need. |
+| **Create a custom native Expo module** | Best control. You can configure Media3/ExoPlayer directly for Android TV.                                                            |
+| **Add external player support**        | Let Kodi/VLC/Just Player handle difficult passthrough cases.                                                                         |
+| **Backend fallback**                   | Direct play first; if it fails, audio-transcode TrueHD to E-AC-3/AC-3 while copying video.                                           |
+
+## My recommendation
+
+For your setup, I would not depend on an `expo-video` JSON setting, because it does not appear to exist.
+
+I would implement the backend profile like this:
 
 ```ts
 const nvidiaShieldProfile = {
-  allowMkvDirectPlay: true,
-  allowHevcDirectPlay: true,
+  directPlayContainers: ["mkv", "mp4"],
+  directPlayVideoCodecs: ["h264", "hevc", "vp9"],
+  directPlayAudioCodecs: ["aac", "ac3", "eac3", "truehd"],
   allowTrueHdPassthroughAttempt: true,
   fallbackAudioCodec: "eac3",
 };
 ```
 
-Then use this logic:
+Then in the app settings, expose your own toggle:
 
 ```text
-1. If client is Nvidia Shield and user enabled passthrough:
-   Try direct play for MKV + TrueHD Atmos.
-
-2. If playback fails or the user disables passthrough:
-   Keep the video stream untouched.
-   Transcode only audio to E-AC-3 5.1 or AC-3 5.1.
-
-3. If subtitles require burn-in:
-   Full transcode only when necessary.
+Audio passthrough: Auto / Try passthrough / Force compatible audio
 ```
 
-For the server, do **not** transcode TrueHD automatically just because the codec is TrueHD. Let the Shield profile attempt direct play first.
-
-## Recommendation
-
-For your specific setup, `expo-video` is worth testing, but I would not commit to it until you test these files:
+For now, that toggle would control **server behavior**, not Expo internals:
 
 ```text
-MKV + HEVC + TrueHD 7.1 Atmos
-MKV + HEVC + E-AC-3 Atmos
-MKV + HEVC + DTS-HD MA
-MKV + HEVC + AC-3 5.1
-MKV + HEVC + AAC stereo
+Try passthrough:
+  Serve MKV directly with TrueHD untouched.
+
+Force compatible audio:
+  Copy video.
+  Transcode TrueHD to E-AC-3 or AC-3.
 ```
 
-Then check what the Sonos app reports during playback.
+If stock `expo-video` passes TrueHD correctly on your Shield, you can keep it. If Sonos reports PCM/stereo/no audio instead of Dolby Atmos, you will likely need native Android player work, not an Expo plugin setting.
 
-The most important result is whether `expo-video` can pass through **TrueHD Atmos** on the Shield. If it cannot, that does not mean the Shield cannot do it; it means your app/player path may need deeper native ExoPlayer configuration, `react-native-video`, a custom native module, or an external-player option like Kodi.
-
-[1]: https://docs.expo.dev/versions/latest/sdk/video/?utm_source=chatgpt.com "Video (expo-video)"
-[2]: https://developer.android.com/media/media3/exoplayer/supported-formats?utm_source=chatgpt.com "Supported formats | Android media"
-[3]: https://www.reddit.com/r/PleX/comments/1eus6gw/dolby_truehd_passthrough_on_nvidia_shield/?utm_source=chatgpt.com "Dolby TrueHD passthrough on Nvidia Shield : r/PleX"
-[4]: https://en.community.sonos.com/home-theater-228993/sonos-arc-with-nvidia-shield-for-truehd-atmos-via-media-server-6853059?utm_source=chatgpt.com "Sonos Arc with Nvidia Shield for TrueHD Atmos via media ..."
+[1]: https://docs.expo.dev/versions/latest/sdk/video/ "Video (expo-video) - Expo Documentation"
+[2]: https://developer.android.com/media/media3/exoplayer/supported-formats "Supported formats  |  Android media  |  Android Developers"
+[3]: https://professionalsupport.dolby.com/s/article/Enabling-Dolby-Atmos-and-Dolby-Audio-in-Android-TV-media-apps?utm_source=chatgpt.com "Enabling Dolby Atmos and Dolby Audio in Android TV ..."
+[4]: https://developer.amazon.com/docs/fire-tv/4k-tunnel-mode-playback.html?utm_source=chatgpt.com "Tunnel Mode Playback | Amazon Fire TV"

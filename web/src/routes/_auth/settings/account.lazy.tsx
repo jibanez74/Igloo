@@ -583,9 +583,9 @@ function AccountSettings() {
   if (isLoading) {
     return (
       <div className="space-y-8">
-        <Card className="border-slate-700/50 bg-slate-800/30">
+        <Card className="border-border/50 bg-muted/30">
           <CardContent className="pt-6">
-            <p className="text-slate-300">Loading user information...</p>
+            <p className="text-muted-foreground">Loading user information...</p>
           </CardContent>
         </Card>
       </div>
@@ -596,7 +596,7 @@ function AccountSettings() {
   if (userData?.error || !user) {
     return (
       <div className="space-y-8">
-        <Card className="border-slate-700/50 bg-slate-800/30">
+        <Card className="border-border/50 bg-muted/30">
           <CardContent className="pt-6">
             <p className="text-red-400">
               {userData?.error
@@ -612,20 +612,20 @@ function AccountSettings() {
   return (
     <div className="space-y-8">
       {/* Profile Information */}
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <User className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <User className="size-5 text-primary" aria-hidden="true" />
             Profile Information
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Manage your account information and preferences
           </CardDescription>
         </CardHeader>
         <CardContent className="max-w-2xl space-y-6">
           {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-slate-300">
+            <Label htmlFor={emailId} className="text-muted-foreground">
               Email
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -667,7 +667,7 @@ function AccountSettings() {
 
           {/* Name */}
           <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-slate-300">
+            <Label htmlFor={nameId} className="text-muted-foreground">
               Name
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -702,7 +702,7 @@ function AccountSettings() {
                 {updateNameMutation.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
-            <p id={nameDescriptionId} className="text-xs text-slate-400">
+            <p id={nameDescriptionId} className="text-xs text-muted-foreground">
               Your display name (max 100 characters)
             </p>
             {errors.name && (
@@ -715,13 +715,13 @@ function AccountSettings() {
       </Card>
 
       {/* Avatar */}
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <ImageIcon className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <ImageIcon className="size-5 text-primary" aria-hidden="true" />
             Avatar
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Update your profile picture
           </CardDescription>
         </CardHeader>
@@ -734,26 +734,26 @@ function AccountSettings() {
                   src={getAvatarUrl() ?? undefined}
                   alt={user.name}
                 />
-                <AvatarFallback className="bg-amber-500/20 text-lg text-amber-400">
+                <AvatarFallback className="bg-primary/20 text-lg text-primary">
                   {getInitials()}
                 </AvatarFallback>
               </Avatar>
             ) : (
-              <div className="flex size-20 shrink-0 items-center justify-center rounded-full bg-slate-800">
-                <User className="size-10 text-slate-600" aria-hidden="true" />
+              <div className="flex size-20 shrink-0 items-center justify-center rounded-full bg-muted">
+                <User className="size-10 text-muted-foreground" aria-hidden="true" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-sm font-medium text-white">{user.name}</p>
-              <p className="text-xs break-all text-slate-400">{user.email}</p>
+              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-xs break-all text-muted-foreground">{user.email}</p>
             </div>
           </div>
 
-          <Separator className="bg-slate-700/50" />
+          <Separator className="bg-accent/50" />
 
           {/* Upload Avatar */}
           <div className="space-y-2">
-            <Label className="text-slate-300">Upload Image</Label>
+            <Label className="text-muted-foreground">Upload Image</Label>
             <div className="flex gap-2">
               <div className="relative flex flex-1">
                 <input
@@ -777,7 +777,7 @@ function AccountSettings() {
                     lightInputClassName,
                     uploadAvatarMutation.isPending
                       ? "cursor-not-allowed opacity-70"
-                      : "cursor-pointer peer-hover:bg-slate-50",
+                      : "cursor-pointer peer-hover:bg-foreground",
                   )}
                   aria-disabled={uploadAvatarMutation.isPending}
                   aria-busy={uploadAvatarMutation.isPending}
@@ -789,7 +789,7 @@ function AccountSettings() {
                 </label>
               </div>
             </div>
-            <p id={avatarUploadDescriptionId} className="text-xs text-slate-400">
+            <p id={avatarUploadDescriptionId} className="text-xs text-muted-foreground">
               JPEG, PNG, GIF, WebP, or AVIF (max 20MB)
             </p>
             {errors.avatarUpload && (
@@ -805,7 +805,7 @@ function AccountSettings() {
 
           {/* Set Avatar URL */}
           <div className="space-y-2">
-            <Label htmlFor={avatarUrlId} className="text-slate-300">
+            <Label htmlFor={avatarUrlId} className="text-muted-foreground">
               Or enter image URL
             </Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -849,13 +849,13 @@ function AccountSettings() {
       </Card>
 
       {/* Change Password */}
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Lock className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Lock className="size-5 text-primary" aria-hidden="true" />
             Change Password
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Update your account password
           </CardDescription>
         </CardHeader>
@@ -875,7 +875,7 @@ function AccountSettings() {
               hidden
             />
             <div className="space-y-2">
-              <Label htmlFor={currentPasswordId} className="text-slate-300">
+              <Label htmlFor={currentPasswordId} className="text-muted-foreground">
                 Current Password
               </Label>
             <Input
@@ -909,7 +909,7 @@ function AccountSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={newPasswordId} className="text-slate-300">
+            <Label htmlFor={newPasswordId} className="text-muted-foreground">
               New Password
             </Label>
             <Input
@@ -932,7 +932,7 @@ function AccountSettings() {
                 errors.newPassword && newPasswordErrorId,
               )}
             />
-            <p id={newPasswordDescriptionId} className="text-xs text-slate-400">
+            <p id={newPasswordDescriptionId} className="text-xs text-muted-foreground">
               Must be at least 9 characters and no more than 128 characters
             </p>
             {errors.newPassword && (
@@ -947,7 +947,7 @@ function AccountSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={confirmPasswordId} className="text-slate-300">
+            <Label htmlFor={confirmPasswordId} className="text-muted-foreground">
               Confirm New Password
             </Label>
             <Input
@@ -1011,7 +1011,7 @@ function AccountSettings() {
               certain.
             </p>
             {user.is_admin && (
-              <p className="text-sm font-medium text-amber-400">
+              <p className="text-sm font-medium text-primary">
                 Note: Admin accounts cannot be deleted.
               </p>
             )}
@@ -1033,7 +1033,7 @@ function AccountSettings() {
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <DialogContent
-          className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+          className="border-border bg-card text-foreground sm:max-w-md"
           onCloseAutoFocus={event => {
             event.preventDefault();
             focusDialogRestoreTarget(deleteAccountButtonRef.current);
@@ -1041,7 +1041,7 @@ function AccountSettings() {
         >
           <DialogHeader>
             <DialogTitle className="text-red-400">Delete Account</DialogTitle>
-            <DialogDescription className="text-slate-300">
+            <DialogDescription className="text-muted-foreground">
               This action cannot be undone. This will permanently delete your
               account and remove all associated data.
             </DialogDescription>
@@ -1051,7 +1051,7 @@ function AccountSettings() {
               <Label
                 htmlFor={deleteConfirmId}
                 id={deleteConfirmHelperId}
-                className="text-slate-300"
+                className="text-muted-foreground"
               >
                 Type <span className="font-mono font-bold">DELETE</span> to
                 confirm:

@@ -100,10 +100,10 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     pathLabel: "Movies library path",
     placeholder: "/srv/media/movies",
     Icon: Film,
-    iconClassName: "text-cyan-400",
-    iconBackgroundClassName: "bg-cyan-500/10",
+    iconClassName: "text-primary",
+    iconBackgroundClassName: "bg-primary/10",
     scanButtonClassName:
-      "bg-cyan-500 text-slate-900 hover:bg-cyan-400 hover:text-slate-900",
+      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
     clearLabel: "Clear movies library path",
   },
   {
@@ -117,7 +117,7 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     iconClassName: "text-purple-400",
     iconBackgroundClassName: "bg-purple-500/10",
     scanButtonClassName:
-      "bg-purple-500 text-slate-900 hover:bg-purple-400 hover:text-slate-900",
+      "bg-purple-500 text-primary-foreground hover:bg-purple-400 hover:text-primary-foreground",
     clearLabel: "Clear TV shows library path",
   },
   {
@@ -128,10 +128,10 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     pathLabel: "Music library path",
     placeholder: "/srv/media/music",
     Icon: Music,
-    iconClassName: "text-amber-400",
-    iconBackgroundClassName: "bg-amber-500/10",
+    iconClassName: "text-primary",
+    iconBackgroundClassName: "bg-primary/10",
     scanButtonClassName:
-      "bg-amber-500 text-slate-900 hover:bg-amber-400 hover:text-slate-900",
+      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
     clearLabel: "Clear music library path",
   },
 ];
@@ -358,13 +358,13 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       noValidate
       className="max-w-5xl space-y-6"
     >
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Library className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Library className="size-5 text-primary" aria-hidden="true" />
             Library Management
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Manage your media library paths and scanning.
           </CardDescription>
         </CardHeader>
@@ -406,9 +406,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
+      <div className="rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white">
+          <p className="text-sm font-medium text-foreground">
             Library path settings
           </p>
           <p
@@ -419,7 +419,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                 ? "text-red-300"
                 : feedback.tone === "success"
                   ? "text-emerald-300"
-                  : "text-slate-400",
+                  : "text-muted-foreground",
             )}
             aria-live="polite"
           >
@@ -432,7 +432,7 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
             variant="outline"
             onClick={handleReset}
             disabled={!hasChanges || updateMutation.isPending}
-            className="border-slate-600 bg-slate-800/90 text-slate-100 hover:bg-slate-700 hover:text-white"
+            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
           >
             <RotateCcw className="size-4" aria-hidden="true" />
             Reset library paths
@@ -466,7 +466,7 @@ function LibrarySectionGroup({
 }: LibrarySectionGroupProps) {
   return (
     <>
-      {showSeparator && <Separator className="bg-slate-700/50" />}
+      {showSeparator && <Separator className="bg-accent/50" />}
       {children}
     </>
   );
@@ -525,19 +525,19 @@ function LibraryPathSection({
           <Icon className={cn("size-5", config.iconClassName)} aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <h3 id={headingId} className="text-lg font-semibold text-white">
+          <h3 id={headingId} className="text-lg font-semibold text-foreground">
             {config.title}
           </h3>
-          <p className="text-sm text-slate-300">{config.description}</p>
+          <p className="text-sm text-muted-foreground">{config.description}</p>
         </div>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+      <div className="space-y-3 rounded-lg border border-border/50 bg-card/50 p-4">
         <div
           id={pathStatusId}
           className={cn(
             "flex items-center gap-3 text-sm",
-            invalid ? "text-red-300" : "text-slate-300",
+            invalid ? "text-red-300" : "text-muted-foreground",
           )}
         >
           {hasSavedPath ? (
@@ -559,9 +559,9 @@ function LibraryPathSection({
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"
-            className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-ring/30"
+            className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
           />
-          <p id={descriptionId} className="text-sm text-slate-400">
+          <p id={descriptionId} className="text-sm text-muted-foreground">
             Enter a directory path readable by the Igloo server. Leave blank to
             clear this library path.
           </p>
@@ -574,7 +574,7 @@ function LibraryPathSection({
             onClick={onClearPath}
             disabled={disabled}
             aria-label={config.clearLabel}
-            className="w-full text-slate-300 hover:bg-slate-800 hover:text-red-400 sm:w-fit"
+            className="w-full text-muted-foreground hover:bg-muted hover:text-red-400 sm:w-fit"
           >
             <Trash2 className="size-4" aria-hidden="true" />
             Clear path
@@ -649,8 +649,8 @@ function MoviesLibraryStats({ hasLibrary }: StatsProps) {
         value={stats?.total_movies ?? 0}
         loading={isLoading}
         loadingLabel="Loading movies count"
-        icon={<Film className="size-5 text-cyan-400" aria-hidden="true" />}
-        iconBackgroundClassName="bg-cyan-500/10"
+        icon={<Film className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
       />
     </div>
   );
@@ -675,24 +675,24 @@ function MusicLibraryStats({ hasLibrary }: StatsProps) {
         value={stats?.total_albums ?? 0}
         loading={isLoading}
         loadingLabel="Loading albums count"
-        icon={<Disc3 className="size-5 text-amber-400" aria-hidden="true" />}
-        iconBackgroundClassName="bg-amber-500/10"
+        icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
       />
       <StatItem
         label="Tracks"
         value={stats?.total_tracks ?? 0}
         loading={isLoading}
         loadingLabel="Loading tracks count"
-        icon={<Music className="size-5 text-amber-400" aria-hidden="true" />}
-        iconBackgroundClassName="bg-amber-500/10"
+        icon={<Music className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
       />
       <StatItem
         label="Musicians"
         value={stats?.total_musicians ?? 0}
         loading={isLoading}
         loadingLabel="Loading musicians count"
-        icon={<User className="size-5 text-amber-400" aria-hidden="true" />}
-        iconBackgroundClassName="bg-amber-500/10"
+        icon={<User className="size-5 text-primary" aria-hidden="true" />}
+        iconBackgroundClassName="bg-primary/10"
       />
     </div>
   );
@@ -716,7 +716,7 @@ function StatItem({
   iconBackgroundClassName,
 }: StatItemProps) {
   return (
-    <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+    <div className="rounded-lg border border-border/50 bg-card/50 p-4">
       <div className="flex items-center gap-3">
         <div
           className={cn(
@@ -728,16 +728,16 @@ function StatItem({
           {icon}
         </div>
         {loading ? (
-          <div role="status" className="flex items-center gap-2 text-slate-300">
-            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+          <div role="status" className="flex items-center gap-2 text-muted-foreground">
+            <Spinner className="size-5 text-primary" aria-hidden="true" />
             <span className="sr-only">{loadingLabel}</span>
           </div>
         ) : (
           <div>
-            <p className="text-2xl font-bold text-white">
+            <p className="text-2xl font-bold text-foreground">
               {value.toLocaleString()}
             </p>
-            <p className="text-sm text-slate-300">{label}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
           </div>
         )}
       </div>
@@ -748,7 +748,7 @@ function StatItem({
 function TVShowsUnavailableStatus({ hasLibrary }: StatsProps) {
   if (!hasLibrary) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-4 text-sm text-slate-300">
+      <div className="rounded-lg border border-dashed border-border bg-card/30 p-4 text-sm text-muted-foreground">
         TV shows can be configured now. Scanning will be available after TV show
         support is implemented.
       </div>
@@ -756,11 +756,11 @@ function TVShowsUnavailableStatus({ hasLibrary }: StatsProps) {
   }
 
   return (
-    <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/30 p-6">
-      <div className="flex items-center gap-3 text-slate-300">
+    <div className="rounded-lg border border-dashed border-border bg-card/30 p-6">
+      <div className="flex items-center gap-3 text-muted-foreground">
         <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white">
+          <p className="text-sm font-medium text-foreground">
             TV shows scanning unavailable
           </p>
           <p className="text-sm">
@@ -811,10 +811,10 @@ function LibrariesSettingsLoading() {
       role="status"
       aria-labelledby={loadingId}
     >
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-slate-300">
-            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Spinner className="size-5 text-primary" aria-hidden="true" />
             <span id={loadingId}>Loading library settings...</span>
           </div>
         </CardContent>
