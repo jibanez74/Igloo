@@ -18,23 +18,7 @@ type MediaElement = HTMLAudioElement | HTMLVideoElement;
 type VolumeControlProps = {
   mediaRef: React.RefObject<MediaElement | null>;
   variant?: "expanded" | "minimized";
-  /**
-   * Caller hint for which surface the control sits on ("amber" = music,
-   * "cyan" = movies). Both now resolve to the glacier primary accent.
-   */
-  accent?: "amber" | "cyan";
 };
-
-const accentStyles = {
-  amber: {
-    focusRing: "focus:ring-ring",
-    slider: "accent-primary",
-  },
-  cyan: {
-    focusRing: "focus:ring-ring",
-    slider: "accent-primary",
-  },
-} as const;
 
 type VolumeState = {
   volume: number;
@@ -66,7 +50,6 @@ function volumeReducer(state: VolumeState, action: VolumeAction): VolumeState {
 export default function VolumeControl({
   mediaRef,
   variant = "minimized",
-  accent = "amber",
 }: VolumeControlProps) {
   const [{ volume, isMuted }, dispatchVolume] = useReducer(
     volumeReducer,
@@ -74,7 +57,6 @@ export default function VolumeControl({
   );
   const [isMinimizedPanelOpen, setIsMinimizedPanelOpen] = useState(false);
 
-  const styles = accentStyles[accent];
   const controlId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -198,7 +180,7 @@ export default function VolumeControl({
       step="0.01"
       value={currentVolume}
       onChange={handleVolumeChange}
-      className={`${styles.slider} h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted`}
+      className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
       aria-label="Volume"
       aria-valuenow={volumePercent}
       aria-valuemin={0}
@@ -215,8 +197,7 @@ export default function VolumeControl({
           onClick={toggleMute}
           className={cn(
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:outline-none",
-            styles.focusRing,
+            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           )}
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
@@ -241,8 +222,7 @@ export default function VolumeControl({
         onClick={() => setIsMinimizedPanelOpen(open => !open)}
         className={cn(
           MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:outline-none",
-          styles.focusRing,
+          "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           isMinimizedPanelOpen && "bg-accent text-foreground",
         )}
         aria-label="Adjust volume"
@@ -269,8 +249,7 @@ export default function VolumeControl({
               onClick={toggleMute}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:outline-none",
-                styles.focusRing,
+                "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label={isMuted ? "Unmute" : "Mute"}
             >

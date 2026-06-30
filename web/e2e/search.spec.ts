@@ -174,7 +174,7 @@ async function mockSearchApi(page: Page) {
       return;
     }
 
-    if (url.pathname === "/api/notifications/unread-count") {
+    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
       await fulfillJSON(route, apiResponse({ unread_count: 0 }));
       return;
     }

@@ -40,7 +40,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
       <Link
         to="/movies/in-theaters/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
+        className="block rounded-xl outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}

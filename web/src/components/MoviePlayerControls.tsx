@@ -151,7 +151,6 @@ export default function MoviePlayerControls({
             <VolumeControl
               mediaRef={videoRef}
               variant="minimized"
-              accent="cyan"
             />
             <button
               type="button"

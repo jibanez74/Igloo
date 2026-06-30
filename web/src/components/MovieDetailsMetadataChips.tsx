@@ -9,8 +9,8 @@ function criticRatingColor(score: number) {
 }
 
 function audienceRatingColor(score: number) {
-  if (score >= 7) return "bg-violet-600 text-white";
-  if (score >= 5) return "bg-violet-700 text-white";
+  if (score >= 7) return "bg-primary text-primary-foreground";
+  if (score >= 5) return "bg-accent text-accent-foreground";
   return "bg-muted text-foreground";
 }
 
@@ -32,7 +32,7 @@ export default function MovieDetailsMetadataChips({
     >
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
         <li
-          className="flex items-center gap-2 rounded-full border border-sky-400/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-sky-700 dark:text-sky-100"
+          className="flex items-center gap-2 rounded-full border border-primary/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-primary"
           aria-label={`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
         >
           <span className="text-muted-foreground">TMDB</span>

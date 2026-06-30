@@ -118,8 +118,9 @@ export function formatRuntimeMinutes(
   minutes: number | null | undefined,
 ): string | null {
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+  const totalMinutes = Math.floor(minutes);
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
 
   const parts: string[] = [];
   if (hours > 0) parts.push(`${hours} hr`);
@@ -132,8 +133,9 @@ export function formatSpokenRuntimeMinutes(
   minutes: number | null | undefined,
 ): string | null {
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+  const totalMinutes = Math.floor(minutes);
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
 
   const parts: string[] = [];
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);

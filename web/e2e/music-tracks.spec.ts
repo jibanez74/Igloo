@@ -111,6 +111,7 @@ async function mockMusicApi(
 ) {
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
+    const method = route.request().method();
 
     if (url.pathname.startsWith("/api/static/albums/")) {
       await route.fulfill({
@@ -136,7 +137,7 @@ async function mockMusicApi(
       return;
     }
 
-    if (url.pathname === "/api/notifications/unread-count") {
+    if (url.pathname === "/api/notifications/unread-count" && method === "GET") {
       await fulfillJSON(route, apiResponse({ unread_count: 0 }));
       return;
     }

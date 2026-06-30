@@ -680,7 +680,6 @@ export default function AudioPlayer({
                 <VolumeControl
                   mediaRef={audioRef}
                   variant="expanded"
-                  accent="amber"
                 />
               </div>
 
@@ -800,7 +799,6 @@ export default function AudioPlayer({
                 <VolumeControl
                   mediaRef={audioRef}
                   variant="minimized"
-                  accent="amber"
                 />
               </div>
 

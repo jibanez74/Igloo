@@ -104,7 +104,8 @@ export default function TrackActionsMenu({
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
                 onClick={onRemoveFromPlaylist}
-                className="cursor-pointer text-red-400 hover:bg-accent hover:text-red-300 focus:text-red-300"
+                variant="destructive"
+                className="cursor-pointer"
               >
                 <Trash2 className="mr-2 size-4" aria-hidden="true" />
                 Remove from Playlist

@@ -4,6 +4,7 @@ import { User } from "lucide-react";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -25,7 +26,8 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative overflow-hidden rounded-xl border border-border bg-card p-4 hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20",
+        CARD_SURFACE_CLASS,
+        "p-4",
       )}
     >
       <Link
