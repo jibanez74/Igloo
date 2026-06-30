@@ -65,11 +65,11 @@ export default function MovieDetailsMetadataChips({
       {runtime && (
         <li className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
-          <time dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}>
+          <time
+            dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}
+            aria-label={`Runtime: ${spokenRuntime ?? runtime}`}
+          >
             <span aria-hidden="true">{runtime}</span>
-            {spokenRuntime && (
-              <span className="sr-only">Runtime: {spokenRuntime}</span>
-            )}
           </time>
         </li>
       )}

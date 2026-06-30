@@ -342,7 +342,8 @@ const makeStyles = (t: ReturnType<typeof useTheme>["theme"]) =>
 
 | Web (Tailwind / CSS) | React Native equivalent |
 |----------------------|-------------------------|
-| `bg-card`, `text-foreground` | `backgroundColor: t.colors.card`, `color: t.colors.cardForeground` |
+| `bg-card`, `text-card-foreground` | `backgroundColor: t.colors.card`, `color: t.colors.cardForeground` |
+| `text-foreground` | `color: t.colors.foreground` |
 | `.dark` class toggle | `ThemeProvider` mode + context |
 | `bg-primary/90` (alpha modifier) | precomputed rgba, or `opacity` on a wrapper |
 | `rounded-xl` | `borderRadius: t.radius.xl` |

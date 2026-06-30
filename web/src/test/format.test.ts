@@ -23,7 +23,7 @@ describe("formatRuntimeMinutes", () => {
 
   it("floors fractional runtimes before formatting", () => {
     expect(formatRuntimeMinutes(116.75)).toBe("1 hr 56 min");
-    expect(formatRuntimeMinutes(0.75)).toBe("");
+    expect(formatRuntimeMinutes(0.75)).toBeNull();
   });
 });
 
@@ -48,6 +48,6 @@ describe("formatSpokenRuntimeMinutes", () => {
 
   it("floors fractional runtimes before formatting words", () => {
     expect(formatSpokenRuntimeMinutes(116.75)).toBe("1 hour 56 minutes");
-    expect(formatSpokenRuntimeMinutes(0.75)).toBe("");
+    expect(formatSpokenRuntimeMinutes(0.75)).toBeNull();
   });
 });

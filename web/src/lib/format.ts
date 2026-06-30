@@ -119,6 +119,7 @@ export function formatRuntimeMinutes(
 ): string | null {
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
   const totalMinutes = Math.floor(minutes);
+  if (totalMinutes <= 0) return null;
   const hours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
 
@@ -134,6 +135,7 @@ export function formatSpokenRuntimeMinutes(
 ): string | null {
   if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
   const totalMinutes = Math.floor(minutes);
+  if (totalMinutes <= 0) return null;
   const hours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
 
