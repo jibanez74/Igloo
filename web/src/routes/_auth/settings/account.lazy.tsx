@@ -51,7 +51,10 @@ import {
 } from "@/lib/toast-helpers";
 import { useNavigate } from "@tanstack/react-router";
 import type { AuthUser } from "@/types";
-import { lightInputClassName } from "@/lib/input-styles";
+import {
+  lightInputClassName,
+  lightInputPeerHoverClassName,
+} from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -777,7 +780,7 @@ function AccountSettings() {
                     lightInputClassName,
                     uploadAvatarMutation.isPending
                       ? "cursor-not-allowed opacity-70"
-                      : "cursor-pointer peer-hover:bg-foreground",
+                      : cn("cursor-pointer", lightInputPeerHoverClassName),
                   )}
                   aria-disabled={uploadAvatarMutation.isPending}
                   aria-busy={uploadAvatarMutation.isPending}

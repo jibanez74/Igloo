@@ -16,7 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { MOTION_PAGE_ENTER_CLASS } from "@/lib/constants";
-import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
+import {
+  inputIconClassName,
+  lightInputActionClassName,
+  lightInputClassName,
+} from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 
 const pageTitle = "Sign In - Igloo";
@@ -156,8 +160,10 @@ function LoginPage() {
                     />
                     <button
                       type="button"
-                      className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
-                               text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+                      className={cn(
+                        "absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 focus:ring-2 focus:ring-ring focus:outline-none",
+                        lightInputActionClassName,
+                      )}
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }
