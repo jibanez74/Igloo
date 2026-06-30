@@ -37,8 +37,8 @@ export default function ComingSoon({
       <span
         tabIndex={0}
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50
-          focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white focus:ring-2
-          focus:ring-amber-400 focus:outline-none"
+          focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2
+          focus:ring-ring focus:outline-none"
         aria-label={announcement}
       >
         {title} - Under Development
@@ -51,7 +51,7 @@ export default function ComingSoon({
           <div
             data-motion="decorative"
             className={cn(
-              "absolute inset-0 rounded-full bg-amber-400/20",
+              "absolute inset-0 rounded-full bg-primary/20",
               MOTION_DECORATIVE_PING_CLASS,
             )}
           />
@@ -59,11 +59,11 @@ export default function ComingSoon({
           {/* Icon circle */}
           <div
             className="relative flex size-24 items-center justify-center rounded-full
-              bg-linear-to-br from-slate-700 to-slate-800 shadow-xl
-              ring-4 ring-slate-700/50 sm:size-28 md:size-32"
+              bg-linear-to-br from-muted to-muted shadow-xl
+              ring-4 ring-border/50 sm:size-28 md:size-32"
           >
             <Icon
-              className="size-10 text-amber-400 sm:size-12 md:size-14"
+              className="size-10 text-primary sm:size-12 md:size-14"
               aria-hidden="true"
             />
           </div>
@@ -72,14 +72,14 @@ export default function ComingSoon({
         {/* Title */}
         <h1
           id="coming-soon-title"
-          className="mb-4 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl"
+          className="mb-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl"
         >
           {title}
         </h1>
 
         {/* Subtitle badge */}
         <p
-          className="mb-6 inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-4 py-2 text-amber-400"
+          className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-primary"
           role="status"
         >
           <Hammer className="size-4" aria-hidden="true" />
@@ -89,7 +89,7 @@ export default function ComingSoon({
         {/* Description */}
         <p
           id="coming-soon-desc"
-          className="mx-auto max-w-md text-base text-slate-400 sm:text-lg md:max-w-lg"
+          className="mx-auto max-w-md text-base text-muted-foreground sm:text-lg md:max-w-lg"
         >
           {description}
         </p>
@@ -99,9 +99,9 @@ export default function ComingSoon({
           className="mt-10 flex items-center justify-center gap-2"
           aria-hidden="true"
         >
-          <span className="h-px w-12 bg-linear-to-r from-transparent to-slate-600" />
-          <Snowflake className="size-5 text-slate-600" aria-hidden="true" />
-          <span className="h-px w-12 bg-linear-to-l from-transparent to-slate-600" />
+          <span className="h-px w-12 bg-linear-to-r from-transparent to-muted" />
+          <Snowflake className="size-5 text-muted-foreground" aria-hidden="true" />
+          <span className="h-px w-12 bg-linear-to-l from-transparent to-muted" />
         </div>
 
         {/* Progress dots animation - hidden from screen readers */}
@@ -112,7 +112,7 @@ export default function ComingSoon({
           <span
             data-motion="decorative"
             className={cn(
-              "size-2 rounded-full bg-amber-400/60",
+              "size-2 rounded-full bg-primary/60",
               MOTION_DECORATIVE_BOUNCE_CLASS,
             )}
             style={{ animationDelay: "0ms" }}
@@ -120,7 +120,7 @@ export default function ComingSoon({
           <span
             data-motion="decorative"
             className={cn(
-              "size-2 rounded-full bg-amber-400/60",
+              "size-2 rounded-full bg-primary/60",
               MOTION_DECORATIVE_BOUNCE_CLASS,
             )}
             style={{ animationDelay: "150ms" }}
@@ -128,7 +128,7 @@ export default function ComingSoon({
           <span
             data-motion="decorative"
             className={cn(
-              "size-2 rounded-full bg-amber-400/60",
+              "size-2 rounded-full bg-primary/60",
               MOTION_DECORATIVE_BOUNCE_CLASS,
             )}
             style={{ animationDelay: "300ms" }}

@@ -22,7 +22,7 @@ export default function CastSection({
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
         tabIndex={-1}
       >
         Cast
@@ -34,14 +34,14 @@ export default function CastSection({
       </p>
 
       <ul
-        className="-mx-4 flex scrollbar-thin scrollbar-thumb-amber-700/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
+        className="-mx-4 flex scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:px-8"
         role="list"
         aria-label={`Cast members, ${displayedCast.length} shown`}
       >
         {displayedCast.map((actor, index) => (
           <li
             key={actor.id}
-            className="w-32 shrink-0 overflow-hidden rounded-lg border border-amber-500/20 bg-slate-800/50 transition-colors focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/50 hover:border-amber-500/40"
+            className="w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40"
           >
             <article
               tabIndex={0}
@@ -60,19 +60,19 @@ export default function CastSection({
                 />
               ) : (
                 <div
-                  className="flex aspect-2/3 w-full items-center justify-center bg-slate-700"
+                  className="flex aspect-2/3 w-full items-center justify-center bg-accent"
                   role="img"
                   aria-label={`No photo available for ${actor.name}`}
                 >
-                  <User className="size-6 text-slate-400" aria-hidden="true" />
+                  <User className="size-6 text-muted-foreground" aria-hidden="true" />
                 </div>
               )}
               <div className="p-2">
-                <p className="truncate text-sm font-semibold text-white">
+                <p className="truncate text-sm font-semibold text-foreground">
                   {actor.name}
                 </p>
                 <p
-                  className="truncate text-xs text-slate-400"
+                  className="truncate text-xs text-muted-foreground"
                   aria-label={`Playing ${actor.character}`}
                 >
                   {actor.character}

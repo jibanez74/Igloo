@@ -217,7 +217,7 @@ export function resolvePlaybackSettings(
   };
 }
 
-export function formatLanguageName(
+function formatLanguageName(
   raw: string | undefined,
 ): string | undefined {
   const code = raw?.trim().toLowerCase();

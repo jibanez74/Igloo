@@ -12,13 +12,13 @@ export default function MovieAdditionalDetailsSection({
 
   return (
     <section
-      className="mt-8 rounded-xl border border-amber-500/10 bg-slate-800/30 p-4 sm:mt-10 sm:p-5"
+      className="mt-8 rounded-xl border border-primary/10 bg-muted/30 p-4 sm:mt-10 sm:p-5"
       aria-labelledby="details-heading"
     >
       <h2
         id="details-heading"
         tabIndex={-1}
-        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
       >
         Additional Details
       </h2>
@@ -30,31 +30,31 @@ export default function MovieAdditionalDetailsSection({
       >
         {showStatus && (
           <div className="rounded-lg">
-            <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
+            <dt className="text-sm font-semibold tracking-wide text-primary/70 uppercase">
               Status
             </dt>
-            <dd className="mt-1 text-white">{status.trim()}</dd>
+            <dd className="mt-1 text-foreground">{status.trim()}</dd>
           </div>
         )}
         <div className="rounded-lg">
-          <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
+          <dt className="text-sm font-semibold tracking-wide text-primary/70 uppercase">
             Original Language
           </dt>
-          <dd className="mt-1 text-white uppercase">{language ?? "-"}</dd>
+          <dd className="mt-1 text-foreground uppercase">{language ?? "-"}</dd>
         </div>
         <div className="rounded-lg">
-          <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
+          <dt className="text-sm font-semibold tracking-wide text-primary/70 uppercase">
             Budget
           </dt>
-          <dd className="mt-1 text-white">
+          <dd className="mt-1 text-foreground">
             <data value={budget ?? 0}>{formatCurrency(budget ?? 0)}</data>
           </dd>
         </div>
         <div className="rounded-lg">
-          <dt className="text-sm font-semibold tracking-wide text-amber-300/70 uppercase">
+          <dt className="text-sm font-semibold tracking-wide text-primary/70 uppercase">
             Revenue
           </dt>
-          <dd className="mt-1 text-white">
+          <dd className="mt-1 text-foreground">
             <data value={revenue ?? 0}>{formatCurrency(revenue ?? 0)}</data>
           </dd>
         </div>

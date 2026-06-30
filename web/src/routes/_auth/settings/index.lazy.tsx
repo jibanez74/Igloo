@@ -15,6 +15,7 @@ import {
   HardDrive,
   KeyRound,
   MonitorCog,
+  Moon,
   RotateCcw,
   Save,
   Sliders,
@@ -44,6 +45,7 @@ import {
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
+import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -86,25 +88,25 @@ const HARDWARE_OPTIONS: HardwareOption[] = [
     value: "cpu",
     label: "CPU",
     description: "Use software encoding on the host CPU.",
-    icon: <Cpu className="size-4 text-slate-300" aria-hidden="true" />,
+    icon: <Cpu className="size-4 text-muted-foreground" aria-hidden="true" />,
   },
   {
     value: "apple",
     label: "Apple VideoToolbox",
     description: "Use Apple hardware acceleration on supported Macs.",
-    icon: <Apple className="size-4 text-slate-300" aria-hidden="true" />,
+    icon: <Apple className="size-4 text-muted-foreground" aria-hidden="true" />,
   },
   {
     value: "nvidia",
     label: "NVIDIA NVENC",
     description: "Use NVIDIA GPU acceleration when available.",
-    icon: <CircuitBoard className="size-4 text-slate-300" aria-hidden="true" />,
+    icon: <CircuitBoard className="size-4 text-muted-foreground" aria-hidden="true" />,
   },
   {
     value: "intel",
     label: "Intel Quick Sync",
     description: "Use Intel GPU acceleration when available.",
-    icon: <MonitorCog className="size-4 text-slate-300" aria-hidden="true" />,
+    icon: <MonitorCog className="size-4 text-muted-foreground" aria-hidden="true" />,
   },
 ];
 
@@ -231,6 +233,17 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const transcodeDirId = useId();
   const enableWatcherId = useId();
   const downloadImagesId = useId();
+  const darkModeId = useId();
+
+  // Theme is a per-device display preference stored in localStorage, not part of
+  // the backend settings form — see @/lib/theme.
+  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
+
+  const handleThemeChange = (dark: boolean) => {
+    const next: Theme = dark ? "dark" : "light";
+    setTheme(next);
+    setThemeState(next);
+  };
 
   const [form, setForm] = useState<UpdateGeneralSettingsRequest>(() =>
     formFromSettings(settings),
@@ -443,16 +456,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     >
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Sliders className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Sliders className="size-5 text-primary" aria-hidden="true" />
             General Settings
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Configure application behavior, integrations, and local storage.
           </CardDescription>
         </CardHeader>
@@ -460,16 +473,43 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Gauge className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Moon className="size-5 text-primary" aria-hidden="true" />
+            Appearance
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Choose how Igloo looks on this device. Saved in your browser.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <SwitchField
+            id={darkModeId}
+            label="Dark mode"
+            description="Use the dark igloo theme. Turn off for the light theme."
+            checked={theme === "dark"}
+            onCheckedChange={handleThemeChange}
+            icon={<Moon className="size-5 text-primary" aria-hidden="true" />}
+          />
+        </CardContent>
+      </Card>
+
+      <Card
+        className={cn(
+          "border-border/50 bg-muted/30",
+          MOTION_SETTINGS_SURFACE_CLASS,
+        )}
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Gauge className="size-5 text-primary" aria-hidden="true" />
             Application Behavior
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Control background services and metadata handling.
           </CardDescription>
         </CardHeader>
@@ -499,7 +539,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
               handleToggleChange("download_images", checked)
             }
             icon={
-              <Download className="size-5 text-cyan-400" aria-hidden="true" />
+              <Download className="size-5 text-primary" aria-hidden="true" />
             }
             disabled={updateMutation.isPending}
           />
@@ -508,16 +548,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <MonitorCog className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <MonitorCog className="size-5 text-primary" aria-hidden="true" />
             Playback Runtime
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Choose the hardware acceleration mode used for new transcodes.
           </CardDescription>
         </CardHeader>
@@ -532,16 +572,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             >
               <SelectTrigger
                 id={hardwareDeviceId}
-                className="h-10 w-full border-slate-600 bg-slate-950/60 text-white shadow-none focus-visible:ring-amber-400/30"
+                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="border-slate-700 bg-slate-900 text-slate-100">
+              <SelectContent className="border-border bg-card text-foreground">
                 {HARDWARE_OPTIONS.map(option => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
-                    className="focus:bg-slate-800 focus:text-white"
+                    className="focus:bg-muted focus:text-foreground"
                   >
                     <span className="flex items-center gap-2">
                       {option.icon}
@@ -551,7 +591,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               {
                 HARDWARE_OPTIONS.find(
                   option =>
@@ -565,16 +605,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <KeyRound className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <KeyRound className="size-5 text-primary" aria-hidden="true" />
             External Services
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Manage credentials used for metadata and interoperability.
           </CardDescription>
         </CardHeader>
@@ -646,16 +686,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <Card
         className={cn(
-          "border-slate-700/50 bg-slate-800/30",
+          "border-border/50 bg-muted/30",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <HardDrive className="size-5 text-amber-400" aria-hidden="true" />
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <HardDrive className="size-5 text-primary" aria-hidden="true" />
             Local Storage
           </CardTitle>
-          <CardDescription className="text-slate-300">
+          <CardDescription className="text-muted-foreground">
             Configure application-owned storage outside media libraries.
           </CardDescription>
         </CardHeader>
@@ -687,17 +727,17 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <div
         className={cn(
-          "rounded-lg border border-slate-700/50 bg-slate-900/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          "rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white">General settings</p>
+          <p className="text-sm font-medium text-foreground">General settings</p>
           <p
             className={cn(
               "mt-1 text-sm",
               MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-red-300" : "text-slate-400",
+              validationMessage ? "text-red-300" : "text-muted-foreground",
             )}
             aria-live="polite"
           >
@@ -711,7 +751,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             variant="outline"
             onClick={resetForm}
             disabled={!settings || updateMutation.isPending}
-            className="border-slate-600 bg-slate-800/90 text-slate-100 hover:bg-slate-700 hover:text-white"
+            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
           >
             <RotateCcw className="size-4" aria-hidden="true" />
             Reset
@@ -741,7 +781,7 @@ type SwitchFieldProps = {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   icon: ReactNode;
-  disabled: boolean;
+  disabled?: boolean;
 };
 
 function SwitchField({
@@ -759,18 +799,18 @@ function SwitchField({
   return (
     <div
       className={cn(
-        "rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 hover:border-slate-600/70",
+        "rounded-lg border border-border/50 bg-card/50 p-4 hover:border-border/70",
         MOTION_SETTINGS_SURFACE_CLASS,
       )}
     >
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
         <div
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-800"
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted"
           aria-hidden="true"
         >
           {icon}
         </div>
-        <p id={labelId} className="min-w-0 pt-1 text-sm font-medium text-white">
+        <p id={labelId} className="min-w-0 pt-1 text-sm font-medium text-foreground">
           {label}
         </p>
         <button
@@ -782,11 +822,11 @@ function SwitchField({
           disabled={disabled}
           onClick={() => onCheckedChange(!checked)}
           className={cn(
-            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
             MOTION_SETTINGS_SURFACE_CLASS,
             checked
-              ? "border-amber-400 bg-amber-500"
-              : "border-slate-600 bg-slate-700",
+              ? "border-primary bg-primary"
+              : "border-border bg-accent",
           )}
         >
           <span
@@ -800,7 +840,7 @@ function SwitchField({
         </button>
         <p
           id={descriptionId}
-          className="col-span-3 text-sm text-slate-400 min-[380px]:col-span-1 min-[380px]:col-start-2"
+          className="col-span-3 text-sm text-muted-foreground min-[380px]:col-span-1 min-[380px]:col-start-2"
         >
           {description}
         </p>
@@ -853,9 +893,9 @@ function URLInput({
         aria-describedby={descriptionId}
         aria-invalid={invalid || undefined}
         autoComplete="off"
-        className="h-10 border-slate-600 bg-slate-950/60 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+        className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
       />
-      <p id={descriptionId} className="text-sm text-slate-400">
+      <p id={descriptionId} className="text-sm text-muted-foreground">
         Use http:// or https://. Leave blank to clear this value.
       </p>
     </div>
@@ -886,7 +926,7 @@ function SecretInput({
           disabled={disabled}
           aria-describedby={descriptionId}
           autoComplete="off"
-          className="h-10 border-slate-600 bg-slate-950/60 pr-11 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+          className="h-10 border-border bg-background/60 pr-11 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
         />
         <Button
           type="button"
@@ -895,7 +935,7 @@ function SecretInput({
           onClick={() => setVisible(current => !current)}
           disabled={disabled}
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          className="absolute top-1 right-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="absolute top-1 right-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           {visible ? (
             <EyeOff className="size-4" aria-hidden="true" />
@@ -904,7 +944,7 @@ function SecretInput({
           )}
         </Button>
       </div>
-      <p id={descriptionId} className="text-sm text-slate-400">
+      <p id={descriptionId} className="text-sm text-muted-foreground">
         Leave blank to clear this value.
       </p>
     </div>
@@ -940,7 +980,7 @@ function PathInput({
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
       <div className="relative">
-        <span className="absolute top-1/2 left-3 z-10 -translate-y-1/2 text-slate-400">
+        <span className="absolute top-1/2 left-3 z-10 -translate-y-1/2 text-muted-foreground">
           {icon}
         </span>
         <Input
@@ -954,10 +994,10 @@ function PathInput({
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}
           aria-describedby={descriptionId}
-          className="h-10 border-slate-600 bg-slate-950/60 pl-10 text-white placeholder:text-slate-500 focus-visible:ring-amber-400/30"
+          className="h-10 border-border bg-background/60 pl-10 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
         />
       </div>
-      <p id={descriptionId} className="text-sm text-slate-400">
+      <p id={descriptionId} className="text-sm text-muted-foreground">
         This path must be readable by the server.
       </p>
     </div>
@@ -973,10 +1013,10 @@ function GeneralSettingsLoading() {
       role="status"
       aria-labelledby={loadingId}
     >
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-slate-300">
-            <Spinner className="size-5 text-amber-400" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Spinner className="size-5 text-primary" aria-hidden="true" />
             <span id={loadingId}>Loading general settings...</span>
           </div>
         </CardContent>

@@ -145,14 +145,14 @@ export default function SpotifyTrackPicker({
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="spotify-track-title" className="text-slate-300">
+        <Label htmlFor="spotify-track-title" className="text-muted-foreground">
           Track title
         </Label>
         <Input
           id="spotify-track-title"
           value={title}
           onChange={event => setTitle(event.target.value)}
-          className="mt-1 border-slate-700 bg-slate-800 text-white"
+          className="mt-1 border-border bg-muted text-foreground"
           autoComplete="off"
           autoFocus
         />
@@ -176,7 +176,7 @@ export default function SpotifyTrackPicker({
           <legend id={resultsLabelId} className="sr-only">
             Spotify track results
           </legend>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             {results.length} result{results.length === 1 ? "" : "s"} found
           </p>
 
@@ -246,8 +246,8 @@ function SpotifyTrackResultCard({
       className={cn(
         "overflow-hidden rounded-lg border transition-colors",
         selected
-          ? "border-amber-500 bg-amber-500/10"
-          : "border-slate-700 bg-slate-800/60 hover:border-slate-600",
+          ? "border-primary bg-primary/10"
+          : "border-border bg-muted/60 hover:border-border",
       )}
     >
       <input
@@ -264,7 +264,7 @@ function SpotifyTrackResultCard({
       <Label
         id={labelId}
         htmlFor={inputId}
-        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/60"
+        className="mb-0 flex cursor-pointer gap-3 rounded-lg p-2 peer-focus-visible:ring-2 peer-focus-visible:ring-ring/60"
       >
         {result.cover_url ? (
           <img
@@ -273,26 +273,26 @@ function SpotifyTrackResultCard({
             className="size-20 shrink-0 rounded-sm object-cover"
           />
         ) : (
-          <div className="flex size-20 shrink-0 items-center justify-center rounded-sm bg-slate-700">
-            <Music className="size-6 text-slate-500" aria-hidden="true" />
+          <div className="flex size-20 shrink-0 items-center justify-center rounded-sm bg-accent">
+            <Music className="size-6 text-muted-foreground" aria-hidden="true" />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-white">
+          <p className="truncate font-medium text-foreground">
             {result.title}
             {duration && (
-              <span className="ml-1 text-slate-400">({duration})</span>
+              <span className="ml-1 text-muted-foreground">({duration})</span>
             )}
           </p>
-          <p className="mt-0.5 truncate text-sm text-slate-400">
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {artistsLabel}
           </p>
           {result.album_name && (
-            <p className="mt-1 truncate text-xs text-slate-500">
+            <p className="mt-1 truncate text-xs text-muted-foreground">
               Album: {result.album_name}
             </p>
           )}
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Spotify ID: {result.spotify_id}
           </p>
         </div>

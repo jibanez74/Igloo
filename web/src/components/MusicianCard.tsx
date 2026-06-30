@@ -4,6 +4,7 @@ import { User } from "lucide-react";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
@@ -25,17 +26,18 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/20",
+        CARD_SURFACE_CLASS,
+        "p-4",
       )}
     >
       <Link
         to="/music/musician/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-amber-400 focus:outline-none focus:ring-inset"
+        className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
         aria-label={`${name}, ${album_count} albums, ${track_count} tracks`}
       >
         {/* Musician thumbnail - circular; fallback to User icon on load error */}
-        <div className="relative mx-auto mb-3 aspect-square w-full max-w-32 overflow-hidden rounded-full bg-slate-800">
+        <div className="relative mx-auto mb-3 aspect-square w-full max-w-32 overflow-hidden rounded-full bg-muted">
           {showThumb ? (
             <img
               src={thumbUrl}
@@ -47,15 +49,15 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
             />
           ) : (
             <div className="flex size-full items-center justify-center">
-              <User className="size-10 text-slate-600" aria-hidden="true" />
+              <User className="size-10 text-muted-foreground" aria-hidden="true" />
             </div>
           )}
         </div>
 
         {/* Musician info */}
         <div className="text-center">
-          <h3 className="truncate text-sm font-semibold text-white">{name}</h3>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <h3 className="truncate text-sm font-semibold text-foreground">{name}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {album_count} {album_count === 1 ? "album" : "albums"} ·{" "}
             {track_count} {track_count === 1 ? "track" : "tracks"}
           </p>

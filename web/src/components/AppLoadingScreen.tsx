@@ -41,26 +41,26 @@ export default function AppLoadingScreen({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-hidden bg-slate-900 text-slate-100"
+      className="fixed inset-0 z-50 overflow-hidden bg-card text-foreground"
       role={hasInitialSplash ? undefined : "status"}
       aria-live={hasInitialSplash ? undefined : "polite"}
       aria-atomic={hasInitialSplash ? undefined : "true"}
     >
-      <div className="absolute inset-0 bg-slate-950/70" aria-hidden="true" />
+      <div className="absolute inset-0 bg-background/70" aria-hidden="true" />
 
       <div className="relative flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/80 shadow-xl backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card/80 shadow-xl backdrop-blur-sm">
           <div className="px-6 py-8 text-center">
-            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-slate-800">
+            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
               <Snowflake
-                className={cn("size-5 text-amber-400", MOTION_LOADING_STATE_CLASS)}
+                className={cn("size-5 text-primary", MOTION_LOADING_STATE_CLASS)}
                 aria-hidden="true"
               />
             </div>
-            <p className="text-2xl font-semibold tracking-tight text-slate-100">
+            <p className="text-2xl font-semibold tracking-tight text-foreground">
               Igloo
             </p>
-            <p className="mt-2 text-sm text-slate-400">{message}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{message}</p>
           </div>
         </div>
       </div>

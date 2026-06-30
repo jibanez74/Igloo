@@ -41,11 +41,11 @@ function HomePage() {
       <section
         aria-labelledby="home-heading"
         className={cn(
-          "rounded-3xl border border-slate-800/80 bg-linear-to-br from-slate-900 via-slate-900 to-slate-950 p-5 shadow-[0_24px_80px_-56px_rgba(245,158,11,0.45)] sm:p-6",
+          "rounded-3xl border border-border bg-linear-to-br from-card via-card to-background p-5 shadow-[0_24px_80px_-56px_rgba(56,189,248,0.45)] sm:p-6",
           MOTION_SECTION_ENTER_CLASS,
         )}
       >
-        <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-amber-300 uppercase">
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
           <Home
             className="size-3.5"
             aria-hidden="true"
@@ -54,11 +54,11 @@ function HomePage() {
         </p>
         <h1
           id="home-heading"
-          className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+          className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
         >
           Welcome to Igloo
         </h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-300 sm:text-base">
+        <p className="mt-3 max-w-3xl text-sm text-muted-foreground sm:text-base">
           Explore your personal media library with recently added movies,
           albums, shared watch rooms, and what is playing in theaters.
         </p>

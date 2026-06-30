@@ -114,7 +114,7 @@ function MovieDetailsPage() {
   if (!movie || !payload) {
     return (
       <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-slate-300">
+        <h2 className="text-xl font-semibold text-muted-foreground">
           Movie not found
         </h2>
       </div>
@@ -286,7 +286,7 @@ function LibraryMovieDetailsContent({
               />
 
               {tagLine && (
-                <p className="mt-2 max-w-full text-base wrap-break-word text-slate-400 italic sm:text-lg">
+                <p className="mt-2 max-w-full text-base wrap-break-word text-muted-foreground italic sm:text-lg">
                   <q>{tagLine}</q>
                 </p>
               )}

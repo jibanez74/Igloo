@@ -4,8 +4,15 @@ body,
   min-height: 100%;
 }
 
+/* Light igloo (default). Dark overrides follow under html.dark. Values mirror
+   the :root / .dark token hexes in styles.css. */
 html {
-  background: #020617;
+  background: #f2f7fc;
+  color: #0a1322;
+}
+
+html.dark {
+  background: #0a1322;
   color: #f8fafc;
 }
 
@@ -15,9 +22,9 @@ body {
   min-height: 100%;
   flex-direction: column;
   background:
-    radial-gradient(circle at top, rgba(251, 191, 36, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(2, 6, 23, 1) 100%);
-  color: #f8fafc;
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.06), transparent 32%),
+    linear-gradient(180deg, #e8f1fa 0%, #f2f7fc 100%);
+  color: #0a1322;
   font-family:
     Inter,
     ui-sans-serif,
@@ -28,6 +35,13 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html.dark body {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(15, 26, 46, 0.94) 0%, rgba(10, 19, 34, 1) 100%);
+  color: #f8fafc;
 }
 
 #initial-splash {
@@ -64,5 +78,9 @@ html[data-app-ready="true"] #initial-splash {
 .initial-splash__message {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
+  color: #64748b;
+}
+
+html.dark .initial-splash__message {
   color: #94a3b8;
 }

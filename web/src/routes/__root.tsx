@@ -8,7 +8,7 @@ export const Route = createRootRouteWithContext<RouterContextType>()({
 
 function RootLayout() {
   return (
-    <div className="min-h-svh bg-slate-900 text-slate-100 antialiased">
+    <div className="min-h-svh bg-card text-foreground antialiased">
       <BootstrapHeadMetadataSync />
       <Outlet />
     </div>

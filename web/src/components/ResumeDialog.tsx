@@ -55,8 +55,8 @@ export default function ResumeDialog({
         onInteractOutside={event => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Resume movie?</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogTitle className="text-foreground">Resume movie?</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             {savedProgressSec !== null
               ? `Resume from ${formatTimeSeconds(savedProgressSec)} or start from the beginning.`
               : "Resume your saved progress or start from the beginning."}
@@ -70,7 +70,7 @@ export default function ResumeDialog({
               onStartFromBeginning();
             }}
             disabled={pending}
-            className="border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+            className="border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
             {pending ? "Clearing progress..." : "Start from beginning"}

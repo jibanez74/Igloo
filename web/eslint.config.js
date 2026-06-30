@@ -107,7 +107,33 @@ export default defineConfig([
         },
       ],
       "better-tailwindcss/no-conflicting-classes": "warn",
+
+      // Design-system guardrail: forbid new raw slate-*/amber-* Tailwind colors.
+      // Components must read semantic tokens (bg-background, text-muted-foreground,
+      // bg-aurora, …) so the codebase doesn't drift back off the igloo palette.
+      // See docs/design-remediation-plan.md (Phase 5).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "Literal[value=/(?:slate|amber)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+          message:
+            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, …) instead of raw slate-*/amber-* — see docs/design-remediation-plan.md.",
+        },
+        {
+          selector:
+            "TemplateElement[value.cooked=/(?:slate|amber)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+          message:
+            "Use semantic tokens instead of raw slate-*/amber-* — see docs/design-remediation-plan.md.",
+        },
+      ],
     },
+  },
+  {
+    // Sanctioned exceptions: intentional light "frosted" input surfaces that stay
+    // light-on-dark by design (search/login inputs), predating the light theme.
+    files: ["src/lib/input-styles.ts", "src/routes/login.lazy.tsx"],
+    rules: { "no-restricted-syntax": "off" },
   },
   {
     files: ["playwright.config.ts", "e2e/**/*.ts"],

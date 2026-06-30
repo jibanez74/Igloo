@@ -48,11 +48,11 @@ export default function WatchRoomCard({ room }: Props) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 focus-within:border-amber-500/40 focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-900 hover:-translate-y-1 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-500/10",
+        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10",
       )}
       aria-label={`Watch room: ${room.movie_title}`}
     >
-      <div className="relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-800">
+      <div className="relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
         {posterUrl ? (
           <img
             src={posterUrl}
@@ -65,7 +65,7 @@ export default function WatchRoomCard({ room }: Props) {
           />
         ) : (
           <div className="flex size-full items-center justify-center">
-            <Film className="size-6 text-slate-600" aria-hidden="true" />
+            <Film className="size-6 text-muted-foreground" aria-hidden="true" />
           </div>
         )}
       </div>
@@ -73,14 +73,14 @@ export default function WatchRoomCard({ room }: Props) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-white">
+            <h3 className="truncate text-sm font-semibold text-foreground">
               {room.movie_title}
             </h3>
 
-            <p className="mt-0.5 truncate text-xs text-slate-400">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               Hosted by {room.owner.name}
               {room.is_owner && (
-                <span className="ml-1 text-amber-400">(you)</span>
+                <span className="ml-1 text-primary">(you)</span>
               )}
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function WatchRoomCard({ room }: Props) {
               ref={closeRoomButtonRef}
               variant="ghost"
               size="icon"
-              className="size-8 shrink-0 text-slate-500 hover:text-red-400"
+              className="size-8 shrink-0 text-muted-foreground hover:text-red-400"
               aria-label={`Close watch room for ${room.movie_title}`}
               onClick={() => setConfirmOpen(true)}
             >
@@ -100,10 +100,10 @@ export default function WatchRoomCard({ room }: Props) {
         </div>
 
         {room.members.length > 0 && (
-          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+          <div className="mt-3 rounded-xl border border-border bg-background/40 p-3">
             <div className="flex items-center gap-2">
-              <Users className="size-3.5 text-slate-500" aria-hidden="true" />
-              <p className="text-xs font-medium text-slate-300">
+              <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <p className="text-xs font-medium text-muted-foreground">
                 {room.members.length} member{room.members.length === 1 ? "" : "s"}
               </p>
             </div>
@@ -112,7 +112,7 @@ export default function WatchRoomCard({ room }: Props) {
               {shownMembers.map(member => (
                 <Avatar
                   key={member.id}
-                  className="size-7 border-2 border-slate-900"
+                  className="size-7 border-2 border-border"
                 >
                   {member.avatar ? (
                     <AvatarImage
@@ -120,19 +120,19 @@ export default function WatchRoomCard({ room }: Props) {
                       alt={member.name}
                     />
                   ) : null}
-                  <AvatarFallback className="bg-slate-700 text-[10px] font-semibold text-slate-200">
+                  <AvatarFallback className="bg-accent text-[10px] font-semibold text-foreground">
                     {getInitials(member.name)}
                   </AvatarFallback>
                 </Avatar>
               ))}
               {overflow > 0 && (
-                <span className="flex size-7 items-center justify-center rounded-full border-2 border-slate-900 bg-slate-800 text-[10px] font-semibold text-slate-300">
+                <span className="flex size-7 items-center justify-center rounded-full border-2 border-border bg-muted text-[10px] font-semibold text-muted-foreground">
                   +{overflow}
                 </span>
               )}
             </div>
 
-            <p className="mt-2 text-xs/5 text-slate-400">
+            <p className="mt-2 text-xs/5 text-muted-foreground">
               {membersSummary}
             </p>
           </div>
@@ -142,7 +142,7 @@ export default function WatchRoomCard({ room }: Props) {
           <Link
             to="/watch-rooms/$id"
             params={{ id: room.id }}
-            className="inline-flex h-9 items-center rounded-md bg-amber-500 px-3 text-xs font-semibold text-slate-900 transition-colors hover:bg-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:outline-none"
+            className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
             aria-label={`Join watch room for ${room.movie_title}`}
           >
             Join room

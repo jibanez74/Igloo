@@ -202,7 +202,7 @@ export default function CreateWatchRoomDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex max-h-[90vh] flex-col overflow-hidden border-slate-700 bg-slate-900 sm:max-w-xl"
+        className="flex max-h-[90vh] flex-col overflow-hidden border-border bg-card sm:max-w-xl"
         onCloseAutoFocus={event => {
           if (!restoreFocusRef) return;
           event.preventDefault();
@@ -211,8 +211,8 @@ export default function CreateWatchRoomDialog({
       >
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <DialogHeader>
-            <DialogTitle className="text-white">Watch together</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-foreground">Watch together</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Create a private room for <strong>{movieTitle}</strong>. Everyone
               you invite will use these playback settings and can control
               playback together.
@@ -222,32 +222,32 @@ export default function CreateWatchRoomDialog({
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto py-4 pr-1">
             <section
               aria-labelledby="watch-room-playback-settings"
-              className="rounded-lg border border-slate-800 bg-slate-950/40 p-4"
+              className="rounded-lg border border-border bg-background/40 p-4"
             >
               <h3
                 id="watch-room-playback-settings"
-                className="text-sm font-semibold text-slate-100"
+                className="text-sm font-semibold text-foreground"
               >
                 Room playback presets
               </h3>
               <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                     Playback
                   </dt>
-                  <dd className="mt-1 text-sm text-slate-200">{modeLabel}</dd>
+                  <dd className="mt-1 text-sm text-foreground">{modeLabel}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                     Audio
                   </dt>
-                  <dd className="mt-1 text-sm text-slate-200">{audioLabel}</dd>
+                  <dd className="mt-1 text-sm text-foreground">{audioLabel}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                  <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                     Subtitles
                   </dt>
-                  <dd className="mt-1 text-sm text-slate-200">
+                  <dd className="mt-1 text-sm text-foreground">
                     {subtitleLabel}
                   </dd>
                 </div>
@@ -262,32 +262,32 @@ export default function CreateWatchRoomDialog({
                 <div>
                   <h3
                     id="watch-room-invitees"
-                    className="text-sm font-semibold text-slate-100"
+                    className="text-sm font-semibold text-foreground"
                   >
                     Invite people
                   </h3>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-muted-foreground">
                     Choose who can discover and join this room.
                   </p>
                 </div>
                 <div
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/40 px-3 py-1 text-xs text-slate-300"
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-background/40 px-3 py-1 text-xs text-muted-foreground"
                   aria-live="polite"
                 >
-                  <Users className="size-3.5 text-slate-500" aria-hidden="true" />
+                  <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
                   {selectedUserIds.length} selected
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={searchId} className="text-slate-300">
+                <Label htmlFor={searchId} className="text-muted-foreground">
                   Search users
                 </Label>
                 <Input
                   id={searchId}
                   value={search}
                   onChange={event => setSearch(event.target.value)}
-                  className="border-slate-700 bg-slate-800 text-white"
+                  className="border-border bg-muted text-foreground"
                   placeholder="Search by name or email"
                   autoComplete="off"
                 />
@@ -300,7 +300,7 @@ export default function CreateWatchRoomDialog({
                       key={user.id}
                       type="button"
                       onClick={() => handleToggleUser(user.id, false)}
-                      className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-100 transition-colors hover:bg-amber-500/20"
+                      className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
                       aria-label={`Remove ${user.name} from invited users`}
                     >
                       <span>{user.name}</span>
@@ -310,9 +310,9 @@ export default function CreateWatchRoomDialog({
                 </div>
               )}
 
-              <div className="rounded-lg border border-slate-800 bg-slate-950/30">
+              <div className="rounded-lg border border-border bg-background/30">
                 {inviteUsersPending ? (
-                  <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-slate-400">
+                  <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
                     <Spinner className="size-4" aria-hidden="true" />
                     Loading users…
                   </div>
@@ -322,20 +322,20 @@ export default function CreateWatchRoomDialog({
                       "Failed to load users. Please try again."}
                   </p>
                 ) : inviteUsers.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-slate-400">
+                  <p className="px-4 py-6 text-sm text-muted-foreground">
                     No other users are available to invite yet.
                   </p>
                 ) : filteredUsers.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-slate-400">
+                  <p className="px-4 py-6 text-sm text-muted-foreground">
                     No users match that search.
                   </p>
                 ) : (
-                  <ul className="divide-y divide-slate-800">
+                  <ul className="divide-y divide-border">
                     {filteredUsers.map(user => {
                       const checked = selectedUserIds.includes(user.id);
                       return (
                         <li key={user.id}>
-                          <label className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-800/50">
+                          <label className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                             <Checkbox
                               checked={checked}
                               onCheckedChange={value =>
@@ -343,22 +343,22 @@ export default function CreateWatchRoomDialog({
                               }
                               aria-label={`Invite ${user.name}`}
                             />
-                            <Avatar className="size-9 border border-slate-700">
+                            <Avatar className="size-9 border border-border">
                               {user.avatar ? (
                                 <AvatarImage
                                   src={`/api/static/${user.avatar}`}
                                   alt=""
                                 />
                               ) : null}
-                              <AvatarFallback className="bg-slate-700 text-xs font-semibold text-slate-200">
+                              <AvatarFallback className="bg-accent text-xs font-semibold text-foreground">
                                 {getInitials(user.name)}
                               </AvatarFallback>
                             </Avatar>
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-slate-100">
+                              <span className="block truncate text-sm font-medium text-foreground">
                                 {user.name}
                               </span>
-                              <span className="block truncate text-xs text-slate-400">
+                              <span className="block truncate text-xs text-muted-foreground">
                                 {user.email}
                               </span>
                             </span>
@@ -372,11 +372,11 @@ export default function CreateWatchRoomDialog({
             </section>
           </div>
 
-          <DialogFooter className="gap-2 border-t border-slate-800 pt-4 sm:gap-0">
+          <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
             <Button
               type="button"
               variant="ghost"
-              className="text-slate-400"
+              className="text-muted-foreground"
               onClick={() => handleOpenChange(false)}
               disabled={mutation.isPending}
             >

@@ -75,20 +75,20 @@ function PlaylistPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Spinner className="size-10 text-amber-400" />
+        <Spinner className="size-10 text-primary" />
       </div>
     );
   }
 
   if (error || !data || data.error) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <AlertCircle className="mx-auto mb-4 size-10" aria-hidden="true" />
         <p>Failed to load playlist. Please try again.</p>
         <Link
           to="/music"
           search={{ tab: "playlists" }}
-          className="mt-4 inline-block text-amber-400 hover:underline"
+          className="mt-4 inline-block text-primary hover:underline"
         >
           Back to Playlists
         </Link>
@@ -278,7 +278,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       {/* Screen reader announcement */}
       <span
         tabIndex={0}
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-slate-800 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
         aria-label={pageAnnouncement}
       >
         {playlist.name} - {track_count} tracks
@@ -288,7 +288,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <header className="mb-8 flex flex-col gap-6 sm:mb-10 sm:gap-8 lg:flex-row">
         {/* Playlist cover */}
         <figure className="mx-auto shrink-0 lg:mx-0">
-          <div className="aspect-square w-40 overflow-hidden rounded-xl border border-amber-500/20 bg-slate-800 shadow-2xl shadow-amber-500/10 sm:w-48 lg:w-56 xl:w-64">
+          <div className="aspect-square w-40 overflow-hidden rounded-xl border border-primary/20 bg-muted shadow-2xl shadow-primary/10 sm:w-48 lg:w-56 xl:w-64">
             {coverUrl ? (
               <img
                 src={coverUrl}
@@ -296,8 +296,8 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 className="size-full object-cover"
               />
             ) : (
-              <div className="flex size-full items-center justify-center bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/30">
-                <ListMusic className="size-16 text-cyan-200/20" aria-hidden="true" />
+              <div className="flex size-full items-center justify-center bg-linear-to-br from-muted via-muted to-primary/30">
+                <ListMusic className="size-16 text-primary/20" aria-hidden="true" />
               </div>
             )}
           </div>
@@ -308,7 +308,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           {/* Name */}
           <h1
             id="playlist-name"
-            className="text-2xl font-bold text-white sm:truncate sm:text-3xl md:text-4xl lg:text-5xl"
+            className="text-2xl font-bold text-foreground sm:truncate sm:text-3xl md:text-4xl lg:text-5xl"
             title={playlist.name}
           >
             {playlist.name}
@@ -316,30 +316,30 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
 
           {/* Description */}
           {description && (
-            <p className="mt-2 line-clamp-2 text-sm text-slate-400 sm:mt-3 sm:line-clamp-none sm:text-base md:max-w-2xl">
+            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground sm:mt-3 sm:line-clamp-none sm:text-base md:max-w-2xl">
               {description}
             </p>
           )}
 
           {/* Stats row */}
           <ul
-            className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs text-slate-400 sm:gap-x-4 sm:text-sm lg:justify-start lg:text-base"
+            className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs text-muted-foreground sm:gap-x-4 sm:text-sm lg:justify-start lg:text-base"
             aria-label="Playlist statistics"
           >
             <li className="flex items-center gap-1.5">
-              <Music className="size-4 text-slate-400" aria-hidden="true" />
+              <Music className="size-4 text-muted-foreground" aria-hidden="true" />
               <span>
                 {track_count} {track_count === 1 ? "track" : "tracks"}
               </span>
             </li>
             <li className="flex items-center gap-1.5">
-              <Clock className="size-4 text-slate-400" aria-hidden="true" />
+              <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
               <span>{formatDuration(duration)}</span>
             </li>
             {is_owner && (
               <li className="flex items-center gap-1.5">
-                <User className="size-4 text-amber-500" aria-hidden="true" />
-                <span className="text-amber-400">Owner</span>
+                <User className="size-4 text-primary" aria-hidden="true" />
+                <span className="text-primary">Owner</span>
               </li>
             )}
           </ul>
@@ -350,7 +350,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handlePlayAll}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Play all ${track_count} tracks`}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />
@@ -359,7 +359,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handleShuffle}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
                 <Shuffle className="size-4" aria-hidden="true" />
@@ -375,7 +375,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 type="button"
                 ref={editButtonRef}
                 onClick={() => setShowEditDialog(true)}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-amber-400 focus:text-amber-400 focus:outline-none sm:gap-2 sm:text-sm"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none sm:gap-2 sm:text-sm"
                 aria-label="Edit playlist"
               >
                 <Pencil className="size-4" aria-hidden="true" />
@@ -387,7 +387,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ref={deleteButtonRef}
                 onClick={handleDeletePlaylist}
                 disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-red-400 focus:text-red-400 focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-red-400 focus:text-red-400 focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
                 aria-label="Delete playlist"
               >
                 {deleteMutation.isPending ? (
@@ -407,23 +407,23 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       <section aria-labelledby="tracks-heading">
         <h2
           id="tracks-heading"
-          className="mb-4 flex items-center gap-2 text-xl font-semibold text-white"
+          className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
         >
-          <List className="size-5 text-amber-400" aria-hidden="true" />
+          <List className="size-5 text-primary" aria-hidden="true" />
           Tracks
         </h2>
 
         {isLoadingTracks ? (
           <div className="flex justify-center py-12">
-            <Spinner className="size-8 text-amber-400" />
+            <Spinner className="size-8 text-primary" />
           </div>
         ) : allTracks.length === 0 ? (
-          <div className="rounded-xl border border-amber-500/10 bg-slate-800/30 py-12 text-center">
-            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40">
-              <Music className="size-6 text-cyan-200/40" aria-hidden="true" />
+          <div className="rounded-xl border border-primary/10 bg-muted/30 py-12 text-center">
+            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
+              <Music className="size-6 text-primary/40" aria-hidden="true" />
             </div>
-            <p className="text-slate-300">No tracks in this playlist yet.</p>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="text-muted-foreground">No tracks in this playlist yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               Add tracks from your library to get started.
             </p>
           </div>
@@ -448,7 +448,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         <Link
           to="/music"
           search={{ tab: "playlists" }}
-          className="inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-white focus:text-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+          className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none"
           aria-label="Back to Playlists"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -584,8 +584,8 @@ function PlaylistTracksList({
       <>
         <Suspense
           fallback={
-            <div className="flex justify-center rounded-xl border border-amber-500/10 bg-slate-800/30 py-12">
-              <Spinner className="size-8 text-amber-400" />
+            <div className="flex justify-center rounded-xl border border-primary/10 bg-muted/30 py-12">
+              <Spinner className="size-8 text-primary" />
             </div>
           }
         >
@@ -604,7 +604,7 @@ function PlaylistTracksList({
         </Suspense>
         {isFetchingNextPage && (
           <div className="flex justify-center py-4">
-            <Spinner className="size-6 text-amber-400" />
+            <Spinner className="size-6 text-primary" />
           </div>
         )}
       </>
@@ -719,7 +719,7 @@ function VirtualizedPlaylistTracksList({
   return (
     <div
       ref={listRef}
-      className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30"
+      className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30"
     >
       <div
         style={{
@@ -769,7 +769,7 @@ function VirtualizedPlaylistTracksList({
 
       {isFetchingNextPage && (
         <div className="flex justify-center py-4">
-          <Spinner className="size-6 text-amber-400" />
+          <Spinner className="size-6 text-primary" />
         </div>
       )}
     </div>

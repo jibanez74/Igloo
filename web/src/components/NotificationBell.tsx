@@ -152,13 +152,13 @@ export default function NotificationBell() {
           variant="ghost"
           size="icon"
           aria-label={bellLabel}
-          className="relative text-slate-300 hover:bg-slate-800 hover:text-white"
+          className="relative text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Bell aria-hidden="true" />
           {unreadCount > 0 && (
             <span
               aria-hidden="true"
-              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-slate-950"
+              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
@@ -168,16 +168,16 @@ export default function NotificationBell() {
 
       <PopoverContent
         align="end"
-        className="w-80 border-slate-700 bg-slate-900 p-0 text-slate-100"
+        className="w-80 border-border bg-card p-0 text-foreground"
       >
-        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h2 className="text-sm font-semibold text-white">Notifications</h2>
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
           {unreadCount > 0 && (
             <button
               type="button"
               onClick={() => markAllMutation.mutate()}
               disabled={markAllMutation.isPending}
-              className="text-xs font-medium text-amber-400 hover:text-amber-300 disabled:opacity-50"
+              className="text-xs font-medium text-primary hover:text-primary disabled:opacity-50"
             >
               Mark all read
             </button>
@@ -188,7 +188,7 @@ export default function NotificationBell() {
           {showRefreshError && (
             <p
               role="alert"
-              className="border-b border-slate-800 px-4 py-3 text-sm text-amber-300"
+              className="border-b border-border px-4 py-3 text-sm text-primary"
             >
               Unable to refresh notifications.
             </p>
@@ -198,11 +198,11 @@ export default function NotificationBell() {
               <Spinner aria-label="Loading notifications" />
             </div>
           ) : showEmptyState ? (
-            <p className="px-4 py-10 text-center text-sm text-slate-400">
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
               You&apos;re all caught up.
             </p>
           ) : notifications.length > 0 ? (
-            <ul className="divide-y divide-slate-800">
+            <ul className="divide-y divide-border">
               {notifications.map((notification) => {
                 const titleLabel = notificationTitleLabel(notification.title);
                 const readStateLabel = notification.is_read ? "Read" : "Unread";
@@ -242,7 +242,7 @@ export default function NotificationBell() {
                       "flex items-start gap-2 px-4 py-3",
                       notification.is_read
                         ? "bg-transparent"
-                        : "bg-slate-800/40",
+                        : "bg-muted/40",
                     )}
                   >
                     <button
@@ -255,21 +255,21 @@ export default function NotificationBell() {
                         {!notification.is_read && (
                           <span
                             aria-hidden="true"
-                            className="size-2 shrink-0 rounded-full bg-amber-400"
+                            className="size-2 shrink-0 rounded-full bg-primary"
                           />
                         )}
-                        <span className="truncate text-sm font-medium text-white">
+                        <span className="truncate text-sm font-medium text-foreground">
                           {titleLabel}
                         </span>
-                        <span className="ml-auto shrink-0 text-xs text-slate-500">
+                        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                           {relativeTimeLabel}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs whitespace-pre-line text-slate-300">
+                      <p className="mt-1 text-xs whitespace-pre-line text-muted-foreground">
                         {notification.message}
                       </p>
                       {notification.created_by_name && (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           From {notification.created_by_name}
                         </p>
                       )}
@@ -280,7 +280,7 @@ export default function NotificationBell() {
                       onClick={() => deleteMutation.mutate(notification.id)}
                       disabled={deleteMutation.isPending}
                       aria-label={dismissLabelParts.join(", ")}
-                      className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                     >
                       <X aria-hidden="true" className="size-4" />
                     </button>

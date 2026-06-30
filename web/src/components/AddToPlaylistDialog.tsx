@@ -134,7 +134,7 @@ export default function AddToPlaylistDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 sm:max-w-md"
+        className="border-border bg-card sm:max-w-md"
         onCloseAutoFocus={
           restoreFocusRef
             ? event => {
@@ -148,8 +148,8 @@ export default function AddToPlaylistDialog({
         <LiveAnnouncer message={announcement} />
 
         <DialogHeader>
-          <DialogTitle className="text-white">Add to Playlist</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogTitle className="text-foreground">Add to Playlist</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Add "{trackTitle}" to one or more playlists.
           </DialogDescription>
         </DialogHeader>
@@ -162,7 +162,7 @@ export default function AddToPlaylistDialog({
             aria-label="Search playlists"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="border-slate-700 bg-slate-800 text-white placeholder:text-slate-500"
+            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
           />
         )}
 
@@ -170,14 +170,14 @@ export default function AddToPlaylistDialog({
         <div className="max-h-64 overflow-y-auto">
           {isLoading ? (
             <div className="flex justify-center py-8">
-              <Spinner className="size-6 text-amber-400" />
+              <Spinner className="size-6 text-primary" />
             </div>
           ) : filteredPlaylists.length === 0 ? (
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/50 py-8 text-center">
-              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-cyan-900/40">
-                <ListMusic className="size-5 text-cyan-200/40" aria-hidden="true" />
+            <div className="rounded-lg border border-border/50 bg-muted/50 py-8 text-center">
+              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
+                <ListMusic className="size-5 text-primary/40" aria-hidden="true" />
               </div>
-              <p className="text-slate-400">
+              <p className="text-muted-foreground">
                 {editablePlaylists.length === 0
                   ? "No playlists yet. Create one to get started."
                   : "No playlists match your search."}
@@ -193,24 +193,24 @@ export default function AddToPlaylistDialog({
                     aria-pressed={selectedPlaylists.has(playlist.id)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
                       selectedPlaylists.has(playlist.id)
-                        ? "bg-amber-500/20 text-white"
-                        : "text-slate-300 hover:bg-slate-800"
+                        ? "bg-primary/20 text-foreground"
+                        : "text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     <div
                       className={`flex size-5 items-center justify-center rounded-sm border ${
                         selectedPlaylists.has(playlist.id)
-                          ? "border-amber-500 bg-amber-500"
-                          : "border-slate-600"
+                          ? "border-primary bg-primary"
+                          : "border-border"
                       }`}
                     >
                       {selectedPlaylists.has(playlist.id) && (
-                        <Check className="size-3 text-slate-900" aria-hidden="true" />
+                        <Check className="size-3 text-primary-foreground" aria-hidden="true" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{playlist.name}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-muted-foreground">
                         {playlist.track_count} tracks
                       </p>
                     </div>
@@ -227,7 +227,7 @@ export default function AddToPlaylistDialog({
             variant="outline"
             onClick={handleClose}
             disabled={mutation.isPending}
-            className="border-slate-600 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+            className="border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Cancel
           </Button>

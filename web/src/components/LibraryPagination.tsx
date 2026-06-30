@@ -73,7 +73,7 @@ export default function LibraryPagination({
           <PaginationPrevious
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className={currentPage === 1 ? undefined : "hover:bg-slate-800"}
+            className={currentPage === 1 ? undefined : "hover:bg-accent"}
           />
         </PaginationItem>
 
@@ -94,8 +94,8 @@ export default function LibraryPagination({
                 }
                 className={
                   page === currentPage
-                    ? "bg-amber-500 text-slate-900 hover:bg-amber-400"
-                    : "cursor-pointer hover:bg-slate-800"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "cursor-pointer hover:bg-accent"
                 }
               >
                 {page}
@@ -109,7 +109,7 @@ export default function LibraryPagination({
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             className={
-              currentPage === totalPages ? undefined : "hover:bg-slate-800"
+              currentPage === totalPages ? undefined : "hover:bg-accent"
             }
           />
         </PaginationItem>

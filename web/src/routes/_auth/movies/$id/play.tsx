@@ -592,7 +592,7 @@ function PlayMoviePage() {
         chromeFullscreenMode ? showControlsAndResetIdle : undefined
       }
       className={cn(
-        "flex min-h-0 flex-1 flex-col bg-slate-900 [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
+        "flex min-h-0 flex-1 flex-col bg-background [&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:h-screen [&:-webkit-full-screen]:w-screen [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen",
         isImmersiveViewport &&
           "fixed inset-0 z-50 min-h-dvh w-full max-w-none overflow-hidden",
       )}
@@ -627,17 +627,17 @@ function PlayMoviePage() {
           chromeFullscreenMode
             ? cn(
                 MOTION_PLAYER_CHROME_PANEL_CLASS,
-                "absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg",
+                "absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur-lg",
                 controlsVisible
                   ? "translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-full opacity-0",
               )
-            : "flex shrink-0 items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg"
+            : "flex shrink-0 items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur-lg"
         }
       >
         <div className="flex items-center gap-3">
-          <Film className="size-5 text-cyan-400" aria-hidden="true" />
-          <h1 className="truncate text-base font-semibold text-white">
+          <Film className="size-5 text-primary" aria-hidden="true" />
+          <h1 className="truncate text-base font-semibold text-foreground">
             {title}
           </h1>
         </div>
@@ -647,7 +647,7 @@ function PlayMoviePage() {
           onClick={handleBack}
           className={cn(
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           )}
           aria-label="Back to previous page"
         >

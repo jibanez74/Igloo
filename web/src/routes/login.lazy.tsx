@@ -16,7 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { MOTION_PAGE_ENTER_CLASS } from "@/lib/constants";
-import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
+import {
+  inputIconClassName,
+  lightInputActionClassName,
+  lightInputClassName,
+} from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 
 const pageTitle = "Sign In - Igloo";
@@ -72,7 +76,7 @@ function LoginPage() {
   };
 
   return (
-    <div className="h-full bg-slate-900 text-slate-100 antialiased">
+    <div className="h-full bg-background text-foreground antialiased">
       {/* React 19 Document Metadata */}
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
@@ -87,26 +91,26 @@ function LoginPage() {
           fetchPriority="high"
         />
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-slate-950/70" />
+        <div className="absolute inset-0 bg-background/70" />
 
         <main className="relative z-10 flex min-h-screen items-center justify-center px-4">
           <Card
             className={cn(
               MOTION_PAGE_ENTER_CLASS,
-              "w-full max-w-md border-slate-800 bg-slate-900/80 shadow-xl backdrop-blur-sm",
+              "w-full max-w-md border-border bg-card/80 shadow-xl backdrop-blur-sm",
             )}
           >
             <CardHeader className="pb-2 text-center">
-              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-slate-800">
+              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
                 <Snowflake
-                  className="size-5 text-amber-400"
+                  className="size-5 text-primary"
                   aria-hidden="true"
                 />
               </div>
-              <CardTitle className="text-2xl font-semibold tracking-tight text-slate-100">
+              <CardTitle className="text-2xl font-semibold tracking-tight text-foreground">
                 Welcome to Igloo
               </CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-muted-foreground">
                 Sign in to access your private media library.
               </CardDescription>
             </CardHeader>
@@ -156,8 +160,10 @@ function LoginPage() {
                     />
                     <button
                       type="button"
-                      className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2
-                               text-slate-700 hover:text-slate-900 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                      className={cn(
+                        "absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 focus:ring-2 focus:ring-ring focus:outline-none",
+                        lightInputActionClassName,
+                      )}
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
                       }

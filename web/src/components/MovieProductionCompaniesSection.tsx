@@ -13,7 +13,7 @@ export default function MovieProductionCompaniesSection({
       <h2
         id="companies-heading"
         tabIndex={-1}
-        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
       >
         Production Companies
       </h2>
@@ -24,7 +24,7 @@ export default function MovieProductionCompaniesSection({
           return (
             <li
               key={pc.id}
-              className="flex min-w-0 items-center gap-3 rounded-lg border border-amber-500/10 bg-slate-800/50 px-4 py-3 sm:max-w-md"
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-primary/10 bg-muted/50 px-4 py-3 sm:max-w-md"
             >
               {logoUrl ? (
                 <img
@@ -33,9 +33,9 @@ export default function MovieProductionCompaniesSection({
                   className="h-8 w-auto max-w-24 object-contain"
                 />
               ) : (
-                <span className="text-sm text-slate-400">No logo</span>
+                <span className="text-sm text-muted-foreground">No logo</span>
               )}
-              <span className="text-sm font-medium text-white">{pc.name}</span>
+              <span className="text-sm font-medium text-foreground">{pc.name}</span>
             </li>
           );
         })}

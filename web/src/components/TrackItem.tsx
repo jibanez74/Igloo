@@ -107,7 +107,7 @@ export default function TrackItem({
   // Play button visibility classes based on variant
   const getPlayButtonClasses = () => {
     const baseClasses = cn(
-      "flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-slate-900 hover:bg-amber-400",
+      "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90",
       MOTION_TRACK_PLAY_BUTTON_CLASS,
     );
 
@@ -138,10 +138,10 @@ export default function TrackItem({
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-3 hover:bg-slate-800/50 sm:gap-4 sm:px-4",
+        "group flex items-center gap-3 p-3 hover:bg-muted/50 sm:gap-4 sm:px-4",
         MOTION_TRACK_ROW_CLASS,
-        isCurrentTrack && "bg-slate-800/40",
-        isDragging && "opacity-50 shadow-lg ring-2 ring-amber-400/50",
+        isCurrentTrack && "bg-muted/40",
+        isDragging && "opacity-50 shadow-lg ring-2 ring-ring/50",
       )}
     >
       {/* Drag handle - only for draggable items */}
@@ -150,7 +150,7 @@ export default function TrackItem({
           type="button"
           {...dragHandleProps}
           className={cn(
-            "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-slate-400 hover:bg-slate-700 hover:text-slate-300 active:cursor-grabbing",
+            "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-muted-foreground active:cursor-grabbing",
             MOTION_TRACK_MENU_TRIGGER_CLASS,
           )}
           aria-label="Drag to reorder"
@@ -164,12 +164,12 @@ export default function TrackItem({
         <span className="w-8 shrink-0 text-center font-mono text-sm">
           {isPlaying ? (
             <Volume2
-              className={cn("mx-auto size-4 text-amber-400", MOTION_LOADING_STATE_CLASS)}
+              className={cn("mx-auto size-4 text-primary", MOTION_LOADING_STATE_CLASS)}
               aria-hidden="true"
             />
           ) : (
             <span
-              className={`${isCurrentTrack ? "text-amber-400" : "text-slate-400"} group-hover:text-amber-400`}
+              className={`${isCurrentTrack ? "text-primary" : "text-muted-foreground"} group-hover:text-primary`}
             >
               {trackIndex}
             </span>
@@ -180,23 +180,23 @@ export default function TrackItem({
       {/* Track info */}
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate font-medium ${isCurrentTrack ? "text-amber-400" : "text-white"}`}
+          className={`truncate font-medium ${isCurrentTrack ? "text-primary" : "text-foreground"}`}
         >
           {title}
         </p>
 
         {/* Subtitle row - genres for album, text for others */}
         {variant === "album" && genres && genres.length > 0 ? (
-          <p className="mt-0.5 truncate text-sm text-amber-400/60">
+          <p className="mt-0.5 truncate text-sm text-primary/60">
             {genres.join(", ")}
           </p>
         ) : subtitle ? (
-          <p className="truncate text-sm text-slate-400">{subtitle}</p>
+          <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
 
       {/* Duration */}
-      <span className="shrink-0 text-sm text-slate-400 tabular-nums">
+      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
         {formatTrackDuration(duration)}
       </span>
 
@@ -210,7 +210,7 @@ export default function TrackItem({
           MOTION_TRACK_ICON_BUTTON_CLASS,
           isLiked
             ? "text-red-500 hover:text-red-400"
-            : "text-slate-400 hover:text-red-400",
+            : "text-muted-foreground hover:text-red-400",
           isLikeLoading && "opacity-50",
         )}
         aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}

@@ -60,7 +60,7 @@ function SidebarItemContent({
   return (
     <>
       <Icon
-        className={active ? "text-amber-400" : "text-slate-400"}
+        className={active ? "text-primary" : "text-muted-foreground"}
         aria-hidden="true"
       />
       <span aria-hidden="true">{title}</span>
@@ -110,11 +110,11 @@ export default function AppSidebar({
   return (
     <Sidebar
       collapsible="icon"
-      className="border-slate-800/50 bg-slate-900 **:data-[slot=sidebar-inner]:bg-slate-900"
+      className="border-sidebar-border bg-sidebar **:data-[slot=sidebar-inner]:bg-sidebar"
       {...props}
     >
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-slate-800/50 p-4">
+      <SidebarHeader className="border-b border-sidebar-border p-4">
         <Link
           to="/"
           preload={false}
@@ -125,10 +125,10 @@ export default function AppSidebar({
             MOTION_MICRO_OPACITY_CLASS,
           )}
         >
-          <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
             <span className="text-lg font-bold">I</span>
           </div>
-          <span className="text-lg font-semibold text-white group-data-[collapsible=icon]:hidden">
+          <span className="text-lg font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
             Igloo
           </span>
         </Link>
@@ -152,8 +152,8 @@ export default function AppSidebar({
                       isActive={active}
                       className={
                         active
-                          ? "bg-slate-800 text-white hover:bg-slate-700"
-                          : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       }
                     >
                       <Link
@@ -184,15 +184,15 @@ export default function AppSidebar({
       </SidebarContent>
 
       {/* Footer with Logout Button */}
-      <SidebarFooter className="border-t border-slate-800/50 p-2">
+      <SidebarFooter className="border-t border-sidebar-border p-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={handleLogout}
               aria-label="Logout"
-              className="text-slate-300 hover:bg-slate-800/50 hover:text-white"
+              className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
-              <LogOut className="text-slate-400" aria-hidden="true" />
+              <LogOut className="text-muted-foreground" aria-hidden="true" />
               <span aria-hidden="true">Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

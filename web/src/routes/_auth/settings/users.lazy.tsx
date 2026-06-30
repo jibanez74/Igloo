@@ -207,14 +207,14 @@ function UsersSettings() {
 
   return (
     <div className="space-y-8">
-      <Card className="border-slate-700/50 bg-slate-800/30">
+      <Card className="border-border/50 bg-muted/30">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <Users className="size-5 text-amber-400" aria-hidden="true" />
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Users className="size-5 text-primary" aria-hidden="true" />
               User Management
             </CardTitle>
-            <CardDescription className="text-slate-300">
+            <CardDescription className="text-muted-foreground">
               Create, edit, and remove user accounts
             </CardDescription>
           </div>
@@ -231,7 +231,7 @@ function UsersSettings() {
 
         <CardContent>
           {isLoading && (
-            <p className="text-slate-300">Loading users...</p>
+            <p className="text-muted-foreground">Loading users...</p>
           )}
 
           {!isLoading && usersData?.error && (
@@ -241,11 +241,11 @@ function UsersSettings() {
           )}
 
           {!isLoading && !usersData?.error && users.length === 0 && (
-            <p className="text-slate-400">No users found.</p>
+            <p className="text-muted-foreground">No users found.</p>
           )}
 
           {!isLoading && users.length > 0 && (
-            <ul className="divide-y divide-slate-700/50" role="list" aria-label="User list">
+            <ul className="divide-y divide-border" role="list" aria-label="User list">
               {users.map(user => (
                 <li key={user.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4">
                   <div className="flex min-w-0 items-center gap-3 sm:flex-1">
@@ -253,19 +253,19 @@ function UsersSettings() {
                       {user.avatar && (
                         <AvatarImage src={user.avatar} alt={user.name} />
                       )}
-                      <AvatarFallback className="bg-amber-500/20 text-amber-400">
+                      <AvatarFallback className="bg-primary/20 text-primary">
                         {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">
+                      <p className="truncate text-sm font-medium text-foreground">
                         {user.name}
                         {authResolved && user.id === currentUserId && (
-                          <span className="ml-2 text-xs text-slate-400">(you)</span>
+                          <span className="ml-2 text-xs text-muted-foreground">(you)</span>
                         )}
                       </p>
-                      <p className="truncate text-xs text-slate-400">{user.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
 
@@ -273,14 +273,14 @@ function UsersSettings() {
                     <div className="shrink-0">
                       {user.is_admin ? (
                         <span
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400"
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
                         >
                           <ShieldCheck className="size-3" aria-hidden="true" />
                           Admin
                         </span>
                       ) : (
                         <span
-                          className="inline-flex items-center gap-1 rounded-full bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400"
+                          className="inline-flex items-center gap-1 rounded-full bg-accent/50 px-2 py-0.5 text-xs font-medium text-muted-foreground"
                         >
                           <ShieldOff className="size-3" aria-hidden="true" />
                           User
@@ -292,7 +292,7 @@ function UsersSettings() {
                       {authResolved && user.id === currentUserId ? (
                         <Link
                           to="/settings/account"
-                          className="text-xs text-slate-400 underline-offset-2 hover:text-amber-400 hover:underline"
+                          className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
                         >
                           Account settings
                         </Link>
@@ -308,7 +308,7 @@ function UsersSettings() {
                               )
                             }
                             aria-label={`Reset password for ${user.name}`}
-                            className="text-slate-400 hover:text-white"
+                            className="text-muted-foreground hover:text-foreground"
                           >
                             <KeyRound className="size-4" aria-hidden="true" />
                           </Button>
@@ -319,7 +319,7 @@ function UsersSettings() {
                               openDialog({ type: "edit", user }, event.currentTarget)
                             }
                             aria-label={`Edit ${user.name}`}
-                            className="text-slate-400 hover:text-white"
+                            className="text-muted-foreground hover:text-foreground"
                           >
                             <Pencil className="size-4" aria-hidden="true" />
                           </Button>
@@ -330,7 +330,7 @@ function UsersSettings() {
                               openDialog({ type: "delete", user }, event.currentTarget)
                             }
                             aria-label={`Delete ${user.name}`}
-                            className="text-slate-400 hover:text-red-400"
+                            className="text-muted-foreground hover:text-red-400"
                           >
                             <Trash2 className="size-4" aria-hidden="true" />
                           </Button>
@@ -486,19 +486,19 @@ function CreateUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Add User</DialogTitle>
-          <DialogDescription className="text-slate-300">
+          <DialogTitle className="text-foreground">Add User</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Create a new user account.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-slate-300">Name</Label>
+            <Label htmlFor={nameId} className="text-muted-foreground">Name</Label>
             <Input
               id={nameId}
               name="name"
@@ -525,7 +525,7 @@ function CreateUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-slate-300">Email</Label>
+            <Label htmlFor={emailId} className="text-muted-foreground">Email</Label>
             <Input
               id={emailId}
               name="email"
@@ -552,7 +552,7 @@ function CreateUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={passwordId} className="text-slate-300">Password</Label>
+            <Label htmlFor={passwordId} className="text-muted-foreground">Password</Label>
             <Input
               id={passwordId}
               name="password"
@@ -574,7 +574,7 @@ function CreateUserDialog({
               className={lightInputClassName}
               aria-label="User password"
             />
-            <p id={passwordDescriptionId} className="text-xs text-slate-400">
+            <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
               Must be 9–128 characters
             </p>
             {errors.password && (
@@ -590,10 +590,10 @@ function CreateUserDialog({
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
+              className="size-4 rounded-sm border-border bg-muted accent-primary"
               aria-label="Grant admin privileges"
             />
-            <Label htmlFor={isAdminId} className="cursor-pointer text-slate-300">
+            <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">
               Grant admin privileges
             </Label>
           </div>
@@ -689,19 +689,19 @@ function EditUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Edit User</DialogTitle>
-          <DialogDescription className="text-slate-300">
+          <DialogTitle className="text-foreground">Edit User</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Update account information for {user.name}.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={nameId} className="text-slate-300">Name</Label>
+            <Label htmlFor={nameId} className="text-muted-foreground">Name</Label>
             <Input
               id={nameId}
               name="name"
@@ -728,7 +728,7 @@ function EditUserDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={emailId} className="text-slate-300">Email</Label>
+            <Label htmlFor={emailId} className="text-muted-foreground">Email</Label>
             <Input
               id={emailId}
               name="email"
@@ -760,10 +760,10 @@ function EditUserDialog({
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded-sm border-slate-600 bg-slate-800 accent-amber-500"
+              className="size-4 rounded-sm border-border bg-muted accent-primary"
               aria-label="Admin privileges"
             />
-            <Label htmlFor={isAdminId} className="cursor-pointer text-slate-300">
+            <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">
               Admin privileges
             </Label>
           </div>
@@ -816,20 +816,20 @@ function DeleteUserDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
           <DialogTitle className="text-red-400">Delete User</DialogTitle>
-          <DialogDescription className="text-slate-300">
-            This will permanently delete <strong className="text-white">{user.name}</strong> ({user.email}).
+          <DialogDescription className="text-muted-foreground">
+            This will permanently delete <strong className="text-foreground">{user.name}</strong> ({user.email}).
             This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={confirmId} className="text-slate-300">
+            <Label htmlFor={confirmId} className="text-muted-foreground">
               Type <span className="font-mono font-bold">DELETE</span> to confirm:
             </Label>
             <Input
@@ -958,19 +958,19 @@ function ResetPasswordDialog({
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent
-        className="border-slate-700 bg-slate-900 text-white sm:max-w-md"
+        className="border-border bg-card text-foreground sm:max-w-md"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-white">Reset Password</DialogTitle>
-          <DialogDescription className="text-slate-300">
-            Set a new password for <strong className="text-white">{user.name}</strong>.
+          <DialogTitle className="text-foreground">Reset Password</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Set a new password for <strong className="text-foreground">{user.name}</strong>.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor={passwordId} className="text-slate-300">New Password</Label>
+            <Label htmlFor={passwordId} className="text-muted-foreground">New Password</Label>
             <Input
               id={passwordId}
               name="password"
@@ -992,7 +992,7 @@ function ResetPasswordDialog({
               className={lightInputClassName}
               aria-label="New password"
             />
-            <p id={passwordDescriptionId} className="text-xs text-slate-400">
+            <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
               Must be 9–128 characters
             </p>
             {passwordError && (
@@ -1003,7 +1003,7 @@ function ResetPasswordDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={confirmPasswordId} className="text-slate-300">Confirm Password</Label>
+            <Label htmlFor={confirmPasswordId} className="text-muted-foreground">Confirm Password</Label>
             <Input
               id={confirmPasswordId}
               name="confirmPassword"

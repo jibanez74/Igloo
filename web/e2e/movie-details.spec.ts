@@ -369,8 +369,10 @@ test("movie details page renders the mocked success path from the movies index",
   const metadataRow = page.getByRole("list", { name: "Movie details" });
   await expect(metadataRow).toBeVisible();
   await expect(metadataRow).toContainText("PG-13");
-  await expect(metadataRow).toContainText("2h 6m");
+  await expect(metadataRow).toContainText("2 hr 6 min");
   await expect(metadataRow).toContainText("July 4, 2024");
+  const runtime = metadataRow.getByLabel("Runtime: 2 hours 6 minutes");
+  await expect(runtime).toHaveAttribute("datetime", "PT126M");
 
   const playLink = page.getByRole("link", { name: "Play" });
   const watchButton = page.getByRole("button", {

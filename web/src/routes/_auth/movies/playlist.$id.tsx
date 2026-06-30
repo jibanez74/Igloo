@@ -54,7 +54,7 @@ function MoviePlaylistPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <Spinner className="size-10 text-amber-400" />
+        <Spinner className="size-10 text-primary" />
       </div>
     );
   }
@@ -72,7 +72,7 @@ function MoviePlaylistPage() {
         <Link
           to="/movies"
           search={MOVIES_PLAYLISTS_TAB_SEARCH}
-          className="mt-4 inline-block text-amber-400 hover:underline"
+          className="mt-4 inline-block text-primary hover:underline"
         >
           Back to movie playlists
         </Link>
@@ -104,7 +104,7 @@ function MoviePlaylistPage() {
       <Link
         to="/movies"
         search={MOVIES_PLAYLISTS_TAB_SEARCH}
-        className="mb-6 inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-amber-400"
+        className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Movie playlists
@@ -112,15 +112,15 @@ function MoviePlaylistPage() {
 
       <header className="mb-8">
         <div className="flex items-start gap-3">
-          <ListVideo className="mt-1 size-8 shrink-0 text-amber-400" aria-hidden="true" />
+          <ListVideo className="mt-1 size-8 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
               {playlist.name}
             </h1>
             {desc ? (
-              <p className="mt-2 text-slate-400">{desc}</p>
+              <p className="mt-2 text-muted-foreground">{desc}</p>
             ) : null}
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               {movie_count} {movie_count === 1 ? "movie" : "movies"}
             </p>
           </div>
@@ -130,9 +130,9 @@ function MoviePlaylistPage() {
       <LiveAnnouncer message={announce} />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-slate-400">Playlist movies</span>
+        <span className="text-sm text-muted-foreground">Playlist movies</span>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {page} of {Math.max(totalPages, 1)}
           </span>
           <button
@@ -141,7 +141,7 @@ function MoviePlaylistPage() {
               setSort((s) => (s === "asc" ? "desc" : "asc"));
               setPage(1);
             }}
-            className="rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700"
+            className="rounded-full bg-muted px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
           >
             Sort: {sort === "asc" ? "A–Z" : "Z–A"}
           </button>
@@ -159,10 +159,10 @@ function MoviePlaylistPage() {
         />
       ) : moviesLoading ? (
         <div className="flex justify-center py-12">
-          <Spinner className="size-8 text-amber-400" />
+          <Spinner className="size-8 text-primary" />
         </div>
       ) : movies.length === 0 ? (
-        <p className="py-12 text-center text-slate-400">
+        <p className="py-12 text-center text-muted-foreground">
           No movies in this playlist yet.
         </p>
       ) : (

@@ -61,7 +61,7 @@ export default function DeleteMovieDialog({
       description={
         <>
           Are you sure you want to delete{" "}
-          <strong className="text-slate-200">{movieTitle}</strong>? This action
+          <strong className="text-foreground">{movieTitle}</strong>? This action
           cannot be undone.
         </>
       }
@@ -76,7 +76,7 @@ export default function DeleteMovieDialog({
           checked={deleteFile}
           onCheckedChange={(checked) => setDeleteFile(checked === true)}
         />
-        <Label htmlFor="delete-file" className="text-sm text-slate-300">
+        <Label htmlFor="delete-file" className="text-sm text-muted-foreground">
           Also delete the movie file from disk
         </Label>
       </div>

@@ -49,7 +49,7 @@ export default function TrackActionsMenu({
             type="button"
             ref={actionsButtonRef}
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-700 hover:text-white",
+              "flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground",
               MOTION_TRACK_MENU_TRIGGER_CLASS,
             )}
             aria-label={`More actions for ${trackTitle}`}
@@ -59,28 +59,28 @@ export default function TrackActionsMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="border-slate-700 bg-slate-800 text-white"
+          className="border-border bg-popover text-popover-foreground"
         >
           {/* Add to Playlist - always show */}
           <DropdownMenuItem
             onClick={() => setShowAddToPlaylist(true)}
-            className="cursor-pointer hover:bg-slate-700"
+            className="cursor-pointer hover:bg-accent"
           >
-            <Plus className="mr-2 size-4 text-amber-400" aria-hidden="true" />
+            <Plus className="mr-2 size-4 text-primary" aria-hidden="true" />
             Add to Playlist
           </DropdownMenuItem>
 
           {(hasAlbum || hasMusician) && (
-            <DropdownMenuSeparator className="bg-slate-700" />
+            <DropdownMenuSeparator className="bg-border" />
           )}
 
           {hasAlbum && (
             <DropdownMenuItem
               asChild
-              className="cursor-pointer hover:bg-slate-700"
+              className="cursor-pointer hover:bg-accent"
             >
               <Link to="/music/album/$id" params={{ id: albumId.toString() }}>
-                <Disc3 className="mr-2 size-4 text-amber-400" aria-hidden="true" />
+                <Disc3 className="mr-2 size-4 text-primary" aria-hidden="true" />
                 Go to Album
               </Link>
             </DropdownMenuItem>
@@ -88,23 +88,24 @@ export default function TrackActionsMenu({
           {hasMusician && (
             <DropdownMenuItem
               asChild
-              className="cursor-pointer hover:bg-slate-700"
+              className="cursor-pointer hover:bg-accent"
             >
               <Link
                 to="/music/musician/$id"
                 params={{ id: musicianId.toString() }}
               >
-                <User className="mr-2 size-4 text-amber-400" aria-hidden="true" />
+                <User className="mr-2 size-4 text-primary" aria-hidden="true" />
                 Go to Artist
               </Link>
             </DropdownMenuItem>
           )}
           {hasPlaylistActions && (
             <>
-              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
                 onClick={onRemoveFromPlaylist}
-                className="cursor-pointer text-red-400 hover:bg-slate-700 hover:text-red-300 focus:text-red-300"
+                variant="destructive"
+                className="cursor-pointer"
               >
                 <Trash2 className="mr-2 size-4" aria-hidden="true" />
                 Remove from Playlist

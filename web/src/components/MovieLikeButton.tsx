@@ -119,13 +119,13 @@ export default function MovieLikeButton({
         <Heart
           className={cn(
             "size-4",
-            isLiked && "fill-amber-400 text-amber-400!",
+            isLiked && "fill-primary text-primary!",
           )}
           aria-hidden="true"
         />
         {isLiked ? "Liked" : "Like"}
         {mutation.isPending && (
-          <Spinner className="size-4 text-amber-400!" aria-hidden="true" />
+          <Spinner className="size-4 text-primary!" aria-hidden="true" />
         )}
       </button>
     );
@@ -141,17 +141,17 @@ export default function MovieLikeButton({
       }}
       disabled={mutation.isPending || isLoading}
       className={cn(
-        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:ring-2 focus:ring-amber-400 focus:outline-none disabled:opacity-60",
+        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:ring-2 focus:ring-ring focus:outline-none disabled:opacity-60",
         className,
       )}
       aria-label={label}
       aria-pressed={isLiked}
     >
       {mutation.isPending ? (
-        <Spinner className="size-4 text-amber-400" />
+        <Spinner className="size-4 text-primary" />
       ) : (
         <Heart
-          className={`size-5 ${isLiked ? "fill-amber-400 text-amber-400" : "text-white"}`}
+          className={`size-5 ${isLiked ? "fill-primary text-primary" : "text-white"}`}
           aria-hidden="true"
         />
       )}

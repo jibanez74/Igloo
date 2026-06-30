@@ -71,7 +71,7 @@ export default function Header() {
           variant="ghost"
           size="icon"
           aria-label="Cast"
-          className="text-slate-300 hover:bg-slate-800 hover:text-white"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Cast aria-hidden="true" />
         </Button>

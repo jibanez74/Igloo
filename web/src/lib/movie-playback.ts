@@ -286,7 +286,7 @@ export function nativeMoviePlaybackErrorMessage(
 }
 
 // shouldPersistMovieWatchProgress intentionally uses OR so near-complete short videos are saved when completion >= MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD or clampedProgress >= MOVIE_WATCH_PROGRESS_MIN_SECONDS; hasEligibleMovieResumeProgress uses AND to only surface resume for unfinished, sufficiently-long content.
-export function shouldPersistMovieWatchProgress(
+function shouldPersistMovieWatchProgress(
   progressSec: number,
   durationSec: number,
 ) {

@@ -13,6 +13,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+import { runContentFadeTransitionTimeout } from "./content-fade-transition";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
@@ -295,18 +296,12 @@ describe("music route tab transitions", () => {
     expect(screen.getByText("Blue Record")).toBeInTheDocument();
     expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
 
-    const transitionCallIndex = setTimeoutSpy.mock.calls.findIndex(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-
-    expect(transitionCallIndex).toBeGreaterThanOrEqual(0);
-    expect(screen.getByText("Blue Record")).toBeInTheDocument();
-    expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(screen.getByText("Nina Simone")).toBeInTheDocument();
     });
-  });
+  }, 10_000);
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);

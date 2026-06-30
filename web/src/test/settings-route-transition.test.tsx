@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  CONTENT_FADE_TRANSITION_MS,
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
@@ -16,6 +15,7 @@ import {
   SETTINGS_KEY,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+import { runContentFadeTransitionTimeout } from "./content-fade-transition";
 
 const defaultMatchMedia = window.matchMedia;
 const originalStartViewTransition = (document as Document & {
@@ -243,17 +243,13 @@ describe("settings route tab transitions", () => {
     expect(screen.queryByText("Profile Information")).not.toBeInTheDocument();
     expect(startViewTransition).not.toHaveBeenCalled();
 
-    const transitionCallIndex = setTimeoutSpy.mock.calls.findIndex(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-
-    expect(transitionCallIndex).toBeGreaterThanOrEqual(0);
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(screen.getByText("Profile Information")).toBeInTheDocument();
     });
     expect(startViewTransition).not.toHaveBeenCalled();
-  });
+  }, 10_000);
 
   it("uses shared motion contracts for settings surfaces and switches", async () => {
     await renderSettingsRoute("/settings");

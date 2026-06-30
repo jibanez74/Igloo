@@ -41,5 +41,8 @@ jobs:
       - name: Lint
         run: cd web && bun run lint
 
+      - name: Test
+        run: cd web && bun run test
+
       - name: Type-check and build
         run: cd web && bun run build

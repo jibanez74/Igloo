@@ -36,45 +36,45 @@ const variantStyles: Record<
 > = {
   expanded: {
     container: "mb-6 w-full max-w-md",
-    bar: "group relative h-2 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+    bar: "group relative h-2 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
     thumb:
       "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
-    timeText: "text-sm text-slate-400 tabular-nums",
+    timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "below",
   },
   minimized: {
     container: "hidden max-w-md flex-1 items-center gap-3 sm:flex",
-    bar: "group relative h-1.5 flex-1 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+    bar: "group relative h-1.5 flex-1 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
     thumb:
       "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
-    timeText: "w-10 text-xs text-slate-400 tabular-nums",
+    timeText: "w-10 text-xs text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "inline",
   },
   mobile: {
     container: "mt-2 sm:hidden",
-    bar: "relative h-1 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+    bar: "relative h-1 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
     thumb: "", // No thumb on mobile for cleaner look
-    timeText: "text-xs text-slate-400 tabular-nums",
+    timeText: "text-xs text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "below",
   },
   video: {
     container: "mb-4 w-full",
-    bar: "group relative h-2 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+    bar: "group relative h-2 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
     thumb:
       "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
-    timeText: "text-sm text-slate-400 tabular-nums",
+    timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "below",
   },
   trailer: {
     container: "mb-4 w-full",
-    bar: "group relative h-1.5 cursor-pointer rounded-full bg-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none",
+    bar: "group relative h-1.5 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
     thumb:
       "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
-    timeText: "text-sm text-slate-400 tabular-nums",
+    timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: false,
     timesLayout: "below",
   },
@@ -108,10 +108,7 @@ export default function ProgressBar({
   const pageSeekStep = Math.min(30, Math.max(10, safeDuration * 0.1));
   const showThumb = Boolean(styles.thumb) && isSeekable;
   const fillClassName = cn(
-    "absolute inset-y-0 left-0 rounded-full",
-    variant === "video"
-      ? "bg-cyan-400"
-      : "bg-amber-400",
+    "absolute inset-y-0 left-0 rounded-full bg-primary",
     MOTION_PROGRESS_FILL_CLASS,
   );
 

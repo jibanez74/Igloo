@@ -204,30 +204,30 @@ export default function EditMovieDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-2xl"
+        className="max-h-[85vh] overflow-y-auto border-border bg-card sm:max-w-2xl"
         onCloseAutoFocus={(event) => {
           if (!restoreFocusRef) return;
           event.preventDefault();
           focusDialogRestoreTarget(restoreFocusRef.current);
         }}
       >
-        <DialogTitle className="text-white">Edit Movie</DialogTitle>
-        <DialogDescription className="text-slate-400">
+        <DialogTitle className="text-foreground">Edit Movie</DialogTitle>
+        <DialogDescription className="text-muted-foreground">
           Identify with TMDB to replace all metadata, or manually edit
           individual fields.
         </DialogDescription>
 
         <Tabs defaultValue="tmdb">
-          <TabsList className="w-full bg-slate-800">
+          <TabsList className="w-full bg-muted">
             <TabsTrigger
               value="tmdb"
-              className="flex-1 text-slate-300 data-[state=active]:bg-slate-700 data-[state=active]:text-white"
+              className="flex-1 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
             >
               Identify with TMDB
             </TabsTrigger>
             <TabsTrigger
               value="manual"
-              className="flex-1 text-slate-300 data-[state=active]:bg-slate-700 data-[state=active]:text-white"
+              className="flex-1 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
             >
               Manual
             </TabsTrigger>
@@ -356,7 +356,7 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Year" htmlFor="manual-year">
@@ -371,7 +371,7 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Release Date" htmlFor="manual-release-date">
@@ -386,7 +386,7 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Certification" htmlFor="manual-certification">
@@ -401,7 +401,7 @@ function ManualTab({
               })
             }
             placeholder="e.g. PG-13, R"
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Language" htmlFor="manual-language">
@@ -416,7 +416,7 @@ function ManualTab({
               })
             }
             placeholder="e.g. en"
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Tagline" htmlFor="manual-tagline">
@@ -430,7 +430,7 @@ function ManualTab({
                 value: e.target.value,
               })
             }
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Poster Path" htmlFor="manual-poster">
@@ -445,7 +445,7 @@ function ManualTab({
               })
             }
             placeholder="/abcdef.jpg"
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
         <FieldGroup label="Backdrop Path" htmlFor="manual-backdrop">
@@ -460,7 +460,7 @@ function ManualTab({
               })
             }
             placeholder="/abcdef.jpg"
-            className="border-slate-700 bg-slate-800 text-white"
+            className="border-border bg-muted text-foreground"
           />
         </FieldGroup>
       </div>
@@ -482,7 +482,7 @@ function ManualTab({
             })
           }
           rows={4}
-          className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </FieldGroup>
 
@@ -512,7 +512,7 @@ function FieldGroup({
 }) {
   return (
     <div>
-      <Label id={labelId} htmlFor={htmlFor} className="text-slate-300">
+      <Label id={labelId} htmlFor={htmlFor} className="text-muted-foreground">
         {label}
       </Label>
       <div className="mt-1">{children}</div>

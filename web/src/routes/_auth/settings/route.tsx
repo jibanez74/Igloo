@@ -94,11 +94,11 @@ function SettingsLayout() {
 
   const isCompactLayout = visibleTabs.length <= 2;
   const tabsListClassName = isCompactLayout
-    ? "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none"
-    : "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5";
+    ? "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none"
+    : "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5";
   const tabsTriggerClassName = isCompactLayout
-    ? "min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
-    : "min-h-10 min-w-0 p-2 text-sm text-slate-400 last:col-span-2 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1";
+    ? "min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
+    : "min-h-10 min-w-0 p-2 text-sm text-muted-foreground last:col-span-2 hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1";
 
   return (
     <>
@@ -112,11 +112,11 @@ function SettingsLayout() {
       <div className="min-w-0">
         {/* Page header */}
         <header className="mb-6 sm:mb-7">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-            <Settings className="size-6 text-amber-400" aria-hidden="true" />
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+            <Settings className="size-6 text-primary" aria-hidden="true" />
             <span>Settings</span>
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400 md:text-base">
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
             Manage application settings, your account, and users
           </p>
         </header>

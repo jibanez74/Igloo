@@ -296,6 +296,11 @@ async function mockMoviesApi(
       return;
     }
 
+    if (url.pathname === "/api/notifications/unread-count") {
+      await fulfillJSON(route, apiResponse({ unread_count: 0 }));
+      return;
+    }
+
     if (url.pathname === "/api/movies/stats") {
       await fulfillJSON(route, apiResponse({ total_movies: 25 }));
       return;

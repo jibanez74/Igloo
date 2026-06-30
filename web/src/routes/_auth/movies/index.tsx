@@ -219,11 +219,11 @@ function MoviesPage() {
 
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-          <Film className="size-6 shrink-0 text-amber-400" aria-hidden="true" />
+        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+          <Film className="size-6 shrink-0 text-primary" aria-hidden="true" />
           <span>Movie Library</span>
         </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-slate-400 md:text-base">
+        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
           Browse, organize, and enjoy your film collection
         </p>
       </header>
@@ -248,10 +248,10 @@ function MoviesPage() {
         onValueChange={handleTabChange}
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
-        <TabsList className="grid! h-auto w-full max-w-full grid-cols-3 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-3">
+        <TabsList className="grid! h-auto w-full max-w-full grid-cols-3 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-3">
           <TabsTrigger
             value="all"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <Grid3X3
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -262,7 +262,7 @@ function MoviesPage() {
           <TabsTrigger
             value="genres"
             ref={genresTabTriggerRef}
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <Film
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -273,7 +273,7 @@ function MoviesPage() {
           <TabsTrigger
             value="playlists"
             ref={playlistsTabTriggerRef}
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             <ListVideo
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
@@ -326,11 +326,11 @@ function MoviesStats() {
       aria-label={label}
     >
       <div className="flex items-center gap-2" aria-hidden="true">
-        <Film className="size-4 text-amber-400" />
-        <span className="font-medium text-white">
+        <Film className="size-4 text-primary" />
+        <span className="font-medium text-foreground">
           {isLoading ? "—" : total}
         </span>
-        <span className="text-slate-400">Movies</span>
+        <span className="text-muted-foreground">Movies</span>
       </div>
     </section>
   );
@@ -366,31 +366,31 @@ function MoreMenu({
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
-          className="inline-flex items-center justify-center rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
           aria-label="More options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="border-slate-700 bg-slate-800"
+          className="border-border bg-muted"
         >
           <DropdownMenuItem
-            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             onClick={onOpenLikedMovies}
           >
             <Heart className="mr-2 size-4" aria-hidden="true" />
             Liked movies
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             onClick={onOpenMoviePlaylists}
           >
             <ListVideo className="mr-2 size-4" aria-hidden="true" />
             Movie playlists
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white"
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             disabled={requestMovieDisabled}
             aria-label={
               requestMovieDisabled
@@ -494,7 +494,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
 
   if (movies.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No movies found in your library.</p>
       </div>
@@ -514,7 +514,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
         }
       >
         {hasMultiplePages && (
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages}
           </span>
         )}
@@ -522,7 +522,7 @@ function AllMoviesTabContent({ currentPage, sort }: AllMoviesTabContentProps) {
           <button
             type="button"
             onClick={handleSortToggle}
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
             aria-label={
               sort === "asc"
                 ? "Sorted A to Z, click to sort Z to A"
@@ -567,21 +567,21 @@ function AllMoviesTabSkeleton() {
   return (
     <div>
       <div className="mb-5 flex justify-end">
-        <div className={cn("h-8 w-16 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-8 w-16 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: MOVIES_PER_PAGE }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+              "overflow-hidden rounded-xl border border-border bg-card",
               MOTION_LOADING_STATE_CLASS,
             )}
           >
-            <div className="aspect-2/3 bg-slate-800" />
+            <div className="aspect-2/3 bg-muted" />
             <div className="p-3">
-              <div className="h-4 w-3/4 rounded-sm bg-slate-800" />
-              <div className="mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+              <div className="h-4 w-3/4 rounded-sm bg-muted" />
+              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
             </div>
           </div>
         ))}
@@ -726,7 +726,7 @@ function GenresTabContent({
 
   if (genres.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-400">
+      <div className="py-12 text-center text-muted-foreground">
         <Film className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No genres with movies in your library yet.</p>
       </div>
@@ -760,12 +760,12 @@ function GenresTabContent({
                   genreButtonRefs.current.delete(g.genre_id);
                 }}
                 onClick={() => handleSelectGenre(g.genre_id)}
-                className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                className={`flex w-full min-w-0 flex-col justify-between rounded-lg border text-left transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none ${
                   hasSelectedGenre ? "min-h-14 p-2" : "min-h-20 p-3"
                 } ${
                   selected
-                    ? "border-amber-500 bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/15"
-                    : "border-slate-700 bg-slate-800/70 text-slate-200 hover:border-amber-500/40 hover:bg-slate-800"
+                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/15"
+                    : "border-border bg-muted/70 text-foreground hover:border-primary/40 hover:bg-muted"
                 }`}
                 aria-pressed={selected}
               >
@@ -774,7 +774,7 @@ function GenresTabContent({
                 </span>
                 <span
                   className={`${hasSelectedGenre ? "mt-1" : "mt-3"} text-xs ${
-                    selected ? "text-slate-900/70" : "text-slate-400"
+                    selected ? "text-primary-foreground/70" : "text-muted-foreground"
                   }`}
                 >
                   {g.movie_count} {g.movie_count === 1 ? "movie" : "movies"}
@@ -791,16 +791,16 @@ function GenresTabContent({
 
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-foreground">
                 {selectedGenreTag ?? "Genre"}
               </span>
-              <span className="text-sm text-slate-400">
+              <span className="text-sm text-muted-foreground">
                 {total.toLocaleString()} movies
               </span>
               <button
                 type="button"
                 onClick={handleClearGenre}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
                 aria-label="Clear genre filter"
               >
                 <X className="size-3.5" aria-hidden="true" />
@@ -809,14 +809,14 @@ function GenresTabContent({
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {hasMultiplePages && (
-                <span className="text-sm text-slate-400">
+                <span className="text-sm text-muted-foreground">
                   Page {genresPage} of {totalPages}
                 </span>
               )}
               <button
                 type="button"
                 onClick={handleSortToggle}
-                className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
                 aria-label={
                   sort === "asc"
                     ? "Sorted A to Z, click to sort Z to A"
@@ -850,7 +850,7 @@ function GenresTabContent({
           ) : moviesLoading ? (
             <AllMoviesTabSkeleton />
           ) : movies.length === 0 ? (
-            <div className="py-12 text-center text-slate-400">
+            <div className="py-12 text-center text-muted-foreground">
               <Film
                 className="mx-auto mb-4 size-10 opacity-50"
                 aria-hidden="true"
@@ -887,7 +887,7 @@ function GenresTabSkeleton() {
           <div
             key={i}
             className={cn(
-              "min-h-20 rounded-lg border border-slate-800 bg-slate-900",
+              "min-h-20 rounded-lg border border-border bg-card",
               MOTION_LOADING_STATE_CLASS,
             )}
           />
@@ -987,7 +987,7 @@ function PlaylistsTabContent({
   return (
     <div>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm text-slate-400">
+        <span className="text-sm text-muted-foreground">
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
         <div className="flex flex-wrap gap-2">
@@ -1006,7 +1006,7 @@ function PlaylistsTabContent({
                 replace: true,
               });
             }}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-amber-500/50 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
             Liked movies
@@ -1014,7 +1014,7 @@ function PlaylistsTabContent({
           <button
             type="button"
             onClick={handleCreateOpen}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none sm:px-4"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
             New playlist
@@ -1129,12 +1129,12 @@ function LikedMoviesInPlaylistsTab({
             ref={backToPlaylistsButtonRef}
             type="button"
             onClick={onExitLiked}
-            className="text-sm font-medium text-amber-400 hover:underline"
+            className="text-sm font-medium text-primary hover:underline"
           >
             Back to playlists
           </button>
         </div>
-        <div className="py-12 text-center text-slate-400">
+        <div className="py-12 text-center text-muted-foreground">
           <Heart
             className="mx-auto mb-4 size-10 opacity-50"
             aria-hidden="true"
@@ -1155,22 +1155,22 @@ function LikedMoviesInPlaylistsTab({
             ref={backToPlaylistsButtonRef}
             type="button"
             onClick={onExitLiked}
-            className="text-sm font-medium text-amber-400 hover:underline"
+            className="text-sm font-medium text-primary hover:underline"
           >
             Back to playlists
           </button>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             {total.toLocaleString()} liked
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {playlistsPage} of {totalPages}
           </span>
           <button
             type="button"
             onClick={handleSortToggle}
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
             aria-label={
               sort === "asc"
                 ? "Sorted A to Z, click to sort Z to A"
@@ -1213,20 +1213,20 @@ function PlaylistsTabSkeleton() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-10 w-40 rounded-full bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <div className={cn("h-10 w-40 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              "rounded-xl border border-slate-800 bg-slate-900 p-4",
+              "rounded-xl border border-border bg-card p-4",
               MOTION_LOADING_STATE_CLASS,
             )}
           >
-            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-slate-800" />
-            <div className="mx-auto h-4 w-3/4 rounded-sm bg-slate-800" />
+            <div className="mx-auto mb-3 aspect-square w-full rounded-lg bg-muted" />
+            <div className="mx-auto h-4 w-3/4 rounded-sm bg-muted" />
           </div>
         ))}
       </div>
@@ -1241,23 +1241,23 @@ type EmptyMoviePlaylistsStateProps = {
 function EmptyMoviePlaylistsState({ onCreate }: EmptyMoviePlaylistsStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-slate-700 via-slate-800 to-amber-900/30 shadow-lg shadow-amber-500/5 sm:size-24">
+      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/30 shadow-lg shadow-primary/5 sm:size-24">
         <ListVideo
-          className="size-8 text-amber-200/40 sm:size-10"
+          className="size-8 text-primary/40 sm:size-10"
           aria-hidden="true"
         />
       </div>
-      <h3 className="mb-2 text-xl font-semibold text-white">
+      <h3 className="mb-2 text-xl font-semibold text-foreground">
         No movie playlists yet
       </h3>
-      <p className="mb-5 max-w-sm text-slate-400 sm:mb-6">
+      <p className="mb-5 max-w-sm text-muted-foreground sm:mb-6">
         Create a playlist to group films. Music playlists stay on the Music
         page.
       </p>
       <button
         type="button"
         onClick={onCreate}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none sm:px-6 sm:py-3"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
       >
         <Plus className="size-4" aria-hidden="true" />
         Create your first playlist

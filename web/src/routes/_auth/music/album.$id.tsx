@@ -68,7 +68,7 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
       aria-label={`Spotify popularity ${pct} out of 100`}
     >
       <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="flex min-w-0 items-center gap-1.5 text-slate-400">
+        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
           <SpotifyGlyph className="size-4 shrink-0 text-green-500" />
           <span>Spotify popularity</span>
         </span>
@@ -77,7 +77,7 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
         </span>
       </div>
       <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700"
+        className="mt-2 h-2 overflow-hidden rounded-full bg-accent"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -115,7 +115,7 @@ function AlbumDetailsPage() {
   if (Number.isNaN(albumId) || albumId <= 0) {
     return (
       <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-slate-300">
+        <h2 className="text-xl font-semibold text-muted-foreground">
           Album not found
         </h2>
       </div>
@@ -140,7 +140,7 @@ function AlbumDetailsPage() {
   if (!data?.data?.album) {
     return (
       <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-slate-300">
+        <h2 className="text-xl font-semibold text-muted-foreground">
           Album not found
         </h2>
       </div>
@@ -160,8 +160,8 @@ function AlbumDetailsSkeleton() {
       <span className="sr-only">Loading album details...</span>
 
       <div className="relative -mx-4 sm:-mx-6 lg:-mx-8" aria-hidden="true">
-        <div className="h-44 w-full bg-slate-800 sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
-        <div className="absolute inset-0 bg-linear-to-t from-slate-950 via-slate-950/60 to-transparent" />
+        <div className="h-44 w-full bg-muted sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48" />
+        <div className="absolute inset-0 bg-linear-to-t from-background via-background/60 to-transparent" />
       </div>
 
       <div
@@ -170,25 +170,25 @@ function AlbumDetailsSkeleton() {
       >
         <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
           <div className="mx-auto shrink-0 lg:mx-0 lg:pt-1">
-            <div className="aspect-square w-44 rounded-xl bg-slate-800 sm:w-52 md:w-64 lg:w-72" />
+            <div className="aspect-square w-44 rounded-xl bg-muted sm:w-52 md:w-64 lg:w-72" />
           </div>
 
           <div className="min-w-0 flex-1 space-y-4 text-center lg:text-left">
-            <div className="mx-auto h-10 max-w-lg rounded-sm bg-slate-800 lg:mx-0" />
-            <div className="mx-auto h-6 max-w-xs rounded-sm bg-slate-800 lg:mx-0" />
+            <div className="mx-auto h-10 max-w-lg rounded-sm bg-muted lg:mx-0" />
+            <div className="mx-auto h-6 max-w-xs rounded-sm bg-muted lg:mx-0" />
             <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-8 w-28 rounded-full bg-slate-800" />
-              <div className="h-8 w-24 rounded-full bg-slate-800" />
-              <div className="h-8 w-24 rounded-full bg-slate-800" />
+              <div className="h-8 w-28 rounded-full bg-muted" />
+              <div className="h-8 w-24 rounded-full bg-muted" />
+              <div className="h-8 w-24 rounded-full bg-muted" />
             </div>
             <div className="flex flex-wrap justify-center gap-2 lg:justify-start">
-              <div className="h-7 w-20 rounded-full bg-slate-800" />
-              <div className="h-7 w-24 rounded-full bg-slate-800" />
+              <div className="h-7 w-20 rounded-full bg-muted" />
+              <div className="h-7 w-24 rounded-full bg-muted" />
             </div>
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-              <div className="h-12 w-full rounded-full bg-slate-800 sm:w-32" />
-              <div className="h-12 w-full rounded-full bg-slate-800 sm:w-24" />
-              <div className="mx-auto size-12 rounded-full bg-slate-800 sm:mx-0" />
+              <div className="h-12 w-full rounded-full bg-muted sm:w-32" />
+              <div className="h-12 w-full rounded-full bg-muted sm:w-24" />
+              <div className="mx-auto size-12 rounded-full bg-muted sm:mx-0" />
             </div>
           </div>
         </div>
@@ -197,11 +197,11 @@ function AlbumDetailsSkeleton() {
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="flex h-14 items-center gap-4 rounded-lg bg-slate-800/50"
+              className="flex h-14 items-center gap-4 rounded-lg bg-muted/50"
             >
-              <div className="ml-4 h-4 w-6 rounded-sm bg-slate-700" />
-              <div className="h-4 max-w-xs flex-1 rounded-sm bg-slate-700" />
-              <div className="mr-4 h-4 w-16 rounded-sm bg-slate-700" />
+              <div className="ml-4 h-4 w-6 rounded-sm bg-accent" />
+              <div className="h-4 max-w-xs flex-1 rounded-sm bg-accent" />
+              <div className="mr-4 h-4 w-16 rounded-sm bg-accent" />
             </div>
           ))}
         </div>
@@ -373,13 +373,13 @@ function AlbumDetailsContent({
               <h1
                 id="album-title"
                 tabIndex={-1}
-                className="flex w-full max-w-full min-w-0 flex-col gap-1 text-2xl font-bold wrap-break-word text-white outline-none sm:text-3xl lg:text-4xl xl:text-5xl"
+                className="flex w-full max-w-full min-w-0 flex-col gap-1 text-2xl font-bold wrap-break-word text-foreground outline-none sm:text-3xl lg:text-4xl xl:text-5xl"
               >
                 <span className="min-w-0 text-balance">{album.title}</span>
               </h1>
 
               {musicianName && (
-                <p className="mt-2 text-lg font-medium text-amber-400 sm:text-xl lg:text-2xl">
+                <p className="mt-2 text-lg font-medium text-primary sm:text-xl lg:text-2xl">
                   {musicianName}
                 </p>
               )}
@@ -389,9 +389,9 @@ function AlbumDetailsContent({
                 aria-label="Album details"
               >
                 {(album.release_date.Valid || releaseYear) && (
-                  <li className="flex items-center gap-1.5 rounded-full border border-slate-600/40 bg-slate-800/90 px-3 py-1.5 text-sm text-slate-200">
+                  <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
                     <Calendar
-                      className="size-4 shrink-0 text-slate-400"
+                      className="size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <time
@@ -405,18 +405,18 @@ function AlbumDetailsContent({
                     </time>
                   </li>
                 )}
-                <li className="flex items-center gap-1.5 rounded-full border border-slate-600/40 bg-slate-800/90 px-3 py-1.5 text-sm text-slate-200">
+                <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
                   <Music
-                    className="size-4 shrink-0 text-slate-400"
+                    className="size-4 shrink-0 text-muted-foreground"
                     aria-hidden="true"
                   />
                   <span>
                     {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
                   </span>
                 </li>
-                <li className="flex items-center gap-1.5 rounded-full border border-slate-600/40 bg-slate-800/90 px-3 py-1.5 text-sm text-slate-200">
+                <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
                   <Clock
-                    className="size-4 shrink-0 text-slate-400"
+                    className="size-4 shrink-0 text-muted-foreground"
                     aria-hidden="true"
                   />
                   <time
@@ -436,7 +436,7 @@ function AlbumDetailsContent({
                   {album_genres.map(genre => (
                     <li
                       key={genre}
-                      className="rounded-full border border-amber-500/30 bg-slate-800/80 px-3 py-1 text-sm text-amber-200 backdrop-blur-sm"
+                      className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
                     >
                       {genre}
                     </li>
@@ -452,7 +452,7 @@ function AlbumDetailsContent({
                 <button
                   type="button"
                   onClick={handlePlayAlbum}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 transition-colors hover:bg-amber-400 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 sm:w-auto"
                 >
                   <Play className="size-4 fill-current" aria-hidden="true" />
                   Play Album
@@ -460,7 +460,7 @@ function AlbumDetailsContent({
                 <button
                   type="button"
                   onClick={handleShufflePlay}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-6 py-3 font-semibold text-white transition-colors hover:bg-slate-600 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-accent px-6 py-3 font-semibold text-foreground transition-colors hover:bg-accent sm:w-auto"
                   aria-label="Shuffle play album"
                 >
                   <Shuffle className="size-4" aria-hidden="true" />
@@ -472,7 +472,7 @@ function AlbumDetailsContent({
                     <button
                       type="button"
                       ref={moreOptionsButtonRef}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-600 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-accent px-4 py-3 font-semibold text-foreground transition-colors hover:bg-accent sm:w-auto"
                       aria-label="More options"
                     >
                       <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -480,7 +480,7 @@ function AlbumDetailsContent({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="border-slate-700 bg-slate-800"
+                    className="border-border bg-muted"
                   >
                     <DropdownMenuItem
                       onClick={() => setIsDeleteDialogOpen(true)}
@@ -508,7 +508,7 @@ function AlbumDetailsContent({
                 restoreFocusRef={moreOptionsButtonRef}
                 onConfirm={() => void handleDeleteAlbum()}
               >
-                <ul className="ml-4 list-disc space-y-1 text-sm text-slate-300">
+                <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
                   <li>The album and all its metadata</li>
                   <li>
                     All {tracks.length}{" "}
@@ -523,7 +523,7 @@ function AlbumDetailsContent({
                 <section className="mt-6" aria-labelledby="artists-heading">
                   <h2
                     id="artists-heading"
-                    className="mb-3 text-center text-sm font-semibold tracking-wide text-slate-400 uppercase lg:text-left"
+                    className="mb-3 text-center text-sm font-semibold tracking-wide text-muted-foreground uppercase lg:text-left"
                   >
                     {artists.length === 1 ? "Artist" : "Artists"}
                   </h2>
@@ -547,30 +547,30 @@ function AlbumDetailsContent({
           <section className="min-w-0" aria-labelledby="tracklist-heading">
             <h2
               id="tracklist-heading"
-              className="mb-4 flex items-center justify-center gap-2 text-lg font-semibold text-white sm:text-xl lg:justify-start"
+              className="mb-4 flex items-center justify-center gap-2 text-lg font-semibold text-foreground sm:text-xl lg:justify-start"
             >
               <ListOrdered
-                className="size-5 shrink-0 text-amber-400"
+                className="size-5 shrink-0 text-primary"
                 aria-hidden="true"
               />
               Track List
             </h2>
 
-            <div className="overflow-hidden rounded-xl border border-amber-500/10 bg-slate-800/30">
+            <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
               {discNumbers.map(discNum => (
                 <div key={discNum}>
                   {hasMultipleDiscs && (
-                    <div className="border-b border-slate-700/50 bg-slate-800/50 px-4 py-2">
-                      <span className="flex items-center gap-2 text-sm font-medium text-slate-400">
+                    <div className="border-b border-border/50 bg-muted/50 px-4 py-2">
+                      <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <Disc3
-                          className="size-4 text-amber-400/70"
+                          className="size-4 text-primary/70"
                           aria-hidden="true"
                         />
                         Disc {discNum}
                       </span>
                     </div>
                   )}
-                  <div className="divide-y divide-slate-700/30">
+                  <div className="divide-y divide-border/30">
                     {tracksByDisc[discNum].map((track: TrackType) => (
                       <TrackItem
                         key={track.id}
@@ -593,50 +593,50 @@ function AlbumDetailsContent({
           </section>
 
           <section
-            className="rounded-xl border border-amber-500/10 bg-slate-800/30 p-4 sm:p-6"
+            className="rounded-xl border border-primary/10 bg-muted/30 p-4 sm:p-6"
             aria-labelledby="details-heading"
           >
             <h2
               id="details-heading"
-              className="mb-4 text-lg font-semibold text-white"
+              className="mb-4 text-lg font-semibold text-foreground"
             >
               Album Details
             </h2>
             <dl className="grid grid-cols-1 gap-6 text-sm min-[480px]:grid-cols-2 lg:grid-cols-4">
               {album.release_date.Valid && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-amber-300/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
                     Release Date
                   </dt>
-                  <dd className="mt-1 text-white">
+                  <dd className="mt-1 text-foreground">
                     {formatDate(album.release_date.String)}
                   </dd>
                 </div>
               )}
               <div>
-                <dt className="font-semibold tracking-wide text-amber-300/70 uppercase">
+                <dt className="font-semibold tracking-wide text-primary/70 uppercase">
                   Total Tracks
                 </dt>
-                <dd className="mt-1 text-white">{tracks.length}</dd>
+                <dd className="mt-1 text-foreground">{tracks.length}</dd>
               </div>
               <div>
-                <dt className="font-semibold tracking-wide text-amber-300/70 uppercase">
+                <dt className="font-semibold tracking-wide text-primary/70 uppercase">
                   Total Duration
                 </dt>
-                <dd className="mt-1 text-white">
+                <dd className="mt-1 text-foreground">
                   {formatDuration(total_duration)}
                 </dd>
               </div>
               {spotifyPopularity != null && (
                 <div>
-                  <dt className="font-semibold tracking-wide text-amber-300/70 uppercase">
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
                     Spotify popularity
                   </dt>
-                  <dd className="mt-1 flex items-baseline gap-2 text-white">
+                  <dd className="mt-1 flex items-baseline gap-2 text-foreground">
                     <span className="text-lg font-semibold text-green-400 tabular-nums">
                       {Math.round(spotifyPopularity)}
                     </span>
-                    <span className="text-slate-500">/ 100</span>
+                    <span className="text-muted-foreground">/ 100</span>
                   </dd>
                 </div>
               )}
@@ -647,14 +647,14 @@ function AlbumDetailsContent({
             <Link
               to="/music"
               search={{ tab: "albums" }}
-              className="inline-flex items-center justify-center gap-2 text-slate-400 transition-colors hover:text-amber-400 sm:justify-start"
+              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary sm:justify-start"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to Music
             </Link>
             <Link
               to="/"
-              className="inline-flex items-center justify-center gap-2 text-slate-500 transition-colors hover:text-amber-400/90 sm:justify-start"
+              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary/90 sm:justify-start"
             >
               Home
             </Link>
@@ -670,7 +670,7 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
     artist.thumb.Valid ? artist.thumb.String : null
   );
   return (
-    <div className="flex items-center gap-2 rounded-full border border-slate-700/50 bg-slate-800/60 px-3 py-1.5 transition-colors hover:border-amber-500/30">
+    <div className="flex items-center gap-2 rounded-full border border-border/50 bg-muted/60 px-3 py-1.5 transition-colors hover:border-primary/30">
       {thumbUrl ? (
         <img
           src={thumbUrl}
@@ -678,11 +678,11 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
           className="size-6 rounded-full object-cover"
         />
       ) : (
-        <div className="flex size-6 items-center justify-center rounded-full bg-slate-700">
-          <User className="size-3 text-slate-400" aria-hidden="true" />
+        <div className="flex size-6 items-center justify-center rounded-full bg-accent">
+          <User className="size-3 text-muted-foreground" aria-hidden="true" />
         </div>
       )}
-      <span className="text-sm font-medium text-white">{artist.name}</span>
+      <span className="text-sm font-medium text-foreground">{artist.name}</span>
     </div>
   );
 }

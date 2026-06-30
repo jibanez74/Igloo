@@ -20,7 +20,7 @@ export default function MovieExtraVideosSection({
       <h2
         id="extra-videos-heading"
         tabIndex={-1}
-        className="mb-4 text-xl font-semibold text-white outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
       >
         Extra Videos
       </h2>
@@ -29,7 +29,7 @@ export default function MovieExtraVideosSection({
         On touch devices, swipe or scroll the list to see all clips.
       </p>
       <ul
-        className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-amber-700/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
+        className="-mx-4 flex snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/50 list-none gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 sm:-mx-6 sm:gap-4 sm:px-6 lg:-mx-8 lg:gap-4 lg:px-8"
         aria-label={`Extra videos, ${videos.length} clips`}
       >
         {videos.map(video => (
@@ -44,14 +44,14 @@ export default function MovieExtraVideosSection({
                 returnTo,
               }}
               className={cn(
-                "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-amber-500/20 bg-slate-800/80 px-3 py-2.5 text-left text-sm text-amber-200 transition-colors",
-                "hover:border-amber-500/40 hover:bg-slate-800",
-                "focus-visible:border-amber-400 focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:outline-none",
+                "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-primary/20 bg-muted/80 px-3 py-2.5 text-left text-sm text-primary transition-colors",
+                "hover:border-primary/40 hover:bg-muted",
+                "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
                 "sm:min-h-0",
               )}
             >
               <span className="leading-snug font-medium">{video.title}</span>
-              <span className="mt-0.5 text-slate-400">
+              <span className="mt-0.5 text-muted-foreground">
                 ({formatExtraVideoType(video.type)})
               </span>
             </Link>

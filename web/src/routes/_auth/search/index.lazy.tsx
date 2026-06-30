@@ -78,14 +78,14 @@ function SearchPage() {
       <div className="min-w-0">
         <title>Search - Igloo</title>
         <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             <Search
-              className="size-6 shrink-0 text-amber-400"
+              className="size-6 shrink-0 text-primary"
               aria-hidden="true"
             />
             <span>Search</span>
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm text-slate-400 md:text-base">
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground md:text-base">
             Type a query in the search bar above to find movies, albums,
             musicians, and tracks in your library.
           </p>
@@ -126,14 +126,14 @@ function SearchPage() {
       />
 
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
           <Search
-            className="size-6 shrink-0 text-amber-400"
+            className="size-6 shrink-0 text-primary"
             aria-hidden="true"
           />
           <span>
             Search results for{" "}
-            <span className="text-amber-300">&lsquo;{trimmed}&rsquo;</span>
+            <span className="text-primary">&lsquo;{trimmed}&rsquo;</span>
           </span>
         </h1>
       </header>
@@ -143,34 +143,34 @@ function SearchPage() {
         onValueChange={handleTabChange}
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
-        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-slate-700/50 bg-slate-800/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-5">
+        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-5">
           <TabsTrigger
             value="all"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             All
           </TabsTrigger>
           <TabsTrigger
             value="movies"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             Movies
           </TabsTrigger>
           <TabsTrigger
             value="albums"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             Albums
           </TabsTrigger>
           <TabsTrigger
             value="musicians"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             Musicians
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
-            className="min-h-10 min-w-0 p-2 text-sm text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-amber-500/20 sm:px-4"
+            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
           >
             Tracks
           </TabsTrigger>
@@ -240,7 +240,7 @@ function AllResultsTab({ q }: { q: string }) {
 
       {movies.total > 0 && (
         <AllSection
-          icon={<Film className="size-5 text-amber-400" aria-hidden="true" />}
+          icon={<Film className="size-5 text-primary" aria-hidden="true" />}
           title="Movies"
           total={movies.total}
           resultCount={movies.results.length}
@@ -257,7 +257,7 @@ function AllResultsTab({ q }: { q: string }) {
 
       {albums.total > 0 && (
         <AllSection
-          icon={<Disc3 className="size-5 text-amber-400" aria-hidden="true" />}
+          icon={<Disc3 className="size-5 text-primary" aria-hidden="true" />}
           title="Albums"
           total={albums.total}
           resultCount={albums.results.length}
@@ -274,7 +274,7 @@ function AllResultsTab({ q }: { q: string }) {
 
       {musicians.total > 0 && (
         <AllSection
-          icon={<User className="size-5 text-amber-400" aria-hidden="true" />}
+          icon={<User className="size-5 text-primary" aria-hidden="true" />}
           title="Musicians"
           total={musicians.total}
           resultCount={musicians.results.length}
@@ -291,7 +291,7 @@ function AllResultsTab({ q }: { q: string }) {
 
       {tracks.total > 0 && (
         <AllSection
-          icon={<Music className="size-5 text-amber-400" aria-hidden="true" />}
+          icon={<Music className="size-5 text-primary" aria-hidden="true" />}
           title="Tracks"
           total={tracks.total}
           resultCount={tracks.results.length}
@@ -299,11 +299,11 @@ function AllResultsTab({ q }: { q: string }) {
           q={q}
         >
           <ul
-            className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50"
+            className="overflow-hidden rounded-xl border border-border bg-card/50"
             aria-label="Track results"
           >
             {tracks.results.map((track) => (
-              <li key={track.id} className="border-b border-slate-800 last:border-b-0">
+              <li key={track.id} className="border-b border-border last:border-b-0">
                 <SearchTrackItem track={track} />
               </li>
             ))}
@@ -338,10 +338,10 @@ function AllSection({
   return (
     <section aria-label={`${title} results`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+        <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
           {icon}
           <span>{title}</span>
-          <span className="text-sm font-normal text-slate-400">
+          <span className="text-sm font-normal text-muted-foreground">
             ({total.toLocaleString()})
           </span>
         </h2>
@@ -349,7 +349,7 @@ function AllSection({
           <Link
             to="/search"
             search={{ q, tab, page: 1 }}
-            className="text-sm font-medium text-amber-400 hover:underline focus:ring-2 focus:ring-amber-400 focus:outline-none"
+            className="text-sm font-medium text-primary hover:underline focus:ring-2 focus:ring-ring focus:outline-none"
           >
             See all {total.toLocaleString()} {title.toLowerCase()} →
           </Link>
@@ -520,13 +520,13 @@ function TracksResultsTab({ q, page }: CategoryTabProps) {
       onPageChange={handlePageChange}
       renderGrid={(items: TrackListItemType[]) => (
         <ul
-          className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50"
+          className="overflow-hidden rounded-xl border border-border bg-card/50"
           aria-label="Track results"
         >
           {items.map((track) => (
             <li
               key={track.id}
-              className="border-b border-slate-800 last:border-b-0"
+              className="border-b border-border last:border-b-0"
             >
               <SearchTrackItem track={track} />
             </li>
@@ -595,7 +595,7 @@ function CategoryTabFrame<T>({
           message={`No ${label} match ${q}`}
           announcementKey={`${q}-${label}-empty`}
         />
-        <p className="py-12 text-center text-slate-400">
+        <p className="py-12 text-center text-muted-foreground">
           No {label} match &lsquo;{q}&rsquo;.
         </p>
       </>
@@ -612,11 +612,11 @@ function CategoryTabFrame<T>({
       />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm text-slate-400">
+        <span className="text-sm text-muted-foreground">
           {total.toLocaleString()} {label}
         </span>
         {totalPages > 1 && (
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-muted-foreground">
             Page {page} of {totalPages}
           </span>
         )}
@@ -691,7 +691,7 @@ function SearchTrackItem({ track }: { track: TrackListItemType }) {
 
 function EmptyResults({ q }: { q: string }) {
   return (
-    <div className="py-12 text-center text-slate-400">
+    <div className="py-12 text-center text-muted-foreground">
       <Search className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
       <p>
         No results found for &lsquo;{q}&rsquo;. Try a different search term.
@@ -715,7 +715,7 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none"
       >
         Try again
       </button>
@@ -726,20 +726,20 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
 function CategorySkeleton() {
   return (
     <div>
-      <div className={cn("mb-5 h-4 w-32 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+      <div className={cn("mb-5 h-4 w-32 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+              "overflow-hidden rounded-xl border border-border bg-card",
               MOTION_LOADING_STATE_CLASS,
             )}
           >
-            <div className="aspect-2/3 bg-slate-800" />
+            <div className="aspect-2/3 bg-muted" />
             <div className="p-3">
-              <div className="h-4 w-3/4 rounded-sm bg-slate-800" />
-              <div className="mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+              <div className="h-4 w-3/4 rounded-sm bg-muted" />
+              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
             </div>
           </div>
         ))}
@@ -753,20 +753,20 @@ function AllResultsSkeleton() {
     <div className="space-y-10">
       {Array.from({ length: 3 }).map((_, s) => (
         <div key={s}>
-          <div className={cn("mb-4 h-6 w-40 rounded-sm bg-slate-800", MOTION_LOADING_STATE_CLASS)} />
+          <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
                 className={cn(
-                  "overflow-hidden rounded-xl border border-slate-800 bg-slate-900",
+                  "overflow-hidden rounded-xl border border-border bg-card",
                   MOTION_LOADING_STATE_CLASS,
                 )}
               >
-                <div className="aspect-2/3 bg-slate-800" />
+                <div className="aspect-2/3 bg-muted" />
                 <div className="p-3">
-                  <div className="h-4 w-3/4 rounded-sm bg-slate-800" />
-                  <div className="mt-2 h-3 w-1/2 rounded-sm bg-slate-800" />
+                  <div className="h-4 w-3/4 rounded-sm bg-muted" />
+                  <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
                 </div>
               </div>
             ))}

@@ -1,17 +1,17 @@
 import { Star, Clock, Calendar, Users } from "lucide-react";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import type { MovieDetailsMetadataChipsProps } from "@/types";
 
 function criticRatingColor(score: number) {
-  if (score >= 7) return "bg-amber-500 text-slate-900";
-  if (score >= 5) return "bg-amber-600 text-slate-900";
-  return "bg-slate-600 text-white";
+  if (score >= 7) return "bg-aurora text-aurora-foreground";
+  if (score >= 5) return "bg-aurora/90 text-aurora-foreground";
+  return "bg-muted text-foreground";
 }
 
 function audienceRatingColor(score: number) {
-  if (score >= 7) return "bg-violet-600 text-white";
-  if (score >= 5) return "bg-violet-700 text-white";
-  return "bg-slate-600 text-white";
+  if (score >= 7) return "bg-primary text-primary-foreground";
+  if (score >= 5) return "bg-accent text-accent-foreground";
+  return "bg-muted text-foreground";
 }
 
 export default function MovieDetailsMetadataChips({
@@ -23,6 +23,8 @@ export default function MovieDetailsMetadataChips({
   releaseDateStr,
   tmdbVoteAverage,
 }: MovieDetailsMetadataChipsProps) {
+  const spokenRuntime = formatSpokenRuntimeMinutes(runTimeMins);
+
   return (
     <ul
       className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
@@ -30,10 +32,10 @@ export default function MovieDetailsMetadataChips({
     >
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
         <li
-          className="flex items-center gap-2 rounded-full border border-sky-400/35 bg-slate-800/90 px-3 py-1.5 text-sm font-semibold text-sky-100"
+          className="flex items-center gap-2 rounded-full border border-primary/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-primary"
           aria-label={`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
         >
-          <span className="text-slate-400">TMDB</span>
+          <span className="text-muted-foreground">TMDB</span>
           <span aria-hidden="true">{tmdbVoteAverage.toFixed(1)}</span>
         </li>
       )}
@@ -56,24 +58,24 @@ export default function MovieDetailsMetadataChips({
         </li>
       )}
       {certificationLabel && (
-        <li className="rounded-full border border-amber-500/35 bg-slate-800/90 px-3 py-1.5 text-sm font-semibold text-amber-200">
+        <li className="rounded-full border border-primary/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-primary">
           {certificationLabel}
         </li>
       )}
       {runtime && (
-        <li className="flex items-center gap-1.5 text-slate-300">
-          <Clock className="size-4 text-slate-400" aria-hidden="true" />
+        <li className="flex items-center gap-1.5 text-muted-foreground">
+          <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
           <time
             dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}
-            aria-label={`Duration: ${runtime}`}
+            aria-label={`Runtime: ${spokenRuntime ?? runtime}`}
           >
-            {runtime}
+            <span aria-hidden="true">{runtime}</span>
           </time>
         </li>
       )}
       {releaseDateStr && (
-        <li className="flex items-center gap-1.5 text-slate-300">
-          <Calendar className="size-4 text-slate-400" aria-hidden="true" />
+        <li className="flex items-center gap-1.5 text-muted-foreground">
+          <Calendar className="size-4 text-muted-foreground" aria-hidden="true" />
           <time dateTime={releaseDateStr}>{formatDate(releaseDateStr)}</time>
         </li>
       )}

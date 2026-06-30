@@ -268,7 +268,7 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
@@ -277,10 +277,10 @@ function TrailerPage() {
             <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
               <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
             </div>
-            <DialogTitle className="mb-2 text-xl font-semibold text-white">
+            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
               Unable to Play Trailer
             </DialogTitle>
-            <DialogDescription className="mb-6 text-slate-400">
+            <DialogDescription className="mb-6 text-muted-foreground">
               {error}
             </DialogDescription>
             <div className="flex flex-wrap items-center justify-center gap-3">
@@ -290,7 +290,7 @@ function TrailerPage() {
                 onClick={retry}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex items-center rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
               >
                 <RotateCcw className="mr-2 size-4" aria-hidden="true" />
@@ -301,7 +301,7 @@ function TrailerPage() {
                 onClick={handleClose}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex items-center rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-200 hover:bg-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -321,19 +321,19 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
           <div className="max-w-md px-4 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-slate-800">
-              <Film className="size-10 text-slate-400" aria-hidden="true" />
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
+              <Film className="size-10 text-muted-foreground" aria-hidden="true" />
             </div>
-            <DialogTitle className="mb-2 text-xl font-semibold text-white">
+            <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
               No Trailer Available
             </DialogTitle>
-            <DialogDescription className="mb-6 text-slate-400">
+            <DialogDescription className="mb-6 text-muted-foreground">
               This movie doesn't have a trailer yet.
             </DialogDescription>
             <button
@@ -342,7 +342,7 @@ function TrailerPage() {
               onClick={handleClose}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
               )}
             >
               <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -361,7 +361,7 @@ function TrailerPage() {
           ref={containerRef}
           className={cn(
             MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-            "flex items-center justify-center bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+            "flex items-center justify-center bg-linear-to-b from-card via-background to-card",
           )}
           onOpenAutoFocus={handleDialogOpenAutoFocus}
           onEscapeKeyDown={handleDialogEscapeKeyDown}
@@ -372,11 +372,11 @@ function TrailerPage() {
           </DialogDescription>
 
           <div className="text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
-              <Spinner className="size-10 text-amber-400" />
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-primary/10">
+              <Spinner className="size-10 text-primary" />
             </div>
-            <p className="text-lg font-medium text-white">Loading trailer...</p>
-            <p className="mt-2 text-sm text-slate-400">Please wait</p>
+            <p className="text-lg font-medium text-foreground">Loading trailer...</p>
+            <p className="mt-2 text-sm text-muted-foreground">Please wait</p>
           </div>
         </DialogFullscreenContent>
       </Dialog>
@@ -391,7 +391,7 @@ function TrailerPage() {
         ref={containerRef}
         className={cn(
           MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-          "flex flex-col bg-linear-to-b from-slate-900 via-slate-950 to-slate-900",
+          "flex flex-col bg-linear-to-b from-card via-background to-card",
         )}
         onOpenAutoFocus={handleDialogOpenAutoFocus}
         onEscapeKeyDown={handleDialogEscapeKeyDown}
@@ -409,16 +409,16 @@ function TrailerPage() {
       <header
         className={cn(
           MOTION_PLAYER_CHROME_PANEL_CLASS,
-          "flex items-center justify-between border-b border-slate-700/50 bg-slate-900/95 px-4 py-3 backdrop-blur-lg",
+          "flex items-center justify-between border-b border-border/50 bg-card/95 px-4 py-3 backdrop-blur-lg",
         )}
       >
         <div className="flex items-center gap-3">
-          <Film className="size-5 text-amber-400" aria-hidden="true" />
+          <Film className="size-5 text-primary" aria-hidden="true" />
           <div>
-            <DialogTitle className="truncate text-base font-semibold text-white">
+            <DialogTitle className="truncate text-base font-semibold text-foreground">
               {title}
             </DialogTitle>
-            <p className="text-xs text-slate-400">Now Playing</p>
+            <p className="text-xs text-muted-foreground">Now Playing</p>
           </div>
         </div>
         <button
@@ -427,7 +427,7 @@ function TrailerPage() {
           onClick={handleClose}
           className={cn(
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           )}
           aria-label="Close trailer (Escape)"
         >
@@ -444,14 +444,14 @@ function TrailerPage() {
           <div
             className={cn(
               MOTION_MEDIA_OVERLAY_ENTER_CLASS,
-              "absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm",
+              "absolute inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm",
             )}
           >
             <div className="text-center">
-              <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-amber-500/10">
-                <Spinner className="size-8 text-amber-400" />
+              <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary/10">
+                <Spinner className="size-8 text-primary" />
               </div>
-              <p className="font-medium text-white">Loading trailer...</p>
+              <p className="font-medium text-foreground">Loading trailer...</p>
             </div>
           </div>
         )}
@@ -460,7 +460,7 @@ function TrailerPage() {
       <footer
         className={cn(
           MOTION_PLAYER_CHROME_PANEL_CLASS,
-          "border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg",
+          "border-t border-border/50 bg-card/95 p-4 backdrop-blur-lg",
         )}
       >
         <div className="mx-auto max-w-4xl">
@@ -475,11 +475,11 @@ function TrailerPage() {
 
           <div className="flex items-center justify-between">
             <div className="flex min-w-[100px] items-center gap-2">
-              <span className="text-sm text-slate-400 tabular-nums">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {formatTimeSeconds(currentTime)}
               </span>
-              <span className="text-slate-600">/</span>
-              <span className="text-sm text-slate-400 tabular-nums">
+              <span className="text-muted-foreground">/</span>
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {formatTimeSeconds(duration)}
               </span>
             </div>
@@ -494,7 +494,7 @@ function TrailerPage() {
                 onClick={() => seekBackward(10)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
                 aria-label="Rewind 10 seconds (J or Left Arrow)"
               >
@@ -506,7 +506,7 @@ function TrailerPage() {
                 onClick={togglePlay}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-14 items-center justify-center rounded-full bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 hover:bg-amber-400 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                  "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
                 aria-label={
                   isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
@@ -524,7 +524,7 @@ function TrailerPage() {
                 onClick={() => seekForward(10)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
                 aria-label="Forward 10 seconds (L or Right Arrow)"
               >
@@ -538,7 +538,7 @@ function TrailerPage() {
                 onClick={toggleMute}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
@@ -556,7 +556,7 @@ function TrailerPage() {
                 onClick={toggleFullscreen}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-amber-400 focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
                 aria-label={
                   isBrowserFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"

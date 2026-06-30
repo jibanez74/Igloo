@@ -63,12 +63,12 @@ export default function MoviePlayerControls({
         chromeFullscreenMode
           ? cn(
               MOTION_PLAYER_CHROME_PANEL_CLASS,
-              "absolute inset-x-0 bottom-0 z-10 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg",
+              "absolute inset-x-0 bottom-0 z-10 border-t border-border bg-background/95 p-4 backdrop-blur-lg",
               controlsVisible
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none translate-y-full opacity-0",
             )
-          : "shrink-0 border-t border-slate-700/50 bg-slate-900/95 p-4 backdrop-blur-lg"
+          : "shrink-0 border-t border-border bg-background/95 p-4 backdrop-blur-lg"
       }
     >
       <div className="mx-auto max-w-4xl">
@@ -83,11 +83,11 @@ export default function MoviePlayerControls({
 
         <div className="flex items-center justify-between">
           <div className="flex min-w-25 items-center gap-2">
-            <span className="text-sm text-slate-400 tabular-nums">
+            <span className="text-sm text-muted-foreground tabular-nums">
               {formatTimeSeconds(currentTime)}
             </span>
-            <span className="text-slate-600">/</span>
-            <span className="text-sm text-slate-400 tabular-nums">
+            <span className="text-muted-foreground">/</span>
+            <span className="text-sm text-muted-foreground tabular-nums">
               {formatTimeSeconds(displayedDuration)}
             </span>
           </div>
@@ -102,7 +102,7 @@ export default function MoviePlayerControls({
               onClick={onSeekBackward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label="Seek backward 10 seconds"
             >
@@ -113,7 +113,7 @@ export default function MoviePlayerControls({
               onClick={onTogglePlay}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-14 items-center justify-center rounded-full bg-cyan-500 text-slate-900 shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none",
+                "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
               )}
               aria-label={playing ? "Pause" : "Play"}
             >
@@ -128,7 +128,7 @@ export default function MoviePlayerControls({
               onClick={onSeekForward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label="Seek forward 10 seconds"
             >
@@ -138,7 +138,7 @@ export default function MoviePlayerControls({
 
           <div className="flex min-w-25 items-center justify-end gap-2">
             <span
-              className="rounded-sm bg-slate-800/80 px-2 py-1 text-xs text-slate-400"
+              className="rounded-sm bg-muted/80 px-2 py-1 text-xs text-muted-foreground"
               aria-label="Current stream quality"
             >
               {qualityLabel}
@@ -151,14 +151,13 @@ export default function MoviePlayerControls({
             <VolumeControl
               mediaRef={videoRef}
               variant="minimized"
-              accent="cyan"
             />
             <button
               type="button"
               onClick={onToggleFullscreen}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
               aria-label={
                 chromeFullscreenMode
