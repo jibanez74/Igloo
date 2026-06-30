@@ -13,6 +13,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+import { runContentFadeTransitionTimeout } from "./content-fade-transition";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
@@ -295,19 +296,7 @@ describe("music route tab transitions", () => {
     expect(screen.getByText("Blue Record")).toBeInTheDocument();
     expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
 
-    const transitionCall = setTimeoutSpy.mock.calls.find(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-    const transitionCallback = transitionCall?.[0];
-
-    expect(transitionCall).toBeDefined();
-    expect(transitionCallback).toEqual(expect.any(Function));
-    expect(screen.getByText("Blue Record")).toBeInTheDocument();
-    expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
-
-    await act(async () => {
-      (transitionCallback as () => void)();
-    });
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(screen.getByText("Nina Simone")).toBeInTheDocument();

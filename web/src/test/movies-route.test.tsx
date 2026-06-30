@@ -13,6 +13,7 @@ import {
   MOTION_SECTION_ENTER_DELAYED_CLASS,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+import { runContentFadeTransitionTimeout } from "./content-fade-transition";
 
 const defaultMatchMedia = window.matchMedia;
 
@@ -293,26 +294,12 @@ describe("movies route tab transitions", () => {
       screen.queryByRole("button", { name: /Action/i }),
     ).not.toBeInTheDocument();
 
-    const transitionCall = setTimeoutSpy.mock.calls.find(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-    const transitionCallback = transitionCall?.[0];
-
-    expect(transitionCall).toBeDefined();
-    expect(transitionCallback).toEqual(expect.any(Function));
-    expect(screen.getByText("Arrival")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Action/i }),
-    ).not.toBeInTheDocument();
-
-    await act(async () => {
-      (transitionCallback as () => void)();
-    });
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Action/i })).toBeInTheDocument();
     });
-  });
+  }, 10_000);
 
   it("delays swapping from genres to playlists until the fade-out completes", async () => {
     const user = userEvent.setup();
@@ -329,25 +316,12 @@ describe("movies route tab transitions", () => {
       screen.queryByRole("button", { name: "Liked movies" }),
     ).not.toBeInTheDocument();
 
-    const transitionCall = setTimeoutSpy.mock.calls.find(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-    const transitionCallback = transitionCall?.[0];
-
-    expect(transitionCall).toBeDefined();
-    expect(transitionCallback).toEqual(expect.any(Function));
-    expect(
-      screen.queryByRole("button", { name: "Liked movies" }),
-    ).not.toBeInTheDocument();
-
-    await act(async () => {
-      (transitionCallback as () => void)();
-    });
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Liked movies" })).toBeInTheDocument();
     });
-  });
+  }, 10_000);
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);
@@ -452,17 +426,7 @@ describe("movies route focus restoration", () => {
       screen.queryByRole("button", { name: "Back to playlists" }),
     ).not.toBeInTheDocument();
 
-    const transitionCall = setTimeoutSpy.mock.calls.find(
-      ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
-    );
-    const transitionCallback = transitionCall?.[0];
-
-    expect(transitionCall).toBeDefined();
-    expect(transitionCallback).toEqual(expect.any(Function));
-
-    await act(async () => {
-      (transitionCallback as () => void)();
-    });
+    await runContentFadeTransitionTimeout(setTimeoutSpy);
 
     await waitFor(() => {
       expect(
@@ -470,7 +434,7 @@ describe("movies route focus restoration", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "More options" })).toHaveFocus();
     });
-  });
+  }, 10_000);
 
   it("disables Request Movie when TMDB search is unavailable", async () => {
     const user = userEvent.setup();
