@@ -191,6 +191,7 @@ function MoviesPage() {
   };
 
   const handleOpenLikedMovies = () => {
+    primeEnterLikedFocus();
     navigateWithTabTransition("playlists", prev => ({
       ...prev,
       tab: "playlists",
