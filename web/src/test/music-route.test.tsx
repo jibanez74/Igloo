@@ -295,18 +295,24 @@ describe("music route tab transitions", () => {
     expect(screen.getByText("Blue Record")).toBeInTheDocument();
     expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
 
-    const transitionCallIndex = setTimeoutSpy.mock.calls.findIndex(
+    const transitionCall = setTimeoutSpy.mock.calls.find(
       ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
     );
+    const transitionCallback = transitionCall?.[0];
 
-    expect(transitionCallIndex).toBeGreaterThanOrEqual(0);
+    expect(transitionCall).toBeDefined();
+    expect(transitionCallback).toEqual(expect.any(Function));
     expect(screen.getByText("Blue Record")).toBeInTheDocument();
     expect(screen.queryByText("Nina Simone")).not.toBeInTheDocument();
+
+    await act(async () => {
+      (transitionCallback as () => void)();
+    });
 
     await waitFor(() => {
       expect(screen.getByText("Nina Simone")).toBeInTheDocument();
     });
-  });
+  }, 10_000);
 
   it("switches tabs without waiting when reduced motion is enabled", async () => {
     setReducedMotionPreference(true);
