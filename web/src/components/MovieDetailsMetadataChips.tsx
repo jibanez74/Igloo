@@ -1,5 +1,5 @@
 import { Star, Clock, Calendar, Users } from "lucide-react";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import type { MovieDetailsMetadataChipsProps } from "@/types";
 
 function criticRatingColor(score: number) {
@@ -23,6 +23,8 @@ export default function MovieDetailsMetadataChips({
   releaseDateStr,
   tmdbVoteAverage,
 }: MovieDetailsMetadataChipsProps) {
+  const spokenRuntime = formatSpokenRuntimeMinutes(runTimeMins);
+
   return (
     <ul
       className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
@@ -63,11 +65,11 @@ export default function MovieDetailsMetadataChips({
       {runtime && (
         <li className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
-          <time
-            dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}
-            aria-label={`Duration: ${runtime}`}
-          >
-            {runtime}
+          <time dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}>
+            <span aria-hidden="true">{runtime}</span>
+            {spokenRuntime && (
+              <span className="sr-only">Runtime: {spokenRuntime}</span>
+            )}
           </time>
         </li>
       )}

@@ -114,11 +114,38 @@ export function formatSpokenTime(seconds: number) {
   return parts.join(" ");
 }
 
-export function formatRuntimeMinutes(minutes: number | null | undefined): string | null {
-  if (minutes == null || minutes <= 0) return null;
+export function formatRuntimeMinutes(
+  minutes: number | null | undefined,
+): string | null {
+  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
-  return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (remainingMinutes > 0) parts.push(`${remainingMinutes} min`);
+
+  return parts.join(" ");
+}
+
+export function formatSpokenRuntimeMinutes(
+  minutes: number | null | undefined,
+): string | null {
+  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (remainingMinutes > 0) {
+    parts.push(
+      `${remainingMinutes} ${
+        remainingMinutes === 1 ? "minute" : "minutes"
+      }`,
+    );
+  }
+
+  return parts.join(" ");
 }
 
 // Format currency for budget/revenue (movie details)
