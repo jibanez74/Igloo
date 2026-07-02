@@ -13,14 +13,14 @@ export function Toaster(props: ToasterProps) {
       richColors
       toastOptions={{
         classNames: {
-          toast: "bg-muted border-border text-foreground shadow-xl",
-          title: "text-foreground font-medium",
-          description: "text-muted-foreground",
+          toast: "!bg-muted !border-border !text-foreground shadow-xl",
+          title: "!text-foreground font-medium",
+          description: "!text-muted-foreground",
           closeButton:
-            "bg-accent border-border text-muted-foreground hover:bg-muted hover:text-foreground",
-          success: "bg-card border-success/50 text-card-foreground",
-          error: "bg-card border-destructive/50 text-card-foreground",
-          info: "bg-muted border-primary/30 text-foreground",
+            "!bg-accent !border-border !text-muted-foreground hover:!bg-muted hover:!text-foreground",
+          success: "!bg-card !border-success/50 !text-card-foreground",
+          error: "!bg-card !border-destructive/50 !text-card-foreground",
+          info: "!bg-muted !border-primary/30 !text-foreground",
         },
       }}
       {...props}

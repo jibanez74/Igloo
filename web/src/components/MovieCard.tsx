@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { Film, Play } from "lucide-react";
 import {
@@ -22,7 +22,6 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
-  const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
@@ -33,7 +32,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
     poster_path.Valid && poster_path.String !== ""
       ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
       : "";
-  const showPoster = posterUrl !== "" && failedPosterUrl !== posterUrl;
+  const { showPoster, onError } = usePosterFallback(posterUrl);
 
   return (
     <article
@@ -64,7 +63,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
                 decoding="async"
                 fetchPriority="low"
                 className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-                onError={() => setFailedPosterUrl(posterUrl)}
+                onError={onError}
               />
             ) : (
               <div className="flex size-full items-center justify-center">

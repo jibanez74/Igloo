@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
@@ -18,12 +18,10 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
-  const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
-
   const posterUrl = poster_path
     ? buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE)
     : "";
-  const showPoster = posterUrl !== "" && failedPosterUrl !== posterUrl;
+  const { showPoster, onError } = usePosterFallback(posterUrl);
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date ? new Date(release_date).getFullYear() : null;
@@ -59,7 +57,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
               decoding="async"
               fetchPriority="low"
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-              onError={() => setFailedPosterUrl(posterUrl)}
+              onError={onError}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

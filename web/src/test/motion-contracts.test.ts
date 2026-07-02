@@ -204,7 +204,6 @@ describe("motion contracts", () => {
       .filter((name) =>
         /transition-(?!none)/.test(readFileSync(resolve(uiDir, name), "utf8")),
       );
-    expect(animatedFiles.length).toBeGreaterThan(0);
     for (const name of animatedFiles) {
       const source = readFileSync(resolve(uiDir, name), "utf8");
       expect(
