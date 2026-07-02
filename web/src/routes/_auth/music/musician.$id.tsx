@@ -54,7 +54,7 @@ function MusicianDetailsPage() {
     return (
       <Alert
         variant="destructive"
-        className="border-red-500/20 bg-red-500/10 text-red-400"
+        className="border-destructive/20 bg-destructive/10 text-destructive"
       >
         <AlertCircle className="size-4" aria-hidden="true" />
         <AlertTitle>Error</AlertTitle>

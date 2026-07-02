@@ -163,12 +163,12 @@ function PlaybackSettings() {
   if (data?.error) {
     return (
       <div className="max-w-3xl">
-        <Card className="border-red-500/20 bg-red-500/10">
+        <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-red-300">
+            <CardTitle className="text-destructive">
               Settings unavailable
             </CardTitle>
-            <CardDescription className="text-red-200/80">
+            <CardDescription className="text-destructive">
               {data.message || "Failed to load playback settings."}
             </CardDescription>
           </CardHeader>
@@ -719,7 +719,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             className={cn(
               "mt-1 text-sm",
               MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-red-300" : "text-muted-foreground",
+              validationMessage ? "text-destructive" : "text-muted-foreground",
             )}
             aria-live="polite"
           >

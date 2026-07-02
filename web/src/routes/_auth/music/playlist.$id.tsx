@@ -387,7 +387,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ref={deleteButtonRef}
                 onClick={handleDeletePlaylist}
                 disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-red-400 focus:text-red-400 focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-destructive focus:text-destructive focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
                 aria-label="Delete playlist"
               >
                 {deleteMutation.isPending ? (

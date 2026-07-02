@@ -274,8 +274,8 @@ function TrailerPage() {
           onEscapeKeyDown={handleDialogEscapeKeyDown}
         >
           <div className="max-w-md px-4 text-center">
-            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-              <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
+            <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+              <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
             </div>
             <DialogTitle className="mb-2 text-xl font-semibold text-foreground">
               Unable to Play Trailer

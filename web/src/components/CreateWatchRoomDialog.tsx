@@ -317,7 +317,7 @@ export default function CreateWatchRoomDialog({
                     Loading users…
                   </div>
                 ) : inviteUsersData?.error ? (
-                  <p className="px-4 py-6 text-sm text-red-300">
+                  <p className="px-4 py-6 text-sm text-destructive">
                     {inviteUsersData.message ||
                       "Failed to load users. Please try again."}
                   </p>

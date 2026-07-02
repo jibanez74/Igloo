@@ -601,7 +601,7 @@ function AccountSettings() {
       <div className="space-y-8">
         <Card className="border-border/50 bg-muted/30">
           <CardContent className="pt-6">
-            <p className="text-red-400">
+            <p className="text-destructive">
               {userData?.error
                 ? userData.message || "Failed to load user information"
                 : "User information not available"}
@@ -662,7 +662,7 @@ function AccountSettings() {
               </Button>
             </div>
             {errors.email && (
-              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
                 {errors.email}
               </p>
             )}
@@ -709,7 +709,7 @@ function AccountSettings() {
               Your display name (max 100 characters)
             </p>
             {errors.name && (
-              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
                 {errors.name}
               </p>
             )}
@@ -798,7 +798,7 @@ function AccountSettings() {
             {errors.avatarUpload && (
               <p
                 id={avatarUploadErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {errors.avatarUpload}
@@ -841,7 +841,7 @@ function AccountSettings() {
             {errors.avatarUrl && (
               <p
                 id={avatarUrlErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {errors.avatarUrl}
@@ -903,7 +903,7 @@ function AccountSettings() {
             {errors.currentPassword && (
               <p
                 id={currentPasswordErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {errors.currentPassword}
@@ -941,7 +941,7 @@ function AccountSettings() {
             {errors.newPassword && (
               <p
                 id={newPasswordErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {errors.newPassword}
@@ -973,7 +973,7 @@ function AccountSettings() {
             {errors.confirmPassword && (
               <p
                 id={confirmPasswordErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {errors.confirmPassword}
@@ -996,20 +996,20 @@ function AccountSettings() {
       </Card>
 
       {/* Danger Zone */}
-      <Card className="border-red-500/50 bg-red-950/20">
+      <Card className="border-destructive/50 bg-destructive/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-red-400">
+          <CardTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="size-5" aria-hidden="true" />
             Danger Zone
           </CardTitle>
-          <CardDescription className="text-red-300/80">
+          <CardDescription className="text-destructive">
             Irreversible and destructive actions
           </CardDescription>
         </CardHeader>
         <CardContent className="max-w-2xl space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-red-400">Delete Account</p>
-            <p className="text-sm text-red-300/80">
+            <p className="text-sm font-medium text-destructive">Delete Account</p>
+            <p className="text-sm text-destructive">
               Once you delete your account, there is no going back. Please be
               certain.
             </p>
@@ -1043,7 +1043,7 @@ function AccountSettings() {
           }}
         >
           <DialogHeader>
-            <DialogTitle className="text-red-400">Delete Account</DialogTitle>
+            <DialogTitle className="text-destructive">Delete Account</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               This action cannot be undone. This will permanently delete your
               account and remove all associated data.
@@ -1079,7 +1079,7 @@ function AccountSettings() {
               {deleteConfirmError && (
                 <p
                   id={deleteConfirmErrorId}
-                  className="text-xs text-red-400"
+                  className="text-xs text-destructive"
                   role="alert"
                 >
                   {deleteConfirmError}

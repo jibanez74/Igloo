@@ -53,8 +53,8 @@ export default function MoviePlaybackStatusScreen({
         {isLoading ? (
           <Spinner className="mx-auto mb-6 size-10 text-primary" />
         ) : (
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-            <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+            <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
           </div>
         )}
 

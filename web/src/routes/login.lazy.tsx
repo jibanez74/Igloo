@@ -66,7 +66,7 @@ function LoginPage() {
         replace: true,
       });
     } catch (err) {
-      console.error(err);
+      console.debug("login post-auth flow failed", err);
       showError(
         "Login failed",
         "Something went wrong after sign-in. Please try again.",

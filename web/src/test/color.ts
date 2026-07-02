@@ -44,6 +44,18 @@ export function contrastRatio(a: Oklch, b: Oklch): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** OKLCH -> uppercase #RRGGBB (sRGB gamma-encoded, clamped to gamut). */
+export function oklchToHex(color: Oklch): string {
+  const channels = oklchToLinearRgb(color).map((v) => {
+    const c = clamp01(v);
+    const encoded = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    return Math.round(clamp01(encoded) * 255);
+  });
+  return `#${channels
+    .map((c) => c.toString(16).padStart(2, "0"))
+    .join("")}`.toUpperCase();
+}
+
 /**
  * Parse the `--token: oklch(L C H[ / a]);` declarations inside a CSS block.
  * Tokens whose value carries an alpha channel are skipped (not opaque text pairs).

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { Film, Play } from "lucide-react";
 import {
@@ -31,6 +32,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
     poster_path.Valid && poster_path.String !== ""
       ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
       : "";
+  const { showPoster, onError } = usePosterFallback(posterUrl);
 
   return (
     <article
@@ -51,7 +53,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
         >
           {/* Poster with 2:3 aspect ratio (standard movie poster) */}
           <div className="relative aspect-2/3 bg-muted">
-            {posterUrl ? (
+            {showPoster ? (
               <img
                 src={posterUrl}
                 alt=""
@@ -61,6 +63,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
                 decoding="async"
                 fetchPriority="low"
                 className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
+                onError={onError}
               />
             ) : (
               <div className="flex size-full items-center justify-center">

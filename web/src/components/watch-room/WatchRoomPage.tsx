@@ -348,8 +348,8 @@ export function WatchRoomUnavailable({
   return (
     <div className="flex min-h-screen items-center justify-center bg-card px-4">
       <div className="max-w-md text-center">
-        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-red-500/10">
-          <AlertCircle className="size-10 text-red-400" aria-hidden="true" />
+        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
+          <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
         </div>
         <h1 className="mb-2 text-xl font-semibold text-foreground">
           Watch room unavailable
@@ -409,7 +409,6 @@ function WatchRoomHeader({
               type="button"
               variant="destructive"
               size="sm"
-              className="bg-red-600 hover:bg-red-700"
               aria-label={`Close watch room for ${room.movie_title}`}
               onClick={onDelete}
             >
@@ -599,7 +598,7 @@ function WatchRoomPlayerPanel({
           </div>
 
           {playbackError && (
-            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {playbackError}
             </div>
           )}
@@ -657,7 +656,7 @@ function WatchRoomMembersPanel({
                 className={cn(
                   "rounded-full px-2 py-1 text-xs font-medium",
                   isConnected
-                    ? "bg-emerald-500/15 text-emerald-300"
+                    ? "bg-success/15 text-success"
                     : "bg-muted text-muted-foreground",
                 )}
               >

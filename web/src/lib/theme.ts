@@ -11,9 +11,15 @@ export type Theme = "light" | "dark";
 export const THEME_STORAGE_KEY = "igloo-theme";
 
 // Matches <meta name="theme-color"> values; canvas #0A1322 (dark) / #F2F7FC (light).
-const THEME_COLORS: Record<Theme, string> = {
+export const THEME_COLORS: Record<Theme, string> = {
   dark: "#0A1322",
   light: "#F2F7FC",
+};
+
+// Body text on the canvas; mirrors the --foreground tokens and boot.css `color`.
+export const THEME_TEXT_COLORS: Record<Theme, string> = {
+  dark: "#F8FAFC",
+  light: "#0A1322",
 };
 
 /** Reads the stored theme, defaulting to "dark" when absent or invalid. */
@@ -27,11 +33,26 @@ export function getStoredTheme(): Theme {
   }
 }
 
+type ThemeListener = () => void;
+
+const listeners = new Set<ThemeListener>();
+
+/** Subscribes to theme changes; returns an unsubscribe function. */
+export function subscribeTheme(listener: ThemeListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 /** Applies the theme to the DOM: toggles the `dark` class and theme-color meta. */
 export function applyTheme(theme: Theme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
   const meta = document.querySelector('meta[name="theme-color"]');
   meta?.setAttribute("content", THEME_COLORS[theme]);
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 /** Persists the theme to localStorage and applies it immediately. */

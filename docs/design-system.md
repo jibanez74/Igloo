@@ -59,10 +59,13 @@ guaranteed.
 | `input` | white @ 8% | `#CBD9E8` | Input borders |
 | `ring` | `#38BDF8` | `#0EA5E9` | **The one focus color** |
 | `destructive` | `#F87171` | `#DC2626` | Danger / delete |
+| `destructive-foreground` | `#08131F` | `#FFFFFF` | Text on destructive |
 | `aurora` | `#F59E0B` | `#F59E0B` | Warm accent (sparing) |
 | `aurora-foreground` | `#08131F` | `#08131F` | Text on aurora |
 | `success` | `#34D399` | `#059669` | Success state |
+| `success-foreground` | `#08131F` | `#08131F` | Text on success |
 | `accent-teal` | `#2DD4BF` | `#0D9488` | Secondary accent |
+| `accent-teal-foreground` | `#08131F` | `#08131F` | Text on accent-teal |
 | `sidebar*` | navy variants | icy variants | Sidebar chrome |
 | `chart-1..5` | glacier/teal/aurora/success/danger | same families | Data viz |
 
@@ -70,6 +73,9 @@ Notes:
 - `ring` is deliberately a single focus color across the whole app.
 - Many usages apply alpha at the call site via Tailwind's `/NN` modifier
   (`bg-primary/90`, `ring-ring/50`, `bg-black/30`).
+- Known caveat: light-theme `text-success` on `background` is only ~3.5:1
+  (below AA for body text). Fine for large/bold text or icons; avoid it for
+  small body copy in light mode until the light `success` value is darkened.
 
 ### 1.3 Typography
 

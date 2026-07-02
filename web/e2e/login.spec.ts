@@ -67,8 +67,7 @@ function trackBrowserIssues(
     const text = message.text();
     if (
       isExpectedUnauthorizedResourceMessage(text) ||
-      text.startsWith("Failed to load resource:") ||
-      text.startsWith("TypeError: Failed to fetch")
+      text.startsWith("Failed to load resource:")
     ) {
       return;
     }

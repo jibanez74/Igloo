@@ -7,7 +7,7 @@ export function MoviesLoadError({
 }) {
   return (
     <div
-      className="rounded-lg border border-red-500/25 bg-red-950/40 px-4 py-3 text-sm text-red-100"
+      className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive"
       role="alert"
     >
       <p>{message}</p>
