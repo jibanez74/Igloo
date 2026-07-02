@@ -23,6 +23,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -42,7 +43,9 @@
   --color-aurora: var(--aurora);
   --color-aurora-foreground: var(--aurora-foreground);
   --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-accent-teal: var(--accent-teal);
+  --color-accent-teal-foreground: var(--accent-teal-foreground);
 }
 
 :root {
@@ -89,6 +92,9 @@
   --aurora-foreground: oklch(0.183 0.03 251.4); /* onAurora #08131F */
   --success: oklch(0.596 0.127 163.2); /* #059669 */
   --accent-teal: oklch(0.6 0.104 184.7); /* #0D9488 */
+  --destructive-foreground: oklch(1 0 0); /* #FFFFFF — 4.83:1 on destructive */
+  --success-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.96:1 on success */
+  --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.99:1 on accent-teal */
 }
 
 .dark {
@@ -131,6 +137,9 @@
   --aurora-foreground: oklch(0.183 0.03 251.4); /* onAurora #08131F */
   --success: oklch(0.773 0.153 163.2); /* #34D399 */
   --accent-teal: oklch(0.785 0.133 181.9); /* #2DD4BF */
+  --destructive-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 6.76:1 on destructive */
+  --success-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 9.73:1 on success */
+  --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 10.04:1 on accent-teal */
 }
 
 @layer base {

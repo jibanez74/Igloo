@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
@@ -21,6 +22,7 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
+  const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
@@ -31,6 +33,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
     poster_path.Valid && poster_path.String !== ""
       ? buildTmdbImageUrl(poster_path.String, TMDB_POSTER_SIZE)
       : "";
+  const showPoster = posterUrl !== "" && failedPosterUrl !== posterUrl;
 
   return (
     <article
@@ -51,7 +54,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
         >
           {/* Poster with 2:3 aspect ratio (standard movie poster) */}
           <div className="relative aspect-2/3 bg-muted">
-            {posterUrl ? (
+            {showPoster ? (
               <img
                 src={posterUrl}
                 alt=""
@@ -61,6 +64,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
                 decoding="async"
                 fetchPriority="low"
                 className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
+                onError={() => setFailedPosterUrl(posterUrl)}
               />
             ) : (
               <div className="flex size-full items-center justify-center">

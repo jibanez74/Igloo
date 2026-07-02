@@ -119,7 +119,9 @@ async function apiRequest<T extends Record<string, unknown>>(
 
     return await res.json();
   } catch (err) {
-    console.error(err);
+    if (!(err instanceof DOMException && err.name === "AbortError")) {
+      console.warn(`apiRequest failed: ${endpoint}`, err);
+    }
     return NETWORK_ERROR;
   }
 }

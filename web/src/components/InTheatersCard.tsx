@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
 import {
@@ -17,9 +18,12 @@ type MovieCardProps = {
 export default function MovieCard({ movie }: MovieCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
+  const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
+
   const posterUrl = poster_path
     ? buildTmdbImageUrl(poster_path, TMDB_POSTER_SIZE)
     : "";
+  const showPoster = posterUrl !== "" && failedPosterUrl !== posterUrl;
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date ? new Date(release_date).getFullYear() : null;
@@ -45,7 +49,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}
         <div className="relative aspect-2/3 bg-muted">
-          {posterUrl ? (
+          {showPoster ? (
             <img
               src={posterUrl}
               alt=""
@@ -55,6 +59,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
               decoding="async"
               fetchPriority="low"
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
+              onError={() => setFailedPosterUrl(posterUrl)}
             />
           ) : (
             <div className="flex size-full items-center justify-center">

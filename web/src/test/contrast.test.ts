@@ -30,6 +30,12 @@ const pairs: Array<[string, string, number]> = [
   ["--aurora-foreground", "--aurora", 4.5],
   ["--secondary-foreground", "--secondary", 4.5],
   ["--accent-foreground", "--accent", 4.5],
+  ["--destructive-foreground", "--destructive", 4.5],
+  ["--success-foreground", "--success", 4.5],
+  ["--accent-teal-foreground", "--accent-teal", 4.5],
+  ["--sidebar-foreground", "--sidebar", 7], // sidebar body text — AAA
+  ["--sidebar-primary-foreground", "--sidebar-primary", 4.5],
+  ["--sidebar-accent-foreground", "--sidebar-accent", 4.5],
 ];
 
 describe.each(Object.entries(themes))("contrast — %s", (_name, tokens) => {

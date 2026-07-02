@@ -3,6 +3,7 @@ import {
   applyTheme,
   getStoredTheme,
   setTheme,
+  THEME_COLORS,
   THEME_STORAGE_KEY,
 } from "@/lib/theme";
 
@@ -39,7 +40,7 @@ describe("theme preference", () => {
       document
         .querySelector('meta[name="theme-color"]')
         ?.getAttribute("content"),
-    ).toBe("#F2F7FC");
+    ).toBe(THEME_COLORS.light);
 
     applyTheme("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
@@ -47,7 +48,7 @@ describe("theme preference", () => {
       document
         .querySelector('meta[name="theme-color"]')
         ?.getAttribute("content"),
-    ).toBe("#0A1322");
+    ).toBe(THEME_COLORS.dark);
   });
 
   it("setTheme persists and applies", () => {

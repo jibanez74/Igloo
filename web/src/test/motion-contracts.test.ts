@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CARD_ACTION_REVEAL_CLASS,
@@ -191,5 +193,24 @@ describe("motion contracts", () => {
     expect(MOTION_DECORATIVE_STATE_CLASS).toContain(
       "motion-reduce:transform-none",
     );
+  });
+
+  it("keeps ui primitives with inline transitions reduced-motion safe", () => {
+    // Shared MOTION_* constants are covered above, but ui/ primitives declare
+    // transitions inline — scan their sources so a new one can't slip through.
+    const uiDir = resolve(process.cwd(), "src/components/ui");
+    const animatedFiles = readdirSync(uiDir)
+      .filter((name) => name.endsWith(".tsx"))
+      .filter((name) =>
+        /transition-(?!none)/.test(readFileSync(resolve(uiDir, name), "utf8")),
+      );
+    expect(animatedFiles.length).toBeGreaterThan(0);
+    for (const name of animatedFiles) {
+      const source = readFileSync(resolve(uiDir, name), "utf8");
+      expect(
+        source,
+        `${name} declares a transition without motion-reduce:transition-none`,
+      ).toContain("motion-reduce:transition-none");
+    }
   });
 });
