@@ -66,7 +66,7 @@ export default function ConfirmDialog({
       >
         <AlertDialogHeader>
           <AlertDialogTitle
-            className={variant === "destructive" ? "text-red-400" : "text-foreground"}
+            className={variant === "destructive" ? "text-destructive" : "text-foreground"}
           >
             {title}
           </AlertDialogTitle>

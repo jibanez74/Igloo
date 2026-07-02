@@ -237,6 +237,10 @@ describe("settings route tab transitions", () => {
 
     expect(await screen.findByText("General Settings")).toBeInTheDocument();
 
+    // Warm the lazy route chunk so navigation renders without a cold dynamic
+    // import racing the waitFor timeout on slow CI runners.
+    await import("@/routes/_auth/settings/account.lazy");
+
     await user.click(screen.getByRole("tab", { name: "Account" }));
 
     expect(screen.getByText("General Settings")).toBeInTheDocument();
@@ -245,9 +249,12 @@ describe("settings route tab transitions", () => {
 
     await runContentFadeTransitionTimeout(setTimeoutSpy);
 
-    await waitFor(() => {
-      expect(screen.getByText("Profile Information")).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText("Profile Information")).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(startViewTransition).not.toHaveBeenCalled();
   }, 10_000);
 
