@@ -709,9 +709,9 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center"
+      className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center"
     >
-      <p className="mb-4 text-sm text-red-200">{message}</p>
+      <p className="mb-4 text-sm text-destructive">{message}</p>
       <button
         type="button"
         onClick={onRetry}

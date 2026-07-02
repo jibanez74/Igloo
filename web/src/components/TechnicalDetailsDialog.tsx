@@ -280,7 +280,7 @@ export default function TechnicalDetailsDialog({
         )}
 
         {isError && (
-          <div className="py-8 text-center text-sm text-red-400" role="alert">
+          <div className="py-8 text-center text-sm text-destructive" role="alert">
             Failed to load technical details.
           </div>
         )}

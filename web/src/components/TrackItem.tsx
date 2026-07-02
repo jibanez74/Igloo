@@ -209,8 +209,8 @@ export default function TrackItem({
           "flex size-8 shrink-0 items-center justify-center rounded-full",
           MOTION_TRACK_ICON_BUTTON_CLASS,
           isLiked
-            ? "text-red-500 hover:text-red-400"
-            : "text-muted-foreground hover:text-red-400",
+            ? "text-destructive"
+            : "text-muted-foreground hover:text-destructive",
           isLikeLoading && "opacity-50",
         )}
         aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}

@@ -91,7 +91,6 @@ export default function ConfirmDialog({
             variant={variant}
             onClick={onConfirm}
             disabled={pending || confirmDisabled}
-            className={variant === "destructive" ? "bg-red-600 text-white hover:bg-red-700" : undefined}
           >
             {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
             {pending ? `${confirmLabel}...` : confirmLabel}

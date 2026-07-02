@@ -188,12 +188,12 @@ function LibrariesSettings() {
   if (data?.error) {
     return (
       <div className="max-w-5xl">
-        <Card className="border-red-500/20 bg-red-500/10">
+        <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-red-300">
+            <CardTitle className="text-destructive">
               Library settings unavailable
             </CardTitle>
-            <CardDescription className="text-red-200/80">
+            <CardDescription className="text-destructive">
               {data.message || "Failed to load library settings."}
             </CardDescription>
           </CardHeader>
@@ -416,9 +416,9 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
             className={cn(
               "mt-1 text-sm transition-colors",
               feedback.tone === "error"
-                ? "text-red-300"
+                ? "text-destructive"
                 : feedback.tone === "success"
-                  ? "text-emerald-300"
+                  ? "text-success"
                   : "text-muted-foreground",
             )}
             aria-live="polite"
@@ -537,7 +537,7 @@ function LibraryPathSection({
           id={pathStatusId}
           className={cn(
             "flex items-center gap-3 text-sm",
-            invalid ? "text-red-300" : "text-muted-foreground",
+            invalid ? "text-destructive" : "text-muted-foreground",
           )}
         >
           {hasSavedPath ? (
@@ -574,7 +574,7 @@ function LibraryPathSection({
             onClick={onClearPath}
             disabled={disabled}
             aria-label={config.clearLabel}
-            className="w-full text-muted-foreground hover:bg-muted hover:text-red-400 sm:w-fit"
+            className="w-full text-muted-foreground hover:bg-muted hover:text-destructive sm:w-fit"
           >
             <Trash2 className="size-4" aria-hidden="true" />
             Clear path

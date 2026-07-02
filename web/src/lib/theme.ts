@@ -27,11 +27,26 @@ export function getStoredTheme(): Theme {
   }
 }
 
+type ThemeListener = () => void;
+
+const listeners = new Set<ThemeListener>();
+
+/** Subscribes to theme changes; returns an unsubscribe function. */
+export function subscribeTheme(listener: ThemeListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 /** Applies the theme to the DOM: toggles the `dark` class and theme-color meta. */
 export function applyTheme(theme: Theme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
   const meta = document.querySelector('meta[name="theme-color"]');
   meta?.setAttribute("content", THEME_COLORS[theme]);
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 /** Persists the theme to localStorage and applies it immediately. */

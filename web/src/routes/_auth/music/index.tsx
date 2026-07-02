@@ -1140,7 +1140,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
           </button>
           <span className="text-muted-foreground" aria-hidden="true">/</span>
           <h2 className="flex items-center gap-2 font-semibold text-foreground">
-            <Heart className="size-4 fill-current text-red-400" aria-hidden="true" />
+            <Heart className="size-4 fill-current text-destructive" aria-hidden="true" />
             Liked Tracks
           </h2>
         </div>

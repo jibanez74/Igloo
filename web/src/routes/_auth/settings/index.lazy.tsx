@@ -194,12 +194,12 @@ function GeneralSettings() {
   if (data?.error) {
     return (
       <div className="max-w-3xl">
-        <Card className="border-red-500/20 bg-red-500/10">
+        <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-red-300">
+            <CardTitle className="text-destructive">
               Settings unavailable
             </CardTitle>
-            <CardDescription className="text-red-200/80">
+            <CardDescription className="text-destructive">
               {data.message || "Failed to load general settings."}
             </CardDescription>
           </CardHeader>
@@ -524,7 +524,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             }
             icon={
               <Activity
-                className="size-5 text-emerald-400"
+                className="size-5 text-success"
                 aria-hidden="true"
               />
             }
@@ -737,7 +737,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             className={cn(
               "mt-1 text-sm",
               MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-red-300" : "text-muted-foreground",
+              validationMessage ? "text-destructive" : "text-muted-foreground",
             )}
             aria-live="polite"
           >

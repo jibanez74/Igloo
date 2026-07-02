@@ -108,23 +108,24 @@ export default defineConfig([
       ],
       "better-tailwindcss/no-conflicting-classes": "warn",
 
-      // Design-system guardrail: forbid new raw slate-*/amber-* Tailwind colors.
-      // Components must read semantic tokens (bg-background, text-muted-foreground,
-      // bg-aurora, …) so the codebase doesn't drift back off the igloo palette.
+      // Design-system guardrail: forbid new raw slate-*/amber-*/red-*/emerald-*
+      // Tailwind colors. Components must read semantic tokens (bg-background,
+      // text-muted-foreground, bg-aurora, text-destructive, text-success, …) so
+      // the codebase doesn't drift back off the igloo palette.
       // See docs/design-remediation-plan.md (Phase 5).
       "no-restricted-syntax": [
         "error",
         {
           selector:
-            "Literal[value=/(?:slate|amber)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+            "Literal[value=/(?:slate|amber|red|emerald)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
           message:
-            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, …) instead of raw slate-*/amber-* — see docs/design-remediation-plan.md.",
+            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, text-destructive, text-success, …) instead of raw slate-*/amber-*/red-*/emerald-* — see docs/design-remediation-plan.md.",
         },
         {
           selector:
-            "TemplateElement[value.cooked=/(?:slate|amber)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+            "TemplateElement[value.cooked=/(?:slate|amber|red|emerald)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
           message:
-            "Use semantic tokens instead of raw slate-*/amber-* — see docs/design-remediation-plan.md.",
+            "Use semantic tokens instead of raw slate-*/amber-*/red-*/emerald-* — see docs/design-remediation-plan.md.",
         },
       ],
     },

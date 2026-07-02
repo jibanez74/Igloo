@@ -205,13 +205,13 @@ export default function MovieDetailsHeroActions({
         <Check
           className={cn(
             "size-4",
-            isWatched && "text-emerald-400!",
+            isWatched && "text-success!",
           )}
           aria-hidden="true"
         />
         {isWatched ? "Watched" : "Watch"}
         {watchedMutation.isPending && (
-          <Spinner className="size-4 text-emerald-400!" aria-hidden="true" />
+          <Spinner className="size-4 text-success!" aria-hidden="true" />
         )}
       </button>
       <MovieLikeButton movieId={movieId} variant="hero" />
@@ -257,7 +257,7 @@ export default function MovieDetailsHeroActions({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => onDeleteOpenChange(true)}
-                className="text-red-400 focus:text-red-300"
+                className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
                 Delete

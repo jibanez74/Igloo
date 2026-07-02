@@ -235,7 +235,7 @@ function UsersSettings() {
           )}
 
           {!isLoading && usersData?.error && (
-            <p className="text-red-400">
+            <p className="text-destructive">
               {usersData.message || "Failed to load users"}
             </p>
           )}
@@ -330,7 +330,7 @@ function UsersSettings() {
                               openDialog({ type: "delete", user }, event.currentTarget)
                             }
                             aria-label={`Delete ${user.name}`}
-                            className="text-muted-foreground hover:text-red-400"
+                            className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="size-4" aria-hidden="true" />
                           </Button>
@@ -518,7 +518,7 @@ function CreateUserDialog({
               aria-label="User name"
             />
             {errors.name && (
-              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
                 {errors.name}
               </p>
             )}
@@ -545,7 +545,7 @@ function CreateUserDialog({
               aria-label="User email"
             />
             {errors.email && (
-              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
                 {errors.email}
               </p>
             )}
@@ -578,7 +578,7 @@ function CreateUserDialog({
               Must be 9–128 characters
             </p>
             {errors.password && (
-              <p id={passwordErrorId} className="text-xs text-red-400" role="alert">
+              <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
                 {errors.password}
               </p>
             )}
@@ -599,7 +599,7 @@ function CreateUserDialog({
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+            <p id={formErrorId} className="text-sm text-destructive" role="alert">
               {serverError}
             </p>
           )}
@@ -721,7 +721,7 @@ function EditUserDialog({
               aria-label="User name"
             />
             {errors.name && (
-              <p id={nameErrorId} className="text-xs text-red-400" role="alert">
+              <p id={nameErrorId} className="text-xs text-destructive" role="alert">
                 {errors.name}
               </p>
             )}
@@ -748,7 +748,7 @@ function EditUserDialog({
               aria-label="User email"
             />
             {errors.email && (
-              <p id={emailErrorId} className="text-xs text-red-400" role="alert">
+              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
                 {errors.email}
               </p>
             )}
@@ -769,7 +769,7 @@ function EditUserDialog({
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+            <p id={formErrorId} className="text-sm text-destructive" role="alert">
               {serverError}
             </p>
           )}
@@ -820,7 +820,7 @@ function DeleteUserDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
-          <DialogTitle className="text-red-400">Delete User</DialogTitle>
+          <DialogTitle className="text-destructive">Delete User</DialogTitle>
           <DialogDescription className="text-muted-foreground">
             This will permanently delete <strong className="text-foreground">{user.name}</strong> ({user.email}).
             This action cannot be undone.
@@ -846,7 +846,7 @@ function DeleteUserDialog({
               aria-describedby={describedBy(invalid && confirmErrorId)}
             />
             {invalid && (
-              <p id={confirmErrorId} className="text-xs text-red-400" role="alert">
+              <p id={confirmErrorId} className="text-xs text-destructive" role="alert">
                 Type DELETE exactly to enable deletion.
               </p>
             )}
@@ -854,7 +854,7 @@ function DeleteUserDialog({
         </div>
 
         {serverError && (
-          <p id={formErrorId} className="text-sm text-red-400" role="alert">
+          <p id={formErrorId} className="text-sm text-destructive" role="alert">
             {serverError}
           </p>
         )}
@@ -996,7 +996,7 @@ function ResetPasswordDialog({
               Must be 9–128 characters
             </p>
             {passwordError && (
-              <p id={passwordErrorId} className="text-xs text-red-400" role="alert">
+              <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
                 {passwordError}
               </p>
             )}
@@ -1030,7 +1030,7 @@ function ResetPasswordDialog({
             {confirmPasswordError && (
               <p
                 id={confirmPasswordErrorId}
-                className="text-xs text-red-400"
+                className="text-xs text-destructive"
                 role="alert"
               >
                 {confirmPasswordError}
@@ -1039,7 +1039,7 @@ function ResetPasswordDialog({
           </div>
 
           {serverError && (
-            <p id={formErrorId} className="text-sm text-red-400" role="alert">
+            <p id={formErrorId} className="text-sm text-destructive" role="alert">
               {serverError}
             </p>
           )}
