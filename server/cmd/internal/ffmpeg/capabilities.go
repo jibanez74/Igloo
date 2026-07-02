@@ -19,6 +19,7 @@ type Capabilities struct {
 	HWAccels                       map[string]bool
 	FilterOptions                  map[string]map[string]bool
 	EncoderOptions                 map[string]map[string]bool
+	CLIOptions                     map[string]bool
 	H264NVENCRuntimeUsable         bool
 	H264NVENCProbeError            string
 	NvidiaCUDAScaleRuntimeUsable   bool
@@ -47,6 +48,10 @@ func (c Capabilities) SupportsFilter(name string) bool {
 
 func (c Capabilities) SupportsHWAccel(name string) bool {
 	return c.HWAccels[strings.ToLower(strings.TrimSpace(name))]
+}
+
+func (c Capabilities) SupportsCLIOption(name string) bool {
+	return c.CLIOptions[strings.ToLower(strings.TrimSpace(name))]
 }
 
 func (c Capabilities) SupportsFilterOption(filter, option string) bool {
@@ -163,6 +168,7 @@ func probeCapabilities(bin string) Capabilities {
 		HWAccels:       map[string]bool{},
 		FilterOptions:  map[string]map[string]bool{},
 		EncoderOptions: map[string]map[string]bool{},
+		CLIOptions:     map[string]bool{},
 	}
 
 	encoders, err := runFFmpegProbe(bin, "-encoders")
@@ -179,6 +185,8 @@ func probeCapabilities(bin string) Capabilities {
 	if err == nil {
 		caps.HWAccels = parseFFmpegHWAccels(hwaccels)
 	}
+
+	caps.recordCLIOptions(bin, []string{"readrate", "readrate_initial_burst"})
 
 	caps.recordFilterOptions(bin, "scale_cuda", []string{"format"})
 	caps.recordFilterOptions(bin, "tonemap_cuda", []string{"format", "p", "t", "m", "tonemap", "desat"})
@@ -220,6 +228,20 @@ func (c Capabilities) SupportsNvidiaCUDATonemapOptions() bool {
 		}
 	}
 	return true
+}
+
+func (c *Capabilities) recordCLIOptions(bin string, options []string) {
+	output, err := runFFmpegProbe(bin, "-hide_banner", "-h", "long")
+	if err != nil {
+		return
+	}
+	if c.CLIOptions == nil {
+		c.CLIOptions = map[string]bool{}
+	}
+	for _, option := range options {
+		option = strings.ToLower(strings.TrimSpace(option))
+		c.CLIOptions[option] = ffmpegHelpHasOption(output, option)
+	}
 }
 
 func (c *Capabilities) recordFilterOptions(bin string, filter string, options []string) {

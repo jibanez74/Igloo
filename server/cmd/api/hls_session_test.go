@@ -579,6 +579,68 @@ func insertTestHLSMovieFixture(t *testing.T, app *Application, videoCodec string
 	return movieID
 }
 
+func TestCreateHLSSession_CopyVideoBypassesTranscodeLimiter(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+
+	fake := &fakeFFmpeg{
+		plans: []fakeFFmpegRunPlan{
+			{
+				WriteFiles: func(outDir string) error {
+					return writeTestHLSFixture(outDir, testFMP4Fixture{
+						SafeVideo: true,
+						Segments:  helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
+					})
+				},
+			},
+		},
+	}
+	app.FFmpeg = fake
+
+	// Exhaust the only transcode slot; a copy-video (remux) session must not need it.
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot()
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+	}
+	defer release()
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	session, err := app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_REMUX, testIntPtr(0), testPlaybackSessionID, 0, false)
+	if err != nil {
+		t.Fatalf("createHLSSession returned error: %v", err)
+	}
+	defer cleanupHLSSession(session)
+
+	if !session.CopyVideo {
+		t.Fatal("CopyVideo = false, want true for safe remux")
+	}
+}
+
+func TestCreateHLSSession_TranscodeFailsWhenLimiterFull(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{}
+
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot()
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+	}
+	defer release()
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+
+	_, err = app.createHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, false)
+	var capacityErr *hlsTranscodeCapacityError
+	if !errors.As(err, &capacityErr) {
+		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
+	}
+}
+
 func sanitizeTestPathComponent(value string) string {
 	value = strings.ReplaceAll(value, "/", "_")
 	value = strings.ReplaceAll(value, " ", "_")

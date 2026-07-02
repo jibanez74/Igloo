@@ -80,6 +80,67 @@ func hlsTestNvidiaCapabilities(tonemap bool) Capabilities {
 	return caps
 }
 
+func TestBuildHLSArgs_ReadratePacing(t *testing.T) {
+	base := HLSParams{
+		SourcePath:       "/s",
+		OutDir:           "",
+		Profile:          helpers.HLS_PROFILE_720P_3MBPS,
+		VideoStreamIndex: 0,
+		AudioStreamIndex: 1,
+		HWDevice:         helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+	}
+
+	t.Run("unsupported build omits readrate", func(t *testing.T) {
+		p := base
+		p.OutDir = t.TempDir()
+		argStr := strings.Join(hlsArgs(t, p), " ")
+		if strings.Contains(argStr, "-readrate") {
+			t.Fatalf("readrate must be omitted when the ffmpeg build does not support it, got: %s", argStr)
+		}
+	})
+
+	t.Run("supported build paces input reads", func(t *testing.T) {
+		p := base
+		p.OutDir = t.TempDir()
+		p.Capabilities = Capabilities{
+			Probed: true,
+			CLIOptions: map[string]bool{
+				"readrate":               true,
+				"readrate_initial_burst": true,
+			},
+		}
+		args := hlsArgs(t, p)
+		argStr := strings.Join(args, " ")
+		if !strings.Contains(argStr, fmt.Sprintf("-readrate %d", helpers.HLS_READRATE_SPEED)) {
+			t.Fatalf("expected -readrate %d, got: %s", helpers.HLS_READRATE_SPEED, argStr)
+		}
+		if !strings.Contains(argStr, fmt.Sprintf("-readrate_initial_burst %d", helpers.HLS_READRATE_INITIAL_BURST_SEC)) {
+			t.Fatalf("expected -readrate_initial_burst %d, got: %s", helpers.HLS_READRATE_INITIAL_BURST_SEC, argStr)
+		}
+		readrateIdx := indexOf(args, "-readrate")
+		iIdx := indexOf(args, "-i")
+		if readrateIdx > iIdx {
+			t.Fatalf("-readrate is an input option and must come before -i, got: %s", argStr)
+		}
+	})
+
+	t.Run("readrate without burst support", func(t *testing.T) {
+		p := base
+		p.OutDir = t.TempDir()
+		p.Capabilities = Capabilities{
+			Probed:     true,
+			CLIOptions: map[string]bool{"readrate": true},
+		}
+		argStr := strings.Join(hlsArgs(t, p), " ")
+		if !strings.Contains(argStr, "-readrate") {
+			t.Fatalf("expected -readrate, got: %s", argStr)
+		}
+		if strings.Contains(argStr, "-readrate_initial_burst") {
+			t.Fatalf("burst must be omitted when unsupported, got: %s", argStr)
+		}
+	})
+}
+
 func TestBuildHLSArgs_TranscodeAll(t *testing.T) {
 	sourcePath := "/safe/source.mkv"
 	outDir := t.TempDir()
@@ -439,7 +500,7 @@ func TestBuildHLSArgs_HWAccelDevices(t *testing.T) {
 		},
 		{
 			device:      helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
-			wantHWAccel: "",
+			wantHWAccel: "cuda",
 			wantEncoder: "h264_nvenc",
 		},
 		{
@@ -1104,8 +1165,9 @@ func TestBuildHLSArgs_NvidiaSDRUsesCUDAScaleWhenProbed(t *testing.T) {
 	if !(initIdx < filterIdx && filterIdx < iIdx) {
 		t.Fatalf("CUDA device setup must come before input, got: %s", argStr)
 	}
-	if indexOf(args, "-hwaccel") >= 0 {
-		t.Fatalf("NVIDIA CUDA scale path must not force hardware decode, got: %s", argStr)
+	hwIdx := indexOf(args, "-hwaccel")
+	if hwIdx < 0 || args[hwIdx+1] != "cuda" {
+		t.Fatalf("NVIDIA CUDA scale path must decode with -hwaccel cuda, got: %s", argStr)
 	}
 	if !strings.Contains(argStr, "format=nv12,hwupload,scale_cuda=w=-2:h=720:format=yuv420p") {
 		t.Fatalf("NVIDIA CUDA scale path must upload software frames and use scale_cuda, got: %s", argStr)
@@ -1133,8 +1195,9 @@ func TestBuildHLSArgs_NvidiaHDRUsesCUDATonemapWhenProbed(t *testing.T) {
 	if !strings.Contains(argStr, "-init_hw_device cuda=igloo_cuda -filter_hw_device igloo_cuda") {
 		t.Fatalf("NVIDIA CUDA tone-map path must initialize and select a CUDA filter device, got: %s", argStr)
 	}
-	if indexOf(args, "-hwaccel") >= 0 {
-		t.Fatalf("NVIDIA CUDA tone-map path must not force hardware decode, got: %s", argStr)
+	hwIdx := indexOf(args, "-hwaccel")
+	if hwIdx < 0 || args[hwIdx+1] != "cuda" {
+		t.Fatalf("NVIDIA CUDA tone-map path must decode with -hwaccel cuda, got: %s", argStr)
 	}
 	if !strings.Contains(argStr, "format=p010le,hwupload,scale_cuda=w=-2:h=720:format=p010") {
 		t.Fatalf("NVIDIA CUDA tone-map path must upload p010 frames before tone-map, got: %s", argStr)
@@ -1159,8 +1222,12 @@ func TestBuildHLSArgs_NvidiaHDRFallsBackToSoftwareTonemapWithoutCUDAFilter(t *te
 	})
 	argStr := strings.Join(args, " ")
 
-	if indexOf(args, "-hwaccel") >= 0 {
-		t.Fatalf("NVIDIA HDR path without tonemap_cuda must skip CUDA hwaccel, got: %s", argStr)
+	// Decode acceleration is independent of the filter path: -hwaccel cuda
+	// (without -hwaccel_output_format) downloads frames to system memory, so
+	// the software zscale tone-map chain still applies.
+	hwIdx := indexOf(args, "-hwaccel")
+	if hwIdx < 0 || args[hwIdx+1] != "cuda" {
+		t.Fatalf("NVIDIA HDR fallback must still decode with -hwaccel cuda, got: %s", argStr)
 	}
 	if !strings.Contains(argStr, "zscale") || !strings.Contains(argStr, "h264_nvenc") {
 		t.Fatalf("NVIDIA HDR fallback must use software tone-map with NVENC encode, got: %s", argStr)
@@ -1345,8 +1412,14 @@ func TestBuildHLSArgs_HardwareFrameRateUsesFixedGOP(t *testing.T) {
 	if !strings.Contains(argStr, "-g:v:0 96") || !strings.Contains(argStr, "-keyint_min:v:0 96") {
 		t.Fatalf("hardware encoder should use a fixed 4-second GOP, got: %s", argStr)
 	}
-	if strings.Contains(argStr, "-force_key_frames") {
-		t.Fatalf("hardware encoder with known frame rate should not also force expression keyframes, got: %s", argStr)
+	// The GOP size alone drifts on non-integer frame rates (96 frames at
+	// 23.976fps ≈ 4.004s), so expression keyframes stay on to pin segment
+	// boundaries exactly.
+	if !strings.Contains(argStr, "-force_key_frames:0 expr:gte(t,n_forced*4)") {
+		t.Fatalf("hardware encoder must still force expression keyframes on segment boundaries, got: %s", argStr)
+	}
+	if strings.Contains(argStr, "-sc_threshold") {
+		t.Fatalf("-sc_threshold is libx264-only and must not be set for hardware encoders, got: %s", argStr)
 	}
 }
 

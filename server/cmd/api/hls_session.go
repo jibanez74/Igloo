@@ -330,10 +330,15 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	releaseTranscode, err := app.acquireHLSTranscodeSlot()
-	if err != nil {
-		_ = os.RemoveAll(tempDir)
-		return nil, err
+	// Copy-video sessions (-c:v copy) use near-zero CPU, so they bypass the
+	// CPU transcode limiter instead of blocking real transcodes.
+	releaseTranscode := func() {}
+	if !copyVideo {
+		releaseTranscode, err = app.acquireHLSTranscodeSlot()
+		if err != nil {
+			_ = os.RemoveAll(tempDir)
+			return nil, err
+		}
 	}
 
 	startSec := float64(params.StartSec)

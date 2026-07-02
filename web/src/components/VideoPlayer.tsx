@@ -4,13 +4,8 @@ import type { ErrorData } from "hls.js";
 import {
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
-  HLS_SESSION_LOST_MAX_ATTEMPTS,
-  HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
-import {
-  hlsStreamRecoveryKey,
-  supportsNativeHLS,
-} from "@/lib/playback";
+import { supportsNativeHLS } from "@/lib/playback";
 import type { VideoPlayerProps } from "@/types";
 
 function loadHlsLight() {
@@ -35,9 +30,6 @@ export default function VideoPlayer({
   onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
-  const sessionRecoveryKeyRef = useRef<string>("");
-  const sessionLostAttemptsRef = useRef(0);
-  const lastSessionLostAtRef = useRef(0);
 
   const reportError = useEffectEvent((message: string) => {
     onError(message);
@@ -60,26 +52,13 @@ export default function VideoPlayer({
       data: ErrorData,
       sessionLostDetail: string,
     ) => {
+      // Rate limiting and the max-attempt budget live in useHlsSessionRecovery
+      // (the onSessionLost consumer); this component only reports the event.
       if (
         data.details === sessionLostDetail &&
         data.response?.code === 404 &&
         onSessionLost
       ) {
-        const now = Date.now();
-        if (sessionLostAttemptsRef.current >= HLS_SESSION_LOST_MAX_ATTEMPTS) {
-          reportError(
-            "Playback session could not be recovered. Try reloading the page or choosing another quality.",
-          );
-          return;
-        }
-        const tooSoon =
-          sessionLostAttemptsRef.current > 0 &&
-          now - lastSessionLostAtRef.current < HLS_SESSION_LOST_MIN_INTERVAL_MS;
-        if (tooSoon) {
-          return;
-        }
-        sessionLostAttemptsRef.current += 1;
-        lastSessionLostAtRef.current = now;
         onSessionLost(video.currentTime);
         return;
       }
@@ -103,13 +82,6 @@ export default function VideoPlayer({
       (src.endsWith(".m3u8") || src.includes(".m3u8?")) &&
       !supportsNativeHLS
     ) {
-      const recoveryKey = hlsStreamRecoveryKey(src);
-      if (sessionRecoveryKeyRef.current !== recoveryKey) {
-        sessionRecoveryKeyRef.current = recoveryKey;
-        sessionLostAttemptsRef.current = 0;
-        lastSessionLostAtRef.current = 0;
-      }
-
       let cancelled = false;
       let disposeHls: (() => void) | null = null;
 

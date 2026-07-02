@@ -17,23 +17,6 @@ const BROWSER_COMPATIBLE_MIME_TYPES = ["video/mp4", "video/webm", "video/ogg"];
 export { STREAM_MODES };
 
 /**
- * Normalizes an HLS playlist URL for session-recovery rate limiting: only the
- * "reload" query parameter is stripped, so different "start" offsets produce
- * distinct keys and are rate-limited independently.
- */
-export function hlsStreamRecoveryKey(src: string): string {
-  try {
-    const base =
-      typeof window !== "undefined" ? window.location.origin : "http://localhost";
-    const u = new URL(src, base);
-    u.searchParams.delete("reload");
-    return `${u.pathname}${u.search}`;
-  } catch {
-    return src;
-  }
-}
-
-/**
  * True when the browser can play HLS via MSE without hls.js (e.g. Safari).
  * Evaluated once at module load; false in non-browser environments.
  */

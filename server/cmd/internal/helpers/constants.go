@@ -108,6 +108,12 @@ const (
 	HLS_REMUX_PREVALIDATE_TIMEOUT      = 30 * time.Second
 	HLS_REMUX_SAFETY_CACHE_TTL         = 24 * time.Hour
 	HLS_REMUX_SAFETY_CACHE_SWEEP       = 1 * time.Hour
+	// Transcode pacing: keep FFmpeg roughly HLS_READRATE_SPEED× realtime instead
+	// of racing to end of file, after an initial burst that fills the player
+	// buffer quickly. Applied only when the ffmpeg build supports -readrate.
+	HLS_READRATE_SPEED             = 4
+	HLS_READRATE_INITIAL_BURST_SEC = 60
+
 	ENV_HLS_MAX_CPU_TRANSCODES         = "HLS_MAX_CPU_TRANSCODES"
 	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR  = 4
 	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC = 5

@@ -115,14 +115,29 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 				"-filter_hw_device", hlsIntelQSVDeviceName,
 			)
 		}
+		// -hwaccel without -hwaccel_output_format decodes on the GPU when the
+		// codec is supported and transparently falls back to software decode
+		// otherwise; decoded frames land in system memory either way, so the
+		// software and hwupload filter chains below work unchanged. QSV decode
+		// is intentionally not enabled here: its generic hwaccel does not fall
+		// back as reliably across driver stacks.
 		switch {
 		case hwKnown && hw.HWAccel != "" && hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_APPLE:
 			args = append(args, "-hwaccel", hw.HWAccel)
+		case hwLower == helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA && p.Capabilities.SupportsHWAccel("cuda"):
+			args = append(args, "-hwaccel", "cuda")
 		}
 	}
 
 	if p.StartSec > 0 {
 		args = append(args, "-ss", fmt.Sprintf("%.3f", p.StartSec))
+	}
+
+	if p.Capabilities.SupportsCLIOption("readrate") {
+		args = append(args, "-readrate", fmt.Sprintf("%d", helpers.HLS_READRATE_SPEED))
+		if p.Capabilities.SupportsCLIOption("readrate_initial_burst") {
+			args = append(args, "-readrate_initial_burst", fmt.Sprintf("%d", helpers.HLS_READRATE_INITIAL_BURST_SEC))
+		}
 	}
 
 	args = append(args,
@@ -271,9 +286,6 @@ func hlsVideoFilter(
 
 func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []string {
 	segmentTime := float64(helpers.HLS_SEGMENT_TIME_SEC)
-	isGOPDrivenEncoder := strings.EqualFold(encoder, "h264_nvenc") ||
-		strings.EqualFold(encoder, "h264_qsv") ||
-		strings.EqualFold(encoder, "h264_videotoolbox")
 
 	if frameRate > 0 {
 		gop := int(math.Ceil(segmentTime * frameRate))
@@ -282,17 +294,15 @@ func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []s
 				"-g:v:0", fmt.Sprintf("%d", gop),
 				"-keyint_min:v:0", fmt.Sprintf("%d", gop),
 			)
-			if isGOPDrivenEncoder {
-				return args
-			}
 		}
 	}
 
-	// For software encoders (and as a fallback when frame rate is unknown) we
-	// force keyframes on segment boundaries via an expression. This is kept even
-	// when -g/-keyint_min were set above: those make the GOP the right *size*,
-	// while -force_key_frames is what actually pins keyframes to the exact
-	// segment timestamps so every HLS segment starts on an IDR frame.
+	// Keyframes are forced on segment boundaries via an expression for every
+	// encoder, even when -g/-keyint_min were set above: those make the GOP the
+	// right *size*, while -force_key_frames is what actually pins keyframes to
+	// the exact segment timestamps so every HLS segment starts on an IDR frame.
+	// GOP counting alone drifts on VFR sources and non-integer frame rates
+	// (23.976 → gop 96 ≈ 4.004s), splitting segments later and later.
 	// -sc_threshold:v:0 0 disables libx264 scene-cut keyframes so it does not
 	// insert extra, unaligned IDR frames between the forced ones.
 	args = append(args,

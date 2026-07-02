@@ -157,9 +157,9 @@ export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 
-/** hls.js: max `onSessionLost` recoveries per logical stream (see `hlsStreamRecoveryKey`). */
+/** Max session-lost recoveries per stream window (enforced in `useHlsSessionRecovery`). */
 export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
-/** Min ms between `onSessionLost` calls to avoid tight loops when `src` updates re-triggers 404. */
+/** Min ms between recovery attempts to avoid tight loops when `src` updates re-trigger 404. */
 export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
 /** hls.js: manifest / level / fragment request timeout (ms). */
