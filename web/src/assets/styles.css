@@ -52,7 +52,7 @@
   /* Light igloo palette — icy glacier on a cool near-white canvas.
      Mirrors the .dark token set below (the dark igloo theme). Both themes are
      contrast-verified by src/test/contrast.test.ts. See docs/design-system.md §5.3.
-     The app currently boots dark (AppBoot.tsx); a theme toggle will activate this. */
+     The app boots from the stored browser theme, defaulting to dark. */
   --radius: 0.625rem;
   --background: oklch(0.974 0.009 247.9); /* icy canvas #F2F7FC */
   --foreground: oklch(0.187 0.034 260.2); /* navy ink #0A1322 */

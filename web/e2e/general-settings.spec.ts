@@ -173,6 +173,10 @@ async function activeElementName(page: Page) {
 
 async function expectNewIntegrationControls(page: Page) {
   await expect(
+    page.getByRole("heading", { name: "Appearance" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Dark mode")).toHaveCount(0);
+  await expect(
     page.getByRole("textbox", { name: "Jellyfin base URL" }),
   ).toBeVisible();
   await expect(

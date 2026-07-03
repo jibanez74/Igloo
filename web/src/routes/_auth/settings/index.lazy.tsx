@@ -15,7 +15,6 @@ import {
   HardDrive,
   KeyRound,
   MonitorCog,
-  Moon,
   RotateCcw,
   Save,
   Sliders,
@@ -45,7 +44,6 @@ import {
   PLAYBACK_SETTINGS_KEY,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
-import { getStoredTheme, setTheme, type Theme } from "@/lib/theme";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
@@ -233,17 +231,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const transcodeDirId = useId();
   const enableWatcherId = useId();
   const downloadImagesId = useId();
-  const darkModeId = useId();
-
-  // Theme is a per-device display preference stored in localStorage, not part of
-  // the backend settings form — see @/lib/theme.
-  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
-
-  const handleThemeChange = (dark: boolean) => {
-    const next: Theme = dark ? "dark" : "light";
-    setTheme(next);
-    setThemeState(next);
-  };
 
   const [form, setForm] = useState<UpdateGeneralSettingsRequest>(() =>
     formFromSettings(settings),
@@ -469,33 +456,6 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Configure application behavior, integrations, and local storage.
           </CardDescription>
         </CardHeader>
-      </Card>
-
-      <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
-      >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Moon className="size-5 text-primary" aria-hidden="true" />
-            Appearance
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Choose how Igloo looks on this device. Saved in your browser.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <SwitchField
-            id={darkModeId}
-            label="Dark mode"
-            description="Use the dark igloo theme. Turn off for the light theme."
-            checked={theme === "dark"}
-            onCheckedChange={handleThemeChange}
-            icon={<Moon className="size-5 text-primary" aria-hidden="true" />}
-          />
-        </CardContent>
       </Card>
 
       <Card
