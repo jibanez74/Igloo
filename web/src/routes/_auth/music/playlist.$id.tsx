@@ -40,6 +40,7 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
+import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { formatDuration } from "@/lib/format";
 import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
@@ -650,40 +651,7 @@ function VirtualizedPlaylistTracksList({
 }: VirtualizedPlaylistTracksListProps) {
   "use no memo";
 
-  const listRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  // The app shell scrolls the window (not an inner container), so virtualize
-  // against the window. scrollMargin is the list's distance from the top of the
-  // document, letting the virtualizer map window scroll onto item indices.
-  useEffect(() => {
-    const listElement = listRef.current;
-    if (!listElement) {
-      return;
-    }
-
-    const updateScrollMargin = () => {
-      setScrollMargin(listElement.getBoundingClientRect().top + window.scrollY);
-    };
-
-    updateScrollMargin();
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateScrollMargin);
-
-    resizeObserver?.observe(listElement);
-    if (typeof document !== "undefined") {
-      resizeObserver?.observe(document.body);
-    }
-    window.addEventListener("resize", updateScrollMargin);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateScrollMargin);
-    };
-  }, []);
+  const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: tracks.length,
