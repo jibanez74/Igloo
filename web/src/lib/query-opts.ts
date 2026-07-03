@@ -119,46 +119,35 @@ const STALE_30S = 30_000;
 const GC_DEFAULT = 10 * MIN;
 const GC_LONG = 30 * MIN;
 
-async function getNotificationsForQuery() {
-  const response = await getNotifications();
-  if (response.error) {
-    throw new Error(response.message);
-  }
+// ============================================================================
+// Auth
+// ============================================================================
 
-  return response;
-}
-
-async function getUnreadNotificationCountForQuery() {
-  const response = await getUnreadNotificationCount();
-  if (response.error) {
-    throw new Error(response.message);
-  }
-
-  return response;
-}
-
-export function adminUsersQueryOpts() {
-  return queryOptions({
-    queryKey: [ADMIN_USERS_KEY],
-    queryFn: adminGetUsers,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function authUserQueryOpts() {
+/**
+ * Current authenticated user. Both route guards and components read this from
+ * the shared AUTH_USER_KEY cache entry.
+ *
+ * Pass `{ revalidate: true }` in router `beforeLoad` guards so the auth check
+ * always hits the network (staleTime 0). Component reads use the default (no
+ * arg) and reuse that warmed entry for 60s.
+ */
+export function authUserQueryOpts(options?: { revalidate?: boolean }) {
   return queryOptions({
     queryKey: [AUTH_USER_KEY],
     queryFn: getAuthUser,
-    staleTime: STALE_1M,
+    staleTime: options?.revalidate ? 0 : STALE_1M,
     gcTime: GC_DEFAULT,
   });
 }
+
+// ============================================================================
+// Notifications
+// ============================================================================
 
 export function notificationsQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_KEY],
-    queryFn: getNotificationsForQuery,
+    queryFn: getNotifications,
     staleTime: 0,
     gcTime: GC_DEFAULT,
   });
@@ -167,7 +156,7 @@ export function notificationsQueryOpts() {
 export function unreadNotificationCountQueryOpts() {
   return queryOptions({
     queryKey: [NOTIFICATIONS_UNREAD_COUNT_KEY],
-    queryFn: getUnreadNotificationCountForQuery,
+    queryFn: getUnreadNotificationCount,
     staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
     // Poll so the bell badge reflects new requests without a manual refresh.
@@ -175,14 +164,9 @@ export function unreadNotificationCountQueryOpts() {
   });
 }
 
-export function authUserGuardQueryOpts() {
-  return queryOptions({
-    queryKey: [AUTH_USER_KEY],
-    queryFn: getAuthUser,
-    staleTime: 0,
-    gcTime: GC_DEFAULT,
-  });
-}
+// ============================================================================
+// Home / catalog (latest, in-theaters, TMDB/Spotify status)
+// ============================================================================
 
 export function latestMoviesQueryOpts() {
   return queryOptions({
@@ -211,6 +195,18 @@ export function inTheatersQueryOpts() {
   });
 }
 
+// Detail for a TMDB in-theater movie (not a library movie — see
+// libraryMovieDetailsQueryOpts for that). Backed by getMovieInTheaterDetails.
+export function movieDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MOVIE_DETAILS_KEY, id],
+    queryFn: () => getMovieInTheaterDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
+  });
+}
+
 export function tmdbStatusQueryOpts() {
   return queryOptions({
     queryKey: [TMDB_STATUS_KEY],
@@ -229,15 +225,9 @@ export function spotifyStatusQueryOpts() {
   });
 }
 
-export function movieDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [MOVIE_DETAILS_KEY, id],
-    queryFn: () => getMovieInTheaterDetails(id),
-    enabled: id > 0,
-    staleTime: STALE_CATALOG,
-    gcTime: GC_LONG,
-  });
-}
+// ============================================================================
+// Movies library
+// ============================================================================
 
 export function libraryMovieDetailsQueryOpts(id: number) {
   return queryOptions({
@@ -269,139 +259,6 @@ export function movieWatchProgressQueryOpts(id: number) {
   });
 }
 
-export function albumDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [ALBUM_DETAILS_KEY, id],
-    queryFn: () => getAlbumDetails(id),
-    enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
-  return infiniteQueryOptions({
-    queryKey: [TRACKS_INFINITE_KEY, pageSize],
-    queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
-    initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.offset + lastPage.data.limit;
-    },
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function musicStatsQueryOpts() {
-  return queryOptions({
-    queryKey: [MUSIC_STATS_KEY],
-    queryFn: getMusicStats,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function settingsQueryOpts() {
-  return queryOptions({
-    queryKey: [SETTINGS_KEY],
-    queryFn: getSettings,
-    staleTime: STALE_CATALOG,
-    gcTime: GC_LONG,
-  });
-}
-
-export function generalSettingsQueryOpts() {
-  return queryOptions({
-    queryKey: [GENERAL_SETTINGS_KEY],
-    queryFn: getGeneralSettings,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function playbackSettingsQueryOpts(userId: number) {
-  return queryOptions({
-    queryKey: [PLAYBACK_SETTINGS_KEY, userId],
-    queryFn: getPlaybackSettings,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function albumsPaginatedQueryOpts(
-  page: number,
-  perPage: number = ALBUMS_PER_PAGE,
-) {
-  return queryOptions({
-    queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
-    queryFn: () => getAlbumsPaginated(page, perPage),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function musiciansPaginatedQueryOpts(
-  page: number,
-  perPage: number = MUSICIANS_PER_PAGE,
-) {
-  return queryOptions({
-    queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
-    queryFn: () => getMusiciansPaginated(page, perPage),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function musicianDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [MUSICIAN_DETAILS_KEY, id],
-    queryFn: () => getMusicianDetails(id),
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-// Playlist query options
-export function playlistsQueryOpts() {
-  return queryOptions({
-    queryKey: [PLAYLISTS_KEY],
-    queryFn: getPlaylists,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function playlistDetailsQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [PLAYLIST_DETAILS_KEY, id],
-    queryFn: () => getPlaylistDetails(id),
-    enabled: id > 0,
-    staleTime: STALE_LIST,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function playlistTracksInfiniteQueryOpts(
-  playlistId: number,
-  pageSize = PLAYLIST_TRACKS_PAGE_SIZE,
-) {
-  return infiniteQueryOptions({
-    queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
-    queryFn: ({ pageParam = 0 }) =>
-      getPlaylistTracks(playlistId, pageSize, pageParam),
-    initialPageParam: 0,
-    getNextPageParam: lastPage => {
-      if (lastPage.error || !lastPage.data?.has_more) return undefined;
-      return lastPage.data.next_offset;
-    },
-    enabled: playlistId > 0,
-    staleTime: STALE_1M,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-// Movies library page (/movies)
 export function moviesLibraryQueryOpts(
   page: number,
   perPage: number = MOVIES_PER_PAGE,
@@ -471,6 +328,139 @@ export function movieLikeStatusQueryOpts(movieId: number) {
   });
 }
 
+// ============================================================================
+// Music (albums, tracks, musicians, stats)
+// ============================================================================
+
+export function albumDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [ALBUM_DETAILS_KEY, id],
+    queryFn: () => getAlbumDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function albumsPaginatedQueryOpts(
+  page: number,
+  perPage: number = ALBUMS_PER_PAGE,
+) {
+  return queryOptions({
+    queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
+    queryFn: () => getAlbumsPaginated(page, perPage),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
+  return infiniteQueryOptions({
+    queryKey: [TRACKS_INFINITE_KEY, pageSize],
+    queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: lastPage => {
+      if (lastPage.error || !lastPage.data?.has_more) return undefined;
+      return lastPage.data.offset + lastPage.data.limit;
+    },
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function likedTrackIdsQueryOpts() {
+  return queryOptions({
+    queryKey: [LIKED_TRACK_IDS_KEY],
+    queryFn: getLikedTrackIds,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function likedTracksQueryOpts(
+  page: number,
+  perPage: number = LIKED_TRACKS_PER_PAGE,
+) {
+  return queryOptions({
+    queryKey: [LIKED_TRACKS_KEY, page, perPage],
+    queryFn: () => getLikedTracks(page, perPage),
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function musiciansPaginatedQueryOpts(
+  page: number,
+  perPage: number = MUSICIANS_PER_PAGE,
+) {
+  return queryOptions({
+    queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
+    queryFn: () => getMusiciansPaginated(page, perPage),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function musicianDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [MUSICIAN_DETAILS_KEY, id],
+    queryFn: () => getMusicianDetails(id),
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function musicStatsQueryOpts() {
+  return queryOptions({
+    queryKey: [MUSIC_STATS_KEY],
+    queryFn: getMusicStats,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// ============================================================================
+// Playlists (music + movie)
+// ============================================================================
+
+export function playlistsQueryOpts() {
+  return queryOptions({
+    queryKey: [PLAYLISTS_KEY],
+    queryFn: getPlaylists,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function playlistDetailsQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [PLAYLIST_DETAILS_KEY, id],
+    queryFn: () => getPlaylistDetails(id),
+    enabled: id > 0,
+    staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function playlistTracksInfiniteQueryOpts(
+  playlistId: number,
+  pageSize = PLAYLIST_TRACKS_PAGE_SIZE,
+) {
+  return infiniteQueryOptions({
+    queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
+    queryFn: ({ pageParam = 0 }) =>
+      getPlaylistTracks(playlistId, pageSize, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: lastPage => {
+      if (lastPage.error || !lastPage.data?.has_more) return undefined;
+      return lastPage.data.next_offset;
+    },
+    enabled: playlistId > 0,
+    staleTime: STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
 export function moviePlaylistsQueryOpts() {
   return queryOptions({
     queryKey: [MOVIE_PLAYLISTS_KEY],
@@ -505,58 +495,54 @@ export function moviePlaylistMoviesQueryOpts(
   });
 }
 
-export function likedTrackIdsQueryOpts() {
+// ============================================================================
+// Settings
+// ============================================================================
+
+export function settingsQueryOpts() {
   return queryOptions({
-    queryKey: [LIKED_TRACK_IDS_KEY],
-    queryFn: getLikedTrackIds,
-    staleTime: STALE_1M,
+    queryKey: [SETTINGS_KEY],
+    queryFn: getSettings,
+    staleTime: STALE_CATALOG,
+    gcTime: GC_LONG,
+  });
+}
+
+export function generalSettingsQueryOpts() {
+  return queryOptions({
+    queryKey: [GENERAL_SETTINGS_KEY],
+    queryFn: getGeneralSettings,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }
 
-export function likedTracksQueryOpts(
-  page: number,
-  perPage: number = LIKED_TRACKS_PER_PAGE,
-) {
+export function playbackSettingsQueryOpts(userId: number) {
   return queryOptions({
-    queryKey: [LIKED_TRACKS_KEY, page, perPage],
-    queryFn: () => getLikedTracks(page, perPage),
-    staleTime: STALE_1M,
+    queryKey: [PLAYBACK_SETTINGS_KEY, userId],
+    queryFn: getPlaybackSettings,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }
 
-export function watchRoomsQueryOpts() {
+// ============================================================================
+// Admin
+// ============================================================================
+
+export function adminUsersQueryOpts() {
   return queryOptions({
-    queryKey: [WATCH_ROOMS_KEY],
-    queryFn: getWatchRooms,
-    staleTime: STALE_30S,
+    queryKey: [ADMIN_USERS_KEY],
+    queryFn: adminGetUsers,
+    staleTime: STALE_LIST,
     gcTime: GC_DEFAULT,
   });
 }
 
-export function watchRoomQueryOpts(id: number) {
-  return queryOptions({
-    queryKey: [WATCH_ROOM_KEY, id],
-    queryFn: () => getWatchRoom(id),
-    enabled: id > 0,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
-  return queryOptions({
-    queryKey: [WATCH_ROOM_INVITE_USERS_KEY],
-    queryFn: getWatchRoomInviteUsers,
-    enabled,
-    staleTime: STALE_30S,
-    gcTime: GC_DEFAULT,
-  });
-}
-
-// Library search (FTS5-backed). All factories disable themselves for empty
-// queries so the loader/component can call them unconditionally.
+// ============================================================================
+// Search (FTS5-backed). All factories disable themselves for empty queries so
+// the loader/component can call them unconditionally.
+// ============================================================================
 
 export function searchAllQueryOpts(q: string) {
   const trimmed = q.trim();
@@ -625,6 +611,39 @@ export function searchTracksQueryOpts(
     queryFn: () => searchTracks(trimmed, page, perPage),
     enabled: trimmed.length > 0,
     staleTime: STALE_LIST,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// ============================================================================
+// Watch rooms
+// ============================================================================
+
+export function watchRoomsQueryOpts() {
+  return queryOptions({
+    queryKey: [WATCH_ROOMS_KEY],
+    queryFn: getWatchRooms,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function watchRoomQueryOpts(id: number) {
+  return queryOptions({
+    queryKey: [WATCH_ROOM_KEY, id],
+    queryFn: () => getWatchRoom(id),
+    enabled: id > 0,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+export function watchRoomInviteUsersQueryOpts(enabled: boolean = true) {
+  return queryOptions({
+    queryKey: [WATCH_ROOM_INVITE_USERS_KEY],
+    queryFn: getWatchRoomInviteUsers,
+    enabled,
+    staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
   });
 }

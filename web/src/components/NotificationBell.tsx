@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import type {
   ApiResponseType,
   NotificationListItemType,
+  NotificationsListResponseType,
   UnreadNotificationCountResponseType,
 } from "@/types";
 
@@ -61,27 +62,53 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Both queries return the `{ error, data }` envelope as query data, so narrow
+  // on `error === false` before reading the success shape (like every other
+  // query consumer). An error envelope surfaces as `showRefreshError`, not a
+  // thrown query error.
   const countQuery = useQuery(unreadNotificationCountQueryOpts());
-  const countUnreadCount = countQuery.data?.data.unread_count ?? 0;
+  const freshCountData =
+    countQuery.data?.error === false ? countQuery.data.data : undefined;
 
   // Only fetch the full list while the panel is open.
   const listQuery = useQuery({
     ...notificationsQueryOpts(),
     enabled: open,
   });
-  const notifications = listQuery.data?.data.notifications ?? [];
-  const listUnreadCount =
-    open && listQuery.data ? listQuery.data.data.unread_count : undefined;
+  const freshListData =
+    listQuery.data?.error === false ? listQuery.data.data : undefined;
+
+  // react-query stores an error envelope as (successful) data, dropping the last
+  // good payload. Retain it so a failed refresh keeps showing the previous list
+  // and badge instead of flashing empty. Adjusting state during render is the
+  // supported way to remember a value across renders here (React re-renders
+  // immediately without committing the intermediate paint).
+  const [lastCountData, setLastCountData] =
+    useState<UnreadNotificationCountResponseType>();
+  const [lastListData, setLastListData] =
+    useState<NotificationsListResponseType>();
+  if (freshCountData && freshCountData !== lastCountData) {
+    setLastCountData(freshCountData);
+  }
+  if (freshListData && freshListData !== lastListData) {
+    setLastListData(freshListData);
+  }
+
+  const listData = freshListData ?? lastListData;
+  const countUnreadCount = (freshCountData ?? lastCountData)?.unread_count ?? 0;
+  const notifications = listData?.notifications ?? [];
+  const listUnreadCount = open ? listData?.unread_count : undefined;
   const unreadCount = listUnreadCount ?? countUnreadCount;
-  const showRefreshError = countQuery.isError || (open && listQuery.isError);
+  const showRefreshError = Boolean(
+    countQuery.isError ||
+      countQuery.data?.error ||
+      (open && (listQuery.isError || listQuery.data?.error)),
+  );
   const showInitialLoading = listQuery.isLoading && !listQuery.data;
-  const showEmptyState =
-    !listQuery.isError &&
-    !!listQuery.data &&
-    notifications.length === 0;
+  const showEmptyState = !!listData && notifications.length === 0;
 
   useEffect(() => {
-    if (!listQuery.data) {
+    if (!freshListData) {
       return;
     }
 
@@ -89,9 +116,9 @@ export default function NotificationBell() {
       ApiResponseType<UnreadNotificationCountResponseType>
     >([NOTIFICATIONS_UNREAD_COUNT_KEY], {
       error: false,
-      data: { unread_count: listQuery.data.data.unread_count },
+      data: { unread_count: freshListData.unread_count },
     });
-  }, [listQuery.data, queryClient]);
+  }, [freshListData, queryClient]);
 
   function invalidateNotifications() {
     void queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_KEY] });
