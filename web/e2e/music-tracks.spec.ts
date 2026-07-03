@@ -1,4 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import {
+  ALBUMS_PER_PAGE,
+  MUSICIANS_PER_PAGE,
+  TRACKS_INFINITE_PAGE_SIZE,
+} from "../src/lib/constants";
 
 type NullableString = {
   String: string;
@@ -153,7 +158,9 @@ async function mockMusicApi(
 
     if (url.pathname === "/api/music/albums") {
       const albumPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE),
+      );
       requestedAlbumRequests.push(`${url.pathname}${url.search}`);
 
       await fulfillJSON(route, apiResponse({
@@ -171,7 +178,7 @@ async function mockMusicApi(
         musicians: [mockMusician],
         total: 1,
         page: 1,
-        per_page: 24,
+        per_page: MUSICIANS_PER_PAGE,
         total_pages: 1,
       }));
       return;
@@ -190,7 +197,9 @@ async function mockMusicApi(
     }
 
     if (url.pathname === "/api/music/tracks") {
-      const limit = Number(url.searchParams.get("limit") ?? "50");
+      const limit = Number(
+        url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
+      );
       const offset = Number(url.searchParams.get("offset") ?? "0");
       const total = 2267;
       const trackCount = Math.max(0, Math.min(limit, total - offset));
@@ -316,7 +325,7 @@ test("albums tab renders accessible album cards and URL-backed pagination", asyn
         return (
           parsed.pathname === "/api/music/albums" &&
           parsed.searchParams.get("page") === "2" &&
-          parsed.searchParams.get("per_page") === "24"
+          parsed.searchParams.get("per_page") === String(ALBUMS_PER_PAGE)
         );
       }),
     )
@@ -350,7 +359,7 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
       const statusText = await loadedStatus.textContent();
       return Number(statusText?.match(/^\d+/)?.[0] ?? 0);
     })
-    .toBeGreaterThanOrEqual(50);
+    .toBeGreaterThanOrEqual(TRACKS_INFINITE_PAGE_SIZE);
   await expectNoHorizontalOverflow(page);
 
   for (let index = 0; index < 8; index += 1) {
@@ -364,14 +373,22 @@ test("tracks tab keeps fetching pages while the virtualized list grows", async (
       }
     });
 
-    if (requestedOffsets.includes(100)) {
+    if (requestedOffsets.includes(TRACKS_INFINITE_PAGE_SIZE * 2)) {
       break;
     }
     await page.waitForTimeout(100);
   }
 
-  await expect.poll(() => requestedOffsets).toContainEqual(100);
-  expect(requestedOffsets).toEqual(expect.arrayContaining([0, 50, 100]));
+  await expect
+    .poll(() => requestedOffsets)
+    .toContainEqual(TRACKS_INFINITE_PAGE_SIZE * 2);
+  expect(requestedOffsets).toEqual(
+    expect.arrayContaining([
+      0,
+      TRACKS_INFINITE_PAGE_SIZE,
+      TRACKS_INFINITE_PAGE_SIZE * 2,
+    ]),
+  );
   expect(requestedOffsets).toEqual([...new Set(requestedOffsets)]);
 
   await page.evaluate(() => {

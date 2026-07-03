@@ -4,6 +4,14 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import {
+  ALBUMS_PER_PAGE,
+  LIKED_TRACKS_PER_PAGE,
+  MOVIES_PER_PAGE,
+  MUSICIANS_PER_PAGE,
+  SEARCH_PER_PAGE,
+  TRACKS_INFINITE_PAGE_SIZE,
+} from "../src/lib/constants";
 
 type ApiData = Record<string, unknown>;
 
@@ -447,7 +455,10 @@ function paginationParams(url: URL) {
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
   const perPage = Math.max(
     1,
-    Number.parseInt(url.searchParams.get("per_page") ?? "24", 10),
+    Number.parseInt(
+      url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      10,
+    ),
   );
   const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
   return { page, perPage, sort };
@@ -1437,7 +1448,7 @@ function handleMusicRoutes(
     const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
     const perPage = Math.max(
       1,
-      Number.parseInt(url.searchParams.get("per_page") ?? "24", 10),
+      Number.parseInt(url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE), 10),
     );
     const { items, total, total_pages } = paginate(latestAlbums, page, perPage);
     sendSuccess(response, {
@@ -1460,7 +1471,10 @@ function handleMusicRoutes(
     const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
     const perPage = Math.max(
       1,
-      Number.parseInt(url.searchParams.get("per_page") ?? "24", 10),
+      Number.parseInt(
+        url.searchParams.get("per_page") ?? String(MUSICIANS_PER_PAGE),
+        10,
+      ),
     );
     const { items, total, total_pages } = paginate(musicians, page, perPage);
     sendSuccess(response, {
@@ -1508,7 +1522,13 @@ function handleMusicRoutes(
   }
 
   if (url.pathname === "/api/music/tracks" && method === "GET") {
-    const limit = Math.max(1, Number.parseInt(url.searchParams.get("limit") ?? "50", 10));
+    const limit = Math.max(
+      1,
+      Number.parseInt(
+        url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
+        10,
+      ),
+    );
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") ?? "0", 10));
     sendSuccess(response, {
       tracks: tracks.slice(offset, offset + limit),
@@ -1524,7 +1544,10 @@ function handleMusicRoutes(
     const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10));
     const perPage = Math.max(
       1,
-      Number.parseInt(url.searchParams.get("per_page") ?? "50", 10),
+      Number.parseInt(
+        url.searchParams.get("per_page") ?? String(LIKED_TRACKS_PER_PAGE),
+        10,
+      ),
     );
     sendSuccess(response, {
       tracks: [],
@@ -1716,7 +1739,7 @@ function handleSearchRoutes(
       movies: libraryMovies,
       total: libraryMovies.length,
       page: 1,
-      per_page: 24,
+      per_page: SEARCH_PER_PAGE,
       total_pages: 1,
     });
     return true;
@@ -1727,7 +1750,7 @@ function handleSearchRoutes(
       albums: latestAlbums,
       total: latestAlbums.length,
       page: 1,
-      per_page: 24,
+      per_page: SEARCH_PER_PAGE,
       total_pages: 1,
     });
     return true;
@@ -1738,7 +1761,7 @@ function handleSearchRoutes(
       musicians,
       total: musicians.length,
       page: 1,
-      per_page: 24,
+      per_page: SEARCH_PER_PAGE,
       total_pages: 1,
     });
     return true;
@@ -1749,7 +1772,7 @@ function handleSearchRoutes(
       tracks,
       total: tracks.length,
       page: 1,
-      per_page: 24,
+      per_page: SEARCH_PER_PAGE,
       total_pages: 1,
     });
     return true;

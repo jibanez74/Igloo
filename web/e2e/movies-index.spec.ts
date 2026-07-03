@@ -4,6 +4,7 @@ import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
+import { MOVIES_PER_PAGE } from "../src/lib/constants";
 
 type NullableString = {
   String: string;
@@ -77,13 +78,17 @@ function buildMoviePage(
 ) {
   return [
     ...featuredMovies,
-    ...Array.from({ length: 24 - featuredMovies.length }, (_, index) =>
-      movie(
-        fillerStartId + index,
-        `${fillerPrefix} ${index + 1}`,
-        2000 + ((index + 1) % 20),
-        index % 2 === 0 ? `/${fillerPrefix.toLowerCase().replaceAll(" ", "-")}-${index + 1}.jpg` : "",
-      ),
+    ...Array.from(
+      { length: MOVIES_PER_PAGE - featuredMovies.length },
+      (_, index) =>
+        movie(
+          fillerStartId + index,
+          `${fillerPrefix} ${index + 1}`,
+          2000 + ((index + 1) % 20),
+          index % 2 === 0
+            ? `/${fillerPrefix.toLowerCase().replaceAll(" ", "-")}-${index + 1}.jpg`
+            : "",
+        ),
     ),
   ];
 }
@@ -329,7 +334,9 @@ async function mockMoviesApi(
 
     if (url.pathname === "/api/movies/library") {
       const libraryPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
       requestedLibraryRequests.push(`${url.pathname}${url.search}`);
 
@@ -351,7 +358,9 @@ async function mockMoviesApi(
 
     if (url.pathname === "/api/movies/genres/10/movies") {
       const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
       requestedGenreRequests.push(`${url.pathname}${url.search}`);
 
@@ -368,7 +377,9 @@ async function mockMoviesApi(
 
     if (url.pathname === "/api/movies/genres/20/movies") {
       const genrePage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
       requestedGenreRequests.push(`${url.pathname}${url.search}`);
 
@@ -447,7 +458,9 @@ async function mockMoviesApi(
       const playlistId = Number(playlistMoviesMatch[1]);
       const playlist = playlists.find(candidate => candidate.id === playlistId);
       const page = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
 
       if (!playlist) {
@@ -475,7 +488,9 @@ async function mockMoviesApi(
 
     if (url.pathname === "/api/movies/liked") {
       const likedPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
 
       await fulfillJSON(route, apiResponse({
@@ -602,7 +617,7 @@ test("all movies tab renders accessible movie cards and URL-backed pagination", 
         return (
           parsed.pathname === "/api/movies/library" &&
           parsed.searchParams.get("page") === "2" &&
-          parsed.searchParams.get("per_page") === "24" &&
+          parsed.searchParams.get("per_page") === String(MOVIES_PER_PAGE) &&
           parsed.searchParams.get("sort") === "asc"
         );
       }),
@@ -658,7 +673,7 @@ test("genres tab renders accessible counts, filtering, and URL-backed pagination
         return (
           parsed.pathname === "/api/movies/genres/10/movies" &&
           parsed.searchParams.get("page") === "2" &&
-          parsed.searchParams.get("per_page") === "24" &&
+          parsed.searchParams.get("per_page") === String(MOVIES_PER_PAGE) &&
           parsed.searchParams.get("sort") === "asc"
         );
       }),

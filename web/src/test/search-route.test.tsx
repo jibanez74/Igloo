@@ -11,6 +11,7 @@ import {
   CONTENT_FADE_TRANSITION_MS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
+  SEARCH_PER_PAGE,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import { runContentFadeTransitionTimeout } from "./content-fade-transition";
@@ -132,13 +133,13 @@ function mockSearchFetch() {
           ],
           total: 50,
           page: 3,
-          per_page: 24,
+          per_page: SEARCH_PER_PAGE,
           total_pages: 3,
         },
       });
     }
 
-    if (url === "/api/search/albums?q=Casino&page=1&per_page=24") {
+    if (url === `/api/search/albums?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`) {
       return jsonResponse({
         error: false,
         data: {
@@ -154,7 +155,7 @@ function mockSearchFetch() {
           ],
           total: 1,
           page: 1,
-          per_page: 24,
+          per_page: SEARCH_PER_PAGE,
           total_pages: 1,
         },
       });
@@ -266,7 +267,7 @@ describe("search route", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/search/movies?q=Casino&page=999&per_page=24",
+        `/api/search/movies?q=Casino&page=999&per_page=${SEARCH_PER_PAGE}`,
         expect.objectContaining({
           credentials: "include",
           method: "GET",

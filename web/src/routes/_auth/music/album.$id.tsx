@@ -40,9 +40,14 @@ import MediaNotFound from "@/components/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/AlbumDetailsCoverBlock";
 import {
+  ALBUM_DETAILS_KEY,
+  ALBUMS_PAGINATED_KEY,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  LATEST_ALBUMS_KEY,
+  MUSIC_STATS_KEY,
   MOTION_LOADING_STATE_CLASS,
   MOTION_PROGRESS_FILL_CLASS,
+  TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -263,9 +268,12 @@ function AlbumDetailsContent({
         `"${album.title}" has been removed from your library.`,
       );
 
-      // Invalidate album queries to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["albums"] });
-      queryClient.invalidateQueries({ queryKey: ["music-stats"] });
+      // Refresh music views that can include the deleted album or its tracks.
+      queryClient.invalidateQueries({ queryKey: [ALBUMS_PAGINATED_KEY] });
+      queryClient.invalidateQueries({ queryKey: [ALBUM_DETAILS_KEY, album.id] });
+      queryClient.invalidateQueries({ queryKey: [LATEST_ALBUMS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [MUSIC_STATS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TRACKS_INFINITE_KEY] });
 
       setIsDeleteDialogOpen(false);
       navigate({ to: "/music", search: { tab: "albums" } });

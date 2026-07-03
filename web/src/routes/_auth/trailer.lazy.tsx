@@ -31,6 +31,7 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { toast } from "sonner";
 import { formatTimeSeconds } from "@/lib/format";
 import {
+  MOVIE_SEEK_STEP_SEC,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
@@ -196,13 +197,13 @@ function TrailerPage() {
       case "j":
       case "J":
         e.preventDefault();
-        seekBackward(10);
+        seekBackward(MOVIE_SEEK_STEP_SEC);
         break;
       case "ArrowRight":
       case "l":
       case "L":
         e.preventDefault();
-        seekForward(10);
+        seekForward(MOVIE_SEEK_STEP_SEC);
         break;
       case "ArrowUp":
         e.preventDefault();
@@ -402,8 +403,9 @@ function TrailerPage() {
 
       <DialogDescription className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or left arrow to rewind
-        10 seconds, L or right arrow to forward 10 seconds, up/down arrows for
-        volume, M to mute, F for fullscreen, Escape to exit fullscreen or close.
+        {MOVIE_SEEK_STEP_SEC} seconds, L or right arrow to forward{" "}
+        {MOVIE_SEEK_STEP_SEC} seconds, up/down arrows for volume, M to mute, F
+        for fullscreen, Escape to exit fullscreen or close.
       </DialogDescription>
 
       <header
@@ -491,12 +493,12 @@ function TrailerPage() {
             >
               <button
                 type="button"
-                onClick={() => seekBackward(10)}
+                onClick={() => seekBackward(MOVIE_SEEK_STEP_SEC)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
-                aria-label="Rewind 10 seconds (J or Left Arrow)"
+                aria-label={`Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </button>
@@ -521,12 +523,12 @@ function TrailerPage() {
 
               <button
                 type="button"
-                onClick={() => seekForward(10)}
+                onClick={() => seekForward(MOVIE_SEEK_STEP_SEC)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                 )}
-                aria-label="Forward 10 seconds (L or Right Arrow)"
+                aria-label={`Forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
               >
                 <FastForward className="size-5" aria-hidden="true" />
               </button>

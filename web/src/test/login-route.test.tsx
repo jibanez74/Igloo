@@ -8,7 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MOVIES_IN_THEATERS_KEY } from "@/lib/constants";
+import { MOVIES_IN_THEATERS_KEY, MOVIES_PER_PAGE } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
 const toastMocks = vi.hoisted(() => ({
@@ -105,14 +105,14 @@ function mockLoginFetch({
       });
     }
 
-    if (url === "/api/movies/library?page=1&per_page=24&sort=asc") {
+    if (url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
       return jsonResponse({
         error: false,
         data: {
           movies: [],
           total: 0,
           page: 1,
-          per_page: 24,
+          per_page: MOVIES_PER_PAGE,
           total_pages: 0,
         },
       });

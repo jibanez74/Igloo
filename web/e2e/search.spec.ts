@@ -11,6 +11,7 @@ import type {
   SearchMusiciansResponseType,
   SearchTracksResponseType,
 } from "../src/types/search";
+import { SEARCH_PER_PAGE } from "../src/lib/constants";
 
 type NullableString = {
   String: string;
@@ -120,7 +121,7 @@ const movieResults = apiResponse<SearchMoviesResponseType>({
   results: [movieResult],
   total: 1,
   page: 1,
-  per_page: 24,
+  per_page: SEARCH_PER_PAGE,
   total_pages: 1,
 });
 
@@ -129,7 +130,7 @@ const albumResults = apiResponse<SearchAlbumsResponseType>({
   results: [albumResult],
   total: 1,
   page: 1,
-  per_page: 24,
+  per_page: SEARCH_PER_PAGE,
   total_pages: 1,
 });
 
@@ -138,7 +139,7 @@ const musicianResults = apiResponse<SearchMusiciansResponseType>({
   results: [musicianResult],
   total: 1,
   page: 1,
-  per_page: 24,
+  per_page: SEARCH_PER_PAGE,
   total_pages: 1,
 });
 
@@ -147,7 +148,7 @@ const trackResults = apiResponse<SearchTracksResponseType>({
   results: [trackResult],
   total: 1,
   page: 1,
-  per_page: 24,
+  per_page: SEARCH_PER_PAGE,
   total_pages: 1,
 });
 
@@ -292,10 +293,10 @@ test("search supports keyboard submission, tabs, and responsive layout", async (
 
   expect(requestedSearchRequests).toEqual([
     "/api/search?q=Casino",
-    "/api/search/movies?q=Casino&page=1&per_page=24",
-    "/api/search/albums?q=Casino&page=1&per_page=24",
-    "/api/search/musicians?q=Casino&page=1&per_page=24",
-    "/api/search/tracks?q=Casino&page=1&per_page=24",
+    `/api/search/movies?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
+    `/api/search/albums?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
+    `/api/search/musicians?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
+    `/api/search/tracks?q=Casino&page=1&per_page=${SEARCH_PER_PAGE}`,
   ]);
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();

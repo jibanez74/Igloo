@@ -65,7 +65,14 @@ import type {
   SpotifyTrackSearchResultType,
   SpotifyStatusType,
 } from "@/types";
-import { MOVIES_PER_PAGE, SEARCH_PER_PAGE } from "@/lib/constants";
+import {
+  ALBUMS_PER_PAGE,
+  LIKED_TRACKS_PER_PAGE,
+  MOVIES_PER_PAGE,
+  MUSICIANS_PER_PAGE,
+  SEARCH_PER_PAGE,
+  SHUFFLE_TRACKS_LIMIT,
+} from "@/lib/constants";
 
 // API Client - Generic request handler
 const ERROR_NOTFOUND: ApiFailureType = {
@@ -414,7 +421,10 @@ export const deleteAlbum = (id: number) =>
     method: "DELETE",
   });
 
-export const getAlbumsPaginated = (page: number, perPage: number = 24) =>
+export const getAlbumsPaginated = (
+  page: number,
+  perPage: number = ALBUMS_PER_PAGE,
+) =>
   apiRequest<AlbumsListResponseType>(
     withQuery("/api/music/albums", {
       page,
@@ -431,7 +441,7 @@ export const getTracksPaginated = (limit: number, offset: number) =>
     withQuery("/api/music/tracks", { limit, offset }),
   );
 
-export const getShuffleTracks = (limit: number = 50) =>
+export const getShuffleTracks = (limit: number = SHUFFLE_TRACKS_LIMIT) =>
   apiRequest<ShuffleTracksResponseType>(
     withQuery("/api/music/tracks/shuffle", { limit }),
   );
@@ -442,7 +452,10 @@ export const toggleLikeTrack = (trackId: number) =>
     { method: "POST" },
   );
 
-export const getLikedTracks = (page: number, perPage: number = 50) =>
+export const getLikedTracks = (
+  page: number,
+  perPage: number = LIKED_TRACKS_PER_PAGE,
+) =>
   apiRequest<LikedTracksResponseType>(
     withQuery("/api/music/tracks/liked", {
       page,
@@ -457,7 +470,10 @@ export const getLikedTrackIds = () =>
 // Music API - Musicians
 // ============================================================================
 
-export const getMusiciansPaginated = (page: number, perPage: number = 24) =>
+export const getMusiciansPaginated = (
+  page: number,
+  perPage: number = MUSICIANS_PER_PAGE,
+) =>
   apiRequest<MusiciansListResponseType>(
     withQuery("/api/music/musicians", {
       page,

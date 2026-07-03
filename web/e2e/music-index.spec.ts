@@ -4,6 +4,12 @@ import {
   expectNoHorizontalOverflow,
   expectPageHasNoHorizontalScroll,
 } from "./e2e-layout";
+import {
+  ALBUMS_PER_PAGE,
+  LIKED_TRACKS_PER_PAGE,
+  MUSICIANS_PER_PAGE,
+  TRACKS_INFINITE_PAGE_SIZE,
+} from "../src/lib/constants";
 
 type NullableString = {
   String: string;
@@ -290,7 +296,9 @@ async function mockMusicIndexApi(
 
     if (url.pathname === "/api/music/albums") {
       const pageNumber = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(ALBUMS_PER_PAGE),
+      );
 
       await fulfillJSON(route, apiResponse({
         albums: mockAlbums,
@@ -304,7 +312,9 @@ async function mockMusicIndexApi(
 
     if (url.pathname === "/api/music/musicians") {
       const musicianPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MUSICIANS_PER_PAGE),
+      );
       requestedMusicianRequests.push(`${url.pathname}${url.search}`);
 
       await fulfillJSON(route, apiResponse({
@@ -374,7 +384,9 @@ async function mockMusicIndexApi(
 
     if (url.pathname === "/api/music/tracks/liked") {
       const likedTracksPage = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "50");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(LIKED_TRACKS_PER_PAGE),
+      );
 
       await fulfillJSON(route, apiResponse({
         tracks: likedTrackPages[likedTracksPage as keyof typeof likedTrackPages] ?? [],
@@ -392,7 +404,9 @@ async function mockMusicIndexApi(
         tracks: mockTracks,
         total: mockTracks.length,
         offset: Number(url.searchParams.get("offset") ?? "0"),
-        limit: Number(url.searchParams.get("limit") ?? "50"),
+        limit: Number(
+          url.searchParams.get("limit") ?? String(TRACKS_INFINITE_PAGE_SIZE),
+        ),
         has_more: false,
       }));
       return;
@@ -446,7 +460,7 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
         return (
           parsed.pathname === "/api/music/musicians" &&
           parsed.searchParams.get("page") === "2" &&
-          parsed.searchParams.get("per_page") === "24"
+          parsed.searchParams.get("per_page") === String(MUSICIANS_PER_PAGE)
         );
       }),
     )

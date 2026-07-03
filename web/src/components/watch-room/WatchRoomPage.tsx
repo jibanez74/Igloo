@@ -532,7 +532,7 @@ function WatchRoomPlayerPanel({
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
-                aria-label="Rewind 10 seconds"
+                aria-label={`Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
                 <Rewind className="size-5" aria-hidden="true" />
               </button>
@@ -560,7 +560,7 @@ function WatchRoomPlayerPanel({
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
                   "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                 )}
-                aria-label="Fast-forward 10 seconds"
+                aria-label={`Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
                 <FastForward className="size-5" aria-hidden="true" />
               </button>

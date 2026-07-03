@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
+import { MOVIES_PER_PAGE } from "../src/lib/constants";
 
 type NullableString = {
   String: string;
@@ -267,7 +268,9 @@ async function mockMovieDetailsApi(page: Page) {
 
     if (url.pathname === "/api/movies/library") {
       const pageNumber = Number(url.searchParams.get("page") ?? "1");
-      const perPage = Number(url.searchParams.get("per_page") ?? "24");
+      const perPage = Number(
+        url.searchParams.get("per_page") ?? String(MOVIES_PER_PAGE),
+      );
       const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
 
       await fulfillJSON(route, apiResponse({

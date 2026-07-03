@@ -51,6 +51,7 @@ import {
   NOTIFICATIONS_UNREAD_COUNT_KEY,
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
+  ALBUMS_PER_PAGE,
   AUTH_USER_KEY,
   GENERAL_SETTINGS_KEY,
   PLAYBACK_SETTINGS_KEY,
@@ -78,11 +79,14 @@ import {
   MUSIC_STATS_KEY,
   LIKED_TRACK_IDS_KEY,
   LIKED_TRACKS_KEY,
+  LIKED_TRACKS_PER_PAGE,
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_TRACKS_KEY,
+  PLAYLIST_TRACKS_PAGE_SIZE,
   PLAYLISTS_KEY,
   SETTINGS_KEY,
   TRACKS_INFINITE_KEY,
+  TRACKS_INFINITE_PAGE_SIZE,
   WATCH_ROOM_KEY,
   WATCH_ROOM_INVITE_USERS_KEY,
   WATCH_ROOMS_KEY,
@@ -92,6 +96,7 @@ import {
   SEARCH_MUSICIANS_KEY,
   SEARCH_TRACKS_KEY,
   SEARCH_PER_PAGE,
+  MUSICIANS_PER_PAGE,
 } from "@/lib/constants";
 
 /**
@@ -274,7 +279,7 @@ export function albumDetailsQueryOpts(id: number) {
   });
 }
 
-export function tracksInfiniteQueryOpts(pageSize = 50) {
+export function tracksInfiniteQueryOpts(pageSize = TRACKS_INFINITE_PAGE_SIZE) {
   return infiniteQueryOptions({
     queryKey: [TRACKS_INFINITE_KEY, pageSize],
     queryFn: ({ pageParam = 0 }) => getTracksPaginated(pageSize, pageParam),
@@ -324,7 +329,10 @@ export function playbackSettingsQueryOpts(userId: number) {
   });
 }
 
-export function albumsPaginatedQueryOpts(page: number, perPage: number = 24) {
+export function albumsPaginatedQueryOpts(
+  page: number,
+  perPage: number = ALBUMS_PER_PAGE,
+) {
   return queryOptions({
     queryKey: [ALBUMS_PAGINATED_KEY, page, perPage],
     queryFn: () => getAlbumsPaginated(page, perPage),
@@ -335,7 +343,7 @@ export function albumsPaginatedQueryOpts(page: number, perPage: number = 24) {
 
 export function musiciansPaginatedQueryOpts(
   page: number,
-  perPage: number = 24,
+  perPage: number = MUSICIANS_PER_PAGE,
 ) {
   return queryOptions({
     queryKey: [MUSICIANS_PAGINATED_KEY, page, perPage],
@@ -376,7 +384,7 @@ export function playlistDetailsQueryOpts(id: number) {
 
 export function playlistTracksInfiniteQueryOpts(
   playlistId: number,
-  pageSize = 50,
+  pageSize = PLAYLIST_TRACKS_PAGE_SIZE,
 ) {
   return infiniteQueryOptions({
     queryKey: [PLAYLIST_TRACKS_KEY, playlistId, pageSize],
@@ -506,7 +514,10 @@ export function likedTrackIdsQueryOpts() {
   });
 }
 
-export function likedTracksQueryOpts(page: number, perPage: number = 50) {
+export function likedTracksQueryOpts(
+  page: number,
+  perPage: number = LIKED_TRACKS_PER_PAGE,
+) {
   return queryOptions({
     queryKey: [LIKED_TRACKS_KEY, page, perPage],
     queryFn: () => getLikedTracks(page, perPage),

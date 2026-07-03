@@ -11,6 +11,7 @@ import {
   CONTENT_FADE_TRANSITION_MS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
+  MOVIES_PER_PAGE,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import { runContentFadeTransitionTimeout } from "./content-fade-transition";
@@ -111,14 +112,14 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
       });
     }
 
-    if (url === "/api/movies/library?page=1&per_page=24&sort=asc") {
+    if (url === `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
       return jsonResponse({
         error: false,
         data: {
           movies: libraryMovies,
           total: libraryMovies.length,
           page: 1,
-          per_page: 24,
+          per_page: MOVIES_PER_PAGE,
           total_pages: 1,
         },
       });
@@ -144,14 +145,14 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
       });
     }
 
-    if (url === "/api/movies/genres/10/movies?page=1&per_page=24&sort=asc") {
+    if (url === `/api/movies/genres/10/movies?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
       return jsonResponse({
         error: false,
         data: {
           movies: [movie(4, "Die Hard", 1988)],
           total: 1,
           page: 1,
-          per_page: 24,
+          per_page: MOVIES_PER_PAGE,
           total_pages: 1,
         },
       });
@@ -166,14 +167,14 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
       });
     }
 
-    if (url === "/api/movies/liked?page=1&per_page=24&sort=asc") {
+    if (url === `/api/movies/liked?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`) {
       return jsonResponse({
         error: false,
         data: {
           movies: likedMovies,
           total: likedMovies.length,
           page: 1,
-          per_page: 24,
+          per_page: MOVIES_PER_PAGE,
           total_pages: 1,
         },
       });

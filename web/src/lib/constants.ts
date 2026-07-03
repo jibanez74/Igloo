@@ -1,56 +1,69 @@
-// keys for queries
+// TanStack Query keys. Keep these values stable and use the exported constants
+// for query options, cache reads/writes, invalidation, and tests.
+export const ADMIN_USERS_KEY = "admin-users";
 export const AUTH_USER_KEY = "auth-user";
+export const SETTINGS_KEY = "settings";
+export const GENERAL_SETTINGS_KEY = "general-settings";
+export const PLAYBACK_SETTINGS_KEY = "playback-settings";
+
 export const NOTIFICATIONS_KEY = "notifications";
 export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
+
 export const WATCH_ROOMS_KEY = "watch-rooms";
 export const WATCH_ROOM_KEY = "watch-room";
 export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
+
 export const TMDB_STATUS_KEY = "tmdb-status";
 export const SPOTIFY_STATUS_KEY = "spotify-status";
+
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
-export const LATEST_ALBUMS_KEY = "latest-albums";
-export const MOVIES_KEY = "movies";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
 export const MOVIE_TECHNICAL_DETAILS_KEY = "movie-technical-details";
-export const ALBUMS_KEY = "albums";
+export const MOVIES_LIBRARY_KEY = "movies-library";
+export const MOVIES_GENRES_KEY = "movies-genres";
+export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
+export const MOVIES_STATS_KEY = "movies-stats";
+export const MOVIES_LIKED_KEY = "movies-liked";
+export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
+export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
+export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
+export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
+export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";
+
+export const LATEST_ALBUMS_KEY = "latest-albums";
 export const ALBUM_DETAILS_KEY = "album-details";
-export const MUSICIANS_KEY = "musicians";
 export const MUSICIAN_DETAILS_KEY = "musician-details";
-export const TRACKS_KEY = "tracks";
 export const TRACKS_INFINITE_KEY = "tracks-infinite";
 export const ALBUMS_PAGINATED_KEY = "albums-paginated";
 export const MUSICIANS_PAGINATED_KEY = "musicians-paginated";
 export const MUSIC_STATS_KEY = "music-stats";
-export const SETTINGS_KEY = "settings";
-export const GENERAL_SETTINGS_KEY = "general-settings";
-export const PLAYBACK_SETTINGS_KEY = "playback-settings";
-export const ADMIN_USERS_KEY = "admin-users";
+export const PLAYLISTS_KEY = "playlists";
+export const PLAYLIST_DETAILS_KEY = "playlist-details";
+export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
+export const LIKED_TRACKS_KEY = "liked-tracks";
+export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
+
 export const SEARCH_ALL_KEY = "search-all";
 export const SEARCH_MOVIES_KEY = "search-movies";
 export const SEARCH_ALBUMS_KEY = "search-albums";
 export const SEARCH_MUSICIANS_KEY = "search-musicians";
 export const SEARCH_TRACKS_KEY = "search-tracks";
 
-/** Default page size for paginated /api/search/<entity> endpoints (matches server SEARCH_DEFAULT_PER_PAGE). */
+// Pagination and list-size defaults. These values mirror server defaults where
+// noted and should be used by API wrappers, query options, routes, and tests.
 export const SEARCH_PER_PAGE = 24;
-
-// tmdb (paths only from API; frontend builds same-origin proxy URLs inline)
-export const TMDB_IMAGE_BASE = "/api/tmdb/images";
-export const TMDB_BACKDROP_SIZE = "w1280";
-export const TMDB_POSTER_SIZE = "w500";
-export const TMDB_PROFILE_SIZE = "w185";
-export const TMDB_LOGO_SIZE = "w92";
-
-// pagination for music page
 export const ALBUMS_PER_PAGE = 24;
 export const MUSICIANS_PER_PAGE = 24;
-
-/** Default page size for GET /api/movies/library (matches server MOVIES_LIBRARY_DEFAULT_PER_PAGE). */
 export const MOVIES_PER_PAGE = 24;
+export const TRACKS_INFINITE_PAGE_SIZE = 50;
+export const PLAYLIST_TRACKS_PAGE_SIZE = 50;
+export const LIKED_TRACKS_PER_PAGE = 50;
+export const SHUFFLE_TRACKS_LIMIT = 50;
 
-/** Default search params when navigating to /movies from the sidebar (fresh entry). */
+// Route search defaults. Reuse these when navigating so links and loaders agree
+// on the canonical starting search state for a route.
 export const MOVIES_INDEX_DEFAULT_SEARCH = {
   tab: "all" as const,
   allPage: 1,
@@ -65,30 +78,20 @@ export const MOVIES_PLAYLISTS_TAB_SEARCH = {
   tab: "playlists" as const,
 };
 
-// movies library page — query keys (TanStack Query)
-export const MOVIES_LIBRARY_KEY = "movies-library";
-export const MOVIES_GENRES_KEY = "movies-genres";
-export const MOVIES_BY_GENRE_KEY = "movies-by-genre";
-export const MOVIES_STATS_KEY = "movies-stats";
-export const MOVIES_LIKED_KEY = "movies-liked";
-export const MOVIE_LIKE_STATUS_KEY = "movie-like-status";
-export const MOVIE_WATCH_PROGRESS_KEY = "movie-watch-progress";
-export const MOVIE_PLAYLISTS_KEY = "movie-playlists";
-export const MOVIE_PLAYLIST_DETAILS_KEY = "movie-playlist-details";
-export const MOVIE_PLAYLIST_MOVIES_KEY = "movie-playlist-movies";
+// TMDB image proxy settings. API responses provide paths only; the frontend
+// builds same-origin proxy URLs with these sizes.
+export const TMDB_IMAGE_BASE = "/api/tmdb/images";
+export const TMDB_BACKDROP_SIZE = "w1280";
+export const TMDB_POSTER_SIZE = "w500";
+export const TMDB_PROFILE_SIZE = "w185";
+export const TMDB_LOGO_SIZE = "w92";
 
-// virtual list item heights (in pixels)
+// Virtual-list measurements in pixels. These keep virtualized rows stable.
 export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
 export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 
-// playlist query keys
-export const PLAYLISTS_KEY = "playlists";
-export const PLAYLIST_DETAILS_KEY = "playlist-details";
-export const PLAYLIST_TRACKS_KEY = "playlist-tracks";
-export const LIKED_TRACKS_KEY = "liked-tracks";
-export const LIKED_TRACK_IDS_KEY = "liked-track-ids";
-
-// playback — single source of truth for stream modes (ids + labels + metadata)
+// Playback and HLS constants. Stream modes are the source of truth for IDs,
+// labels, and profile metadata used by route validation and playback UI.
 export const STREAM_MODES = [
   {
     id: "direct",
@@ -134,16 +137,15 @@ export const STREAM_MODES = [
   },
 ] as const;
 
-/** Derived from `STREAM_MODES` for Zod `z.enum`. */
-export const STREAM_MODE_IDS = [
-  "direct",
-  "remux",
-  "2160p_16mbps",
-  "1080p_8mbps",
-  "1080p_6mbps",
-  "1080p_4mbps",
-  "720p_3mbps",
-] as const;
+function streamModeIds<T extends readonly { id: string }[]>(modes: T) {
+  return modes.map((mode) => mode.id) as {
+    readonly [K in keyof T]: T[K] extends { readonly id: infer Id }
+      ? Id
+      : never;
+  };
+}
+
+export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
 export const MOVIE_SEEK_STEP_SEC = 10;
@@ -169,7 +171,7 @@ export const HLS_RESUME_REWIND_BUFFER_SEC = 10;
 /** hls.js: seconds of already-played buffer to keep behind the playhead. */
 export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 120;
 
-// playback settings dialog (movie play UI)
+// Playback settings dialog UI values and class contracts.
 export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";
 /** Subtitle `<select>` / Radix value when subtitles are off. */
 export const SUBTITLE_TRACK_SELECT_OFF_VALUE = "off";
@@ -189,7 +191,8 @@ export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
   "z-100 border-border bg-muted";
 
-// subtitle codecs that are image-based and cannot be converted to WebVTT
+// Subtitle and language constants used to choose supported subtitle behavior
+// and format audio/subtitle labels.
 export const BITMAP_SUBTITLE_CODECS = [
   "hdmv_pgs_subtitle",
   "dvd_subtitle",
@@ -269,7 +272,8 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 /** Key crew: max writing-department rows before "Show all crew" */
 export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
 
-// Shared motion tokens and classes
+// Shared motion tokens and class contracts. Keep reduced-motion behavior in
+// these constants so components stay consistent.
 export const MOTION_DURATION_MICRO_MS = 150;
 export const MOTION_DURATION_STANDARD_MS = 200;
 export const MOTION_DURATION_PAGE_MS = 300;
@@ -341,7 +345,7 @@ export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
 export const CONTENT_FADE_EXIT_CLASS =
   "animate-out fade-out-0 fill-mode-both duration-200 ease-in motion-reduce:animate-none motion-reduce:opacity-100";
 
-// watch rooms
+// Watch-room playback and synchronization behavior.
 export const WATCH_ROOM_SEEK_STEP_SEC = 10;
 export const WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC = 1.5;
 export const WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS = 1200;

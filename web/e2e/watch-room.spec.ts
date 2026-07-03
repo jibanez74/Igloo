@@ -8,6 +8,7 @@ import {
 
 import { readE2EEnv, type E2EEnv } from "./e2e-env";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
+import { WATCH_ROOM_SEEK_STEP_SEC } from "../src/lib/constants";
 
 type ApiResponse<T> = {
   error: boolean;
@@ -271,11 +272,15 @@ async function videoCurrentTime(page: Page) {
 
 async function expectWatchRoomChrome(page: Page) {
   await expect(
-    page.getByRole("button", { name: "Rewind 10 seconds" }),
+    page.getByRole("button", {
+      name: `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+    }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Fast-forward 10 seconds" }),
+    page.getByRole("button", {
+      name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Adjust volume" }),
@@ -344,7 +349,9 @@ test.describe("Watch room realtime playback", () => {
       ).toBeVisible({ timeout: env.responseTimeoutMs });
 
       await ownerPage
-        .getByRole("button", { name: "Fast-forward 10 seconds" })
+        .getByRole("button", {
+          name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+        })
         .click();
       await expect
         .poll(() => videoCurrentTime(guestPage), {

@@ -11,6 +11,7 @@ import ProgressBar from "@/components/ProgressBar";
 import ChapterMenu from "@/components/ChapterMenu";
 import VolumeControl from "@/components/VolumeControl";
 import {
+  MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
@@ -104,7 +105,7 @@ export default function MoviePlayerControls({
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
                 "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
-              aria-label="Seek backward 10 seconds"
+              aria-label={`Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`}
             >
               <Rewind className="size-5" aria-hidden="true" />
             </button>
@@ -130,7 +131,7 @@ export default function MoviePlayerControls({
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
                 "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
-              aria-label="Seek forward 10 seconds"
+              aria-label={`Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`}
             >
               <FastForward className="size-5" aria-hidden="true" />
             </button>

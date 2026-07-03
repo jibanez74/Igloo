@@ -4,7 +4,10 @@ import type { ComponentType } from "react";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { WatchRoomPage as WatchRoomPageContent } from "@/components/watch-room/WatchRoomPage";
 import { Route as WatchRoomRoute } from "@/routes/_auth/watch-rooms/$id.lazy";
-import { MOTION_PLAYER_CHROME_BUTTON_CLASS } from "@/lib/constants";
+import {
+  MOTION_PLAYER_CHROME_BUTTON_CLASS,
+  WATCH_ROOM_SEEK_STEP_SEC,
+} from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
 import { renderWithQueryClient } from "@/test/render";
 
@@ -535,9 +538,9 @@ describe("WatchRoomPageContent", () => {
 
     const socket = FakeWebSocket.instances[0];
     for (const name of [
-      "Rewind 10 seconds",
+      `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
       "Play playback",
-      "Fast-forward 10 seconds",
+      `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
       "Fullscreen",
     ]) {
       expect(screen.getByRole("button", { name })).toHaveClass(
@@ -555,13 +558,15 @@ describe("WatchRoomPageContent", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: /fast-forward 10 seconds/i }),
+      screen.getByRole("button", {
+        name: `Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      }),
     );
 
     await waitFor(() => {
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
         type: "seek",
-        position_sec: 10,
+        position_sec: WATCH_ROOM_SEEK_STEP_SEC,
       });
     });
 
@@ -570,11 +575,15 @@ describe("WatchRoomPageContent", () => {
     await waitFor(() => {
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
         type: "pause",
-        position_sec: 10,
+        position_sec: WATCH_ROOM_SEEK_STEP_SEC,
       });
     });
 
-    await user.click(screen.getByRole("button", { name: /rewind 10 seconds/i }));
+    await user.click(
+      screen.getByRole("button", {
+        name: `Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`,
+      }),
+    );
 
     await waitFor(() => {
       expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({

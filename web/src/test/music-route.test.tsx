@@ -8,9 +8,12 @@ import {
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ALBUMS_PER_PAGE,
   CONTENT_FADE_TRANSITION_MS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
+  MUSICIANS_PER_PAGE,
+  TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import { runContentFadeTransitionTimeout } from "./content-fade-transition";
@@ -128,7 +131,7 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
       });
     }
 
-    if (url === "/api/music/albums?page=1&per_page=24") {
+    if (url === `/api/music/albums?page=1&per_page=${ALBUMS_PER_PAGE}`) {
       return jsonResponse({
         error: false,
         data: {
@@ -143,13 +146,13 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
           ],
           total: 1,
           page: 1,
-          per_page: 24,
+          per_page: ALBUMS_PER_PAGE,
           total_pages: 1,
         },
       });
     }
 
-    if (url === "/api/music/musicians?page=1&per_page=24") {
+    if (url === `/api/music/musicians?page=1&per_page=${MUSICIANS_PER_PAGE}`) {
       return jsonResponse({
         error: false,
         data: {
@@ -165,20 +168,20 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
           ],
           total: 1,
           page: 1,
-          per_page: 24,
+          per_page: MUSICIANS_PER_PAGE,
           total_pages: 1,
         },
       });
     }
 
-    if (url === "/api/music/tracks?limit=50&offset=0") {
+    if (url === `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`) {
       return jsonResponse({
         error: false,
         data: {
           tracks: [track(1, "Alabaster"), track(2, "Borrowed Light")],
           total: 2,
           offset: 0,
-          limit: 50,
+          limit: TRACKS_INFINITE_PAGE_SIZE,
           has_more: false,
         },
       });

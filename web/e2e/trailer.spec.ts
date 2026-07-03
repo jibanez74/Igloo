@@ -3,6 +3,7 @@ import { trackBrowserIssues } from "./e2e-browser-issues";
 import { expectPageHasNoHorizontalScroll } from "./e2e-layout";
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import { mockYouTubePlayer } from "./mock-youtube-player";
+import { MOVIE_SEEK_STEP_SEC } from "../src/lib/constants";
 
 async function login(page: Page, env: E2EEnv) {
   const response = await page.context().request.post(
@@ -30,10 +31,14 @@ async function expectTrailerChrome(page: Page) {
     page.getByRole("button", { name: "Play (Space or K)" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Rewind 10 seconds (J or Left Arrow)" }),
+    page.getByRole("button", {
+      name: `Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`,
+    }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Forward 10 seconds (L or Right Arrow)" }),
+    page.getByRole("button", {
+      name: `Forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`,
+    }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Mute (M)" })).toBeVisible();
   await expect(

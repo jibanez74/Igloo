@@ -617,9 +617,9 @@ function PlayMoviePage() {
 
       <p className="sr-only">
         Keyboard shortcuts: Space or K to play/pause, J or Left arrow to rewind
-        10 seconds, L or Right arrow to forward 10 seconds, Up/Down for volume,
-        M to mute, F for fullscreen, Escape to exit fullscreen, Back button to
-        go back.
+        {MOVIE_SEEK_STEP_SEC} seconds, L or Right arrow to forward{" "}
+        {MOVIE_SEEK_STEP_SEC} seconds, Up/Down for volume, M to mute, F for
+        fullscreen, Escape to exit fullscreen, Back button to go back.
       </p>
 
       <header

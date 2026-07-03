@@ -33,21 +33,30 @@ import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
 import {
-  MUSIC_STATS_KEY,
-  ALBUMS_KEY,
-  TRACKS_KEY,
-  MUSICIANS_KEY,
-  LATEST_ALBUMS_KEY,
+  ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
-  MUSICIANS_PAGINATED_KEY,
-  TRACKS_INFINITE_KEY,
-  MOVIES_STATS_KEY,
-  MOVIES_KEY,
+  LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
-  MOVIE_PLAYLISTS_KEY,
-  MOVIE_PLAYLIST_DETAILS_KEY,
+  LIBRARY_MOVIE_DETAILS_KEY,
+  LIKED_TRACK_IDS_KEY,
+  LIKED_TRACKS_KEY,
+  MUSIC_STATS_KEY,
+  MUSICIAN_DETAILS_KEY,
+  MUSICIANS_PAGINATED_KEY,
   MOVIE_PLAYLIST_MOVIES_KEY,
+  MOVIE_PLAYLIST_DETAILS_KEY,
+  MOVIE_PLAYLISTS_KEY,
+  MOVIE_TECHNICAL_DETAILS_KEY,
+  MOVIES_BY_GENRE_KEY,
+  MOVIES_GENRES_KEY,
+  MOVIES_LIBRARY_KEY,
+  MOVIES_LIKED_KEY,
+  MOVIES_STATS_KEY,
+  PLAYLIST_DETAILS_KEY,
+  PLAYLIST_TRACKS_KEY,
+  PLAYLISTS_KEY,
   SETTINGS_KEY,
+  TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
@@ -780,21 +789,30 @@ function invalidateScanQueries(
     scan === "movies"
       ? [
           MOVIES_STATS_KEY,
-          MOVIES_KEY,
+          MOVIES_LIBRARY_KEY,
+          MOVIES_GENRES_KEY,
+          MOVIES_BY_GENRE_KEY,
+          MOVIES_LIKED_KEY,
           LATEST_MOVIES_KEY,
+          LIBRARY_MOVIE_DETAILS_KEY,
+          MOVIE_TECHNICAL_DETAILS_KEY,
           MOVIE_PLAYLISTS_KEY,
           MOVIE_PLAYLIST_DETAILS_KEY,
           MOVIE_PLAYLIST_MOVIES_KEY,
         ]
       : [
           MUSIC_STATS_KEY,
-          ALBUMS_KEY,
-          TRACKS_KEY,
-          MUSICIANS_KEY,
           LATEST_ALBUMS_KEY,
           ALBUMS_PAGINATED_KEY,
+          ALBUM_DETAILS_KEY,
           MUSICIANS_PAGINATED_KEY,
+          MUSICIAN_DETAILS_KEY,
           TRACKS_INFINITE_KEY,
+          LIKED_TRACKS_KEY,
+          LIKED_TRACK_IDS_KEY,
+          PLAYLISTS_KEY,
+          PLAYLIST_DETAILS_KEY,
+          PLAYLIST_TRACKS_KEY,
         ];
 
   queryKeys.forEach(key => {

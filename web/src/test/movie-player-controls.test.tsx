@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import MoviePlayerControls from "@/components/MoviePlayerControls";
 import {
+  MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
@@ -39,9 +40,9 @@ describe("MoviePlayerControls", () => {
     ).toBeInTheDocument();
 
     for (const name of [
-      "Seek backward 10 seconds",
+      `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`,
       "Play",
-      "Seek forward 10 seconds",
+      `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`,
       "Exit expanded view",
     ]) {
       expect(screen.getByRole("button", { name })).toHaveClass(
