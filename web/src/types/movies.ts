@@ -5,13 +5,6 @@ import type {
 } from "./nullable";
 import type { PlaylistCollaboratorType } from "./music";
 
-// Simple movie type for basic listings
-export type SimpleMovieType = {
-  id: number;
-  title: string;
-  thumb: string;
-};
-
 // Movie from our library (scanned) - used for Latest Movies on home (API returns poster_path; frontend builds URL)
 export type LatestMovieType = {
   id: number;

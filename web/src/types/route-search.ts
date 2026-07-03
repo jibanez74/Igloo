@@ -9,16 +9,12 @@ export const loginSearchSchema = z.object({
   ),
 });
 
-export type LoginSearchParams = z.infer<typeof loginSearchSchema>;
-
 export const trailerSearchSchema = z.object({
   mediaType: z.optional(z.enum(["movie", "tv"])),
   mediaId: z.optional(z.coerce.number().check(z.int(), z.positive())),
   videoKey: z.optional(z.string()),
   returnTo: z.optional(z.string()),
 });
-
-export type TrailerSearchParams = z.infer<typeof trailerSearchSchema>;
 
 export const searchSearchSchema = z.object({
   q: z._default(z.catch(z.string(), ""), ""),

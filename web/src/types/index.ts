@@ -49,7 +49,6 @@ export type {
 
 // Movie types
 export type {
-  SimpleMovieType,
   LatestMovieType,
   CastMemberType,
   CrewMemberType,
@@ -85,8 +84,6 @@ export type {
 
 // Route search params
 export type {
-  LoginSearchParams,
-  TrailerSearchParams,
   SearchParams,
   MoviesSearchParams,
   MusicSearchParams,
@@ -115,7 +112,6 @@ export type {
   AlbumInfoType,
   AudioPlayerState,
   AudioPlayerActions,
-  AudioPlayerContextType,
   PlayableTrackData,
 } from "./audio-player";
 
@@ -128,7 +124,7 @@ export type {
 } from "./api";
 
 // User types
-export type { AuthUser, AuthUserResponseType, AdminUserType } from "./user";
+export type { AuthUser, AdminUserType } from "./user";
 
 // Notification types
 export type {

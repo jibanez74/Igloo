@@ -84,6 +84,3 @@ export type AudioPlayerActions = {
   suspendKeyboard: () => void;
   resumeKeyboard: () => void;
 };
-
-// Combined audio player context type
-export type AudioPlayerContextType = AudioPlayerState & AudioPlayerActions;
