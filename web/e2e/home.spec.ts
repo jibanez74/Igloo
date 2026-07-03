@@ -269,6 +269,9 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   const browserIssues = trackBrowserIssues(page);
   const unexpectedApiRequests = await mockHomeApi(page);
 
+  await page.addInitScript(() => {
+    window.localStorage.removeItem("igloo-theme");
+  });
   await page.goto("/");
 
   await expect(page).toHaveTitle("Home - Igloo");
@@ -287,7 +290,10 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Notifications" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cast" })).toBeVisible();
+  const themeToggle = page.getByRole("button", {
+    name: "Switch to light theme",
+  });
+  await expect(themeToggle).toBeVisible();
 
   for (const name of [
     "Watch Rooms",
@@ -306,6 +312,14 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
+
+  await themeToggle.click();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("igloo-theme")))
+    .toBe("light");
+  await expect(
+    page.getByRole("button", { name: "Switch to dark theme" }),
+  ).toBeVisible();
 
   const main = page.getByRole("main");
   for (const viewport of [

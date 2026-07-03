@@ -417,16 +417,11 @@ These are concrete, fixable inconsistencies observed in the current web code.
    toaster colors are an inconsistency — they won't track the palette and have no
    token equivalent for an RN port.
 
-4. **Stale comment in `styles.css`** (line ~52): "The app currently boots dark
-   (AppBoot.tsx); a theme toggle will activate this." The toggle is already
-   implemented (Settings → Appearance, `settings/index.lazy.tsx` calling
-   `setTheme`). The comment should be updated.
-
-5. **Toaster `success`/`error` contrast is not covered by `contrast.test.ts`.**
+4. **Toaster `success`/`error` contrast is not covered by `contrast.test.ts`.**
    The contrast test guards token pairs but not these hardcoded toast colors, so
    they could regress accessibility silently.
 
-6. **No exported numeric scale for spacing/radius/typography.** Radius is a token
+5. **No exported numeric scale for spacing/radius/typography.** Radius is a token
    (`--radius`) but spacing/type rely entirely on Tailwind utility literals
    scattered across components, so there's no single place that defines the
    intended scale (this matters for keeping an RN client aligned).
