@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
@@ -24,8 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
-import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
-import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { showActionFailed } from "@/lib/toast-helpers";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
@@ -55,10 +54,6 @@ import {
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
-import {
-  getOffsetWithinScrollContainer,
-  observeElementRectWithWindowFallback,
-} from "@/lib/scroll-container";
 import { cn } from "@/lib/utils";
 
 import AlbumCard from "@/components/AlbumCard";
@@ -658,20 +653,20 @@ function VirtualizedTracksList({
 }: VirtualizedTracksListProps) {
   "use no memo";
 
-  const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
+  // The app shell scrolls the window (not an inner container), so virtualize
+  // against the window. scrollMargin is the list's distance from the top of the
+  // document, letting the virtualizer map window scroll onto item indices.
   useEffect(() => {
     const listElement = listRef.current;
-    if (!listElement || !scrollContainer) {
+    if (!listElement) {
       return;
     }
 
     const updateScrollMargin = () => {
-      setScrollMargin(
-        getOffsetWithinScrollContainer(listElement, scrollContainer),
-      );
+      setScrollMargin(listElement.getBoundingClientRect().top + window.scrollY);
     };
 
     updateScrollMargin();
@@ -682,14 +677,16 @@ function VirtualizedTracksList({
         : new ResizeObserver(updateScrollMargin);
 
     resizeObserver?.observe(listElement);
-    resizeObserver?.observe(scrollContainer);
+    if (typeof document !== "undefined") {
+      resizeObserver?.observe(document.body);
+    }
     window.addEventListener("resize", updateScrollMargin);
 
     return () => {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateScrollMargin);
     };
-  }, [scrollContainer]);
+  }, []);
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: virtualItems.length,
@@ -699,14 +696,8 @@ function VirtualizedTracksList({
     scopeKey: "music-tracks",
   });
 
-  const virtualizer = useElementVirtualizer({
+  const virtualizer = useWindowVirtualizer({
     count: virtualItems.length,
-    getScrollElement: () => scrollContainer,
-    initialRect: {
-      width: scrollContainer?.clientWidth ?? window.innerWidth,
-      height: scrollContainer?.clientHeight ?? window.innerHeight,
-    },
-    observeElementRect: observeElementRectWithWindowFallback,
 
     estimateSize: index => {
       const item = virtualItems[index];
@@ -864,7 +855,20 @@ function LetterHeader({ letter }: { letter: string }) {
   );
 }
 
-function TrackListItem({ track, isLiked }: { track: TrackListItemType; isLiked: boolean }) {
+// Memoized because the parent VirtualizedTracksList opts out of the React
+// Compiler ("use no memo") and re-renders on every scroll tick; without memo,
+// each windowed row re-renders each frame even though `track` (stable identity
+// from the cached query pages) and `isLiked` (boolean) are unchanged. The
+// compiler can't cover this: it only memoizes within a component, and the
+// opted-out parent hands fresh row JSX each render, so this memo is required.
+// react-doctor-disable-next-line react-doctor/react-compiler-no-manual-memoization
+const TrackListItem = memo(function TrackListItem({
+  track,
+  isLiked,
+}: {
+  track: TrackListItemType;
+  isLiked: boolean;
+}) {
   const audioPlayer = useAudioPlayerActions();
   const playerState = useAudioPlayerState();
 
@@ -907,7 +911,7 @@ function TrackListItem({ track, isLiked }: { track: TrackListItemType; isLiked: 
       showActionsMenu
     />
   );
-}
+});
 
 // Flatten tracks into virtual items with letter headers inserted
 function flattenToVirtualItems(tracks: TrackListItemType[]): VirtualItem[] {

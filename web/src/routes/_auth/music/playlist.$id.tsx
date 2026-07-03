@@ -38,8 +38,7 @@ import { deletePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } from "
 import { convertToAudioTrack, shuffleArray } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
-import { useAppShellScrollContainer } from "@/hooks/useAppShellScrollContainer";
-import { useElementVirtualizer } from "@/hooks/useElementVirtualizer";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { formatDuration } from "@/lib/format";
 import {
@@ -48,10 +47,6 @@ import {
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
-import {
-  getOffsetWithinScrollContainer,
-  observeElementRectWithWindowFallback,
-} from "@/lib/scroll-container";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrackType } from "@/types";
 
@@ -655,20 +650,20 @@ function VirtualizedPlaylistTracksList({
 }: VirtualizedPlaylistTracksListProps) {
   "use no memo";
 
-  const scrollContainer = useAppShellScrollContainer();
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
+  // The app shell scrolls the window (not an inner container), so virtualize
+  // against the window. scrollMargin is the list's distance from the top of the
+  // document, letting the virtualizer map window scroll onto item indices.
   useEffect(() => {
     const listElement = listRef.current;
-    if (!listElement || !scrollContainer) {
+    if (!listElement) {
       return;
     }
 
     const updateScrollMargin = () => {
-      setScrollMargin(
-        getOffsetWithinScrollContainer(listElement, scrollContainer),
-      );
+      setScrollMargin(listElement.getBoundingClientRect().top + window.scrollY);
     };
 
     updateScrollMargin();
@@ -679,14 +674,16 @@ function VirtualizedPlaylistTracksList({
         : new ResizeObserver(updateScrollMargin);
 
     resizeObserver?.observe(listElement);
-    resizeObserver?.observe(scrollContainer);
+    if (typeof document !== "undefined") {
+      resizeObserver?.observe(document.body);
+    }
     window.addEventListener("resize", updateScrollMargin);
 
     return () => {
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateScrollMargin);
     };
-  }, [scrollContainer]);
+  }, []);
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: tracks.length,
@@ -696,14 +693,8 @@ function VirtualizedPlaylistTracksList({
     scopeKey: playlistId,
   });
 
-  const virtualizer = useElementVirtualizer({
+  const virtualizer = useWindowVirtualizer({
     count: tracks.length,
-    getScrollElement: () => scrollContainer,
-    initialRect: {
-      width: scrollContainer?.clientWidth ?? window.innerWidth,
-      height: scrollContainer?.clientHeight ?? window.innerHeight,
-    },
-    observeElementRect: observeElementRectWithWindowFallback,
     estimateSize: () => VIRTUAL_LIST_TRACK_HEIGHT,
     overscan: 5,
     scrollMargin,
