@@ -11,7 +11,7 @@ type UseVirtualizedInfiniteLoaderOptions = {
 };
 
 type VirtualizedInfiniteLoaderOnChange = <
-  TScrollElement extends Element,
+  TScrollElement extends Element | Window,
   TItemElement extends Element,
 >(
   virtualizer: Virtualizer<TScrollElement, TItemElement>,

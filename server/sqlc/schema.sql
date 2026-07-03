@@ -122,6 +122,18 @@ CREATE INDEX IF NOT EXISTS idx_track_album ON tracks (album_id);
 
 CREATE INDEX IF NOT EXISTS idx_track_musician ON tracks (musician_id);
 
+-- Serves GetTracksAlphabetical's ORDER BY (letter bucket, then UPPER(title)) so
+-- the paginated tracks listing reads rows in order instead of full-scanning and
+-- temp-sorting the whole table on every page. Expression must match the ORDER BY
+-- in sqlc/queries/tracks.sql exactly.
+CREATE INDEX IF NOT EXISTS idx_track_alpha ON tracks (
+  CASE
+    WHEN UPPER(SUBSTR(title, 1, 1)) BETWEEN 'A' AND 'Z' THEN UPPER(SUBSTR(title, 1, 1))
+    ELSE '#'
+  END,
+  UPPER(title)
+);
+
 -- track_musicians
 CREATE TABLE
   IF NOT EXISTS track_musicians (

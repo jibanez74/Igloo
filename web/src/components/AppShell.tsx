@@ -1,7 +1,6 @@
-import { useState, type PropsWithChildren } from "react";
+import { type PropsWithChildren } from "react";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/app-sidebar";
-import { AppShellScrollContainerContext } from "@/hooks/useAppShellScrollContainer";
 import {
   SidebarInset,
   SidebarProvider,
@@ -9,9 +8,6 @@ import {
 } from "@/components/ui/sidebar";
 
 export default function AppShell({ children }: PropsWithChildren) {
-  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(
-    null,
-  );
   const handleSkipToContent = () => {
     requestAnimationFrame(() => {
       document.getElementById("main")?.focus();
@@ -40,14 +36,9 @@ export default function AppShell({ children }: PropsWithChildren) {
           <Header />
         </header>
 
-        <AppShellScrollContainerContext.Provider value={scrollContainer}>
-          <div
-            ref={setScrollContainer}
-            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8"
-          >
-            {children}
-          </div>
-        </AppShellScrollContainerContext.Provider>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
