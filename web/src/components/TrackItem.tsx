@@ -116,17 +116,7 @@ export default function TrackItem({
       return baseClasses;
     }
 
-    if (variant === "musician") {
-      // Musician: always visible on mobile, hover on desktop
-      return cn(
-        baseClasses,
-        isCurrentTrack
-          ? "opacity-100"
-          : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
-      );
-    }
-
-    // Album: hover on desktop; always visible on touch / small screens
+    // Album / Musician: hover on desktop; always visible on touch / small screens
     return cn(
       baseClasses,
       isCurrentTrack
