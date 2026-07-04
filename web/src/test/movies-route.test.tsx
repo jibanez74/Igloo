@@ -9,12 +9,32 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTENT_FADE_TRANSITION_MS,
+  LIBRARY_MOVIE_DETAILS_KEY,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
+  MOVIES_STATS_KEY,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import { runContentFadeTransitionTimeout } from "./content-fade-transition";
+
+const toastMocks = vi.hoisted(() => ({
+  showActionFailed: vi.fn(),
+  showSuccess: vi.fn(),
+}));
+
+vi.mock("@/lib/toast-helpers", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/toast-helpers")>(
+      "@/lib/toast-helpers",
+    );
+
+  return {
+    ...actual,
+    showActionFailed: toastMocks.showActionFailed,
+    showSuccess: toastMocks.showSuccess,
+  };
+});
 
 const defaultMatchMedia = window.matchMedia;
 
@@ -77,11 +97,15 @@ function playlist(id: number, name: string, movieCount: number) {
   };
 }
 
-function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
+function mockMoviesFetch(options?: {
+  statsRefreshFailure?: boolean;
+  tmdbAvailable?: boolean;
+}) {
   const libraryMovies = [movie(1, "Arrival", 2016), movie(2, "Heat", 1995)];
   const likedMovies = [movie(3, "Moonlight", 2016)];
   const playlists = [playlist(11, "Weekend Picks", 2)];
   const tmdbAvailable = options?.tmdbAvailable ?? true;
+  let statsRequestCount = 0;
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
@@ -104,6 +128,15 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
     }
 
     if (url === "/api/movies/stats") {
+      statsRequestCount += 1;
+
+      if (options?.statsRefreshFailure && statsRequestCount > 1) {
+        return jsonResponse({
+          error: true,
+          message: "Movie stats are unavailable.",
+        });
+      }
+
       return jsonResponse({
         error: false,
         data: {
@@ -202,6 +235,14 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
   return fetchMock;
 }
 
+function countFetchRequests(
+  fetchMock: ReturnType<typeof mockMoviesFetch>,
+  url: string,
+) {
+  return fetchMock.mock.calls.filter(([input]) => requestURL(input) === url)
+    .length;
+}
+
 function createMoviesQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -217,10 +258,13 @@ function createMoviesQueryClient() {
 
 async function renderMoviesRoute(
   initialEntry: string,
-  options?: { tmdbAvailable?: boolean },
+  options?: {
+    statsRefreshFailure?: boolean;
+    tmdbAvailable?: boolean;
+  },
 ) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockMoviesFetch(options);
+  const fetchMock = mockMoviesFetch(options);
 
   const queryClient = createMoviesQueryClient();
   const history = createMemoryHistory({
@@ -245,6 +289,7 @@ async function renderMoviesRoute(
   );
 
   return {
+    fetchMock,
     queryClient,
     router,
     ...view,
@@ -367,6 +412,79 @@ describe("movies route section motion", () => {
       screen.getByRole("tabpanel", { name: "All Movies" }).firstElementChild
         ?.className,
     ).toContain(MOTION_SECTION_ENTER_CLASS);
+  });
+});
+
+describe("movies route library refresh", () => {
+  it("refreshes active movie library queries without starting a scan", async () => {
+    const user = userEvent.setup();
+
+    const { fetchMock, queryClient } = await renderMoviesRoute("/movies/");
+
+    const statsUrl = "/api/movies/stats";
+    const libraryUrl = `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`;
+    const tmdbStatusUrl = "/api/tmdb/status";
+    const scanUrl = "/api/settings/scan/movies";
+    const inactiveDetailsKey = [LIBRARY_MOVIE_DETAILS_KEY, 999] as const;
+
+    queryClient.setQueryData(inactiveDetailsKey, {
+      error: false,
+      data: { movie: { id: 999, title: "Cached detail" } },
+    });
+
+    const initialStatsCalls = countFetchRequests(fetchMock, statsUrl);
+    const initialLibraryCalls = countFetchRequests(fetchMock, libraryUrl);
+    const initialTmdbStatusCalls = countFetchRequests(fetchMock, tmdbStatusUrl);
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Refresh Library" }),
+    );
+
+    await waitFor(() => {
+      expect(countFetchRequests(fetchMock, statsUrl)).toBeGreaterThan(
+        initialStatsCalls,
+      );
+      expect(countFetchRequests(fetchMock, libraryUrl)).toBeGreaterThan(
+        initialLibraryCalls,
+      );
+    });
+
+    expect(queryClient.getQueryData(inactiveDetailsKey)).toBeUndefined();
+    expect(countFetchRequests(fetchMock, tmdbStatusUrl)).toBe(
+      initialTmdbStatusCalls,
+    );
+    expect(countFetchRequests(fetchMock, scanUrl)).toBe(0);
+  });
+
+  it("reports refresh failure when an active movie query returns an API error envelope", async () => {
+    const user = userEvent.setup();
+
+    const { queryClient } = await renderMoviesRoute("/movies/", {
+      statsRefreshFailure: true,
+    });
+
+    await screen.findByRole("region", {
+      name: "Library statistics: 42 movies",
+    });
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Refresh Library" }),
+    );
+
+    await waitFor(() => {
+      expect(toastMocks.showActionFailed).toHaveBeenCalledWith(
+        "refresh library",
+        "Unable to refresh the movie library. Please try again.",
+      );
+    });
+
+    expect(toastMocks.showSuccess).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData([MOVIES_STATS_KEY])).toEqual({
+      error: true,
+      message: "Movie stats are unavailable.",
+    });
   });
 });
 

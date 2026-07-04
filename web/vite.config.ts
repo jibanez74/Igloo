@@ -75,6 +75,10 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       setupFiles: "./src/test/setup.ts",
       include: ["src/test/**/*.test.{ts,tsx}"],
+      // Full-router-load route tests (movies/movie-details/home) can exceed the
+      // 5s vitest default under parallel-suite load and cold module import,
+      // producing flaky timeouts in CI. Give them headroom.
+      testTimeout: 15000,
     },
 
     plugins: [
