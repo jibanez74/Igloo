@@ -12,6 +12,7 @@ import {
   MOVIES_LIKED_KEY,
   MOVIES_STATS_KEY,
 } from "@/lib/constants";
+import { isApiFailure } from "@/lib/is-api-failure";
 
 export const MOVIE_LIBRARY_QUERY_KEYS = [
   MOVIES_STATS_KEY,
@@ -41,6 +42,17 @@ export async function refreshMovieLibraryCache(queryClient: QueryClient) {
         { queryKey: [key], type: "active" },
         { throwOnError: true },
       );
+
+      const refreshedQueries = queryClient.getQueriesData({
+        queryKey: [key],
+        type: "active",
+      });
+
+      for (const [, data] of refreshedQueries) {
+        if (isApiFailure(data)) {
+          throw new Error(data.message);
+        }
+      }
     }),
   );
 }
