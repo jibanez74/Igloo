@@ -38,7 +38,7 @@ const SETTINGS_TABS = [
 export const Route = createFileRoute("/_auth/settings")({
   beforeLoad: async ({ context, location }) => {
     const authData = await context.queryClient.fetchQuery(
-      authUserQueryOpts({ revalidate: true }),
+      authUserQueryOpts(),
     );
     if (authData.error) {
       throw redirect({
