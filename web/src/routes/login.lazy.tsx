@@ -3,7 +3,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { showSuccess, showError } from "@/lib/toast-helpers";
 import { Snowflake, Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
 import { login } from "@/lib/api";
-import { authUserGuardQueryOpts } from "@/lib/query-opts";
+import { authUserQueryOpts } from "@/lib/query-opts";
 import loginBg from "@/assets/images/login-bg.webp";
 import {
   Card,
@@ -59,7 +59,7 @@ function LoginPage() {
       showSuccess("Welcome back!", res.message || "Login successful");
 
       queryClient.removeQueries();
-      await queryClient.fetchQuery(authUserGuardQueryOpts());
+      await queryClient.fetchQuery(authUserQueryOpts({ revalidate: true }));
 
       await navigate({
         to: redirect,

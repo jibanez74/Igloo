@@ -74,7 +74,10 @@ import {
   SHUFFLE_TRACKS_LIMIT,
 } from "@/lib/constants";
 
-// API Client - Generic request handler
+// ============================================================================
+// Request handling (shared)
+// ============================================================================
+
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
@@ -133,7 +136,10 @@ async function apiRequest<T extends Record<string, unknown>>(
   }
 }
 
-// Authentication API
+// ============================================================================
+// Auth
+// ============================================================================
+
 export const login = (email: string, password: string) =>
   apiRequest("/api/auth/login", {
     method: "POST",
@@ -148,7 +154,10 @@ export const logout = () =>
 export const getAuthUser = () =>
   apiRequest<{ user: AuthUser }>("/api/auth/user");
 
-// User Settings API
+// ============================================================================
+// User settings
+// ============================================================================
+
 export const updateUserName = (name: string) =>
   apiRequest("/api/user/name", {
     method: "PUT",
@@ -176,6 +185,8 @@ export const updateUserAvatar = (avatar: string) =>
     body: { avatar },
   });
 
+// Bypasses apiRequest because it sends multipart FormData rather than JSON, but
+// returns the same failure shape (NETWORK_ERROR) on a fetch rejection.
 export const uploadUserAvatar = async (
   file: File,
 ): Promise<ApiResponseType<{ user: AuthUser }>> => {
@@ -192,10 +203,7 @@ export const uploadUserAvatar = async (
     const data = await response.json();
     return data;
   } catch {
-    return {
-      error: true,
-      message: "Failed to upload avatar",
-    };
+    return NETWORK_ERROR;
   }
 };
 
@@ -203,6 +211,10 @@ export const deleteUserAccount = () =>
   apiRequest("/api/user", {
     method: "DELETE",
   });
+
+// ============================================================================
+// Notifications
+// ============================================================================
 
 export const createNotification = (body: CreateNotificationRequest) =>
   apiRequest<CreateNotificationResponseType>("/api/notifications", {
@@ -227,7 +239,10 @@ export const markAllNotificationsRead = () =>
 export const deleteNotification = (id: number) =>
   apiRequest(`/api/notifications/${id}`, { method: "DELETE" });
 
-// Home Page API
+// ============================================================================
+// Home / catalog + external metadata (TMDB / Spotify)
+// ============================================================================
+
 export const getLatestAlbums = () =>
   apiRequest<{ albums: SimpleAlbumType[] }>("/api/music/albums/latest");
 
@@ -245,15 +260,6 @@ export const getTmdbStatus = () =>
 
 export const getSpotifyStatus = () =>
   apiRequest<SpotifyStatusType>("/api/spotify/status");
-
-// movie details
-export const getMovieDetails = (id: number) =>
-  apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
-
-export const getMovieTechnicalDetails = (id: number) =>
-  apiRequest<MovieTechnicalDetailsResponse>(
-    `/api/movies/${id}/technical-details`,
-  );
 
 export const searchTmdbMovies = (body: TmdbSearchMoviesRequest) =>
   apiRequest<{ results: TmdbSearchResultType[] }>("/api/tmdb/movies/search", {
@@ -279,6 +285,18 @@ export const searchSpotifyTracks = (body: SpotifyTrackSearchRequest) =>
     },
   );
 
+// ============================================================================
+// Movies library (details, metadata editing, browsing, likes, watch progress)
+// ============================================================================
+
+export const getMovieDetails = (id: number) =>
+  apiRequest<LibraryMovieDetailsResponse>(`/api/movies/details/${id}`);
+
+export const getMovieTechnicalDetails = (id: number) =>
+  apiRequest<MovieTechnicalDetailsResponse>(
+    `/api/movies/${id}/technical-details`,
+  );
+
 export const identifyMovie = (movieId: number, tmdbId: number) =>
   apiRequest<Record<string, never>>(`/api/movies/${movieId}/identify`, {
     method: "PUT",
@@ -299,10 +317,6 @@ export const deleteMovie = (movieId: number, deleteFile: boolean) =>
     method: "DELETE",
     body: { delete_file: deleteFile },
   });
-
-// ============================================================================
-// Movies library page (GET /api/movies/library, /stats, /liked, playlists, like)
-// ============================================================================
 
 export const getMoviesLibrary = (
   page: number,
@@ -386,33 +400,10 @@ export const setMovieWatched = (movieId: number, watched: boolean) =>
     },
   );
 
-export const getMoviePlaylists = () =>
-  apiRequest<MoviePlaylistsListResponseType>("/api/movies/playlists");
+// ============================================================================
+// Music (albums, tracks, musicians, stats, play events)
+// ============================================================================
 
-export const getMoviePlaylistDetails = (id: number) =>
-  apiRequest<MoviePlaylistDetailResponseType>(`/api/movies/playlists/${id}`);
-
-export const getMoviePlaylistMovies = (
-  playlistId: number,
-  page: number,
-  perPage: number = MOVIES_PER_PAGE,
-  sort: "asc" | "desc" = "asc",
-) =>
-  apiRequest<MoviesLibraryPaginatedDataType>(
-    withQuery(`/api/movies/playlists/${playlistId}/movies`, {
-      page,
-      per_page: perPage,
-      sort,
-    }),
-  );
-
-export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
-  apiRequest<{ playlist: MoviePlaylistRowType }>("/api/movies/playlists", {
-    method: "POST",
-    body: data,
-  });
-
-// Music API - Albums
 export const getAlbumDetails = (id: number) =>
   apiRequest<AlbumDetailsResponseType>(`/api/music/albums/details/${id}`);
 
@@ -431,10 +422,6 @@ export const getAlbumsPaginated = (
       per_page: perPage,
     }),
   );
-
-// ============================================================================
-// Music API - Tracks
-// ============================================================================
 
 export const getTracksPaginated = (limit: number, offset: number) =>
   apiRequest<TracksListResponseType>(
@@ -466,10 +453,6 @@ export const getLikedTracks = (
 export const getLikedTrackIds = () =>
   apiRequest<{ liked_track_ids: number[] }>("/api/music/tracks/liked-ids");
 
-// ============================================================================
-// Music API - Musicians
-// ============================================================================
-
 export const getMusiciansPaginated = (
   page: number,
   perPage: number = MUSICIANS_PER_PAGE,
@@ -484,15 +467,25 @@ export const getMusiciansPaginated = (
 export const getMusicianDetails = (id: number) =>
   apiRequest<MusicianDetailsResponseType>(`/api/music/musicians/${id}`);
 
-// ============================================================================
-// Music API - Stats
-// ============================================================================
-
 export const getMusicStats = () =>
   apiRequest<MusicStatsType>("/api/music/stats");
 
+export const recordPlayEvent = (
+  trackId: number,
+  durationPlayed: number,
+  completed: boolean,
+) =>
+  apiRequest<{ recorded: boolean }>("/api/music/user-stats/play", {
+    method: "POST",
+    body: {
+      track_id: trackId,
+      duration_played: durationPlayed,
+      completed,
+    },
+  });
+
 // ============================================================================
-// Playlist API
+// Playlists (music + movie)
 // ============================================================================
 
 export const getPlaylists = () =>
@@ -550,26 +543,34 @@ export const reorderPlaylistTracks = (playlistId: number, trackIds: number[]) =>
     },
   );
 
-// ============================================================================
-// Music API - User Listening Stats
-// ============================================================================
+export const getMoviePlaylists = () =>
+  apiRequest<MoviePlaylistsListResponseType>("/api/movies/playlists");
 
-export const recordPlayEvent = (
-  trackId: number,
-  durationPlayed: number,
-  completed: boolean,
+export const getMoviePlaylistDetails = (id: number) =>
+  apiRequest<MoviePlaylistDetailResponseType>(`/api/movies/playlists/${id}`);
+
+export const getMoviePlaylistMovies = (
+  playlistId: number,
+  page: number,
+  perPage: number = MOVIES_PER_PAGE,
+  sort: "asc" | "desc" = "asc",
 ) =>
-  apiRequest<{ recorded: boolean }>("/api/music/user-stats/play", {
+  apiRequest<MoviesLibraryPaginatedDataType>(
+    withQuery(`/api/movies/playlists/${playlistId}/movies`, {
+      page,
+      per_page: perPage,
+      sort,
+    }),
+  );
+
+export const createMoviePlaylist = (data: CreateMoviePlaylistRequest) =>
+  apiRequest<{ playlist: MoviePlaylistRowType }>("/api/movies/playlists", {
     method: "POST",
-    body: {
-      track_id: trackId,
-      duration_played: durationPlayed,
-      completed,
-    },
+    body: data,
   });
 
 // ============================================================================
-// Settings API
+// Settings
 // ============================================================================
 
 export const getSettings = () => apiRequest<SettingsType>("/api/settings");
@@ -608,7 +609,10 @@ export const triggerMovieScan = () =>
     method: "POST",
   });
 
-// Admin user management API
+// ============================================================================
+// Admin user management
+// ============================================================================
+
 export const adminGetUsers = () =>
   apiRequest<{ users: AdminUserType[] }>("/api/admin/users");
 
@@ -644,7 +648,7 @@ export const adminResetUserPassword = (id: number, password: string) =>
   });
 
 // ============================================================================
-// Search API (FTS5-backed library search across movies, albums, musicians, tracks)
+// Search (FTS5-backed library search across movies, albums, musicians, tracks)
 // ============================================================================
 
 export const searchAll = (q: string) =>
@@ -704,7 +708,10 @@ export const searchTracks = (
     }),
   );
 
-// Watch rooms API
+// ============================================================================
+// Watch rooms
+// ============================================================================
+
 export const getWatchRoomInviteUsers = () =>
   apiRequest<WatchRoomInviteUsersResponseType>("/api/users");
 
