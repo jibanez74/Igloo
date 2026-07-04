@@ -1,6 +1,10 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   ArrowLeft,
   Disc3,
@@ -11,6 +15,7 @@ import {
   Music,
   Play,
   Plus,
+  RefreshCw,
   Shuffle,
   User,
   Users,
@@ -27,7 +32,8 @@ import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoader";
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
-import { showActionFailed } from "@/lib/toast-helpers";
+import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
+import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import {
@@ -271,12 +277,34 @@ function LibraryStats() {
 }
 
 function MoreMenu() {
+  const queryClient = useQueryClient();
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const [requestAlbumOpen, setRequestAlbumOpen] = useState(false);
   const [requestTrackOpen, setRequestTrackOpen] = useState(false);
   const { data: spotifyStatusData, isLoading: spotifyStatusLoading } = useQuery(
     spotifyStatusQueryOpts(),
   );
+
+  const handleRefreshLibrary = async () => {
+    if (refreshingLibrary) return;
+
+    setRefreshingLibrary(true);
+    try {
+      await refreshMusicLibraryCache(queryClient);
+      showSuccess("Library refreshed", "Music library data is up to date.");
+    } catch (error) {
+      console.error("Failed to refresh music library:", error);
+      showActionFailed(
+        "refresh library",
+        "Unable to refresh the music library. Please try again.",
+      );
+    } finally {
+      setRefreshingLibrary(false);
+      setMenuOpen(false);
+    }
+  };
   const spotifyAvailable =
     spotifyStatusData?.error === false
       ? spotifyStatusData.data.available
@@ -288,7 +316,7 @@ function MoreMenu() {
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
           className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
@@ -300,6 +328,25 @@ function MoreMenu() {
           align="end"
           className="border-border bg-muted"
         >
+          <DropdownMenuItem
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
+            disabled={refreshingLibrary}
+            onSelect={event => {
+              // Keep the menu open while the async refresh runs so the
+              // spinner/disabled state stays perceivable; it closes when the
+              // refresh settles (see handleRefreshLibrary).
+              event.preventDefault();
+              if (refreshingLibrary) return;
+              void handleRefreshLibrary();
+            }}
+          >
+            {refreshingLibrary ? (
+              <Spinner className="mr-2 size-4 text-primary" />
+            ) : (
+              <RefreshCw className="mr-2 size-4" aria-hidden="true" />
+            )}
+            Refresh Library
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             disabled={spotifyRequestDisabled}
