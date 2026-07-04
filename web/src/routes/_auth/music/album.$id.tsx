@@ -15,10 +15,15 @@ import {
   ArrowLeft,
   User,
 } from "lucide-react";
-import { albumDetailsQueryOpts, likedTrackIdsQueryOpts } from "@/lib/query-opts";
+import {
+  albumDetailsQueryOpts,
+  authUserQueryOpts,
+  likedTrackIdsQueryOpts,
+} from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +38,7 @@ import { formatDate, formatDuration } from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
   ArtistType,
+  AuthUser,
   TrackGenreType,
   TrackType,
 } from "@/types";
@@ -47,6 +53,9 @@ import {
   MUSIC_STATS_KEY,
   MOTION_LOADING_STATE_CLASS,
   MOTION_PROGRESS_FILL_CLASS,
+  SPOTIFY_BRAND_FILL_CLASS,
+  SPOTIFY_BRAND_ICON_CLASS,
+  SPOTIFY_BRAND_TEXT_CLASS,
   TRACKS_INFINITE_KEY,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -74,10 +83,15 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
     >
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-          <SpotifyGlyph className="size-4 shrink-0 text-green-500" />
+          <SpotifyGlyph className={cn("size-4 shrink-0", SPOTIFY_BRAND_ICON_CLASS)} />
           <span>Spotify popularity</span>
         </span>
-        <span className="shrink-0 font-semibold text-green-400 tabular-nums">
+        <span
+          className={cn(
+            "shrink-0 font-semibold tabular-nums",
+            SPOTIFY_BRAND_TEXT_CLASS,
+          )}
+        >
           {pct}
         </span>
       </div>
@@ -90,7 +104,8 @@ function SpotifyPopularityMeter({ score }: { score: number }) {
       >
         <div
           className={cn(
-            "h-full rounded-full bg-green-500",
+            "h-full rounded-full",
+            SPOTIFY_BRAND_FILL_CLASS,
             MOTION_PROGRESS_FILL_CLASS,
           )}
           style={{ width: `${pct}%` }}
@@ -232,6 +247,13 @@ function AlbumDetailsContent({
   const likedSet = new Set<number>(
     likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : []
   );
+
+  const { data: userData } = useQuery(authUserQueryOpts());
+  const user: AuthUser | null =
+    userData?.error === false && userData.data?.user
+      ? (userData.data.user as AuthUser)
+      : null;
+  const isAdmin = user?.is_admin === true;
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -457,48 +479,56 @@ function AlbumDetailsContent({
               )}
 
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                <button
+                <Button
                   type="button"
+                  variant="accent-pill"
+                  size="lg"
                   onClick={handlePlayAlbum}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 sm:w-auto"
+                  className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
                 >
                   <Play className="size-4 fill-current" aria-hidden="true" />
                   Play Album
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="lg"
                   onClick={handleShufflePlay}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-accent px-6 py-3 font-semibold text-foreground transition-colors hover:bg-accent sm:w-auto"
+                  className="w-full rounded-full font-semibold sm:w-auto"
                   aria-label="Shuffle play album"
                 >
                   <Shuffle className="size-4" aria-hidden="true" />
                   Shuffle
-                </button>
+                </Button>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      ref={moreOptionsButtonRef}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-accent px-4 py-3 font-semibold text-foreground transition-colors hover:bg-accent sm:w-auto"
-                      aria-label="More options"
+                {isAdmin && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        ref={moreOptionsButtonRef}
+                        variant="outline"
+                        size="lg"
+                        className="w-full rounded-full font-semibold sm:w-auto sm:px-4"
+                        aria-label="More options"
+                      >
+                        <MoreHorizontal className="size-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="border-border bg-muted"
                     >
-                      <MoreHorizontal className="size-4" aria-hidden="true" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="border-border bg-muted"
-                  >
-                    <DropdownMenuItem
-                      onClick={() => setIsDeleteDialogOpen(true)}
-                      className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 size-4" aria-hidden="true" />
-                      Delete Album
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuItem
+                        onClick={() => setIsDeleteDialogOpen(true)}
+                        className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 size-4" aria-hidden="true" />
+                        Delete Album
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
 
               <ConfirmDialog
@@ -641,7 +671,12 @@ function AlbumDetailsContent({
                     Spotify popularity
                   </dt>
                   <dd className="mt-1 flex items-baseline gap-2 text-foreground">
-                    <span className="text-lg font-semibold text-green-400 tabular-nums">
+                    <span
+                      className={cn(
+                        "text-lg font-semibold tabular-nums",
+                        SPOTIFY_BRAND_TEXT_CLASS,
+                      )}
+                    >
                       {Math.round(spotifyPopularity)}
                     </span>
                     <span className="text-muted-foreground">/ 100</span>
@@ -662,7 +697,7 @@ function AlbumDetailsContent({
             </Link>
             <Link
               to="/"
-              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary/90 sm:justify-start"
+              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary sm:justify-start"
             >
               Home
             </Link>

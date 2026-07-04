@@ -191,6 +191,16 @@ export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
   "z-100 border-border bg-muted";
 
+/**
+ * Spotify brand accent (the recognizable Spotify green). This is a deliberate
+ * *brand* color, not a semantic design token — it identifies Spotify-sourced data
+ * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.
+ * The light-theme shades are darkened so the green stays readable on light surfaces.
+ */
+export const SPOTIFY_BRAND_TEXT_CLASS = "text-green-600 dark:text-green-400";
+export const SPOTIFY_BRAND_ICON_CLASS = "text-green-600 dark:text-green-500";
+export const SPOTIFY_BRAND_FILL_CLASS = "bg-green-500";
+
 // Subtitle and language constants used to choose supported subtitle behavior
 // and format audio/subtitle labels.
 export const BITMAP_SUBTITLE_CODECS = [
