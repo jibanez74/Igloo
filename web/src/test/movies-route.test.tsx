@@ -9,6 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONTENT_FADE_TRANSITION_MS,
+  LIBRARY_MOVIE_DETAILS_KEY,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOVIES_PER_PAGE,
@@ -202,6 +203,14 @@ function mockMoviesFetch(options?: { tmdbAvailable?: boolean }) {
   return fetchMock;
 }
 
+function countFetchRequests(
+  fetchMock: ReturnType<typeof mockMoviesFetch>,
+  url: string,
+) {
+  return fetchMock.mock.calls.filter(([input]) => requestURL(input) === url)
+    .length;
+}
+
 function createMoviesQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -220,7 +229,7 @@ async function renderMoviesRoute(
   options?: { tmdbAvailable?: boolean },
 ) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockMoviesFetch(options);
+  const fetchMock = mockMoviesFetch(options);
 
   const queryClient = createMoviesQueryClient();
   const history = createMemoryHistory({
@@ -245,6 +254,7 @@ async function renderMoviesRoute(
   );
 
   return {
+    fetchMock,
     queryClient,
     router,
     ...view,
@@ -367,6 +377,49 @@ describe("movies route section motion", () => {
       screen.getByRole("tabpanel", { name: "All Movies" }).firstElementChild
         ?.className,
     ).toContain(MOTION_SECTION_ENTER_CLASS);
+  });
+});
+
+describe("movies route library refresh", () => {
+  it("refreshes active movie library queries without starting a scan", async () => {
+    const user = userEvent.setup();
+
+    const { fetchMock, queryClient } = await renderMoviesRoute("/movies/");
+
+    const statsUrl = "/api/movies/stats";
+    const libraryUrl = `/api/movies/library?page=1&per_page=${MOVIES_PER_PAGE}&sort=asc`;
+    const tmdbStatusUrl = "/api/tmdb/status";
+    const scanUrl = "/api/settings/scan/movies";
+    const inactiveDetailsKey = [LIBRARY_MOVIE_DETAILS_KEY, 999] as const;
+
+    queryClient.setQueryData(inactiveDetailsKey, {
+      error: false,
+      data: { movie: { id: 999, title: "Cached detail" } },
+    });
+
+    const initialStatsCalls = countFetchRequests(fetchMock, statsUrl);
+    const initialLibraryCalls = countFetchRequests(fetchMock, libraryUrl);
+    const initialTmdbStatusCalls = countFetchRequests(fetchMock, tmdbStatusUrl);
+
+    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Refresh Library" }),
+    );
+
+    await waitFor(() => {
+      expect(countFetchRequests(fetchMock, statsUrl)).toBeGreaterThan(
+        initialStatsCalls,
+      );
+      expect(countFetchRequests(fetchMock, libraryUrl)).toBeGreaterThan(
+        initialLibraryCalls,
+      );
+    });
+
+    expect(queryClient.getQueryData(inactiveDetailsKey)).toBeUndefined();
+    expect(countFetchRequests(fetchMock, tmdbStatusUrl)).toBe(
+      initialTmdbStatusCalls,
+    );
+    expect(countFetchRequests(fetchMock, scanUrl)).toBe(0);
   });
 });
 

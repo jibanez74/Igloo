@@ -32,26 +32,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
+import { invalidateMovieLibraryQueries } from "@/lib/movie-library-cache";
 import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   LATEST_ALBUMS_KEY,
-  LATEST_MOVIES_KEY,
-  LIBRARY_MOVIE_DETAILS_KEY,
   LIKED_TRACK_IDS_KEY,
   LIKED_TRACKS_KEY,
   MUSIC_STATS_KEY,
   MUSICIAN_DETAILS_KEY,
   MUSICIANS_PAGINATED_KEY,
-  MOVIE_PLAYLIST_MOVIES_KEY,
-  MOVIE_PLAYLIST_DETAILS_KEY,
-  MOVIE_PLAYLISTS_KEY,
-  MOVIE_TECHNICAL_DETAILS_KEY,
-  MOVIES_BY_GENRE_KEY,
-  MOVIES_GENRES_KEY,
-  MOVIES_LIBRARY_KEY,
-  MOVIES_LIKED_KEY,
-  MOVIES_STATS_KEY,
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
@@ -785,35 +775,25 @@ function invalidateScanQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   scan: ImplementedScan,
 ) {
-  const queryKeys =
-    scan === "movies"
-      ? [
-          MOVIES_STATS_KEY,
-          MOVIES_LIBRARY_KEY,
-          MOVIES_GENRES_KEY,
-          MOVIES_BY_GENRE_KEY,
-          MOVIES_LIKED_KEY,
-          LATEST_MOVIES_KEY,
-          LIBRARY_MOVIE_DETAILS_KEY,
-          MOVIE_TECHNICAL_DETAILS_KEY,
-          MOVIE_PLAYLISTS_KEY,
-          MOVIE_PLAYLIST_DETAILS_KEY,
-          MOVIE_PLAYLIST_MOVIES_KEY,
-        ]
-      : [
-          MUSIC_STATS_KEY,
-          LATEST_ALBUMS_KEY,
-          ALBUMS_PAGINATED_KEY,
-          ALBUM_DETAILS_KEY,
-          MUSICIANS_PAGINATED_KEY,
-          MUSICIAN_DETAILS_KEY,
-          TRACKS_INFINITE_KEY,
-          LIKED_TRACKS_KEY,
-          LIKED_TRACK_IDS_KEY,
-          PLAYLISTS_KEY,
-          PLAYLIST_DETAILS_KEY,
-          PLAYLIST_TRACKS_KEY,
-        ];
+  if (scan === "movies") {
+    invalidateMovieLibraryQueries(queryClient);
+    return;
+  }
+
+  const queryKeys = [
+    MUSIC_STATS_KEY,
+    LATEST_ALBUMS_KEY,
+    ALBUMS_PAGINATED_KEY,
+    ALBUM_DETAILS_KEY,
+    MUSICIANS_PAGINATED_KEY,
+    MUSICIAN_DETAILS_KEY,
+    TRACKS_INFINITE_KEY,
+    LIKED_TRACKS_KEY,
+    LIKED_TRACK_IDS_KEY,
+    PLAYLISTS_KEY,
+    PLAYLIST_DETAILS_KEY,
+    PLAYLIST_TRACKS_KEY,
+  ];
 
   queryKeys.forEach(key => {
     queryClient.invalidateQueries({ queryKey: [key] });

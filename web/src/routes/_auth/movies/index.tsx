@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
@@ -17,6 +17,7 @@ import {
   ListVideo,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   X,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import CreateMoviePlaylistDialog from "@/components/CreateMoviePlaylistDialog";
 import MovieCard from "@/components/MovieCard";
@@ -52,6 +54,8 @@ import {
 } from "@/lib/query-opts";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
+import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
+import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import RequestMovieDialog from "@/components/RequestMovieDialog";
@@ -349,7 +353,9 @@ function MoreMenu({
   onOpenLikedMovies,
   onOpenMoviePlaylists,
 }: MoreMenuProps) {
+  const queryClient = useQueryClient();
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const [requestMovieOpen, setRequestMovieOpen] = useState(false);
   const { data: tmdbStatusData, isLoading: tmdbStatusLoading } = useQuery(
     tmdbStatusQueryOpts(),
@@ -360,6 +366,23 @@ function MoreMenu({
   const requestMovieDescription = tmdbStatusLoading
     ? "TMDB search status is still loading."
     : "TMDB search is unavailable on this server.";
+
+  const handleRefreshLibrary = async () => {
+    if (refreshingLibrary) return;
+
+    setRefreshingLibrary(true);
+    try {
+      await refreshMovieLibraryCache(queryClient);
+      showSuccess("Library refreshed", "Movie library data is up to date.");
+    } catch {
+      showActionFailed(
+        "refresh library",
+        "Unable to refresh the movie library. Please try again.",
+      );
+    } finally {
+      setRefreshingLibrary(false);
+    }
+  };
 
   return (
     <>
@@ -388,6 +411,24 @@ function MoreMenu({
           >
             <ListVideo className="mr-2 size-4" aria-hidden="true" />
             Movie playlists
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
+            disabled={refreshingLibrary}
+            onSelect={(event) => {
+              if (refreshingLibrary) {
+                event.preventDefault();
+                return;
+              }
+              void handleRefreshLibrary();
+            }}
+          >
+            {refreshingLibrary ? (
+              <Spinner className="mr-2 size-4 text-primary" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="mr-2 size-4" aria-hidden="true" />
+            )}
+            Refresh Library
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
