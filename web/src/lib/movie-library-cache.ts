@@ -38,7 +38,7 @@ export async function refreshMovieLibraryCache(queryClient: QueryClient) {
   await Promise.all(
     MOVIE_LIBRARY_QUERY_KEYS.map(async key => {
       queryClient.removeQueries({ queryKey: [key], type: "inactive" });
-      await queryClient.resetQueries(
+      await queryClient.refetchQueries(
         { queryKey: [key], type: "active" },
         { throwOnError: true },
       );

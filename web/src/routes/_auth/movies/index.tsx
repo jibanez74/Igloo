@@ -355,6 +355,7 @@ function MoreMenu({
 }: MoreMenuProps) {
   const queryClient = useQueryClient();
   const moreOptionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const [requestMovieOpen, setRequestMovieOpen] = useState(false);
   const { data: tmdbStatusData, isLoading: tmdbStatusLoading } = useQuery(
@@ -374,19 +375,21 @@ function MoreMenu({
     try {
       await refreshMovieLibraryCache(queryClient);
       showSuccess("Library refreshed", "Movie library data is up to date.");
-    } catch {
+    } catch (error) {
+      console.error("Failed to refresh movie library:", error);
       showActionFailed(
         "refresh library",
         "Unable to refresh the movie library. Please try again.",
       );
     } finally {
       setRefreshingLibrary(false);
+      setMenuOpen(false);
     }
   };
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
           className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
@@ -416,15 +419,16 @@ function MoreMenu({
             className="cursor-pointer text-foreground focus:bg-accent focus:text-foreground"
             disabled={refreshingLibrary}
             onSelect={(event) => {
-              if (refreshingLibrary) {
-                event.preventDefault();
-                return;
-              }
+              // Keep the menu open while the async refresh runs so the
+              // spinner/disabled state stays perceivable; it closes when the
+              // refresh settles (see handleRefreshLibrary).
+              event.preventDefault();
+              if (refreshingLibrary) return;
               void handleRefreshLibrary();
             }}
           >
             {refreshingLibrary ? (
-              <Spinner className="mr-2 size-4 text-primary" aria-hidden="true" />
+              <Spinner className="mr-2 size-4 text-primary" />
             ) : (
               <RefreshCw className="mr-2 size-4" aria-hidden="true" />
             )}
