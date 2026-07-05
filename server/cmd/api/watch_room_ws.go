@@ -22,6 +22,23 @@ import (
 
 const watchRoomPositionDriftFloor = 0.0
 
+const (
+	watchRoomWriteTimeout = 5 * time.Second
+	// Deep enough to absorb legitimate broadcast bursts (e.g. several
+	// members seeking rapidly at once) without evicting a healthy client
+	// whose writer is momentarily behind; a truly stalled consumer stops
+	// draining entirely and still overflows it.
+	watchRoomSendBufferSize = 256
+)
+
+// Vars rather than consts so tests can shrink them.
+var (
+	watchRoomReadTimeout = 60 * time.Second
+	// Must be shorter than watchRoomReadTimeout so pongs keep idle
+	// connections alive even when the client's JS timers are throttled.
+	watchRoomPingInterval = 40 * time.Second
+)
+
 type watchRoomPlaybackState struct {
 	Paused      bool      `json:"paused"`
 	PositionSec float64   `json:"position_sec"`
@@ -42,10 +59,22 @@ type watchRoomServerEvent struct {
 }
 
 type watchRoomClient struct {
-	conn   *websocket.Conn
-	roomID int64
-	user   watchRoomMemberSummary
-	mu     sync.Mutex
+	conn      *websocket.Conn
+	roomID    int64
+	user      watchRoomMemberSummary
+	send      chan []byte
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func newWatchRoomClient(conn *websocket.Conn, roomID int64, user watchRoomMemberSummary) *watchRoomClient {
+	return &watchRoomClient{
+		conn:   conn,
+		roomID: roomID,
+		user:   user,
+		send:   make(chan []byte, watchRoomSendBufferSize),
+		done:   make(chan struct{}),
+	}
 }
 
 type watchRoomSession struct {
@@ -224,6 +253,11 @@ func (hub *WatchRoomHub) applyPlaybackEvent(roomID int64, eventType string, posi
 }
 
 func (hub *WatchRoomHub) broadcast(roomID int64, payload watchRoomServerEvent) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
 	hub.mu.Lock()
 	session, ok := hub.sessions[roomID]
 	if !ok {
@@ -238,11 +272,16 @@ func (hub *WatchRoomHub) broadcast(roomID int64, payload watchRoomServerEvent) {
 	hub.mu.Unlock()
 
 	for _, client := range clients {
-		client.writeJSON(payload)
+		client.enqueue(data)
 	}
 }
 
 func (hub *WatchRoomHub) broadcastToOthers(roomID int64, sender *watchRoomClient, payload watchRoomServerEvent) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
 	hub.mu.Lock()
 	session, ok := hub.sessions[roomID]
 	if !ok {
@@ -259,7 +298,7 @@ func (hub *WatchRoomHub) broadcastToOthers(roomID int64, sender *watchRoomClient
 	hub.mu.Unlock()
 
 	for _, client := range clients {
-		client.writeJSON(payload)
+		client.enqueue(data)
 	}
 }
 
@@ -286,14 +325,16 @@ func (hub *WatchRoomHub) deleteRoom(roomID int64) {
 		return
 	}
 
-	event := watchRoomServerEvent{
+	data, err := json.Marshal(watchRoomServerEvent{
 		Type:   "room_deleted",
 		RoomID: roomID,
-	}
+	})
 
 	for _, client := range clients {
-		client.writeJSON(event)
-		_ = client.conn.Close()
+		if err == nil {
+			client.enqueue(data)
+		}
+		client.close()
 	}
 }
 
@@ -309,15 +350,76 @@ func (hub *WatchRoomHub) Shutdown() {
 	hub.mu.Unlock()
 
 	for _, client := range clients {
-		_ = client.conn.Close()
+		client.close()
 	}
 }
 
-func (client *watchRoomClient) writeJSON(payload watchRoomServerEvent) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	_ = client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	_ = client.conn.WriteJSON(payload)
+// close signals the writer goroutine to flush queued payloads and shut the
+// connection down. Safe to call from any goroutine, any number of times.
+func (client *watchRoomClient) close() {
+	client.closeOnce.Do(func() {
+		close(client.done)
+	})
+}
+
+// enqueue queues a payload without blocking. A full outbox means the peer has
+// stalled; it gets evicted instead of delaying the rest of the room.
+func (client *watchRoomClient) enqueue(payload []byte) {
+	select {
+	case client.send <- payload:
+	default:
+		client.close()
+	}
+}
+
+func (client *watchRoomClient) enqueueEvent(payload watchRoomServerEvent) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	client.enqueue(data)
+}
+
+func (client *watchRoomClient) write(messageType int, payload []byte) bool {
+	_ = client.conn.SetWriteDeadline(time.Now().Add(watchRoomWriteTimeout))
+	return client.conn.WriteMessage(messageType, payload) == nil
+}
+
+// writePump is the sole writer for the connection. It drains the outbox,
+// keeps the peer alive with ping control frames, and on shutdown flushes any
+// queued payloads (e.g. room_deleted) before closing the connection, which
+// in turn unblocks the read loop.
+func (client *watchRoomClient) writePump() {
+	ticker := time.NewTicker(watchRoomPingInterval)
+	defer func() {
+		ticker.Stop()
+		client.close()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		select {
+		case payload := <-client.send:
+			if !client.write(websocket.TextMessage, payload) {
+				return
+			}
+		case <-ticker.C:
+			if !client.write(websocket.PingMessage, nil) {
+				return
+			}
+		case <-client.done:
+			for {
+				select {
+				case payload := <-client.send:
+					if !client.write(websocket.TextMessage, payload) {
+						return
+					}
+				default:
+					return
+				}
+			}
+		}
+	}
 }
 
 func pointerToPlaybackState(state watchRoomPlaybackState) *watchRoomPlaybackState {
@@ -534,14 +636,11 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		app.Wait.Add(1)
 	}
 
-	client := &watchRoomClient{
-		conn:   conn,
-		roomID: room.ID,
-		user:   member,
-	}
+	client := newWatchRoomClient(conn, room.ID, member)
+	go client.writePump()
 
 	snapshot, firstConnection := app.WatchRoomHub.connect(room.ID, client)
-	client.writeJSON(snapshot)
+	client.enqueueEvent(snapshot)
 	if firstConnection {
 		if event := app.WatchRoomHub.memberJoinedEvent(room.ID, member); event != nil {
 			app.WatchRoomHub.broadcastToOthers(room.ID, client, *event)
@@ -555,17 +654,20 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		if event := app.WatchRoomHub.disconnect(client); event != nil {
 			app.WatchRoomHub.broadcast(room.ID, *event)
 		}
-		_ = conn.Close()
+		client.close()
 	}()
 
-	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(watchRoomReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(watchRoomReadTimeout))
+	})
 
 	for {
 		_, rawMessage, err := conn.ReadMessage()
 		if err != nil {
 			return
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(watchRoomReadTimeout))
 
 		var event watchRoomClientEvent
 		err = json.Unmarshal(rawMessage, &event)
@@ -576,16 +678,10 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 		switch event.Type {
 		case "join":
 			if fresh := app.WatchRoomHub.currentSnapshot(room.ID); fresh != nil {
-				client.writeJSON(*fresh)
+				client.enqueueEvent(*fresh)
 			}
 		case "ping":
-			client.mu.Lock()
-			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			err = conn.WriteJSON(watchRoomServerEvent{Type: "pong", RoomID: room.ID})
-			client.mu.Unlock()
-			if err != nil {
-				return
-			}
+			client.enqueueEvent(watchRoomServerEvent{Type: "pong", RoomID: room.ID})
 		case "play", "pause", "seek":
 			positionSec := -1.0
 			if event.PositionSec != nil {

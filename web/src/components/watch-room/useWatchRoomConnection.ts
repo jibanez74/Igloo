@@ -15,7 +15,7 @@ import type {
   WatchRoomServerEventType,
 } from "@/types";
 
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_DELAY_MS = 16_000;
 
 type UseWatchRoomConnectionOptions = {
   currentRoomId: number | null;
@@ -208,11 +208,11 @@ export function useWatchRoomConnection({
     setConnectionReady(false);
     clearHeartbeat();
     if (closedInstanceId !== socketInstanceIdRef.current) return;
-    if (
-      !intentionalCloseRef.current &&
-      reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
-    ) {
-      const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 16_000);
+    if (!intentionalCloseRef.current) {
+      const delay = Math.min(
+        1000 * 2 ** Math.min(reconnectAttemptsRef.current, 10),
+        MAX_RECONNECT_DELAY_MS,
+      );
       reconnectAttemptsRef.current += 1;
       setPlaybackError(null);
       reconnectTimeoutRef.current = window.setTimeout(() => {

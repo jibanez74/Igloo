@@ -281,13 +281,10 @@ func attachShutdownTestWatchRoomClient(app *Application, socketMarker string) er
 		return syscall.ETIMEDOUT
 	}
 
-	client := &watchRoomClient{
-		conn:   serverConn,
-		roomID: 999,
-		user: watchRoomMemberSummary{
-			ID: 777,
-		},
-	}
+	client := newWatchRoomClient(serverConn, 999, watchRoomMemberSummary{
+		ID: 777,
+	})
+	go client.writePump()
 
 	app.WatchRoomHub.mu.Lock()
 	session := app.WatchRoomHub.getOrCreateSession(client.roomID)

@@ -925,3 +925,88 @@ func TestWatchRoomHub_ShutdownIsIdempotent(t *testing.T) {
 	hub.Shutdown()
 	hub.Shutdown()
 }
+
+func TestWatchRoomClient_EnqueueEvictsStalledClientWithoutBlocking(t *testing.T) {
+	client := newWatchRoomClient(nil, 1, watchRoomMemberSummary{ID: 1})
+
+	for i := 0; i < watchRoomSendBufferSize; i++ {
+		client.send <- []byte("queued")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		client.enqueue([]byte("overflow"))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("enqueue blocked on a full outbox")
+	}
+
+	select {
+	case <-client.done:
+	default:
+		t.Fatal("expected stalled client to be marked closed when its outbox is full")
+	}
+}
+
+func TestWatchRoomWebSocket_ServerPingKeepsIdleConnectionAlive(t *testing.T) {
+	origReadTimeout := watchRoomReadTimeout
+	origPingInterval := watchRoomPingInterval
+	watchRoomReadTimeout = 250 * time.Millisecond
+	watchRoomPingInterval = 100 * time.Millisecond
+	defer func() {
+		watchRoomReadTimeout = origReadTimeout
+		watchRoomPingInterval = origPingInterval
+	}()
+
+	app := setupTestApp(t)
+	defer closeWatchRoomWSTestApp(t, app)
+
+	ownerID, movieID := createTestUserAndMovie(t, app)
+	room := createTestRoom(t, app, ownerID, movieID)
+	addMembersToRoom(t, app, room.ID, ownerID)
+	server := setupWatchRoomWSTestServer(t, app)
+	defer server.Close()
+
+	conn, _ := dialWatchRoomSocket(t, app, server.URL, room.ID, ownerID)
+	defer conn.Close()
+
+	_ = readUntilEventType(t, conn, "room_snapshot")
+
+	// Block in a read for several server read-timeout windows. Gorilla's
+	// default ping handler answers the server's ping control frames while
+	// this goroutine is blocked reading, which must keep the connection
+	// alive; a server-side disconnect would surface as a read error.
+	type readResult struct {
+		event watchRoomWSTestEvent
+		err   error
+	}
+	results := make(chan readResult, 1)
+	go func() {
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var event watchRoomWSTestEvent
+		err := conn.ReadJSON(&event)
+		results <- readResult{event: event, err: err}
+	}()
+
+	time.Sleep(time.Second)
+
+	if err := conn.WriteJSON(map[string]any{"type": "ping"}); err != nil {
+		t.Fatalf("write ping after idle period: %v", err)
+	}
+
+	select {
+	case res := <-results:
+		if res.err != nil {
+			t.Fatalf("connection dropped while idle: %v", res.err)
+		}
+		if res.event.Type != "pong" || res.event.RoomID != room.ID {
+			t.Fatalf("unexpected event after idle period: %+v", res.event)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for pong after idle period")
+	}
+}

@@ -25,6 +25,7 @@ type MockVideoPlayerProps = {
   title: string;
   onPlay?: () => void;
   onPause?: () => void;
+  onEnded?: () => void;
   onTimeUpdate?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
 };
@@ -39,6 +40,7 @@ const mockVideoController = {
   pauseCalls: 0,
   onPlay: undefined as (() => void) | undefined,
   onPause: undefined as (() => void) | undefined,
+  onEnded: undefined as (() => void) | undefined,
   onTimeUpdate: undefined as ((time: number) => void) | undefined,
   onDurationChange: undefined as ((duration: number) => void) | undefined,
 
@@ -52,6 +54,7 @@ const mockVideoController = {
     this.pauseCalls = 0;
     this.onPlay = undefined;
     this.onPause = undefined;
+    this.onEnded = undefined;
     this.onTimeUpdate = undefined;
     this.onDurationChange = undefined;
   },
@@ -67,6 +70,7 @@ const mockVideoController = {
     this.element = node;
     this.onPlay = props.onPlay;
     this.onPause = props.onPause;
+    this.onEnded = props.onEnded;
     this.onTimeUpdate = props.onTimeUpdate;
     this.onDurationChange = props.onDurationChange;
 
@@ -208,6 +212,7 @@ class FakeWebSocket {
   static CLOSING = 2;
   static CLOSED = 3;
   static instances: FakeWebSocket[] = [];
+  static autoOpen = true;
 
   readyState = FakeWebSocket.CONNECTING;
   sentMessages: string[] = [];
@@ -219,7 +224,7 @@ class FakeWebSocket {
     FakeWebSocket.instances.push(this);
     this.readyState = FakeWebSocket.OPEN;
     queueMicrotask(() => {
-      if (this.readyState === FakeWebSocket.OPEN) {
+      if (FakeWebSocket.autoOpen && this.readyState === FakeWebSocket.OPEN) {
         this.dispatch("open", new Event("open"));
       }
     });
@@ -330,6 +335,7 @@ describe("WatchRoomPageContent", () => {
 
   beforeEach(() => {
     FakeWebSocket.instances = [];
+    FakeWebSocket.autoOpen = true;
     mockVideoController.reset();
     navigateMock.mockReset();
     useQueryMock.mockReset();
@@ -681,6 +687,227 @@ describe("WatchRoomPageContent", () => {
       expect(FakeWebSocket.instances).toHaveLength(2);
     });
     expect(FakeWebSocket.instances[1].url).toContain("/api/watch-rooms/7/ws");
+  });
+
+  it("keeps reconnecting with capped backoff after more than five consecutive failures", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    // Subsequent sockets never fire "open", so every close below counts as
+    // a consecutive connection failure and the backoff must keep growing.
+    FakeWebSocket.autoOpen = false;
+
+    const scheduledDelays: number[] = [];
+
+    for (let failure = 1; failure <= 7; failure++) {
+      const socket = FakeWebSocket.instances.at(-1);
+      if (!socket) {
+        throw new Error("Expected an active socket.");
+      }
+
+      const callbacks: { reconnect?: () => void } = {};
+      const setTimeoutSpy = vi
+        .spyOn(window, "setTimeout")
+        .mockImplementation((handler: TimerHandler, timeout?: number) => {
+          if (
+            typeof handler === "function" &&
+            typeof timeout === "number" &&
+            timeout >= 1000
+          ) {
+            callbacks.reconnect = handler as () => void;
+            scheduledDelays.push(timeout);
+          }
+          return 1;
+        });
+
+      try {
+        act(() => {
+          socket.serverClose();
+        });
+        const reconnect = callbacks.reconnect;
+        if (!reconnect) {
+          throw new Error(
+            `Expected a reconnect to be scheduled after failure ${failure}.`,
+          );
+        }
+        act(() => {
+          reconnect();
+        });
+      } finally {
+        setTimeoutSpy.mockRestore();
+      }
+
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(failure + 1);
+      });
+    }
+
+    expect(scheduledDelays).toEqual([
+      1000, 2000, 4000, 8000, 16_000, 16_000, 16_000,
+    ]);
+  });
+
+  it("only hard-seeks when remote playback drifts past the sync threshold", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+
+    mockVideoController.currentTime = 10;
+
+    // Drift below the 1.5s threshold: position must be left alone.
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: true,
+        position_sec: 10.8,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /play playback/i }),
+      ).toBeInTheDocument();
+    });
+    expect(mockVideoController.currentTime).toBe(10);
+
+    // Drift far past the threshold: the player must hard-seek.
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: true,
+        position_sec: 40,
+        updated_at: "2026-04-18T12:00:05Z",
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockVideoController.currentTime).toBe(40);
+    });
+  });
+
+  it("compensates for time elapsed between receiving a sync and media readiness", async () => {
+    const baseNow = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(baseNow);
+
+    try {
+      mockVideoController.readyState = 0;
+      renderRoomPage(buildRoom({ is_owner: false }));
+
+      await waitFor(() => {
+        expect(FakeWebSocket.instances).toHaveLength(1);
+      });
+
+      FakeWebSocket.instances[0].emitMessage({
+        type: "playback_changed",
+        room_id: 7,
+        playback: {
+          paused: false,
+          position_sec: 50,
+          updated_at: "2026-04-18T12:00:00Z",
+        },
+      });
+
+      // Media takes two (mocked) seconds to become ready; the applied
+      // position must include that elapsed time.
+      nowSpy.mockReturnValue(baseNow + 2000);
+      mockVideoController.setReadyState(4);
+
+      await waitFor(() => {
+        expect(mockVideoController.currentTime).toBe(52);
+        expect(mockVideoController.playCalls).toBe(1);
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("surfaces an autoplay-permission error when the browser blocks synced play", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.element).not.toBeNull();
+    });
+
+    const video = mockVideoController.element;
+    if (!video) {
+      throw new Error("Expected mock video element.");
+    }
+    Object.defineProperty(video, "play", {
+      configurable: true,
+      value: vi.fn(async () => {
+        throw new DOMException("play blocked", "NotAllowedError");
+      }),
+    });
+
+    FakeWebSocket.instances[0].emitMessage({
+      type: "playback_changed",
+      room_id: 7,
+      playback: {
+        paused: false,
+        position_sec: 30,
+        updated_at: "2026-04-18T12:00:00Z",
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/press play to continue syncing/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("broadcasts a pause to the room when local playback ends", async () => {
+    renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(mockVideoController.onEnded).toBeDefined();
+    });
+
+    mockVideoController.currentTime = 118;
+    act(() => {
+      mockVideoController.onEnded?.();
+    });
+
+    const socket = FakeWebSocket.instances[0];
+    await waitFor(() => {
+      expect(JSON.parse(socket.sentMessages.at(-1) ?? "{}")).toEqual({
+        type: "pause",
+        position_sec: 118,
+      });
+    });
+  });
+
+  it("closes the socket intentionally on unmount without scheduling a reconnect", async () => {
+    const { unmount } = renderRoomPage(buildRoom({ is_owner: false }));
+
+    await waitFor(() => {
+      expect(FakeWebSocket.instances).toHaveLength(1);
+    });
+    const socket = FakeWebSocket.instances[0];
+
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+    try {
+      unmount();
+
+      expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
+      const reconnectSchedules = setTimeoutSpy.mock.calls.filter(
+        ([, timeout]) => typeof timeout === "number" && timeout >= 1000,
+      );
+      expect(reconnectSchedules).toHaveLength(0);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+    expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
   it("redirects invited members gracefully when the room_deleted event arrives", async () => {
