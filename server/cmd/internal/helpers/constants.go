@@ -2,55 +2,16 @@ package helpers
 
 import "time"
 
+// Process configuration and filesystem defaults used while bootstrapping the API.
 const (
 	ENV_FILE = ".env"
-	// logger
-	LOGGER_MAX_LINES = 500
 
-	// hardware acceleration
-	HARDWARE_ACCELERATION_DEVICE_CPU    = "cpu"
-	HARDWARE_ACCELERATION_DEVICE_APPLE  = "apple"
-	HARDWARE_ACCELERATION_DEVICE_NVIDIA = "nvidia"
-	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
-
-	// media scanner
-	SCANNER_BATCH_SIZE = 54
-
-	// playlists — content_type discriminator (movies page / unified playlists table)
-	PLAYLIST_CONTENT_TYPE_TRACK = "track"
-	PLAYLIST_CONTENT_TYPE_MOVIE = "movie"
-	// max JSON body size for playlist create/update/add-movies requests
-	MAX_PLAYLIST_REQUEST_SIZE = 1024 * 1024 // 1MB
-
-	// movies library API (paginated list; align with music musicians defaults)
-	MOVIES_LIBRARY_DEFAULT_PER_PAGE = 24
-	MOVIES_LIBRARY_MAX_PER_PAGE     = 48
-
-	// library search (FTS5-backed; used by /api/search and per-entity search endpoints)
-	SEARCH_DEFAULT_PER_PAGE = 24
-	SEARCH_MAX_PER_PAGE     = 48
-	SEARCH_ALL_TOP_N        = 8
-
-	// cookie settings
-	COOKIE_USER_ID = "user_id"
-
-	// default admin bootstrap (InitDefaultUser when the database has no admin)
-	DEFAULT_ADMIN_NAME     = "Admin"
-	DEFAULT_ADMIN_EMAIL    = "admin@sample.com"
-	DEFAULT_ADMIN_PASSWORD = "AdminPassword"
-
-	ENV_DEFAULT_ADMIN_NAME     = "DEFAULT_ADMIN_NAME"
-	ENV_DEFAULT_ADMIN_EMAIL    = "DEFAULT_ADMIN_EMAIL"
-	ENV_DEFAULT_ADMIN_PASSWORD = "DEFAULT_ADMIN_PASSWORD"
-
-	// app startup defaults (used by cmd/api/main.go for InitDB / InitLogger / InitSettings)
 	DEFAULT_APP_PORT      = 8080
 	DEFAULT_DB_PATH       = "db/igloo.db"
 	DEFAULT_STATIC_DIR    = "static"
 	DEFAULT_LOGS_DIR      = "logs"
 	DEFAULT_TRANSCODE_DIR = "transcode"
 
-	// env vars consumed at startup
 	ENV_DB_PATH               = "DB_PATH"
 	ENV_STATIC_DIR            = "STATIC_DIR"
 	ENV_LOGS_DIR              = "LOGS_DIR"
@@ -58,19 +19,74 @@ const (
 	ENV_SESSION_COOKIE_SECURE = "SESSION_COOKIE_SECURE"
 	ENV_LOG_TO_STDOUT         = "LOG_TO_STDOUT"
 	ENV_PORT                  = "PORT"
+)
 
-	// error messages
+// Logging controls shared by the API logger and log file helpers.
+const (
+	LOGGER_MAX_LINES = 500
+)
+
+// Auth cookie names and the bootstrap admin used when no admin exists yet.
+const (
+	COOKIE_USER_ID = "user_id"
+
+	DEFAULT_ADMIN_NAME     = "Admin"
+	DEFAULT_ADMIN_EMAIL    = "admin@sample.com"
+	DEFAULT_ADMIN_PASSWORD = "AdminPassword"
+
+	ENV_DEFAULT_ADMIN_NAME     = "DEFAULT_ADMIN_NAME"
+	ENV_DEFAULT_ADMIN_EMAIL    = "DEFAULT_ADMIN_EMAIL"
+	ENV_DEFAULT_ADMIN_PASSWORD = "DEFAULT_ADMIN_PASSWORD"
+)
+
+// Shared API messages kept consistent across handlers.
+const (
 	INTERNAL_SERVER_ERROR       = "The server encountered an unexpected error"
 	NOT_AUTHORIZED_MESSAGE      = "not authorized"
 	INVALID_CREDENTIALS_MESSAGE = "invalid email or password provided"
+)
 
-	// notification titles (persisted enum values in notifications.title)
+// Hardware acceleration device identifiers accepted by transcoding settings.
+const (
+	HARDWARE_ACCELERATION_DEVICE_CPU    = "cpu"
+	HARDWARE_ACCELERATION_DEVICE_APPLE  = "apple"
+	HARDWARE_ACCELERATION_DEVICE_NVIDIA = "nvidia"
+	HARDWARE_ACCELERATION_DEVICE_INTEL  = "intel"
+)
+
+// Media scanner and library pagination limits keep scans and list responses bounded.
+const (
+	SCANNER_BATCH_SIZE = 54
+
+	MOVIES_LIBRARY_DEFAULT_PER_PAGE = 24
+	MOVIES_LIBRARY_MAX_PER_PAGE     = 48
+)
+
+// Library search limits are shared by FTS-backed search and per-entity search endpoints.
+const (
+	SEARCH_DEFAULT_PER_PAGE = 24
+	SEARCH_MAX_PER_PAGE     = 48
+	SEARCH_ALL_TOP_N        = 8
+)
+
+// Playlist constants cover the unified playlist table discriminator and request limits.
+const (
+	PLAYLIST_CONTENT_TYPE_TRACK = "track"
+	PLAYLIST_CONTENT_TYPE_MOVIE = "movie"
+
+	MAX_PLAYLIST_REQUEST_SIZE = 1024 * 1024 // 1 MB
+)
+
+// Notification title values are persisted in notifications.title.
+const (
 	NOTIFICATION_TITLE_MOVIE_REQUEST = "movie_request"
 	NOTIFICATION_TITLE_ALBUM_REQUEST = "album_request"
 	NOTIFICATION_TITLE_TRACK_REQUEST = "track_request"
 	NOTIFICATION_TITLE_OTHER         = "other"
+)
 
-	// constants for tmdb
+// TMDB API, image sizing, and retry policy used by metadata enrichment.
+const (
 	TMDB_BASE_API_URL          = "https://api.themoviedb.org/3"
 	TMDB_IMAGE_BASE_URL        = "https://image.tmdb.org/t/p"
 	TMDB_IMAGE_SIZE            = "original"
@@ -86,29 +102,39 @@ const (
 	// TMDB_YEAR_MATCH_SCORE is the score bonus for exact year matches in TMDB search results.
 	// This ensures exact year matches are prioritized over popularity/vote average.
 	TMDB_YEAR_MATCH_SCORE = 10000.0
+)
 
-	// HLS encoding profile IDs (allowed list in hls_profiles.go; used in URLs and validation).
+// HLS profile identifiers are URL-visible values accepted by hls_profiles.go.
+const (
 	HLS_PROFILE_REMUX        = "remux"
 	HLS_PROFILE_2160P_16MBPS = "2160p_16mbps"
 	HLS_PROFILE_1080P_8MBPS  = "1080p_8mbps"
 	HLS_PROFILE_1080P_6MBPS  = "1080p_6mbps"
 	HLS_PROFILE_1080P_4MBPS  = "1080p_4mbps"
 	HLS_PROFILE_720P_3MBPS   = "720p_3mbps"
+)
 
-	// HLS transcoding
+// HLS segment generation and remux validation settings.
+const (
 	HLS_SEGMENT_TIME_SEC = 4 // segment duration in seconds for fMP4 HLS
+
 	// HLS_COPY_VIDEO_TARGET_DURATION is the TARGETDURATION ceiling used when FFmpeg
 	// runs in -c:v copy mode. Copy mode splits only at keyframe boundaries, so
 	// segments can far exceed HLS_SEGMENT_TIME_SEC. 30s covers all practical GOPs.
 	HLS_COPY_VIDEO_TARGET_DURATION = 30
+
 	// HLS remux preflight checks the first few complete segments before the
 	// manifest is served so copied H.264 streams can fall back to transcode
 	// before playback begins.
-	HLS_REMUX_PREVALIDATE_SEGMENTS     = 4
-	HLS_REMUX_PREVALIDATE_TIMEOUT      = 30 * time.Second
-	HLS_REMUX_SAFETY_CACHE_TTL         = 24 * time.Hour
-	HLS_REMUX_SAFETY_CACHE_SWEEP       = 1 * time.Hour
-	// Transcode pacing: keep FFmpeg roughly HLS_READRATE_SPEED× realtime instead
+	HLS_REMUX_PREVALIDATE_SEGMENTS = 4
+	HLS_REMUX_PREVALIDATE_TIMEOUT  = 30 * time.Second
+	HLS_REMUX_SAFETY_CACHE_TTL     = 24 * time.Hour
+	HLS_REMUX_SAFETY_CACHE_SWEEP   = 1 * time.Hour
+)
+
+// HLS process pacing, concurrency, and diagnostics keep local transcodes predictable.
+const (
+	// Transcode pacing: keep FFmpeg roughly HLS_READRATE_SPEED times realtime instead
 	// of racing to end of file, after an initial burst that fills the player
 	// buffer quickly. Applied only when the ffmpeg build supports -readrate.
 	HLS_READRATE_SPEED             = 4
@@ -117,19 +143,28 @@ const (
 	ENV_HLS_MAX_CPU_TRANSCODES         = "HLS_MAX_CPU_TRANSCODES"
 	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR  = 4
 	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC = 5
-	HLS_PLAYBACK_SESSION_ID_PATTERN    = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
 
-	// HDR transfer characteristics as reported by ffprobe (color_transfer field).
-	// Used to detect HDR sources that require tone-mapping when transcoding to SDR.
-	HDR_TRANSFER_PQ                = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
-	HDR_TRANSFER_HLG               = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
-	HLS_STDERR_TAIL_LINES          = 20             // lines of FFmpeg stderr kept for error reporting
+	HLS_STDERR_TAIL_LINES          = 20 // lines of FFmpeg stderr kept for error reporting
 	HLS_STDERR_SCANNER_BUFFER_SIZE = 64 * 1024
 	HLS_STDERR_SCANNER_MAX_TOKEN   = 1024 * 1024
-	HLS_SESSION_TTL                = 30 * time.Minute // TTL for cached HLS session entries
-	HLS_SESSION_CACHE_SWEEP        = 10 * time.Minute // interval for removing expired HLS session entries
+)
 
-	// HLS HTTP: manifest polling, response headers, and fMP4 filenames (match FFmpeg output)
+// HDR transfer characteristics reported by ffprobe and SDR color output parameters.
+const (
+	HDR_TRANSFER_PQ      = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
+	HDR_TRANSFER_HLG     = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
+	HLS_SDR_COLOR_PARAMS = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
+)
+
+// HLS session cache and playback-session request validation.
+const (
+	HLS_PLAYBACK_SESSION_ID_PATTERN = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+	HLS_SESSION_TTL                 = 30 * time.Minute // TTL for cached HLS session entries
+	HLS_SESSION_CACHE_SWEEP         = 10 * time.Minute // interval for removing expired HLS session entries
+)
+
+// HLS HTTP serving constants for manifest polling, content types, and FFmpeg fMP4 filenames.
+const (
 	HLS_SEGMENT_WAIT              = 120 * time.Second
 	HLS_SEGMENT_POLL              = 250 * time.Millisecond
 	HLS_PLAYLIST_CONTENT_TYPE     = "application/vnd.apple.mpegurl"
@@ -137,16 +172,21 @@ const (
 	HLS_INIT_FILENAME             = "init.mp4"
 	HLS_SEGMENT_FILENAME_PREFIX   = "segment_"
 	HLS_SEGMENT_FILENAME_SUFFIX   = ".m4s"
-	HLS_SDR_COLOR_PARAMS          = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
+)
 
-	// Watch rooms
+// Watch-room playback modes and request limits for shared viewing sessions.
+const (
 	WATCH_ROOM_PLAYBACK_MODE_DIRECT = "direct"
 	MAX_WATCH_ROOM_REQUEST_SIZE     = 1024 * 1024 // 1 MB
+)
 
-	// Watch progress
+// Watch progress thresholds define when playback progress counts as completed.
+const (
 	WATCH_COMPLETION_THRESHOLD = 0.98
+)
 
-	// Subtitle extraction
+// Subtitle extraction and cache settings for generated WebVTT subtitle tracks.
+const (
 	SUBTITLE_WEBVTT_CONTENT_TYPE = "text/vtt"
 	SUBTITLE_EXTRACT_TIMEOUT     = 60 * time.Second
 	SUBTITLE_CACHE_TTL           = 1 * time.Hour
