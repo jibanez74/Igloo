@@ -355,6 +355,25 @@ export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;
 export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 
+/**
+ * The one focus ring, per design-system §1.7. Use on inline (non-shadcn)
+ * controls so keyboard focus is a single consistent glacier ring and only
+ * shows for keyboard users (`focus-visible`, not `focus`).
+ */
+export const FOCUS_VISIBLE_RING_CLASS =
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none";
+
+/**
+ * Layout-only shell for the full-width library/settings tab bars (movies /
+ * music / search / settings). The shared *look* (glacier primary-fill active
+ * pill, bordered `bg-muted/50` container) lives in the base `ui/tabs.tsx`;
+ * these just switch it to a responsive full-width grid. Pair the list class
+ * with a per-page `grid-cols-*` via `cn(...)`.
+ */
+export const LIBRARY_TABS_LIST_CLASS =
+  "grid! h-auto w-full max-w-full sm:w-fit sm:max-w-none";
+export const LIBRARY_TAB_TRIGGER_CLASS = "min-h-10 min-w-0 p-2 sm:px-4";
+
 // Shared content fade transitions
 export const CONTENT_FADE_TRANSITION_MS = MOTION_DURATION_STANDARD_MS;
 export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;

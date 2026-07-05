@@ -30,7 +30,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
       <Link
         to="/movies/playlist/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
+        className="block focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
         aria-label={`${name}, ${movie_count} ${movieNoun}`}
       >
         <div className="relative mx-auto mb-3 aspect-square w-full overflow-hidden rounded-lg bg-muted">

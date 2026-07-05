@@ -54,7 +54,11 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_TAB_TRIGGER_CLASS,
+  LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
+  MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSICIANS_PER_PAGE,
@@ -189,41 +193,31 @@ function MusicPage() {
         onValueChange={handleTabChange}
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
-        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-4">
-          <TabsTrigger
-            value="musicians"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+        <TabsList
+          className={cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2 sm:grid-cols-4")}
+        >
+          <TabsTrigger value="musicians" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <Users
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
               aria-hidden="true"
             />
             Musicians
           </TabsTrigger>
-          <TabsTrigger
-            value="albums"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="albums" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <Disc3
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
               aria-hidden="true"
             />
             Albums
           </TabsTrigger>
-          <TabsTrigger
-            value="tracks"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="tracks" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <List
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
               aria-hidden="true"
             />
             Tracks
           </TabsTrigger>
-          <TabsTrigger
-            value="playlists"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="playlists" className={LIBRARY_TAB_TRIGGER_CLASS}>
             <ListMusic
               className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
               aria-hidden="true"
@@ -322,7 +316,11 @@ function MoreMenu() {
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}
-          className="inline-flex items-center justify-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none"
+          className={cn(
+            "inline-flex items-center justify-center rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground",
+            MOTION_MICRO_CONTROL_CLASS,
+            FOCUS_VISIBLE_RING_CLASS,
+          )}
           aria-label="More options"
         >
           <MoreHorizontal className="size-5" aria-hidden="true" />
@@ -1158,7 +1156,11 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
           <button
             type="button"
             onClick={onExit}
-            className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none"
+            className={cn(
+              "flex items-center gap-2 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:text-primary",
+              MOTION_MICRO_CONTROL_CLASS,
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
             aria-label="Back to playlists"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />

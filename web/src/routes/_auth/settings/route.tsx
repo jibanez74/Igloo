@@ -16,6 +16,8 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  LIBRARY_TAB_TRIGGER_CLASS,
+  LIBRARY_TABS_LIST_CLASS,
 } from "@/lib/constants";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { authUserQueryOpts } from "@/lib/query-opts";
@@ -94,11 +96,17 @@ function SettingsLayout() {
 
   const isCompactLayout = visibleTabs.length <= 2;
   const tabsListClassName = isCompactLayout
-    ? "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none"
-    : "grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 min-[520px]:grid-cols-3 sm:w-fit sm:max-w-none sm:grid-cols-5";
+    ? cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2")
+    : cn(
+        LIBRARY_TABS_LIST_CLASS,
+        "grid-cols-2 min-[520px]:grid-cols-3 sm:grid-cols-5",
+      );
   const tabsTriggerClassName = isCompactLayout
-    ? "min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-    : "min-h-10 min-w-0 p-2 text-sm text-muted-foreground last:col-span-2 hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 min-[520px]:last:col-span-2 sm:px-4 sm:last:col-span-1";
+    ? LIBRARY_TAB_TRIGGER_CLASS
+    : cn(
+        LIBRARY_TAB_TRIGGER_CLASS,
+        "last:col-span-2 min-[520px]:last:col-span-2 sm:last:col-span-1",
+      );
 
   return (
     <>

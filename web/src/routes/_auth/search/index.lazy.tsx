@@ -29,7 +29,11 @@ import {
   CONTENT_FADE_ENTER_CLASS,
   CONTENT_FADE_EXIT_CLASS,
   CONTENT_FADE_TRANSITION_MS,
+  FOCUS_VISIBLE_RING_CLASS,
+  LIBRARY_TAB_TRIGGER_CLASS,
+  LIBRARY_TABS_LIST_CLASS,
   MOTION_LOADING_STATE_CLASS,
+  MOTION_MICRO_CONTROL_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
@@ -143,34 +147,24 @@ function SearchPage() {
         onValueChange={handleTabChange}
         className={MOTION_SECTION_ENTER_DELAYED_CLASS}
       >
-        <TabsList className="grid! h-auto w-full max-w-full grid-cols-2 gap-1 border border-border/50 bg-muted/50 p-1 sm:w-fit sm:max-w-none sm:grid-cols-5">
-          <TabsTrigger
-            value="all"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+        <TabsList
+          className={cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2 sm:grid-cols-5")}
+        >
+          <TabsTrigger value="all" className={LIBRARY_TAB_TRIGGER_CLASS}>
             All
           </TabsTrigger>
-          <TabsTrigger
-            value="movies"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="movies" className={LIBRARY_TAB_TRIGGER_CLASS}>
             Movies
           </TabsTrigger>
-          <TabsTrigger
-            value="albums"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="albums" className={LIBRARY_TAB_TRIGGER_CLASS}>
             Albums
           </TabsTrigger>
-          <TabsTrigger
-            value="musicians"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
-          >
+          <TabsTrigger value="musicians" className={LIBRARY_TAB_TRIGGER_CLASS}>
             Musicians
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
-            className="min-h-10 min-w-0 p-2 text-sm text-muted-foreground hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20 sm:px-4"
+            className={LIBRARY_TAB_TRIGGER_CLASS}
           >
             Tracks
           </TabsTrigger>
@@ -349,7 +343,10 @@ function AllSection({
           <Link
             to="/search"
             search={{ q, tab, page: 1 }}
-            className="text-sm font-medium text-primary hover:underline focus:ring-2 focus:ring-ring focus:outline-none"
+            className={cn(
+              "rounded-sm text-sm font-medium text-primary hover:underline",
+              FOCUS_VISIBLE_RING_CLASS,
+            )}
           >
             See all {total.toLocaleString()} {title.toLowerCase()} →
           </Link>
@@ -715,7 +712,11 @@ function SearchLoadError({ message, onRetry }: SearchLoadErrorProps) {
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:outline-none"
+        className={cn(
+          "inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90",
+          MOTION_MICRO_CONTROL_CLASS,
+          FOCUS_VISIBLE_RING_CLASS,
+        )}
       >
         Try again
       </button>

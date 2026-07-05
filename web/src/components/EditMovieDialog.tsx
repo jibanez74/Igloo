@@ -218,17 +218,11 @@ export default function EditMovieDialog({
         </DialogDescription>
 
         <Tabs defaultValue="tmdb">
-          <TabsList className="w-full bg-muted">
-            <TabsTrigger
-              value="tmdb"
-              className="flex-1 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
-            >
+          <TabsList className="w-full">
+            <TabsTrigger value="tmdb" className="flex-1">
               Identify with TMDB
             </TabsTrigger>
-            <TabsTrigger
-              value="manual"
-              className="flex-1 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
-            >
+            <TabsTrigger value="manual" className="flex-1">
               Manual
             </TabsTrigger>
           </TabsList>
