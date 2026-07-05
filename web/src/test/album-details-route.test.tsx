@@ -162,10 +162,12 @@ type MockAlbumDetailsFetchOptions = {
     body: unknown;
     status?: number;
   };
+  isAdmin?: boolean;
 };
 
 function mockAlbumDetailsFetch({
   deleteAlbumResponse,
+  isAdmin = false,
 }: MockAlbumDetailsFetchOptions = {}) {
   const detailsById = new Map<number, AlbumDetailsResponseType>([
     [42, albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster")],
@@ -184,7 +186,7 @@ function mockAlbumDetailsFetch({
             id: 1,
             name: "Album User",
             email: "albums@example.com",
-            is_admin: false,
+            is_admin: isAdmin,
             avatar: null,
             created_at: "2026-01-01T00:00:00Z",
             updated_at: "2026-01-01T00:00:00Z",
@@ -383,6 +385,7 @@ describe("album details deletion", () => {
   it("keeps the delete dialog open and reenabled after an API error response", async () => {
     const user = userEvent.setup();
     const { router } = await renderAlbumDetailsRoute("/music/album/42", {
+      isAdmin: true,
       deleteAlbumResponse: {
         body: {
           error: true,

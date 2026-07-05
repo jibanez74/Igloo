@@ -90,6 +90,12 @@ export const TMDB_LOGO_SIZE = "w92";
 export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
 export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 
+// Shared surface for library track lists (tracks tab + liked tracks). Keeps the
+// two list frames on the music index visually identical: card radius + standard
+// surface/border tokens.
+export const TRACK_LIST_CONTAINER_CLASS =
+  "overflow-hidden rounded-xl border border-border bg-card/50";
+
 // Playback and HLS constants. Stream modes are the source of truth for IDs,
 // labels, and profile metadata used by route validation and playback UI.
 export const STREAM_MODES = [

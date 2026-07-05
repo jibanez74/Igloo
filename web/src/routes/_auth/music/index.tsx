@@ -58,6 +58,7 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MUSICIANS_PER_PAGE,
+  TRACK_LIST_CONTAINER_CLASS,
   VIRTUAL_LIST_LETTER_HEIGHT,
   VIRTUAL_LIST_TRACK_HEIGHT,
 } from "@/lib/constants";
@@ -68,6 +69,8 @@ import MusicianCard from "@/components/MusicianCard";
 import LibraryPagination from "@/components/LibraryPagination";
 import TrackItem from "@/components/TrackItem";
 import PlaylistCard from "@/components/PlaylistCard";
+import EmptyState from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
 import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
 import RequestAlbumDialog from "@/components/RequestAlbumDialog";
 import RequestTrackDialog from "@/components/RequestTrackDialog";
@@ -529,6 +532,32 @@ type AlbumsTabContentProps = {
   perPage: number;
 };
 
+// Skeleton loader that matches the albums grid layout to prevent CLS
+function AlbumsTabSkeleton() {
+  return (
+    <div>
+      {/* Skeleton grid - matches the real albums grid dimensions */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        {Array.from({ length: ALBUMS_PER_PAGE }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "overflow-hidden rounded-xl border border-border bg-card",
+              MOTION_LOADING_STATE_CLASS,
+            )}
+          >
+            <div className="aspect-square bg-muted" />
+            <div className="p-3">
+              <div className="h-4 w-3/4 rounded-sm bg-muted" />
+              <div className="mt-2 h-3 w-1/2 rounded-sm bg-muted" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   const navigate = Route.useNavigate();
 
@@ -561,12 +590,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-12" role="status" aria-label="Loading albums">
-        <Spinner className="size-8 text-primary" />
-        <span className="sr-only">Loading albums...</span>
-      </div>
-    );
+    return <AlbumsTabSkeleton />;
   }
 
   if (albums.length === 0) {
@@ -609,6 +633,34 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   );
 }
 
+// Skeleton loader that matches the library track-list layout to prevent CLS.
+// Shared by the Tracks tab and the Liked Tracks view.
+function TracksListSkeleton() {
+  return (
+    <div className={TRACK_LIST_CONTAINER_CLASS}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 p-3 sm:gap-4 sm:px-4"
+          style={{ height: `${VIRTUAL_LIST_TRACK_HEIGHT}px` }}
+        >
+          <div
+            className={cn(
+              "size-9 shrink-0 rounded-full bg-muted",
+              MOTION_LOADING_STATE_CLASS,
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className={cn("h-4 w-1/2 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+            <div className={cn("mt-2 h-3 w-1/3 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+          </div>
+          <div className={cn("h-3 w-10 shrink-0 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TracksTabContent() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery(tracksInfiniteQueryOpts());
@@ -640,12 +692,7 @@ function TracksTabContent() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-12" role="status" aria-label="Loading tracks">
-        <Spinner className="size-8 text-primary" />
-        <span className="sr-only">Loading tracks...</span>
-      </div>
-    );
+    return <TracksListSkeleton />;
   }
 
   if (allTracks.length === 0) {
@@ -736,7 +783,7 @@ function VirtualizedTracksList({
   return (
     <div
       ref={listRef}
-      className="overflow-hidden rounded-lg border border-border bg-card/50"
+      className={TRACK_LIST_CONTAINER_CLASS}
       role="list"
       aria-label="Tracks"
     >
@@ -805,11 +852,11 @@ function PlayAllButton() {
   };
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={handlePlayAll}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-3 py-2 font-medium text-foreground transition-colors hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
+      className="min-h-10 rounded-full"
       aria-label="Play all tracks"
     >
       {isLoading ? (
@@ -818,7 +865,7 @@ function PlayAllButton() {
         <Play className="size-4 fill-current" aria-hidden="true" />
       )}
       <span>Play all</span>
-    </button>
+    </Button>
   );
 }
 
@@ -840,11 +887,11 @@ function ShuffleButton() {
   };
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="accent-pill"
       onClick={handleShuffle}
       disabled={isLoading}
-      className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50 sm:px-4"
+      className="min-h-10"
       aria-label="Shuffle all tracks"
     >
       {isLoading ? (
@@ -853,7 +900,7 @@ function ShuffleButton() {
         <Shuffle className="size-4" aria-hidden="true" />
       )}
       <span>Shuffle all</span>
-    </button>
+    </Button>
   );
 }
 
@@ -888,18 +935,7 @@ const TrackListItem = memo(function TrackListItem({
   const playerState = useAudioPlayerState();
 
   const handlePlay = () => {
-    const audioTrack = convertToAudioTrack({
-      id: track.id,
-      title: track.title,
-      file_path: track.file_path,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      musician_id: track.musician_id,
-      album_cover: track.album_cover,
-      musician_name: track.musician_name,
-    });
+    const audioTrack = convertToAudioTrack(track);
 
     audioPlayer.playTrack(audioTrack, [audioTrack], {
       cover: unwrapString(track.album_cover),
@@ -1001,9 +1037,9 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
     );
   }
 
-  // Generate announcement for screen readers
+  // Generate announcement for screen readers.
+  // Reached only after the isLoading early-return above, so no loading case here.
   const getAnnouncement = () => {
-    if (isLoading) return undefined;
     if (playlists.length === 0) return "No playlists yet";
     return `${playlists.length} playlist${playlists.length !== 1 ? "s" : ""} loaded`;
   };
@@ -1022,25 +1058,25 @@ function PlaylistsTabContent({ playlistsView, likedTracksPage }: PlaylistsTabCon
           {playlists.length} {playlists.length === 1 ? "playlist" : "playlists"}
         </span>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={handleShowLiked}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none sm:px-4"
+            className="min-h-10 rounded-full"
             aria-label="View liked tracks"
           >
             <Heart className="size-4 shrink-0" aria-hidden="true" />
             Liked tracks
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             ref={createPlaylistRestoreRef}
+            variant="accent-pill"
             onClick={handleCreateOpen}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-4"
+            className="min-h-10"
             aria-label="Create new playlist"
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
             New playlist
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1080,8 +1116,8 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   const total = data?.error === false ? data.data.total : 0;
   const totalPages = data?.error === false ? data.data.total_pages : 0;
 
+  // Reached only after the isLoading early-return below, so no loading case here.
   const getAnnouncement = () => {
-    if (isLoading) return undefined;
     if (tracks.length === 0) return "No liked tracks";
     return `${total} liked track${total !== 1 ? "s" : ""}, page ${likedTracksPage} of ${totalPages}`;
   };
@@ -1099,32 +1135,8 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   };
 
   const handlePlayTrack = (track: TrackListItemType) => {
-    const audioTrack = convertToAudioTrack({
-      id: track.id,
-      title: track.title,
-      file_path: track.file_path,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      musician_id: track.musician_id,
-      album_cover: track.album_cover,
-      musician_name: track.musician_name,
-    });
-    const allAudioTracks = tracks.map((t) =>
-      convertToAudioTrack({
-        id: t.id,
-        title: t.title,
-        file_path: t.file_path,
-        duration: t.duration,
-        codec: t.codec,
-        bit_rate: t.bit_rate,
-        album_id: t.album_id,
-        musician_id: t.musician_id,
-        album_cover: t.album_cover,
-        musician_name: t.musician_name,
-      })
-    );
+    const audioTrack = convertToAudioTrack(track);
+    const allAudioTracks = tracks.map((t) => convertToAudioTrack(t));
     audioPlayer.playTrack(audioTrack, allAudioTracks, {
       cover: null,
       title: "Liked Tracks",
@@ -1133,12 +1145,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
   };
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-12" role="status" aria-label="Loading liked tracks">
-        <Spinner className="size-8 text-primary" />
-        <span className="sr-only">Loading liked tracks...</span>
-      </div>
-    );
+    return <TracksListSkeleton />;
   }
 
   return (
@@ -1170,17 +1177,14 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
 
       {/* Track list or empty state */}
       {tracks.length === 0 ? (
-        <div className="rounded-xl border border-primary/10 bg-muted/30 py-12 text-center">
-          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/40">
-            <Heart className="size-6 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <p className="text-muted-foreground">No liked tracks yet.</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Tap the heart icon on any track to add it here.
-          </p>
-        </div>
+        <EmptyState
+          bordered
+          icon={Heart}
+          title="No liked tracks yet"
+          description="Tap the heart icon on any track to add it here."
+        />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
+        <div className={TRACK_LIST_CONTAINER_CLASS}>
           {tracks.map((track) => (
             <TrackItem
               key={track.id}
@@ -1223,9 +1227,12 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
 function PlaylistsTabSkeleton() {
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        <div className="flex flex-wrap gap-2">
+          <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
+          <div className={cn("h-10 w-32 rounded-full bg-muted", MOTION_LOADING_STATE_CLASS)} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
@@ -1252,27 +1259,21 @@ type EmptyPlaylistsStateProps = {
 
 function EmptyPlaylistsState({ onCreateClick }: EmptyPlaylistsStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-      <div className="mb-5 flex size-20 items-center justify-center rounded-full bg-linear-to-br from-muted via-muted to-primary/30 shadow-lg shadow-primary/5 sm:size-24">
-        <ListMusic
-          className="size-8 text-primary/40 sm:size-10"
-          aria-hidden="true"
-        />
-      </div>
-      <h3 className="mb-2 text-xl font-semibold text-foreground">
-        No playlists yet
-      </h3>
-      <p className="mb-5 max-w-sm text-muted-foreground sm:mb-6">
-        Create your first playlist to start organizing your favorite tracks.
-      </p>
-      <button
-        type="button"
-        onClick={onCreateClick}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        Create your first playlist
-      </button>
-    </div>
+    <EmptyState
+      icon={ListMusic}
+      title="No playlists yet"
+      description="Create your first playlist to start organizing your favorite tracks."
+      action={
+        <Button
+          variant="accent-pill"
+          size="lg"
+          onClick={onCreateClick}
+          className="font-semibold shadow-lg shadow-primary/20"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Create your first playlist
+        </Button>
+      }
+    />
   );
 }
