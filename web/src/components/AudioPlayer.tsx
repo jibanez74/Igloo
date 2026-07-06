@@ -29,6 +29,10 @@ import { cn } from "@/lib/utils";
 type AudioPlayerProps = {
   track: TrackType | null;
   tracks: TrackType[];
+  // Played tracks trimmed from the front of an endless queue; added back into
+  // the "Track N of M" counter so it never jumps backwards. Finite queues
+  // never trim, so the default keeps the counter untouched.
+  trimmedCount?: number;
   albumCover: string | null;
   albumTitle: string;
   musicianName: string | null;
@@ -75,6 +79,7 @@ function mediaSessionSupported() {
 export default function AudioPlayer({
   track,
   tracks,
+  trimmedCount = 0,
   albumCover,
   albumTitle,
   musicianName,
@@ -751,7 +756,8 @@ export default function AudioPlayer({
               </div>
 
               <p className="mt-4 text-sm text-muted-foreground">
-                Track {currentIndex + 1} of {tracks.length}
+                Track {trimmedCount + currentIndex + 1} of{" "}
+                {trimmedCount + tracks.length}
               </p>
             </main>
           </DialogFullscreenContent>

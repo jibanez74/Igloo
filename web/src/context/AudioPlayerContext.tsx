@@ -20,12 +20,16 @@ import {
   convertToAudioTrack,
   extractTrackMetadata,
   shuffleArray,
+  trimQueueHistory,
 } from "@/lib/audio-utils";
 
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
 const MAX_SHUFFLE_FETCH_ATTEMPTS = 3;
+// Endless queues (shuffle, play all) are trimmed when a new batch is appended;
+// this many played tracks stay reachable via previous-track navigation.
+const MAX_TRACKS_BEHIND = 50;
 
 type QueueState = Omit<
   AudioPlayerState,
@@ -41,6 +45,7 @@ function createInitialQueueState(): QueueState {
     musicianName: null,
     isShuffleMode: false,
     isPlayAllMode: false,
+    trimmedCount: 0,
   };
 }
 
@@ -89,6 +94,32 @@ export function AudioPlayerProvider({
       trackMusiciansRef.current.set(track.id, musician);
       trackAlbumTitlesRef.current.set(track.id, albumTitle);
     }
+  };
+
+  // Append a fetched batch to an endless queue, trimming played tracks beyond
+  // MAX_TRACKS_BEHIND and pruning their metadata so multi-hour shuffle or
+  // play-all sessions stay bounded. The map deletions are idempotent, so
+  // StrictMode's double-invoked updater is harmless.
+  const appendToQueue = (appended: TrackType[]) => {
+    setQueueState(prev => {
+      const { tracks: kept, dropped } = trimQueueHistory(
+        prev.tracks,
+        prev.currentTrack?.id ?? null,
+        MAX_TRACKS_BEHIND,
+      );
+
+      for (const track of dropped) {
+        trackCoversRef.current?.delete(track.id);
+        trackMusiciansRef.current?.delete(track.id);
+        trackAlbumTitlesRef.current?.delete(track.id);
+      }
+
+      return {
+        ...prev,
+        tracks: [...kept, ...appended],
+        trimmedCount: prev.trimmedCount + dropped.length,
+      };
+    });
   };
 
   const clearMetadataRefs = () => {
@@ -167,10 +198,7 @@ export function AudioPlayerProvider({
       }
 
       if (!isCancelled && collected.length > 0) {
-        setQueueState(prev => ({
-          ...prev,
-          tracks: [...prev.tracks, ...collected],
-        }));
+        appendToQueue(collected);
       }
 
       isFetchingMoreRef.current = false;
@@ -215,10 +243,7 @@ export function AudioPlayerProvider({
           playAllOffsetRef.current += rawTracks.length;
 
           if (newTracks.length > 0) {
-            setQueueState(prev => ({
-              ...prev,
-              tracks: [...prev.tracks, ...newTracks],
-            }));
+            appendToQueue(newTracks);
           }
         }
       } catch {
@@ -324,6 +349,7 @@ export function AudioPlayerProvider({
       musicianName: albumInfo.musician,
       isShuffleMode,
       isPlayAllMode,
+      trimmedCount: 0,
     });
     setIsExpanded(true);
   };
@@ -533,6 +559,7 @@ export function AudioPlayerProvider({
         <AudioPlayer
           track={queueState.currentTrack}
           tracks={queueState.tracks}
+          trimmedCount={queueState.trimmedCount}
           albumCover={queueState.albumCover}
           albumTitle={queueState.albumTitle}
           musicianName={queueState.musicianName}

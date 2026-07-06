@@ -45,6 +45,30 @@ export function extractTrackMetadata(track: PlayableTrackData): {
   };
 }
 
+// Bound an endless queue's history: keep at most keepBehind tracks before the
+// current one and report what was dropped so callers can prune per-track
+// metadata. Returns the input array untouched when nothing needs trimming.
+export function trimQueueHistory<T extends { id: number }>(
+  tracks: T[],
+  currentTrackId: number | null,
+  keepBehind: number,
+): { tracks: T[]; dropped: T[] } {
+  const currentIndex =
+    currentTrackId === null
+      ? -1
+      : tracks.findIndex(track => track.id === currentTrackId);
+  const dropCount = currentIndex - keepBehind;
+
+  if (dropCount <= 0) {
+    return { tracks, dropped: [] };
+  }
+
+  return {
+    tracks: tracks.slice(dropCount),
+    dropped: tracks.slice(0, dropCount),
+  };
+}
+
 // Shuffle an array using the Fisher-Yates algorithm
 export function shuffleArray<T>(array: T[]) {
   const shuffled = [...array];

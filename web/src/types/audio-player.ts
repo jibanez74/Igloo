@@ -44,6 +44,10 @@ export type AudioPlayerState = {
 
   // Whether "play all" mode is enabled (plays through entire library)
   isPlayAllMode: boolean;
+
+  // How many played tracks were trimmed from the front of an endless
+  // shuffle/play-all queue; keeps the "Track N of M" counter monotonic
+  trimmedCount: number;
 };
 
 // Actions available for the audio player
