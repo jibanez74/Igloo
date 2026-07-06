@@ -87,9 +87,10 @@ export function AudioPlayerProvider({
       const { cover, musician } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
       trackMusiciansRef.current.set(track.id, musician);
-      if (track.album_title?.Valid) {
-        trackAlbumTitlesRef.current.set(track.id, track.album_title.String);
-      }
+      trackAlbumTitlesRef.current.set(
+        track.id,
+        track.album_title?.Valid ? track.album_title.String : "",
+      );
     }
   };
 
@@ -471,8 +472,9 @@ export function AudioPlayerProvider({
         musicianName: musicians?.has(track.id)
           ? (musicians.get(track.id) ?? null)
           : prev.musicianName,
-        albumTitle:
-          trackAlbumTitlesRef.current?.get(track.id) ?? prev.albumTitle,
+        albumTitle: trackAlbumTitlesRef.current?.has(track.id)
+          ? (trackAlbumTitlesRef.current.get(track.id) ?? "")
+          : prev.albumTitle,
       };
     });
   };

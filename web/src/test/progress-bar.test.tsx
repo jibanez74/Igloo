@@ -175,4 +175,64 @@ describe("ProgressBar", () => {
     );
     expect(slider.value).toBe("102");
   });
+
+  it("clears the scrubbed position when the pointer is cancelled", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    fireEvent.change(slider, { target: { value: "100" } });
+    fireEvent.pointerCancel(slider);
+
+    rerender(
+      <ProgressBar
+        currentTime={51}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+    expect(slider.value).toBe("51");
+  });
+
+  it("drops a pending scrub value when resetKey changes", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="expanded"
+        resetKey={1}
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    fireEvent.change(slider, { target: { value: "180" } });
+    expect(slider.value).toBe("180");
+
+    // Track auto-advances mid-drag: the new track must not inherit the old
+    // track's scrub position.
+    rerender(
+      <ProgressBar
+        currentTime={0}
+        duration={240}
+        onSeek={onSeek}
+        variant="expanded"
+        resetKey={2}
+      />,
+    );
+    expect(slider.value).toBe("0");
+  });
 });

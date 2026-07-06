@@ -17,7 +17,7 @@ function rawTrack({
 }: {
   id: number;
   title: string;
-  albumTitle: string;
+  albumTitle: string | null;
   musician: string;
   cover: string | null;
 }): PlayableTrackData {
@@ -34,7 +34,10 @@ function rawTrack({
       ? { String: cover, Valid: true }
       : { String: "", Valid: false },
     musician_name: { String: musician, Valid: true },
-    album_title: { String: albumTitle, Valid: true },
+    album_title:
+      albumTitle !== null
+        ? { String: albumTitle, Valid: true }
+        : { String: "", Valid: false },
   };
 }
 
@@ -144,6 +147,24 @@ describe("playTrackFromList", () => {
     expect(
       screen.getByRole("img", { name: "No album cover available" }),
     ).toBeInTheDocument();
+  });
+
+  it("clears the album title for a track without one instead of keeping the previous track's", () => {
+    const drift = rawTrack({
+      id: 4,
+      title: "Drift",
+      albumTitle: null,
+      musician: "Loose Single",
+      cover: null,
+    });
+
+    renderQueue([alabaster, drift], 1);
+
+    expect(screen.getByText("Stone Record")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+
+    expect(screen.queryByText("Stone Record")).not.toBeInTheDocument();
   });
 
   it("ignores a start track that is not in the list", () => {

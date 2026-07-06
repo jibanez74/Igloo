@@ -20,6 +20,7 @@ type ProgressBarProps = {
   variant: ProgressBarVariant;
   ariaLabel?: string;
   groupLabel?: string;
+  resetKey?: string | number;
 };
 
 // Variant-specific styles
@@ -95,12 +96,20 @@ export default function ProgressBar({
   variant,
   ariaLabel = "Seek through track",
   groupLabel = "Playback progress",
+  resetKey,
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
   // While the user is scrubbing, the media element's currentTime lags behind
   // (seeks are async), so the displayed position follows the pending scrub
   // value instead of snapping back to the stale currentTime prop.
   const [scrubTime, setScrubTime] = useState<number | null>(null);
+  // When the playing media changes (e.g. track auto-advance mid-drag), a
+  // pending scrub value belongs to the old media and must not carry over.
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
+    setScrubTime(null);
+  }
   const safeDuration =
     Number.isFinite(duration) && duration > 0 ? duration : 0;
   const isSeekable = safeDuration > 0;
@@ -194,6 +203,7 @@ export default function ProgressBar({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onPointerUp={clearScrub}
+        onPointerCancel={clearScrub}
         onBlur={clearScrub}
         tabIndex={isSeekable ? 0 : -1}
         className={cn(

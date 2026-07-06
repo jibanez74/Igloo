@@ -679,6 +679,7 @@ export default function AudioPlayer({
                 duration={duration}
                 onSeek={handleSeek}
                 variant="expanded"
+                resetKey={track.id}
               />
 
               <div
@@ -849,6 +850,7 @@ export default function AudioPlayer({
                 duration={duration}
                 onSeek={handleSeek}
                 variant="minimized"
+                resetKey={track.id}
               />
 
               <div className="hidden sm:block">
@@ -890,6 +892,7 @@ export default function AudioPlayer({
               duration={duration}
               onSeek={handleSeek}
               variant="mobile"
+              resetKey={track.id}
             />
           </div>
         </div>
