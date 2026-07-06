@@ -11,7 +11,6 @@ import TrackItem from "@/components/TrackItem";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
-import { convertToAudioTrack } from "@/lib/audio-utils";
 import {
   unwrapInt,
   unwrapString,
@@ -298,7 +297,7 @@ function AllResultsTab({ q }: { q: string }) {
           >
             {tracks.results.map((track) => (
               <li key={track.id} className="border-b border-border last:border-b-0">
-                <SearchTrackItem track={track} />
+                <SearchTrackItem track={track} queue={tracks.results} />
               </li>
             ))}
           </ul>
@@ -525,7 +524,7 @@ function TracksResultsTab({ q, page }: CategoryTabProps) {
               key={track.id}
               className="border-b border-border last:border-b-0"
             >
-              <SearchTrackItem track={track} />
+              <SearchTrackItem track={track} queue={items} />
             </li>
           ))}
         </ul>
@@ -636,29 +635,18 @@ function CategoryTabFrame<T>({
 // Track row that can play through the audio player
 // ---------------------------------------------------------------------------
 
-function SearchTrackItem({ track }: { track: TrackListItemType }) {
+function SearchTrackItem({
+  track,
+  queue,
+}: {
+  track: TrackListItemType;
+  queue: TrackListItemType[];
+}) {
   const audioPlayer = useAudioPlayerActions();
   const playerState = useAudioPlayerState();
 
   const handlePlay = () => {
-    const audioTrack = convertToAudioTrack({
-      id: track.id,
-      title: track.title,
-      file_path: track.file_path,
-      duration: track.duration,
-      codec: track.codec,
-      bit_rate: track.bit_rate,
-      album_id: track.album_id,
-      musician_id: track.musician_id,
-      album_cover: track.album_cover,
-      musician_name: track.musician_name,
-    });
-
-    audioPlayer.playTrack(audioTrack, [audioTrack], {
-      cover: unwrapString(track.album_cover),
-      title: unwrapString(track.album_title) ?? "Unknown Album",
-      musician: unwrapString(track.musician_name),
-    });
+    audioPlayer.playTrackFromList(queue, track.id);
   };
 
   return (

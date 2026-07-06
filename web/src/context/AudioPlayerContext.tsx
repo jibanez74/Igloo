@@ -20,12 +20,16 @@ import {
   convertToAudioTrack,
   extractTrackMetadata,
   shuffleArray,
+  trimQueueHistory,
 } from "@/lib/audio-utils";
 
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
 const MAX_SHUFFLE_FETCH_ATTEMPTS = 3;
+// Endless queues (shuffle, play all) are trimmed when a new batch is appended;
+// this many played tracks stay reachable via previous-track navigation.
+const MAX_TRACKS_BEHIND = 50;
 
 type QueueState = Omit<
   AudioPlayerState,
@@ -41,6 +45,7 @@ function createInitialQueueState(): QueueState {
     musicianName: null,
     isShuffleMode: false,
     isPlayAllMode: false,
+    trimmedCount: 0,
   };
 }
 
@@ -67,6 +72,7 @@ export function AudioPlayerProvider({
 
   const trackCoversRef = useRef<Map<number, string | null> | null>(null);
   const trackMusiciansRef = useRef<Map<number, string | null> | null>(null);
+  const trackAlbumTitlesRef = useRef<Map<number, string> | null>(null);
 
   const playAllOffsetRef = useRef(0);
   const playAllTotalRef = useRef(0);
@@ -78,17 +84,48 @@ export function AudioPlayerProvider({
     if (trackMusiciansRef.current === null) {
       trackMusiciansRef.current = new Map();
     }
+    if (trackAlbumTitlesRef.current === null) {
+      trackAlbumTitlesRef.current = new Map();
+    }
 
     for (const track of tracks) {
-      const { cover, musician } = extractTrackMetadata(track);
+      const { cover, musician, albumTitle } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
       trackMusiciansRef.current.set(track.id, musician);
+      trackAlbumTitlesRef.current.set(track.id, albumTitle);
     }
+  };
+
+  // Append a fetched batch to an endless queue, trimming played tracks beyond
+  // MAX_TRACKS_BEHIND and pruning their metadata so multi-hour shuffle or
+  // play-all sessions stay bounded. The map deletions are idempotent, so
+  // StrictMode's double-invoked updater is harmless.
+  const appendToQueue = (appended: TrackType[]) => {
+    setQueueState(prev => {
+      const { tracks: kept, dropped } = trimQueueHistory(
+        prev.tracks,
+        prev.currentTrack?.id ?? null,
+        MAX_TRACKS_BEHIND,
+      );
+
+      for (const track of dropped) {
+        trackCoversRef.current?.delete(track.id);
+        trackMusiciansRef.current?.delete(track.id);
+        trackAlbumTitlesRef.current?.delete(track.id);
+      }
+
+      return {
+        ...prev,
+        tracks: [...kept, ...appended],
+        trimmedCount: prev.trimmedCount + dropped.length,
+      };
+    });
   };
 
   const clearMetadataRefs = () => {
     trackCoversRef.current?.clear();
     trackMusiciansRef.current?.clear();
+    trackAlbumTitlesRef.current?.clear();
     playAllOffsetRef.current = 0;
     playAllTotalRef.current = 0;
   };
@@ -161,10 +198,7 @@ export function AudioPlayerProvider({
       }
 
       if (!isCancelled && collected.length > 0) {
-        setQueueState(prev => ({
-          ...prev,
-          tracks: [...prev.tracks, ...collected],
-        }));
+        appendToQueue(collected);
       }
 
       isFetchingMoreRef.current = false;
@@ -209,10 +243,7 @@ export function AudioPlayerProvider({
           playAllOffsetRef.current += rawTracks.length;
 
           if (newTracks.length > 0) {
-            setQueueState(prev => ({
-              ...prev,
-              tracks: [...prev.tracks, ...newTracks],
-            }));
+            appendToQueue(newTracks);
           }
         }
       } catch {
@@ -287,34 +318,81 @@ export function AudioPlayerProvider({
     return () => clearInterval(interval);
   }, [isPlaying, queueState.currentTrack?.id]);
 
-  const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+  // Every playback entry point resets the metadata maps, seeds the queue, and
+  // expands the player. Mixed-list flows also pass rawTracks so setTrack can
+  // resolve per-track metadata on navigation; album flows leave the maps empty
+  // so the queue-wide albumInfo carries over.
+  const startQueue = ({
+    currentTrack,
+    tracks,
+    albumInfo,
+    rawTracks,
+    isShuffleMode = false,
+    isPlayAllMode = false,
+  }: {
+    currentTrack: TrackType;
+    tracks: TrackType[];
+    albumInfo: { cover: string | null; title: string; musician: string | null };
+    rawTracks?: PlayableTrackData[];
+    isShuffleMode?: boolean;
+    isPlayAllMode?: boolean;
+  }) => {
     clearMetadataRefs();
+    if (rawTracks) {
+      populateTrackMetadata(rawTracks);
+    }
     setQueueState({
-      currentTrack: track,
-      tracks: playlist,
+      currentTrack,
+      tracks,
       albumCover: albumInfo.cover,
       albumTitle: albumInfo.title,
       musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
+      isShuffleMode,
+      isPlayAllMode,
+      trimmedCount: 0,
     });
     setIsExpanded(true);
+  };
+
+  const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+    startQueue({ currentTrack: track, tracks: playlist, albumInfo });
+  };
+
+  const playTrackFromList: AudioPlayerActions["playTrackFromList"] = (
+    rawTracks,
+    startTrackId,
+  ) => {
+    // Mixed lists (search results, library tracks tab) can repeat an id;
+    // dedupe so findIndex-based prev/next navigation stays coherent.
+    const seenIds = new Set<number>();
+    const uniqueRawTracks = rawTracks.filter(track => {
+      if (seenIds.has(track.id)) {
+        return false;
+      }
+      seenIds.add(track.id);
+      return true;
+    });
+
+    const startRawTrack = uniqueRawTracks.find(
+      track => track.id === startTrackId,
+    );
+    if (!startRawTrack) return;
+
+    const tracks = uniqueRawTracks.map(convertToAudioTrack);
+    const { cover, musician, albumTitle } = extractTrackMetadata(startRawTrack);
+
+    startQueue({
+      currentTrack: tracks[uniqueRawTracks.indexOf(startRawTrack)],
+      tracks,
+      albumInfo: { cover, title: albumTitle, musician },
+      rawTracks: uniqueRawTracks,
+    });
   };
 
   const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
-    clearMetadataRefs();
-    setQueueState({
-      currentTrack: tracks[0],
-      tracks,
-      albumCover: albumInfo.cover,
-      albumTitle: albumInfo.title,
-      musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
-    });
-    setIsExpanded(true);
+    startQueue({ currentTrack: tracks[0], tracks, albumInfo });
   };
 
   const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = (tracks, albumInfo) => {
@@ -322,17 +400,7 @@ export function AudioPlayerProvider({
 
     const shuffled = shuffleArray(tracks);
 
-    clearMetadataRefs();
-    setQueueState({
-      currentTrack: shuffled[0],
-      tracks: shuffled,
-      albumCover: albumInfo.cover,
-      albumTitle: albumInfo.title,
-      musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
-    });
-    setIsExpanded(true);
+    startQueue({ currentTrack: shuffled[0], tracks: shuffled, albumInfo });
   };
 
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
@@ -342,25 +410,27 @@ export function AudioPlayerProvider({
         return;
       }
 
-      const rawTracks = response.data.tracks;
+      // The shuffle endpoint can repeat an id within one batch; dedupe so
+      // findIndex-based prev/next navigation stays coherent (the append
+      // effect above already dedupes subsequent batches).
+      const seenIds = new Set<number>();
+      const rawTracks = response.data.tracks.filter(track => {
+        if (seenIds.has(track.id)) {
+          return false;
+        }
+        seenIds.add(track.id);
+        return true;
+      });
       const tracks = rawTracks.map(convertToAudioTrack);
+      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
-      clearMetadataRefs();
-      populateTrackMetadata(rawTracks);
-
-      const firstTrack = rawTracks[0];
-      const { cover, musician } = extractTrackMetadata(firstTrack);
-
-      setQueueState({
+      startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumCover: cover,
-        albumTitle: "Shuffle All",
-        musicianName: musician,
+        albumInfo: { cover, title: "Shuffle All", musician },
+        rawTracks,
         isShuffleMode: true,
-        isPlayAllMode: false,
       });
-      setIsExpanded(true);
     };
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
@@ -372,43 +442,43 @@ export function AudioPlayerProvider({
 
       const rawTracks = response.data.tracks;
       const tracks = rawTracks.map(convertToAudioTrack);
+      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
-      clearMetadataRefs();
-      populateTrackMetadata(rawTracks);
-
-      playAllOffsetRef.current = rawTracks.length;
-      playAllTotalRef.current = response.data.total;
-
-      const firstTrack = rawTracks[0];
-      const { cover, musician } = extractTrackMetadata(firstTrack);
-
-      setQueueState({
+      startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumCover: cover,
-        albumTitle: "All Tracks",
-        musicianName: musician,
-        isShuffleMode: false,
+        albumInfo: { cover, title: "All Tracks", musician },
+        rawTracks,
         isPlayAllMode: true,
       });
-      setIsExpanded(true);
+
+      // After startQueue: clearMetadataRefs inside it zeroes these counters.
+      playAllOffsetRef.current = rawTracks.length;
+      playAllTotalRef.current = response.data.total;
     };
 
   const setTrack: AudioPlayerActions["setTrack"] = track => {
     setQueueState(prev => {
-      const isSpecialMode = prev.isShuffleMode || prev.isPlayAllMode;
-      const newAlbumCover = isSpecialMode
-        ? (trackCoversRef.current?.get(track.id) ?? null)
-        : prev.albumCover;
-      const newMusicianName = isSpecialMode
-        ? (trackMusiciansRef.current?.get(track.id) ?? null)
-        : prev.musicianName;
+      // Album/playlist flows clear the metadata maps, so their lookups miss
+      // and the queue-wide values carry over; mixed queues (shuffle, play
+      // all, search/library lists) resolve per-track metadata here. A track
+      // can legitimately map to null (no cover/musician), so distinguish
+      // "unmapped" from "mapped to null" via has().
+      const covers = trackCoversRef.current;
+      const musicians = trackMusiciansRef.current;
 
       return {
         ...prev,
         currentTrack: track,
-        albumCover: newAlbumCover,
-        musicianName: newMusicianName,
+        albumCover: covers?.has(track.id)
+          ? (covers.get(track.id) ?? null)
+          : prev.albumCover,
+        musicianName: musicians?.has(track.id)
+          ? (musicians.get(track.id) ?? null)
+          : prev.musicianName,
+        albumTitle: trackAlbumTitlesRef.current?.has(track.id)
+          ? (trackAlbumTitlesRef.current.get(track.id) ?? "")
+          : prev.albumTitle,
       };
     });
   };
@@ -467,6 +537,7 @@ export function AudioPlayerProvider({
 
   const actionsValue = {
     playTrack,
+    playTrackFromList,
     playAlbum,
     shuffleAlbum,
     startShufflePlayback,
@@ -488,6 +559,7 @@ export function AudioPlayerProvider({
         <AudioPlayer
           track={queueState.currentTrack}
           tracks={queueState.tracks}
+          trimmedCount={queueState.trimmedCount}
           albumCover={queueState.albumCover}
           albumTitle={queueState.albumTitle}
           musicianName={queueState.musicianName}

@@ -22,6 +22,10 @@ export type PlayableTrackData = {
   musician_id: NullableInt64;
   album_cover: NullableString;
   musician_name: NullableString;
+
+  // Present on list/search rows; used to keep the player header accurate in
+  // mixed queues. The shuffle/play-all endpoints may omit it.
+  album_title?: NullableString;
 };
 
 // State for the global audio player
@@ -40,6 +44,10 @@ export type AudioPlayerState = {
 
   // Whether "play all" mode is enabled (plays through entire library)
   isPlayAllMode: boolean;
+
+  // How many played tracks were trimmed from the front of an endless
+  // shuffle/play-all queue; keeps the "Track N of M" counter monotonic
+  trimmedCount: number;
 };
 
 // Actions available for the audio player
@@ -49,6 +57,13 @@ export type AudioPlayerActions = {
     track: TrackType,
     playlist: TrackType[],
     albumInfo: AlbumInfoType
+  ) => void;
+
+  // Play a track from a mixed list (search results, library tracks tab),
+  // queueing the whole list with per-track cover/musician metadata
+  playTrackFromList: (
+    rawTracks: PlayableTrackData[],
+    startTrackId: number
   ) => void;
 
   // Play an entire album from the beginning

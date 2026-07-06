@@ -32,14 +32,40 @@ export function convertToAudioTrack(track: PlayableTrackData) {
   };
 }
 
-// Extract cover and musician info from playable track data
+// Extract cover, musician, and album title info from playable track data
 export function extractTrackMetadata(track: PlayableTrackData): {
   cover: string | null;
   musician: string | null;
+  albumTitle: string;
 } {
   return {
     cover: track.album_cover.Valid ? track.album_cover.String : null,
     musician: track.musician_name.Valid ? track.musician_name.String : null,
+    albumTitle: track.album_title?.Valid ? track.album_title.String : "",
+  };
+}
+
+// Bound an endless queue's history: keep at most keepBehind tracks before the
+// current one and report what was dropped so callers can prune per-track
+// metadata. Returns the input array untouched when nothing needs trimming.
+export function trimQueueHistory<T extends { id: number }>(
+  tracks: T[],
+  currentTrackId: number | null,
+  keepBehind: number,
+): { tracks: T[]; dropped: T[] } {
+  const currentIndex =
+    currentTrackId === null
+      ? -1
+      : tracks.findIndex(track => track.id === currentTrackId);
+  const dropCount = currentIndex - keepBehind;
+
+  if (dropCount <= 0) {
+    return { tracks, dropped: [] };
+  }
+
+  return {
+    tracks: tracks.slice(dropCount),
+    dropped: tracks.slice(0, dropCount),
   };
 }
 

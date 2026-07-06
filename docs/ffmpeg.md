@@ -72,7 +72,9 @@ When a client requests a personal HLS playlist:
 
 `audio_track` is omitted for video-only movies. Igloo loads the movie and stream metadata from the database, creates a temp directory, starts FFmpeg in the background, caches the session, and returns a VOD-style playlist to the browser. Segment requests then read files from the session temp directory as FFmpeg produces them.
 
-Personal HLS sessions are keyed by movie ID, requested profile, audio track, playback session ID, and start time. If the same request arrives again, Igloo refreshes the cached session TTL and reuses the process. When a new personal session is created for the same movie, user, and playback session ID, older sessions for that playback session are cleaned up so seeks and reloads do not leave extra FFmpeg processes running. Concurrent creation is deduplicated with singleflight so multiple near-simultaneous manifest requests do not start duplicate transcodes for the same session.
+Personal HLS sessions are keyed by movie ID, requested profile, audio track, playback session ID, and start time. If the same request arrives again, Igloo refreshes the cached session TTL and reuses the process. When a new personal session is created for the same movie, user, and playback session ID, older sessions for that playback session are cleaned up so seeks and reloads do not leave extra FFmpeg processes running. Concurrent creation is deduplicated with singleflight so multiple near-simultaneous manifest requests do not start duplicate transcodes for the same session. Clients can also tear a playback session's HLS sessions down explicitly with `POST /api/movies/{id}/hls/session/stop`.
+
+HLS requests additionally accept an optional `reload` query parameter. It is an opaque client-supplied value that is echoed into the rewritten playlist asset URLs; it is not part of the session cache key.
 
 FFmpeg runs with `context.Background()` after session creation. This is deliberate: an HLS process must outlive the HTTP request that created it, because the browser will request the manifest and segments as separate requests. The session cache owns the lifecycle. Expiration, eviction, room cleanup, or server shutdown stops the process and removes the temp directory.
 
@@ -160,25 +162,29 @@ The `fast` preset is a practical default for self-hosted playback: it improves s
 When the source frame rate is known, Igloo sets a fixed 4-second GOP:
 
 ```text
--g:v:0 <segment_time*fps> -keyint_min:v:0 <segment_time*fps>
+-g:v:0 <ceil(segment_time*fps)> -keyint_min:v:0 <ceil(segment_time*fps)>
 ```
 
-Hardware encoders rely on that fixed GOP when the frame rate is known. Software transcodes, and hardware transcodes with unknown frame rate, also use forced keyframe expressions:
+Every transcode, regardless of encoder, also uses a forced keyframe expression:
 
 ```text
 -force_key_frames:0 expr:gte(t,n_forced*4)
 ```
 
-Both paths align keyframes with the 4-second HLS segment target. Without predictable keyframes, HLS segments can drift, seek behavior gets worse, and browsers may wait longer for independently decodable frames.
+The GOP flags make the GOP the right size, while `-force_key_frames` is what actually pins keyframes to the exact segment timestamps so every HLS segment starts on an IDR frame. GOP counting alone drifts on VFR sources and non-integer frame rates (23.976 fps rounds to a 96-frame GOP, which is about 4.004 seconds), splitting segments later and later. Without predictable keyframes, HLS segments can drift, seek behavior gets worse, and browsers may wait longer for independently decodable frames.
 
 FFmpeg also runs with:
 
 - `-fflags +genpts` to generate timestamps when sources have missing or awkward presentation timestamps.
 - `-analyzeduration 5000000` and `-probesize 5000000` to give FFmpeg enough input data to identify streams without making startup unbounded.
+- `-readrate 4` and `-readrate_initial_burst 60`, when the FFmpeg build supports those CLI options, so a session reads input at most 4x realtime after an initial 60-second burst instead of racing arbitrarily far ahead of playback.
+- `-map_metadata -1` and `-map_chapters -1` to keep source metadata and chapter markers out of HLS output.
 - `-avoid_negative_ts make_zero` to normalize output timestamps.
 - `-max_muxing_queue_size 1024` to tolerate sources with stream timing that would otherwise overflow FFmpeg's muxing queue.
 
-Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. Total pressure on a home server is bounded by the HLS transcode limiter instead: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS FFmpeg sessions, and the default is `max(1, runtime.NumCPU()/4)`.
+Transcodes also tag output color explicitly: the output gets `-color_primaries bt709 -color_trc bt709 -colorspace bt709`, every video filter chain ends with a matching `setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709`, and `-pix_fmt yuv420p` is set for all encoders except `h264_qsv` and the CUDA filter paths, which control their pixel format inside the filter chain.
+
+Igloo does not pass `-threads` to FFmpeg. libx264 and the hardware encoders choose their own per-process thread behavior. Total pressure on a home server is bounded by the HLS transcode limiter instead: `HLS_MAX_CPU_TRANSCODES` sets the maximum number of concurrent HLS transcode sessions, and the default is `max(1, runtime.NumCPU()/4)`. Copy-video (remux) sessions bypass the limiter because they do not encode video.
 
 ## Audio Handling
 
@@ -222,7 +228,7 @@ The FFmpeg encoder mapping is:
 | --- | --- | --- | --- |
 | `cpu` | none | `libx264` | Any supported runtime |
 | `apple` | `-hwaccel videotoolbox` | `h264_videotoolbox` | macOS with VideoToolbox-capable FFmpeg |
-| `nvidia` | software decode; CUDA filter device only when `scale_cuda`/`tonemap_cuda` probes pass | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
+| `nvidia` | `-hwaccel cuda` when the `cuda` hwaccel is probed; CUDA filter device only when `scale_cuda`/`tonemap_cuda` probes pass | `h264_nvenc` | Linux with NVIDIA driver/runtime support |
 | `intel` | software decode by default; QSV filter device only when SDR `scale_qsv` is probed usable | `h264_qsv` | Linux with Intel QSV support |
 
 NVIDIA adds:
@@ -243,7 +249,7 @@ Igloo only sends those Intel encoder options when the probed FFmpeg build lists 
 
 At startup, after the `-version` executability check, Igloo probes FFmpeg for encoders, filters, hardware acceleration methods, key filter options, encoder options, and selected runtime filter chains. CPU, unknown devices, missing hardware encoders, failed NVENC runtime probes, failed QSV runtime probes, and missing Apple VideoToolbox encoder support fall back to `libx264`. This is intentional: an invalid or unavailable hardware mode should not create a new unsupported encoder path inside the argument builder. The settings API validates known device names, but the HLS builder still has a safe CPU fallback.
 
-NVIDIA encode is checked with a short runtime encode probe, not just by looking for `h264_nvenc` in `ffmpeg -encoders`. Igloo does not use `-hwaccel cuda` for HLS because hardware decode support depends on the source codec and profile. For SDR transcodes, NVIDIA normally uses software decode and software scaling into `yuv420p` frames before `h264_nvenc` encode:
+NVIDIA encode is checked with a short runtime encode probe, not just by looking for `h264_nvenc` in `ffmpeg -encoders`. When the probed build supports the `cuda` hwaccel, NVIDIA transcodes add `-hwaccel cuda` without `-hwaccel_output_format`: FFmpeg decodes on the GPU when the source codec is supported and transparently falls back to software decode otherwise, and decoded frames land in system memory either way, so the same filter chains work in both cases. For SDR transcodes, NVIDIA normally uses software scaling into `yuv420p` frames before `h264_nvenc` encode:
 
 ```text
 scale=-2:<height>,format=yuv420p
@@ -256,9 +262,7 @@ If NVENC is usable and FFmpeg also exposes `cuda`, `hwupload`, `scale_cuda`, the
 -vf format=nv12,hwupload,scale_cuda=w=-2:h=<height>:format=yuv420p
 ```
 
-Igloo does not use `-hwaccel cuda` for this path. Software decode avoids failing playback on files whose source decode path is unsupported by the GPU while still allowing CUDA filters and NVENC encode when those runtime probes pass.
-
-Intel QSV encode is checked with a short runtime encode probe, not just by looking for `h264_qsv` in `ffmpeg -encoders`. For SDR transcodes, Igloo normally uses software decode and software scaling into `nv12` frames before `h264_qsv` encode:
+Intel QSV encode is checked with a short runtime encode probe, not just by looking for `h264_qsv` in `ffmpeg -encoders`. Unlike CUDA, QSV decode is intentionally not enabled: FFmpeg's generic `-hwaccel qsv` does not fall back to software decode as reliably across driver stacks. For SDR transcodes, Igloo uses software decode and normally software scaling into `nv12` frames before `h264_qsv` encode:
 
 ```text
 scale=-2:<height>,format=nv12
@@ -270,8 +274,6 @@ If QSV encode is usable and FFmpeg also exposes `qsv`, `scale_qsv`, the `scale_q
 -init_hw_device qsv=igloo_qsv -filter_hw_device igloo_qsv
 -vf format=nv12,hwupload=extra_hw_frames=64,scale_qsv=w=-2:h=<height>:format=nv12
 ```
-
-Igloo does not use `-hwaccel qsv` for the default Intel encode-only path.
 
 NVIDIA and Intel hardware acceleration require host drivers, device access, and an FFmpeg build with the matching encoder support. Apple VideoToolbox is available only on macOS builds with a VideoToolbox-capable FFmpeg binary.
 
@@ -335,7 +337,7 @@ The HLS manifest accepts a `start` query parameter. When `start` is greater than
 
 Igloo exposes the rebased session as a VOD playlist. The files on disk start at `segment_0.m4s`, but the UI keeps absolute movie time. When a seek requires a different offset, the client asks for a manifest with a new `start` value and Igloo creates a new session.
 
-Final playlists from completed rebased sessions can include accurate FFmpeg segment durations for the generated portion. Igloo fills earlier timeline space with placeholder durations so hls.js has a coherent total-duration timeline.
+A rebased session's playlist covers only the remaining time from the start offset to the end of the movie. While FFmpeg is still encoding, Igloo generates the VOD playlist from that remaining duration; after FFmpeg exits successfully, the finalized FFmpeg playlist with accurate segment durations is served with only its asset URLs rewritten. The client is responsible for mapping session-local playback time back to absolute movie time in the UI.
 
 This is more complex than exposing FFmpeg's event playlist directly, but it gives browser players the behavior users expect from a movie: visible duration, seeking, resume, and a stable VOD presentation.
 
@@ -362,7 +364,7 @@ The endpoint:
 uses `trackIndex` as the 0-based index into the movie's stored subtitle rows. It then maps that row back to the absolute ffprobe stream index and runs FFmpeg:
 
 ```text
-ffmpeg -v error -y -i <source> -map 0:<stream_index> -c:s webvtt -f webvtt pipe:1
+ffmpeg -v error -i <source> -map 0:<stream_index> -c:s webvtt -f webvtt pipe:1
 ```
 
 The output is returned directly from stdout and cached for one hour by movie ID and stream index. The request has a 60-second timeout so a difficult subtitle track cannot tie up a request indefinitely.
@@ -383,7 +385,7 @@ For binary deployments:
 
 - `TRANSCODE_DIR` seeds the Settings transcode directory on first launch; after that, edit it from Settings.
 - HLS temp output is written below the Settings transcode directory.
-- `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS FFmpeg sessions. It is not stored in Settings.
+- `HLS_MAX_CPU_TRANSCODES` is read at startup and limits concurrent HLS transcode sessions; copy-video (remux) sessions are not counted. It is not stored in Settings.
 - Configured media directories should be readable by the Igloo process. Igloo does not need write access to media libraries.
 
 For local development:

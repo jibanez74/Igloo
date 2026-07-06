@@ -717,6 +717,7 @@ function TracksTabContent() {
 
       <VirtualizedTracksList
         virtualItems={virtualItems}
+        allTracks={allTracks}
         likedSet={likedSet}
         totalTracks={totalTracks}
         hasNextPage={hasNextPage}
@@ -729,6 +730,7 @@ function TracksTabContent() {
 
 type VirtualizedTracksListProps = {
   virtualItems: VirtualItem[];
+  allTracks: TrackListItemType[];
   likedSet: Set<number>;
   totalTracks: number;
   hasNextPage: boolean;
@@ -738,6 +740,7 @@ type VirtualizedTracksListProps = {
 
 function VirtualizedTracksList({
   virtualItems,
+  allTracks,
   likedSet,
   totalTracks,
   hasNextPage,
@@ -747,6 +750,14 @@ function VirtualizedTracksList({
   "use no memo";
 
   const { listRef, scrollMargin } = useWindowScrollMargin<HTMLDivElement>();
+
+  // Rows are memoized (see TrackListItem), so they receive the loaded track
+  // list through a ref whose identity never changes; clicking play reads the
+  // freshest list from it to queue the whole tab.
+  const allTracksRef = useRef<TrackListItemType[]>(allTracks);
+  useEffect(() => {
+    allTracksRef.current = allTracks;
+  });
 
   const onChange = useVirtualizedInfiniteLoader({
     itemCount: virtualItems.length,
@@ -815,7 +826,11 @@ function VirtualizedTracksList({
               {item.type === "letter" ? (
                 <LetterHeader letter={item.letter} />
               ) : (
-                <TrackListItem track={item.track} isLiked={likedSet.has(item.track.id)} />
+                <TrackListItem
+                  track={item.track}
+                  isLiked={likedSet.has(item.track.id)}
+                  queueRef={allTracksRef}
+                />
               )}
             </div>
           );
@@ -925,21 +940,17 @@ function LetterHeader({ letter }: { letter: string }) {
 const TrackListItem = memo(function TrackListItem({
   track,
   isLiked,
+  queueRef,
 }: {
   track: TrackListItemType;
   isLiked: boolean;
+  queueRef: React.RefObject<TrackListItemType[]>;
 }) {
   const audioPlayer = useAudioPlayerActions();
   const playerState = useAudioPlayerState();
 
   const handlePlay = () => {
-    const audioTrack = convertToAudioTrack(track);
-
-    audioPlayer.playTrack(audioTrack, [audioTrack], {
-      cover: unwrapString(track.album_cover),
-      title: unwrapString(track.album_title) ?? "Unknown Album",
-      musician: unwrapString(track.musician_name),
-    });
+    audioPlayer.playTrackFromList(queueRef.current, track.id);
   };
 
   return (

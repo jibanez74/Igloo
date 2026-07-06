@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { formatTimeSeconds } from "@/lib/format";
 import {
   MOTION_PROGRESS_FILL_CLASS,
@@ -20,6 +20,7 @@ type ProgressBarProps = {
   variant: ProgressBarVariant;
   ariaLabel?: string;
   groupLabel?: string;
+  resetKey?: string | number;
 };
 
 // Variant-specific styles
@@ -36,25 +37,25 @@ const variantStyles: Record<
 > = {
   expanded: {
     container: "mb-6 w-full max-w-md",
-    bar: "group relative h-2 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+    bar: "group relative h-2 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
     thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
+      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100",
     timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "below",
   },
   minimized: {
     container: "hidden max-w-md flex-1 items-center gap-3 sm:flex",
-    bar: "group relative h-1.5 flex-1 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
+    bar: "group relative h-1.5 flex-1 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
     thumb:
-      "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
+      "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus-within:opacity-100",
     timeText: "w-10 text-xs text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "inline",
   },
   mobile: {
     container: "mt-2 sm:hidden",
-    bar: "relative h-1 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
+    bar: "relative h-1 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
     thumb: "", // No thumb on mobile for cleaner look
     timeText: "text-xs text-muted-foreground tabular-nums",
     showTimes: true,
@@ -62,18 +63,18 @@ const variantStyles: Record<
   },
   video: {
     container: "mb-4 w-full",
-    bar: "group relative h-2 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+    bar: "group relative h-2 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
     thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus:opacity-100",
+      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100",
     timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: true,
     timesLayout: "below",
   },
   trailer: {
     container: "mb-4 w-full",
-    bar: "group relative h-1.5 cursor-pointer rounded-full bg-muted focus:ring-2 focus:ring-ring focus:outline-none",
+    bar: "group relative h-1.5 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
     thumb:
-      "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus:opacity-100",
+      "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus-within:opacity-100",
     timeText: "text-sm text-muted-foreground tabular-nums",
     showTimes: false,
     timesLayout: "below",
@@ -95,14 +96,25 @@ export default function ProgressBar({
   variant,
   ariaLabel = "Seek through track",
   groupLabel = "Playback progress",
+  resetKey,
 }: ProgressBarProps) {
   const styles = variantStyles[variant];
-  const activePointerIdRef = useRef<number | null>(null);
+  // While the user is scrubbing, the media element's currentTime lags behind
+  // (seeks are async), so the displayed position follows the pending scrub
+  // value instead of snapping back to the stale currentTime prop.
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  // When the playing media changes (e.g. track auto-advance mid-drag), a
+  // pending scrub value belongs to the old media and must not carry over.
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
+    setScrubTime(null);
+  }
   const safeDuration =
     Number.isFinite(duration) && duration > 0 ? duration : 0;
   const isSeekable = safeDuration > 0;
   const safeCurrentTime = isSeekable
-    ? clampToRange(currentTime, 0, safeDuration)
+    ? clampToRange(scrubTime ?? currentTime, 0, safeDuration)
     : 0;
   const progress = isSeekable ? (safeCurrentTime / safeDuration) * 100 : 0;
   const pageSeekStep = Math.min(30, Math.max(10, safeDuration * 0.1));
@@ -120,61 +132,18 @@ export default function ProgressBar({
     onSeek(clampToRange(nextTime, 0, safeDuration));
   };
 
-  const getSeekTime = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isSeekable) {
-      return 0;
-    }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) {
-      return 0;
-    }
-
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    return (x / rect.width) * safeDuration;
-  };
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isSeekable || !e.isPrimary || activePointerIdRef.current !== null) return;
-
-    activePointerIdRef.current = e.pointerId;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    seekTo(getSeekTime(e));
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isSeekable || activePointerIdRef.current !== e.pointerId) return;
-
-    seekTo(getSeekTime(e));
-  };
-
-  const releasePointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    const activePointerId = activePointerIdRef.current;
-    if (
-      activePointerId !== null &&
-      e.currentTarget.hasPointerCapture?.(activePointerId)
-    ) {
-      e.currentTarget.releasePointerCapture(activePointerId);
-    }
-    activePointerIdRef.current = null;
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activePointerIdRef.current !== e.pointerId) return;
-
-    if (isSeekable) {
-      seekTo(getSeekTime(e));
-    }
-
-    releasePointerDrag(e);
-  };
-
-  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activePointerIdRef.current !== e.pointerId) {
       return;
     }
 
-    releasePointerDrag(e);
+    const nextTime = clampToRange(e.target.valueAsNumber, 0, safeDuration);
+    setScrubTime(nextTime);
+    onSeek(nextTime);
+  };
+
+  const clearScrub = () => {
+    setScrubTime(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -211,31 +180,7 @@ export default function ProgressBar({
   };
 
   const slider = (
-    <div
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onKeyDown={handleKeyDown}
-      tabIndex={isSeekable ? 0 : -1}
-      className={cn(
-        styles.bar,
-        isSeekable && "touch-none",
-        !isSeekable && "cursor-default opacity-60",
-      )}
-      role="slider"
-      aria-label={ariaLabel}
-      aria-disabled={!isSeekable}
-      aria-orientation="horizontal"
-      aria-valuenow={Math.round(safeCurrentTime)}
-      aria-valuemin={0}
-      aria-valuemax={Math.round(safeDuration)}
-      aria-valuetext={
-        isSeekable
-          ? `${formatTimeSeconds(safeCurrentTime)} of ${formatTimeSeconds(safeDuration)}`
-          : "Seek unavailable"
-      }
-    >
+    <div className={cn(styles.bar, !isSeekable && "opacity-60")}>
       <div
         className={fillClassName}
         style={{ width: `${progress}%` }}
@@ -246,6 +191,33 @@ export default function ProgressBar({
           style={{ left: `${progress}%` }}
         />
       )}
+      {/* A transparent native range input handles all interaction: unlike a
+          custom role="slider" div, it stays operable with iOS VoiceOver's
+          adjustable gestures, which never reach pointer or keydown handlers. */}
+      <input
+        type="range"
+        min={0}
+        max={isSeekable ? safeDuration : 0}
+        step={1}
+        value={safeCurrentTime}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onPointerUp={clearScrub}
+        onPointerCancel={clearScrub}
+        onBlur={clearScrub}
+        tabIndex={isSeekable ? 0 : -1}
+        className={cn(
+          "absolute top-1/2 left-0 h-6 w-full -translate-y-1/2 appearance-none bg-transparent opacity-0 focus:outline-none",
+          isSeekable ? "cursor-pointer touch-none" : "cursor-default",
+        )}
+        aria-label={ariaLabel}
+        aria-disabled={!isSeekable}
+        aria-valuetext={
+          isSeekable
+            ? `${formatTimeSeconds(safeCurrentTime)} of ${formatTimeSeconds(safeDuration)}`
+            : "Seek unavailable"
+        }
+      />
     </div>
   );
 

@@ -87,9 +87,11 @@ Notes:
 - **Untokenized exceptions to be aware of** (do not hunt for a token for these):
   - `boot.css` splash-message greys `#64748B` (light) / `#94A3B8` (dark) are
     hardcoded, not drawn from `muted-foreground`.
-  - The media cards (`MovieCard`, `AlbumCard`) use raw `bg-black/30`, `bg-black/40`,
-    `text-white`, and a `from-black/90` poster gradient. White-on-darkened-poster is a
-    legitimate over-media pattern; port it as literal black/alpha + white, not tokens.
+  - The media cards use raw black/alpha + white over posters: `MovieCard` uses
+    `bg-black/30` (dim overlay), `text-white`, and a `from-black/90` poster gradient;
+    `AlbumCard` uses `bg-black/40` (dim overlay). Both share `shadow-black/30`.
+    White-on-darkened-poster is a legitimate over-media pattern; port it as literal
+    black/alpha + white, not tokens.
 - All token pairs pass their contrast budget in both themes (verified by
   `contrast.test.ts`); e.g. `success-foreground` on `success` measures ~4.96:1 (light)
   and ~9.73:1 (dark).
@@ -350,8 +352,12 @@ All media cards share style constants in `web/src/lib/constants.ts`
   tracks". No Play button; focus just zooms + lifts.
 - **`TrackItem.tsx`** — list row, variants `library | playlist | musician | album`. In
   album variant a track index swaps to a spinner/primary color when playing. **Caveat**:
-  in musician/album variants the Play button is `opacity-0` until hover — on TV, always
-  show it or reveal on **row focus**. Rows also carry a Like heart and an actions menu.
+  in musician/album variants the Play button is always visible on touch/small screens but
+  hidden on `sm`+ until row hover or keyboard focus (`sm:opacity-0 sm:group-hover:opacity-100
+  sm:focus-visible:opacity-100`), and it stays visible on the **current track** regardless —
+  a port must keep the keyboard-focus and current-track paths so the control is never hidden
+  from keyboard users or on the active row. On TV, always show it or reveal on **row focus**.
+  Rows also carry a Like heart and an actions menu.
 
 ### 3.4 Media playback UX
 

@@ -7,6 +7,9 @@ import {
 } from "@/lib/constants";
 
 describe("ProgressBar", () => {
+  // jsdom does not implement native range-input keyboard stepping, so this
+  // exercises the component's own keydown handler (which also overrides the
+  // native 1s step with friendlier increments in real browsers).
   it("seeks with keyboard controls", () => {
     const onSeek = vi.fn();
 
@@ -55,13 +58,10 @@ describe("ProgressBar", () => {
       const slider = screen.getByRole("slider");
 
       fireEvent.keyDown(slider, { key: "ArrowRight" });
-      fireEvent.pointerDown(slider, {
-        clientX: 50,
-        isPrimary: true,
-        pointerId: 1,
-      });
+      fireEvent.change(slider, { target: { value: "50" } });
 
       expect(slider).toHaveAttribute("aria-disabled", "true");
+      expect(slider).toHaveAttribute("tabindex", "-1");
       expect(onSeek).not.toHaveBeenCalled();
     },
   );
@@ -98,11 +98,12 @@ describe("ProgressBar", () => {
 
     const group = screen.getByRole("group");
     const slider = screen.getByRole("slider");
-    const fill = slider.firstElementChild;
+    const bar = slider.parentElement;
+    const fill = bar?.firstElementChild;
     const thumb = fill?.nextElementSibling;
 
     expect(group).toHaveClass("mb-4", "w-full");
-    expect(slider).toHaveClass("h-1.5", "focus:ring-ring");
+    expect(bar).toHaveClass("h-1.5", "focus-within:ring-ring");
     expect(fill).toHaveClass(
       "bg-primary",
       ...MOTION_PROGRESS_FILL_CLASS.split(" "),
@@ -110,12 +111,12 @@ describe("ProgressBar", () => {
     expect(thumb).toHaveClass(
       "size-3",
       "group-hover:opacity-100",
-      "group-focus:opacity-100",
+      "group-focus-within:opacity-100",
       ...MOTION_PROGRESS_THUMB_REVEAL_CLASS.split(" "),
     );
   });
 
-  it("seeks from pointer position", () => {
+  it("seeks when the range input value changes", () => {
     const onSeek = vi.fn();
 
     render(
@@ -128,24 +129,110 @@ describe("ProgressBar", () => {
     );
 
     const slider = screen.getByRole("slider");
-    vi.spyOn(slider, "getBoundingClientRect").mockReturnValue({
-      bottom: 10,
-      height: 10,
-      left: 20,
-      right: 220,
-      top: 0,
-      width: 200,
-      x: 20,
-      y: 0,
-      toJSON: () => ({}),
-    });
 
-    fireEvent.pointerDown(slider, {
-      clientX: 120,
-      isPrimary: true,
-      pointerId: 1,
-    });
+    fireEvent.change(slider, { target: { value: "100" } });
+    expect(onSeek).toHaveBeenLastCalledWith(100);
 
-    expect(onSeek).toHaveBeenCalledWith(100);
+    fireEvent.change(slider, { target: { value: "999" } });
+    expect(onSeek).toHaveBeenLastCalledWith(200);
+  });
+
+  it("keeps the scrubbed position until the pointer is released", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    fireEvent.change(slider, { target: { value: "100" } });
+
+    // A stale timeupdate re-render must not snap the thumb back mid-drag.
+    rerender(
+      <ProgressBar
+        currentTime={51}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+    expect(slider.value).toBe("100");
+
+    fireEvent.pointerUp(slider);
+    rerender(
+      <ProgressBar
+        currentTime={102}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+    expect(slider.value).toBe("102");
+  });
+
+  it("clears the scrubbed position when the pointer is cancelled", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    fireEvent.change(slider, { target: { value: "100" } });
+    fireEvent.pointerCancel(slider);
+
+    rerender(
+      <ProgressBar
+        currentTime={51}
+        duration={200}
+        onSeek={onSeek}
+        variant="trailer"
+      />,
+    );
+    expect(slider.value).toBe("51");
+  });
+
+  it("drops a pending scrub value when resetKey changes", () => {
+    const onSeek = vi.fn();
+
+    const { rerender } = render(
+      <ProgressBar
+        currentTime={50}
+        duration={200}
+        onSeek={onSeek}
+        variant="expanded"
+        resetKey={1}
+      />,
+    );
+
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+
+    fireEvent.change(slider, { target: { value: "180" } });
+    expect(slider.value).toBe("180");
+
+    // Track auto-advances mid-drag: the new track must not inherit the old
+    // track's scrub position.
+    rerender(
+      <ProgressBar
+        currentTime={0}
+        duration={240}
+        onSeek={onSeek}
+        variant="expanded"
+        resetKey={2}
+      />,
+    );
+    expect(slider.value).toBe("0");
   });
 });
