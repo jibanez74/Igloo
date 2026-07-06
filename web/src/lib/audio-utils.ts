@@ -32,14 +32,16 @@ export function convertToAudioTrack(track: PlayableTrackData) {
   };
 }
 
-// Extract cover and musician info from playable track data
+// Extract cover, musician, and album title info from playable track data
 export function extractTrackMetadata(track: PlayableTrackData): {
   cover: string | null;
   musician: string | null;
+  albumTitle: string;
 } {
   return {
     cover: track.album_cover.Valid ? track.album_cover.String : null,
     musician: track.musician_name.Valid ? track.musician_name.String : null,
+    albumTitle: track.album_title?.Valid ? track.album_title.String : "",
   };
 }
 

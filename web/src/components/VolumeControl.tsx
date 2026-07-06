@@ -182,9 +182,6 @@ export default function VolumeControl({
       onChange={handleVolumeChange}
       className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
       aria-label="Volume"
-      aria-valuenow={volumePercent}
-      aria-valuemin={0}
-      aria-valuemax={100}
       aria-valuetext={`${volumePercent}% volume`}
     />
   );

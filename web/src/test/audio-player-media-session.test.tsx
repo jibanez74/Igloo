@@ -306,6 +306,79 @@ describe("AudioPlayer Media Session", () => {
     expect(() => renderAudioPlayer()).not.toThrow();
   });
 
+  it("clears media session metadata when playback stops", () => {
+    const mediaSession = mockMediaSession();
+    const sharedProps = {
+      tracks: [track()],
+      albumCover: "/covers/7.jpg",
+      albumTitle: "Blue Record",
+      musicianName: "The Band",
+      onTrackChange: vi.fn(),
+      audioRef: createRef<HTMLAudioElement>(),
+      isPlaying: false,
+      onPlayStateChange: vi.fn(),
+      isExpanded: false,
+      onMinimize: vi.fn(),
+      onExpand: vi.fn(),
+    };
+
+    const { rerender } = render(<AudioPlayer track={track()} {...sharedProps} />);
+    expect(mediaSession.metadata).not.toBeNull();
+
+    rerender(<AudioPlayer track={null} {...sharedProps} />);
+    expect(mediaSession.metadata).toBeNull();
+  });
+
+  it("resets the displayed position when the track changes", () => {
+    mockMediaSession();
+    const first = track();
+    const second = track({ id: 43, title: "Basalt" });
+    const sharedProps = {
+      tracks: [first, second],
+      albumCover: "/covers/7.jpg",
+      albumTitle: "Blue Record",
+      musicianName: "The Band",
+      onTrackChange: vi.fn(),
+      audioRef: createRef<HTMLAudioElement>(),
+      isPlaying: false,
+      onPlayStateChange: vi.fn(),
+      isExpanded: false,
+      onMinimize: vi.fn(),
+      onExpand: vi.fn(),
+    };
+
+    const { rerender, container } = render(
+      <AudioPlayer track={first} {...sharedProps} />,
+    );
+
+    const audio = container.querySelector("audio");
+    if (!audio) {
+      throw new Error("Audio element was not rendered");
+    }
+    setAudioNumber(audio, "duration", 120);
+    setAudioNumber(audio, "currentTime", 60);
+    act(() => {
+      audio.dispatchEvent(new Event("durationchange"));
+      audio.dispatchEvent(new Event("timeupdate"));
+    });
+
+    for (const slider of screen.getAllByRole("slider", {
+      name: "Seek through track",
+    })) {
+      expect((slider as HTMLInputElement).value).toBe("60");
+    }
+
+    // The new track's media events have not fired yet; the old position and
+    // duration must not linger on the progress bar.
+    rerender(<AudioPlayer track={second} {...sharedProps} />);
+
+    for (const slider of screen.getAllByRole("slider", {
+      name: "Seek through track",
+    })) {
+      expect((slider as HTMLInputElement).value).toBe("0");
+    }
+  });
+
   it("keeps minimized audio chrome labelled and reduced-motion safe", () => {
     renderAudioPlayer({ onClose: vi.fn() });
 

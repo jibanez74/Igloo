@@ -84,13 +84,10 @@ export function AudioPlayerProvider({
     }
 
     for (const track of tracks) {
-      const { cover, musician } = extractTrackMetadata(track);
+      const { cover, musician, albumTitle } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
       trackMusiciansRef.current.set(track.id, musician);
-      trackAlbumTitlesRef.current.set(
-        track.id,
-        track.album_title?.Valid ? track.album_title.String : "",
-      );
+      trackAlbumTitlesRef.current.set(track.id, albumTitle);
     }
   };
 
@@ -296,18 +293,43 @@ export function AudioPlayerProvider({
     return () => clearInterval(interval);
   }, [isPlaying, queueState.currentTrack?.id]);
 
-  const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+  // Every playback entry point resets the metadata maps, seeds the queue, and
+  // expands the player. Mixed-list flows also pass rawTracks so setTrack can
+  // resolve per-track metadata on navigation; album flows leave the maps empty
+  // so the queue-wide albumInfo carries over.
+  const startQueue = ({
+    currentTrack,
+    tracks,
+    albumInfo,
+    rawTracks,
+    isShuffleMode = false,
+    isPlayAllMode = false,
+  }: {
+    currentTrack: TrackType;
+    tracks: TrackType[];
+    albumInfo: { cover: string | null; title: string; musician: string | null };
+    rawTracks?: PlayableTrackData[];
+    isShuffleMode?: boolean;
+    isPlayAllMode?: boolean;
+  }) => {
     clearMetadataRefs();
+    if (rawTracks) {
+      populateTrackMetadata(rawTracks);
+    }
     setQueueState({
-      currentTrack: track,
-      tracks: playlist,
+      currentTrack,
+      tracks,
       albumCover: albumInfo.cover,
       albumTitle: albumInfo.title,
       musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
+      isShuffleMode,
+      isPlayAllMode,
     });
     setIsExpanded(true);
+  };
+
+  const playTrack: AudioPlayerActions["playTrack"] = (track, playlist, albumInfo) => {
+    startQueue({ currentTrack: track, tracks: playlist, albumInfo });
   };
 
   const playTrackFromList: AudioPlayerActions["playTrackFromList"] = (
@@ -330,40 +352,21 @@ export function AudioPlayerProvider({
     );
     if (!startRawTrack) return;
 
-    clearMetadataRefs();
-    populateTrackMetadata(uniqueRawTracks);
-
     const tracks = uniqueRawTracks.map(convertToAudioTrack);
-    const { cover, musician } = extractTrackMetadata(startRawTrack);
+    const { cover, musician, albumTitle } = extractTrackMetadata(startRawTrack);
 
-    setQueueState({
+    startQueue({
       currentTrack: tracks[uniqueRawTracks.indexOf(startRawTrack)],
       tracks,
-      albumCover: cover,
-      albumTitle: startRawTrack.album_title?.Valid
-        ? startRawTrack.album_title.String
-        : "",
-      musicianName: musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
+      albumInfo: { cover, title: albumTitle, musician },
+      rawTracks: uniqueRawTracks,
     });
-    setIsExpanded(true);
   };
 
   const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
-    clearMetadataRefs();
-    setQueueState({
-      currentTrack: tracks[0],
-      tracks,
-      albumCover: albumInfo.cover,
-      albumTitle: albumInfo.title,
-      musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
-    });
-    setIsExpanded(true);
+    startQueue({ currentTrack: tracks[0], tracks, albumInfo });
   };
 
   const shuffleAlbum: AudioPlayerActions["shuffleAlbum"] = (tracks, albumInfo) => {
@@ -371,17 +374,7 @@ export function AudioPlayerProvider({
 
     const shuffled = shuffleArray(tracks);
 
-    clearMetadataRefs();
-    setQueueState({
-      currentTrack: shuffled[0],
-      tracks: shuffled,
-      albumCover: albumInfo.cover,
-      albumTitle: albumInfo.title,
-      musicianName: albumInfo.musician,
-      isShuffleMode: false,
-      isPlayAllMode: false,
-    });
-    setIsExpanded(true);
+    startQueue({ currentTrack: shuffled[0], tracks: shuffled, albumInfo });
   };
 
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
@@ -403,23 +396,15 @@ export function AudioPlayerProvider({
         return true;
       });
       const tracks = rawTracks.map(convertToAudioTrack);
+      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
-      clearMetadataRefs();
-      populateTrackMetadata(rawTracks);
-
-      const firstTrack = rawTracks[0];
-      const { cover, musician } = extractTrackMetadata(firstTrack);
-
-      setQueueState({
+      startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumCover: cover,
-        albumTitle: "Shuffle All",
-        musicianName: musician,
+        albumInfo: { cover, title: "Shuffle All", musician },
+        rawTracks,
         isShuffleMode: true,
-        isPlayAllMode: false,
       });
-      setIsExpanded(true);
     };
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
@@ -431,26 +416,19 @@ export function AudioPlayerProvider({
 
       const rawTracks = response.data.tracks;
       const tracks = rawTracks.map(convertToAudioTrack);
+      const { cover, musician } = extractTrackMetadata(rawTracks[0]);
 
-      clearMetadataRefs();
-      populateTrackMetadata(rawTracks);
-
-      playAllOffsetRef.current = rawTracks.length;
-      playAllTotalRef.current = response.data.total;
-
-      const firstTrack = rawTracks[0];
-      const { cover, musician } = extractTrackMetadata(firstTrack);
-
-      setQueueState({
+      startQueue({
         currentTrack: tracks[0],
         tracks,
-        albumCover: cover,
-        albumTitle: "All Tracks",
-        musicianName: musician,
-        isShuffleMode: false,
+        albumInfo: { cover, title: "All Tracks", musician },
+        rawTracks,
         isPlayAllMode: true,
       });
-      setIsExpanded(true);
+
+      // After startQueue: clearMetadataRefs inside it zeroes these counters.
+      playAllOffsetRef.current = rawTracks.length;
+      playAllTotalRef.current = response.data.total;
     };
 
   const setTrack: AudioPlayerActions["setTrack"] = track => {

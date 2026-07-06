@@ -91,8 +91,8 @@ describe("VolumeControl", () => {
 
     expect(screen.getByRole("button", { name: "Unmute" })).toBeVisible();
     expect(screen.getByRole("slider", { name: "Volume" })).toHaveAttribute(
-      "aria-valuenow",
-      "0",
+      "aria-valuetext",
+      "0% volume",
     );
     expect(screen.getByText("0%")).toBeVisible();
   });
@@ -112,7 +112,7 @@ describe("VolumeControl", () => {
 
     expect(media.volume).toBe(0.25);
     expect(media.muted).toBe(false);
-    expect(slider).toHaveAttribute("aria-valuenow", "25");
+    expect(slider).toHaveAttribute("aria-valuetext", "25% volume");
     expect(screen.getByRole("button", { name: "Mute" })).toBeVisible();
   });
 });

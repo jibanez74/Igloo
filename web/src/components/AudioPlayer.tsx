@@ -114,6 +114,13 @@ export default function AudioPlayer({
     currentTrackId !== lastState.trackId ||
     isPlaying !== lastState.isPlaying
   ) {
+    if (currentTrackId !== lastState.trackId) {
+      // The <audio> element persists across track changes, so the old track's
+      // position/duration would otherwise show until the new track's
+      // timeupdate/durationchange events fire.
+      setCurrentTime(0);
+      setDuration(0);
+    }
     if (!track) {
       setAnnouncement("");
     } else if (lastState.trackId !== null) {
@@ -190,11 +197,14 @@ export default function AudioPlayer({
   }, [isExpanded]);
 
   useEffect(() => {
-    if (
-      !track ||
-      !("mediaSession" in navigator) ||
-      typeof MediaMetadata === "undefined"
-    ) {
+    if (!("mediaSession" in navigator)) {
+      return;
+    }
+
+    // Clear stale lock-screen/OS media info once playback stops; otherwise
+    // the last track keeps showing after the player is closed.
+    if (!track || typeof MediaMetadata === "undefined") {
+      navigator.mediaSession.metadata = null;
       return;
     }
 
