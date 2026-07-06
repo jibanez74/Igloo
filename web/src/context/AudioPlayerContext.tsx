@@ -67,6 +67,7 @@ export function AudioPlayerProvider({
 
   const trackCoversRef = useRef<Map<number, string | null> | null>(null);
   const trackMusiciansRef = useRef<Map<number, string | null> | null>(null);
+  const trackAlbumTitlesRef = useRef<Map<number, string> | null>(null);
 
   const playAllOffsetRef = useRef(0);
   const playAllTotalRef = useRef(0);
@@ -78,17 +79,24 @@ export function AudioPlayerProvider({
     if (trackMusiciansRef.current === null) {
       trackMusiciansRef.current = new Map();
     }
+    if (trackAlbumTitlesRef.current === null) {
+      trackAlbumTitlesRef.current = new Map();
+    }
 
     for (const track of tracks) {
       const { cover, musician } = extractTrackMetadata(track);
       trackCoversRef.current.set(track.id, cover);
       trackMusiciansRef.current.set(track.id, musician);
+      if (track.album_title?.Valid) {
+        trackAlbumTitlesRef.current.set(track.id, track.album_title.String);
+      }
     }
   };
 
   const clearMetadataRefs = () => {
     trackCoversRef.current?.clear();
     trackMusiciansRef.current?.clear();
+    trackAlbumTitlesRef.current?.clear();
     playAllOffsetRef.current = 0;
     playAllTotalRef.current = 0;
   };
@@ -301,6 +309,46 @@ export function AudioPlayerProvider({
     setIsExpanded(true);
   };
 
+  const playTrackFromList: AudioPlayerActions["playTrackFromList"] = (
+    rawTracks,
+    startTrackId,
+  ) => {
+    // Mixed lists (search results, library tracks tab) can repeat an id;
+    // dedupe so findIndex-based prev/next navigation stays coherent.
+    const seenIds = new Set<number>();
+    const uniqueRawTracks = rawTracks.filter(track => {
+      if (seenIds.has(track.id)) {
+        return false;
+      }
+      seenIds.add(track.id);
+      return true;
+    });
+
+    const startRawTrack = uniqueRawTracks.find(
+      track => track.id === startTrackId,
+    );
+    if (!startRawTrack) return;
+
+    clearMetadataRefs();
+    populateTrackMetadata(uniqueRawTracks);
+
+    const tracks = uniqueRawTracks.map(convertToAudioTrack);
+    const { cover, musician } = extractTrackMetadata(startRawTrack);
+
+    setQueueState({
+      currentTrack: tracks[uniqueRawTracks.indexOf(startRawTrack)],
+      tracks,
+      albumCover: cover,
+      albumTitle: startRawTrack.album_title?.Valid
+        ? startRawTrack.album_title.String
+        : "",
+      musicianName: musician,
+      isShuffleMode: false,
+      isPlayAllMode: false,
+    });
+    setIsExpanded(true);
+  };
+
   const playAlbum: AudioPlayerActions["playAlbum"] = (tracks, albumInfo) => {
     if (tracks.length === 0) return;
 
@@ -342,7 +390,17 @@ export function AudioPlayerProvider({
         return;
       }
 
-      const rawTracks = response.data.tracks;
+      // The shuffle endpoint can repeat an id within one batch; dedupe so
+      // findIndex-based prev/next navigation stays coherent (the append
+      // effect above already dedupes subsequent batches).
+      const seenIds = new Set<number>();
+      const rawTracks = response.data.tracks.filter(track => {
+        if (seenIds.has(track.id)) {
+          return false;
+        }
+        seenIds.add(track.id);
+        return true;
+      });
       const tracks = rawTracks.map(convertToAudioTrack);
 
       clearMetadataRefs();
@@ -396,19 +454,25 @@ export function AudioPlayerProvider({
 
   const setTrack: AudioPlayerActions["setTrack"] = track => {
     setQueueState(prev => {
-      const isSpecialMode = prev.isShuffleMode || prev.isPlayAllMode;
-      const newAlbumCover = isSpecialMode
-        ? (trackCoversRef.current?.get(track.id) ?? null)
-        : prev.albumCover;
-      const newMusicianName = isSpecialMode
-        ? (trackMusiciansRef.current?.get(track.id) ?? null)
-        : prev.musicianName;
+      // Album/playlist flows clear the metadata maps, so their lookups miss
+      // and the queue-wide values carry over; mixed queues (shuffle, play
+      // all, search/library lists) resolve per-track metadata here. A track
+      // can legitimately map to null (no cover/musician), so distinguish
+      // "unmapped" from "mapped to null" via has().
+      const covers = trackCoversRef.current;
+      const musicians = trackMusiciansRef.current;
 
       return {
         ...prev,
         currentTrack: track,
-        albumCover: newAlbumCover,
-        musicianName: newMusicianName,
+        albumCover: covers?.has(track.id)
+          ? (covers.get(track.id) ?? null)
+          : prev.albumCover,
+        musicianName: musicians?.has(track.id)
+          ? (musicians.get(track.id) ?? null)
+          : prev.musicianName,
+        albumTitle:
+          trackAlbumTitlesRef.current?.get(track.id) ?? prev.albumTitle,
       };
     });
   };
@@ -467,6 +531,7 @@ export function AudioPlayerProvider({
 
   const actionsValue = {
     playTrack,
+    playTrackFromList,
     playAlbum,
     shuffleAlbum,
     startShufflePlayback,

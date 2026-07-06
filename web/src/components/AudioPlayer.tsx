@@ -43,6 +43,27 @@ type AudioPlayerProps = {
   isKeyboardSuspended?: boolean;
 };
 
+// "Previous" restarts the current track instead of navigating once playback
+// has passed this many seconds.
+const RESTART_THRESHOLD_SECONDS = 3;
+
+// Controls whose native keyboard interaction must win over the global
+// playback shortcuts.
+const INTERACTIVE_SELECTOR =
+  'button, a[href], select, summary, [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="slider"], [role="spinbutton"]';
+
+// Overlays that own their keyboard interaction entirely. The player's own
+// fullscreen dialog is exempted via the data-audio-player marker.
+const FOREIGN_OVERLAY_SELECTOR =
+  '[role="dialog"]:not([data-audio-player]), [role="alertdialog"], [role="menu"], [role="listbox"]';
+
+const ARROW_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+]);
+
 function mediaSessionSupported() {
   return (
     typeof navigator !== "undefined" &&
@@ -110,7 +131,7 @@ export default function AudioPlayer({
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
-  const prevAriaLabel = hasPrevious ? "Previous track" : "No previous track";
+  const prevAriaLabel = "Previous track";
   const nextAriaLabel = hasNext ? "Next track" : "No next track";
   const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
@@ -123,6 +144,23 @@ export default function AudioPlayer({
       await audio.play();
     } catch {
       // Autoplay can still be blocked by the browser in some cases.
+    }
+  };
+
+  // Spotify-style previous: within the first few seconds go to the previous
+  // track; otherwise (or when there is no previous track) restart the current
+  // one. The button therefore never needs to be disabled.
+  const playPrevious = () => {
+    const audio = audioRef.current;
+
+    if (hasPrevious && (audio?.currentTime ?? 0) <= RESTART_THRESHOLD_SECONDS) {
+      onTrackChange(tracks[currentIndex - 1]);
+      return;
+    }
+
+    if (audio) {
+      audio.currentTime = 0;
+      setCurrentTime(0);
     }
   };
 
@@ -197,9 +235,7 @@ export default function AudioPlayer({
   });
 
   const handleMediaSessionPrevious = useEffectEvent(() => {
-    if (hasPrevious) {
-      onTrackChange(tracks[currentIndex - 1]);
-    }
+    playPrevious();
   });
 
   const handleMediaSessionNext = useEffectEvent(() => {
@@ -388,18 +424,42 @@ export default function AudioPlayer({
       return;
     }
 
-    const target = event.target as HTMLElement;
+    const target = event.target instanceof HTMLElement ? event.target : null;
 
     if (
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.isContentEditable
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable)
     ) {
       return;
     }
 
     if (event.ctrlKey || event.metaKey || event.altKey) {
       return;
+    }
+
+    if (target) {
+      if (target.closest(FOREIGN_OVERLAY_SELECTOR)) {
+        return;
+      }
+
+      const interactive = target.closest(INTERACTIVE_SELECTOR);
+      if (interactive) {
+        // Space must activate the focused control everywhere, and arrow keys
+        // belong to widgets like tabs and radios — except inside the player's
+        // own chrome, where arrows keep seeking and adjusting volume.
+        if (event.key === " ") {
+          return;
+        }
+
+        if (
+          ARROW_KEYS.has(event.key) &&
+          !interactive.closest("[data-audio-player]")
+        ) {
+          return;
+        }
+      }
     }
 
     switch (event.key) {
@@ -441,9 +501,7 @@ export default function AudioPlayer({
       case "P":
       case "MediaTrackPrevious":
         event.preventDefault();
-        if (hasPrevious) {
-          onTrackChange(tracks[currentIndex - 1]);
-        }
+        playPrevious();
         break;
       case "r":
       case "R":
@@ -473,12 +531,6 @@ export default function AudioPlayer({
       void playAudio();
     } else {
       audio.pause();
-    }
-  };
-
-  const playPrevious = () => {
-    if (hasPrevious) {
-      onTrackChange(tracks[currentIndex - 1]);
     }
   };
 
@@ -517,8 +569,16 @@ export default function AudioPlayer({
   return (
     <>
       <audio ref={audioRef} preload="metadata" className="hidden">
-        {streamUrl && <source src={streamUrl} type={track.mime_type} />}
+        {streamUrl && (
+          <source src={streamUrl} type={track.mime_type || undefined} />
+        )}
       </audio>
+
+      {/* Rendered outside the dialog so track changes and play/pause are
+          still announced while the player is minimized. */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
 
       <Dialog
         open={isExpanded}
@@ -530,6 +590,7 @@ export default function AudioPlayer({
       >
         {isExpanded && (
           <DialogFullscreenContent
+            data-audio-player=""
             className={cn(
               MOTION_MEDIA_OVERLAY_ENTER_CLASS,
               "flex flex-col bg-linear-to-b from-background via-muted to-background",
@@ -548,10 +609,6 @@ export default function AudioPlayer({
             <DialogDescription className="sr-only">
               Press Escape to minimize.
             </DialogDescription>
-
-            <div className="sr-only" aria-live="polite" aria-atomic="true">
-              {announcement}
-            </div>
 
             <header className="flex items-center justify-between px-6 py-4">
               <button
@@ -632,10 +689,9 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={playPrevious}
-                  disabled={!hasPrevious}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                   )}
                   aria-label={prevAriaLabel}
                 >
@@ -665,10 +721,10 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={playNext}
-                  disabled={!hasNext}
+                  aria-disabled={!hasNext}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
                   )}
                   aria-label={nextAriaLabel}
                 >
@@ -695,6 +751,7 @@ export default function AudioPlayer({
         <div
           role="region"
           aria-label="Audio player"
+          data-audio-player=""
           className={cn(
             MOTION_PLAYER_CHROME_ENTER_CLASS,
             "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-2xl shadow-black/50 backdrop-blur-lg",
@@ -745,10 +802,9 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={playPrevious}
-                  disabled={!hasPrevious}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                   )}
                   aria-label={prevAriaLabel}
                 >
@@ -777,10 +833,10 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={playNext}
-                  disabled={!hasNext}
+                  aria-disabled={!hasNext}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-30",
+                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
                   )}
                   aria-label={nextAriaLabel}
                 >

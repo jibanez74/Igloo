@@ -1,5 +1,12 @@
-import { createRef, useRef, useState } from "react";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { createRef, useRef, useState, type ReactNode } from "react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "@/components/AudioPlayer";
@@ -36,7 +43,7 @@ function nullableInt64(value: number | null = null) {
   };
 }
 
-function track(): TrackType {
+function track(overrides: Partial<TrackType> = {}): TrackType {
   return {
     id: 42,
     title: "Alabaster",
@@ -63,6 +70,7 @@ function track(): TrackType {
     musician_id: nullableInt64(8),
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
   };
 }
 
@@ -77,31 +85,58 @@ function setAudioNumber(
   });
 }
 
+// setAudioNumber defines a read-only value; the restart tests need to observe
+// the `audio.currentTime = 0` assignment, so this installs a writable spy.
+function observeAudioCurrentTime(audio: HTMLAudioElement, initial: number) {
+  let currentValue = initial;
+  const set = vi.fn((next: number) => {
+    currentValue = next;
+  });
+
+  Object.defineProperty(audio, "currentTime", {
+    configurable: true,
+    get: () => currentValue,
+    set,
+  });
+
+  return set;
+}
+
 function renderAudioPlayer({
   isExpanded = false,
   onClose,
+  currentTrack = track(),
+  tracks = [currentTrack],
+  onTrackChange = vi.fn(),
+  siblings,
 }: {
   isExpanded?: boolean;
   onClose?: () => void;
+  currentTrack?: TrackType;
+  tracks?: TrackType[];
+  onTrackChange?: (nextTrack: TrackType) => void;
+  siblings?: ReactNode;
 } = {}) {
   const audioRef = createRef<HTMLAudioElement>();
-  const currentTrack = track();
   const view = render(
-    <AudioPlayer
-      track={currentTrack}
-      tracks={[currentTrack]}
-      albumCover="/covers/7.jpg"
-      albumTitle="Blue Record"
-      musicianName="The Band"
-      onTrackChange={vi.fn()}
-      audioRef={audioRef}
-      isPlaying={false}
-      onPlayStateChange={vi.fn()}
-      isExpanded={isExpanded}
-      onMinimize={vi.fn()}
-      onExpand={vi.fn()}
-      onClose={onClose}
-    />,
+    <>
+      {siblings}
+      <AudioPlayer
+        track={currentTrack}
+        tracks={tracks}
+        albumCover="/covers/7.jpg"
+        albumTitle="Blue Record"
+        musicianName="The Band"
+        onTrackChange={onTrackChange}
+        audioRef={audioRef}
+        isPlaying={false}
+        onPlayStateChange={vi.fn()}
+        isExpanded={isExpanded}
+        onMinimize={vi.fn()}
+        onExpand={vi.fn()}
+        onClose={onClose}
+      />
+    </>,
   );
 
   const audio = view.container.querySelector("audio");
@@ -283,13 +318,18 @@ describe("AudioPlayer Media Session", () => {
       }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
     expect(
-      screen.getByRole("button", { name: "No previous track" }),
+      screen.getByRole("button", { name: "Previous track" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    expect(screen.getByRole("button", { name: "Previous track" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
     expect(screen.getByRole("button", { name: "No next track" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
+    );
+    expect(screen.getByRole("button", { name: "No next track" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
     expect(
       screen.getByRole("button", { name: "Stop playback and close player" }),
@@ -311,7 +351,7 @@ describe("AudioPlayer Media Session", () => {
       screen.getByRole("button", { name: "Stop playback and close player" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
     expect(
-      screen.getByRole("button", { name: "No previous track" }),
+      screen.getByRole("button", { name: "Previous track" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
     expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
@@ -384,6 +424,221 @@ describe("AudioPlayer Media Session", () => {
     });
     await waitFor(() => {
       expect(expandButton).toHaveFocus();
+    });
+  });
+
+  describe("previous and next controls", () => {
+    function secondTrack(): TrackType {
+      return track({
+        id: 43,
+        title: "Basalt",
+        file_path: "/music/basalt.flac",
+        file_name: "basalt.flac",
+      });
+    }
+
+    it("restarts the only track when previous is pressed", () => {
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({ onTrackChange });
+      const setCurrentTime = observeAudioCurrentTime(audio, 42);
+
+      fireEvent.click(screen.getByRole("button", { name: "Previous track" }));
+
+      expect(onTrackChange).not.toHaveBeenCalled();
+      expect(setCurrentTime).toHaveBeenCalledWith(0);
+    });
+
+    it("restarts the current track when previous is pressed past the threshold", () => {
+      const first = track();
+      const current = secondTrack();
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({
+        currentTrack: current,
+        tracks: [first, current],
+        onTrackChange,
+      });
+      const setCurrentTime = observeAudioCurrentTime(audio, 10);
+
+      fireEvent.click(screen.getByRole("button", { name: "Previous track" }));
+
+      expect(onTrackChange).not.toHaveBeenCalled();
+      expect(setCurrentTime).toHaveBeenCalledWith(0);
+    });
+
+    it("navigates to the previous track near the start of playback", () => {
+      const first = track();
+      const current = secondTrack();
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({
+        currentTrack: current,
+        tracks: [first, current],
+        onTrackChange,
+      });
+      const setCurrentTime = observeAudioCurrentTime(audio, 1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Previous track" }));
+
+      expect(onTrackChange).toHaveBeenCalledWith(first);
+      expect(setCurrentTime).not.toHaveBeenCalled();
+    });
+
+    it("applies the same previous behavior to the media session handler", () => {
+      const mediaSession = mockMediaSession();
+      const first = track();
+      const current = secondTrack();
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({
+        currentTrack: current,
+        tracks: [first, current],
+        onTrackChange,
+      });
+      observeAudioCurrentTime(audio, 1);
+
+      const previousHandler = mediaSession.setActionHandler.mock.calls
+        .filter(([action, handler]) => action === "previoustrack" && handler)
+        .at(-1)?.[1] as (() => void) | undefined;
+      if (!previousHandler) {
+        throw new Error("previoustrack handler was not registered");
+      }
+
+      act(() => {
+        previousHandler();
+      });
+
+      expect(onTrackChange).toHaveBeenCalledWith(first);
+    });
+
+    it("applies the same previous behavior to the keyboard shortcut", () => {
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({ onTrackChange });
+      const setCurrentTime = observeAudioCurrentTime(audio, 42);
+
+      fireEvent.keyDown(window, { key: "p" });
+
+      expect(onTrackChange).not.toHaveBeenCalled();
+      expect(setCurrentTime).toHaveBeenCalledWith(0);
+    });
+
+    it("keeps the next button focusable but inert on the last track", () => {
+      const onTrackChange = vi.fn();
+      renderAudioPlayer({ onTrackChange });
+
+      const nextButton = screen.getByRole("button", { name: "No next track" });
+      nextButton.focus();
+
+      fireEvent.click(nextButton);
+
+      expect(onTrackChange).not.toHaveBeenCalled();
+      expect(nextButton).toHaveAttribute("aria-disabled", "true");
+      expect(nextButton).toHaveFocus();
+    });
+  });
+
+  describe("global keyboard shortcut guards", () => {
+    const dialogStub = (
+      <div role="dialog" aria-label="Stub dialog">
+        <button type="button">Dialog button</button>
+      </div>
+    );
+
+    it("leaves Space to activate focused controls instead of toggling playback", () => {
+      const { audio } = renderAudioPlayer();
+      observeAudioCurrentTime(audio, 42);
+
+      const prevButton = screen.getByRole("button", { name: "Previous track" });
+      prevButton.focus();
+
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+      const playCallsBefore = playMock.mock.calls.length;
+
+      const defaultNotPrevented = fireEvent.keyDown(prevButton, { key: " " });
+
+      expect(defaultNotPrevented).toBe(true);
+      expect(playMock.mock.calls.length).toBe(playCallsBefore);
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+    });
+
+    it("ignores shortcuts fired from inside a foreign dialog", () => {
+      const onTrackChange = vi.fn();
+      const { audio } = renderAudioPlayer({
+        onTrackChange,
+        siblings: dialogStub,
+      });
+      const setCurrentTime = observeAudioCurrentTime(audio, 42);
+
+      const dialogButton = screen.getByRole("button", {
+        name: "Dialog button",
+      });
+      dialogButton.focus();
+
+      fireEvent.keyDown(dialogButton, { key: "p" });
+      fireEvent.keyDown(dialogButton, { key: "ArrowRight" });
+
+      expect(onTrackChange).not.toHaveBeenCalled();
+      expect(setCurrentTime).not.toHaveBeenCalled();
+    });
+
+    it("keeps arrow seeking off buttons outside the player but on inside it", () => {
+      const { audio } = renderAudioPlayer({
+        siblings: <button type="button">Outside button</button>,
+      });
+      setAudioNumber(audio, "duration", 120);
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+
+      const outsideButton = screen.getByRole("button", {
+        name: "Outside button",
+      });
+      outsideButton.focus();
+      fireEvent.keyDown(outsideButton, { key: "ArrowRight" });
+      expect(setCurrentTime).not.toHaveBeenCalled();
+
+      const prevButton = screen.getByRole("button", { name: "Previous track" });
+      prevButton.focus();
+      fireEvent.keyDown(prevButton, { key: "ArrowRight" });
+      expect(setCurrentTime).toHaveBeenCalledWith(40);
+    });
+
+    it("still seeks with arrows from non-interactive targets", () => {
+      const { audio } = renderAudioPlayer();
+      setAudioNumber(audio, "duration", 120);
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+
+      fireEvent.keyDown(document.body, { key: "ArrowRight" });
+
+      expect(setCurrentTime).toHaveBeenCalledWith(40);
+    });
+  });
+
+  describe("live region announcements", () => {
+    it("announces track changes while minimized", () => {
+      const audioRef = createRef<HTMLAudioElement>();
+      const first = track();
+      const second = track({ id: 43, title: "Basalt" });
+      const sharedProps = {
+        tracks: [first, second],
+        albumCover: "/covers/7.jpg",
+        albumTitle: "Blue Record",
+        musicianName: "The Band",
+        onTrackChange: vi.fn(),
+        audioRef,
+        isPlaying: false,
+        onPlayStateChange: vi.fn(),
+        isExpanded: false,
+        onMinimize: vi.fn(),
+        onExpand: vi.fn(),
+      };
+
+      const { rerender, container } = render(
+        <AudioPlayer track={first} {...sharedProps} />,
+      );
+
+      rerender(<AudioPlayer track={second} {...sharedProps} />);
+
+      const liveRegion = container.querySelector('[aria-live="polite"]');
+      expect(liveRegion).not.toBeNull();
+      expect(liveRegion).toHaveTextContent("Now playing: Basalt by The Band");
     });
   });
 });

@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from "react";
+import { useContext, type PropsWithChildren } from "react";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/app-sidebar";
 import {
@@ -6,8 +6,20 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
+import { cn } from "@/lib/utils";
 
 export default function AppShell({ children }: PropsWithChildren) {
+  // Read the context directly (not useAudioPlayerState) so the shell also
+  // renders outside AudioPlayerProvider, e.g. in isolated tests.
+  const playerState = useContext(AudioPlayerStateContext);
+  // The minimized audio player is a fixed bottom bar; reserve space for it so
+  // the last rows of any page stay reachable while music plays.
+  const isMiniPlayerVisible =
+    playerState !== null &&
+    playerState.currentTrack !== null &&
+    !playerState.isExpanded;
+
   const handleSkipToContent = () => {
     requestAnimationFrame(() => {
       document.getElementById("main")?.focus();
@@ -36,7 +48,12 @@ export default function AppShell({ children }: PropsWithChildren) {
           <Header />
         </header>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8",
+            isMiniPlayerVisible && "pb-28 sm:pb-24",
+          )}
+        >
           {children}
         </div>
       </SidebarInset>
