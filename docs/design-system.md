@@ -352,10 +352,12 @@ All media cards share style constants in `web/src/lib/constants.ts`
   tracks". No Play button; focus just zooms + lifts.
 - **`TrackItem.tsx`** — list row, variants `library | playlist | musician | album`. In
   album variant a track index swaps to a spinner/primary color when playing. **Caveat**:
-  in musician/album variants the Play button is `sm:opacity-0` until hover (`sm:opacity-0
-  sm:group-hover:opacity-100`), so it hides only on `sm`+ screens and is always visible on
-  touch/small screens — on TV, always show it or reveal on **row focus**. Rows also carry a
-  Like heart and an actions menu.
+  in musician/album variants the Play button is always visible on touch/small screens but
+  hidden on `sm`+ until row hover or keyboard focus (`sm:opacity-0 sm:group-hover:opacity-100
+  sm:focus-visible:opacity-100`), and it stays visible on the **current track** regardless —
+  a port must keep the keyboard-focus and current-track paths so the control is never hidden
+  from keyboard users or on the active row. On TV, always show it or reveal on **row focus**.
+  Rows also carry a Like heart and an actions menu.
 
 ### 3.4 Media playback UX
 
