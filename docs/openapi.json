@@ -3,7 +3,7 @@
   "info": {
     "title": "Igloo API",
     "version": "0.1.0",
-    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields."
+    "description": "HTTP API for the Igloo self-hosted media center. Most JSON endpoints return a shared envelope with error, optional message, and optional data fields. Device bearer tokens issued via Quick Connect or device login (Authorization: Bearer igd_...) are accepted on every route that accepts cookieAuth."
   },
   "servers": [
     {
@@ -24,6 +24,10 @@
     {
       "name": "Auth",
       "description": "Session authentication"
+    },
+    {
+      "name": "Devices",
+      "description": "Quick Connect pairing and device token management."
     },
     {
       "name": "User",
@@ -158,6 +162,254 @@
         "responses": {
           "200": {
             "$ref": "#/components/responses/MessageSuccess"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/auth/device-login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Log in with email and password from a TV or mobile client and receive a device token",
+        "operationId": "authenticateDevice",
+        "security": [],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/DeviceLoginRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DeviceTokenResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/quick-connect/initiate": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Request a quick-connect code to display on a device",
+        "operationId": "initiateQuickConnect",
+        "security": [],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/QuickConnectInitiateRequest"
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/QuickConnectInitiateResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/quick-connect/redeem": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Poll a quick-connect code and receive a device token once approved",
+        "description": "Devices poll this endpoint at the advertised interval. A 404 means the code is unknown, expired, or the secret does not match (including after a server restart); the device should request a new code and start over. Approved codes are consumed: the token is returned exactly once.",
+        "operationId": "redeemQuickConnect",
+        "security": [],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/QuickConnectRedeemRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/QuickConnectRedeemResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/quick-connect/approve": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Approve a quick-connect code for the current user",
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected so a device token cannot mint further devices.",
+        "operationId": "approveQuickConnect",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/QuickConnectApproveRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List the current user's devices",
+        "operationId": "getDevices",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DevicesListResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/devices/{id}": {
+      "patch": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Rename one of the current user's devices",
+        "operationId": "renameDevice",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/RenameDeviceRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Revoke one of the current user's devices",
+        "description": "Deletes the device and its token; the next request using that token receives 401.",
+        "operationId": "revokeDevice",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MessageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3397,6 +3649,11 @@
         "in": "cookie",
         "name": "session",
         "description": "Server-side session cookie set by POST /api/auth/login."
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Long-lived device token issued by POST /api/quick-connect/redeem or POST /api/auth/device-login. Tokens are prefixed with igd_."
       }
     },
     "parameters": {
@@ -3985,6 +4242,56 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/RecordPlayEventRequest"
+            }
+          }
+        }
+      },
+      "QuickConnectInitiateRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectInitiateRequest"
+            }
+          }
+        }
+      },
+      "QuickConnectRedeemRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectRedeemRequest"
+            }
+          }
+        }
+      },
+      "QuickConnectApproveRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectApproveRequest"
+            }
+          }
+        }
+      },
+      "DeviceLoginRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeviceLoginRequest"
+            }
+          }
+        }
+      },
+      "RenameDeviceRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RenameDeviceRequest"
             }
           }
         }
@@ -4911,6 +5218,56 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "QuickConnectInitiateResponse": {
+        "description": "Pending quick-connect code created.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectInitiateEnvelope"
+            }
+          }
+        }
+      },
+      "QuickConnectRedeemResponse": {
+        "description": "Pairing status; includes the device token once approved.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectRedeemEnvelope"
+            }
+          }
+        }
+      },
+      "DeviceTokenResponse": {
+        "description": "Device token issued.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeviceTokenEnvelope"
+            }
+          }
+        }
+      },
+      "DevicesListResponse": {
+        "description": "Devices belonging to the current user.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DevicesListEnvelope"
             }
           }
         }
@@ -9267,6 +9624,278 @@
             }
           }
         ]
+      },
+      "QuickConnectInitiateRequest": {
+        "type": "object",
+        "required": [
+          "device_name"
+        ],
+        "properties": {
+          "device_name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "platform": {
+            "type": "string",
+            "description": "Client platform identifier, e.g. android_tv, android, ios."
+          },
+          "app_version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "QuickConnectInitiateEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "secret",
+                  "expires_in_seconds",
+                  "poll_interval_seconds"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "Short code to show the user; entered in the web app to approve the device."
+                  },
+                  "secret": {
+                    "type": "string",
+                    "description": "Device-held secret required to redeem the code. Never shown to the user."
+                  },
+                  "expires_in_seconds": {
+                    "type": "integer"
+                  },
+                  "poll_interval_seconds": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "QuickConnectRedeemRequest": {
+        "type": "object",
+        "required": [
+          "code",
+          "secret"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Device": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "platform",
+          "app_version",
+          "created_at",
+          "last_used_at",
+          "is_current"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "app_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": "string"
+          },
+          "is_current": {
+            "type": "boolean",
+            "description": "True when the request was authenticated with this device's token."
+          }
+        },
+        "additionalProperties": false
+      },
+      "QuickConnectRedeemEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "approved"
+                    ]
+                  },
+                  "token": {
+                    "type": "string",
+                    "description": "Bearer device token. Present only when status is approved; returned exactly once."
+                  },
+                  "device": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "QuickConnectApproveRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeviceLoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "device_name"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "device_name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "platform": {
+            "type": "string"
+          },
+          "app_version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeviceTokenEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "device"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "Bearer device token; returned exactly once."
+                  },
+                  "device": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "DevicesListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "devices"
+                ],
+                "properties": {
+                  "devices": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Device"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "RenameDeviceRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

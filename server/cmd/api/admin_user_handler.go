@@ -174,7 +174,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Do not let an admin lock themselves out.
-	currentUserID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	currentUserID := app.userIDFromRequest(r)
 	if targetID == currentUserID && !req.IsAdmin {
 		helpers.ErrorJSON(w, errors.New("you cannot remove your own admin status"), http.StatusForbidden)
 		return
@@ -264,7 +264,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	currentUserID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	currentUserID := app.userIDFromRequest(r)
 	if targetID == currentUserID {
 		helpers.ErrorJSON(w, errors.New("you cannot delete your own account"), http.StatusForbidden)
 		return

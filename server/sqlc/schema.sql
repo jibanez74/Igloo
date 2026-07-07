@@ -938,3 +938,19 @@ CREATE TABLE
 
 CREATE INDEX IF NOT EXISTS idx_notification_reads_user
 ON notification_reads (user_id);
+
+-- devices (long-lived bearer tokens for TV / mobile clients)
+CREATE TABLE
+  IF NOT EXISTS devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT '',
+    app_version TEXT,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices (user_id);

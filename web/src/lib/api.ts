@@ -8,6 +8,7 @@ import type {
   CreateMoviePlaylistRequest,
   CreateNotificationRequest,
   CreateNotificationResponseType,
+  DevicesListResponseType,
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
   CreatePlaylistRequest,
@@ -153,6 +154,30 @@ export const logout = () =>
 
 export const getAuthUser = () =>
   apiRequest<{ user: AuthUser }>("/api/auth/user");
+
+// ============================================================================
+// Devices (Quick Connect)
+// ============================================================================
+
+export const approveQuickConnect = (code: string) =>
+  apiRequest("/api/quick-connect/approve", {
+    method: "POST",
+    body: { code },
+  });
+
+export const getDevices = () =>
+  apiRequest<DevicesListResponseType>("/api/devices");
+
+export const renameDevice = (id: number, name: string) =>
+  apiRequest(`/api/devices/${id}`, {
+    method: "PATCH",
+    body: { name },
+  });
+
+export const revokeDevice = (id: number) =>
+  apiRequest(`/api/devices/${id}`, {
+    method: "DELETE",
+  });
 
 // ============================================================================
 // User settings

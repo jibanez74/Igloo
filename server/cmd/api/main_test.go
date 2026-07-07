@@ -682,6 +682,9 @@ func setupTestApp(t *testing.T) *Application {
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
 	app.WatchRoomHub = NewWatchRoomHub()
+	app.QuickConnect = NewQuickConnectBroker()
+	app.AuthLimiter = newRateLimiter()
+	app.DeviceLastSeen = cache.New(deviceLastSeenTTL, deviceLastSeenTTL)
 
 	return app
 }

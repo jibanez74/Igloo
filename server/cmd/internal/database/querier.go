@@ -24,6 +24,7 @@ type Querier interface {
 	CountUserLikedMovies(ctx context.Context, userID int64) (int64, error)
 	CountUserLikedTracks(ctx context.Context, userID int64) (int64, error)
 	CountUsersByIDs(ctx context.Context, ids []int64) (int64, error)
+	CreateDevice(ctx context.Context, arg CreateDeviceParams) (Device, error)
 	// Link a movie to an extra video (trailer/special feature). Idempotent.
 	CreateMovieExtraVideo(ctx context.Context, arg CreateMovieExtraVideoParams) error
 	// Link movie to genre via junction table
@@ -40,6 +41,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
 	DeleteAlbum(ctx context.Context, id int64) error
+	DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error)
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie
@@ -93,6 +95,8 @@ type Querier interface {
 	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
 	// Crew for a movie with artist name and profile (for details view).
 	GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCrewByMovieIDRow, error)
+	GetDeviceByTokenHash(ctx context.Context, tokenHash string) (Device, error)
+	GetDevicesByUser(ctx context.Context, userID int64) ([]GetDevicesByUserRow, error)
 	GetGenresByAlbumID(ctx context.Context, albumID sql.NullInt64) ([]GetGenresByAlbumIDRow, error)
 	// Genres linked to a movie (for details view).
 	GetGenresByMovieID(ctx context.Context, movieID int64) ([]GetGenresByMovieIDRow, error)
@@ -211,8 +215,10 @@ type Querier interface {
 	RemoveCollaborator(ctx context.Context, arg RemoveCollaboratorParams) error
 	RemoveMovieFromPlaylist(ctx context.Context, arg RemoveMovieFromPlaylistParams) error
 	RemoveTrackFromPlaylist(ctx context.Context, arg RemoveTrackFromPlaylistParams) error
+	RenameDevice(ctx context.Context, arg RenameDeviceParams) (int64, error)
 	UnlikeTrack(ctx context.Context, arg UnlikeTrackParams) error
 	UpdateAlbumSpotifyCover(ctx context.Context, arg UpdateAlbumSpotifyCoverParams) (Album, error)
+	UpdateDeviceLastUsed(ctx context.Context, id int64) error
 	UpdateGeneralSettings(ctx context.Context, arg UpdateGeneralSettingsParams) (Setting, error)
 	UpdateLibrarySettings(ctx context.Context, arg UpdateLibrarySettingsParams) (Setting, error)
 	// Dedicated UPDATE for movie metadata (used by Edit feature).

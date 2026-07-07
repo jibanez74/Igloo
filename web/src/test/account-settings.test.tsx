@@ -95,6 +95,13 @@ function setupAccountFetch(user: TestAuthUser = testUser()) {
       });
     }
 
+    if (url === "/api/devices" && method === "GET") {
+      return jsonResponse({
+        error: false,
+        data: { devices: [] },
+      });
+    }
+
     if (url === "/api/user/password" && method === "PUT") {
       return jsonResponse({
         error: false,

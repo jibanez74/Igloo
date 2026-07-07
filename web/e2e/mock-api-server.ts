@@ -1781,6 +1781,26 @@ function handleSearchRoutes(
   return false;
 }
 
+function handleDeviceRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/devices" && method === "GET") {
+    sendSuccess(response, { devices: [] });
+    return true;
+  }
+
+  if (url.pathname === "/api/quick-connect/approve" && method === "POST") {
+    sendFailure(response, 404, "invalid or expired code");
+    return true;
+  }
+
+  return false;
+}
+
 function handleNotificationRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1851,6 +1871,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (handleWatchRoomRoutes(request, response, url, user)) return;
       if (handleSearchRoutes(request, response, url)) return;
       if (handleNotificationRoutes(request, response, url)) return;
+      if (handleDeviceRoutes(request, response, url)) return;
     }
 
     if (url.pathname.startsWith("/api/")) {

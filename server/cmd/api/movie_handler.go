@@ -296,7 +296,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 }
 
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -359,7 +359,7 @@ func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetMovieLikeStatus(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	idParam := chi.URLParam(r, "id")
 	movieID, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil || movieID <= 0 {
@@ -433,7 +433,7 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 }
 
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return

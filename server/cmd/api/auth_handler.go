@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"strings"
+	"time"
 )
 
 type AuthRequest struct {
@@ -71,8 +73,83 @@ func (app *Application) AuthenticateUser(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSON(w, http.StatusOK, res)
 }
 
+type DeviceAuthRequest struct {
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	DeviceName string `json:"device_name"`
+	Platform   string `json:"platform"`
+	AppVersion string `json:"app_version"`
+}
+
+// AuthenticateDevice is the password-based login path for TV / mobile
+// clients. It issues a long-lived bearer token and never touches the session.
+func (app *Application) AuthenticateDevice(w http.ResponseWriter, r *http.Request) {
+	if !app.AuthLimiter.Allow("dlogin:"+clientIP(r), 10, 5*time.Minute) {
+		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+		return
+	}
+
+	var request DeviceAuthRequest
+
+	err := helpers.ReadJSON(w, r, &request, 0)
+	if err != nil {
+		app.Logger.Error("failed to parse request body in device login", "error", err)
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	request.DeviceName = strings.TrimSpace(request.DeviceName)
+	if request.Email == "" || request.Password == "" {
+		helpers.ErrorJSON(w, errors.New(helpers.INVALID_CREDENTIALS_MESSAGE), http.StatusBadRequest)
+		return
+	}
+
+	if request.DeviceName == "" || len(request.DeviceName) > maxDeviceNameLength {
+		helpers.ErrorJSON(w, errors.New("device_name is required and must be at most 100 characters"), http.StatusBadRequest)
+		return
+	}
+
+	user, err := app.Queries.GetUserByEmail(r.Context(), request.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			helpers.ErrorJSON(w, errors.New(helpers.INVALID_CREDENTIALS_MESSAGE), http.StatusUnauthorized)
+		} else {
+			app.Logger.Error("failed to fetch user from database for device login", "error", err)
+			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		}
+
+		return
+	}
+
+	match, err := helpers.PasswordMatches(request.Password, user.Password)
+	if err != nil {
+		app.Logger.Error("failed to compare password hash", "error", err, "email", request.Email)
+		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		return
+	}
+
+	if !match {
+		helpers.ErrorJSON(w, errors.New(helpers.INVALID_CREDENTIALS_MESSAGE), http.StatusUnauthorized)
+		return
+	}
+
+	token, device, ok := app.issueDeviceToken(w, r, user.ID, request.DeviceName, request.Platform, request.AppVersion)
+	if !ok {
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error:   false,
+		Message: fmt.Sprintf("Hello %s, welcome to your media library!", user.Name),
+		Data: map[string]any{
+			"token":  token,
+			"device": deviceResponseMap(device.ID, device.Name, device.Platform, device.AppVersion, device.CreatedAt, device.LastUsedAt, true),
+		},
+	})
+}
+
 func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return

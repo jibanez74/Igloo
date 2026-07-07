@@ -14,6 +14,12 @@ Igloo is intended to run on user-managed hardware, usually inside a private netw
 
 Native TV clients, including the planned Android TV / Google TV app, are not part of this repository.
 
+## Native Client Integration
+
+Planned native clients, such as a Kotlin Android TV app or a React Native mobile app, do not need backend CORS support when they use native HTTP networking. CORS is enforced by browsers, not by native app runtimes.
+
+Do not add CORS middleware for native-client access alone. Revisit CORS only if Igloo adds a browser-hosted cross-origin client, a WebView client, or a React Native Web target. Authentication for native clients should be designed separately from the current browser session-cookie flow.
+
 ## Current Status
 
 What works today:
