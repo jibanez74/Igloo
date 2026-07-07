@@ -6,14 +6,22 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
+
+var errQuickConnectCapacityReached = errors.New("quick connect pending-code capacity reached")
 
 const (
 	quickConnectCodeTTL     = 5 * time.Minute
 	quickConnectPollSeconds = 2
 	quickConnectCodeLength  = 6
+
+	// Hard ceiling on pending codes so the public initiate endpoint cannot
+	// grow the map unbounded from many source IPs. Legitimate use is a
+	// handful of codes; the per-IP limiter caps one IP at ~50 live entries.
+	quickConnectMaxPendingCodes = 1000
 
 	// No I, L, O, 0 or 1 so codes are unambiguous on a TV screen.
 	quickConnectCodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -62,6 +70,10 @@ func (b *QuickConnectBroker) Initiate(deviceName, platform, appVersion string) (
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.purgeExpiredLocked()
+
+	if len(b.entries) >= quickConnectMaxPendingCodes {
+		return "", "", errQuickConnectCapacityReached
+	}
 
 	var code string
 	for {
@@ -121,8 +133,9 @@ type redeemResult struct {
 	appVersion string
 }
 
-// Redeem checks a code+secret pair. Approved entries are consumed so a token
-// can only be issued once per code.
+// Redeem checks a code+secret pair. Approved entries are NOT consumed here:
+// the caller must call Consume once the device token has been durably issued,
+// so a failed issuance leaves the code redeemable on the device's next poll.
 func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -142,7 +155,6 @@ func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 		return redeemResult{status: redeemPending}
 	}
 
-	delete(b.entries, code)
 	return redeemResult{
 		status:     redeemApproved,
 		userID:     entry.approvedUserID,
@@ -150,6 +162,17 @@ func (b *QuickConnectBroker) Redeem(code, secret string) redeemResult {
 		platform:   entry.platform,
 		appVersion: entry.appVersion,
 	}
+}
+
+// Consume removes a code after its device token has been issued, so the code
+// cannot mint another token. Concurrent redeems of the same code before
+// Consume could each issue a token, but both need the device-held secret and
+// the device polls sequentially; worst case is an extra device row the user
+// can revoke.
+func (b *QuickConnectBroker) Consume(code string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.entries, code)
 }
 
 func (b *QuickConnectBroker) purgeExpiredLocked() {

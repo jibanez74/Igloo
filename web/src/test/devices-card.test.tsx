@@ -112,6 +112,40 @@ describe("DevicesCard", () => {
     });
   });
 
+  it("shows a failure toast and closes the dialog when revoke fails", async () => {
+    getDevicesMock.mockResolvedValue({
+      error: false,
+      data: { devices: [device()] },
+    });
+    revokeDeviceMock.mockResolvedValue({
+      error: true,
+      message: "something went wrong",
+    });
+
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Revoke Living Room TV" }),
+    );
+    await screen.findByRole("alertdialog");
+
+    await user.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await waitFor(() => {
+      expect(showActionFailedMock).toHaveBeenCalledWith(
+        "revoke device",
+        "something went wrong",
+      );
+    });
+    expect(showSuccessMock).not.toHaveBeenCalled();
+
+    // onSettled resets the pending device, closing the confirm dialog.
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  });
+
   it("renames a device inline", async () => {
     getDevicesMock.mockResolvedValue({
       error: false,

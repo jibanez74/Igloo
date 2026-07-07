@@ -14,6 +14,7 @@ import (
 const (
 	quickConnectInvalidCodeMessage = "invalid or expired code"
 	tooManyAttemptsMessage         = "too many attempts, please try again later"
+	quickConnectBusyMessage        = "quick connect is busy, please try again later"
 
 	maxDeviceNameLength = 100
 )
@@ -46,6 +47,11 @@ func (app *Application) InitiateQuickConnect(w http.ResponseWriter, r *http.Requ
 
 	code, secret, err := app.QuickConnect.Initiate(request.DeviceName, request.Platform, request.AppVersion)
 	if err != nil {
+		if errors.Is(err, errQuickConnectCapacityReached) {
+			helpers.ErrorJSON(w, errors.New(quickConnectBusyMessage), http.StatusServiceUnavailable)
+			return
+		}
+
 		app.Logger.Error("failed to initiate quick connect", "error", err)
 		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 		return
@@ -81,7 +87,8 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result := app.QuickConnect.Redeem(normalizeQuickConnectCode(request.Code), request.Secret)
+	code := normalizeQuickConnectCode(request.Code)
+	result := app.QuickConnect.Redeem(code, request.Secret)
 	switch result.status {
 	case redeemPending:
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
@@ -93,6 +100,8 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 		if !ok {
 			return
 		}
+
+		app.QuickConnect.Consume(code)
 
 		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
 			Error: false,
@@ -175,7 +184,7 @@ func (app *Application) issueDeviceToken(w http.ResponseWriter, r *http.Request,
 		return "", database.Device{}, false
 	}
 
-	app.Logger.Info("device token issued", "user_id", userID, "device_id", device.ID, "device_name", device.Name)
+	app.Logger.Info("device token issued", "user_id", userID, "device_id", device.ID)
 
 	return token, device, true
 }

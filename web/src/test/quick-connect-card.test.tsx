@@ -89,6 +89,7 @@ describe("QuickConnectApproveCard", () => {
     approveQuickConnectMock.mockResolvedValue({
       error: true,
       message: "404 - The resource you requested was not found.",
+      status: 404,
     });
 
     const user = userEvent.setup();

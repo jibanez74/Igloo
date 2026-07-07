@@ -35,9 +35,8 @@ export default function QuickConnectApproveCard() {
     mutationFn: (deviceCode: string) => approveQuickConnect(deviceCode),
     onSuccess: res => {
       if (res.error) {
-        const message = res.message.startsWith("404")
-          ? INVALID_CODE_MESSAGE
-          : res.message;
+        const message =
+          res.status === 404 ? INVALID_CODE_MESSAGE : res.message;
         setError(message);
         showActionFailed("approve device", message);
         return;

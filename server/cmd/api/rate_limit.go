@@ -43,6 +43,7 @@ func (l *rateLimiter) Allow(key string, limit int, window time.Duration) bool {
 
 	if len(l.buckets) > rateLimiterPruneThreshold {
 		l.pruneLocked(now)
+		l.evictOverflowLocked()
 	}
 
 	bucket, ok := l.buckets[key]
@@ -58,6 +59,19 @@ func (l *rateLimiter) Allow(key string, limit int, window time.Duration) bool {
 	bucket.count++
 	l.buckets[key] = bucket
 	return true
+}
+
+// evictOverflowLocked drops arbitrary buckets until the map is back at the
+// threshold. Under a flood from many distinct IPs, bounded memory matters
+// more than perfect per-key limiting; an evicted key merely restarts its
+// window on the next attempt.
+func (l *rateLimiter) evictOverflowLocked() {
+	for key := range l.buckets {
+		if len(l.buckets) <= rateLimiterPruneThreshold {
+			return
+		}
+		delete(l.buckets, key)
+	}
 }
 
 func (l *rateLimiter) pruneLocked(now time.Time) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -291,5 +292,55 @@ func TestQuickConnectBroker_PurgesExpiredEntries(t *testing.T) {
 	broker.mu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("entries = %d, want 0 after purge", remaining)
+	}
+}
+
+func TestQuickConnectBroker_RedeemLeavesEntryUntilConsumed(t *testing.T) {
+	broker := NewQuickConnectBroker()
+
+	code, secret, err := broker.Initiate("TV", "android_tv", "")
+	if err != nil {
+		t.Fatalf("initiate: %v", err)
+	}
+	if !broker.Approve(code, 1) {
+		t.Fatal("approve failed")
+	}
+
+	// A failed token issuance must leave the code redeemable on the next poll.
+	for i := 0; i < 2; i++ {
+		result := broker.Redeem(code, secret)
+		if result.status != redeemApproved {
+			t.Fatalf("redeem #%d status = %d, want redeemApproved", i+1, result.status)
+		}
+	}
+
+	broker.Consume(code)
+
+	result := broker.Redeem(code, secret)
+	if result.status != redeemNotFound {
+		t.Fatalf("redeem after consume status = %d, want redeemNotFound", result.status)
+	}
+}
+
+func TestQuickConnectBroker_RejectsWhenAtCapacity(t *testing.T) {
+	broker := NewQuickConnectBroker()
+
+	for i := 0; i < quickConnectMaxPendingCodes; i++ {
+		_, _, err := broker.Initiate("TV", "android_tv", "")
+		if err != nil {
+			t.Fatalf("initiate #%d: %v", i+1, err)
+		}
+	}
+
+	_, _, err := broker.Initiate("TV", "android_tv", "")
+	if !errors.Is(err, errQuickConnectCapacityReached) {
+		t.Fatalf("initiate over capacity err = %v, want errQuickConnectCapacityReached", err)
+	}
+
+	// Once entries expire, capacity frees up again.
+	broker.now = func() time.Time { return time.Now().Add(quickConnectCodeTTL + time.Second) }
+	_, _, err = broker.Initiate("TV", "android_tv", "")
+	if err != nil {
+		t.Fatalf("initiate after expiry: %v", err)
 	}
 }

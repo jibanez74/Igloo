@@ -241,6 +241,40 @@ func TestRevokeDevice_CannotRevokeOtherUsersDevice(t *testing.T) {
 	}
 }
 
+func TestRenameDevice_CannotRenameOtherUsersDevice(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	owner := createTestUser(t, app, "Owner", "owner@example.com", false)
+	attacker := createTestUser(t, app, "Attacker", "attacker@example.com", false)
+	token := createTestDevice(t, app, owner.ID, "TV", "android_tv")
+
+	device, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
+	if err != nil {
+		t.Fatalf("lookup device: %v", err)
+	}
+
+	body := `{"name":"Hacked"}`
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/devices/%d", device.ID), strings.NewReader(body))
+	req.AddCookie(newAuthSessionCookie(t, app, attacker.ID))
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("cross-user rename status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+
+	unchanged, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
+	if err != nil {
+		t.Fatalf("lookup device after rename attempt: %v", err)
+	}
+	if unchanged.Name != "TV" {
+		t.Fatalf("name = %q, want unchanged %q", unchanged.Name, "TV")
+	}
+}
+
 func TestRenameDevice_RenamesOwnDevice(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

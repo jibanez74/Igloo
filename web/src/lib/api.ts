@@ -82,11 +82,13 @@ import {
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
+  status: 404,
 };
 
 const NETWORK_ERROR: ApiFailureType = {
   error: true,
   message: "500 - A network error occurred while processing your request.",
+  status: 500,
 };
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

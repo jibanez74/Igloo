@@ -48,10 +48,15 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 
 		device, err := app.Queries.GetDeviceByTokenHash(r.Context(), hashDeviceToken(token))
 		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) && app.Logger != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+				return
+			}
+
+			if app.Logger != nil {
 				app.Logger.Error("failed to look up device token", "error", err)
 			}
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 			return
 		}
 

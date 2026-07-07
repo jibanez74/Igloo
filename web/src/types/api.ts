@@ -14,6 +14,8 @@ export type ApiSuccessType<T extends Record<string, unknown>> = {
 export type ApiFailureType = {
   error: true;
   message: string;
+  // HTTP status, set by the client for failures it synthesizes (404, network).
+  status?: number;
   data?: never; // Explicitly no data on failure
 };
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,6 +53,26 @@ func TestRateLimiterCannotBeBypassedByForwardedForRotation(t *testing.T) {
 		if i == 1 && w.Code != http.StatusTooManyRequests {
 			t.Fatalf("second request status = %d, want 429", w.Code)
 		}
+	}
+}
+
+func TestRateLimiterBoundsBucketMap(t *testing.T) {
+	limiter := newRateLimiter()
+
+	// Flood with distinct keys whose windows are all still active; the map
+	// must stay bounded even though pruning alone would keep every bucket.
+	total := rateLimiterPruneThreshold * 3
+	for i := 0; i < total; i++ {
+		limiter.Allow(fmt.Sprintf("auth:198.51.%d.%d", i/256, i%256), 5, time.Minute)
+	}
+
+	limiter.mu.Lock()
+	size := len(limiter.buckets)
+	limiter.mu.Unlock()
+
+	// Allow evicts down to the threshold before inserting the new key.
+	if size > rateLimiterPruneThreshold+1 {
+		t.Fatalf("buckets = %d, want at most %d", size, rateLimiterPruneThreshold+1)
 	}
 }
 
