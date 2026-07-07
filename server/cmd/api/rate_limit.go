@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"sync"
@@ -13,6 +14,8 @@ type rateBucket struct {
 	count       int
 	windowStart time.Time
 }
+
+type clientSocketIPContextKey struct{}
 
 // rateLimiter is a minimal fixed-window limiter for auth endpoints. State is
 // in-memory and per-process, which is sufficient for the single-binary home
@@ -68,12 +71,27 @@ func (l *rateLimiter) pruneLocked(now time.Time) {
 	}
 }
 
-// clientIP returns the request's remote IP. The chi RealIP middleware already
-// rewrites RemoteAddr from proxy headers when present.
+func preserveClientSocketIP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), clientSocketIPContextKey{}, remoteAddrIP(r.RemoteAddr))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// clientIP returns the TCP peer IP captured before chi's RealIP middleware can
+// rewrite RemoteAddr from spoofable forwarded headers.
 func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if ip, ok := r.Context().Value(clientSocketIPContextKey{}).(string); ok && ip != "" {
+		return ip
+	}
+
+	return remoteAddrIP(r.RemoteAddr)
+}
+
+func remoteAddrIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		return remoteAddr
 	}
 	return host
 }
