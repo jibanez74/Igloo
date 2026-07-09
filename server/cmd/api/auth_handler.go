@@ -7,6 +7,7 @@ import (
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -189,6 +190,17 @@ func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
 			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
 			return
 		}
+
+		app.DeviceLastSeen.Delete(strconv.FormatInt(auth.DeviceID, 10))
+
+		app.Logger.Info("device revoked via logout", "user_id", auth.UserID, "device_id", auth.DeviceID)
+
+		helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+			Error:   false,
+			Message: "You have been logged out successfully",
+		})
+
+		return
 	}
 
 	err := app.SessionManager.Destroy(r.Context())

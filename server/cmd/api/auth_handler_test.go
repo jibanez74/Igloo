@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"igloo/cmd/internal/helpers"
@@ -128,6 +129,13 @@ func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
 	user := createTestUser(t, app, "TV User", "tv@example.com", false)
 	token := createTestDevice(t, app, user.ID, "TV", "android_tv")
 
+	device, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
+	if err != nil {
+		t.Fatalf("get device by token hash: %v", err)
+	}
+	lastSeenKey := strconv.FormatInt(device.ID, 10)
+	app.DeviceLastSeen.SetDefault(lastSeenKey, struct{}{})
+
 	req := httptest.NewRequest(http.MethodDelete, "/api/auth/logout", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -135,6 +143,10 @@ func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("logout status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	if _, found := app.DeviceLastSeen.Get(lastSeenKey); found {
+		t.Fatal("DeviceLastSeen cache entry should be evicted after device logout")
 	}
 
 	// The token must be dead after logout.
