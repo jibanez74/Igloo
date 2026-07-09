@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -73,6 +74,41 @@ func TestRateLimiterBoundsBucketMap(t *testing.T) {
 	// Allow evicts down to the threshold before inserting the new key.
 	if size > rateLimiterPruneThreshold+1 {
 		t.Fatalf("buckets = %d, want at most %d", size, rateLimiterPruneThreshold+1)
+	}
+}
+
+func TestRateLimiterAllowsConcurrentCallsSafely(t *testing.T) {
+	limiter := newRateLimiter()
+
+	const limit = 7
+	const attempts = 64
+
+	var ready sync.WaitGroup
+	ready.Add(attempts)
+
+	start := make(chan struct{})
+	results := make(chan bool, attempts)
+
+	for i := 0; i < attempts; i++ {
+		go func() {
+			ready.Done()
+			<-start
+			results <- limiter.Allow("auth:198.51.100.7", limit, time.Minute)
+		}()
+	}
+
+	ready.Wait()
+	close(start)
+
+	allowed := 0
+	for i := 0; i < attempts; i++ {
+		if <-results {
+			allowed++
+		}
+	}
+
+	if allowed != limit {
+		t.Fatalf("allowed attempts = %d, want %d", allowed, limit)
 	}
 }
 

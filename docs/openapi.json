@@ -241,7 +241,7 @@
           "Devices"
         ],
         "summary": "Poll a quick-connect code and receive a device token once approved",
-        "description": "Devices poll this endpoint at the advertised interval. A 404 means the code is unknown, expired, or the secret does not match (including after a server restart); the device should request a new code and start over. Approved codes are consumed: the token is returned exactly once.",
+        "description": "Quick Connect pairings are kept in this server process's memory. In multi-instance deployments, initiate, approve, and redeem must reach the same instance through sticky routing or a shared store; otherwise cross-instance requests can return 404. Devices poll this endpoint at the advertised interval. A 404 means the code is unknown, expired, or the secret does not match (including after a server restart); the device should request a new code and start over. Approved codes are consumed: the token is returned exactly once.",
         "operationId": "redeemQuickConnect",
         "security": [],
         "requestBody": {
