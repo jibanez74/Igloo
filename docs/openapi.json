@@ -160,8 +160,8 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Destroy the current session",
-        "description": "Destroys the cookie session. When the request is authenticated with a device bearer token, the device token is revoked instead.",
+        "summary": "Log out the current web session or device client",
+        "description": "For cookie-authenticated web clients, destroys only the current session. For requests authenticated with a device bearer token, revokes only that device token. If both credentials are sent, the device bearer token takes precedence.",
         "operationId": "destroySession",
         "responses": {
           "200": {
