@@ -133,8 +133,23 @@ func (app *Application) currentUserID(w http.ResponseWriter, r *http.Request) (i
 	return userID, true
 }
 
+// requireSessionUserID resolves the user from the session cookie only.
+// Device bearer tokens are rejected so a stolen device token cannot manage
+// (enumerate, rename, revoke) devices or approve pairing codes to mint
+// further devices.
 func (app *Application) requireSessionUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	return app.currentUserID(w, r)
+	if deviceAuthFrom(r.Context()) != nil {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return 0, false
+	}
+
+	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	if userID == 0 {
+		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		return 0, false
+	}
+
+	return userID, true
 }
 
 // touchDeviceLastUsed updates devices.last_used_at, throttled through the

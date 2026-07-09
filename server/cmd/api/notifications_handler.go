@@ -115,7 +115,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -158,7 +158,7 @@ func isValidNotificationTitle(title string) bool {
 // (their targeted notifications, plus the admin request queue for admins),
 // newest first, along with the unread count.
 func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -208,7 +208,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 // GetUnreadNotificationCount returns just the unread count. It is intentionally
 // lightweight because the client polls it on an interval to drive the bell badge.
 func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -240,7 +240,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 // notification. It is idempotent and relevance-gated in SQL, so marking an
 // already-read or out-of-scope notification is a harmless no-op.
 func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -275,7 +275,7 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 // MarkAllNotificationsRead marks every notification currently visible to the
 // user as read.
 func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -305,7 +305,7 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 // shared admin-queue notification clears it for all admins, which is the
 // intended "request handled" behavior.
 func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}

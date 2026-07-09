@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
+import { DEVICES_KEY } from "@/lib/constants";
 
 const approveQuickConnectMock = vi.fn();
 const showSuccessMock = vi.fn();
@@ -30,11 +31,17 @@ function renderCard() {
       <QuickConnectApproveCard />
     </QueryClientProvider>,
   );
+
+  return queryClient;
 }
 
 describe("QuickConnectApproveCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("labels the code input accessibly", () => {
@@ -67,6 +74,39 @@ describe("QuickConnectApproveCard", () => {
       expect(showSuccessMock).toHaveBeenCalled();
     });
     expect(input).toHaveValue("");
+  });
+
+  it("invalidates the devices list immediately and again after the device polls", async () => {
+    approveQuickConnectMock.mockResolvedValue({
+      error: false,
+      message: "Device approved. It will finish signing in shortly.",
+    });
+
+    // userEvent and RTL's waitFor deadlock under vitest fake timers, so drive
+    // the form with synchronous fireEvent and advance timers explicitly.
+    vi.useFakeTimers();
+    const queryClient = renderCard();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Quick Connect code" }),
+      { target: { value: "XK4T7P" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Approve device" }));
+
+    // The list refreshes right away so an already-redeemed device shows up...
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: [DEVICES_KEY] });
+
+    // ...and again after the device has had time to poll and redeem its code.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: [DEVICES_KEY] });
   });
 
   it("rejects codes that are not six characters without calling the API", async () => {

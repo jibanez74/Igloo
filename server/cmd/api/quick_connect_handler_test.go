@@ -156,6 +156,133 @@ func TestQuickConnect_FullPairingFlow(t *testing.T) {
 	}
 }
 
+// TestQuickConnect_DeviceLifecycle drives the entire device lifecycle through
+// the real router in one uninterrupted sequence: pairing, using the token,
+// managing the device from a session, and revoking it. It intentionally
+// overlaps TestQuickConnect_FullPairingFlow on the pairing steps.
+func TestQuickConnect_DeviceLifecycle(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+	cookie := newAuthSessionCookie(t, app, user.ID)
+
+	// 1. The device asks for a pairing code.
+	code, secret := initiateQuickConnectForTest(t, app)
+
+	// 2. Polling before approval reports pending.
+	w := redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pending redeem status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var pending quickConnectRedeemResponse
+	err := json.Unmarshal(w.Body.Bytes(), &pending)
+	if err != nil {
+		t.Fatalf("decode pending response: %v", err)
+	}
+	if pending.Data.Status != "pending" {
+		t.Fatalf("status = %q, want pending", pending.Data.Status)
+	}
+
+	// 3. The user approves the code from their browser session.
+	w = approveQuickConnectForTest(t, app, code, cookie)
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	// 4. The device's next poll receives its token.
+	w = redeemQuickConnectForTest(t, app, code, secret)
+	if w.Code != http.StatusOK {
+		t.Fatalf("approved redeem status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var approved quickConnectRedeemResponse
+	err = json.Unmarshal(w.Body.Bytes(), &approved)
+	if err != nil {
+		t.Fatalf("decode approved response: %v", err)
+	}
+	if approved.Data.Status != "approved" {
+		t.Fatalf("status = %q, want approved", approved.Data.Status)
+	}
+	if !strings.HasPrefix(approved.Data.Token, deviceTokenPrefix) {
+		t.Fatalf("token = %q, want %q prefix", approved.Data.Token, deviceTokenPrefix)
+	}
+	token := approved.Data.Token
+	deviceID := approved.Data.Device.ID
+
+	// 5. The token authenticates requests as the approving user.
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("bearer auth/user status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	authResp := decodeAuthUserResponse(t, w)
+	if authResp.Data.User.ID != user.ID {
+		t.Fatalf("bearer user id = %d, want %d", authResp.Data.User.ID, user.ID)
+	}
+
+	// 6. The user's session sees the new device in the list.
+	req = httptest.NewRequest(http.MethodGet, "/api/devices", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var list deviceListResponse
+	err = json.Unmarshal(w.Body.Bytes(), &list)
+	if err != nil {
+		t.Fatalf("decode devices response: %v", err)
+	}
+	if len(list.Data.Devices) != 1 {
+		t.Fatalf("devices = %d, want 1", len(list.Data.Devices))
+	}
+	if list.Data.Devices[0].ID != deviceID || list.Data.Devices[0].Name != "Living Room TV" {
+		t.Fatalf("device = %+v, want id %d named %q", list.Data.Devices[0], deviceID, "Living Room TV")
+	}
+	if list.Data.Devices[0].IsCurrent {
+		t.Fatal("is_current = true, want false in the session-only list")
+	}
+
+	// 7. The user revokes the device from their session.
+	req = httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/devices/%d", deviceID), nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("revoke status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	// 8. The device is gone from the list.
+	req = httptest.NewRequest(http.MethodGet, "/api/devices", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list after revoke status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	list = deviceListResponse{}
+	err = json.Unmarshal(w.Body.Bytes(), &list)
+	if err != nil {
+		t.Fatalf("decode devices response after revoke: %v", err)
+	}
+	if len(list.Data.Devices) != 0 {
+		t.Fatalf("devices after revoke = %d, want 0", len(list.Data.Devices))
+	}
+
+	// 9. The revoked token no longer authenticates anything.
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
 func TestQuickConnect_RedeemRejectsWrongSecret(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

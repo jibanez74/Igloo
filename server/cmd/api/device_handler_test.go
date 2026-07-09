@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -146,7 +147,7 @@ func TestAuthenticateDevice_IsRateLimited(t *testing.T) {
 	}
 }
 
-func TestGetDevices_ListsOwnDevicesAndMarksCurrent(t *testing.T) {
+func TestGetDevices_SessionListsOwnDevices(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 	app.InitSession()
@@ -154,11 +155,11 @@ func TestGetDevices_ListsOwnDevicesAndMarksCurrent(t *testing.T) {
 
 	user := createTestUser(t, app, "Owner", "owner@example.com", false)
 	other := createTestUser(t, app, "Other", "other@example.com", false)
-	token := createTestDevice(t, app, user.ID, "Living Room TV", "android_tv")
+	createTestDevice(t, app, user.ID, "Living Room TV", "android_tv")
 	createTestDevice(t, app, other.ID, "Other Phone", "ios")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/devices", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 
@@ -175,12 +176,72 @@ func TestGetDevices_ListsOwnDevicesAndMarksCurrent(t *testing.T) {
 	if len(resp.Data.Devices) != 1 {
 		t.Fatalf("devices = %d, want 1 (only own devices)", len(resp.Data.Devices))
 	}
-	if resp.Data.Devices[0].Name != "Living Room TV" || !resp.Data.Devices[0].IsCurrent {
-		t.Fatalf("device = %+v, want own device marked current", resp.Data.Devices[0])
+	if resp.Data.Devices[0].Name != "Living Room TV" || resp.Data.Devices[0].IsCurrent {
+		t.Fatalf("device = %+v, want own device with is_current false in the session-only list", resp.Data.Devices[0])
 	}
 
 	if strings.Contains(w.Body.String(), "token_hash") {
 		t.Fatal("device list response leaked token_hash")
+	}
+}
+
+func TestDeviceRoutes_RejectDeviceTokenAuth(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Owner", "owner@example.com", false)
+	token := createTestDevice(t, app, user.ID, "Living Room TV", "android_tv")
+
+	device, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
+	if err != nil {
+		t.Fatalf("lookup device: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "list", method: http.MethodGet, path: "/api/devices"},
+		{name: "rename", method: http.MethodPatch, path: fmt.Sprintf("/api/devices/%d", device.ID), body: `{"name":"Renamed"}`},
+		{name: "revoke", method: http.MethodDelete, path: fmt.Sprintf("/api/devices/%d", device.ID)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var reader io.Reader
+			if tc.body != "" {
+				reader = strings.NewReader(tc.body)
+			}
+			req := httptest.NewRequest(tc.method, tc.path, reader)
+			req.Header.Set("Authorization", "Bearer "+token)
+			w := httptest.NewRecorder()
+			app.Router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("%s %s with bearer status = %d, want 401, body = %s", tc.method, tc.path, w.Code, w.Body.String())
+			}
+		})
+	}
+
+	// The rejected requests must have had no side effects.
+	unchanged, err := app.Queries.GetDeviceByTokenHash(context.Background(), hashDeviceToken(token))
+	if err != nil {
+		t.Fatalf("lookup device after rejected requests: %v", err)
+	}
+	if unchanged.Name != "Living Room TV" {
+		t.Fatalf("name = %q, want unchanged %q", unchanged.Name, "Living Room TV")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("token after rejected revoke status = %d, want 200 (device must not be deleted)", w.Code)
 	}
 }
 

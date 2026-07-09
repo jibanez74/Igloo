@@ -17,7 +17,7 @@ type userListSummary struct {
 }
 
 func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}

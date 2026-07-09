@@ -121,13 +121,6 @@ type ApproveQuickConnectRequest struct {
 }
 
 func (app *Application) ApproveQuickConnect(w http.ResponseWriter, r *http.Request) {
-	// Approval must come from a session-authenticated user: a stolen device
-	// token must not be able to mint further devices.
-	if deviceAuthFrom(r.Context()) != nil {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
-		return
-	}
-
 	userID, ok := app.requireSessionUserID(w, r)
 	if !ok {
 		return

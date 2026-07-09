@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:e2e:login": "playwright test e2e/login.spec.ts",
     "test:e2e:account-settings": "playwright test e2e/account-settings.spec.ts",
+    "test:e2e:device-lifecycle": "playwright test e2e/device-lifecycle.spec.ts",
     "test:e2e:general-settings": "playwright test e2e/general-settings.spec.ts",
     "test:e2e:libraries-settings": "playwright test e2e/libraries-settings.spec.ts",
     "test:e2e:user-settings": "playwright test e2e/user-settings.spec.ts",

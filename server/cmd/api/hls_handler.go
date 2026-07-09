@@ -33,7 +33,7 @@ type hlsRequestParams struct {
 // at segment_0 on disk. The web player keeps absolute movie time in the UI and
 // converts seeks to session-relative media time client-side.
 func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -92,7 +92,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 // FFmpeg writes segments asynchronously; serve only once complete.
 func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -208,7 +208,7 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 }
 
 func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}

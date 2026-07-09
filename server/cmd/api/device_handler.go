@@ -24,14 +24,10 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var currentDeviceID int64
-	auth := deviceAuthFrom(r.Context())
-	if auth != nil {
-		currentDeviceID = auth.DeviceID
-	}
-
 	devices := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
+		// The list is session-only, so no device in it is ever the caller;
+		// is_current stays in the shape for the redeem/device-login envelopes.
 		devices = append(devices, deviceResponseMap(
 			row.ID,
 			row.Name,
@@ -39,7 +35,7 @@ func (app *Application) GetDevices(w http.ResponseWriter, r *http.Request) {
 			row.AppVersion,
 			row.CreatedAt,
 			row.LastUsedAt,
-			row.ID == currentDeviceID,
+			false,
 		))
 	}
 

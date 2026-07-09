@@ -310,13 +310,11 @@
           "Devices"
         ],
         "summary": "List the current user's devices",
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected with 401 so a stolen device token cannot enumerate devices.",
         "operationId": "getDevices",
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "bearerAuth": []
           }
         ],
         "responses": {
@@ -338,13 +336,11 @@
           "Devices"
         ],
         "summary": "Rename one of the current user's devices",
+        "description": "Session-authenticated users only: requests carrying a device bearer token are rejected with 401 so a stolen device token cannot rename devices.",
         "operationId": "renameDevice",
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -385,14 +381,11 @@
           "Devices"
         ],
         "summary": "Revoke one of the current user's devices",
-        "description": "Deletes the device and its token; the next request using that token receives 401.",
+        "description": "Deletes the device and its token; the next request using that token receives 401. Session-authenticated users only: requests carrying a device bearer token are rejected with 401 so a stolen device token cannot revoke devices.",
         "operationId": "revokeDevice",
         "security": [
           {
             "cookieAuth": []
-          },
-          {
-            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -9888,7 +9881,7 @@
           },
           "is_current": {
             "type": "boolean",
-            "description": "True when the request was authenticated with this device's token."
+            "description": "True when the request was authenticated with this device's token. Always false in the device-list response, which is session-only."
           }
         },
         "additionalProperties": false
