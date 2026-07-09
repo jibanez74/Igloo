@@ -574,9 +574,6 @@ func (app *Application) InitRouter() {
 	router.Use(app.RequestLogger)
 	router.Use(middleware.Recoverer)
 
-	// Resolves device bearer tokens for every route, including WebSockets.
-	router.Use(app.DeviceTokenAuth)
-
 	app.registerWebSocketRoutes(router)
 
 	router.Group(func(r chi.Router) {
@@ -588,7 +585,7 @@ func (app *Application) InitRouter() {
 }
 
 func (app *Application) registerWebSocketRoutes(router chi.Router) {
-	router.With(app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
+	router.With(app.DeviceTokenAuth, app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
 }
 
 func (app *Application) registerSessionRoutes(r chi.Router) {
@@ -603,7 +600,7 @@ func (app *Application) registerAPIRoutes(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
 		r.Post("/auth/login", app.AuthenticateUser)
 		r.Post("/auth/device-login", app.AuthenticateDevice)
-		r.Get("/auth/user", app.GetCurrentAuthUser)
+		r.With(app.DeviceTokenAuth).Get("/auth/user", app.GetCurrentAuthUser)
 		r.Post("/quick-connect/initiate", app.InitiateQuickConnect)
 		r.Post("/quick-connect/redeem", app.RedeemQuickConnect)
 		app.registerAuthenticatedAPIRoutes(r)
@@ -612,6 +609,7 @@ func (app *Application) registerAPIRoutes(r chi.Router) {
 
 func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 	r.Group(func(r chi.Router) {
+		r.Use(app.DeviceTokenAuth)
 		r.Use(app.IsAuth)
 
 		app.registerAuthRoutes(r)

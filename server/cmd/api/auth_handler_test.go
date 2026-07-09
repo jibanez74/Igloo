@@ -118,3 +118,61 @@ func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedForStaleSession(t *testing.T)
 		t.Fatalf("response = %+v, want not authorized error", resp)
 	}
 }
+
+func TestLogout_DeviceTokenRevokesDevice(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "TV User", "tv@example.com", false)
+	token := createTestDevice(t, app, user.ID, "TV", "android_tv")
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("logout status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	// The token must be dead after logout.
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("post-logout status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestLogout_SessionCookieDoesNotRevokeDevices(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Web User", "web@example.com", false)
+	token := createTestDevice(t, app, user.ID, "Phone", "android")
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/auth/logout", nil)
+	req.AddCookie(newAuthSessionCookie(t, app, user.ID))
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("logout status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	// A browser logout must not revoke the user's paired devices.
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("device token status after cookie logout = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+}

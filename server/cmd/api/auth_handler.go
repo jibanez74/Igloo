@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strings"
@@ -178,6 +179,18 @@ func (app *Application) GetCurrentAuthUser(w http.ResponseWriter, r *http.Reques
 }
 
 func (app *Application) DestroySession(w http.ResponseWriter, r *http.Request) {
+	if auth := deviceAuthFrom(r.Context()); auth != nil {
+		_, err := app.Queries.DeleteDeviceForUser(r.Context(), database.DeleteDeviceForUserParams{
+			ID:     auth.DeviceID,
+			UserID: auth.UserID,
+		})
+		if err != nil {
+			app.Logger.Error("failed to revoke device during logout", "error", err)
+			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			return
+		}
+	}
+
 	err := app.SessionManager.Destroy(r.Context())
 	if err != nil {
 		app.Logger.Error("failed to destroy session during logout", "error", err)

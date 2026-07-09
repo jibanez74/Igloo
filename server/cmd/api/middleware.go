@@ -28,6 +28,9 @@ func deviceAuthFrom(ctx context.Context) *deviceAuth {
 }
 
 // DeviceTokenAuth resolves "Authorization: Bearer igd_..." device tokens.
+// It is attached only to routes where device auth is part of the contract
+// (protected API routes, the watch-room WebSocket, and /api/auth/user), so
+// public pairing and login routes stay reachable with a stale token.
 // Requests without such a header pass through untouched; an invalid or
 // revoked token is rejected immediately rather than falling back to cookies.
 // The session is never written to, so bearer requests do not create session

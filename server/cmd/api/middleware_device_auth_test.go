@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,6 +36,128 @@ func TestDeviceTokenAuth_IgnoresNonDeviceBearerTokens(t *testing.T) {
 	// request falls through to session auth and fails there instead.
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/user", nil)
 	req.Header.Set("Authorization", "Bearer some-other-token")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeviceTokenAuth_StaleTokenAllowsDeviceLogin(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	createTestUserWithPassword(t, app, "Revoked TV", "revoked@example.com", "correct horse")
+
+	// A client whose token was revoked still sends it; device login must
+	// authenticate the credentials instead of rejecting the stale token.
+	body := `{"email":"revoked@example.com","password":"correct horse","device_name":"TV","platform":"android_tv"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/device-login", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	var resp quickConnectRedeemResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
+		t.Fatalf("decode device login response: %v", err)
+	}
+	if !strings.HasPrefix(resp.Data.Token, deviceTokenPrefix) {
+		t.Fatalf("token = %q, want %q prefix", resp.Data.Token, deviceTokenPrefix)
+	}
+}
+
+func TestDeviceTokenAuth_StaleTokenAllowsQuickConnectRecovery(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	stale := "Bearer " + deviceTokenPrefix + "stale-token"
+
+	body := `{"device_name":"Living Room TV","platform":"android_tv","app_version":"1.0.0"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/initiate", strings.NewReader(body))
+	req.Header.Set("Authorization", stale)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("initiate status = %d, want 201, body = %s", w.Code, w.Body.String())
+	}
+
+	// Redeem with an unknown code reaches its normal validation (404), not a
+	// 401 from the stale bearer token.
+	req = httptest.NewRequest(http.MethodPost, "/api/quick-connect/redeem", strings.NewReader(`{"code":"XXXXXX","secret":"nope"}`))
+	req.Header.Set("Authorization", stale)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("redeem status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeviceTokenAuth_StaleTokenAllowsPublicRoutes(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	createTestUserWithPassword(t, app, "Login User", "login@example.com", "correct horse")
+
+	stale := "Bearer " + deviceTokenPrefix + "stale-token"
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("Authorization", stale)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+
+	body := `{"email":"login@example.com","password":"correct horse"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(body))
+	req.Header.Set("Authorization", stale)
+	w = httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("login status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeviceTokenAuth_ProtectedRouteRejectsUnknownToken(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/devices/", nil)
+	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeviceTokenAuth_WebSocketRouteRejectsUnknownToken(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/watch-rooms/1/ws", nil)
+	req.Header.Set("Authorization", "Bearer "+deviceTokenPrefix+"stale-token")
 	w := httptest.NewRecorder()
 	app.Router.ServeHTTP(w, req)
 

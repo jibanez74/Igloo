@@ -161,6 +161,7 @@
           "Auth"
         ],
         "summary": "Destroy the current session",
+        "description": "Destroys the cookie session. When the request is authenticated with a device bearer token, the device token is revoked instead.",
         "operationId": "destroySession",
         "responses": {
           "200": {
