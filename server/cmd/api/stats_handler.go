@@ -18,7 +18,7 @@ type RecordPlayEventRequest struct {
 
 // The frontend records a play after its playback threshold is met.
 func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -77,7 +77,7 @@ func (app *Application) RecordPlayEvent(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -106,7 +106,7 @@ func (app *Application) GetUserListeningStats(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -137,7 +137,7 @@ func (app *Application) GetUserTopTracks(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -168,7 +168,7 @@ func (app *Application) GetUserTopMusicians(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -205,7 +205,7 @@ func (app *Application) GetUserTopGenres(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -236,7 +236,7 @@ func (app *Application) GetUserTopAlbums(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) GetUserRecentlyPlayed(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return

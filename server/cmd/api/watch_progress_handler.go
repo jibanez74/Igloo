@@ -72,7 +72,7 @@ func movieWatchProgressToResponse(row database.MovieWatchProgress) movieWatchPro
 }
 
 func (app *Application) GetMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -117,7 +117,7 @@ func (app *Application) GetMovieWatchProgress(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -207,7 +207,7 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) DeleteMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -246,7 +246,7 @@ func (app *Application) DeleteMovieWatchProgress(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) SetMovieWatched(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}

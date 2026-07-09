@@ -125,7 +125,7 @@ func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist data
 }
 
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -177,7 +177,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -241,7 +241,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -324,7 +324,7 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 }
 
 func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -376,7 +376,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -465,7 +465,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -519,7 +519,7 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -615,7 +615,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -688,7 +688,7 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 }
 
 func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -766,7 +766,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -827,7 +827,7 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -907,7 +907,7 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -996,7 +996,7 @@ func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescR
 }
 
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1048,7 +1048,7 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 }
 
 func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1115,7 +1115,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1177,7 +1177,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1289,7 +1289,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1341,7 +1341,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1439,7 +1439,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 }
 
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -1558,7 +1558,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 }
 
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return

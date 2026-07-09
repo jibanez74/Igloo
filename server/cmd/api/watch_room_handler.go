@@ -116,7 +116,7 @@ func findMemberByID(members []watchRoomMemberSummary, id int64) (watchRoomMember
 }
 
 func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -209,7 +209,7 @@ func (app *Application) GetWatchRooms(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -292,7 +292,7 @@ func (app *Application) GetWatchRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -441,7 +441,7 @@ func (app *Application) CreateWatchRoom(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}
@@ -484,7 +484,7 @@ func (app *Application) JoinWatchRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeleteWatchRoom(w http.ResponseWriter, r *http.Request) {
-	userID, ok := app.requireSessionUserID(w, r)
+	userID, ok := app.currentUserID(w, r)
 	if !ok {
 		return
 	}

@@ -43,6 +43,8 @@ const requiredAccountControlNames = [
   "New password",
   "Confirm new password",
   "Update Password",
+  "Quick Connect code",
+  "Approve device",
   "Delete account",
 ];
 

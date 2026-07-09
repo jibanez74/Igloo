@@ -63,6 +63,9 @@ type Application struct {
 	RoomHLSTombstone     *cache.Cache
 	RoomHLSMu            sync.Mutex
 	WatchRoomHub         *WatchRoomHub
+	QuickConnect         *QuickConnectBroker
+	AuthLimiter          *rateLimiter
+	DeviceLastSeen       *cache.Cache
 }
 
 //go:embed all:webdist
@@ -232,6 +235,12 @@ func (app *Application) initRuntimeCaches() {
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
 	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+
+	app.QuickConnect = NewQuickConnectBroker()
+	app.AuthLimiter = newRateLimiter()
+
+	// Throttles devices.last_used_at writes to at most one per device per TTL.
+	app.DeviceLastSeen = cache.New(deviceLastSeenTTL, deviceLastSeenTTL)
 }
 
 func (app *Application) InitDB() error {
@@ -560,6 +569,7 @@ func optionalEnvSetting(envName string) sql.NullString {
 func (app *Application) InitRouter() {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
+	router.Use(preserveClientSocketIP)
 	router.Use(middleware.RealIP)
 	router.Use(app.RequestLogger)
 	router.Use(middleware.Recoverer)
@@ -575,7 +585,7 @@ func (app *Application) InitRouter() {
 }
 
 func (app *Application) registerWebSocketRoutes(router chi.Router) {
-	router.With(app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
+	router.With(app.DeviceTokenAuth, app.LoadSessionReadOnly, app.IsAuth).Get("/api/watch-rooms/{id}/ws", app.WatchRoomWebSocket)
 }
 
 func (app *Application) registerSessionRoutes(r chi.Router) {
@@ -589,16 +599,21 @@ func (app *Application) registerAPIRoutes(r chi.Router) {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
 		r.Post("/auth/login", app.AuthenticateUser)
-		r.Get("/auth/user", app.GetCurrentAuthUser)
+		r.Post("/auth/device-login", app.AuthenticateDevice)
+		r.With(app.DeviceTokenAuth).Get("/auth/user", app.GetCurrentAuthUser)
+		r.Post("/quick-connect/initiate", app.InitiateQuickConnect)
+		r.Post("/quick-connect/redeem", app.RedeemQuickConnect)
 		app.registerAuthenticatedAPIRoutes(r)
 	})
 }
 
 func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 	r.Group(func(r chi.Router) {
+		r.Use(app.DeviceTokenAuth)
 		r.Use(app.IsAuth)
 
 		app.registerAuthRoutes(r)
+		app.registerDeviceRoutes(r)
 		app.registerUserRoutes(r)
 		app.registerNotificationRoutes(r)
 		r.Get("/static/*", app.ServeStaticFiles)
@@ -617,6 +632,16 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 func (app *Application) registerAuthRoutes(r chi.Router) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Delete("/logout", app.DestroySession)
+	})
+}
+
+func (app *Application) registerDeviceRoutes(r chi.Router) {
+	r.Post("/quick-connect/approve", app.ApproveQuickConnect)
+
+	r.Route("/devices", func(r chi.Router) {
+		r.Get("/", app.GetDevices)
+		r.Patch("/{id}", app.RenameDevice)
+		r.Delete("/{id}", app.RevokeDevice)
 	})
 }
 

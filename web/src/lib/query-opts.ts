@@ -4,6 +4,7 @@ import {
   getAlbumDetails,
   getAlbumsPaginated,
   getAuthUser,
+  getDevices,
   getGeneralSettings,
   getPlaybackSettings,
   getLatestAlbums,
@@ -53,6 +54,7 @@ import {
   ALBUMS_PAGINATED_KEY,
   ALBUMS_PER_PAGE,
   AUTH_USER_KEY,
+  DEVICES_KEY,
   GENERAL_SETTINGS_KEY,
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
@@ -136,6 +138,19 @@ export function authUserQueryOpts(options?: { revalidate?: boolean }) {
     queryKey: [AUTH_USER_KEY],
     queryFn: getAuthUser,
     staleTime: options?.revalidate ? 0 : STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+// ============================================================================
+// Devices (Quick Connect)
+// ============================================================================
+
+export function devicesQueryOpts() {
+  return queryOptions({
+    queryKey: [DEVICES_KEY],
+    queryFn: getDevices,
+    staleTime: STALE_30S,
     gcTime: GC_DEFAULT,
   });
 }

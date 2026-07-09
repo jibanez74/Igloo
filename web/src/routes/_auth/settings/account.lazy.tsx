@@ -57,6 +57,8 @@ import {
 } from "@/lib/input-styles";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
+import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
+import DevicesCard from "@/components/DevicesCard";
 
 export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,
@@ -994,6 +996,12 @@ function AccountSettings() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Quick Connect */}
+      <QuickConnectApproveCard />
+
+      {/* Devices */}
+      <DevicesCard />
 
       {/* Danger Zone */}
       <Card className="border-destructive/50 bg-destructive/10">

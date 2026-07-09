@@ -6,6 +6,8 @@ export const SETTINGS_KEY = "settings";
 export const GENERAL_SETTINGS_KEY = "general-settings";
 export const PLAYBACK_SETTINGS_KEY = "playback-settings";
 
+export const DEVICES_KEY = "devices";
+
 export const NOTIFICATIONS_KEY = "notifications";
 export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
 

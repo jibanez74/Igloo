@@ -8,6 +8,7 @@ import type {
   CreateMoviePlaylistRequest,
   CreateNotificationRequest,
   CreateNotificationResponseType,
+  DevicesListResponseType,
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
   CreatePlaylistRequest,
@@ -81,11 +82,13 @@ import {
 const ERROR_NOTFOUND: ApiFailureType = {
   error: true,
   message: "404 - The resource you requested was not found.",
+  status: 404,
 };
 
 const NETWORK_ERROR: ApiFailureType = {
   error: true,
   message: "500 - A network error occurred while processing your request.",
+  status: 500,
 };
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -153,6 +156,30 @@ export const logout = () =>
 
 export const getAuthUser = () =>
   apiRequest<{ user: AuthUser }>("/api/auth/user");
+
+// ============================================================================
+// Devices (Quick Connect)
+// ============================================================================
+
+export const approveQuickConnect = (code: string) =>
+  apiRequest("/api/quick-connect/approve", {
+    method: "POST",
+    body: { code },
+  });
+
+export const getDevices = () =>
+  apiRequest<DevicesListResponseType>("/api/devices");
+
+export const renameDevice = (id: number, name: string) =>
+  apiRequest(`/api/devices/${id}`, {
+    method: "PATCH",
+    body: { name },
+  });
+
+export const revokeDevice = (id: number) =>
+  apiRequest(`/api/devices/${id}`, {
+    method: "DELETE",
+  });
 
 // ============================================================================
 // User settings

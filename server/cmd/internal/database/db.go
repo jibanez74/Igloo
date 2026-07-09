@@ -66,6 +66,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countUsersByIDsStmt, err = db.PrepareContext(ctx, countUsersByIDs); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUsersByIDs: %w", err)
 	}
+	if q.createDeviceStmt, err = db.PrepareContext(ctx, createDevice); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateDevice: %w", err)
+	}
 	if q.createMovieExtraVideoStmt, err = db.PrepareContext(ctx, createMovieExtraVideo); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateMovieExtraVideo: %w", err)
 	}
@@ -104,6 +107,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deleteAlbumStmt, err = db.PrepareContext(ctx, deleteAlbum); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteAlbum: %w", err)
+	}
+	if q.deleteDeviceForUserStmt, err = db.PrepareContext(ctx, deleteDeviceForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteDeviceForUser: %w", err)
 	}
 	if q.deleteMovieStmt, err = db.PrepareContext(ctx, deleteMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovie: %w", err)
@@ -200,6 +206,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getCrewByMovieIDStmt, err = db.PrepareContext(ctx, getCrewByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCrewByMovieID: %w", err)
+	}
+	if q.getDeviceByTokenHashStmt, err = db.PrepareContext(ctx, getDeviceByTokenHash); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDeviceByTokenHash: %w", err)
+	}
+	if q.getDevicesByUserStmt, err = db.PrepareContext(ctx, getDevicesByUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDevicesByUser: %w", err)
 	}
 	if q.getGenresByAlbumIDStmt, err = db.PrepareContext(ctx, getGenresByAlbumID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetGenresByAlbumID: %w", err)
@@ -462,11 +474,17 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.removeTrackFromPlaylistStmt, err = db.PrepareContext(ctx, removeTrackFromPlaylist); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveTrackFromPlaylist: %w", err)
 	}
+	if q.renameDeviceStmt, err = db.PrepareContext(ctx, renameDevice); err != nil {
+		return nil, fmt.Errorf("error preparing query RenameDevice: %w", err)
+	}
 	if q.unlikeTrackStmt, err = db.PrepareContext(ctx, unlikeTrack); err != nil {
 		return nil, fmt.Errorf("error preparing query UnlikeTrack: %w", err)
 	}
 	if q.updateAlbumSpotifyCoverStmt, err = db.PrepareContext(ctx, updateAlbumSpotifyCover); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAlbumSpotifyCover: %w", err)
+	}
+	if q.updateDeviceLastUsedStmt, err = db.PrepareContext(ctx, updateDeviceLastUsed); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateDeviceLastUsed: %w", err)
 	}
 	if q.updateGeneralSettingsStmt, err = db.PrepareContext(ctx, updateGeneralSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateGeneralSettings: %w", err)
@@ -627,6 +645,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing countUsersByIDsStmt: %w", cerr)
 		}
 	}
+	if q.createDeviceStmt != nil {
+		if cerr := q.createDeviceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createDeviceStmt: %w", cerr)
+		}
+	}
 	if q.createMovieExtraVideoStmt != nil {
 		if cerr := q.createMovieExtraVideoStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createMovieExtraVideoStmt: %w", cerr)
@@ -690,6 +713,11 @@ func (q *Queries) Close() error {
 	if q.deleteAlbumStmt != nil {
 		if cerr := q.deleteAlbumStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteAlbumStmt: %w", cerr)
+		}
+	}
+	if q.deleteDeviceForUserStmt != nil {
+		if cerr := q.deleteDeviceForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteDeviceForUserStmt: %w", cerr)
 		}
 	}
 	if q.deleteMovieStmt != nil {
@@ -850,6 +878,16 @@ func (q *Queries) Close() error {
 	if q.getCrewByMovieIDStmt != nil {
 		if cerr := q.getCrewByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getCrewByMovieIDStmt: %w", cerr)
+		}
+	}
+	if q.getDeviceByTokenHashStmt != nil {
+		if cerr := q.getDeviceByTokenHashStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDeviceByTokenHashStmt: %w", cerr)
+		}
+	}
+	if q.getDevicesByUserStmt != nil {
+		if cerr := q.getDevicesByUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDevicesByUserStmt: %w", cerr)
 		}
 	}
 	if q.getGenresByAlbumIDStmt != nil {
@@ -1287,6 +1325,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing removeTrackFromPlaylistStmt: %w", cerr)
 		}
 	}
+	if q.renameDeviceStmt != nil {
+		if cerr := q.renameDeviceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing renameDeviceStmt: %w", cerr)
+		}
+	}
 	if q.unlikeTrackStmt != nil {
 		if cerr := q.unlikeTrackStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing unlikeTrackStmt: %w", cerr)
@@ -1295,6 +1338,11 @@ func (q *Queries) Close() error {
 	if q.updateAlbumSpotifyCoverStmt != nil {
 		if cerr := q.updateAlbumSpotifyCoverStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateAlbumSpotifyCoverStmt: %w", cerr)
+		}
+	}
+	if q.updateDeviceLastUsedStmt != nil {
+		if cerr := q.updateDeviceLastUsedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateDeviceLastUsedStmt: %w", cerr)
 		}
 	}
 	if q.updateGeneralSettingsStmt != nil {
@@ -1490,6 +1538,7 @@ type Queries struct {
 	countUserLikedMoviesStmt                    *sql.Stmt
 	countUserLikedTracksStmt                    *sql.Stmt
 	countUsersByIDsStmt                         *sql.Stmt
+	createDeviceStmt                            *sql.Stmt
 	createMovieExtraVideoStmt                   *sql.Stmt
 	createMovieGenreStmt                        *sql.Stmt
 	createMoviePlaylistStmt                     *sql.Stmt
@@ -1503,6 +1552,7 @@ type Queries struct {
 	createUserStmt                              *sql.Stmt
 	createWatchRoomStmt                         *sql.Stmt
 	deleteAlbumStmt                             *sql.Stmt
+	deleteDeviceForUserStmt                     *sql.Stmt
 	deleteMovieStmt                             *sql.Stmt
 	deleteMovieAudioStreamsStmt                 *sql.Stmt
 	deleteMovieCastStmt                         *sql.Stmt
@@ -1535,6 +1585,8 @@ type Queries struct {
 	getCastByMovieIDStmt                        *sql.Stmt
 	getChaptersByMovieIDStmt                    *sql.Stmt
 	getCrewByMovieIDStmt                        *sql.Stmt
+	getDeviceByTokenHashStmt                    *sql.Stmt
+	getDevicesByUserStmt                        *sql.Stmt
 	getGenresByAlbumIDStmt                      *sql.Stmt
 	getGenresByMovieIDStmt                      *sql.Stmt
 	getGenresByMusicianIDStmt                   *sql.Stmt
@@ -1622,8 +1674,10 @@ type Queries struct {
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
 	removeTrackFromPlaylistStmt                 *sql.Stmt
+	renameDeviceStmt                            *sql.Stmt
 	unlikeTrackStmt                             *sql.Stmt
 	updateAlbumSpotifyCoverStmt                 *sql.Stmt
+	updateDeviceLastUsedStmt                    *sql.Stmt
 	updateGeneralSettingsStmt                   *sql.Stmt
 	updateLibrarySettingsStmt                   *sql.Stmt
 	updateMovieStmt                             *sql.Stmt
@@ -1672,6 +1726,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countUserLikedMoviesStmt:                    q.countUserLikedMoviesStmt,
 		countUserLikedTracksStmt:                    q.countUserLikedTracksStmt,
 		countUsersByIDsStmt:                         q.countUsersByIDsStmt,
+		createDeviceStmt:                            q.createDeviceStmt,
 		createMovieExtraVideoStmt:                   q.createMovieExtraVideoStmt,
 		createMovieGenreStmt:                        q.createMovieGenreStmt,
 		createMoviePlaylistStmt:                     q.createMoviePlaylistStmt,
@@ -1685,6 +1740,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createUserStmt:                              q.createUserStmt,
 		createWatchRoomStmt:                         q.createWatchRoomStmt,
 		deleteAlbumStmt:                             q.deleteAlbumStmt,
+		deleteDeviceForUserStmt:                     q.deleteDeviceForUserStmt,
 		deleteMovieStmt:                             q.deleteMovieStmt,
 		deleteMovieAudioStreamsStmt:                 q.deleteMovieAudioStreamsStmt,
 		deleteMovieCastStmt:                         q.deleteMovieCastStmt,
@@ -1717,6 +1773,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
 		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
 		getCrewByMovieIDStmt:                        q.getCrewByMovieIDStmt,
+		getDeviceByTokenHashStmt:                    q.getDeviceByTokenHashStmt,
+		getDevicesByUserStmt:                        q.getDevicesByUserStmt,
 		getGenresByAlbumIDStmt:                      q.getGenresByAlbumIDStmt,
 		getGenresByMovieIDStmt:                      q.getGenresByMovieIDStmt,
 		getGenresByMusicianIDStmt:                   q.getGenresByMusicianIDStmt,
@@ -1804,8 +1862,10 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,
 		removeTrackFromPlaylistStmt:                 q.removeTrackFromPlaylistStmt,
+		renameDeviceStmt:                            q.renameDeviceStmt,
 		unlikeTrackStmt:                             q.unlikeTrackStmt,
 		updateAlbumSpotifyCoverStmt:                 q.updateAlbumSpotifyCoverStmt,
+		updateDeviceLastUsedStmt:                    q.updateDeviceLastUsedStmt,
 		updateGeneralSettingsStmt:                   q.updateGeneralSettingsStmt,
 		updateLibrarySettingsStmt:                   q.updateLibrarySettingsStmt,
 		updateMovieStmt:                             q.updateMovieStmt,

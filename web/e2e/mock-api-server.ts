@@ -62,6 +62,23 @@ type MovieWatchProgress = {
   updated_at: string | null;
 };
 
+type MockDevice = {
+  id: number;
+  name: string;
+  platform: string;
+  app_version: string | null;
+  created_at: string;
+  last_used_at: string;
+};
+
+type PendingPairing = {
+  secret: string;
+  device_name: string;
+  platform: string;
+  app_version: string | null;
+  approved: boolean;
+};
+
 const HOST = "127.0.0.1";
 const PORT = Number.parseInt(process.env.E2E_MOCK_API_PORT ?? "8080", 10);
 const SESSION_COOKIE = "igloo_e2e_session";
@@ -72,8 +89,15 @@ const startedAt = new Date().toISOString();
 let nextUserId = 2;
 let nextPlaylistId = 2;
 let nextWatchRoomId = 1;
+let nextDeviceId = 1;
 
 const sessions = new Map<string, number>();
+// Quick Connect pairing state. Starts empty so specs that only render the
+// settings page see no devices. Bearer-token auth on other routes is
+// deliberately not simulated: token validity/revocation semantics are covered
+// by the Go integration tests and the live-gated quick-connect.spec.ts.
+const devices: MockDevice[] = [];
+const pendingPairings = new Map<string, PendingPairing>();
 const playbackPreferences = new Map<number, PlaybackPreferences>();
 const likedMovieIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
@@ -809,9 +833,96 @@ function canHandleWithoutAuth(pathname: string) {
     pathname === "/api/auth/login" ||
     pathname === "/api/auth/logout" ||
     pathname === "/api/auth/user" ||
+    pathname === "/api/quick-connect/initiate" ||
+    pathname === "/api/quick-connect/redeem" ||
     pathname.startsWith("/api/tmdb/images/") ||
     pathname.startsWith("/api/static/")
   );
+}
+
+// Public quick-connect routes: the pairing device is unauthenticated until it
+// redeems an approved code, mirroring the real server.
+async function handleQuickConnectPublicRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/quick-connect/initiate" && method === "POST") {
+    const body = await readJSONBody(request);
+    const deviceName = stringField(body, "device_name").trim();
+    if (!deviceName || deviceName.length > 100) {
+      sendFailure(
+        response,
+        400,
+        "device_name is required and must be at most 100 characters",
+      );
+      return true;
+    }
+
+    let code = "";
+    do {
+      code = randomUUID().replace(/[^A-Z2-9]/gi, "").toUpperCase().slice(0, 6);
+    } while (code.length < 6 || pendingPairings.has(code));
+
+    pendingPairings.set(code, {
+      secret: randomUUID(),
+      device_name: deviceName,
+      platform: stringField(body, "platform"),
+      app_version: nullableStringField(body, "app_version") ?? null,
+      approved: false,
+    });
+
+    sendSuccess(
+      response,
+      {
+        code,
+        secret: pendingPairings.get(code)?.secret,
+        expires_in_seconds: 300,
+        poll_interval_seconds: 2,
+      },
+      201,
+    );
+    return true;
+  }
+
+  if (url.pathname === "/api/quick-connect/redeem" && method === "POST") {
+    const body = await readJSONBody(request);
+    const code = stringField(body, "code").trim().toUpperCase();
+    const pairing = pendingPairings.get(code);
+
+    if (!pairing || pairing.secret !== stringField(body, "secret")) {
+      sendFailure(response, 404, "invalid or expired code");
+      return true;
+    }
+
+    if (!pairing.approved) {
+      sendSuccess(response, { status: "pending" });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const device: MockDevice = {
+      id: nextDeviceId++,
+      name: pairing.device_name,
+      platform: pairing.platform,
+      app_version: pairing.app_version,
+      created_at: now,
+      last_used_at: now,
+    };
+    devices.push(device);
+    pendingPairings.delete(code);
+
+    sendSuccess(response, {
+      status: "approved",
+      token: `igd_mock_${randomUUID()}`,
+      device: { ...device, is_current: true },
+    });
+    return true;
+  }
+
+  return false;
 }
 
 async function handleAuthRoutes(
@@ -1781,6 +1892,74 @@ function handleSearchRoutes(
   return false;
 }
 
+async function handleDeviceRoutes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+) {
+  const method = request.method ?? "GET";
+
+  if (url.pathname === "/api/devices" && method === "GET") {
+    sendSuccess(response, {
+      devices: devices.map(device => ({ ...device, is_current: false })),
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/quick-connect/approve" && method === "POST") {
+    const body = await readJSONBody(request);
+    const code = stringField(body, "code").trim().toUpperCase();
+    const pairing = pendingPairings.get(code);
+
+    if (!pairing || pairing.approved) {
+      sendFailure(response, 404, "invalid or expired code");
+      return true;
+    }
+
+    pairing.approved = true;
+    sendSuccess(response, {}, 200, "Device approved. It will finish signing in shortly.");
+    return true;
+  }
+
+  const deviceMatch = url.pathname.match(/^\/api\/devices\/(\d+)$/);
+  if (deviceMatch) {
+    const deviceId = Number.parseInt(deviceMatch[1], 10);
+    const index = devices.findIndex(device => device.id === deviceId);
+
+    if (method === "PATCH") {
+      const body = await readJSONBody(request);
+      const name = stringField(body, "name").trim();
+      if (!name || name.length > 100) {
+        sendFailure(
+          response,
+          400,
+          "name is required and must be at most 100 characters",
+        );
+        return true;
+      }
+      if (index === -1) {
+        sendFailure(response, 404, "device not found");
+        return true;
+      }
+      devices[index].name = name;
+      sendSuccess(response, {}, 200, "Device renamed");
+      return true;
+    }
+
+    if (method === "DELETE") {
+      if (index === -1) {
+        sendFailure(response, 404, "device not found");
+        return true;
+      }
+      devices.splice(index, 1);
+      sendSuccess(response, {}, 200, "Device revoked");
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function handleNotificationRoutes(
   request: IncomingMessage,
   response: ServerResponse,
@@ -1831,6 +2010,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   try {
     if (await handleAuthRoutes(request, response, url)) return;
+    if (await handleQuickConnectPublicRoutes(request, response, url)) return;
 
     if (!canHandleWithoutAuth(url.pathname)) {
       const user = requireAuth(request, response);
@@ -1851,6 +2031,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (handleWatchRoomRoutes(request, response, url, user)) return;
       if (handleSearchRoutes(request, response, url)) return;
       if (handleNotificationRoutes(request, response, url)) return;
+      if (await handleDeviceRoutes(request, response, url)) return;
     }
 
     if (url.pathname.startsWith("/api/")) {

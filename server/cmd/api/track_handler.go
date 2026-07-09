@@ -14,7 +14,7 @@ import (
 )
 
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -87,7 +87,7 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 // GetLikedTrackIDsForUser returns the IDs of every track the authenticated user has liked.
 // Used by the frontend to initialize liked-heart state on page load without a paginated fetch.
 func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return
@@ -113,7 +113,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 // GetLikedTracks returns the current user's liked tracks as a paginated list,
 // ordered by most recently liked first. Query params: page (default 1), per_page (default 50, max 100).
 func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.userIDFromRequest(r)
 	if userID == 0 {
 		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
 		return

@@ -126,6 +126,8 @@ export type {
 // User types
 export type { AuthUser, AdminUserType } from "./user";
 
+export type { DeviceType, DevicesListResponseType } from "./devices";
+
 // Notification types
 export type {
   NotificationType,

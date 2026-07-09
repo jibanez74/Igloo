@@ -76,6 +76,17 @@ type Crew struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+type Device struct {
+	ID         int64          `json:"id"`
+	UserID     int64          `json:"user_id"`
+	Name       string         `json:"name"`
+	Platform   string         `json:"platform"`
+	AppVersion sql.NullString `json:"app_version"`
+	TokenHash  string         `json:"token_hash"`
+	CreatedAt  string         `json:"created_at"`
+	LastUsedAt string         `json:"last_used_at"`
+}
+
 type ExtraVideo struct {
 	ID         int64          `json:"id"`
 	Title      string         `json:"title"`
