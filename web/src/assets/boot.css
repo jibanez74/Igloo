@@ -1,19 +1,18 @@
+/* Self-hosted InterVariable (docs/design-system.md §1.3): one variable file
+   covering weights 100–900, served from public/ so this plain stylesheet
+   resolves it identically in dev and production builds. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+
 html,
 body,
 #app {
   min-height: 100%;
-}
-
-/* Light igloo (default). Dark overrides follow under html.dark. Values mirror
-   the :root / .dark token hexes in styles.css. */
-html {
-  background: #f2f7fc;
-  color: #0a1322;
-}
-
-html.dark {
-  background: #0a1322;
-  color: #f8fafc;
 }
 
 body {
@@ -21,10 +20,6 @@ body {
   display: flex;
   min-height: 100%;
   flex-direction: column;
-  background:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.06), transparent 32%),
-    linear-gradient(180deg, #e8f1fa 0%, #f2f7fc 100%);
-  color: #0a1322;
   font-family:
     Inter,
     ui-sans-serif,
@@ -35,13 +30,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-html.dark body {
-  background:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.1), transparent 32%),
-    linear-gradient(180deg, rgba(15, 26, 46, 0.94) 0%, rgba(10, 19, 34, 1) 100%);
-  color: #f8fafc;
 }
 
 #initial-splash {
@@ -78,9 +66,39 @@ html[data-app-ready="true"] #initial-splash {
 .initial-splash__message {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
+}
+
+/* BEGIN GENERATED: theme boot colors — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
+/* Light igloo (default). Dark overrides follow under html.dark. */
+html {
+  background: #f2f7fc;
+  color: #0a1322;
+}
+
+html.dark {
+  background: #0a1322;
+  color: #f8fafc;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.06), transparent 32%),
+    linear-gradient(180deg, #e8f1fa 0%, #f2f7fc 100%);
+  color: #0a1322;
+}
+
+html.dark body {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(15, 26, 46, 0.94) 0%, rgba(10, 19, 34, 1) 100%);
+  color: #f8fafc;
+}
+
+.initial-splash__message {
   color: #64748b;
 }
 
 html.dark .initial-splash__message {
   color: #94a3b8;
 }
+/* END GENERATED: theme boot colors */

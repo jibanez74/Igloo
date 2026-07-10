@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:theme": "bun scripts/generate-theme.ts",
     "build": "vite build && tsc --noEmit",
     "build:analyze": "vite build --mode analyze && tsc --noEmit",
     "lint": "eslint . --max-warnings 0",

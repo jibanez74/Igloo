@@ -165,8 +165,8 @@ function PlaybackSettings() {
       <div className="max-w-3xl">
         <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-destructive">
-              Settings unavailable
+            <CardTitle asChild className="text-destructive">
+              <h2>Settings unavailable</h2>
             </CardTitle>
             <CardDescription className="text-destructive">
               {data.message || "Failed to load playback settings."}
@@ -379,13 +379,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle
-            role="heading"
-            aria-level={2}
-            className="flex items-center gap-2 text-foreground"
-          >
-            <Play className="size-5 text-primary" aria-hidden="true" />
-            Playback Settings
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Play className="size-5 text-primary" aria-hidden="true" />
+              Playback Settings
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Tell Igloo about your connection so it can pick the right stream
@@ -401,9 +399,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Gauge className="size-5 text-primary" aria-hidden="true" />
-            Your network speed
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Gauge className="size-5 text-primary" aria-hidden="true" />
+              Your network speed
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Used to recommend a stream profile for your viewing.
@@ -447,9 +447,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Wifi className="size-5 text-primary" aria-hidden="true" />
-            Server upload cap
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Wifi className="size-5 text-primary" aria-hidden="true" />
+              Server upload cap
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             The home server&apos;s outbound bandwidth limit, applied when you
@@ -513,11 +515,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       >
         <CardHeader>
           <CardTitle
+            asChild
             id={recommendationTitleId}
             className="flex items-center gap-2 text-foreground"
           >
-            <Sliders className="size-5 text-primary" aria-hidden="true" />
-            Recommended profile
+            <h2>
+              <Sliders className="size-5 text-primary" aria-hidden="true" />
+              Recommended profile
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Calculated from your download speed and the server upload cap, with
@@ -546,9 +551,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Play className="size-5 text-primary" aria-hidden="true" />
-            Preferred profile
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Play className="size-5 text-primary" aria-hidden="true" />
+              Preferred profile
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             The default profile when you start a stream. You can still pick a
@@ -599,9 +606,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Languages className="size-5 text-primary" aria-hidden="true" />
-            Preferred audio language
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Languages className="size-5 text-primary" aria-hidden="true" />
+              Preferred audio language
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Igloo will pick the matching audio track when a movie has one. You
@@ -652,9 +661,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Subtitles className="size-5 text-primary" aria-hidden="true" />
-            Preferred subtitles
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Subtitles className="size-5 text-primary" aria-hidden="true" />
+              Preferred subtitles
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Pick a default subtitle language, or always start with subtitles

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Film, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
@@ -7,6 +8,7 @@ import {
   CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
+import { criticRatingClass } from "@/lib/rating";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
 import type { TheaterMovieType } from "@/types";
@@ -25,12 +27,6 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
   const rating = vote_average ? vote_average.toFixed(1) : null;
   const year = release_date ? new Date(release_date).getFullYear() : null;
-
-  const getRatingColor = (score: number) => {
-    if (score >= 7) return "bg-aurora text-aurora-foreground"; // Strong
-    if (score >= 5) return "bg-aurora/80 text-aurora-foreground"; // Mid
-    return "bg-muted text-foreground"; // Low
-  };
 
   return (
     <article
@@ -67,13 +63,16 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
           {/* Rating badge */}
           {rating && (
-            <div
-              className={`absolute top-2 right-2 rounded-md px-2 py-0.5 text-xs font-bold shadow-lg ${getRatingColor(vote_average)}`}
+            <Badge
+              className={cn(
+                "absolute top-2 right-2 rounded-md px-2 font-bold shadow-lg",
+                criticRatingClass(vote_average),
+              )}
               aria-hidden="true"
             >
-              <Star className="mr-1 size-2.5 fill-current" aria-hidden="true" />
+              <Star className="size-2.5 fill-current" aria-hidden="true" />
               {rating}
-            </div>
+            </Badge>
           )}
 
           {/* Gradient overlay for text readability */}

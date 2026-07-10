@@ -2,8 +2,9 @@
 
 This document is the development guideline for the Igloo web client (`web/`). It
 describes the visual system as implemented, the conventions every new UI change
-must follow, and the issues found in the July 2026 audit (§4) with prioritized
-improvement suggestions (§5).
+must follow, and the July 2026 audit findings (§4) with the fixes that were
+applied (§5) — all resolved 2026-07-10 except the deliberately accepted §4
+item 7.
 
 Scope: the web client only. (An earlier revision of this document doubled as an
 Android TV / Jetpack Compose port guide; that content was removed deliberately —
@@ -22,13 +23,13 @@ this doc, prefer adding a guard too.
 
 | Rule | Guarded by |
 |---|---|
-| Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), both themes | `web/src/test/contrast.test.ts` |
-| Theme constants stay in sync across `styles.css` / `boot.css` / `index.html` / `theme.ts` | `web/src/test/theme-drift.test.ts` |
+| Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), plus `text-success` on `background`/`card`, both themes | `web/src/test/contrast.test.ts` |
+| Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/theme-drift.test.ts` |
 | Every shared motion constant carries a `motion-reduce:` escape; every `ui/*.tsx` transition has `motion-reduce:transition-none` | `web/src/test/motion-contracts.test.ts` |
-| No raw `slate-*` / `amber-*` / `red-*` / `emerald-*` palette classes | ESLint `no-restricted-syntax` (error) in `web/eslint.config.js` |
+| No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (error) in `web/eslint.config.js` |
 | Class order, duplicates, unknown/conflicting classes | `eslint-plugin-better-tailwindcss` |
 | Input styling contracts | `web/src/test/input-styles.test.ts` |
-| Shared class-string constants keep their contracts | `web/src/test/constants-contracts.test.ts` |
+| Shared class-string constants keep their contracts, incl. the single focus-ring recipe | `web/src/test/constants-contracts.test.ts` |
 
 ---
 
@@ -49,7 +50,8 @@ The system is implemented with:
   (`clsx` + `tailwind-merge`, from `web/src/lib/utils.ts`).
 - **Semantic CSS custom properties** in OKLCH, defined once per theme
   (`:root` = light, `.dark` = dark) and consumed through utilities like
-  `bg-card`, `text-muted-foreground`, `ring-ring`.
+  `bg-card`, `text-muted-foreground`, `ring-ring`. The token rules are
+  **generated** from `src/lib/theme-tokens.ts` (§2.4).
 - **`tw-animate-css`** for enter/exit animations, with a strict
   `motion-reduce:` discipline (§1.5).
 - **lucide-react** for all icons.
@@ -60,9 +62,11 @@ script in `index.html` (§2.4). Default is dark whenever no stored value exists.
 
 ### 1.2 Color tokens
 
-Colors are authored in **OKLCH** in `styles.css` with hex equivalents in inline
-comments. Tokens are paired (`X` surface + `X-foreground` text) so contrast is
-guaranteed; every pair is verified in both themes by `contrast.test.ts`.
+Colors are authored in **OKLCH** in `src/lib/theme-tokens.ts` (value + hex +
+comment per token) and rendered into `styles.css` by `bun run generate:theme`
+(§2.4) — edit the module, not the CSS. Tokens are paired (`X` surface +
+`X-foreground` text) so contrast is guaranteed; every pair is verified in both
+themes by `contrast.test.ts`.
 
 | Token | Dark (default) | Light | Role |
 |-------|----------------|-------|------|
@@ -79,7 +83,7 @@ guaranteed; every pair is verified in both themes by `contrast.test.ts`.
 | `ring` | `#38BDF8` | `#0EA5E9` | **The one focus color** |
 | `destructive` / `-foreground` | `#F87171` / `#08131F` | `#DC2626` / `#FFFFFF` | Danger / delete |
 | `aurora` / `-foreground` | `#F59E0B` / `#08131F` | same | Warm accent (sparing) |
-| `success` / `-foreground` | `#34D399` / `#08131F` | `#059669` / `#08131F` | Success state |
+| `success` / `-foreground` | `#34D399` / `#08131F` | `#167050` / `#FFFFFF` | Success state |
 | `accent-teal` / `-foreground` | `#2DD4BF` / `#08131F` | `#0D9488` / `#08131F` | Secondary accent |
 | `sidebar` (+ its own fg/primary/accent/border/ring set) | `#0F1A2E` | `#E8F1FA` | Sidebar chrome |
 | `chart-1..5` | glacier / teal / aurora / success / danger | same families | Data viz |
@@ -100,18 +104,21 @@ Rules:
   overlays, `bg-linear-to-t from-black/90` scrims, `text-white` titles,
   `shadow-black/30`. These must not track the theme (a poster doesn't change
   with the theme); keep them literal, don't hunt for tokens.
-- One deliberate brand exception exists: `SPOTIFY_BRAND_TEXT_CLASS` in
-  `lib/constants.ts` (Spotify green, documented there).
-- Known caveat: light-theme `text-success` on `background` is only ~3.5:1 —
-  fine for icons/large text, not for small body text (§4 item 8).
+- One deliberate brand exception exists: the `SPOTIFY_BRAND_*` constants in
+  `lib/constants.ts` (Spotify green, documented there, carried past the lint
+  ban with inline `eslint-disable` comments).
+- `text-success` is AA-safe on `background` and `card` in both themes
+  (light `--success` is a deep glacier green, `#167050`); the pairs are pinned
+  by `contrast.test.ts`.
 
 ### 1.3 Typography
 
 - **Font stack**: `Inter, ui-sans-serif, system-ui, -apple-system,
   BlinkMacSystemFont, "Segoe UI", sans-serif`, declared once on `body` in
-  `web/src/assets/boot.css` (with antialiasing). **Inter is not actually
-  loaded** — there is no `@font-face`, package, or `<link>` — so the app
-  renders in the platform system font today (§4 item 2). Do not declare other
+  `web/src/assets/boot.css` (with antialiasing). **Inter is self-hosted**: the
+  variable font (`web/public/fonts/InterVariable.woff2`, weights 100–900) is
+  loaded by an `@font-face` in `boot.css` with `font-display: swap` and
+  preloaded in `index.html` — no CDN, no npm package. Do not declare other
   font families in components.
 - **Scale**: Tailwind's default type scale as utility literals; there are no
   custom font-size tokens. In practice: `text-sm`/`text-xs` for body and
@@ -191,9 +198,14 @@ stamps `data-variant`/`data-size`.
   search params (validated in `types/route-search.ts`), never local state.
 - **cva policy**: only `button.tsx`, `alert.tsx`, and `sidebar.tsx` use
   `class-variance-authority` (as shipped by shadcn). Everything else composes
-  plain `cn(...)`. Don't introduce cva into new components; either add a
-  variant to an existing cva component or export a class-string constant
-  (§2.3).
+  plain `cn(...)` — `badge.tsx` (a plain variant record:
+  `default`/`aurora`/`muted`/`outline`) is the model. Don't introduce cva into
+  new components; either add a variant to an existing cva component or export
+  a class-string constant (§2.3).
+- **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
+  pills, rating chips, status tags. It is non-interactive by design (a
+  `span`); actionable chips are Buttons. Rating-tier colors come from the
+  shared helpers in `lib/rating.ts` (§3.2).
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an
@@ -204,13 +216,13 @@ stamps `data-variant`/`data-size`.
 
 ### 1.7 Accessibility — non-negotiable
 
-- **One focus color.** `--ring` is glacier in both themes. Inline (non-shadcn)
-  interactive elements use `FOCUS_VISIBLE_RING_CLASS` from `constants.ts`
-  (`focus-visible:ring-2 ring-ring offset-2`); shadcn primitives ship the
-  newer `focus-visible:ring-[3px] ring-ring/50` style. Two ring *weights*, one
-  color — verified visible over posters and backdrops in both themes (§4
-  item 5 tracks unifying them). Media cards add `focus-within:ring-2` on the
-  `<article>` so the whole card shows focus.
+- **One focus recipe.** `--ring` is glacier in both themes, and there is one
+  ring recipe: the shadcn `focus-visible:ring-[3px] ring-ring/50 border-ring`
+  style, shipped by the primitives and exported for inline (non-shadcn)
+  controls as `FOCUS_VISIBLE_RING_CLASS` in `constants.ts` (pinned by
+  `constants-contracts.test.ts`). Media cards keep `focus-within:ring-2` on
+  the `<article>` — the intentional whole-card variant — so the card shows
+  focus wherever it lands inside.
 - **Hover/focus parity.** Every `group-hover` reveal pairs with
   `group-focus-within` (cards) or `focus-visible` (rows) so keyboard users get
   the same affordances. Never gate an action behind hover alone.
@@ -248,7 +260,8 @@ stamps `data-variant`/`data-size`.
   minimal — component styling belongs in components.
 - Gradients use the v4 syntax (`bg-linear-to-t`, `bg-linear-to-br`).
 - Scrollbar styling uses the v4 core utilities (`scrollbar-thin`,
-  `scrollbar-thumb-primary/50`) on horizontal media rails.
+  `scrollbar-thumb-primary/50`) on horizontal media rails; the lint plugin
+  recognizes them natively (no allowlist entry needed).
 - `eslint-plugin-better-tailwindcss` enforces class order, duplicates, and
   unknown classes; write class lists in its canonical order (the lint
   autofixes).
@@ -259,14 +272,16 @@ stamps `data-variant`/`data-size`.
   (`web/components.json`). Components import from the consolidated
   **`radix-ui`** package (`import { Slot } from "radix-ui"`), not
   `@radix-ui/react-*`.
-- 22 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
-  button, card, checkbox, dialog, dropdown-menu, input, label, pagination,
-  popover, select, separator, sheet, sidebar (+ `sidebar-context.tsx`),
-  skeleton, sonner, spinner, tabs, tooltip.
+- 23 primitives are vendored in `components/ui`: alert, alert-dialog, avatar,
+  badge, button, card, checkbox, dialog, dropdown-menu, input, label,
+  pagination, popover, select, separator, sheet, sidebar
+  (+ `sidebar-context.tsx`), skeleton, sonner, spinner, tabs, tooltip.
 - **Customize in place** — these files are ours. House customizations to
-  preserve when regenerating: the Button/Tabs variants (§1.6), `motion-reduce:`
-  escapes appended to every animated primitive, `skeleton.tsx`/`spinner.tsx`
-  consuming the shared motion constants, and `sonner.tsx` (§3.6).
+  preserve when regenerating: the Button/Tabs variants (§1.6), the
+  house-written `badge.tsx` (plain variant record, no cva), `CardTitle`'s
+  `asChild` heading support (§3.7), `motion-reduce:` escapes appended to every
+  animated primitive, `skeleton.tsx`/`spinner.tsx` consuming the shared motion
+  constants, and `sonner.tsx` (§3.6).
 - **No new dependencies** without explicit approval (project rule). Before
   adding a primitive, check whether an existing one + a constant covers it.
 
@@ -295,28 +310,39 @@ rather than being copy-pasted.
 
 ### 2.4 Theme system
 
-Four sync points define the theme; they are intentionally duplicated and
-pinned to each other by `theme-drift.test.ts`:
+**`src/lib/theme-tokens.ts` is the single source of truth**: every themed
+color as OKLCH + hex + comment (`THEME_TOKENS`), the boot-only colors
+(`BOOT_COLORS`), and `THEME_STORAGE_KEY`. Three files carry generated blocks
+rendered from it by `scripts/generate-theme.ts` between
+`BEGIN/END GENERATED` markers — **edit the module, run
+`bun run generate:theme`, never hand-edit inside the markers**
+(`--check` exits 1 if anything is stale):
 
-1. `src/assets/styles.css` — the OKLCH tokens (+ hex comments), `:root` and
-   `.dark`.
-2. `src/assets/boot.css` — pre-hydration paint: themed `html` colors, the
-   canvas gradients (a glacier radial tint over a vertical wash), the body
-   font stack, and the `#initial-splash` full-screen splash (fades out when
-   `AppBoot` sets `data-app-ready="true"`).
-3. `index.html` — the inline anti-flash IIFE that reads
-   `localStorage["igloo-theme"]` and applies the `dark` class + the
-   `<meta name="theme-color">` before first paint (defaults dark, including
-   on storage errors).
-4. `src/lib/theme.ts` — the runtime API and source of truth for the pinned
-   hexes: `THEME_COLORS` / `THEME_TEXT_COLORS`, `getStoredTheme()` (defaults
-   `"dark"`), `applyTheme()` (class + meta + listeners), `setTheme()`
-   (persists), `subscribeTheme()` for `useSyncExternalStore` consumers
-   (`ThemeToggle`, `sonner.tsx`).
+1. `src/assets/styles.css` — the `:root` / `.dark` token rules. (The
+   `@theme inline` mapping above them stays hand-written; add a line there
+   when adding a token.)
+2. `src/assets/boot.css` — pre-hydration paint: themed `html`/`body` colors,
+   the canvas gradients (a glacier radial tint over a vertical wash), and the
+   splash message colors. The hand-written zone keeps layout, the body font
+   stack, the `@font-face`, and the `#initial-splash` structure (fades out
+   when `AppBoot` sets `data-app-ready="true"`).
+3. `index.html` — the `<meta name="theme-color">` and the inline anti-flash
+   IIFE that reads `localStorage["igloo-theme"]` and applies the `dark` class
+   before first paint (defaults dark, including on storage errors).
 
-If you touch any of the four, run the web tests — the drift test fails on any
-mismatch. Live-verified: toggling updates class, storage, and meta correctly,
-and a hard reload shows no theme flash.
+`src/lib/theme.ts` needs no codegen — it imports the module directly and
+derives `THEME_COLORS` / `THEME_TEXT_COLORS` from the canvas tokens; it
+remains the runtime API: `getStoredTheme()` (defaults `"dark"`),
+`applyTheme()` (class + meta + listeners), `setTheme()` (persists),
+`subscribeTheme()` for `useSyncExternalStore` consumers (`ThemeToggle`,
+`sonner.tsx`).
+
+`theme-drift.test.ts` re-renders each generated block and diffs it against
+the file, and checks every token's OKLCH value round-trips to its declared
+hex — so hand edits and module typos both fail CI. OKLCH values in the module
+carry enough decimals to round-trip exactly through `src/test/color.ts`; keep
+that property when editing. Live-verified: toggling updates class, storage,
+and meta correctly, and a hard reload shows no theme flash.
 
 ---
 
@@ -367,8 +393,10 @@ One anatomy, shared by `MovieCard`, `InTheatersCard`, `AlbumCard`,
 Rules: 2:3 posters, square covers, circular musician thumbs; titles clamp at
 2 lines; the hover overlay must also reveal on `group-focus-within`; cards
 prefetch their detail query on `onMouseEnter`/`onFocus`
-(`queryClient.prefetchQuery`); rating badges tier on `bg-aurora` (≥7) /
-`bg-aurora/80–90` (≥5) / `bg-muted`.
+(`queryClient.prefetchQuery`); rating chips tier via the shared
+`criticRatingClass`/`audienceRatingClass` helpers in `lib/rating.ts`
+(`bg-aurora` ≥7 / `bg-aurora/80` ≥5 / `bg-muted`), rendered with the `Badge`
+primitive where no list semantics are needed (§1.6).
 
 Grids: the canonical poster grid is
 `grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`; home
@@ -421,7 +449,9 @@ extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars.
   envelope `{ error, message, data }`). Inline query errors use
   `MoviesLoadError` (`role="alert"`, `border-destructive/25 bg-destructive/10
   text-destructive`, "Try again" → `refetch()`); missing resources use
-  `MediaNotFound` (destructive `Alert`); mutation failures **toast** via
+  `MediaNotFound` (destructive `Alert` + a required "Back to
+  Movies/Music/Home" outline link so the page never dead-ends); mutation
+  failures **toast** via
   `toast-helpers.ts` instead of rendering inline. Placeholder sections
   (`ComingSoon`) reuse the EmptyState language.
 
@@ -476,7 +506,9 @@ require the full playback test pass.
   with labeled inputs, helper text below (`text-muted-foreground text-xs`),
   and per-field or per-card Save buttons; destructive areas get the tinted
   "Danger Zone" card (`border-destructive/*` + destructive text + outline
-  destructive actions).
+  destructive actions). **Card section titles are real headings**: render
+  `CardTitle` with `asChild` wrapping an `<h2>` (login's is the page `<h1>`)
+  so card-sectioned pages are navigable by heading.
 - The header search + login inputs use the frosted light treatment from
   `lib/input-styles.ts` — the sanctioned raw-color exception (§1.2); its
   contract is pinned by `input-styles.test.ts`.
@@ -487,63 +519,81 @@ require the full playback test pass.
 
 ---
 
-## 4. Audit findings (2026-07-10)
+## 4. Audit findings (2026-07-10) — resolved 2026-07-10
 
 Combined static audit + live inspection (real library: 402 movies, 211
 albums / 2,267 tracks; Chrome, both themes, 1440/768/390 viewports). Console
 was clean on every page visited. P1 = user-visible/a11y, P2 = maintainability
-hazard, P3 = polish.
+hazard, P3 = polish. **All items except #7 (deliberately accepted) were fixed
+the same day** — resolutions in the table; details in §5.
 
-| # | P | Finding | Evidence / status |
-|---|---|---------|-------------------|
-| 1 | P2 | **Inter is named but never loaded** — no `@font-face`/package/link; the app silently renders in the OS system font. Fine visually today, but the stack advertises a font users never get, and typography differs per-OS. | `boot.css` body stack; live: `document.fonts` empty, zero font network requests. OPEN |
-| 2 | P2 | **Four-way theme duplication** (styles.css / boot.css / index.html / theme.ts). Mitigated by `theme-drift.test.ts`, but there is still no single machine-readable token source; the old dangling `docs/igloo-theme.ts` comment in `styles.css` was removed in this audit (now cites §1.2/§2.4). | §2.4. MITIGATED / OPEN (item was worse before; see §5.2) |
-| 3 | P2 | **ESLint raw-color ban only covers `slate/amber/red/emerald`** — `blue-*`, `zinc-*`, `sky-*`, etc. would slip through. (Deliberate `green-*` Spotify exception exists.) | `web/eslint.config.js` `no-restricted-syntax`. OPEN |
-| 4 | P2 | **Settings card titles are not headings** — settings pages expose only the `h1`; "Profile Information", "Quick Connect", "Danger Zone" are divs (shadcn `CardTitle`), so screen-reader users can't navigate by heading. | Live: `document.querySelectorAll('h2,h3,h4')` → 0 on `/settings/account`. OPEN |
-| 5 | P3 | **Two coexisting focus-ring styles** — `FOCUS_VISIBLE_RING_CLASS` (`ring-2` + offset) vs shadcn base (`ring-[3px] ring-ring/50`). Same color, different weight/offset; visually acceptable live, but one recipe should win eventually. | §1.7. OPEN |
-| 6 | P3 | **No `badge.tsx` primitive** — count pills, rating badges, "Under Development" chips are hand-rolled `rounded-full` spans; the aurora rating-tier logic repeats in `InTheatersCard` and `MovieDetailsMetadataChips`. | OPEN |
-| 7 | P3 | **Spacing/typography not tokenized** — utility literals only (radius is the lone non-color token). Consistent in practice (§1.4 rhythm), so low urgency; document-and-enforce-by-review. | OPEN (accepted for now) |
-| 8 | P1 | **Light-theme `text-success` on `background` ≈ 3.5:1** — below AA for small text. Not covered by `contrast.test.ts` (which checks `success-foreground` *on* `success`, not `text-success` on canvas). | Known caveat carried from the 2026-07-02 round. OPEN |
-| 9 | P3 | **`MediaNotFound` is terse and dead-ends** — "404 - The resource you requested was not found." with no way back. | Live on `/movies/999999`. OPEN |
-| 10 | P3 | **Stale `scrollbar-*` lint comment** — the eslint ignore says "for the tailwind-scrollbar plugin", but the classes are Tailwind v4 core utilities now (verified live: `scrollbar-width: thin` + glacier thumb are applied). The allowlist may be removable entirely. | `web/eslint.config.js`; live computed styles on the cast rail. OPEN (comment-only) |
-| 11 | P3 | **Mobile hero-actions wrap** — on 390px movie detail, Play/Watch/Like fit one row and the "More" (⋮) button wraps alone to a centered second row. Functional, slightly unbalanced. | Live screenshot, `/movies/401` @390. OPEN |
+| # | P | Finding | Status |
+|---|---|---------|--------|
+| 1 | P2 | **Inter was named but never loaded** — the app silently rendered in the OS system font. | FIXED (2026-07-10): self-hosted `InterVariable.woff2` (§1.3). |
+| 2 | P2 | **Four-way theme duplication** (styles.css / boot.css / index.html / theme.ts) with no single machine-readable token source. | FIXED (2026-07-10): `src/lib/theme-tokens.ts` + `bun run generate:theme` (§2.4). |
+| 3 | P2 | **ESLint raw-color ban only covered `slate/amber/red/emerald`** — other families would slip through. | FIXED (2026-07-10): ban widened to all 22 families; Spotify green carries inline eslint-disables; the one purple offender migrated to `accent-teal`. |
+| 4 | P2 | **Settings card titles were not headings** — screen-reader users couldn't navigate settings by heading. | FIXED (2026-07-10): `CardTitle asChild` + `<h2>` on all card-sectioned pages; login card title is the page `<h1>` (§3.7). |
+| 5 | P3 | **Two coexisting focus-ring styles** (`ring-2`+offset constant vs shadcn `ring-[3px]/50` base). | FIXED (2026-07-10): the shadcn recipe won; `FOCUS_VISIBLE_RING_CLASS` now matches the primitives and is pinned (§1.7). |
+| 6 | P3 | **No `badge.tsx` primitive**; aurora rating-tier logic duplicated in `InTheatersCard` and `MovieDetailsMetadataChips` (with a `/80` vs `/90` mid-tier drift). | FIXED (2026-07-10): `ui/badge.tsx` + `lib/rating.ts` helpers, adopted for rating badges and the home count pill (§1.6, §3.2). |
+| 7 | P3 | **Spacing/typography not tokenized** — utility literals only (radius is the lone non-color token). Consistent in practice (§1.4 rhythm). | OPEN — **accepted**; document-and-enforce-by-review. |
+| 8 | P1 | **Light-theme `text-success` on `background` ≈ 3.5:1** — below AA for small text, and unguarded. | FIXED (2026-07-10): light `--success` → `#167050` (5.6:1 canvas / 6.1:1 card / 4.6:1 on `success/15` tints), fg → white; pairs pinned in `contrast.test.ts` (§1.2). |
+| 9 | P3 | **`MediaNotFound` was terse and dead-ended.** | FIXED (2026-07-10): required `backTo`/`backLabel` props render an outline back link (§3.4). |
+| 10 | P3 | **Stale `scrollbar-*` lint comment** ("tailwind-scrollbar plugin" — the classes are Tailwind v4 core). | FIXED (2026-07-10): the allowlist entry was removable entirely; lint passes without it (§2.1). |
+| 11 | P3 | **Mobile hero-actions wrap** — the ⋮ button wrapped alone to a second row at 390px. | FIXED (2026-07-10): `flex-1 sm:flex-none` on Play/Watch/Like (+ `px-3 sm:px-6`) keeps all four controls on one row. |
 | 12 | — | **Verified strengths (don't churn)**: token discipline in `ui/` (no raw palette hits), airtight `motion-reduce` coverage, hover/focus parity on cards, skip links, anti-flash boot, image fallbacks, TMDB proxying, window-scrolled virtualization (26 rendered rows of 2,267), no horizontal overflow at 390px anywhere visited, clean console. | — |
 
 Items fixed in earlier rounds (toaster tokens, raw red/emerald sweep,
 `*-foreground` accent tokens, theme-drift test, poster fallbacks) remain in
 place — re-verified during this audit.
 
-## 5. Suggestions & improvements
+## 5. Suggestions & improvements — applied 2026-07-10
 
-Prioritized; each maps to a §4 finding.
+Each item maps to a §4 finding; the chosen resolution is recorded here.
 
-1. **Fix light-theme `text-success` (§4.8).** Either darken light `--success`
-   (needs re-check against `success-foreground` on `success`), or add a
-   `--success-text` token for on-canvas text, or restrict `text-success` to
-   large text/icons. Extend `contrast.test.ts` to pin `text-success`-on-
-   `background` so it can't regress.
-2. **Decide the Inter story (§4.1).** Either self-host Inter (`@fontface` +
-   woff2 asset — no CDN, keeps the no-external-requests property) or delete
-   `Inter,` from the boot stack and own being a system-font app. Update §1.3
-   after.
-3. **Single token source (§4.2).** Generate the four sync points from one
-   typed module (e.g. `src/lib/theme-tokens.ts` with OKLCH + hex per token) —
-   or accept the drift-test status quo; if accepted, close the item and note
-   it here.
-4. **Heading semantics in Settings (§4.4).** Render shadcn `CardTitle` as an
-   `h2` (it accepts `asChild`/element overrides) on settings and other
-   card-sectioned pages. Cheap, real a11y win.
-5. **Widen the ESLint color ban (§4.3).** Extend the regex to all Tailwind
-   palette families (keep the documented Spotify-green and input-styles
-   exceptions).
-6. **Add a `Badge` primitive (§4.6)** with `default/aurora/muted/outline`
-   variants and fold the rating-tier logic into one helper.
-7. **Unify the focus ring (§4.5).** Pick the shadcn `ring-[3px]/50` recipe or
-   the `ring-2`+offset recipe and migrate the other; update §1.7 and the
-   `FOCUS_VISIBLE_RING_CLASS` docstring.
-8. **Give `MediaNotFound` a way home (§4.9)**: a "Back to Movies/Music"
-   button under the alert.
-9. **Housekeeping (§4.10, §4.11)**: fix the stale scrollbar lint comment (or
-   drop the allowlist if `no-unknown-classes` now recognizes core scrollbar
-   utilities), and let the mobile hero-actions row use the full width (e.g.
-   `flex-1` on the three main buttons with ⋮ inline).
+1. **Light-theme `text-success` (§4.8) — done.** Darkened light `--success` to
+   `oklch(0.487 0.097 163.5)` `#167050` (a deep glacier green: 5.62:1 on
+   canvas, 6.06:1 on card, 4.56:1 as text on `bg-success/15` tints) and
+   flipped light `--success-foreground` to white (6.06:1), mirroring the
+   light `destructive` pattern. Light `--chart-4` tracks it.
+   `contrast.test.ts` now pins `--success` on `--background` and `--card` in
+   both themes.
+2. **Inter (§4.1) — self-hosted.** `web/public/fonts/InterVariable.woff2`
+   (variable, 100–900) + `@font-face` with `font-display: swap` in `boot.css`
+   + a `<link rel="preload">` in `index.html`. No CDN, no npm package; the
+   font stack was already correct.
+3. **Single token source (§4.2) — generated.** `src/lib/theme-tokens.ts` is
+   the machine-readable source; `scripts/generate-theme.ts`
+   (`bun run generate:theme`, `--check` for CI) renders the marked blocks in
+   `styles.css` / `boot.css` / `index.html`; `theme.ts` imports the module
+   directly; `theme-drift.test.ts` became a regenerate-and-diff + OKLCH↔hex
+   round-trip guard. See §2.4.
+4. **Heading semantics in Settings (§4.4) — done.** `CardTitle` gained
+   `asChild` (radix `Slot`); all settings cards, `DevicesCard`, and
+   `QuickConnectApproveCard` render `<h2>` titles; the old
+   `role="heading"` hack in playback settings was removed; the login card
+   title became the page `<h1>`.
+5. **ESLint color ban (§4.3) — widened** to all 22 Tailwind families (Literal
+   + TemplateElement selectors). The Spotify-green constants carry inline
+   `eslint-disable` comments; the input-styles/login allowlist block is
+   unchanged; the TV Shows library card's purple moved to `accent-teal`.
+6. **`Badge` primitive (§4.6) — added** (`ui/badge.tsx`,
+   `default/aurora/muted/outline`, plain variant record per the cva policy,
+   non-interactive). Rating tiers folded into `lib/rating.ts`
+   (`criticRatingClass`/`audienceRatingClass`, mid tier standardized on
+   `/80`). Adopted where it consolidates: both rating badges and the
+   `HomeMediaSection` count pill. Deliberately left: `ComingSoon` chip
+   (`role="status"`, bespoke), `NotificationBell` micro-badge
+   (positioning-critical), genre pills (`<li>` semantics).
+7. **Focus ring (§4.5) — unified on the shadcn recipe.**
+   `FOCUS_VISIBLE_RING_CLASS` =
+   `focus-visible:border-ring focus-visible:ring-[3px]
+   focus-visible:ring-ring/50 focus-visible:outline-none`, pinned by
+   `constants-contracts.test.ts`. Card `focus-within:ring-2` stays as the
+   whole-card variant.
+8. **`MediaNotFound` (§4.9) — done.** Required `backTo` (`"/" | "/movies" |
+   "/music"`) + `backLabel` props; all four call sites updated (in-theaters
+   details go back to Home, where the rail lives).
+9. **Housekeeping (§4.10, §4.11) — done.** The `scrollbar-.*` lint allowlist
+   entry was dropped outright (the plugin knows the v4 core utilities), and
+   the hero actions row uses `flex-1 sm:flex-none` + tighter mobile padding
+   so Play/Watch/Like/⋮ share one row at 390px.

@@ -113,10 +113,10 @@ const LIBRARY_SECTIONS: LibrarySectionConfig[] = [
     pathLabel: "TV shows library path",
     placeholder: "/srv/media/shows",
     Icon: Tv,
-    iconClassName: "text-purple-400",
-    iconBackgroundClassName: "bg-purple-500/10",
+    iconClassName: "text-accent-teal",
+    iconBackgroundClassName: "bg-accent-teal/10",
     scanButtonClassName:
-      "bg-purple-500 text-primary-foreground hover:bg-purple-400 hover:text-primary-foreground",
+      "bg-accent-teal text-accent-teal-foreground hover:bg-accent-teal/90 hover:text-accent-teal-foreground",
     clearLabel: "Clear TV shows library path",
   },
   {
@@ -189,8 +189,8 @@ function LibrariesSettings() {
       <div className="max-w-5xl">
         <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-destructive">
-              Library settings unavailable
+            <CardTitle asChild className="text-destructive">
+              <h2>Library settings unavailable</h2>
             </CardTitle>
             <CardDescription className="text-destructive">
               {data.message || "Failed to load library settings."}
@@ -359,9 +359,11 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
     >
       <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Library className="size-5 text-primary" aria-hidden="true" />
-            Library Management
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Library className="size-5 text-primary" aria-hidden="true" />
+              Library Management
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Manage your media library paths and scanning.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALBUMS_PAGINATED_KEY,
   ALBUMS_PER_PAGE,
+  FOCUS_VISIBLE_RING_CLASS,
   LIKED_TRACKS_KEY,
   LIKED_TRACKS_PER_PAGE,
   MOVIES_BY_GENRE_KEY,
@@ -32,6 +33,12 @@ import {
 } from "@/lib/query-opts";
 
 describe("constants contracts", () => {
+  it("keeps the single shadcn focus-ring recipe (design-system §1.7)", () => {
+    expect(FOCUS_VISIBLE_RING_CLASS).toBe(
+      "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+    );
+  });
+
   it("derives stream mode ids from stream modes", () => {
     expect(STREAM_MODE_IDS).toEqual(STREAM_MODES.map((mode) => mode.id));
   });

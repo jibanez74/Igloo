@@ -75,9 +75,14 @@ export default function QuickConnectApproveCard() {
   return (
     <Card className="border-border/50 bg-muted/30">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-foreground">
-          <MonitorSmartphone className="size-5 text-primary" aria-hidden="true" />
-          Quick Connect
+        <CardTitle asChild className="flex items-center gap-2 text-foreground">
+          <h2>
+            <MonitorSmartphone
+              className="size-5 text-primary"
+              aria-hidden="true"
+            />
+            Quick Connect
+          </h2>
         </CardTitle>
         <CardDescription className="text-muted-foreground">
           Sign in a TV or mobile app by entering the code it shows you

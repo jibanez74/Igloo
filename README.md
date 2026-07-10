@@ -152,7 +152,7 @@ Start the backend in another terminal:
 make dev
 ```
 
-`make dev` runs sqlc generation, syncs the embedded schema copy, creates a placeholder web asset directory for tests/development, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
+`make dev` runs sqlc generation, creates a placeholder web asset directory for tests/development, builds a development API binary, and starts it with `VITE_DEV_SERVER=http://localhost:3000` so non-API browser requests are handed to Vite.
 
 Make targets do not create, copy, rewrite, or delete `.env` files. `make dev` runs the API from the repository root, so the recommended local workflow is to keep one root `.env` and edit app-owned values from Settings after first launch. Default runtime directories resolve consistently with production `make start`.
 
@@ -198,6 +198,13 @@ From the repository root:
 | `make start` | Build and run the full application in the background |
 | `make stop` | Stop the application started by `make start` |
 | `make clean` | Remove build artifacts while preserving `.env`, database, media, and runtime data |
+| `make check` | Run backend tests, web lint, web unit tests, and web build/type-check |
+| `make test` | Run backend and web unit tests |
+| `make test-server` | Run backend tests with the required build tags and placeholder web assets |
+| `make test-web` | Run Vitest |
+| `make lint-web` | Run ESLint |
+| `make build-web` | Build and type-check the web client |
+| `make test-openapi` | Run the OpenAPI route coverage test |
 
 From `web/`:
 
@@ -315,8 +322,7 @@ The OpenAPI document lives at [docs/openapi.json](docs/openapi.json). It covers 
 When adding or changing an API route, update the OpenAPI file and run the route coverage test:
 
 ```bash
-cd server
-go test -tags "externalbin sqlite_fts5" ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes -count=1
+make test-openapi
 ```
 
 See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenance workflow.
@@ -343,28 +349,21 @@ make generate
 Backend:
 
 ```bash
-cd server
-mkdir -p cmd/api/webdist
-touch cmd/api/webdist/.keep
-go test -tags "externalbin sqlite_fts5" -v ./...
-```
-
-CI-equivalent backend suite:
-
-```bash
-cd server
-mkdir -p cmd/api/webdist
-touch cmd/api/webdist/.keep
-go test -count=1 -v -tags "externalbin sqlite_fts5" ./...
+make test-server
 ```
 
 Frontend:
 
 ```bash
-cd web
-bun run lint
-bun run build
-bun run test
+make lint-web
+make test-web
+make build-web
+```
+
+CI-equivalent local suite:
+
+```bash
+make check
 ```
 
 Playwright suites are opt-in and require an already-running Igloo instance:

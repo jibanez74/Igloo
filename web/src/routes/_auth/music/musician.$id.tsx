@@ -87,6 +87,8 @@ function MusicianDetailsPage() {
           data?.message ||
           "Failed to load musician details. Please try again later."
         }
+        backTo="/music"
+        backLabel="Back to Music"
       />
     );
   }

@@ -48,11 +48,13 @@
   --color-accent-teal-foreground: var(--accent-teal-foreground);
 }
 
+/* BEGIN GENERATED: theme tokens — edit src/lib/theme-tokens.ts and run `bun run generate:theme` */
 :root {
-  /* Light igloo palette — icy glacier on a cool near-white canvas.
-     Mirrors the .dark token set below (the dark igloo theme). Both themes are
-     contrast-verified by src/test/contrast.test.ts. See docs/design-system.md §1.2.
-     The app boots from the stored browser theme, defaulting to dark. */
+  /* Light igloo palette — icy glacier on a cool near-white canvas. Mirrors
+     the .dark token set below (the dark igloo theme, the default). Both
+     themes are contrast-verified by src/test/contrast.test.ts; see
+     docs/design-system.md §1.2. The app boots from the stored browser
+     theme, defaulting to dark. */
   --radius: 0.625rem;
   --background: oklch(0.974 0.009 247.9); /* icy canvas #F2F7FC */
   --foreground: oklch(0.187 0.034 260.2); /* navy ink #0A1322 */
@@ -60,7 +62,7 @@
   --card-foreground: oklch(0.187 0.034 260.2);
   --popover: oklch(1 0 0); /* surfaceOverlay #FFFFFF */
   --popover-foreground: oklch(0.187 0.034 260.2);
-  --primary: oklch(0.5 0.119 242.7); /* deeper glacier #0369A1 (AA on white text) */
+  --primary: oklch(0.5 0.1193 242.7); /* deeper glacier #0369A1 (AA on white text) */
   --primary-foreground: oklch(1 0 0); /* onPrimary #FFFFFF */
   --secondary: oklch(0.942 0.017 248); /* cool surface #E3EDF7 */
   --secondary-foreground: oklch(0.187 0.034 260.2);
@@ -71,36 +73,31 @@
   --destructive: oklch(0.577 0.215 27.3); /* danger #DC2626 */
   --border: oklch(0.879 0.026 250); /* #CBD9E8 */
   --input: oklch(0.879 0.026 250); /* #CBD9E8 */
-  --ring: oklch(0.685 0.148 237.3); /* glacier #0EA5E9 — one focus color */
-  --chart-1: oklch(0.685 0.148 237.3); /* glacier */
-  --chart-2: oklch(0.6 0.104 184.7); /* teal */
-  --chart-3: oklch(0.769 0.165 70.1); /* aurora */
-  --chart-4: oklch(0.596 0.127 163.2); /* success */
+  --ring: oklch(0.685 0.148 237.32); /* glacier #0EA5E9 — one focus color */
+  --chart-1: oklch(0.685 0.148 237.32); /* glacier */
+  --chart-2: oklch(0.6002 0.1038 184.7); /* teal */
+  --chart-3: oklch(0.7686 0.1647 70.1); /* aurora */
+  --chart-4: oklch(0.487 0.097 163.5); /* success */
   --chart-5: oklch(0.577 0.215 27.3); /* danger */
   --sidebar: oklch(0.954 0.015 248); /* #E8F1FA */
   --sidebar-foreground: oklch(0.187 0.034 260.2);
-  --sidebar-primary: oklch(0.5 0.119 242.7); /* glacier #0369A1 */
+  --sidebar-primary: oklch(0.5 0.1193 242.7); /* glacier #0369A1 */
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(1 0 0); /* surfaceRaised #FFFFFF */
   --sidebar-accent-foreground: oklch(0.187 0.034 260.2);
   --sidebar-border: oklch(0.879 0.026 250);
-  --sidebar-ring: oklch(0.685 0.148 237.3); /* glacier */
-
-  /* Semantic accents — also defined here so bg-aurora/bg-success/bg-accent-teal
-     resolve in light mode (they were previously only in .dark). */
-  --aurora: oklch(0.769 0.165 70.1); /* amber #F59E0B — warm, sparing */
+  --sidebar-ring: oklch(0.685 0.148 237.32); /* glacier */
+  --aurora: oklch(0.7686 0.1647 70.1); /* amber #F59E0B — warm, sparing */
   --aurora-foreground: oklch(0.183 0.03 251.4); /* onAurora #08131F */
-  --success: oklch(0.596 0.127 163.2); /* #059669 */
-  --accent-teal: oklch(0.6 0.104 184.7); /* #0D9488 */
+  --success: oklch(0.487 0.097 163.5); /* deep glacier green #167050 — ≥4.5:1 on canvas, card, and /15 tints */
+  --accent-teal: oklch(0.6002 0.1038 184.7); /* #0D9488 */
   --destructive-foreground: oklch(1 0 0); /* #FFFFFF — 4.83:1 on destructive */
-  --success-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.96:1 on success */
+  --success-foreground: oklch(1 0 0); /* #FFFFFF — 6.06:1 on success */
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 4.99:1 on accent-teal */
 }
 
 .dark {
-  /* Igloo palette — cool glacier primary + sparing amber aurora.
-     See docs/design-system.md §1.2 and §2.4 (theme sync points; hex comments here
-     are pinned to src/lib/theme.ts by src/test/theme-drift.test.ts). */
+  /* Igloo palette — cool glacier primary + sparing amber aurora. */
   --background: oklch(0.187 0.034 260.2); /* canvas #0A1322 */
   --foreground: oklch(0.984 0.003 247.9); /* textPrimary #F8FAFC */
   --card: oklch(0.256 0.048 259.9); /* surfaceRaised #15233A */
@@ -120,9 +117,9 @@
   --input: oklch(1 0 0 / 8%); /* borderSubtle */
   --ring: oklch(0.754 0.139 232.7); /* glacier — one focus color */
   --chart-1: oklch(0.754 0.139 232.7); /* glacier */
-  --chart-2: oklch(0.785 0.133 181.9); /* teal */
-  --chart-3: oklch(0.769 0.165 70.1); /* aurora */
-  --chart-4: oklch(0.773 0.153 163.2); /* success */
+  --chart-2: oklch(0.7845 0.1325 181.9); /* teal */
+  --chart-3: oklch(0.7686 0.1647 70.1); /* aurora */
+  --chart-4: oklch(0.7729 0.1535 163.2); /* success */
   --chart-5: oklch(0.711 0.166 22.2); /* danger */
   --sidebar: oklch(0.219 0.043 261.6); /* surface #0F1A2E */
   --sidebar-foreground: oklch(0.984 0.003 247.9);
@@ -132,16 +129,15 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.9);
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.754 0.139 232.7); /* glacier */
-
-  /* New semantic accents (consumed by Phases 3–4) */
-  --aurora: oklch(0.769 0.165 70.1); /* amber #F59E0B — warm, sparing */
+  --aurora: oklch(0.7686 0.1647 70.1); /* amber #F59E0B — warm, sparing */
   --aurora-foreground: oklch(0.183 0.03 251.4); /* onAurora #08131F */
-  --success: oklch(0.773 0.153 163.2); /* #34D399 */
-  --accent-teal: oklch(0.785 0.133 181.9); /* #2DD4BF */
+  --success: oklch(0.7729 0.1535 163.2); /* #34D399 */
+  --accent-teal: oklch(0.7845 0.1325 181.9); /* #2DD4BF */
   --destructive-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 6.76:1 on destructive */
   --success-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 9.73:1 on success */
   --accent-teal-foreground: oklch(0.183 0.03 251.4); /* ink #08131F — 10.04:1 on accent-teal */
 }
+/* END GENERATED: theme tokens */
 
 @layer base {
   * {
