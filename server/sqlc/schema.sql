@@ -809,30 +809,6 @@ CREATE TRIGGER IF NOT EXISTS musicians_au AFTER UPDATE ON musicians BEGIN
   VALUES (new.id, new.name, new.sort_name);
 END;
 
-CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5 (
-  title,
-  content = 'tracks',
-  content_rowid = 'id',
-  tokenize = 'unicode61 remove_diacritics 2'
-);
-
-CREATE TRIGGER IF NOT EXISTS tracks_ai AFTER INSERT ON tracks BEGIN
-  INSERT INTO tracks_fts (rowid, title)
-  VALUES (new.id, new.title);
-END;
-
-CREATE TRIGGER IF NOT EXISTS tracks_ad AFTER DELETE ON tracks BEGIN
-  INSERT INTO tracks_fts (tracks_fts, rowid, title)
-  VALUES ('delete', old.id, old.title);
-END;
-
-CREATE TRIGGER IF NOT EXISTS tracks_au AFTER UPDATE ON tracks BEGIN
-  INSERT INTO tracks_fts (tracks_fts, rowid, title)
-  VALUES ('delete', old.id, old.title);
-  INSERT INTO tracks_fts (rowid, title)
-  VALUES (new.id, new.title);
-END;
-
 CREATE VIRTUAL TABLE IF NOT EXISTS tracks_search_fts USING fts5 (
   title,
   album_title,
@@ -900,6 +876,16 @@ CREATE TRIGGER IF NOT EXISTS tracks_search_musician_au AFTER UPDATE OF name ON m
   LEFT JOIN musicians AS m ON m.id = t.musician_id
   WHERE t.musician_id = new.id;
 END;
+
+-- Read-only fts5vocab views over the FTS indexes, used by search typo
+-- correction to find indexed terms near a misspelled query token.
+CREATE VIRTUAL TABLE IF NOT EXISTS movies_fts_vocab USING fts5vocab (movies_fts, 'row');
+
+CREATE VIRTUAL TABLE IF NOT EXISTS albums_fts_vocab USING fts5vocab (albums_fts, 'row');
+
+CREATE VIRTUAL TABLE IF NOT EXISTS musicians_fts_vocab USING fts5vocab (musicians_fts, 'row');
+
+CREATE VIRTUAL TABLE IF NOT EXISTS tracks_search_fts_vocab USING fts5vocab (tracks_search_fts, 'row');
 
 -- notifications
 CREATE TABLE
