@@ -206,7 +206,6 @@ type Querier interface {
 	// Idempotent and relevance-gated: only records a read when the notification is
 	// actually visible to the viewer.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
-	ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error
 	// ============================================================================
 	// PLAY HISTORY RECORDING
 	// ============================================================================
