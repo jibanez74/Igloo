@@ -206,22 +206,45 @@ function SearchPage() {
         <TabsList
           className={cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2 sm:grid-cols-5")}
         >
-          <TabsTrigger value="all" className={LIBRARY_TAB_TRIGGER_CLASS}>
+          <TabsTrigger
+            value="all"
+            className={cn(LIBRARY_TAB_TRIGGER_CLASS, "max-sm:col-span-2")}
+          >
+            <Search
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             All
           </TabsTrigger>
           <TabsTrigger value="movies" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <Film
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Movies
           </TabsTrigger>
           <TabsTrigger value="albums" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <Disc3
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Albums
           </TabsTrigger>
           <TabsTrigger value="musicians" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <User
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Musicians
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
             className={LIBRARY_TAB_TRIGGER_CLASS}
           >
+            <Music
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Tracks
           </TabsTrigger>
         </TabsList>

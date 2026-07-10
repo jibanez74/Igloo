@@ -24,6 +24,29 @@ describe("light input styles", () => {
     expect(lightInputActionClassName).not.toContain("hover:text-foreground");
   });
 
+  it("keeps input foregrounds legible on the dark glass field", () => {
+    // In dark mode ui/input.tsx's `dark:bg-input/30` overrides the light
+    // background, so every foreground color needs a dark variant.
+    expect(lightInputClassName).toContain(
+      lightInputColorClass("dark:text", "50"),
+    );
+    expect(lightInputClassName).toContain(
+      lightInputColorClass("dark:placeholder:text", "400"),
+    );
+    expect(lightInputActionClassName).toContain(
+      lightInputColorClass("dark:text", "400"),
+    );
+    expect(lightInputActionClassName).toContain(
+      lightInputColorClass("dark:hover:text", "100"),
+    );
+    expect(lightInputPeerHoverClassName).toContain(
+      lightInputColorClass("dark:peer-hover:text", "50"),
+    );
+    expect(lightInputPeerHoverClassName).not.toContain(
+      lightInputColorClass("dark:peer-hover:bg", "100/95"),
+    );
+  });
+
   it("keeps peer-hover states in the light input palette", () => {
     expect(lightInputPeerHoverClassName).toContain(
       lightInputColorClass("peer-hover:bg", "100/95"),
