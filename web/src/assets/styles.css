@@ -51,7 +51,7 @@
 :root {
   /* Light igloo palette — icy glacier on a cool near-white canvas.
      Mirrors the .dark token set below (the dark igloo theme). Both themes are
-     contrast-verified by src/test/contrast.test.ts. See docs/design-system.md §5.3.
+     contrast-verified by src/test/contrast.test.ts. See docs/design-system.md §1.2.
      The app boots from the stored browser theme, defaulting to dark. */
   --radius: 0.625rem;
   --background: oklch(0.974 0.009 247.9); /* icy canvas #F2F7FC */
@@ -99,7 +99,8 @@
 
 .dark {
   /* Igloo palette — cool glacier primary + sparing amber aurora.
-     See docs/design-system.md §5.3 and docs/igloo-theme.ts (hex source of truth). */
+     See docs/design-system.md §1.2 and §2.4 (theme sync points; hex comments here
+     are pinned to src/lib/theme.ts by src/test/theme-drift.test.ts). */
   --background: oklch(0.187 0.034 260.2); /* canvas #0A1322 */
   --foreground: oklch(0.984 0.003 247.9); /* textPrimary #F8FAFC */
   --card: oklch(0.256 0.048 259.9); /* surfaceRaised #15233A */

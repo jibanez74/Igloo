@@ -51,25 +51,18 @@ cd igloo-server-linux-amd64
 
 On Apple Silicon, use the `igloo-server-darwin-arm64.tar.gz` package instead.
 
-Before first start, create a `.env` file in the directory where you will start the binary:
+Before first start, copy `.env.example` to `.env` in the directory where you will start the binary:
 
-```env
-PORT=8080
-SESSION_COOKIE_SECURE=false
-DEFAULT_ADMIN_EMAIL=admin@example.com
-DEFAULT_ADMIN_PASSWORD=change-this-password
-DB_PATH=./db/igloo.db
-MOVIES_DIR=/path/to/movies
-MUSIC_DIR=/path/to/music
-TRANSCODE_DIR=./transcode
+```bash
+cp .env.example .env
 ```
 
 Adjust these values before running Igloo:
 
-- Set `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`.
+- Set `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and `DEFAULT_ADMIN_PASSWORD`.
 - Set `SESSION_COOKIE_SECURE=false` when testing over plain HTTP, such as `http://localhost:8080`.
 - Keep `SESSION_COOKIE_SECURE=true` when running behind HTTPS, including Tailscale Serve or a reverse proxy.
-- Optionally set `MOVIES_DIR` and `MUSIC_DIR` to seed library paths on first launch. You can also configure movie, TV show, and music paths later from Settings.
+- Optionally set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` to seed library paths on first launch. You can also configure movie, TV show, and music paths later from Settings.
 - Each configured media directory must already exist. Igloo will not create empty media library directories.
 
 Start Igloo from the directory that contains `.env`:
@@ -86,28 +79,28 @@ Igloo reads environment variables from the process environment and from one opti
 
 The current working directory matters. When you run `./igloo-server`, Igloo looks for `./.env` relative to the directory you started the process from, not automatically next to the executable. For packaged releases, start the binary from the extracted package directory that contains `.env`, or provide configuration through the shell or a service manager.
 
-The most important variables are:
+Use [`.env.example`](.env.example) as the canonical runtime reference. The most important variables are:
 
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | HTTP listener port, default `8080` |
-| `DB_PATH` | SQLite database file, default `./db/igloo.db`; always read at startup |
-| `STATIC_DIR` | First-run default for downloaded artwork and uploaded static files |
-| `LOGS_DIR` | First-run default for file logs |
-| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace |
+| `DB_PATH` | SQLite database file, default `db/igloo.db`; always read at startup |
+| `STATIC_DIR` | First-run default for downloaded artwork and uploaded static files, default `static` |
+| `LOGS_DIR` | First-run default for file logs, default `logs` |
+| `TRANSCODE_DIR` | First-run default for the temporary HLS workspace, default `transcode` |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
 | `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |
 | `JELLYFIN_API_KEY` | First-run default for optional Jellyfin integration settings; not required for current core features |
-| `ENABLE_LOGGER`, `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
-| `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR` |
+| `ENABLE_WATCHER`, `DOWNLOAD_IMAGES` | First-run defaults for feature settings |
+| `LOG_TO_STDOUT` | Send logs to stdout instead of `LOGS_DIR`; defaults to `false` unless `DEBUG=true` |
 | `HARDWARE_ACCELERATION_DEVICE` | First-run default transcode target: `cpu`, `apple`, `nvidia`, or `intel` |
-| `HLS_MAX_CPU_TRANSCODES` | Optional startup limit for concurrent CPU transcodes |
+| `HLS_MAX_CPU_TRANSCODES` | Optional startup override for concurrent CPU transcodes; when unset, Igloo uses `max(1, NumCPU/4)` |
 | `DEBUG` | Optional startup flag for debug logging |
 
-Use this table as the current environment reference.
+The comments in [`.env.example`](.env.example) describe which values are first-run seeds and which stay startup-driven.
 
 Environment values that are stored in Settings are seed values only. Igloo reads them when the database has no settings row, saves that row, and then uses the database on later starts. Edit static, log, transcode, metadata, feature, hardware acceleration, and media library settings from Settings after first launch. `DB_PATH`, `PORT`, `SESSION_COOKIE_SECURE`, `LOG_TO_STDOUT`, `HLS_MAX_CPU_TRANSCODES`, and `DEBUG` stay startup-driven.
 
@@ -129,17 +122,19 @@ Prerequisites:
 - `ffmpeg` and `ffprobe` on your `PATH` for `make dev` and backend tests
 - Local embedded ffmpeg/ffprobe payload files only when building release binaries
 
-Create or edit a root `.env` file for local development:
+Create or update the root `.env` from the tracked example:
 
-```env
-DEBUG=true
-PORT=8080
-SESSION_COOKIE_SECURE=false
-DEFAULT_ADMIN_EMAIL=admin@example.com
-DEFAULT_ADMIN_PASSWORD=AdminPassword
-DB_PATH=./db/igloo.db
-TRANSCODE_DIR=./transcode
+```bash
+cp .env.example .env
 ```
+
+Adjust these values before first run:
+
+- Set `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, and `DEFAULT_ADMIN_PASSWORD`.
+- Set `SESSION_COOKIE_SECURE=false` for local plain HTTP development, such as `http://localhost:8080`.
+- Optionally set `MOVIES_DIR`, `SHOWS_DIR`, and `MUSIC_DIR` if you want first-run library paths seeded from `.env`.
+
+Set `DEBUG=true` if you want verbose backend logs during development.
 
 Start the web client:
 
@@ -241,7 +236,7 @@ E2E_ADMIN_PASSWORD=AdminPassword \
 bun run test:e2e:login
 ```
 
-When omitted, those environment variables default to the local dev values shown above.
+When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
 
 ### Movies E2E Checks
 
@@ -255,7 +250,7 @@ E2E_ADMIN_PASSWORD=AdminPassword \
 bun run test:e2e:movies
 ```
 
-When omitted, those environment variables default to the local dev values shown above.
+When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
 
 ### Movies Index Mocked E2E Checks
 
@@ -280,7 +275,7 @@ E2E_ADMIN_PASSWORD=AdminPassword \
 bun run test:e2e:general-settings
 ```
 
-When omitted, those environment variables default to the local dev values shown above.
+When omitted, Playwright defaults to `E2E_BASE_URL=http://127.0.0.1:3000`, `E2E_ADMIN_EMAIL=admin@example.com`, and `E2E_ADMIN_PASSWORD=AdminPassword`.
 
 ### HLS Transcoding E2E Checks
 
@@ -330,7 +325,7 @@ See [docs/openapi-maintenance.md](docs/openapi-maintenance.md) for the maintenan
 
 - SQLite is the database engine.
 - WAL mode is enabled at startup.
-- `DB_PATH` controls the database file path; the binary default is `./db/igloo.db`.
+- `DB_PATH` controls the database file path; the binary default is `db/igloo.db`.
 - `server/sqlc/schema.sql` is the schema source of truth and the embedded startup schema.
 - Query files live under `server/sqlc/queries/`.
 - Generated database code lives under `server/cmd/internal/database/`.
