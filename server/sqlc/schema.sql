@@ -730,6 +730,19 @@ CREATE INDEX IF NOT EXISTS idx_user_track_stats_play_count ON user_track_stats (
 
 CREATE INDEX IF NOT EXISTS idx_user_track_stats_last_played ON user_track_stats (user_id, last_played_at DESC);
 
+-- Generations for the bounded in-memory typo indexes. Dedicated triggers below
+-- keep this compatible with databases that already have the FTS triggers.
+CREATE TABLE IF NOT EXISTS search_vocab_generations (
+  vocab_table TEXT PRIMARY KEY,
+  generation INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT OR IGNORE INTO search_vocab_generations (vocab_table) VALUES
+  ('movies_fts_vocab'),
+  ('albums_fts_vocab'),
+  ('musicians_fts_vocab'),
+  ('tracks_search_fts_vocab');
+
 -- FTS5 virtual tables for library search.
 -- External-content tables: FTS stores the index and joins back to the source
 -- table by rowid (= primary key id). Triggers below keep them in sync.
@@ -886,6 +899,80 @@ CREATE VIRTUAL TABLE IF NOT EXISTS albums_fts_vocab USING fts5vocab (albums_fts,
 CREATE VIRTUAL TABLE IF NOT EXISTS musicians_fts_vocab USING fts5vocab (musicians_fts, 'row');
 
 CREATE VIRTUAL TABLE IF NOT EXISTS tracks_search_fts_vocab USING fts5vocab (tracks_search_fts, 'row');
+
+-- Invalidate only vocabularies affected by searchable field changes. FTS and
+-- generation updates commit atomically even though they use separate triggers.
+CREATE TRIGGER IF NOT EXISTS search_vocab_movies_ai AFTER INSERT ON movies BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'movies_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_movies_ad AFTER DELETE ON movies BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'movies_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_movies_au AFTER UPDATE OF title, overview, tag_line ON movies BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'movies_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_albums_ai AFTER INSERT ON albums BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'albums_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_albums_ad AFTER DELETE ON albums BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'albums_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_albums_au AFTER UPDATE OF title, musician ON albums BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table IN ('albums_fts_vocab', 'tracks_search_fts_vocab');
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_musicians_ai AFTER INSERT ON musicians BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'musicians_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_musicians_ad AFTER DELETE ON musicians BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'musicians_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_musicians_au AFTER UPDATE OF name, sort_name ON musicians BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table IN ('musicians_fts_vocab', 'tracks_search_fts_vocab');
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_tracks_ai AFTER INSERT ON tracks BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'tracks_search_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_tracks_ad AFTER DELETE ON tracks BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'tracks_search_fts_vocab';
+END;
+
+CREATE TRIGGER IF NOT EXISTS search_vocab_tracks_au AFTER UPDATE OF title, album_id, musician_id ON tracks BEGIN
+  UPDATE search_vocab_generations
+  SET generation = generation + 1
+  WHERE vocab_table = 'tracks_search_fts_vocab';
+END;
 
 -- notifications
 CREATE TABLE

@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"sort"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
 
 // Search match resolution runs in three stages, from precise to broad:
@@ -23,6 +21,10 @@ import (
 // searchVocabMaxCorrections caps how many near-spelled vocabulary terms a
 // single query token can expand into.
 const searchVocabMaxCorrections = 3
+
+// Fuzzy expansion is deliberately capped independently of the raw FTS query.
+// Prefix and OR matching still use every sanitized token.
+const searchVocabMaxTypoTokens = 8
 
 // searchTokens converts a user-supplied query into lowercase FTS-safe tokens.
 // Characters that are not letters, digits, or whitespace are dropped so the
@@ -92,6 +94,8 @@ func searchTypoMaxDist(tokenLen int) int {
 	switch {
 	case tokenLen < 3:
 		return 0
+	case tokenLen > searchVocabMaxTokenRunes:
+		return 0
 	case tokenLen <= 5:
 		return 1
 	default:
@@ -143,71 +147,22 @@ func damerauLevenshtein(a, b string, maxDist int) int {
 	return prev[lb]
 }
 
-// vocabCorrections returns up to searchVocabMaxCorrections indexed terms that
-// are within typo distance of the query token, nearest first, tie-broken by
-// how many documents contain the term. vocabTable always comes from a fixed
-// in-code entity spec, never from user input.
+// vocabCorrections is the single-token entry point used by focused tests. Full
+// search resolution loads the category index once and reuses it for all tokens.
 func (app *Application) vocabCorrections(ctx context.Context, vocabTable, token string) ([]string, error) {
-	tokenLen := utf8.RuneCountInString(token)
+	tokenLen := len([]rune(token))
 	maxDist := searchTypoMaxDist(tokenLen)
 	if maxDist == 0 {
 		return nil, nil
 	}
 
-	// LENGTH() counts characters on SQLite text values, matching the rune
-	// count used for the distance band.
-	query := "SELECT term, doc FROM " + vocabTable + " WHERE LENGTH(term) BETWEEN ? AND ?"
-	rows, err := app.DB.QueryContext(ctx, query, tokenLen-maxDist, tokenLen+maxDist)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	type candidate struct {
-		term string
-		dist int
-		doc  int64
-	}
-	var candidates []candidate
-	for rows.Next() {
-		var term string
-		var doc int64
-		err = rows.Scan(&term, &doc)
-		if err != nil {
-			return nil, err
-		}
-		if term == token {
-			continue
-		}
-		dist := damerauLevenshtein(token, term, maxDist)
-		if dist > maxDist {
-			continue
-		}
-		candidates = append(candidates, candidate{term: term, dist: dist, doc: doc})
-	}
-	err = rows.Err()
+	index, err := app.searchVocabIndex(ctx, vocabTable)
 	if err != nil {
 		return nil, err
 	}
 
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].dist != candidates[j].dist {
-			return candidates[i].dist < candidates[j].dist
-		}
-		if candidates[i].doc != candidates[j].doc {
-			return candidates[i].doc > candidates[j].doc
-		}
-		return candidates[i].term < candidates[j].term
-	})
-	if len(candidates) > searchVocabMaxCorrections {
-		candidates = candidates[:searchVocabMaxCorrections]
-	}
-
-	out := make([]string, len(candidates))
-	for i, c := range candidates {
-		out[i] = c.term
-	}
-	return out, nil
+	corrections, _ := index.corrections(token, maxDist, searchVocabMaxVisited)
+	return corrections, nil
 }
 
 // resolveSearchMatch runs the staged resolution described at the top of this
@@ -234,11 +189,22 @@ func (app *Application) resolveSearchMatch(ctx context.Context, countSQL, vocabT
 	}
 
 	expanded := false
+	correctableTokens := 0
+	var vocabIndex *searchVocabIndex
 	for i, t := range tokens {
-		corrections, err := app.vocabCorrections(ctx, vocabTable, t)
-		if err != nil {
-			return "", 0, false, err
+		maxDist := searchTypoMaxDist(len([]rune(t)))
+		if maxDist == 0 || correctableTokens >= searchVocabMaxTypoTokens {
+			continue
 		}
+		correctableTokens++
+
+		if vocabIndex == nil {
+			vocabIndex, err = app.searchVocabIndex(ctx, vocabTable)
+			if err != nil {
+				return "", 0, false, err
+			}
+		}
+		corrections, _ := vocabIndex.corrections(t, maxDist, searchVocabMaxVisited)
 		if len(corrections) > 0 {
 			groups[i] = append(groups[i], corrections...)
 			expanded = true
