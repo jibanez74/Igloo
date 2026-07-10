@@ -19,57 +19,32 @@ type searchAllHTTPResponse struct {
 }
 
 type searchMoviesHTTPResponse struct {
-	Error   bool             `json:"error"`
-	Message string           `json:"message,omitempty"`
-	Data    searchMoviesData `json:"data"`
+	Error   bool                                                `json:"error"`
+	Message string                                              `json:"message,omitempty"`
+	Data    searchCategoryData[database.GetMoviesLibraryAscRow] `json:"data"`
 }
 
-func TestBuildFTSQuery(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-		want string
-		ok   bool
-	}{
-		{
-			name: "simple prefix tokens",
-			raw:  "Casino Royale",
-			want: "casino* OR royale*",
-			ok:   true,
-		},
-		{
-			name: "keeps unicode letters for unicode61 tokenizer",
-			raw:  "Beyoncé año",
-			want: "beyoncé* OR año*",
-			ok:   true,
-		},
-		{
-			name: "strips fts syntax",
-			raw:  `"casino" OR title:royale`,
-			want: "casino* OR or* OR title* OR royale*",
-			ok:   true,
-		},
-		{
-			name: "punctuation only",
-			raw:  `"'():`,
-			ok:   false,
-		},
+// searchEntityResults runs the full staged match resolution plus page query
+// for one entity, mirroring what the HTTP handlers do.
+func searchEntityResults[T any](t *testing.T, app *Application, e searchEntity[T], query string) []T {
+	t.Helper()
+
+	match, _, ok, err := app.resolveSearchMatch(context.Background(), e.countSQL, e.vocabTable, query)
+	if err != nil {
+		t.Fatalf("resolveSearchMatch(%q) failed: %v", query, err)
+	}
+	if !ok {
+		return []T{}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := buildFTSQuery(tt.raw)
-			if ok != tt.ok {
-				t.Fatalf("buildFTSQuery(%q) ok = %v, want %v", tt.raw, ok, tt.ok)
-			}
-			if got != tt.want {
-				t.Fatalf("buildFTSQuery(%q) = %q, want %q", tt.raw, got, tt.want)
-			}
-		})
+	results, err := searchEntityPage(context.Background(), app, e, query, match, 10, 0)
+	if err != nil {
+		t.Fatalf("searchEntityPage(%q) failed: %v", query, err)
 	}
+	return results
 }
 
-func TestSearchMoviesBroadMatchingRanksExactTitleFirst(t *testing.T) {
+func TestSearchMoviesStagedMatching(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
@@ -77,21 +52,74 @@ func TestSearchMoviesBroadMatchingRanksExactTitleFirst(t *testing.T) {
 	createSearchMovie(t, app, "Royale Tenenbaums", "/movies/royale-tenenbaums.mkv")
 	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
-	match, ok := buildFTSQuery("Casino Royale")
-	if !ok {
-		t.Fatal("expected usable FTS query")
-	}
-
-	results, err := app.searchMovies(context.Background(), "Casino Royale", match, 10, 0)
-	if err != nil {
-		t.Fatalf("searchMovies failed: %v", err)
-	}
-
-	if len(results) != 3 {
-		t.Fatalf("expected broad search to return 3 movies, got %d", len(results))
+	// A well-spelled multi-token query resolves at stage 1 (AND) and only
+	// returns documents containing every token.
+	results := searchEntityResults(t, app, movieSearchEntity, "Casino Royale")
+	if len(results) != 1 {
+		t.Fatalf("expected AND matching to return 1 movie, got %d", len(results))
 	}
 	if results[0].Title != "Casino Royale" {
-		t.Fatalf("expected exact title first, got %q", results[0].Title)
+		t.Fatalf("expected Casino Royale, got %q", results[0].Title)
+	}
+
+	// Tokens that never co-occur and have no near-spelled vocabulary terms
+	// fall through to the stage-3 OR query, keeping broad recall.
+	results = searchEntityResults(t, app, movieSearchEntity, "Casino Zzzqx")
+	if len(results) != 2 {
+		t.Fatalf("expected OR fallback to return 2 casino movies, got %d", len(results))
+	}
+}
+
+func TestSearchMoviesTypoInOneTokenRanksTargetFirst(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
+	createSearchMovie(t, app, "A Time to Kill", "/movies/a-time-to-kill.mkv")
+
+	results := searchEntityResults(t, app, movieSearchEntity, "License to Kill")
+	if len(results) == 0 {
+		t.Fatal("expected typo-corrected search to return results")
+	}
+	if results[0].Title != "Licence to Kill" {
+		t.Fatalf("expected Licence to Kill first, got %q", results[0].Title)
+	}
+}
+
+func TestSearchMoviesSingleTokenTypoReturnsResult(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+
+	for _, query := range []string{"Lisence", "Lisense"} {
+		t.Run(query, func(t *testing.T) {
+			results := searchEntityResults(t, app, movieSearchEntity, query)
+			if len(results) != 1 {
+				t.Fatalf("expected 1 result for %q, got %d", query, len(results))
+			}
+			if results[0].Title != "Licence to Kill" {
+				t.Fatalf("expected Licence to Kill, got %q", results[0].Title)
+			}
+		})
+	}
+}
+
+func TestSearchTracksMusicianTypoReturnsResult(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	musicianID := createSearchMusician(t, app, "Adele")
+	albumID := createSearchAlbum(t, app, "Twenty Five", "Adele")
+	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, musicianID)
+
+	results := searchEntityResults(t, app, trackSearchEntity, "Adelle")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 track for misspelled musician, got %d", len(results))
+	}
+	if results[0].Title != "Hello" {
+		t.Fatalf("expected Hello, got %q", results[0].Title)
 	}
 }
 
@@ -101,15 +129,7 @@ func TestSearchMoviesFTSSyntaxInputDoesNotSuppressResults(t *testing.T) {
 
 	createSearchMovie(t, app, "Casino Royale", "/movies/casino-royale.mkv")
 
-	match, ok := buildFTSQuery(`"Casino" OR title:royale`)
-	if !ok {
-		t.Fatal("expected usable FTS query")
-	}
-
-	results, err := app.searchMovies(context.Background(), `"Casino" OR title:royale`, match, 10, 0)
-	if err != nil {
-		t.Fatalf("searchMovies failed: %v", err)
-	}
+	results := searchEntityResults(t, app, movieSearchEntity, `"Casino" OR title:royale`)
 	if len(results) == 0 || results[0].Title != "Casino Royale" {
 		t.Fatalf("expected Casino Royale result, got %#v", results)
 	}
@@ -125,15 +145,7 @@ func TestSearchTracksMatchesTrackAlbumAndArtist(t *testing.T) {
 
 	for _, query := range []string{"Hello", "Twenty", "Adele"} {
 		t.Run(query, func(t *testing.T) {
-			match, ok := buildFTSQuery(query)
-			if !ok {
-				t.Fatal("expected usable FTS query")
-			}
-
-			results, err := app.searchTracks(context.Background(), query, match, 10, 0)
-			if err != nil {
-				t.Fatalf("searchTracks failed: %v", err)
-			}
+			results := searchEntityResults(t, app, trackSearchEntity, query)
 			if len(results) != 1 {
 				t.Fatalf("expected 1 track for %q, got %d", query, len(results))
 			}
@@ -153,38 +165,19 @@ func TestSearchTracksReflectsTrackRelationshipUpdates(t *testing.T) {
 	albumID := createSearchAlbum(t, app, "Power Ballads", "Various Artists")
 	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, originalMusicianID)
 
-	match, ok := buildFTSQuery("Sia")
-	if !ok {
-		t.Fatal("expected usable FTS query")
-	}
-
-	results, err := app.searchTracks(context.Background(), "Sia", match, 10, 0)
-	if err != nil {
-		t.Fatalf("searchTracks before update failed: %v", err)
-	}
+	results := searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 0 {
 		t.Fatalf("expected no Sia results before update, got %#v", results)
 	}
 
 	createSearchTrack(t, app, "Hello", "/music/hello.flac", albumID, updatedMusicianID)
 
-	results, err = app.searchTracks(context.Background(), "Sia", match, 10, 0)
-	if err != nil {
-		t.Fatalf("searchTracks after update failed: %v", err)
-	}
+	results = searchEntityResults(t, app, trackSearchEntity, "Sia")
 	if len(results) != 1 || results[0].Title != "Hello" {
 		t.Fatalf("expected updated track relationship to be searchable, got %#v", results)
 	}
 
-	match, ok = buildFTSQuery("Adele")
-	if !ok {
-		t.Fatal("expected usable FTS query")
-	}
-
-	results, err = app.searchTracks(context.Background(), "Adele", match, 10, 0)
-	if err != nil {
-		t.Fatalf("searchTracks old relationship failed: %v", err)
-	}
+	results = searchEntityResults(t, app, trackSearchEntity, "Adele")
 	if len(results) != 0 {
 		t.Fatalf("expected old musician relationship to be removed from search, got %#v", results)
 	}
@@ -231,6 +224,38 @@ func TestSearchAllRouteReturnsSameResultsForSlashVariants(t *testing.T) {
 			}
 			previous = &resp.Data
 		})
+	}
+}
+
+func TestSearchMoviesRouteCorrectsTypos(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := createSearchUser(t, app)
+	createSearchMovie(t, app, "Licence to Kill", "/movies/licence-to-kill.mkv")
+	createSearchMovie(t, app, "Kill Bill: Volume 1", "/movies/kill-bill-1.mkv")
+
+	app.InitSession()
+	app.InitRouter()
+
+	w := performAuthenticatedSearchRequest(t, app, userID, "/api/search/movies?q=License+to+Kill")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
+	}
+
+	var resp searchMoviesHTTPResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	if err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error {
+		t.Fatalf("expected success response, got %q", resp.Message)
+	}
+	if len(resp.Data.Results) == 0 {
+		t.Fatal("expected typo-corrected route search to return results")
+	}
+	if resp.Data.Results[0].Title != "Licence to Kill" {
+		t.Fatalf("expected Licence to Kill first, got %q", resp.Data.Results[0].Title)
 	}
 }
 

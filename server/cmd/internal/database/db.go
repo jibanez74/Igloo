@@ -459,9 +459,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.markNotificationReadForUserStmt, err = db.PrepareContext(ctx, markNotificationReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkNotificationReadForUser: %w", err)
 	}
-	if q.reassignMoviePathStmt, err = db.PrepareContext(ctx, reassignMoviePath); err != nil {
-		return nil, fmt.Errorf("error preparing query ReassignMoviePath: %w", err)
-	}
 	if q.recordPlayEventStmt, err = db.PrepareContext(ctx, recordPlayEvent); err != nil {
 		return nil, fmt.Errorf("error preparing query RecordPlayEvent: %w", err)
 	}
@@ -1300,11 +1297,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing markNotificationReadForUserStmt: %w", cerr)
 		}
 	}
-	if q.reassignMoviePathStmt != nil {
-		if cerr := q.reassignMoviePathStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing reassignMoviePathStmt: %w", cerr)
-		}
-	}
 	if q.recordPlayEventStmt != nil {
 		if cerr := q.recordPlayEventStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing recordPlayEventStmt: %w", cerr)
@@ -1669,7 +1661,6 @@ type Queries struct {
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
 	markNotificationReadForUserStmt             *sql.Stmt
-	reassignMoviePathStmt                       *sql.Stmt
 	recordPlayEventStmt                         *sql.Stmt
 	removeCollaboratorStmt                      *sql.Stmt
 	removeMovieFromPlaylistStmt                 *sql.Stmt
@@ -1857,7 +1848,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
 		markNotificationReadForUserStmt:             q.markNotificationReadForUserStmt,
-		reassignMoviePathStmt:                       q.reassignMoviePathStmt,
 		recordPlayEventStmt:                         q.recordPlayEventStmt,
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,
 		removeMovieFromPlaylistStmt:                 q.removeMovieFromPlaylistStmt,

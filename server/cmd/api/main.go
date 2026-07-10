@@ -53,6 +53,7 @@ type Application struct {
 	Router               *chi.Mux
 	Server               *http.Server
 	ScannerDBMu          sync.Mutex
+	SearchVocab          searchVocabCache
 	HLSSessionCache      *cache.Cache
 	HLSSessionGroup      singleflight.Group
 	HLSTranscodeLimiter  *hlsTranscodeLimiter

@@ -1440,26 +1440,6 @@ func (q *Queries) InsertVideoStream(ctx context.Context, arg InsertVideoStreamPa
 	return i, err
 }
 
-const reassignMoviePath = `-- name: ReassignMoviePath :exec
-UPDATE movies
-SET
-  file_path = ?,
-  file_name = ?,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
-`
-
-type ReassignMoviePathParams struct {
-	FilePath string `json:"file_path"`
-	FileName string `json:"file_name"`
-	ID       int64  `json:"id"`
-}
-
-func (q *Queries) ReassignMoviePath(ctx context.Context, arg ReassignMoviePathParams) error {
-	_, err := q.exec(ctx, q.reassignMoviePathStmt, reassignMoviePath, arg.FilePath, arg.FileName, arg.ID)
-	return err
-}
-
 const updateMovie = `-- name: UpdateMovie :one
 UPDATE movies
 SET

@@ -189,6 +189,7 @@ export type { SidebarContextProps } from "./sidebar";
 // Search types
 export type {
   SearchSection,
+  PaginatedSearchResponse,
   SearchAllResponseType,
   SearchMoviesResponseType,
   SearchAlbumsResponseType,

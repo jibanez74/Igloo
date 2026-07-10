@@ -20,7 +20,7 @@ export type SearchAllResponseType = {
   tracks: SearchSection<TrackListItemType>;
 };
 
-type PaginatedSearchResponse<T> = {
+export type PaginatedSearchResponse<T> = {
   query: string;
   results: T[];
   total: number;

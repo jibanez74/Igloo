@@ -1,5 +1,5 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import { Search, Film, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
@@ -39,7 +39,9 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
+  ApiResponseType,
   MoviesLibraryListItemType,
+  PaginatedSearchResponse,
   SearchTab,
   SimpleAlbumType,
   SimpleMusicianType,
@@ -50,6 +52,9 @@ import type { SearchParams } from "@/types/route-search";
 export const Route = createLazyFileRoute("/_auth/search/")({
   component: SearchPage,
 });
+
+const SEARCH_GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6";
 
 function SearchPage() {
   const navigate = Route.useNavigate();
@@ -100,19 +105,71 @@ function SearchPage() {
   let topLevelTabContent = <AllResultsTab q={trimmed} />;
 
   if (tab === "movies") {
-    topLevelTabContent = <MoviesResultsTab q={trimmed} page={page} />;
+    topLevelTabContent = (
+      <CategoryResultsTab
+        label="movies"
+        q={trimmed}
+        page={page}
+        queryOpts={searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
+        renderGrid={(items: MoviesLibraryListItemType[]) => (
+          <div className={SEARCH_GRID_CLASS}>
+            {items.map((movie) => (
+              <MovieCard key={movie.id} movie={movie} />
+            ))}
+          </div>
+        )}
+      />
+    );
   }
 
   if (tab === "albums") {
-    topLevelTabContent = <AlbumsResultsTab q={trimmed} page={page} />;
+    topLevelTabContent = (
+      <CategoryResultsTab
+        label="albums"
+        q={trimmed}
+        page={page}
+        queryOpts={searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
+        renderGrid={(items: SimpleAlbumType[]) => (
+          <div className={SEARCH_GRID_CLASS}>
+            {items.map((album) => (
+              <AlbumCard key={album.id} album={album} />
+            ))}
+          </div>
+        )}
+      />
+    );
   }
 
   if (tab === "musicians") {
-    topLevelTabContent = <MusiciansResultsTab q={trimmed} page={page} />;
+    topLevelTabContent = (
+      <CategoryResultsTab
+        label="musicians"
+        q={trimmed}
+        page={page}
+        queryOpts={searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
+        renderGrid={(items: SimpleMusicianType[]) => (
+          <div className={SEARCH_GRID_CLASS}>
+            {items.map((musician) => (
+              <MusicianCard key={musician.id} musician={musician} />
+            ))}
+          </div>
+        )}
+      />
+    );
   }
 
   if (tab === "tracks") {
-    topLevelTabContent = <TracksResultsTab q={trimmed} page={page} />;
+    topLevelTabContent = (
+      <CategoryResultsTab
+        label="tracks"
+        q={trimmed}
+        page={page}
+        queryOpts={searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE)}
+        renderGrid={(items: TrackListItemType[]) => (
+          <TracksResultsList tracks={items} />
+        )}
+      />
+    );
   }
 
   const topLevelTabPanelClassName = cn(
@@ -149,22 +206,45 @@ function SearchPage() {
         <TabsList
           className={cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2 sm:grid-cols-5")}
         >
-          <TabsTrigger value="all" className={LIBRARY_TAB_TRIGGER_CLASS}>
+          <TabsTrigger
+            value="all"
+            className={cn(LIBRARY_TAB_TRIGGER_CLASS, "max-sm:col-span-2")}
+          >
+            <Search
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             All
           </TabsTrigger>
           <TabsTrigger value="movies" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <Film
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Movies
           </TabsTrigger>
           <TabsTrigger value="albums" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <Disc3
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Albums
           </TabsTrigger>
           <TabsTrigger value="musicians" className={LIBRARY_TAB_TRIGGER_CLASS}>
+            <User
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Musicians
           </TabsTrigger>
           <TabsTrigger
             value="tracks"
             className={LIBRARY_TAB_TRIGGER_CLASS}
           >
+            <Music
+              className="mr-1.5 size-4 shrink-0 max-[360px]:hidden sm:mr-2"
+              aria-hidden="true"
+            />
             Tracks
           </TabsTrigger>
         </TabsList>
@@ -240,7 +320,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="movies"
           q={q}
         >
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className={SEARCH_GRID_CLASS}>
             {movies.results.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
@@ -257,7 +337,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="albums"
           q={q}
         >
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className={SEARCH_GRID_CLASS}>
             {albums.results.map((album) => (
               <AlbumCard key={album.id} album={album} />
             ))}
@@ -274,7 +354,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="musicians"
           q={q}
         >
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className={SEARCH_GRID_CLASS}>
             {musicians.results.map((musician) => (
               <MusicianCard key={musician.id} musician={musician} />
             ))}
@@ -291,16 +371,7 @@ function AllResultsTab({ q }: { q: string }) {
           tab="tracks"
           q={q}
         >
-          <ul
-            className="overflow-hidden rounded-xl border border-border bg-card/50"
-            aria-label="Track results"
-          >
-            {tracks.results.map((track) => (
-              <li key={track.id} className="border-b border-border last:border-b-0">
-                <SearchTrackItem track={track} queue={tracks.results} />
-              </li>
-            ))}
-          </ul>
+          <TracksResultsList tracks={tracks.results} />
         </AllSection>
       )}
     </div>
@@ -357,19 +428,27 @@ function AllSection({
 }
 
 // ---------------------------------------------------------------------------
-// Category tabs
+// Category tabs — one generic component; only the query options and the grid
+// renderer differ per category
 // ---------------------------------------------------------------------------
 
-type CategoryTabProps = {
+type CategoryResultsTabProps<T> = {
+  label: Exclude<SearchTab, "all">;
   q: string;
   page: number;
+  queryOpts: UseQueryOptions<ApiResponseType<PaginatedSearchResponse<T>>>;
+  renderGrid: (items: T[]) => React.ReactNode;
 };
 
-function MoviesResultsTab({ q, page }: CategoryTabProps) {
+function CategoryResultsTab<T>({
+  label,
+  q,
+  page,
+  queryOpts,
+  renderGrid,
+}: CategoryResultsTabProps<T>) {
   const navigate = Route.useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery(
-    searchMoviesQueryOpts(q, page, SEARCH_PER_PAGE),
-  );
+  const { data, isLoading, isError, refetch } = useQuery(queryOpts);
 
   const handlePageChange = (newPage: number) => {
     navigate({
@@ -382,7 +461,7 @@ function MoviesResultsTab({ q, page }: CategoryTabProps) {
 
   return (
     <CategoryTabFrame
-      label="movies"
+      label={label}
       q={q}
       isLoading={isLoading}
       isError={isError}
@@ -394,141 +473,7 @@ function MoviesResultsTab({ q, page }: CategoryTabProps) {
       page={data?.error === false ? data.data.page : page}
       totalPages={data?.error === false ? data.data.total_pages : 0}
       onPageChange={handlePageChange}
-      renderGrid={(items: MoviesLibraryListItemType[]) => (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {items.map((m) => (
-            <MovieCard key={m.id} movie={m} />
-          ))}
-        </div>
-      )}
-    />
-  );
-}
-
-function AlbumsResultsTab({ q, page }: CategoryTabProps) {
-  const navigate = Route.useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery(
-    searchAlbumsQueryOpts(q, page, SEARCH_PER_PAGE),
-  );
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/search",
-      search: (prev: SearchParams) => ({ ...prev, page: newPage }),
-      replace: true,
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  return (
-    <CategoryTabFrame
-      label="albums"
-      q={q}
-      isLoading={isLoading}
-      isError={isError}
-      isApiFailure={isApiFailure(data)}
-      message={isApiFailure(data) ? data.message : undefined}
-      onRetry={() => void refetch()}
-      results={data?.error === false ? data.data.results : []}
-      total={data?.error === false ? data.data.total : 0}
-      page={data?.error === false ? data.data.page : page}
-      totalPages={data?.error === false ? data.data.total_pages : 0}
-      onPageChange={handlePageChange}
-      renderGrid={(items: SimpleAlbumType[]) => (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {items.map((a) => (
-            <AlbumCard key={a.id} album={a} />
-          ))}
-        </div>
-      )}
-    />
-  );
-}
-
-function MusiciansResultsTab({ q, page }: CategoryTabProps) {
-  const navigate = Route.useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery(
-    searchMusiciansQueryOpts(q, page, SEARCH_PER_PAGE),
-  );
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/search",
-      search: (prev: SearchParams) => ({ ...prev, page: newPage }),
-      replace: true,
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  return (
-    <CategoryTabFrame
-      label="musicians"
-      q={q}
-      isLoading={isLoading}
-      isError={isError}
-      isApiFailure={isApiFailure(data)}
-      message={isApiFailure(data) ? data.message : undefined}
-      onRetry={() => void refetch()}
-      results={data?.error === false ? data.data.results : []}
-      total={data?.error === false ? data.data.total : 0}
-      page={data?.error === false ? data.data.page : page}
-      totalPages={data?.error === false ? data.data.total_pages : 0}
-      onPageChange={handlePageChange}
-      renderGrid={(items: SimpleMusicianType[]) => (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {items.map((m) => (
-            <MusicianCard key={m.id} musician={m} />
-          ))}
-        </div>
-      )}
-    />
-  );
-}
-
-function TracksResultsTab({ q, page }: CategoryTabProps) {
-  const navigate = Route.useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery(
-    searchTracksQueryOpts(q, page, SEARCH_PER_PAGE),
-  );
-
-  const handlePageChange = (newPage: number) => {
-    navigate({
-      to: "/search",
-      search: (prev: SearchParams) => ({ ...prev, page: newPage }),
-      replace: true,
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  return (
-    <CategoryTabFrame
-      label="tracks"
-      q={q}
-      isLoading={isLoading}
-      isError={isError}
-      isApiFailure={isApiFailure(data)}
-      message={isApiFailure(data) ? data.message : undefined}
-      onRetry={() => void refetch()}
-      results={data?.error === false ? data.data.results : []}
-      total={data?.error === false ? data.data.total : 0}
-      page={data?.error === false ? data.data.page : page}
-      totalPages={data?.error === false ? data.data.total_pages : 0}
-      onPageChange={handlePageChange}
-      renderGrid={(items: TrackListItemType[]) => (
-        <ul
-          className="overflow-hidden rounded-xl border border-border bg-card/50"
-          aria-label="Track results"
-        >
-          {items.map((track) => (
-            <li
-              key={track.id}
-              className="border-b border-border last:border-b-0"
-            >
-              <SearchTrackItem track={track} queue={items} />
-            </li>
-          ))}
-        </ul>
-      )}
+      renderGrid={renderGrid}
     />
   );
 }
@@ -632,8 +577,23 @@ function CategoryTabFrame<T>({
 }
 
 // ---------------------------------------------------------------------------
-// Track row that can play through the audio player
+// Track list and row that can play through the audio player
 // ---------------------------------------------------------------------------
+
+function TracksResultsList({ tracks }: { tracks: TrackListItemType[] }) {
+  return (
+    <ul
+      className="overflow-hidden rounded-xl border border-border bg-card/50"
+      aria-label="Track results"
+    >
+      {tracks.map((track) => (
+        <li key={track.id} className="border-b border-border last:border-b-0">
+          <SearchTrackItem track={track} queue={tracks} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function SearchTrackItem({
   track,
@@ -716,7 +676,7 @@ function CategorySkeleton() {
   return (
     <div>
       <div className={cn("mb-5 h-4 w-32 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      <div className={SEARCH_GRID_CLASS}>
         {Array.from({ length: SEARCH_PER_PAGE }).map((_, i) => (
           <div
             key={i}
@@ -743,7 +703,7 @@ function AllResultsSkeleton() {
       {Array.from({ length: 3 }).map((_, s) => (
         <div key={s}>
           <div className={cn("mb-4 h-6 w-40 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className={SEARCH_GRID_CLASS}>
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
