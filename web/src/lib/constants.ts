@@ -20,6 +20,7 @@ export const SPOTIFY_STATUS_KEY = "spotify-status";
 
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
+export const CONTINUE_WATCHING_KEY = "continue-watching";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
 export const MOVIE_TECHNICAL_DETAILS_KEY = "movie-technical-details";

@@ -1158,6 +1158,27 @@
         }
       }
     },
+    "/api/movies/continue-watching": {
+      "get": {
+        "tags": [
+          "Movies"
+        ],
+        "summary": "List movies the current user is watching",
+        "description": "Returns up to 12 movies the current user has started watching but not finished or marked watched, most recently watched first.",
+        "operationId": "getContinueWatchingMovies",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ContinueWatchingMoviesResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/movies/library": {
       "get": {
         "tags": [
@@ -4582,6 +4603,16 @@
           }
         }
       },
+      "ContinueWatchingMoviesResponse": {
+        "description": "Continue watching movies response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ContinueWatchingMoviesEnvelope"
+            }
+          }
+        }
+      },
       "MoviesLibraryResponse": {
         "description": "Paginated movie library response.",
         "content": {
@@ -6451,6 +6482,30 @@
         },
         "additionalProperties": true
       },
+      "ContinueWatchingMovie": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/LatestMovie"
+          },
+          {
+            "type": "object",
+            "required": [
+              "progress_sec",
+              "duration_sec"
+            ],
+            "properties": {
+              "progress_sec": {
+                "type": "number",
+                "format": "double"
+              },
+              "duration_sec": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        ]
+      },
       "MovieLibraryItem": {
         "allOf": [
           {
@@ -6530,6 +6585,36 @@
                     "type": "array",
                     "items": {
                       "$ref": "#/components/schemas/LatestMovie"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContinueWatchingMoviesEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "movies"
+                ],
+                "properties": {
+                  "movies": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ContinueWatchingMovie"
                     }
                   }
                 },

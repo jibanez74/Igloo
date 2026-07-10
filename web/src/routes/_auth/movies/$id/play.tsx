@@ -1,5 +1,6 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -32,6 +33,7 @@ import {
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
 import {
+  CONTINUE_WATCHING_KEY,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
@@ -132,6 +134,7 @@ function PlayMoviePage() {
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -147,6 +150,15 @@ function PlayMoviePage() {
     suspendKeyboard();
     return () => resumeKeyboard();
   }, [pause, suspendKeyboard, resumeKeyboard]);
+
+  // Progress is saved with plain fetch calls (no queryClient), so drop the
+  // cached continue-watching list on exit; the home loader then refetches it
+  // before render, keeping the "Watching" section shift-free and accurate.
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
+    };
+  }, [queryClient]);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -505,6 +517,7 @@ function PlayMoviePage() {
       return;
     }
 
+    queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
     setResumeDismissed(true);
   };
 

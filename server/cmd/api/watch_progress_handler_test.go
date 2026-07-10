@@ -459,6 +459,122 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 	}
 }
 
+func TestGetContinueWatchingMovies(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	user, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Watcher",
+		Email:    "watcher@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	otherUser, err := app.Queries.CreateUser(ctx, database.CreateUserParams{
+		Name:     "Other",
+		Email:    "other@example.com",
+		Password: "hashed",
+	})
+	if err != nil {
+		t.Fatalf("failed to create other user: %v", err)
+	}
+
+	createMovie := func(title, fileName string) int64 {
+		movie, err := app.Queries.UpsertMovie(ctx, database.UpsertMovieParams{
+			Title:     title,
+			FilePath:  "/movies/" + fileName,
+			FileName:  fileName,
+			Size:      1024,
+			Container: "mkv",
+			MimeType:  "video/x-matroska",
+		})
+		if err != nil {
+			t.Fatalf("failed to create movie %q: %v", title, err)
+		}
+		return movie.ID
+	}
+
+	oldInProgressID := createMovie("Old In Progress", "old-in-progress.mkv")
+	recentInProgressID := createMovie("Recent In Progress", "recent-in-progress.mkv")
+	watchedID := createMovie("Watched", "watched.mkv")
+	unwatchedZeroID := createMovie("Unwatched Zero", "unwatched-zero.mkv")
+	otherUserID := createMovie("Other User Movie", "other-user.mkv")
+
+	upsertProgress := func(userID, movieID int64, progressSec float64) {
+		err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+			UserID:      userID,
+			MovieID:     movieID,
+			ProgressSec: progressSec,
+			DurationSec: 7200.0,
+		})
+		if err != nil {
+			t.Fatalf("failed to upsert progress for movie %d: %v", movieID, err)
+		}
+	}
+
+	upsertProgress(user.ID, oldInProgressID, 300.0)
+	upsertProgress(user.ID, recentInProgressID, 1200.0)
+	upsertProgress(otherUser.ID, otherUserID, 900.0)
+
+	err = app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
+		UserID:  user.ID,
+		MovieID: watchedID,
+	})
+	if err != nil {
+		t.Fatalf("failed to mark movie watched: %v", err)
+	}
+
+	err = app.Queries.MarkMovieUnwatched(ctx, database.MarkMovieUnwatchedParams{
+		UserID:  user.ID,
+		MovieID: unwatchedZeroID,
+	})
+	if err != nil {
+		t.Fatalf("failed to mark movie unwatched: %v", err)
+	}
+
+	// CURRENT_TIMESTAMP has second resolution, so force a distinct older
+	// timestamp to make the recency ordering deterministic.
+	_, err = app.DB.ExecContext(ctx,
+		"UPDATE movie_watch_progress SET updated_at = datetime('now', '-1 hour') WHERE user_id = ? AND movie_id = ?",
+		user.ID, oldInProgressID,
+	)
+	if err != nil {
+		t.Fatalf("failed to backdate progress row: %v", err)
+	}
+
+	rows, err := app.Queries.GetContinueWatchingMovies(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetContinueWatchingMovies failed: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 continue watching movies, got %d", len(rows))
+	}
+	if rows[0].ID != recentInProgressID {
+		t.Errorf("expected most recently watched movie %d first, got %d", recentInProgressID, rows[0].ID)
+	}
+	if rows[1].ID != oldInProgressID {
+		t.Errorf("expected older movie %d second, got %d", oldInProgressID, rows[1].ID)
+	}
+	if rows[0].ProgressSec != 1200.0 {
+		t.Errorf("expected progress_sec 1200.0, got %f", rows[0].ProgressSec)
+	}
+	if rows[0].DurationSec != 7200.0 {
+		t.Errorf("expected duration_sec 7200.0, got %f", rows[0].DurationSec)
+	}
+
+	otherRows, err := app.Queries.GetContinueWatchingMovies(ctx, otherUser.ID)
+	if err != nil {
+		t.Fatalf("GetContinueWatchingMovies for other user failed: %v", err)
+	}
+	if len(otherRows) != 1 || otherRows[0].ID != otherUserID {
+		t.Errorf("expected other user to only see their own in-progress movie, got %+v", otherRows)
+	}
+}
+
 func TestWatchProgress_CascadeDeleteMovie(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()

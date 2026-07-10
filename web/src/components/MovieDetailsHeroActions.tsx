@@ -22,7 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import MovieLikeButton from "@/components/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
-import { MOVIE_WATCH_PROGRESS_KEY } from "@/lib/constants";
+import {
+  CONTINUE_WATCHING_KEY,
+  MOVIE_WATCH_PROGRESS_KEY,
+} from "@/lib/constants";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -165,6 +168,9 @@ export default function MovieDetailsHeroActions({
       });
 
       void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({
+        queryKey: [CONTINUE_WATCHING_KEY],
+      });
     },
   });
 

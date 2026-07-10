@@ -50,6 +50,7 @@ export type {
 // Movie types
 export type {
   LatestMovieType,
+  ContinueWatchingMovieType,
   CastMemberType,
   CrewMemberType,
   TheaterMovieType,

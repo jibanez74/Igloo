@@ -50,6 +50,22 @@ SET
   watched = true,
   updated_at = CURRENT_TIMESTAMP;
 
+-- name: GetContinueWatchingMovies :many
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  mwp.progress_sec,
+  mwp.duration_sec
+FROM movie_watch_progress AS mwp
+JOIN movies AS m ON m.id = mwp.movie_id
+WHERE mwp.user_id = ?
+  AND mwp.watched = false
+  AND mwp.progress_sec > 0
+ORDER BY mwp.updated_at DESC
+LIMIT 12;
+
 -- name: MarkMovieUnwatched :exec
 INSERT INTO movie_watch_progress (
   user_id,

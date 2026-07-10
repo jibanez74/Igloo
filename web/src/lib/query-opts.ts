@@ -4,6 +4,7 @@ import {
   getAlbumDetails,
   getAlbumsPaginated,
   getAuthUser,
+  getContinueWatchingMovies,
   getDevices,
   getGeneralSettings,
   getPlaybackSettings,
@@ -59,6 +60,7 @@ import {
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
   LATEST_MOVIES_KEY,
+  CONTINUE_WATCHING_KEY,
   SPOTIFY_STATUS_KEY,
   TMDB_STATUS_KEY,
   LIBRARY_MOVIE_DETAILS_KEY,
@@ -189,6 +191,17 @@ export function latestMoviesQueryOpts() {
     queryFn: getLatestMovies,
     staleTime: STALE_CATALOG,
     gcTime: GC_LONG,
+  });
+}
+
+// Progress changes with every playback session, so keep this as fresh as the
+// per-movie watch-progress query (STALE_30S).
+export function continueWatchingQueryOpts() {
+  return queryOptions({
+    queryKey: [CONTINUE_WATCHING_KEY],
+    queryFn: getContinueWatchingMovies,
+    staleTime: STALE_30S,
+    gcTime: GC_DEFAULT,
   });
 }
 

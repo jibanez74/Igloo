@@ -204,6 +204,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getChaptersByMovieIDStmt, err = db.PrepareContext(ctx, getChaptersByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChaptersByMovieID: %w", err)
 	}
+	if q.getContinueWatchingMoviesStmt, err = db.PrepareContext(ctx, getContinueWatchingMovies); err != nil {
+		return nil, fmt.Errorf("error preparing query GetContinueWatchingMovies: %w", err)
+	}
 	if q.getCrewByMovieIDStmt, err = db.PrepareContext(ctx, getCrewByMovieID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCrewByMovieID: %w", err)
 	}
@@ -870,6 +873,11 @@ func (q *Queries) Close() error {
 	if q.getChaptersByMovieIDStmt != nil {
 		if cerr := q.getChaptersByMovieIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getChaptersByMovieIDStmt: %w", cerr)
+		}
+	}
+	if q.getContinueWatchingMoviesStmt != nil {
+		if cerr := q.getContinueWatchingMoviesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getContinueWatchingMoviesStmt: %w", cerr)
 		}
 	}
 	if q.getCrewByMovieIDStmt != nil {
@@ -1576,6 +1584,7 @@ type Queries struct {
 	getAudioStreamsByMovieIDStmt                *sql.Stmt
 	getCastByMovieIDStmt                        *sql.Stmt
 	getChaptersByMovieIDStmt                    *sql.Stmt
+	getContinueWatchingMoviesStmt               *sql.Stmt
 	getCrewByMovieIDStmt                        *sql.Stmt
 	getDeviceByTokenHashStmt                    *sql.Stmt
 	getDevicesByUserStmt                        *sql.Stmt
@@ -1763,6 +1772,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getAudioStreamsByMovieIDStmt:                q.getAudioStreamsByMovieIDStmt,
 		getCastByMovieIDStmt:                        q.getCastByMovieIDStmt,
 		getChaptersByMovieIDStmt:                    q.getChaptersByMovieIDStmt,
+		getContinueWatchingMoviesStmt:               q.getContinueWatchingMoviesStmt,
 		getCrewByMovieIDStmt:                        q.getCrewByMovieIDStmt,
 		getDeviceByTokenHashStmt:                    q.getDeviceByTokenHashStmt,
 		getDevicesByUserStmt:                        q.getDevicesByUserStmt,

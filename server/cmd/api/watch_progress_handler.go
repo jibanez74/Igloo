@@ -116,6 +116,27 @@ func (app *Application) GetMovieWatchProgress(w http.ResponseWriter, r *http.Req
 	})
 }
 
+func (app *Application) GetContinueWatchingMovies(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.currentUserID(w, r)
+	if !ok {
+		return
+	}
+
+	movies, err := app.Queries.GetContinueWatchingMovies(r.Context(), userID)
+	if err != nil {
+		app.Logger.Error("failed to get continue watching movies", "error", err, "user_id", userID)
+		helpers.ErrorJSON(w, errors.New("failed to fetch movies"))
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"movies": movies,
+		},
+	})
+}
+
 func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {

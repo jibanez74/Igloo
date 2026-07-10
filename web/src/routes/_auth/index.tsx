@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  continueWatchingQueryOpts,
   latestMoviesQueryOpts,
   latestAlbumsQueryOpts,
   inTheatersQueryOpts,
   watchRoomsQueryOpts,
 } from "@/lib/query-opts";
 import { Home } from "lucide-react";
+import ContinueWatching from "@/components/ContinueWatching";
 import LatestAlbums from "@/components/LatestAlbums";
 import LatestMovies from "@/components/LatestMovies";
 import MoviesInTheaters from "@/components/MoviesInTheaters";
@@ -23,6 +25,7 @@ export const Route = createFileRoute("/_auth/")({
 
     await Promise.all([
       queryClient.ensureQueryData(watchRoomsQueryOpts()),
+      queryClient.ensureQueryData(continueWatchingQueryOpts()),
       queryClient.ensureQueryData(latestMoviesQueryOpts()),
       queryClient.ensureQueryData(latestAlbumsQueryOpts()),
       queryClient.ensureQueryData(inTheatersQueryOpts()),
@@ -65,6 +68,7 @@ function HomePage() {
       </section>
 
       <WatchRooms />
+      <ContinueWatching />
       <LatestMovies />
       <LatestAlbums />
       <MoviesInTheaters />
