@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { persistMovieWatchProgress } from "@/lib/movie-playback";
 import { MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS } from "@/lib/constants";
@@ -17,12 +17,24 @@ export function useMovieWatchProgressSaver({
   currentTimeRef,
   durationRef,
 }: MovieWatchProgressSaverOptions) {
+  const pendingSaveRef = useRef<Promise<void>>(Promise.resolve());
+
+  const queueProgressSave = useCallback(
+    (progressSec: number, durationSec: number) => {
+      const save = pendingSaveRef.current.then(() =>
+        persistMovieWatchProgress(movieId, progressSec, durationSec),
+      );
+      pendingSaveRef.current = save.catch(() => {});
+      return save;
+    },
+    [movieId],
+  );
+
   useEffect(() => {
     if (!playing) return;
     const interval = window.setInterval(async () => {
       try {
-        await persistMovieWatchProgress(
-          movieId,
+        await queueProgressSave(
           currentTimeRef.current,
           durationRef.current,
         );
@@ -33,7 +45,7 @@ export function useMovieWatchProgressSaver({
     return () => {
       window.clearInterval(interval);
     };
-  }, [movieId, playing, currentTimeRef, durationRef]);
+  }, [playing, currentTimeRef, durationRef, queueProgressSave]);
 
   useEffect(() => {
     const handlePageHide = () => {
@@ -50,29 +62,9 @@ export function useMovieWatchProgressSaver({
     };
   }, [movieId, currentTimeRef, durationRef]);
 
-  // In-app navigation (e.g. the Back button) fires neither pagehide nor a
-  // reliable pause event, so flush the latest position on unmount to avoid
-  // dropping progress accrued since the last interval tick.
-  useEffect(() => {
-    return () => {
-      // Intentionally read the live ref values at unmount time (not the values
-      // captured when the effect ran) so we flush the most recent position.
-      void persistMovieWatchProgress(
-        movieId,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        currentTimeRef.current,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        durationRef.current,
-      ).catch(() => {
-        // Best-effort flush on unmount; nothing left to surface the error to.
-      });
-    };
-  }, [movieId, currentTimeRef, durationRef]);
-
   const handlePauseSave = async () => {
     try {
-      await persistMovieWatchProgress(
-        movieId,
+      await queueProgressSave(
         currentTimeRef.current,
         durationRef.current,
       );
@@ -83,8 +75,7 @@ export function useMovieWatchProgressSaver({
 
   const handleEndedSave = async () => {
     try {
-      await persistMovieWatchProgress(
-        movieId,
+      await queueProgressSave(
         durationRef.current,
         durationRef.current,
       );
@@ -96,5 +87,8 @@ export function useMovieWatchProgressSaver({
     }
   };
 
-  return { handlePauseSave, handleEndedSave };
+  const flushProgress = () =>
+    queueProgressSave(currentTimeRef.current, durationRef.current);
+
+  return { handlePauseSave, handleEndedSave, flushProgress };
 }

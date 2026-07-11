@@ -1,5 +1,10 @@
 import { useRef, useEffect, useMemo, useState } from "react";
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  redirect,
+  useBlocker,
+  useRouter,
+} from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
@@ -32,6 +37,10 @@ import {
   toAbsolutePlaybackTime,
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
+import {
+  staysOnCurrentMoviePlayback,
+  synchronizeMoviePlaybackExit,
+} from "@/lib/movie-playback-exit";
 import {
   CONTINUE_WATCHING_KEY,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
@@ -150,15 +159,6 @@ function PlayMoviePage() {
     suspendKeyboard();
     return () => resumeKeyboard();
   }, [pause, suspendKeyboard, resumeKeyboard]);
-
-  // Progress is saved with plain fetch calls (no queryClient), so drop the
-  // cached continue-watching list on exit; the home loader then refetches it
-  // before render, keeping the "Watching" section shift-free and accurate.
-  useEffect(() => {
-    return () => {
-      queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
-    };
-  }, [queryClient]);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -428,11 +428,36 @@ function PlayMoviePage() {
     durationRef.current = duration;
   }, [currentTime, duration]);
 
-  const { handlePauseSave, handleEndedSave } = useMovieWatchProgressSaver({
-    movieId,
-    playing,
-    currentTimeRef,
-    durationRef,
+  const { handlePauseSave, handleEndedSave, flushProgress } =
+    useMovieWatchProgressSaver({
+      movieId,
+      playing,
+      currentTimeRef,
+      durationRef,
+    });
+
+  useBlocker({
+    enableBeforeUnload: false,
+    shouldBlockFn: async ({ current, next }) => {
+      if (staysOnCurrentMoviePlayback(current, next)) return false;
+
+      await synchronizeMoviePlaybackExit({
+        pausePlayback: () => videoRef.current?.pause(),
+        flushProgress,
+        refreshContinueWatching: () =>
+          queryClient.invalidateQueries({
+            queryKey: [CONTINUE_WATCHING_KEY],
+            refetchType: "all",
+          }),
+        onSaveError: () =>
+          showActionFailed(
+            "save watch progress",
+            "Unable to save your latest playback position.",
+          ),
+      });
+
+      return false;
+    },
   });
 
   useEffect(() => {

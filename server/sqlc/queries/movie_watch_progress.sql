@@ -63,6 +63,8 @@ JOIN movies AS m ON m.id = mwp.movie_id
 WHERE mwp.user_id = ?
   AND mwp.watched = false
   AND mwp.progress_sec > 0
+  AND mwp.duration_sec > 0
+  AND mwp.progress_sec < mwp.duration_sec
 ORDER BY mwp.updated_at DESC
 LIMIT 12;
 

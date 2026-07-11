@@ -499,6 +499,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 
 	oldInProgressID := createMovie("Old In Progress", "old-in-progress.mkv")
 	recentInProgressID := createMovie("Recent In Progress", "recent-in-progress.mkv")
+	completedID := createMovie("Completed", "completed.mkv")
 	watchedID := createMovie("Watched", "watched.mkv")
 	unwatchedZeroID := createMovie("Unwatched Zero", "unwatched-zero.mkv")
 	otherUserID := createMovie("Other User Movie", "other-user.mkv")
@@ -517,6 +518,7 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 
 	upsertProgress(user.ID, oldInProgressID, 300.0)
 	upsertProgress(user.ID, recentInProgressID, 1200.0)
+	upsertProgress(user.ID, completedID, 7200.0)
 	upsertProgress(otherUser.ID, otherUserID, 900.0)
 
 	err = app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
