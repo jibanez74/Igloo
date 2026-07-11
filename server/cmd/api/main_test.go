@@ -428,6 +428,19 @@ func TestInitTables_Indexes(t *testing.T) {
 			}
 		})
 	}
+
+	var watchProgressIndexSQL string
+	err = db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+		"idx_movie_watch_progress_user_updated_at",
+	).Scan(&watchProgressIndexSQL)
+	if err != nil {
+		t.Fatalf("Failed to read movie watch progress index definition: %v", err)
+	}
+
+	if !strings.Contains(watchProgressIndexSQL, "WHERE watched = false") {
+		t.Fatalf("Expected movie watch progress index to exclude watched movies, got %q", watchProgressIndexSQL)
+	}
 }
 
 func TestInitTables_Idempotent(t *testing.T) {

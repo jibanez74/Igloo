@@ -202,7 +202,8 @@ CREATE TABLE
   );
 
 CREATE INDEX IF NOT EXISTS idx_movie_watch_progress_user_updated_at
-ON movie_watch_progress (user_id, updated_at DESC);
+ON movie_watch_progress (user_id, updated_at DESC)
+WHERE watched = false;
 
 -- production_companies
 CREATE TABLE
