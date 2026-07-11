@@ -22,7 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import MovieLikeButton from "@/components/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
-import { MOVIE_WATCH_PROGRESS_KEY } from "@/lib/constants";
+import {
+  CONTINUE_WATCHING_KEY,
+  MOVIE_WATCH_PROGRESS_KEY,
+} from "@/lib/constants";
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -165,6 +168,9 @@ export default function MovieDetailsHeroActions({
       });
 
       void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({
+        queryKey: [CONTINUE_WATCHING_KEY],
+      });
     },
   });
 
@@ -181,7 +187,7 @@ export default function MovieDetailsHeroActions({
         }}
         className={cn(
           buttonVariants({ variant: "accent", size: "lg" }),
-          "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
+          "min-h-11 flex-1 touch-manipulation sm:flex-none",
         )}
       >
         <Play className="size-4 fill-current" aria-hidden="true" />
@@ -197,7 +203,7 @@ export default function MovieDetailsHeroActions({
         disabled={watchedMutation.isPending || watchProgressLoading}
         className={cn(
           buttonVariants({ variant: "outline", size: "lg" }),
-          "min-h-11 touch-manipulation px-6 font-semibold",
+          "min-h-11 flex-1 touch-manipulation px-3 font-semibold sm:flex-none sm:px-6",
         )}
         aria-label={isWatched ? "Mark movie as unwatched" : "Mark movie as watched"}
         aria-pressed={isWatched}
@@ -214,7 +220,11 @@ export default function MovieDetailsHeroActions({
           <Spinner className="size-4 text-success!" aria-hidden="true" />
         )}
       </button>
-      <MovieLikeButton movieId={movieId} variant="hero" />
+      <MovieLikeButton
+        movieId={movieId}
+        variant="hero"
+        className="flex-1 sm:flex-none"
+      />
       <DropdownMenu>
         <DropdownMenuTrigger
           ref={moreOptionsButtonRef}

@@ -1,18 +1,7 @@
 import { Star, Clock, Calendar, Users } from "lucide-react";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
+import { audienceRatingClass, criticRatingClass } from "@/lib/rating";
 import type { MovieDetailsMetadataChipsProps } from "@/types";
-
-function criticRatingColor(score: number) {
-  if (score >= 7) return "bg-aurora text-aurora-foreground";
-  if (score >= 5) return "bg-aurora/90 text-aurora-foreground";
-  return "bg-muted text-foreground";
-}
-
-function audienceRatingColor(score: number) {
-  if (score >= 7) return "bg-primary text-primary-foreground";
-  if (score >= 5) return "bg-accent text-accent-foreground";
-  return "bg-muted text-foreground";
-}
 
 export default function MovieDetailsMetadataChips({
   criticRating,
@@ -41,7 +30,7 @@ export default function MovieDetailsMetadataChips({
       )}
       {criticRating != null && criticRating > 0 && (
         <li
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${criticRatingColor(criticRating)}`}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${criticRatingClass(criticRating)}`}
           aria-label={`Critic rating: ${criticRating.toFixed(1)} out of 10`}
         >
           <Star className="size-3.5 fill-current" aria-hidden="true" />
@@ -50,7 +39,7 @@ export default function MovieDetailsMetadataChips({
       )}
       {audienceRating != null && audienceRating > 0 && (
         <li
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${audienceRatingColor(audienceRating)}`}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${audienceRatingClass(audienceRating)}`}
           aria-label={`Audience rating: ${audienceRating.toFixed(1)} out of 10`}
         >
           <Users className="size-3.5 fill-current" aria-hidden="true" />

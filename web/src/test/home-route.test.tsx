@@ -46,7 +46,24 @@ function authUser() {
   };
 }
 
-function mockHomeFetch() {
+type MockHomeFetchOptions = {
+  continueWatching?: unknown[];
+};
+
+const defaultContinueWatchingMovies = [
+  {
+    id: 104,
+    title: "Ember Line",
+    poster_path: { String: "", Valid: false },
+    year: { Int64: 2026, Valid: true },
+    progress_sec: 1830,
+    duration_sec: 5400,
+  },
+];
+
+function mockHomeFetch(options: MockHomeFetchOptions = {}) {
+  const continueWatching =
+    options.continueWatching ?? defaultContinueWatchingMovies;
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);
     const method = init?.method ?? "GET";
@@ -86,6 +103,13 @@ function mockHomeFetch() {
             },
           ],
         },
+      });
+    }
+
+    if (url === "/api/movies/continue-watching") {
+      return jsonResponse({
+        error: false,
+        data: { movies: continueWatching },
       });
     }
 
@@ -142,9 +166,9 @@ function createHomeQueryClient() {
   });
 }
 
-async function renderHomeRoute() {
+async function renderHomeRoute(options: MockHomeFetchOptions = {}) {
   vi.stubGlobal("scrollTo", vi.fn());
-  mockHomeFetch();
+  mockHomeFetch(options);
   const queryClient = createHomeQueryClient();
   const history = createMemoryHistory({
     initialEntries: ["/"],
@@ -194,6 +218,7 @@ describe("home route motion", () => {
 
     for (const regionName of [
       "Watch Rooms",
+      "Continue Watching",
       "Recently Added Movies",
       "Recently Added Albums",
       "Now Playing in Theaters",
@@ -208,5 +233,32 @@ describe("home route motion", () => {
     expect(MOTION_SECTION_ENTER_DELAYED_CLASS).toContain(
       "motion-reduce:delay-0",
     );
+  });
+});
+
+describe("home continue watching section", () => {
+  it("announces watch progress on the card link", async () => {
+    await renderHomeRoute();
+
+    const watchingRegion = await screen.findByRole("region", {
+      name: "Continue Watching",
+    });
+    expect(watchingRegion).toBeInTheDocument();
+
+    // 1830 / 5400 rounds to 34%.
+    expect(
+      screen.getByRole("link", { name: "Ember Line 2026, 34% watched" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render when there are no in-progress movies", async () => {
+    await renderHomeRoute({ continueWatching: [] });
+
+    expect(
+      await screen.findByRole("region", { name: "Recently Added Movies" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Continue Watching" }),
+    ).not.toBeInTheDocument();
   });
 });

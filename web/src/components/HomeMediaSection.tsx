@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
@@ -80,9 +81,9 @@ export default function HomeMediaSection<T>({
         </div>
 
         {!isPending && !hasError && items.length > 0 && (
-          <p className="rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+          <Badge variant="outline" className="px-3 py-1">
             {items.length} {countLabel}
-          </p>
+          </Badge>
         )}
       </div>
 

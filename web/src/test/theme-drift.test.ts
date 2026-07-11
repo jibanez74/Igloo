@@ -2,73 +2,47 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  THEME_COLORS,
-  THEME_STORAGE_KEY,
-  THEME_TEXT_COLORS,
-  type Theme,
-} from "@/lib/theme";
-import { extractRuleBody, oklchToHex, parseOklchTokens } from "./color";
+  extractGeneratedBlock,
+  GENERATED_TARGETS,
+} from "../../scripts/generate-theme";
+import { THEME_COLORS } from "@/lib/theme";
+import { THEME_TOKENS, type ThemeName } from "@/lib/theme-tokens";
+import { oklchToHex, parseOklchTokens } from "./color";
 
-// The canvas/text hexes and the theme storage key are intentionally duplicated
-// across styles.css (OKLCH tokens), boot.css (pre-hydration paint), the
-// index.html anti-flash script, and src/lib/theme.ts. This test pins them all
-// to the theme.ts constants so an edit in one place can't silently drift.
-// Resolved from the vitest cwd (the web/ project root).
+// The theme sync points (styles.css tokens, boot.css pre-hydration paint, the
+// index.html anti-flash script) are GENERATED from src/lib/theme-tokens.ts by
+// scripts/generate-theme.ts. This test fails when a generated block is edited
+// by hand or the module changes without rerunning `bun run generate:theme`,
+// and when a token's OKLCH value and hex disagree.
+// Files are resolved from the vitest cwd (the web/ project root).
 const read = (relPath: string) =>
   readFileSync(resolve(process.cwd(), relPath), "utf8");
 
-const stylesCss = read("src/assets/styles.css");
-const bootCss = read("src/assets/boot.css");
-const indexHtml = read("index.html");
-
-const themes: Array<[Theme, string]> = [
-  ["light", ":root"],
-  ["dark", ".dark"],
-];
-
-const bootSelectors: Record<Theme, string> = {
-  light: "html",
-  dark: "html.dark",
-};
-
-describe("theme constants stay in sync across files", () => {
-  it.each(themes)(
-    "styles.css %s canvas/text tokens match THEME_COLORS",
-    (theme, selector) => {
-      const tokens = parseOklchTokens(extractRuleBody(stylesCss, selector));
-      expect(oklchToHex(tokens["--background"])).toBe(THEME_COLORS[theme]);
-      expect(oklchToHex(tokens["--foreground"])).toBe(THEME_TEXT_COLORS[theme]);
+describe("generated theme blocks match src/lib/theme-tokens.ts", () => {
+  it.each(GENERATED_TARGETS.map((target) => [target.relPath, target] as const))(
+    "%s is up to date (bun run generate:theme)",
+    (relPath, target) => {
+      expect(extractGeneratedBlock(read(relPath), target)).toBe(
+        target.render(),
+      );
     },
   );
+});
 
-  it.each(themes)(
-    "boot.css %s html rule matches THEME_COLORS",
-    (theme) => {
-      const body = extractRuleBody(bootCss, bootSelectors[theme]);
-      const background = /background:\s*(#[0-9a-fA-F]{6})/.exec(body)?.[1];
-      const color = /color:\s*(#[0-9a-fA-F]{6})/.exec(body)?.[1];
-      expect(background?.toUpperCase()).toBe(THEME_COLORS[theme]);
-      expect(color?.toUpperCase()).toBe(THEME_TEXT_COLORS[theme]);
-    },
-  );
+describe("theme-tokens.ts is internally consistent", () => {
+  const themes: ThemeName[] = ["light", "dark"];
 
-  it("index.html anti-flash script uses the storage key and theme-color hexes", () => {
-    expect(indexHtml).toContain(`localStorage.getItem("${THEME_STORAGE_KEY}")`);
-    expect(indexHtml).toContain(THEME_COLORS.light);
-    expect(indexHtml).toContain(THEME_COLORS.dark);
+  it.each(themes)("%s OKLCH values round-trip to their hex", (theme) => {
+    for (const [name, token] of Object.entries(THEME_TOKENS[theme])) {
+      if (!token.hex) continue; // alpha tokens carry no hex
+      const parsed = parseOklchTokens(`${name}: ${token.value};`)[name];
+      expect(parsed, `unparseable OKLCH for ${name} (${theme})`).toBeDefined();
+      expect(oklchToHex(parsed), `${name} (${theme})`).toBe(token.hex);
+    }
   });
 
-  it("index.html <meta name=\"theme-color\"> defaults to the dark canvas", () => {
-    const meta = /<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(
-      indexHtml,
-    )?.[1];
-    expect(meta?.toUpperCase()).toBe(THEME_COLORS.dark);
-  });
-
-  it("boot.css glacier gradient tint matches the dark --primary token", () => {
-    // Both body gradients tint with the glacier primary as rgba(56, 189, 248, a).
-    expect(bootCss).toContain("rgba(56, 189, 248");
-    const darkTokens = parseOklchTokens(extractRuleBody(stylesCss, ".dark"));
-    expect(oklchToHex(darkTokens["--primary"])).toBe("#38BDF8");
+  it("THEME_COLORS derives from the canvas tokens", () => {
+    expect(THEME_COLORS.dark).toBe(THEME_TOKENS.dark["--background"].hex);
+    expect(THEME_COLORS.light).toBe(THEME_TOKENS.light["--background"].hex);
   });
 });

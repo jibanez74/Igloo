@@ -103,6 +103,8 @@ function MovieDetailsPage() {
           data?.message ||
           "Failed to load movie details. Please try again later."
         }
+        backTo="/movies"
+        backLabel="Back to Movies"
       />
     );
   }

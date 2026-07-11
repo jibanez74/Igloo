@@ -107,8 +107,8 @@ function LoginPage() {
                   aria-hidden="true"
                 />
               </div>
-              <CardTitle className="text-2xl font-semibold tracking-tight text-foreground">
-                Welcome to Igloo
+              <CardTitle asChild className="text-2xl font-semibold tracking-tight text-foreground">
+                <h1>Welcome to Igloo</h1>
               </CardTitle>
               <CardDescription className="text-muted-foreground">
                 Sign in to access your private media library.

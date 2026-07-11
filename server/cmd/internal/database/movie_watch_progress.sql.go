@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteMovieWatchProgress = `-- name: DeleteMovieWatchProgress :exec
@@ -23,6 +24,64 @@ type DeleteMovieWatchProgressParams struct {
 func (q *Queries) DeleteMovieWatchProgress(ctx context.Context, arg DeleteMovieWatchProgressParams) error {
 	_, err := q.exec(ctx, q.deleteMovieWatchProgressStmt, deleteMovieWatchProgress, arg.UserID, arg.MovieID)
 	return err
+}
+
+const getContinueWatchingMovies = `-- name: GetContinueWatchingMovies :many
+SELECT
+  m.id,
+  m.title,
+  m.poster_path,
+  m.year,
+  mwp.progress_sec,
+  mwp.duration_sec
+FROM movie_watch_progress AS mwp
+JOIN movies AS m ON m.id = mwp.movie_id
+WHERE mwp.user_id = ?
+  AND mwp.watched = false
+  AND mwp.progress_sec > 0
+  AND mwp.duration_sec > 0
+  AND mwp.progress_sec < mwp.duration_sec
+ORDER BY mwp.updated_at DESC
+LIMIT 12
+`
+
+type GetContinueWatchingMoviesRow struct {
+	ID          int64          `json:"id"`
+	Title       string         `json:"title"`
+	PosterPath  sql.NullString `json:"poster_path"`
+	Year        sql.NullInt64  `json:"year"`
+	ProgressSec float64        `json:"progress_sec"`
+	DurationSec float64        `json:"duration_sec"`
+}
+
+func (q *Queries) GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error) {
+	rows, err := q.query(ctx, q.getContinueWatchingMoviesStmt, getContinueWatchingMovies, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetContinueWatchingMoviesRow{}
+	for rows.Next() {
+		var i GetContinueWatchingMoviesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.PosterPath,
+			&i.Year,
+			&i.ProgressSec,
+			&i.DurationSec,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getMovieWatchProgress = `-- name: GetMovieWatchProgress :one

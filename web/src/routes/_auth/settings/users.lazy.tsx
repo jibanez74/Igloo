@@ -210,9 +210,11 @@ function UsersSettings() {
       <Card className="border-border/50 bg-muted/30">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Users className="size-5 text-primary" aria-hidden="true" />
-              User Management
+            <CardTitle asChild className="flex items-center gap-2 text-foreground">
+              <h2>
+                <Users className="size-5 text-primary" aria-hidden="true" />
+                User Management
+              </h2>
             </CardTitle>
             <CardDescription className="text-muted-foreground">
               Create, edit, and remove user accounts

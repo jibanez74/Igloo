@@ -2,24 +2,27 @@
 // The igloo light/dark palettes live in styles.css; this module just decides
 // which one is active by toggling the `dark` class on <html>.
 //
-// NOTE: THEME_STORAGE_KEY and the THEME_COLORS hexes are intentionally
-// duplicated by the inline anti-flash script in index.html (which runs before
-// any module loads). Keep the two in sync.
+// The token values come from src/lib/theme-tokens.ts (the single token
+// source); the inline anti-flash script in index.html duplicates the storage
+// key and canvas hexes but is generated from the same module by
+// `bun run generate:theme` (see docs/design-system.md §2.4).
+
+import { THEME_STORAGE_KEY, tokenHex } from "./theme-tokens";
 
 export type Theme = "light" | "dark";
 
-export const THEME_STORAGE_KEY = "igloo-theme";
+export { THEME_STORAGE_KEY };
 
-// Matches <meta name="theme-color"> values; canvas #0A1322 (dark) / #F2F7FC (light).
+// Matches the generated <meta name="theme-color"> values (the canvas tokens).
 export const THEME_COLORS: Record<Theme, string> = {
-  dark: "#0A1322",
-  light: "#F2F7FC",
+  dark: tokenHex("dark", "--background"),
+  light: tokenHex("light", "--background"),
 };
 
 // Body text on the canvas; mirrors the --foreground tokens and boot.css `color`.
 export const THEME_TEXT_COLORS: Record<Theme, string> = {
-  dark: "#F8FAFC",
-  light: "#0A1322",
+  dark: tokenHex("dark", "--foreground"),
+  light: tokenHex("light", "--foreground"),
 };
 
 /** Reads the stored theme, defaulting to "dark" when absent or invalid. */

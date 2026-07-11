@@ -619,9 +619,11 @@ function AccountSettings() {
       {/* Profile Information */}
       <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <User className="size-5 text-primary" aria-hidden="true" />
-            Profile Information
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <User className="size-5 text-primary" aria-hidden="true" />
+              Profile Information
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Manage your account information and preferences
@@ -722,9 +724,11 @@ function AccountSettings() {
       {/* Avatar */}
       <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <ImageIcon className="size-5 text-primary" aria-hidden="true" />
-            Avatar
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <ImageIcon className="size-5 text-primary" aria-hidden="true" />
+              Avatar
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Update your profile picture
@@ -856,9 +860,11 @@ function AccountSettings() {
       {/* Change Password */}
       <Card className="border-border/50 bg-muted/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Lock className="size-5 text-primary" aria-hidden="true" />
-            Change Password
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Lock className="size-5 text-primary" aria-hidden="true" />
+              Change Password
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Update your account password
@@ -1006,9 +1012,11 @@ function AccountSettings() {
       {/* Danger Zone */}
       <Card className="border-destructive/50 bg-destructive/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="size-5" aria-hidden="true" />
-            Danger Zone
+          <CardTitle asChild className="flex items-center gap-2 text-destructive">
+            <h2>
+              <AlertTriangle className="size-5" aria-hidden="true" />
+              Danger Zone
+            </h2>
           </CardTitle>
           <CardDescription className="text-destructive">
             Irreversible and destructive actions

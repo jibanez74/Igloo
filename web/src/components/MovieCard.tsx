@@ -17,9 +17,10 @@ import type { LatestMovieType } from "@/types";
 
 type MovieCardProps = {
   movie: LatestMovieType;
+  watchProgress?: { progressSec: number; durationSec: number };
 };
 
-export default function MovieCard({ movie }: MovieCardProps) {
+export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
   const { id, title, poster_path, year } = movie;
   const queryClient = useQueryClient();
 
@@ -27,6 +28,21 @@ export default function MovieCard({ movie }: MovieCardProps) {
     queryClient.prefetchQuery(libraryMovieDetailsQueryOpts(id));
 
   const ariaTitle = year.Valid ? `${title} ${year.Int64}` : title;
+
+  const progressPct =
+    watchProgress && watchProgress.durationSec > 0
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round(
+              (watchProgress.progressSec / watchProgress.durationSec) * 100,
+            ),
+          ),
+        )
+      : null;
+  const cardAriaLabel =
+    progressPct !== null ? `${ariaTitle}, ${progressPct}% watched` : ariaTitle;
 
   const posterUrl =
     poster_path.Valid && poster_path.String !== ""
@@ -49,7 +65,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
           to="/movies/$id"
           params={{ id: String(id) }}
           className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          aria-label={ariaTitle}
+          aria-label={cardAriaLabel}
         >
           {/* Poster with 2:3 aspect ratio (standard movie poster) */}
           <div className="relative aspect-2/3 bg-muted">
@@ -80,6 +96,18 @@ export default function MovieCard({ movie }: MovieCardProps) {
             />
             {/* Gradient overlay for text readability */}
             <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 via-black/50 to-transparent" />
+            {/* Watch progress bar - percent is announced via the link label */}
+            {progressPct !== null && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 h-1 bg-white/25"
+              >
+                <div
+                  className="h-full bg-primary"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            )}
           </div>
           {/* Movie info */}
           <div className="absolute inset-x-0 bottom-0 p-3">

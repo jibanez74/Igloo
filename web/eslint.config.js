@@ -96,36 +96,35 @@ export default defineConfig([
           // - Font Awesome icons (fa-*)
           // - Lucide icons (lucide-*)
           // - tw-animate-css (animate-in, animate-out)
-          // - tailwind-scrollbar plugin (scrollbar-*)
           ignore: [
             "fa-.*",
             "lucide-.*",
             "animate-in",
             "animate-out",
-            "scrollbar-.*",
           ],
         },
       ],
       "better-tailwindcss/no-conflicting-classes": "warn",
 
-      // Design-system guardrail: forbid new raw slate-*/amber-*/red-*/emerald-*
-      // Tailwind colors. Components must read semantic tokens (bg-background,
+      // Design-system guardrail: forbid raw Tailwind palette colors (every
+      // family). Components must read semantic tokens (bg-background,
       // text-muted-foreground, bg-aurora, text-destructive, text-success, …) so
-      // the codebase doesn't drift back off the igloo palette.
-      // See docs/design-remediation-plan.md (Phase 5).
+      // the codebase doesn't drift back off the igloo palette. Documented
+      // brand exceptions use eslint-disable comments (Spotify green in
+      // src/lib/constants.ts). See docs/design-system.md §1.2.
       "no-restricted-syntax": [
         "error",
         {
           selector:
-            "Literal[value=/(?:slate|amber|red|emerald)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+            "Literal[value=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
           message:
-            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, text-destructive, text-success, …) instead of raw slate-*/amber-*/red-*/emerald-* — see docs/design-remediation-plan.md.",
+            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, text-destructive, text-success, …) instead of raw Tailwind palette colors — see docs/design-system.md §1.2.",
         },
         {
           selector:
-            "TemplateElement[value.cooked=/(?:slate|amber|red|emerald)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+            "TemplateElement[value.cooked=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
           message:
-            "Use semantic tokens instead of raw slate-*/amber-*/red-*/emerald-* — see docs/design-remediation-plan.md.",
+            "Use semantic tokens instead of raw Tailwind palette colors — see docs/design-system.md §1.2.",
         },
       ],
     },

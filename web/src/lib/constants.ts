@@ -20,6 +20,7 @@ export const SPOTIFY_STATUS_KEY = "spotify-status";
 
 export const MOVIES_IN_THEATERS_KEY = "movies-in-theaters";
 export const LATEST_MOVIES_KEY = "latest-movies";
+export const CONTINUE_WATCHING_KEY = "continue-watching";
 export const MOVIE_DETAILS_KEY = "movie-details";
 export const LIBRARY_MOVIE_DETAILS_KEY = "library-movie-details";
 export const MOVIE_TECHNICAL_DETAILS_KEY = "movie-technical-details";
@@ -160,6 +161,7 @@ export const MOVIE_SEEK_STEP_SEC = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+export const MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 180;
 export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
@@ -205,8 +207,11 @@ export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
  * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.
  * The light-theme shades are darkened so the green stays readable on light surfaces.
  */
+// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
 export const SPOTIFY_BRAND_TEXT_CLASS = "text-green-600 dark:text-green-400";
+// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
 export const SPOTIFY_BRAND_ICON_CLASS = "text-green-600 dark:text-green-500";
+// eslint-disable-next-line no-restricted-syntax -- deliberate Spotify brand green (see docstring above)
 export const SPOTIFY_BRAND_FILL_CLASS = "bg-green-500";
 
 // Subtitle and language constants used to choose supported subtitle behavior
@@ -358,12 +363,13 @@ export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
 
 /**
- * The one focus ring, per design-system §1.7. Use on inline (non-shadcn)
- * controls so keyboard focus is a single consistent glacier ring and only
- * shows for keyboard users (`focus-visible`, not `focus`).
+ * The one focus ring, per design-system §1.7 — the shadcn
+ * `ring-[3px] ring-ring/50` recipe, so inline (non-shadcn) controls match the
+ * primitives exactly. Only shows for keyboard users (`focus-visible`, not
+ * `focus`). Pinned by src/test/constants-contracts.test.ts.
  */
 export const FOCUS_VISIBLE_RING_CLASS =
-  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none";
+  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
 
 /**
  * Layout-only shell for the full-width library/settings tab bars (movies /

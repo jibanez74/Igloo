@@ -95,9 +95,11 @@ export default function DevicesCard() {
   return (
     <Card className="border-border/50 bg-muted/30">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-foreground">
-          <Smartphone className="size-5 text-primary" aria-hidden="true" />
-          Devices
+        <CardTitle asChild className="flex items-center gap-2 text-foreground">
+          <h2>
+            <Smartphone className="size-5 text-primary" aria-hidden="true" />
+            Devices
+          </h2>
         </CardTitle>
         <CardDescription className="text-muted-foreground">
           TV and mobile apps signed in to your account

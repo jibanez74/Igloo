@@ -700,6 +700,7 @@ func (app *Application) registerSearchRoutes(r chi.Router) {
 func (app *Application) registerMovieRoutes(r chi.Router) {
 	r.Route("/movies", func(r chi.Router) {
 		r.Get("/latest", app.GetLatestMovies)
+		r.Get("/continue-watching", app.GetContinueWatchingMovies)
 		r.Get("/library", app.GetMoviesLibrary)
 		r.Get("/stats", app.GetMoviesStats)
 		r.Get("/liked", app.GetLikedMovies)

@@ -15,6 +15,7 @@ import type {
   CreateWatchRoomRequestType,
   CreateWatchRoomResponseType,
   JoinWatchRoomResponseType,
+  ContinueWatchingMovieType,
   LatestMovieType,
   LibraryMovieDetailsResponse,
   GeneralSettingsResponseType,
@@ -275,6 +276,11 @@ export const getLatestAlbums = () =>
 
 export const getLatestMovies = () =>
   apiRequest<{ movies: LatestMovieType[] }>("/api/movies/latest");
+
+export const getContinueWatchingMovies = () =>
+  apiRequest<{ movies: ContinueWatchingMovieType[] }>(
+    "/api/movies/continue-watching",
+  );
 
 export const getMoviesInTheaters = () =>
   apiRequest<{ movies: TheaterMovieType[] }>("/api/tmdb/movies/in-theaters");

@@ -194,8 +194,8 @@ function GeneralSettings() {
       <div className="max-w-3xl">
         <Card className="border-destructive/20 bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-destructive">
-              Settings unavailable
+            <CardTitle asChild className="text-destructive">
+              <h2>Settings unavailable</h2>
             </CardTitle>
             <CardDescription className="text-destructive">
               {data.message || "Failed to load general settings."}
@@ -448,9 +448,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Sliders className="size-5 text-primary" aria-hidden="true" />
-            General Settings
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Sliders className="size-5 text-primary" aria-hidden="true" />
+              General Settings
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Configure application behavior, integrations, and local storage.
@@ -465,9 +467,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Gauge className="size-5 text-primary" aria-hidden="true" />
-            Application Behavior
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <Gauge className="size-5 text-primary" aria-hidden="true" />
+              Application Behavior
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Control background services and metadata handling.
@@ -513,9 +517,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <MonitorCog className="size-5 text-primary" aria-hidden="true" />
-            Playback Runtime
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <MonitorCog className="size-5 text-primary" aria-hidden="true" />
+              Playback Runtime
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Choose the hardware acceleration mode used for new transcodes.
@@ -570,9 +576,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <KeyRound className="size-5 text-primary" aria-hidden="true" />
-            External Services
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <KeyRound className="size-5 text-primary" aria-hidden="true" />
+              External Services
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Manage credentials used for metadata and interoperability.
@@ -651,9 +659,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <HardDrive className="size-5 text-primary" aria-hidden="true" />
-            Local Storage
+          <CardTitle asChild className="flex items-center gap-2 text-foreground">
+            <h2>
+              <HardDrive className="size-5 text-primary" aria-hidden="true" />
+              Local Storage
+            </h2>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             Configure application-owned storage outside media libraries.

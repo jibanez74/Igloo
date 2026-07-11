@@ -1,5 +1,11 @@
 import { useRef, useEffect, useMemo, useState } from "react";
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  redirect,
+  useBlocker,
+  useRouter,
+} from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -32,6 +38,11 @@ import {
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
 import {
+  staysOnCurrentMoviePlayback,
+  synchronizeMoviePlaybackExit,
+} from "@/lib/movie-playback-exit";
+import {
+  CONTINUE_WATCHING_KEY,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
@@ -132,6 +143,7 @@ function PlayMoviePage() {
   const movieId = parseInt(id, 10);
   const navigate = Route.useNavigate();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { pause, suspendKeyboard, resumeKeyboard } = useAudioPlayerActions();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -416,11 +428,36 @@ function PlayMoviePage() {
     durationRef.current = duration;
   }, [currentTime, duration]);
 
-  const { handlePauseSave, handleEndedSave } = useMovieWatchProgressSaver({
-    movieId,
-    playing,
-    currentTimeRef,
-    durationRef,
+  const { handlePauseSave, handleEndedSave, flushProgress } =
+    useMovieWatchProgressSaver({
+      movieId,
+      playing,
+      currentTimeRef,
+      durationRef,
+    });
+
+  useBlocker({
+    enableBeforeUnload: false,
+    shouldBlockFn: async ({ current, next }) => {
+      if (staysOnCurrentMoviePlayback(current, next)) return false;
+
+      await synchronizeMoviePlaybackExit({
+        pausePlayback: () => videoRef.current?.pause(),
+        flushProgress,
+        refreshContinueWatching: () =>
+          queryClient.invalidateQueries({
+            queryKey: [CONTINUE_WATCHING_KEY],
+            refetchType: "all",
+          }),
+        onSaveError: () =>
+          showActionFailed(
+            "save watch progress",
+            "Unable to save your latest playback position.",
+          ),
+      });
+
+      return false;
+    },
   });
 
   useEffect(() => {
@@ -505,6 +542,7 @@ function PlayMoviePage() {
       return;
     }
 
+    queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
     setResumeDismissed(true);
   };
 

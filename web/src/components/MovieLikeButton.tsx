@@ -110,7 +110,7 @@ export default function MovieLikeButton({
         disabled={mutation.isPending || isLoading}
         className={cn(
           buttonVariants({ variant: "outline", size: "lg" }),
-          "min-h-11 touch-manipulation px-6 font-semibold",
+          "min-h-11 touch-manipulation px-3 font-semibold sm:px-6",
           className,
         )}
         aria-label={label}

@@ -8,10 +8,10 @@
   <meta name="description"
     data-igloo-bootstrap-description
     content="Igloo is your personal media center for movies, TV Shows, music, personal videos, photos and so much more. Stream and organize your entire media library." />
+  <!-- BEGIN GENERATED: theme boot — edit src/lib/theme-tokens.ts and run `bun run generate:theme` -->
   <meta name="theme-color" content="#0A1322" />
-  <!-- Anti-flash: apply the stored theme before any CSS paints. Mirrors
-       src/lib/theme.ts (THEME_STORAGE_KEY "igloo-theme", theme-color hexes);
-       keep the two in sync. Defaults to dark. -->
+  <!-- Anti-flash: apply the stored theme before any CSS paints. Defaults
+       to dark, including on storage errors. -->
   <script>
     (function () {
       try {
@@ -24,7 +24,9 @@
       }
     })();
   </script>
+  <!-- END GENERATED: theme boot -->
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/src/assets/boot.css" />
 </head>
 

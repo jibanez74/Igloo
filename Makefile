@@ -15,6 +15,7 @@ LOG_FILE := $(DIST_DIR)/$(BINARY_NAME).log
 
 GO_TAGS := sqlite_fts5
 DEV_TAGS := externalbin sqlite_fts5
+TEST_TAGS := externalbin sqlite_fts5
 LDFLAGS := -s -w
 
 GOOS_CURRENT := $(shell go env GOOS 2>/dev/null)
@@ -24,10 +25,12 @@ PAYLOAD_SUFFIX := $(GOOS_CURRENT)_$(GOARCH_CURRENT)
 FFMPEG_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffmpeg/ffmpeg_$(PAYLOAD_SUFFIX)
 FFPROBE_PAYLOAD := $(SERVER_DIR)/cmd/internal/ffprobe/ffprobe_$(PAYLOAD_SUFFIX)
 
-.PHONY: dev build start stop clean
-.PHONY: check-dev-tools check-build-tools check-platform check-media-payloads generate prepare-test-webdist prepare-web
+.DEFAULT_GOAL := dev
 
-dev: check-dev-tools generate prepare-test-webdist
+.PHONY: dev build start stop clean help check test test-server test-web lint-web build-web test-openapi
+.PHONY: check-go-tools check-web-tools check-sqlc-tools check-media-tools check-dev-tools check-build-tools check-server-test-tools check-platform check-media-payloads generate prepare-webdist-placeholder prepare-test-webdist prepare-web
+
+dev: check-dev-tools generate prepare-webdist-placeholder
 	@echo "Starting development server..."
 	@echo "Start the web client separately with: cd $(WEB_DIR) && bun run dev"
 	@mkdir -p $(DIST_DIR)
@@ -99,16 +102,59 @@ clean: stop
 	@rm -rf $(DIST_DIR) $(WEB_DIST) $(WEB_EMBED_DIR) $(WEB_DIR)/.tanstack $(WEB_DIR)/src/routeTree.gen.ts
 	@echo "Cleaned."
 
-check-dev-tools:
-	@command -v go >/dev/null || (echo "go is required"; exit 1)
-	@command -v sqlc >/dev/null || (echo "sqlc is required"; exit 1)
-	@command -v ffmpeg >/dev/null || (echo "ffmpeg is required on PATH for make dev"; exit 1)
-	@command -v ffprobe >/dev/null || (echo "ffprobe is required on PATH for make dev"; exit 1)
+help:
+	@echo "Igloo Make targets:"
+	@echo "  make dev           Generate sqlc code and run the API for local development"
+	@echo "  make build         Build the native binary with embedded web assets and media tools"
+	@echo "  make start         Build and run the full application in the background"
+	@echo "  make stop          Stop the background application"
+	@echo "  make clean         Remove ignored build artifacts"
+	@echo "  make check         Run backend tests, web lint, web tests, and web build"
+	@echo "  make test          Run backend and web unit tests"
+	@echo "  make test-server   Run backend tests with required build tags"
+	@echo "  make test-web      Run frontend unit tests"
+	@echo "  make lint-web      Run frontend lint"
+	@echo "  make build-web     Build and type-check the frontend"
+	@echo "  make test-openapi  Run OpenAPI route coverage test"
 
-check-build-tools:
+check: test-server lint-web test-web build-web
+
+test: test-server test-web
+
+test-server: check-server-test-tools prepare-webdist-placeholder
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -count=1 -v -tags "$(TEST_TAGS)" ./...
+
+test-web: check-web-tools
+	@cd $(WEB_DIR) && bun run test
+
+lint-web: check-web-tools
+	@cd $(WEB_DIR) && bun run lint
+
+build-web: check-web-tools
+	@cd $(WEB_DIR) && bun run build
+
+test-openapi: check-server-test-tools prepare-webdist-placeholder
+	@cd $(SERVER_DIR) && env CGO_ENABLED=1 go test -tags "$(TEST_TAGS)" ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes -count=1
+
+check-go-tools:
 	@command -v go >/dev/null || (echo "go is required"; exit 1)
-	@command -v sqlc >/dev/null || (echo "sqlc is required"; exit 1)
+	@command -v cc >/dev/null || command -v clang >/dev/null || command -v gcc >/dev/null || (echo "a C compiler is required for CGO/sqlite builds"; exit 1)
+
+check-web-tools:
 	@command -v bun >/dev/null || (echo "bun is required"; exit 1)
+
+check-sqlc-tools:
+	@command -v sqlc >/dev/null || (echo "sqlc is required"; exit 1)
+
+check-media-tools:
+	@command -v ffmpeg >/dev/null || (echo "ffmpeg is required on PATH"; exit 1)
+	@command -v ffprobe >/dev/null || (echo "ffprobe is required on PATH"; exit 1)
+
+check-dev-tools: check-go-tools check-sqlc-tools check-media-tools
+
+check-build-tools: check-go-tools check-sqlc-tools check-web-tools
+
+check-server-test-tools: check-go-tools check-media-tools
 
 check-platform:
 	@case "$(PLATFORM)" in \
@@ -123,9 +169,11 @@ check-media-payloads: check-platform
 generate:
 	@cd $(SERVER_DIR)/sqlc && sqlc generate
 
-prepare-test-webdist:
+prepare-webdist-placeholder:
 	@mkdir -p $(WEB_EMBED_DIR)
 	@touch $(WEB_EMBED_DIR)/.keep
+
+prepare-test-webdist: prepare-webdist-placeholder
 
 prepare-web:
 	@echo "Building web app..."

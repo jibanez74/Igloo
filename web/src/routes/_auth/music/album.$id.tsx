@@ -96,6 +96,8 @@ function AlbumDetailsPage() {
           data?.message ||
           "Failed to load album details. Please try again later."
         }
+        backTo="/music"
+        backLabel="Back to Music"
       />
     );
   }

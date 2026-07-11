@@ -1318,6 +1318,17 @@ function handleMoviesRoutes(
     return true;
   }
 
+  if (url.pathname === "/api/movies/continue-watching" && method === "GET") {
+    sendSuccess(response, {
+      movies: libraryMovies.slice(0, 2).map((movie, index) => ({
+        ...movie,
+        progress_sec: 900 * (index + 1),
+        duration_sec: 5400,
+      })),
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/movies/stats" && method === "GET") {
     sendSuccess(response, { total_movies: libraryMovies.length });
     return true;

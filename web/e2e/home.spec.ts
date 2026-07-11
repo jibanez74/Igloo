@@ -61,7 +61,32 @@ function placeholderSvg(label: string, background: string, foreground = "#f8fafc
   </svg>`;
 }
 
-async function mockHomeApi(page: Page) {
+type MockHomeApiOptions = {
+  continueWatching?: unknown[];
+};
+
+const defaultContinueWatchingMovies = [
+  {
+    id: 104,
+    title: "Ember Line",
+    poster_path: nullableString("/ember-line.jpg"),
+    year: nullableInt64(2026),
+    progress_sec: 1830,
+    duration_sec: 5400,
+  },
+  {
+    id: 105,
+    title: "Quiet Orbit",
+    poster_path: nullableString(),
+    year: nullableInt64(2023),
+    progress_sec: 300,
+    duration_sec: 6000,
+  },
+];
+
+async function mockHomeApi(page: Page, options: MockHomeApiOptions = {}) {
+  const continueWatching =
+    options.continueWatching ?? defaultContinueWatchingMovies;
   const unexpectedApiRequests: string[] = [];
 
   await page.route("**/api/**", async route => {
@@ -130,6 +155,11 @@ async function mockHomeApi(page: Page) {
           },
         ],
       }));
+      return;
+    }
+
+    if (pathname === "/api/movies/continue-watching") {
+      await fulfillJSON(route, apiResponse({ movies: continueWatching }));
       return;
     }
 
@@ -297,6 +327,7 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
 
   for (const name of [
     "Watch Rooms",
+    "Continue Watching",
     "Recently Added Movies",
     "Recently Added Albums",
     "Now Playing in Theaters",
@@ -357,6 +388,45 @@ test("home page is clean, responsive, and accessible", async ({ page }) => {
   await expect(
     page.getByRole("dialog", { name: "Navigation" }),
   ).toBeHidden();
+
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
+});
+
+test("continue watching section announces progress", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockHomeApi(page);
+
+  await page.goto("/");
+
+  const watchingRegion = page.getByRole("region", {
+    name: "Continue Watching",
+  });
+  await expect(watchingRegion).toBeVisible();
+  await expect(
+    watchingRegion.getByRole("link", { name: "Ember Line 2026, 34% watched" }),
+  ).toBeVisible();
+
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
+});
+
+test("continue watching section is hidden when there are no in-progress movies", async ({
+  page,
+}) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockHomeApi(page, {
+    continueWatching: [],
+  });
+
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("region", { name: "Recently Added Movies" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Continue Watching" }),
+  ).toHaveCount(0);
 
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();

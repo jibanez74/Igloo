@@ -6,10 +6,10 @@ When adding or changing an API route:
 
 1. Update the route or handler in `server/cmd/api`.
 2. Update the matching path, parameters, request body, responses, and reusable schemas in `docs/openapi.json`.
-3. Run the OpenAPI route coverage test from `server/`:
+3. Run the OpenAPI route coverage test from the repository root:
 
 ```sh
-go test ./cmd/api -run TestOpenAPIDocumentsRegisteredAPIRoutes
+make test-openapi
 ```
 
 Conventions:
