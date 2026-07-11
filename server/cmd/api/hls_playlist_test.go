@@ -239,7 +239,7 @@ func TestGenerateVODPlaylist_TranscodeTargetDurationIsDoubleSegmentTime(t *testi
 func TestGenerateVODPlaylist_CopyVideoUsesLargerTargetDuration(t *testing.T) {
 	got := generateVODPlaylist(100, "/base/", buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: testIntPtr(0)}), true)
 
-	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", helpers.HLS_COPY_VIDEO_TARGET_DURATION)
+	want := fmt.Sprintf("#EXT-X-TARGETDURATION:%d", hlsCopyVideoTargetDuration)
 	if !strings.Contains(got, want) {
 		t.Errorf("expected target duration %q for copy-video mode, got:\n%s", want, got)
 	}

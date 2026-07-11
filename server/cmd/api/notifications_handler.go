@@ -14,7 +14,13 @@ import (
 
 // notificationListLimit caps how many notifications a single list request
 // returns. The bell panel only shows the most recent ones.
-const notificationListLimit = 50
+const (
+	notificationListLimit         = 50
+	notificationTitleMovieRequest = "movie_request"
+	notificationTitleAlbumRequest = "album_request"
+	notificationTitleTrackRequest = "track_request"
+	notificationTitleOther        = "other"
+)
 
 type CreateNotificationReq struct {
 	Title   string `json:"title"`
@@ -66,12 +72,12 @@ func (app *Application) notificationViewerIsAdmin(w http.ResponseWriter, r *http
 			if destroyErr != nil {
 				app.Logger.Error("failed to destroy stale notification session", "error", destroyErr, "user_id", userID)
 			}
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return false, false
 		}
 
 		app.Logger.Error("failed to load user for notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return false, false
 	}
 
@@ -130,7 +136,7 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		app.Logger.Error("failed to create notification", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -144,10 +150,10 @@ func (app *Application) CreateNotification(w http.ResponseWriter, r *http.Reques
 
 func isValidNotificationTitle(title string) bool {
 	switch title {
-	case helpers.NOTIFICATION_TITLE_MOVIE_REQUEST,
-		helpers.NOTIFICATION_TITLE_ALBUM_REQUEST,
-		helpers.NOTIFICATION_TITLE_TRACK_REQUEST,
-		helpers.NOTIFICATION_TITLE_OTHER:
+	case notificationTitleMovieRequest,
+		notificationTitleAlbumRequest,
+		notificationTitleTrackRequest,
+		notificationTitleOther:
 		return true
 	default:
 		return false
@@ -177,7 +183,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		app.Logger.Error("failed to list notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -187,7 +193,7 @@ func (app *Application) ListNotifications(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -224,7 +230,7 @@ func (app *Application) GetUnreadNotificationCount(w http.ResponseWriter, r *htt
 	})
 	if err != nil {
 		app.Logger.Error("failed to count unread notifications", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -262,7 +268,7 @@ func (app *Application) MarkNotificationRead(w http.ResponseWriter, r *http.Requ
 	})
 	if err != nil {
 		app.Logger.Error("failed to mark notification read", "error", err, "user_id", userID, "notification_id", notificationID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -291,7 +297,7 @@ func (app *Application) MarkAllNotificationsRead(w http.ResponseWriter, r *http.
 	})
 	if err != nil {
 		app.Logger.Error("failed to mark all notifications read", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -327,7 +333,7 @@ func (app *Application) DeleteNotification(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		app.Logger.Error("failed to delete notification", "error", err, "user_id", userID, "notification_id", notificationID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

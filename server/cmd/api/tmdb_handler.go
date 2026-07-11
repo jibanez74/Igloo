@@ -15,6 +15,16 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const (
+	tmdbImageBaseURL = "https://image.tmdb.org/t/p"
+	tmdbImageSize    = "original"
+	tmdbBackdropSize = "w1280"
+	tmdbPosterSize   = "w500"
+	tmdbProfileSize  = "w185"
+	tmdbLogoSize     = "w92"
+	tmdbMaxItems     = 12
+)
+
 type tmdbSearchPayload struct {
 	Title  string `json:"title"`
 	Year   int    `json:"year"`
@@ -32,11 +42,11 @@ type tmdbSearchResult struct {
 }
 
 var supportedTmdbImageSizes = map[string]bool{
-	helpers.TMDB_IMAGE_SIZE:    true,
-	helpers.TMDB_BACKDROP_SIZE: true,
-	helpers.TMDB_POSTER_SIZE:   true,
-	helpers.TMDB_PROFILE_SIZE:  true,
-	helpers.TMDB_LOGO_SIZE:     true,
+	tmdbImageSize:    true,
+	tmdbBackdropSize: true,
+	tmdbPosterSize:   true,
+	tmdbProfileSize:  true,
+	tmdbLogoSize:     true,
 }
 
 func (app *Application) SearchTmdbMovies(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +110,7 @@ func (app *Application) ProxyTmdbImage(w http.ResponseWriter, r *http.Request) {
 
 	baseURL := strings.TrimRight(app.TmdbImageBaseURL, "/")
 	if baseURL == "" {
-		baseURL = helpers.TMDB_IMAGE_BASE_URL
+		baseURL = tmdbImageBaseURL
 	}
 
 	imageURL, err := url.JoinPath(baseURL, size, file)
@@ -234,8 +244,8 @@ func (app *Application) GetMoviesInTheaters(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if len(movies) > helpers.TMDB_MAX_ITEMS {
-		movies = movies[:helpers.TMDB_MAX_ITEMS]
+	if len(movies) > tmdbMaxItems {
+		movies = movies[:tmdbMaxItems]
 	}
 
 	res := helpers.JSONResponse{

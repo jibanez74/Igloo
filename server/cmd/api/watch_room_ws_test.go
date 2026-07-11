@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 
 	"github.com/gorilla/websocket"
 )
@@ -125,7 +124,7 @@ func newWatchRoomSessionCookie(t *testing.T, app *Application, userID int64) *ht
 		t.Fatalf("load test session: %v", err)
 	}
 
-	app.SessionManager.Put(ctx, helpers.COOKIE_USER_ID, userID)
+	app.SessionManager.Put(ctx, cookieUserID, userID)
 	token, _, err := app.SessionManager.Commit(ctx)
 	if err != nil {
 		t.Fatalf("commit test session: %v", err)

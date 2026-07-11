@@ -16,7 +16,7 @@ import (
 func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (app *Application) ToggleLikeTrack(w http.ResponseWriter, r *http.Request) 
 func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -115,7 +115,7 @@ func (app *Application) GetLikedTrackIDsForUser(w http.ResponseWriter, r *http.R
 func (app *Application) GetLikedTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 

@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-
-	"igloo/cmd/internal/helpers"
 )
 
 func newAuthSessionCookie(t *testing.T, app *Application, userID int64) *http.Cookie {
@@ -19,7 +17,7 @@ func newAuthSessionCookie(t *testing.T, app *Application, userID int64) *http.Co
 		t.Fatalf("load test session: %v", err)
 	}
 
-	app.SessionManager.Put(ctx, helpers.COOKIE_USER_ID, userID)
+	app.SessionManager.Put(ctx, cookieUserID, userID)
 	token, _, err := app.SessionManager.Commit(ctx)
 	if err != nil {
 		t.Fatalf("commit test session: %v", err)
@@ -69,7 +67,7 @@ func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedWhenUnauthenticated(t *testin
 	}
 
 	resp := decodeAuthUserResponse(t, w)
-	if !resp.Error || resp.Message != helpers.NOT_AUTHORIZED_MESSAGE {
+	if !resp.Error || resp.Message != notAuthorizedMessage {
 		t.Fatalf("response = %+v, want not authorized error", resp)
 	}
 }
@@ -115,7 +113,7 @@ func TestGetCurrentAuthUser_HTTPReturnsUnauthorizedForStaleSession(t *testing.T)
 	}
 
 	resp := decodeAuthUserResponse(t, w)
-	if !resp.Error || resp.Message != helpers.NOT_AUTHORIZED_MESSAGE {
+	if !resp.Error || resp.Message != notAuthorizedMessage {
 		t.Fatalf("response = %+v, want not authorized error", resp)
 	}
 }

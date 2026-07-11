@@ -657,7 +657,7 @@ func TestWatchProgress_CompletionThreshold(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clamped := helpers.ClampFloat64(tt.progressSec, 0, tt.durationSec)
 			ratio := clamped / tt.durationSec
-			isWatched := ratio >= helpers.WATCH_COMPLETION_THRESHOLD
+			isWatched := ratio >= watchCompletionThreshold
 			if isWatched != tt.wantWatched {
 				t.Errorf("progress=%.0f duration=%.0f ratio=%.4f: got watched=%v, want %v",
 					tt.progressSec, tt.durationSec, ratio, isWatched, tt.wantWatched)
@@ -739,7 +739,7 @@ func TestUpdateMovieWatchProgress_HTTPMissingFields(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Put("/api/movies/{id}/watch-progress", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.UpdateMovieWatchProgress(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)
@@ -777,7 +777,7 @@ func TestSetMovieWatched_HTTPMissingWatched(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Put("/api/movies/{id}/watch-progress/watched", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.SetMovieWatched(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)

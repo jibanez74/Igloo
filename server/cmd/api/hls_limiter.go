@@ -7,8 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+)
 
-	"igloo/cmd/internal/helpers"
+const (
+	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	hlsCPUTranscodeDefaultDivisor = 4
 )
 
 type hlsTranscodeCapacityError struct {
@@ -31,11 +34,11 @@ func newHLSTranscodeLimiter(maxActive int) *hlsTranscodeLimiter {
 }
 
 func defaultHLSMaxCPUTranscodes() int {
-	return max(1, runtime.NumCPU()/helpers.HLS_CPU_TRANSCODE_DEFAULT_DIVISOR)
+	return max(1, runtime.NumCPU()/hlsCPUTranscodeDefaultDivisor)
 }
 
 func configuredHLSMaxCPUTranscodes() int {
-	raw := strings.TrimSpace(os.Getenv(helpers.ENV_HLS_MAX_CPU_TRANSCODES))
+	raw := strings.TrimSpace(os.Getenv(envHLSMaxCPUTranscodes))
 	if raw == "" {
 		return defaultHLSMaxCPUTranscodes()
 	}

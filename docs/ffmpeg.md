@@ -327,7 +327,7 @@ A segment is treated as complete when:
 
 `init.mp4` is treated as ready only after the first media segment exists. This avoids giving hls.js an init segment before any media is available.
 
-This design prevents browsers from reading partially written `.m4s` files, which can cause decode errors, retry loops, or broken playback state. Segment requests wait up to `HLS_SEGMENT_WAIT` and poll every `HLS_SEGMENT_POLL`. If FFmpeg exits with an error before a requested segment exists, Igloo returns a transcode failure instead of hanging.
+This design prevents browsers from reading partially written `.m4s` files, which can cause decode errors, retry loops, or broken playback state. Segment requests wait up to `hlsSegmentWait` and poll every `hlsSegmentPoll`. If FFmpeg exits with an error before a requested segment exists, Igloo returns a transcode failure instead of hanging.
 
 FFmpeg stderr is not streamed to clients. The HLS runner keeps the last 20 stderr lines and passes them to the session exit handler for logging. That gives enough context for server-side troubleshooting without storing unbounded FFmpeg output.
 

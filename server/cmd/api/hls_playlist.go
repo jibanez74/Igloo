@@ -10,6 +10,10 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+// Copy mode splits only at keyframes, so its target-duration ceiling is
+// intentionally larger than the regular HLS segment duration.
+const hlsCopyVideoTargetDuration = 30
+
 type hlsAssetQueryParams struct {
 	AudioTrack      *int
 	StartSec        *int
@@ -90,7 +94,7 @@ func generateVODPlaylist(totalDurationSec float64, baseURL, querySuffix string, 
 	// Copy-video segments follow source keyframes, so they need a larger target duration.
 	targetDuration := helpers.HLS_SEGMENT_TIME_SEC * 2
 	if copyVideo {
-		targetDuration = helpers.HLS_COPY_VIDEO_TARGET_DURATION
+		targetDuration = hlsCopyVideoTargetDuration
 	}
 	b.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", targetDuration))
 	b.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")

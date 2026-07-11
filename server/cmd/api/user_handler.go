@@ -51,7 +51,7 @@ type UpdateUserNameRequest struct {
 func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		app.Logger.Error("failed to update user name", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -98,7 +98,7 @@ type UpdateUserEmailRequest struct {
 func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -130,7 +130,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		app.Logger.Error("failed to update user email", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -152,7 +152,7 @@ type UpdateUserPasswordRequest struct {
 func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -175,10 +175,10 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
 			app.Logger.Error("failed to fetch user for password update", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		}
 		return
 	}
@@ -186,7 +186,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 	match, err := helpers.PasswordMatches(req.CurrentPassword, user.Password)
 	if err != nil {
 		app.Logger.Error("failed to compare password hash", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -198,7 +198,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 	hashedPassword, err := helpers.HashPassword(req.NewPassword)
 	if err != nil {
 		app.Logger.Error("failed to hash new password", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -208,7 +208,7 @@ func (app *Application) UpdateUserPassword(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		app.Logger.Error("failed to update user password", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -229,7 +229,7 @@ type UpdateUserAvatarRequest struct {
 func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	currentUser, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to get user for avatar update", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -261,7 +261,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		app.Logger.Error("failed to update user avatar", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -288,7 +288,7 @@ const maxAvatarSize = 20 << 20
 func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -333,7 +333,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	currentUser, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to get user for avatar upload", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -344,7 +344,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	avatarsDir := filepath.Join(app.Settings.StaticDir, "avatars")
 	if err := os.MkdirAll(avatarsDir, 0755); err != nil {
 		app.Logger.Error("failed to create avatars directory", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -354,14 +354,14 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	dst, err := os.Create(filePath)
 	if err != nil {
 		app.Logger.Error("failed to create avatar file", "error", err, "path", filePath)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
 		app.Logger.Error("failed to write avatar file", "error", err, "path", filePath)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -374,7 +374,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		app.Logger.Error("failed to update user avatar in database", "error", err, "user_id", userID)
 		os.Remove(filePath)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -416,17 +416,17 @@ func (app *Application) deleteAvatarFile(avatarURL string) {
 func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
 	user, err := app.Queries.GetUser(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		} else {
 			app.Logger.Error("failed to fetch user for deletion", "error", err, "user_id", userID)
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		}
 		return
 	}
@@ -439,7 +439,7 @@ func (app *Application) DeleteUserAccount(w http.ResponseWriter, r *http.Request
 	err = app.Queries.DeleteUser(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to delete user", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

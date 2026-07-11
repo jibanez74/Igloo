@@ -43,7 +43,7 @@ func (app *Application) runMusicScan() {
 	tracksScanned := 0
 	tracksSkipped := 0
 	startTime := time.Now()
-	batch := make([]helpers.ScanFile, 0, helpers.SCANNER_BATCH_SIZE)
+	batch := make([]helpers.ScanFile, 0, scannerBatchSize)
 	scanIndex, err := app.loadMusicScanIndex(ctx)
 	if err != nil {
 		app.Logger.Error(fmt.Sprintf("failed to load music scan index: %s", err.Error()))
@@ -77,7 +77,7 @@ func (app *Application) runMusicScan() {
 
 			batch = append(batch, file)
 
-			if len(batch) >= helpers.SCANNER_BATCH_SIZE {
+			if len(batch) >= scannerBatchSize {
 				flushBatch()
 			}
 

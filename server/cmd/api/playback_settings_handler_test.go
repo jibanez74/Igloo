@@ -36,7 +36,7 @@ func mountPlaybackRouter(app *Application, userID int64) http.Handler {
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if userID != 0 {
-				app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+				app.SessionManager.Put(r.Context(), cookieUserID, userID)
 			}
 			next.ServeHTTP(w, r)
 		})
@@ -448,7 +448,7 @@ func TestGetPlaybackSettings_ReflectsAdminSetServerUploadCap(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			app.SessionManager.Put(req.Context(), helpers.COOKIE_USER_ID, admin.ID)
+			app.SessionManager.Put(req.Context(), cookieUserID, admin.ID)
 			next.ServeHTTP(w, req)
 		})
 	})

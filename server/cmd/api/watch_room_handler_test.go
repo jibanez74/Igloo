@@ -1261,7 +1261,7 @@ func TestGetUsers_HTTP_ExcludesCurrentUser(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user1.ID)
+		app.SessionManager.Put(r.Context(), cookieUserID, user1.ID)
 		app.GetUsers(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)
@@ -1318,7 +1318,7 @@ func TestGetUsers_HTTP_SearchFilter(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user1.ID)
+		app.SessionManager.Put(r.Context(), cookieUserID, user1.ID)
 		app.GetUsers(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)
@@ -1392,7 +1392,7 @@ func TestGetUsers_HTTP_SearchTreatsLikeMetacharactersLiterally(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Get("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, user1.ID)
+		app.SessionManager.Put(r.Context(), cookieUserID, user1.ID)
 		app.GetUsers(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)

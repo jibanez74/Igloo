@@ -16,6 +16,9 @@ import (
 	"unicode"
 )
 
+// Exact year matches must outrank TMDB popularity and vote averages.
+const tmdbYearMatchScore = 10000.0
+
 type tmdbMatchCandidate struct {
 	Movie      *tmdb.TmdbMovie
 	Score      float64
@@ -308,7 +311,7 @@ func scoreTmdbCandidate(targetTitle string, targetYear int, movie *tmdb.TmdbMovi
 	if targetYear > 0 {
 		switch {
 		case movieYear == targetYear:
-			score += helpers.TMDB_YEAR_MATCH_SCORE
+			score += tmdbYearMatchScore
 		case movieYear > 0 && absInt(movieYear-targetYear) == 1:
 			score += 12
 		case movieYear > 0:

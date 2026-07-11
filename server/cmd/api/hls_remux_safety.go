@@ -9,6 +9,11 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+const (
+	hlsRemuxSafetyCacheTTL   = 24 * time.Hour
+	hlsRemuxSafetyCacheSweep = time.Hour
+)
+
 type remuxSafetyVerdict struct {
 	Safe   bool
 	Reason string
@@ -114,7 +119,7 @@ func waitForRemuxPreflight(session *HLSSession, segmentCount int, timeout time.D
 			}
 		}
 
-		time.Sleep(helpers.HLS_SEGMENT_POLL)
+		time.Sleep(hlsSegmentPoll)
 	}
 
 	return fmt.Errorf(

@@ -219,7 +219,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,
 		"-hls_fmp4_init_filename", helpers.HLS_INIT_FILENAME,
-		filepath.Join(p.OutDir, "playlist.m3u8"),
+		filepath.Join(p.OutDir, helpers.HLS_PLAYLIST_FILENAME),
 	)
 
 	return args, nil

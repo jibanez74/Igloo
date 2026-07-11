@@ -35,6 +35,16 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+const (
+	defaultAdminName     = "Admin"
+	defaultAdminEmail    = "admin@sample.com"
+	defaultAdminPassword = "AdminPassword"
+
+	envDefaultAdminName     = "DEFAULT_ADMIN_NAME"
+	envDefaultAdminEmail    = "DEFAULT_ADMIN_EMAIL"
+	envDefaultAdminPassword = "DEFAULT_ADMIN_PASSWORD"
+)
+
 type Application struct {
 	DB                   *sql.DB
 	Queries              *database.Queries
@@ -220,7 +230,7 @@ func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
 
 	// Eviction callback removes generated files when an HLS session ages out.
-	hlsCache := cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	hlsCache := cache.New(hlsSessionTTL, hlsSessionCacheSweep)
 	hlsCache.OnEvicted(func(key string, val interface{}) {
 		session, ok := val.(*HLSSession)
 		if ok {
@@ -229,13 +239,13 @@ func (app *Application) initRuntimeCaches() {
 	})
 	app.HLSSessionCache = hlsCache
 	app.RemuxSafetyCache = cache.New(
-		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
-		helpers.HLS_REMUX_SAFETY_CACHE_SWEEP,
+		hlsRemuxSafetyCacheTTL,
+		hlsRemuxSafetyCacheSweep,
 	)
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
-	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
-	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
+	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
 
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()
@@ -470,7 +480,7 @@ func validateExistingDir(path string) error {
 
 func (app *Application) InitLogger() error {
 	debug := envBool("DEBUG", app.Config.Debug)
-	logToStdout := envBool(helpers.ENV_LOG_TO_STDOUT, app.Config.LogToStdout || debug)
+	logToStdout := envBool(envLogToStdout, app.Config.LogToStdout || debug)
 
 	logsDir := app.Config.effectiveLogsDir()
 
@@ -512,19 +522,19 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 
 	app.Logger.Info("no admin user found, creating default admin user...")
 
-	name := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_NAME))
+	name := strings.TrimSpace(os.Getenv(envDefaultAdminName))
 	if name == "" {
-		name = helpers.DEFAULT_ADMIN_NAME
+		name = defaultAdminName
 	}
 
-	email := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_EMAIL))
+	email := strings.TrimSpace(os.Getenv(envDefaultAdminEmail))
 	if email == "" {
-		email = helpers.DEFAULT_ADMIN_EMAIL
+		email = defaultAdminEmail
 	}
 
-	password := strings.TrimSpace(os.Getenv(helpers.ENV_DEFAULT_ADMIN_PASSWORD))
+	password := strings.TrimSpace(os.Getenv(envDefaultAdminPassword))
 	if password == "" {
-		password = helpers.DEFAULT_ADMIN_PASSWORD
+		password = defaultAdminPassword
 	}
 
 	hashedPassword, err := helpers.HashPassword(password)
@@ -556,7 +566,7 @@ func (app *Application) InitSession() {
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = envBool(helpers.ENV_SESSION_COOKIE_SECURE, app.Config.SessionCookieSecure)
+	sessionManager.Cookie.Secure = envBool(envSessionCookieSecure, app.Config.SessionCookieSecure)
 
 	app.SessionManager = sessionManager
 
@@ -716,7 +726,7 @@ func (app *Application) registerMovieRoutes(r chi.Router) {
 		r.Delete("/{id}/watch-progress", app.DeleteMovieWatchProgress)
 		r.Put("/{id}/watch-progress/watched", app.SetMovieWatched)
 		r.Post("/{id}/hls/session/stop", app.StopPersonalHLSSession)
-		r.Get("/{id}/hls/{profile}/playlist.m3u8", app.HLSManifest)
+		r.Get("/{id}/hls/{profile}/"+helpers.HLS_PLAYLIST_FILENAME, app.HLSManifest)
 		r.Get("/{id}/hls/{profile}/{filename}", app.HLSSegment)
 		r.Get("/{id}/stream", app.StreamMovie)
 		r.Get("/{id}/subtitles/{trackIndex}/web.vtt", app.SubtitleWebVTT)
@@ -759,7 +769,7 @@ func (app *Application) registerWatchRoomRoutes(r chi.Router) {
 		r.Get("/{id}", app.GetWatchRoom)
 		r.Post("/{id}/join", app.JoinWatchRoom)
 		r.Get("/{id}/stream", app.StreamWatchRoomMovie)
-		r.Get("/{id}/hls/playlist.m3u8", app.WatchRoomHLSManifest)
+		r.Get("/{id}/hls/"+helpers.HLS_PLAYLIST_FILENAME, app.WatchRoomHLSManifest)
 		r.Get("/{id}/hls/{filename}", app.WatchRoomHLSSegment)
 		r.Delete("/{id}", app.DeleteWatchRoom)
 	})

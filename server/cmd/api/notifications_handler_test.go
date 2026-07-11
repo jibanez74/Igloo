@@ -55,8 +55,8 @@ func TestCreateNotification_HTTPCreatesMovieRequest(t *testing.T) {
 	if resp.Error {
 		t.Fatalf("expected success response, got %s", w.Body.String())
 	}
-	if resp.Data.Notification.Title != helpers.NOTIFICATION_TITLE_MOVIE_REQUEST {
-		t.Fatalf("title = %q, want %q", resp.Data.Notification.Title, helpers.NOTIFICATION_TITLE_MOVIE_REQUEST)
+	if resp.Data.Notification.Title != notificationTitleMovieRequest {
+		t.Fatalf("title = %q, want %q", resp.Data.Notification.Title, notificationTitleMovieRequest)
 	}
 	if !resp.Data.Notification.IsAdmin {
 		t.Fatal("expected notification to target admins")
@@ -147,7 +147,7 @@ func notificationTestServer(app *Application, userID int64) http.Handler {
 
 	withUser := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+			app.SessionManager.Put(r.Context(), cookieUserID, userID)
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -183,7 +183,7 @@ func seedAdminQueueNotification(t *testing.T, app *Application, requesterID int6
 	n, err := app.Queries.CreateNotification(context.Background(), database.CreateNotificationParams{
 		CreatedByUserID: requesterID,
 		UserID:          sql.NullInt64{},
-		Title:           helpers.NOTIFICATION_TITLE_MOVIE_REQUEST,
+		Title:           notificationTitleMovieRequest,
 		Message:         message,
 		IsAdmin:         true,
 	})
@@ -281,7 +281,7 @@ func TestListNotifications_ReturnsUnauthorizedForStaleSession(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if !resp.Error || resp.Message != helpers.NOT_AUTHORIZED_MESSAGE {
+	if !resp.Error || resp.Message != notAuthorizedMessage {
 		t.Fatalf("response = %+v, want not authorized error", resp)
 	}
 
@@ -289,7 +289,7 @@ func TestListNotifications_ReturnsUnauthorizedForStaleSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load session after stale request: %v", err)
 	}
-	if app.SessionManager.Exists(ctx, helpers.COOKIE_USER_ID) {
+	if app.SessionManager.Exists(ctx, cookieUserID) {
 		t.Fatal("stale session still has a user id after notification request")
 	}
 }

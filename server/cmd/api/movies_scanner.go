@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const scannerBatchSize = 54
+
 func (app *Application) ScanMoviesLibrary() {
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
 		app.Logger.Error("movies directory not configured")
@@ -52,7 +54,7 @@ func (app *Application) runMovieScan() {
 	}
 	scan := newMovieScanContext(scanIndex)
 
-	batch := make([]helpers.ScanFile, 0, helpers.SCANNER_BATCH_SIZE)
+	batch := make([]helpers.ScanFile, 0, scannerBatchSize)
 	flushBatch := func() {
 		if len(batch) == 0 {
 			return
@@ -80,7 +82,7 @@ func (app *Application) runMovieScan() {
 
 			batch = append(batch, file)
 
-			if len(batch) >= helpers.SCANNER_BATCH_SIZE {
+			if len(batch) >= scannerBatchSize {
 				flushBatch()
 			}
 

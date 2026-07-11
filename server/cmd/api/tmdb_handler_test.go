@@ -420,7 +420,7 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	movies := make([]*tmdb.TmdbMovie, helpers.TMDB_MAX_ITEMS+5)
+	movies := make([]*tmdb.TmdbMovie, tmdbMaxItems+5)
 	for i := range movies {
 		movies[i] = &tmdb.TmdbMovie{TmdbID: i + 1, Title: "Movie " + strconv.Itoa(i+1)}
 	}
@@ -443,8 +443,8 @@ func TestGetMoviesInTheaters_HTTPLimitsResults(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(resp.Data.Movies) != helpers.TMDB_MAX_ITEMS {
-		t.Fatalf("movie count = %d, want capped count %d", len(resp.Data.Movies), helpers.TMDB_MAX_ITEMS)
+	if len(resp.Data.Movies) != tmdbMaxItems {
+		t.Fatalf("movie count = %d, want capped count %d", len(resp.Data.Movies), tmdbMaxItems)
 	}
 }
 

@@ -20,7 +20,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if room.PlaybackMode == helpers.WATCH_ROOM_PLAYBACK_MODE_DIRECT {
+	if room.PlaybackMode == watchRoomPlaybackModeDirect {
 		helpers.ErrorJSON(w, errors.New("this room uses direct playback"), http.StatusBadRequest)
 		return
 	}
@@ -32,7 +32,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
+	baseURL := strings.TrimSuffix(r.URL.Path, helpers.HLS_PLAYLIST_FILENAME)
 	audioTrack := int(room.AudioTrack)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{AudioTrack: &audioTrack})
 
@@ -47,7 +47,7 @@ func (app *Application) WatchRoomHLSManifest(w http.ResponseWriter, r *http.Requ
 		playlist = generateVODPlaylist(session.DurationSec, baseURL, querySuffix, session.CopyVideo)
 	}
 
-	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
+	w.Header().Set("Content-Type", hlsPlaylistContentType)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
@@ -73,7 +73,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 	session, found, err := app.getActiveRoomHLSSession(room.ID, key)
 	if err != nil {
 		app.Logger.Error("watch room hls session fetch failed", "error", err, "room_id", room.ID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR), http.StatusInternalServerError)
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage), http.StatusInternalServerError)
 		return
 	}
 	if !found {
@@ -83,10 +83,10 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 
 	filePath := filepath.Join(session.TempDir, filename)
 
-	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
+	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
-			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
+			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
 			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
 			return
@@ -106,7 +106,7 @@ func (app *Application) WatchRoomHLSSegment(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		time.Sleep(helpers.HLS_SEGMENT_POLL)
+		time.Sleep(hlsSegmentPoll)
 	}
 
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
@@ -118,7 +118,7 @@ func (app *Application) StreamWatchRoomMovie(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if room.PlaybackMode != helpers.WATCH_ROOM_PLAYBACK_MODE_DIRECT {
+	if room.PlaybackMode != watchRoomPlaybackModeDirect {
 		helpers.ErrorJSON(w, errors.New("this room uses HLS playback"), http.StatusBadRequest)
 		return
 	}
