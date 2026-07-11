@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const subtitleCacheKeyPrefix = "sub:"
+
 // IsBitmapSubtitleCodec returns true for image-based subtitle codecs
 // (PGS, DVD sub) that cannot be converted to WebVTT.
 func IsBitmapSubtitleCodec(codec string) bool {
@@ -12,9 +14,9 @@ func IsBitmapSubtitleCodec(codec string) bool {
 }
 
 func SubtitleCacheKey(movieID int64, streamIndex int64) string {
-	return fmt.Sprintf("%s%d:%d", SUBTITLE_CACHE_KEY_PREFIX, movieID, streamIndex)
+	return fmt.Sprintf("%s%d:%d", subtitleCacheKeyPrefix, movieID, streamIndex)
 }
 
 func SubtitleCachePrefix(movieID int64) string {
-	return fmt.Sprintf("%s%d:", SUBTITLE_CACHE_KEY_PREFIX, movieID)
+	return fmt.Sprintf("%s%d:", subtitleCacheKeyPrefix, movieID)
 }

@@ -111,11 +111,11 @@ func TestBuildHLSArgs_ReadratePacing(t *testing.T) {
 		}
 		args := hlsArgs(t, p)
 		argStr := strings.Join(args, " ")
-		if !strings.Contains(argStr, fmt.Sprintf("-readrate %d", helpers.HLS_READRATE_SPEED)) {
-			t.Fatalf("expected -readrate %d, got: %s", helpers.HLS_READRATE_SPEED, argStr)
+		if !strings.Contains(argStr, fmt.Sprintf("-readrate %d", hlsReadrateSpeed)) {
+			t.Fatalf("expected -readrate %d, got: %s", hlsReadrateSpeed, argStr)
 		}
-		if !strings.Contains(argStr, fmt.Sprintf("-readrate_initial_burst %d", helpers.HLS_READRATE_INITIAL_BURST_SEC)) {
-			t.Fatalf("expected -readrate_initial_burst %d, got: %s", helpers.HLS_READRATE_INITIAL_BURST_SEC, argStr)
+		if !strings.Contains(argStr, fmt.Sprintf("-readrate_initial_burst %d", hlsReadrateInitialBurstSec)) {
+			t.Fatalf("expected -readrate_initial_burst %d, got: %s", hlsReadrateInitialBurstSec, argStr)
 		}
 		readrateIdx := indexOf(args, "-readrate")
 		iIdx := indexOf(args, "-i")

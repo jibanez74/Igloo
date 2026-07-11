@@ -19,6 +19,15 @@ import (
 const (
 	hlsIntelQSVDeviceName   = "igloo_qsv"
 	hlsNvidiaCUDADeviceName = "igloo_cuda"
+
+	// Keep FFmpeg roughly hlsReadrateSpeed times realtime after an initial
+	// burst that fills the player buffer. Applied only when supported.
+	hlsReadrateSpeed           = 4
+	hlsReadrateInitialBurstSec = 60
+	hlsStderrTailLines         = 20
+	hlsStderrScannerBufferSize = 64 * 1024
+	hlsStderrScannerMaxToken   = 1024 * 1024
+	hlsSDRColorParams          = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
 )
 
 func isExpectedHLSStderrClose(err error) bool {
@@ -134,9 +143,9 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 	}
 
 	if p.Capabilities.SupportsCLIOption("readrate") {
-		args = append(args, "-readrate", fmt.Sprintf("%d", helpers.HLS_READRATE_SPEED))
+		args = append(args, "-readrate", fmt.Sprintf("%d", hlsReadrateSpeed))
 		if p.Capabilities.SupportsCLIOption("readrate_initial_burst") {
-			args = append(args, "-readrate_initial_burst", fmt.Sprintf("%d", helpers.HLS_READRATE_INITIAL_BURST_SEC))
+			args = append(args, "-readrate_initial_burst", fmt.Sprintf("%d", hlsReadrateInitialBurstSec))
 		}
 	}
 
@@ -199,7 +208,8 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 
 	args = append(args, "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "1024")
 
-	segmentPattern := filepath.Join(p.OutDir, "segment_%d.m4s")
+	segmentFilenamePattern := helpers.HLS_SEGMENT_FILENAME_PREFIX + "%d" + helpers.HLS_SEGMENT_FILENAME_SUFFIX
+	segmentPattern := filepath.Join(p.OutDir, segmentFilenamePattern)
 	args = append(args,
 		"-f", "hls",
 		"-hls_segment_type", "fmp4",
@@ -208,7 +218,7 @@ func buildHLSArgs(p HLSParams) ([]string, error) {
 		"-hls_list_size", "0",
 		"-hls_time", fmt.Sprintf("%d", helpers.HLS_SEGMENT_TIME_SEC),
 		"-hls_segment_filename", segmentPattern,
-		"-hls_fmp4_init_filename", "init.mp4",
+		"-hls_fmp4_init_filename", helpers.HLS_INIT_FILENAME,
 		filepath.Join(p.OutDir, "playlist.m3u8"),
 	)
 
@@ -276,11 +286,11 @@ func hlsVideoFilter(
 				"zscale=t=bt709:m=bt709:r=tv,format=%s,%s",
 			cfg.Height,
 			outputFormat,
-			helpers.HLS_SDR_COLOR_PARAMS,
+			hlsSDRColorParams,
 		)
 	default:
 		outputFormat := hlsSoftwareOutputPixelFormat(hwDevice)
-		return fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, helpers.HLS_SDR_COLOR_PARAMS)
+		return fmt.Sprintf("scale=-2:%d,format=%s,%s", cfg.Height, outputFormat, hlsSDRColorParams)
 	}
 }
 
@@ -317,7 +327,7 @@ func appendHLSKeyframeArgs(args []string, encoder string, frameRate float64) []s
 
 // RunHLS starts FFmpeg in the background for HLS transcoding.
 // It does not block on process exit. onExit is called asynchronously when
-// the process finishes; stderrTail contains the last HLS_STDERR_TAIL_LINES
+// the process finishes; stderrTail contains the last hlsStderrTailLines
 // of FFmpeg's stderr output for error diagnostics. The returned command is
 // for process lifecycle control only; RunHLS owns cmd.Wait and exit delivery.
 func (f *ffmpeg) RunHLS(
@@ -362,10 +372,10 @@ func (f *ffmpeg) RunHLS(
 		return nil, err
 	}
 
-	ring := make([]string, helpers.HLS_STDERR_TAIL_LINES)
+	ring := make([]string, hlsStderrTailLines)
 	var ringIdx int
 	appendTail := func(line string) {
-		ring[ringIdx%helpers.HLS_STDERR_TAIL_LINES] = line
+		ring[ringIdx%hlsStderrTailLines] = line
 		ringIdx++
 	}
 
@@ -374,7 +384,7 @@ func (f *ffmpeg) RunHLS(
 	go func() {
 		defer stderrWg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
-		scanner.Buffer(make([]byte, helpers.HLS_STDERR_SCANNER_BUFFER_SIZE), helpers.HLS_STDERR_SCANNER_MAX_TOKEN)
+		scanner.Buffer(make([]byte, hlsStderrScannerBufferSize), hlsStderrScannerMaxToken)
 		for scanner.Scan() {
 			appendTail(scanner.Text())
 		}
@@ -397,7 +407,7 @@ func (f *ffmpeg) RunHLS(
 		exitErr := cmd.Wait()
 		stderrWg.Wait()
 		if onExit != nil {
-			n := helpers.HLS_STDERR_TAIL_LINES
+			n := hlsStderrTailLines
 			if ringIdx < n {
 				n = ringIdx
 			}
@@ -407,7 +417,7 @@ func (f *ffmpeg) RunHLS(
 				start = 0
 			}
 			for i := start; i < ringIdx; i++ {
-				tail = append(tail, ring[i%helpers.HLS_STDERR_TAIL_LINES])
+				tail = append(tail, ring[i%hlsStderrTailLines])
 			}
 			onExit(exitErr, tail)
 		}

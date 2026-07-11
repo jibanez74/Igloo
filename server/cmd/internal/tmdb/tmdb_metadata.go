@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"igloo/cmd/internal/helpers"
 	"io"
 	"net/http"
 	"net/url"
@@ -345,8 +344,8 @@ func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration 
 		if retryAfter != "" {
 			if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
 				delay := time.Duration(seconds) * time.Second
-				if delay > helpers.TMDB_HTTP_RETRY_MAX_DELAY {
-					return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+				if delay > tmdbHTTPRetryMaxDelay {
+					return tmdbHTTPRetryMaxDelay
 				}
 				return delay
 			}
@@ -356,8 +355,8 @@ func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration 
 				if delay < 0 {
 					delay = 0
 				}
-				if delay > helpers.TMDB_HTTP_RETRY_MAX_DELAY {
-					return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+				if delay > tmdbHTTPRetryMaxDelay {
+					return tmdbHTTPRetryMaxDelay
 				}
 				return delay
 			}
@@ -366,13 +365,13 @@ func (t *tmdbClient) retryDelay(headers http.Header, attempt int) time.Duration 
 
 	delay := t.retryBaseDelay
 	if delay <= 0 {
-		delay = helpers.TMDB_HTTP_RETRY_BASE_DELAY
+		delay = tmdbHTTPRetryBaseDelay
 	}
 
 	for i := 0; i < attempt; i++ {
 		delay *= 2
-		if delay >= helpers.TMDB_HTTP_RETRY_MAX_DELAY {
-			return helpers.TMDB_HTTP_RETRY_MAX_DELAY
+		if delay >= tmdbHTTPRetryMaxDelay {
+			return tmdbHTTPRetryMaxDelay
 		}
 	}
 

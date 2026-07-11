@@ -2,11 +2,12 @@ package logger
 
 import (
 	"fmt"
-	"igloo/cmd/internal/helpers"
 	"log/slog"
 	"os"
 	"path/filepath"
 )
+
+const loggerMaxLines = 500
 
 type LoggerInterface interface {
 	Debug(msg string, args ...any)
@@ -73,7 +74,7 @@ func New(cfg *LoggerConfig) (LoggerInterface, func() error, error) {
 
 	path := filepath.Join(cfg.LogDir, logFile)
 
-	rw, err := newRotatingWriter(path, helpers.LOGGER_MAX_LINES)
+	rw, err := newRotatingWriter(path, loggerMaxLines)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 	}

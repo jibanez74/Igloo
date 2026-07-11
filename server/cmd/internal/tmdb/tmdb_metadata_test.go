@@ -144,8 +144,8 @@ func TestNew_ConfiguresSharedHTTPClient(t *testing.T) {
 	if concrete.httpClient.Timeout != helpers.TMDB_HTTP_TIMEOUT {
 		t.Fatalf("expected timeout %s, got %s", helpers.TMDB_HTTP_TIMEOUT, concrete.httpClient.Timeout)
 	}
-	if concrete.maxRetries != helpers.TMDB_HTTP_MAX_RETRIES {
-		t.Fatalf("expected max retries %d, got %d", helpers.TMDB_HTTP_MAX_RETRIES, concrete.maxRetries)
+	if concrete.maxRetries != tmdbHTTPMaxRetries {
+		t.Fatalf("expected max retries %d, got %d", tmdbHTTPMaxRetries, concrete.maxRetries)
 	}
 }
 
@@ -394,8 +394,8 @@ func TestRetryDelayHonorsRetryAfterAndCaps(t *testing.T) {
 	}
 
 	headers.Set("Retry-After", "60")
-	if got := client.retryDelay(headers, 0); got != helpers.TMDB_HTTP_RETRY_MAX_DELAY {
-		t.Fatalf("capped Retry-After delay = %s, want %s", got, helpers.TMDB_HTTP_RETRY_MAX_DELAY)
+	if got := client.retryDelay(headers, 0); got != tmdbHTTPRetryMaxDelay {
+		t.Fatalf("capped Retry-After delay = %s, want %s", got, tmdbHTTPRetryMaxDelay)
 	}
 
 	headers.Set("Retry-After", "not-a-date")

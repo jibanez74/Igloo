@@ -21,11 +21,6 @@ const (
 	ENV_PORT                  = "PORT"
 )
 
-// Logging controls shared by the API logger and log file helpers.
-const (
-	LOGGER_MAX_LINES = 500
-)
-
 // Auth cookie names and the bootstrap admin used when no admin exists yet.
 const (
 	COOKIE_USER_ID = "user_id"
@@ -85,20 +80,16 @@ const (
 	NOTIFICATION_TITLE_OTHER         = "other"
 )
 
-// TMDB API, image sizing, and retry policy used by metadata enrichment.
+// TMDB image sizing and shared HTTP settings used by metadata enrichment.
 const (
-	TMDB_BASE_API_URL          = "https://api.themoviedb.org/3"
-	TMDB_IMAGE_BASE_URL        = "https://image.tmdb.org/t/p"
-	TMDB_IMAGE_SIZE            = "original"
-	TMDB_BACKDROP_SIZE         = "w1280"
-	TMDB_POSTER_SIZE           = "w500"
-	TMDB_PROFILE_SIZE          = "w185"
-	TMDB_LOGO_SIZE             = "w92"
-	TMDB_MAX_ITEMS             = 12
-	TMDB_HTTP_TIMEOUT          = 10 * time.Second
-	TMDB_HTTP_MAX_RETRIES      = 3
-	TMDB_HTTP_RETRY_BASE_DELAY = 250 * time.Millisecond
-	TMDB_HTTP_RETRY_MAX_DELAY  = 2 * time.Second
+	TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+	TMDB_IMAGE_SIZE     = "original"
+	TMDB_BACKDROP_SIZE  = "w1280"
+	TMDB_POSTER_SIZE    = "w500"
+	TMDB_PROFILE_SIZE   = "w185"
+	TMDB_LOGO_SIZE      = "w92"
+	TMDB_MAX_ITEMS      = 12
+	TMDB_HTTP_TIMEOUT   = 10 * time.Second
 	// TMDB_YEAR_MATCH_SCORE is the score bonus for exact year matches in TMDB search results.
 	// This ensures exact year matches are prioritized over popularity/vote average.
 	TMDB_YEAR_MATCH_SCORE = 10000.0
@@ -132,28 +123,17 @@ const (
 	HLS_REMUX_SAFETY_CACHE_SWEEP   = 1 * time.Hour
 )
 
-// HLS process pacing, concurrency, and diagnostics keep local transcodes predictable.
+// HLS concurrency settings keep local transcodes predictable.
 const (
-	// Transcode pacing: keep FFmpeg roughly HLS_READRATE_SPEED times realtime instead
-	// of racing to end of file, after an initial burst that fills the player
-	// buffer quickly. Applied only when the ffmpeg build supports -readrate.
-	HLS_READRATE_SPEED             = 4
-	HLS_READRATE_INITIAL_BURST_SEC = 60
-
 	ENV_HLS_MAX_CPU_TRANSCODES         = "HLS_MAX_CPU_TRANSCODES"
 	HLS_CPU_TRANSCODE_DEFAULT_DIVISOR  = 4
 	HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC = 5
-
-	HLS_STDERR_TAIL_LINES          = 20 // lines of FFmpeg stderr kept for error reporting
-	HLS_STDERR_SCANNER_BUFFER_SIZE = 64 * 1024
-	HLS_STDERR_SCANNER_MAX_TOKEN   = 1024 * 1024
 )
 
-// HDR transfer characteristics reported by ffprobe and SDR color output parameters.
+// HDR transfer characteristics reported by ffprobe.
 const (
-	HDR_TRANSFER_PQ      = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
-	HDR_TRANSFER_HLG     = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
-	HLS_SDR_COLOR_PARAMS = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709"
+	HDR_TRANSFER_PQ  = "smpte2084"    // HDR10 (Perceptual Quantizer / SMPTE ST 2084)
+	HDR_TRANSFER_HLG = "arib-std-b67" // HLG  (Hybrid Log-Gamma / ARIB STD-B67)
 )
 
 // HLS session cache and playback-session request validation.
@@ -191,7 +171,6 @@ const (
 	SUBTITLE_EXTRACT_TIMEOUT     = 60 * time.Second
 	SUBTITLE_CACHE_TTL           = 1 * time.Hour
 	SUBTITLE_CACHE_CLEANUP       = 10 * time.Minute
-	SUBTITLE_CACHE_KEY_PREFIX    = "sub:"
 )
 
 // Bitmap subtitle codecs cannot be converted to WebVTT.

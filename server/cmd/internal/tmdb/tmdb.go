@@ -10,6 +10,13 @@ import (
 	cache "github.com/patrickmn/go-cache"
 )
 
+const (
+	tmdbBaseAPIURL         = "https://api.themoviedb.org/3"
+	tmdbHTTPMaxRetries     = 3
+	tmdbHTTPRetryBaseDelay = 250 * time.Millisecond
+	tmdbHTTPRetryMaxDelay  = 2 * time.Second
+)
+
 type TmdbInterface interface {
 	GetTmdbMovieByID(ctx context.Context, movie *TmdbMovie) error
 	SearchMoviesByTitleAndYear(ctx context.Context, title string, year ...int) ([]TmdbMovie, error)
@@ -35,10 +42,10 @@ func New(apiKey string) (TmdbInterface, error) {
 
 	client := tmdbClient{
 		key:            apiKey,
-		baseURL:        helpers.TMDB_BASE_API_URL,
+		baseURL:        tmdbBaseAPIURL,
 		httpClient:     &http.Client{Timeout: helpers.TMDB_HTTP_TIMEOUT},
-		maxRetries:     helpers.TMDB_HTTP_MAX_RETRIES,
-		retryBaseDelay: helpers.TMDB_HTTP_RETRY_BASE_DELAY,
+		maxRetries:     tmdbHTTPMaxRetries,
+		retryBaseDelay: tmdbHTTPRetryBaseDelay,
 		movieCache:     cache.New(tmdbMovieCacheTTL, tmdbMovieCacheCleanup),
 	}
 
