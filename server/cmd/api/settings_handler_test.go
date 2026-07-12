@@ -439,7 +439,7 @@ func mountGeneralSettingsRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+			app.SessionManager.Put(r.Context(), cookieUserID, userID)
 			next.ServeHTTP(w, r)
 		})
 	})

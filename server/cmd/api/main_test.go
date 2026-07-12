@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -32,13 +31,13 @@ func setupTestLogger(t *testing.T, app *Application) {
 func clearRuntimeConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		helpers.ENV_DB_PATH,
-		helpers.ENV_STATIC_DIR,
-		helpers.ENV_LOGS_DIR,
-		helpers.ENV_TRANSCODE_DIR,
-		helpers.ENV_PORT,
-		helpers.ENV_LOG_TO_STDOUT,
-		helpers.ENV_SESSION_COOKIE_SECURE,
+		envDBPath,
+		envStaticDir,
+		envLogsDir,
+		envTranscodeDir,
+		envPort,
+		envLogToStdout,
+		envSessionCookieSecure,
 		"DEBUG",
 	} {
 		t.Setenv(key, "")
@@ -53,16 +52,16 @@ func TestNewRuntimeConfig_DefaultPaths(t *testing.T) {
 		t.Fatalf("NewRuntimeConfig failed: %v", err)
 	}
 
-	if cfg.DBPath != helpers.DEFAULT_DB_PATH {
+	if cfg.DBPath != defaultDBPath {
 		t.Fatalf("expected derived DB path, got %q", cfg.DBPath)
 	}
-	if cfg.StaticDir != helpers.DEFAULT_STATIC_DIR {
+	if cfg.StaticDir != defaultStaticDir {
 		t.Fatalf("expected derived static dir, got %q", cfg.StaticDir)
 	}
-	if cfg.LogsDir != helpers.DEFAULT_LOGS_DIR {
+	if cfg.LogsDir != defaultLogsDir {
 		t.Fatalf("expected derived logs dir, got %q", cfg.LogsDir)
 	}
-	if cfg.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
+	if cfg.TranscodeDir != defaultTranscodeDir {
 		t.Fatalf("expected derived transcode dir, got %q", cfg.TranscodeDir)
 	}
 }
@@ -75,10 +74,10 @@ func TestNewRuntimeConfig_ExplicitPathsOverrideDefaults(t *testing.T) {
 	logsDir := filepath.Join(t.TempDir(), "logs")
 	transcodeDir := filepath.Join(t.TempDir(), "transcode")
 
-	t.Setenv(helpers.ENV_DB_PATH, dbPath)
-	t.Setenv(helpers.ENV_STATIC_DIR, staticDir)
-	t.Setenv(helpers.ENV_LOGS_DIR, logsDir)
-	t.Setenv(helpers.ENV_TRANSCODE_DIR, transcodeDir)
+	t.Setenv(envDBPath, dbPath)
+	t.Setenv(envStaticDir, staticDir)
+	t.Setenv(envLogsDir, logsDir)
+	t.Setenv(envTranscodeDir, transcodeDir)
 
 	cfg, err := NewRuntimeConfig()
 	if err != nil {
@@ -102,7 +101,7 @@ func TestNewRuntimeConfig_ExplicitPathsOverrideDefaults(t *testing.T) {
 func TestNewRuntimeConfig_PortHonoredWithoutDebug(t *testing.T) {
 	clearRuntimeConfigEnv(t)
 	t.Setenv("DEBUG", "false")
-	t.Setenv(helpers.ENV_PORT, "4242")
+	t.Setenv(envPort, "4242")
 
 	cfg, err := NewRuntimeConfig()
 	if err != nil {
@@ -116,7 +115,7 @@ func TestNewRuntimeConfig_PortHonoredWithoutDebug(t *testing.T) {
 
 func TestNewRuntimeConfig_RejectsInvalidPort(t *testing.T) {
 	clearRuntimeConfigEnv(t)
-	t.Setenv(helpers.ENV_PORT, "not-a-port")
+	t.Setenv(envPort, "not-a-port")
 
 	_, err := NewRuntimeConfig()
 	if err == nil {
@@ -283,9 +282,9 @@ func TestInitDB(t *testing.T) {
 func TestInitDB_DefaultPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	changeWorkingDirectory(t, tmpDir)
-	t.Setenv(helpers.ENV_DB_PATH, "")
+	t.Setenv(envDBPath, "")
 
-	dbFile := filepath.Join(tmpDir, helpers.DEFAULT_DB_PATH)
+	dbFile := filepath.Join(tmpDir, defaultDBPath)
 
 	app := &Application{}
 	setupTestLogger(t, app)
@@ -670,7 +669,7 @@ func setupTestApp(t *testing.T) *Application {
 		DB: db,
 		Config: RuntimeConfig{
 			TranscodeDir: filepath.Join(dataDir, "transcode"),
-			Port:         helpers.DEFAULT_APP_PORT,
+			Port:         defaultAppPort,
 		},
 	}
 	setupTestLogger(t, app)
@@ -687,13 +686,13 @@ func setupTestApp(t *testing.T) *Application {
 
 	// Tests do not attach real FFmpeg processes to HLS cache entries.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
-	app.HLSSessionCache = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.HLSSessionCache = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
 	app.RemuxSafetyCache = cache.New(
-		helpers.HLS_REMUX_SAFETY_CACHE_TTL,
-		helpers.HLS_REMUX_SAFETY_CACHE_SWEEP,
+		hlsRemuxSafetyCacheTTL,
+		hlsRemuxSafetyCacheSweep,
 	)
-	app.SubtitleVTTCache = cache.New(helpers.SUBTITLE_CACHE_TTL, helpers.SUBTITLE_CACHE_CLEANUP)
-	app.RoomHLSTombstone = cache.New(helpers.HLS_SESSION_TTL, helpers.HLS_SESSION_CACHE_SWEEP)
+	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
+	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
 	app.WatchRoomHub = NewWatchRoomHub()
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()
@@ -739,11 +738,11 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 		t.Fatal("Settings should not be nil after InitSettings")
 	}
 
-	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
-		t.Errorf("Expected StaticDir %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
+	if app.Settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir %q, got %q", defaultStaticDir, app.Settings.StaticDir)
 	}
-	if app.Settings.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
-		t.Errorf("Expected TranscodeDir %q, got %q", helpers.DEFAULT_TRANSCODE_DIR, app.Settings.TranscodeDir)
+	if app.Settings.TranscodeDir != defaultTranscodeDir {
+		t.Errorf("Expected TranscodeDir %q, got %q", defaultTranscodeDir, app.Settings.TranscodeDir)
 	}
 
 	if app.Settings.HardwareAccelerationDevice.String != "cpu" {
@@ -904,8 +903,8 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 		MoviesDir:                  sql.NullString{String: existingMoviesDir, Valid: true},
 		ShowsDir:                   sql.NullString{String: existingShowsDir, Valid: true},
 		MusicDir:                   sql.NullString{String: existingMusicDir, Valid: true},
-		StaticDir:                  helpers.DEFAULT_STATIC_DIR,
-		TranscodeDir:               helpers.DEFAULT_TRANSCODE_DIR,
+		StaticDir:                  defaultStaticDir,
+		TranscodeDir:               defaultTranscodeDir,
 	}
 	_, err := app.Queries.CreateSettings(context.Background(), params)
 	if err != nil {
@@ -970,11 +969,11 @@ func TestInitSettings_ExistingSettingsIgnoreEnvOverrides(t *testing.T) {
 	if !app.Settings.MusicDir.Valid {
 		t.Error("Expected MusicDir.Valid to remain true")
 	}
-	if app.Settings.StaticDir != helpers.DEFAULT_STATIC_DIR {
-		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", helpers.DEFAULT_STATIC_DIR, app.Settings.StaticDir)
+	if app.Settings.StaticDir != defaultStaticDir {
+		t.Errorf("Expected StaticDir to remain fixed at %q, got %q", defaultStaticDir, app.Settings.StaticDir)
 	}
-	if app.Settings.TranscodeDir != helpers.DEFAULT_TRANSCODE_DIR {
-		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", helpers.DEFAULT_TRANSCODE_DIR, app.Settings.TranscodeDir)
+	if app.Settings.TranscodeDir != defaultTranscodeDir {
+		t.Errorf("Expected TranscodeDir to remain fixed at %q, got %q", defaultTranscodeDir, app.Settings.TranscodeDir)
 	}
 }
 
@@ -1014,7 +1013,7 @@ func TestInitSession_DefaultCookieSecureDisabled(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Setenv(helpers.ENV_SESSION_COOKIE_SECURE, "")
+	t.Setenv(envSessionCookieSecure, "")
 	app.InitSession()
 
 	if app.SessionManager.Cookie.Secure {
@@ -1026,7 +1025,7 @@ func TestInitSession_UsesSessionCookieSecureEnv(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Setenv(helpers.ENV_SESSION_COOKIE_SECURE, "true")
+	t.Setenv(envSessionCookieSecure, "true")
 	app.InitSession()
 
 	if !app.SessionManager.Cookie.Secure {

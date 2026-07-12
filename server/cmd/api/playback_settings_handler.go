@@ -100,11 +100,11 @@ func (app *Application) GetPlaybackSettings(w http.ResponseWriter, r *http.Reque
 	prefs, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
 		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -147,12 +147,12 @@ func (app *Application) UpdatePlaybackSettings(w http.ResponseWriter, r *http.Re
 	current, err := app.Queries.GetUserPlaybackPreferences(r.Context(), userID)
 	if err != nil {
 		app.Logger.Error("failed to load playback preferences", "error", err, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
 	if _, ok := rawFields["server_upload_mbps"]; ok && !current.IsAdmin {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusForbidden)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusForbidden)
 		return
 	}
 

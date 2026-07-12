@@ -11,6 +11,22 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+const (
+	defaultAppPort      = 8080
+	defaultDBPath       = "db/igloo.db"
+	defaultStaticDir    = "static"
+	defaultLogsDir      = "logs"
+	defaultTranscodeDir = "transcode"
+
+	envDBPath              = "DB_PATH"
+	envStaticDir           = "STATIC_DIR"
+	envLogsDir             = "LOGS_DIR"
+	envTranscodeDir        = "TRANSCODE_DIR"
+	envSessionCookieSecure = "SESSION_COOKIE_SECURE"
+	envLogToStdout         = "LOG_TO_STDOUT"
+	envPort                = "PORT"
+)
+
 type RuntimeConfig struct {
 	DBPath              string
 	StaticDir           string
@@ -46,8 +62,8 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 	config := RuntimeConfig{
 		Port:                port,
 		Debug:               debug,
-		LogToStdout:         envBool(helpers.ENV_LOG_TO_STDOUT, debug),
-		SessionCookieSecure: envBool(helpers.ENV_SESSION_COOKIE_SECURE, false),
+		LogToStdout:         envBool(envLogToStdout, debug),
+		SessionCookieSecure: envBool(envSessionCookieSecure, false),
 	}
 	config.DBPath = config.effectiveDBPath()
 	config.StaticDir = config.effectiveStaticDir()
@@ -90,33 +106,33 @@ func (config RuntimeConfig) effectiveTranscodeDir() string {
 }
 
 func configuredDBPath() string {
-	return envString(helpers.ENV_DB_PATH, helpers.DEFAULT_DB_PATH)
+	return envString(envDBPath, defaultDBPath)
 }
 
 func configuredStaticDir() string {
-	return envString(helpers.ENV_STATIC_DIR, helpers.DEFAULT_STATIC_DIR)
+	return envString(envStaticDir, defaultStaticDir)
 }
 
 func configuredLogsDir() string {
-	return envString(helpers.ENV_LOGS_DIR, helpers.DEFAULT_LOGS_DIR)
+	return envString(envLogsDir, defaultLogsDir)
 }
 
 func configuredTranscodeDir() string {
-	return envString(helpers.ENV_TRANSCODE_DIR, helpers.DEFAULT_TRANSCODE_DIR)
+	return envString(envTranscodeDir, defaultTranscodeDir)
 }
 
 func configuredPort() (int, error) {
-	value := strings.TrimSpace(os.Getenv(helpers.ENV_PORT))
+	value := strings.TrimSpace(os.Getenv(envPort))
 	if value == "" {
-		return helpers.DEFAULT_APP_PORT, nil
+		return defaultAppPort, nil
 	}
 
 	port, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s value %q: %w", helpers.ENV_PORT, value, err)
+		return 0, fmt.Errorf("invalid %s value %q: %w", envPort, value, err)
 	}
 	if port < 1 || port > 65535 {
-		return 0, fmt.Errorf("invalid %s value %q: must be between 1 and 65535", helpers.ENV_PORT, value)
+		return 0, fmt.Errorf("invalid %s value %q: must be between 1 and 65535", envPort, value)
 	}
 	return port, nil
 }

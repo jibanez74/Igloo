@@ -16,6 +16,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const (
+	moviesLibraryDefaultPerPage = 24
+	moviesLibraryMaxPerPage     = 48
+)
+
 // moviesLibraryData is the JSON shape of helpers.JSONResponse.Data for GET /api/movies/library.
 type moviesLibraryData struct {
 	Movies     []database.GetMoviesLibraryAscRow `json:"movies"`
@@ -113,15 +118,15 @@ func parseMoviesLibraryQuery(r *http.Request) (page, perPage int64, sort string)
 		}
 	}
 
-	perPage = int64(helpers.MOVIES_LIBRARY_DEFAULT_PER_PAGE)
+	perPage = int64(moviesLibraryDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
 			perPage = parsed
 		}
 	}
-	if perPage > helpers.MOVIES_LIBRARY_MAX_PER_PAGE {
-		perPage = helpers.MOVIES_LIBRARY_MAX_PER_PAGE
+	if perPage > moviesLibraryMaxPerPage {
+		perPage = moviesLibraryMaxPerPage
 	}
 
 	sort = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
@@ -298,7 +303,7 @@ func (app *Application) GetMoviesByGenreLibrary(w http.ResponseWriter, r *http.R
 func (app *Application) GetLikedMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -435,7 +440,7 @@ func (app *Application) toggleMovieLike(ctx context.Context, userID, movieID int
 func (app *Application) ToggleLikeMovie(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 

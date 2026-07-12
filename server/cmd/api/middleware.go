@@ -52,14 +52,14 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 		device, err := app.Queries.GetDeviceByTokenHash(r.Context(), hashDeviceToken(token))
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+				helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 				return
 			}
 
 			if app.Logger != nil {
 				app.Logger.Error("failed to look up device token", "error", err)
 			}
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
 
@@ -92,7 +92,7 @@ func (app *Application) LoadSessionReadOnly(next http.Handler) http.Handler {
 			if app.Logger != nil {
 				app.Logger.Error("failed to load read-only session", "error", err)
 			}
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
 
@@ -108,8 +108,8 @@ func (app *Application) IsAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if !app.SessionManager.Exists(r.Context(), helpers.COOKIE_USER_ID) {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		if !app.SessionManager.Exists(r.Context(), cookieUserID) {
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
 
@@ -124,13 +124,13 @@ func (app *Application) userIDFromRequest(r *http.Request) int64 {
 	if auth != nil {
 		return auth.UserID
 	}
-	return app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	return app.SessionManager.GetInt64(r.Context(), cookieUserID)
 }
 
 func (app *Application) currentUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return 0, false
 	}
 	return userID, true
@@ -142,13 +142,13 @@ func (app *Application) currentUserID(w http.ResponseWriter, r *http.Request) (i
 // further devices.
 func (app *Application) requireSessionUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	if deviceAuthFrom(r.Context()) != nil {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return 0, false
 	}
 
-	userID := app.SessionManager.GetInt64(r.Context(), helpers.COOKIE_USER_ID)
+	userID := app.SessionManager.GetInt64(r.Context(), cookieUserID)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return 0, false
 	}
 
@@ -185,7 +185,7 @@ func (app *Application) RequireAdmin(next http.Handler) http.Handler {
 
 		user, err := app.Queries.GetUser(r.Context(), userID)
 		if err != nil {
-			helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
 

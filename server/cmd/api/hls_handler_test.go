@@ -333,7 +333,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.HLSManifest(w, r)
 	})
 
@@ -392,7 +392,7 @@ func TestHLSSegment_UsesRequestedRemuxKeyWhenEffectiveProfileFallsBack(t *testin
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.HLSSegment(w, r)
 	})
 
@@ -434,7 +434,7 @@ func TestStopPersonalHLSSession_RemovesOnlyMatchingOwnedSession(t *testing.T) {
 
 	router := chi.NewRouter()
 	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.StopPersonalHLSSession(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(router)
@@ -470,7 +470,7 @@ func TestStopPersonalHLSSession_InvalidPlaybackSession(t *testing.T) {
 
 	router := chi.NewRouter()
 	router.Post("/api/movies/{id}/hls/session/stop", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, int64(100))
+		app.SessionManager.Put(r.Context(), cookieUserID, int64(100))
 		app.StopPersonalHLSSession(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(router)
@@ -503,7 +503,7 @@ func TestHLSSegment_RejectsDifferentOwner(t *testing.T) {
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.HLSSegment(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(router)

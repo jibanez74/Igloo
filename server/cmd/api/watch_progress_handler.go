@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const watchCompletionThreshold = 0.98
+
 type updateMovieWatchProgressRequest struct {
 	ProgressSec *float64 `json:"progress_sec"`
 	DurationSec *float64 `json:"duration_sec"`
@@ -189,7 +191,7 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 	progressSec := helpers.ClampFloat64(progressVal, 0, durationVal)
 	durationSec := durationVal
 
-	if progressSec/durationSec >= helpers.WATCH_COMPLETION_THRESHOLD {
+	if progressSec/durationSec >= watchCompletionThreshold {
 		if err := app.Queries.MarkMovieWatched(r.Context(), database.MarkMovieWatchedParams{
 			UserID:  userID,
 			MovieID: movieID,

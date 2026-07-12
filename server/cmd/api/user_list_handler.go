@@ -30,7 +30,7 @@ func (app *Application) GetUsers(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		app.Logger.Error("failed to fetch users", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

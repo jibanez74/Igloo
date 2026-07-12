@@ -581,7 +581,7 @@ func (app *Application) loadAuthorizedWatchRoomForRequest(w http.ResponseWriter,
 			return database.WatchRoom{}, 0, false
 		}
 		app.Logger.Error("failed to authorize watch room", "error", err, "room_id", roomID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return database.WatchRoom{}, 0, false
 	}
 
@@ -622,7 +622,7 @@ func (app *Application) WatchRoomWebSocket(w http.ResponseWriter, r *http.Reques
 	member, err := app.loadRoomMemberSummary(r.Context(), room.ID, userID)
 	if err != nil {
 		app.Logger.Error("failed to load room member summary for websocket", "error", err, "room_id", room.ID, "user_id", userID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

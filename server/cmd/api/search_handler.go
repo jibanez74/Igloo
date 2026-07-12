@@ -11,6 +11,12 @@ import (
 	"strings"
 )
 
+const (
+	searchDefaultPerPage = 24
+	searchMaxPerPage     = 48
+	searchAllTopN        = 8
+)
+
 type searchSection[T any] struct {
 	Results []T   `json:"results"`
 	Total   int64 `json:"total"`
@@ -231,15 +237,15 @@ func parseSearchPagination(r *http.Request) (page, perPage int64) {
 		}
 	}
 
-	perPage = int64(helpers.SEARCH_DEFAULT_PER_PAGE)
+	perPage = int64(searchDefaultPerPage)
 	if pp := r.URL.Query().Get("per_page"); pp != "" {
 		parsed, err := strconv.ParseInt(pp, 10, 64)
 		if err == nil && parsed > 0 {
 			perPage = parsed
 		}
 	}
-	if perPage > helpers.SEARCH_MAX_PER_PAGE {
-		perPage = helpers.SEARCH_MAX_PER_PAGE
+	if perPage > searchMaxPerPage {
+		perPage = searchMaxPerPage
 	}
 	return page, perPage
 }
@@ -325,7 +331,7 @@ func searchEntityTopN[T any](ctx context.Context, app *Application, e searchEnti
 func (app *Application) SearchAll(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	ctx := r.Context()
-	limit := int64(helpers.SEARCH_ALL_TOP_N)
+	limit := int64(searchAllTopN)
 
 	movies, err := searchEntityTopN(ctx, app, movieSearchEntity, q, limit)
 	if err != nil {

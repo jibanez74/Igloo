@@ -21,6 +21,12 @@ const (
 	PermissionOwner
 )
 
+const (
+	playlistContentTypeTrack = "track"
+	playlistContentTypeMovie = "movie"
+	maxPlaylistRequestSize   = 1024 * 1024 // 1 MB
+)
+
 type CreatePlaylistRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -109,7 +115,7 @@ func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, u
 }
 
 func (app *Application) mustBeTrackPlaylist(w http.ResponseWriter, playlist database.Playlist) bool {
-	if playlist.ContentType != helpers.PLAYLIST_CONTENT_TYPE_TRACK {
+	if playlist.ContentType != playlistContentTypeTrack {
 		helpers.ErrorJSON(w, errors.New("not a track playlist"), http.StatusBadRequest)
 		return false
 	}
@@ -117,7 +123,7 @@ func (app *Application) mustBeTrackPlaylist(w http.ResponseWriter, playlist data
 }
 
 func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist database.Playlist) bool {
-	if playlist.ContentType != helpers.PLAYLIST_CONTENT_TYPE_MOVIE {
+	if playlist.ContentType != playlistContentTypeMovie {
 		helpers.ErrorJSON(w, errors.New("not a movie playlist"), http.StatusBadRequest)
 		return false
 	}
@@ -127,7 +133,7 @@ func (app *Application) mustBeMoviePlaylist(w http.ResponseWriter, playlist data
 func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -179,7 +185,7 @@ func (app *Application) GetPlaylists(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -243,7 +249,7 @@ func (app *Application) GetPlaylist(w http.ResponseWriter, r *http.Request) {
 func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -326,12 +332,12 @@ func (app *Application) GetPlaylistTracks(w http.ResponseWriter, r *http.Request
 func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
 	var req CreatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -378,7 +384,7 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -420,7 +426,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdatePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -467,7 +473,7 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -521,7 +527,7 @@ func (app *Application) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
 func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -563,7 +569,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req AddTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -617,7 +623,7 @@ func (app *Application) AddTracksToPlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -690,7 +696,7 @@ func (app *Application) RemoveTrackFromPlaylist(w http.ResponseWriter, r *http.R
 func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -732,7 +738,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 	}
 
 	var req ReorderTracksRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -768,7 +774,7 @@ func (app *Application) ReorderPlaylistTracks(w http.ResponseWriter, r *http.Req
 func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -829,7 +835,7 @@ func (app *Application) GetPlaylistCollaborators(w http.ResponseWriter, r *http.
 func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -861,7 +867,7 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req AddCollaboratorRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -909,7 +915,7 @@ func (app *Application) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 func (app *Application) RemoveCollaborator(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -998,7 +1004,7 @@ func libraryRowsFromPlaylistDesc(rows []database.GetPlaylistMoviesPaginatedDescR
 func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1050,12 +1056,12 @@ func (app *Application) GetMoviePlaylists(w http.ResponseWriter, r *http.Request
 func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
 	var req CreateMoviePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1117,7 +1123,7 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1179,7 +1185,7 @@ func (app *Application) GetMoviePlaylist(w http.ResponseWriter, r *http.Request)
 func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1222,7 +1228,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req UpdateMoviePlaylistRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1291,7 +1297,7 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1343,7 +1349,7 @@ func (app *Application) DeleteMoviePlaylist(w http.ResponseWriter, r *http.Reque
 func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1441,7 +1447,7 @@ func (app *Application) GetMoviePlaylistMovies(w http.ResponseWriter, r *http.Re
 func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 
@@ -1483,7 +1489,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 	}
 
 	var req AddMoviesRequest
-	if err := helpers.ReadJSON(w, r, &req, helpers.MAX_PLAYLIST_REQUEST_SIZE); err != nil {
+	if err := helpers.ReadJSON(w, r, &req, maxPlaylistRequestSize); err != nil {
 		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
@@ -1560,7 +1566,7 @@ func (app *Application) AddMoviesToMoviePlaylist(w http.ResponseWriter, r *http.
 func (app *Application) RemoveMovieFromMoviePlaylist(w http.ResponseWriter, r *http.Request) {
 	userID := app.userIDFromRequest(r)
 	if userID == 0 {
-		helpers.ErrorJSON(w, errors.New(helpers.NOT_AUTHORIZED_MESSAGE), http.StatusUnauthorized)
+		helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 		return
 	}
 

@@ -43,7 +43,7 @@ func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.Queries.GetAllUsers(r.Context())
 	if err != nil {
 		app.Logger.Error("admin: failed to fetch users", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 	hashedPassword, err := helpers.HashPassword(req.Password)
 	if err != nil {
 		app.Logger.Error("admin: failed to hash password for new user", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -118,7 +118,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		app.Logger.Error("admin: failed to create user", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -183,7 +183,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		app.Logger.Error("admin: failed to begin user update transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -197,7 +197,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		app.Logger.Error("admin: failed to fetch user for update", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -207,7 +207,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			_ = tx.Rollback()
 			app.Logger.Error("admin: failed to count admins during update", "error", err, "target_id", targetID)
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
 
@@ -231,7 +231,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		app.Logger.Error("admin: failed to update user", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -239,7 +239,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to commit user update transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -273,7 +273,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	tx, err := app.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		app.Logger.Error("admin: failed to begin user deletion transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -287,7 +287,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		app.Logger.Error("admin: failed to fetch user for deletion", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -297,7 +297,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			_ = tx.Rollback()
 			app.Logger.Error("admin: failed to count admins during deletion", "error", err, "target_id", targetID)
-			helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 			return
 		}
 
@@ -312,7 +312,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to delete user", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -320,7 +320,7 @@ func (app *Application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		_ = tx.Rollback()
 		app.Logger.Error("admin: failed to commit user deletion transaction", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -362,7 +362,7 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 	hashedPassword, err := helpers.HashPassword(req.Password)
 	if err != nil {
 		app.Logger.Error("admin: failed to hash password for reset", "error", err)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 
@@ -372,7 +372,7 @@ func (app *Application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 	})
 	if err != nil {
 		app.Logger.Error("admin: failed to reset user password", "error", err, "target_id", targetID)
-		helpers.ErrorJSON(w, errors.New(helpers.INTERNAL_SERVER_ERROR))
+		helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
 		return
 	}
 

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -307,8 +306,8 @@ func TestSearchMoviesRouteNormalizesPagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode cap response: %v", err)
 	}
-	if resp.Data.PerPage != helpers.SEARCH_MAX_PER_PAGE {
-		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, helpers.SEARCH_MAX_PER_PAGE)
+	if resp.Data.PerPage != searchMaxPerPage {
+		t.Fatalf("per_page = %d, want cap %d", resp.Data.PerPage, searchMaxPerPage)
 	}
 }
 
@@ -417,7 +416,7 @@ func searchAuthCookies(t *testing.T, app *Application, userID int64) []*http.Coo
 	t.Helper()
 
 	handler := app.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

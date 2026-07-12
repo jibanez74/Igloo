@@ -59,7 +59,7 @@ func WriteHLSFixture(outDir string, fixture Fixture) error {
 	}
 
 	playlist := buildEventPlaylist(fixture.Segments)
-	return os.WriteFile(filepath.Join(outDir, "playlist.m3u8"), []byte(playlist), 0644)
+	return os.WriteFile(filepath.Join(outDir, helpers.HLS_PLAYLIST_FILENAME), []byte(playlist), 0644)
 }
 
 func BuildInitMP4() []byte {

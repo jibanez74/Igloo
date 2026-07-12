@@ -895,7 +895,7 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 	defer app.DB.Close()
 
 	moviesDir := t.TempDir()
-	for i := 0; i < helpers.SCANNER_BATCH_SIZE+1; i++ {
+	for i := 0; i < scannerBatchSize+1; i++ {
 		path := filepath.Join(moviesDir, "Movie."+strconv.Itoa(i)+".2020.mkv")
 		if err := os.WriteFile(path, []byte("movie"), 0o644); err != nil {
 			t.Fatalf("write movie %d: %v", i, err)
@@ -913,12 +913,12 @@ func TestRunMovieScanWalksVideoFilesAndLogsOnlyFinalResults(t *testing.T) {
 
 	app.runMovieScan()
 
-	if ffprobeStub.calls != helpers.SCANNER_BATCH_SIZE+1 {
-		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, helpers.SCANNER_BATCH_SIZE+1)
+	if ffprobeStub.calls != scannerBatchSize+1 {
+		t.Fatalf("ffprobe calls = %d, want %d video files only", ffprobeStub.calls, scannerBatchSize+1)
 	}
 
 	foundCompletion := false
-	wantCompletion := "movies scanner completed: " + strconv.Itoa(helpers.SCANNER_BATCH_SIZE+1) + " scanned, 0 skipped, 0 errors"
+	wantCompletion := "movies scanner completed: " + strconv.Itoa(scannerBatchSize+1) + " scanned, 0 skipped, 0 errors"
 	for _, entry := range logger.infoEntries {
 		if strings.Contains(entry.msg, "movies scanner batch processed") {
 			t.Fatalf("unexpected per-batch log entry: %q", entry.msg)

@@ -15,6 +15,14 @@ import (
 	"igloo/cmd/internal/helpers"
 )
 
+const (
+	hlsRemuxPrevalidateTimeout = 30 * time.Second
+	hlsSessionTTL              = 30 * time.Minute
+	hlsSessionCacheSweep       = 10 * time.Minute
+	hdrTransferPQ              = "smpte2084"
+	hdrTransferHLG             = "arib-std-b67"
+)
+
 // HLSSession holds state for one HLS transcode session.
 type HLSSession struct {
 	MovieID          int64
@@ -57,7 +65,7 @@ func isHDRStream(stream *database.VideoStream) bool {
 		return false
 	}
 	ct := strings.ToLower(strings.TrimSpace(stream.ColorTransfer.String))
-	return ct == helpers.HDR_TRANSFER_PQ || ct == helpers.HDR_TRANSFER_HLG
+	return ct == hdrTransferPQ || ct == hdrTransferHLG
 }
 
 func isBrowserSafeH264RemuxCandidate(stream *database.VideoStream) (bool, string) {
@@ -141,7 +149,7 @@ func RoomHLSSessionKey(roomID int64) string {
 }
 
 func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
-	app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+	app.HLSSessionCache.Set(key, session, hlsSessionTTL)
 }
 
 func (app *Application) removeHLSSession(key string) {
@@ -202,7 +210,7 @@ func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, se
 	app.RoomHLSMu.Lock()
 	deleted := app.isRoomHLSSessionDeleted(roomID)
 	if !deleted {
-		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+		app.HLSSessionCache.Set(key, session, hlsSessionTTL)
 	}
 	app.RoomHLSMu.Unlock()
 
@@ -382,7 +390,7 @@ func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSess
 	startTime := time.Now()
 	onExit := func(exitErr error, stderrTail []string) {
 		if exitErr == nil {
-			raw, readErr := os.ReadFile(filepath.Join(tempDir, "playlist.m3u8"))
+			raw, readErr := os.ReadFile(filepath.Join(tempDir, helpers.HLS_PLAYLIST_FILENAME))
 			if readErr == nil {
 				session.ExitMu.Lock()
 				session.FinalPlaylist = finalizeEventPlaylist(string(raw))
@@ -497,7 +505,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		app.HLSSessionCache.Set(key, session, helpers.HLS_SESSION_TTL)
+		app.HLSSessionCache.Set(key, session, hlsSessionTTL)
 		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, playbackSession, key)
 		return session, nil
 	})
@@ -722,7 +730,7 @@ func (app *Application) createHLSSession(
 	waitErr := waitForRemuxPreflight(
 		session,
 		helpers.HLS_REMUX_PREVALIDATE_SEGMENTS,
-		helpers.HLS_REMUX_PREVALIDATE_TIMEOUT,
+		hlsRemuxPrevalidateTimeout,
 	)
 	if waitErr != nil {
 		fallbackReason := waitErr.Error()

@@ -8,10 +8,18 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
+)
+
+const (
+	subtitleWebVTTContentType = "text/vtt"
+	subtitleExtractTimeout    = 60 * time.Second
+	subtitleCacheTTL          = time.Hour
+	subtitleCacheCleanup      = 10 * time.Minute
 )
 
 func (app *Application) invalidateSubtitleVTTCache(movieID int64) {
@@ -78,7 +86,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 			)
 			app.SubtitleVTTCache.Delete(cacheKey)
 		} else {
-			w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
+			w.Header().Set("Content-Type", subtitleWebVTTContentType)
 			w.Header().Set("Cache-Control", "no-cache")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(vtt)
@@ -86,7 +94,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), helpers.SUBTITLE_EXTRACT_TIMEOUT)
+	ctx, cancel := context.WithTimeout(r.Context(), subtitleExtractTimeout)
 	defer cancel()
 
 	// Collapse concurrent extractions of the same track (e.g. every watch-room
@@ -103,7 +111,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 			return nil, extractErr
 		}
 
-		app.SubtitleVTTCache.Set(cacheKey, out, helpers.SUBTITLE_CACHE_TTL)
+		app.SubtitleVTTCache.Set(cacheKey, out, subtitleCacheTTL)
 		return out, nil
 	})
 	if err != nil {
@@ -128,7 +136,7 @@ func (app *Application) SubtitleWebVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", helpers.SUBTITLE_WEBVTT_CONTENT_TYPE)
+	w.Header().Set("Content-Type", subtitleWebVTTContentType)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(out)

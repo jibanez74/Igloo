@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -44,11 +43,11 @@ func createAdminUser(t *testing.T, app *Application, name, email string, isAdmin
 func mountAdminUserRouter(app *Application, userID int64) http.Handler {
 	r := chi.NewRouter()
 	r.Patch("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.AdminUpdateUser(w, r)
 	})
 	r.Delete("/api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.AdminDeleteUser(w, r)
 	})
 

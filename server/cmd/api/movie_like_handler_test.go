@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"igloo/cmd/internal/database"
-	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -23,7 +22,7 @@ func TestToggleLikeMovie_HTTPPersistsLikeAndUnlike(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Post("/api/movies/{id}/like", func(w http.ResponseWriter, r *http.Request) {
-		app.SessionManager.Put(r.Context(), helpers.COOKIE_USER_ID, userID)
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
 		app.ToggleLikeMovie(w, r)
 	})
 	handler := app.SessionManager.LoadAndSave(r)

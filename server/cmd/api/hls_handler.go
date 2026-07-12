@@ -16,7 +16,16 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var hlsPlaybackSessionIDPattern = regexp.MustCompile(helpers.HLS_PLAYBACK_SESSION_ID_PATTERN)
+const (
+	hlsTranscodeBusyRetryAfterSec = 5
+	hlsPlaybackSessionIDPattern   = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+	hlsSegmentWait                = 120 * time.Second
+	hlsSegmentPoll                = 250 * time.Millisecond
+	hlsPlaylistContentType        = "application/vnd.apple.mpegurl"
+	hlsSegmentHTTPContentType     = "video/mp4"
+)
+
+var hlsPlaybackSessionIDRegexp = regexp.MustCompile(hlsPlaybackSessionIDPattern)
 
 var errHLSSessionNotFound = errors.New("session not found")
 
@@ -58,7 +67,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	baseURL := strings.TrimSuffix(r.URL.Path, "playlist.m3u8")
+	baseURL := strings.TrimSuffix(r.URL.Path, helpers.HLS_PLAYLIST_FILENAME)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      params.AudioTrack,
 		StartSec:        &params.StartSec,
@@ -84,7 +93,7 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 
 	app.RefreshHLSSessionTTL(key, session)
 
-	w.Header().Set("Content-Type", helpers.HLS_PLAYLIST_CONTENT_TYPE)
+	w.Header().Set("Content-Type", hlsPlaylistContentType)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(playlist))
@@ -134,10 +143,10 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 
 	filePath := filepath.Join(session.TempDir, filename)
 
-	deadline := time.Now().Add(helpers.HLS_SEGMENT_WAIT)
+	deadline := time.Now().Add(hlsSegmentWait)
 	for time.Now().Before(deadline) {
 		if segmentComplete(session, filename) {
-			w.Header().Set("Content-Type", helpers.HLS_SEGMENT_HTTP_CONTENT_TYPE)
+			w.Header().Set("Content-Type", hlsSegmentHTTPContentType)
 			w.Header().Set("Cache-Control", "no-store")
 			http.ServeFile(w, r, filePath)
 			return
@@ -157,7 +166,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		time.Sleep(helpers.HLS_SEGMENT_POLL)
+		time.Sleep(hlsSegmentPoll)
 	}
 
 	helpers.ErrorJSON(w, errors.New("segment not ready"), http.StatusServiceUnavailable)
@@ -200,7 +209,7 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 
 	var capacityErr *hlsTranscodeCapacityError
 	if errors.As(err, &capacityErr) {
-		w.Header().Set("Retry-After", strconv.Itoa(helpers.HLS_TRANSCODE_BUSY_RETRY_AFTER_SEC))
+		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
 		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
 		return
 	}
@@ -220,7 +229,7 @@ func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Re
 	}
 
 	playbackSession := strings.TrimSpace(r.URL.Query().Get("playback_session"))
-	if !hlsPlaybackSessionIDPattern.MatchString(playbackSession) {
+	if !hlsPlaybackSessionIDRegexp.MatchString(playbackSession) {
 		helpers.ErrorJSON(w, errors.New("invalid playback_session"), http.StatusBadRequest)
 		return
 	}
@@ -247,7 +256,7 @@ func parseHLSParams(w http.ResponseWriter, r *http.Request) (hlsRequestParams, b
 
 	query := r.URL.Query()
 	playbackSession := strings.TrimSpace(query.Get("playback_session"))
-	if !hlsPlaybackSessionIDPattern.MatchString(playbackSession) {
+	if !hlsPlaybackSessionIDRegexp.MatchString(playbackSession) {
 		helpers.ErrorJSON(w, errors.New("invalid playback_session"), http.StatusBadRequest)
 		return params, false
 	}
