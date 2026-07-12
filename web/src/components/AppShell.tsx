@@ -1,4 +1,4 @@
-import { useContext, type PropsWithChildren } from "react";
+import type { PropsWithChildren } from "react";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/app-sidebar";
 import {
@@ -6,19 +6,13 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
+import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import { cn } from "@/lib/utils";
 
 export default function AppShell({ children }: PropsWithChildren) {
-  // Read the context directly (not useAudioPlayerState) so the shell also
-  // renders outside AudioPlayerProvider, e.g. in isolated tests.
-  const playerState = useContext(AudioPlayerStateContext);
   // The minimized audio player is a fixed bottom bar; reserve space for it so
   // the last rows of any page stay reachable while music plays.
-  const isMiniPlayerVisible =
-    playerState !== null &&
-    playerState.currentTrack !== null &&
-    !playerState.isExpanded;
+  const isMiniPlayerVisible = useIsMiniPlayerVisible();
 
   const handleSkipToContent = () => {
     requestAnimationFrame(() => {

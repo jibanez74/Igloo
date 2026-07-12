@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useContext, useId, useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
+import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -219,11 +219,7 @@ type GeneralSettingsFormProps = {
 
 function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
-  const playerState = useContext(AudioPlayerStateContext);
-  const isMiniPlayerVisible =
-    playerState !== null &&
-    playerState.currentTrack !== null &&
-    !playerState.isExpanded;
+  const isMiniPlayerVisible = useIsMiniPlayerVisible();
   const tmdbKeyId = useId();
   const jellyfinBaseUrlId = useId();
   const jellyfinApiKeyId = useId();
