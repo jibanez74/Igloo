@@ -8,6 +8,7 @@ import (
 	"igloo/cmd/internal/helpers"
 	"net/http"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -22,9 +23,11 @@ const (
 )
 
 const (
-	playlistContentTypeTrack = "track"
-	playlistContentTypeMovie = "movie"
-	maxPlaylistRequestSize   = 1024 * 1024 // 1 MB
+	playlistContentTypeTrack     = "track"
+	playlistContentTypeMovie     = "movie"
+	playlistNameMaxLength        = 255
+	playlistDescriptionMaxLength = 1000
+	maxPlaylistRequestSize       = 1024 * 1024 // 1 MB
 )
 
 type CreatePlaylistRequest struct {
@@ -70,6 +73,24 @@ type UpdateMoviePlaylistRequest struct {
 
 type AddMoviesRequest struct {
 	MovieIds []int64 `json:"movie_ids"`
+}
+
+func validatePlaylistMetadata(name, description string) error {
+	if name == "" {
+		return errors.New("playlist name is required")
+	}
+
+	nameLength := utf8.RuneCountInString(name)
+	if nameLength > playlistNameMaxLength {
+		return errors.New("playlist name is too long (max 255 characters)")
+	}
+
+	descriptionLength := utf8.RuneCountInString(description)
+	if descriptionLength > playlistDescriptionMaxLength {
+		return errors.New("description is too long (max 1000 characters)")
+	}
+
+	return nil
 }
 
 func (app *Application) getPlaylistPermission(ctx context.Context, playlistId, userId int64) (PlaylistPermission, error) {
@@ -342,16 +363,9 @@ func (app *Application) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Name) > 255 {
-		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Description) > 1000 {
-		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+	validationErr := validatePlaylistMetadata(req.Name, req.Description)
+	if validationErr != nil {
+		helpers.ErrorJSON(w, validationErr, http.StatusBadRequest)
 		return
 	}
 
@@ -431,16 +445,9 @@ func (app *Application) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Name) > 255 {
-		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Description) > 1000 {
-		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+	validationErr := validatePlaylistMetadata(req.Name, req.Description)
+	if validationErr != nil {
+		helpers.ErrorJSON(w, validationErr, http.StatusBadRequest)
 		return
 	}
 
@@ -1066,16 +1073,9 @@ func (app *Application) CreateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Name) > 255 {
-		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Description) > 1000 {
-		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+	validationErr := validatePlaylistMetadata(req.Name, req.Description)
+	if validationErr != nil {
+		helpers.ErrorJSON(w, validationErr, http.StatusBadRequest)
 		return
 	}
 
@@ -1233,16 +1233,9 @@ func (app *Application) UpdateMoviePlaylist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.Name == "" {
-		helpers.ErrorJSON(w, errors.New("playlist name is required"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Name) > 255 {
-		helpers.ErrorJSON(w, errors.New("playlist name is too long (max 255 characters)"), http.StatusBadRequest)
-		return
-	}
-	if len(req.Description) > 1000 {
-		helpers.ErrorJSON(w, errors.New("description is too long (max 1000 characters)"), http.StatusBadRequest)
+	validationErr := validatePlaylistMetadata(req.Name, req.Description)
+	if validationErr != nil {
+		helpers.ErrorJSON(w, validationErr, http.StatusBadRequest)
 		return
 	}
 
