@@ -147,6 +147,12 @@ export default function AudioPlayer({
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
   const nextAriaLabel = hasNext ? "Next track" : "No next track";
+  // Mirrors playPrevious(): past the restart threshold (or with no previous
+  // track) the button restarts the current track instead of navigating.
+  const previousAriaLabel =
+    hasPrevious && currentTime <= RESTART_THRESHOLD_SECONDS
+      ? PREVIOUS_TRACK_ARIA_LABEL
+      : "Restart track";
   const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
@@ -717,7 +723,7 @@ export default function AudioPlayer({
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                   )}
-                  aria-label={PREVIOUS_TRACK_ARIA_LABEL}
+                  aria-label={previousAriaLabel}
                 >
                   <SkipBack className="size-6" aria-hidden="true" />
                 </button>
@@ -831,7 +837,7 @@ export default function AudioPlayer({
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                   )}
-                  aria-label={PREVIOUS_TRACK_ARIA_LABEL}
+                  aria-label={previousAriaLabel}
                 >
                   <SkipBack className="size-4" aria-hidden="true" />
                 </button>

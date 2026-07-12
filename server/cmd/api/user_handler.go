@@ -44,7 +44,10 @@ func validatePassword(password, label string) error {
 	return nil
 }
 
-const userNameMaxLength = 100
+const (
+	userNameMaxLength  = 100
+	userEmailMaxLength = 255
+)
 
 // validateUserName enforces the shared name length bound in characters
 // (runes), matching the web client's validation.
@@ -126,8 +129,8 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if len(req.Email) > 255 {
-		helpers.ErrorJSON(w, errors.New("email must be 255 characters or less"), http.StatusBadRequest)
+	if utf8.RuneCountInString(req.Email) > userEmailMaxLength {
+		helpers.ErrorJSON(w, fmt.Errorf("email must be %d characters or less", userEmailMaxLength), http.StatusBadRequest)
 		return
 	}
 

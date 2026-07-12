@@ -37,6 +37,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
+import { codePointLength } from "@/lib/utils";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
@@ -447,7 +448,7 @@ function CreateUserDialog({
 
     if (trimmedName === "") {
       nextErrors.name = "Name is required.";
-    } else if (trimmedName.length > USER_NAME_MAX_LENGTH) {
+    } else if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
       nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
     }
 
@@ -455,15 +456,15 @@ function CreateUserDialog({
       nextErrors.email = "Email is required.";
     } else if (!isValidEmail(trimmedEmail)) {
       nextErrors.email = "Enter a valid email address.";
-    } else if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
+    } else if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
       nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
     } else if (hasDuplicateEmail(users, trimmedEmail)) {
       nextErrors.email = "A user with that email already exists.";
     }
 
-    if (password.length < USER_PASSWORD_MIN_LENGTH) {
+    if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (password.length > USER_PASSWORD_MAX_LENGTH) {
+    } else if (codePointLength(password) > USER_PASSWORD_MAX_LENGTH) {
       nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
 
@@ -516,7 +517,6 @@ function CreateUserDialog({
                 onClearServerError();
               }}
               placeholder="Full name"
-              maxLength={USER_NAME_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
@@ -666,7 +666,7 @@ function EditUserDialog({
 
     if (trimmedName === "") {
       nextErrors.name = "Name is required.";
-    } else if (trimmedName.length > USER_NAME_MAX_LENGTH) {
+    } else if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
       nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
     }
 
@@ -674,7 +674,7 @@ function EditUserDialog({
       nextErrors.email = "Email is required.";
     } else if (!isValidEmail(trimmedEmail)) {
       nextErrors.email = "Enter a valid email address.";
-    } else if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
+    } else if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
       nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
     } else if (hasDuplicateEmail(users, trimmedEmail, user.id)) {
       nextErrors.email = "A user with that email already exists.";
@@ -722,7 +722,6 @@ function EditUserDialog({
                 onClearServerError();
               }}
               placeholder="Full name"
-              maxLength={USER_NAME_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
@@ -923,9 +922,9 @@ function ResetPasswordDialog({
     e.preventDefault();
     const nextErrors: UserFormErrors = {};
 
-    if (password.length < USER_PASSWORD_MIN_LENGTH) {
+    if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (password.length > USER_PASSWORD_MAX_LENGTH) {
+    } else if (codePointLength(password) > USER_PASSWORD_MAX_LENGTH) {
       nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
 
@@ -952,18 +951,18 @@ function ResetPasswordDialog({
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const passwordError =
     errors.password ??
-    (password.length > 0 && password.length < USER_PASSWORD_MIN_LENGTH
+    (password.length > 0 && codePointLength(password) < USER_PASSWORD_MIN_LENGTH
       ? `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`
       : undefined) ??
-    (password.length > USER_PASSWORD_MAX_LENGTH
+    (codePointLength(password) > USER_PASSWORD_MAX_LENGTH
       ? `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`
       : undefined);
   const confirmPasswordError =
     errors.confirmPassword ?? (mismatch ? "Passwords do not match." : undefined);
   const resetDisabled =
     isPending ||
-    password.length < USER_PASSWORD_MIN_LENGTH ||
-    password.length > USER_PASSWORD_MAX_LENGTH ||
+    codePointLength(password) < USER_PASSWORD_MIN_LENGTH ||
+    codePointLength(password) > USER_PASSWORD_MAX_LENGTH ||
     mismatch;
 
   return (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 	"net/http"
@@ -82,12 +83,12 @@ func validatePlaylistMetadata(name, description string) error {
 
 	nameLength := utf8.RuneCountInString(name)
 	if nameLength > playlistNameMaxLength {
-		return errors.New("playlist name is too long (max 255 characters)")
+		return fmt.Errorf("playlist name is too long (max %d characters)", playlistNameMaxLength)
 	}
 
 	descriptionLength := utf8.RuneCountInString(description)
 	if descriptionLength > playlistDescriptionMaxLength {
-		return errors.New("description is too long (max 1000 characters)")
+		return fmt.Errorf("description is too long (max %d characters)", playlistDescriptionMaxLength)
 	}
 
 	return nil

@@ -390,10 +390,11 @@ describe("AudioPlayer Media Session", () => {
         name: /expand player\. now playing: alabaster by the band/i,
       }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
+    // A single-track queue has no previous track, so the button restarts.
     expect(
-      screen.getByRole("button", { name: "Previous track" }),
+      screen.getByRole("button", { name: "Restart track" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
-    expect(screen.getByRole("button", { name: "Previous track" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restart track" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
@@ -424,7 +425,7 @@ describe("AudioPlayer Media Session", () => {
       screen.getByRole("button", { name: "Stop playback and close player" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
     expect(
-      screen.getByRole("button", { name: "Previous track" }),
+      screen.getByRole("button", { name: "Restart track" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
     expect(screen.getByRole("button", { name: "Play" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
@@ -515,7 +516,7 @@ describe("AudioPlayer Media Session", () => {
       const { audio } = renderAudioPlayer({ onTrackChange });
       const setCurrentTime = observeAudioCurrentTime(audio, 42);
 
-      fireEvent.click(screen.getByRole("button", { name: "Previous track" }));
+      fireEvent.click(screen.getByRole("button", { name: "Restart track" }));
 
       expect(onTrackChange).not.toHaveBeenCalled();
       expect(setCurrentTime).toHaveBeenCalledWith(0);
@@ -532,7 +533,12 @@ describe("AudioPlayer Media Session", () => {
       });
       const setCurrentTime = observeAudioCurrentTime(audio, 10);
 
-      fireEvent.click(screen.getByRole("button", { name: "Previous track" }));
+      // Sync the rendered time so the label reflects the restart behavior.
+      act(() => {
+        audio.dispatchEvent(new Event("timeupdate"));
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Restart track" }));
 
       expect(onTrackChange).not.toHaveBeenCalled();
       expect(setCurrentTime).toHaveBeenCalledWith(0);
@@ -618,7 +624,7 @@ describe("AudioPlayer Media Session", () => {
       const { audio } = renderAudioPlayer();
       observeAudioCurrentTime(audio, 42);
 
-      const prevButton = screen.getByRole("button", { name: "Previous track" });
+      const prevButton = screen.getByRole("button", { name: "Restart track" });
       prevButton.focus();
 
       const playMock = HTMLMediaElement.prototype.play as ReturnType<
@@ -667,7 +673,7 @@ describe("AudioPlayer Media Session", () => {
       fireEvent.keyDown(outsideButton, { key: "ArrowRight" });
       expect(setCurrentTime).not.toHaveBeenCalled();
 
-      const prevButton = screen.getByRole("button", { name: "Previous track" });
+      const prevButton = screen.getByRole("button", { name: "Restart track" });
       prevButton.focus();
       fireEvent.keyDown(prevButton, { key: "ArrowRight" });
       expect(setCurrentTime).toHaveBeenCalledWith(40);

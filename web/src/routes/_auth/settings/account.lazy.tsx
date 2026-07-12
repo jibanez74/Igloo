@@ -59,7 +59,7 @@ import {
   lightInputClassName,
   lightInputPeerHoverClassName,
 } from "@/lib/input-styles";
-import { cn } from "@/lib/utils";
+import { cn, codePointLength } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
 import DevicesCard from "@/components/DevicesCard";
@@ -391,7 +391,7 @@ function AccountSettings() {
       return;
     }
 
-    if (trimmedName.length > USER_NAME_MAX_LENGTH) {
+    if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
       showFieldError(
         "name",
         `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`,
@@ -415,7 +415,7 @@ function AccountSettings() {
       return;
     }
 
-    if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
+    if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
       showFieldError(
         "email",
         `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`,
@@ -439,9 +439,9 @@ function AccountSettings() {
 
     if (!newPassword) {
       nextErrors.newPassword = "New password is required.";
-    } else if (newPassword.length < USER_PASSWORD_MIN_LENGTH) {
+    } else if (codePointLength(newPassword) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.newPassword = `New password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
-    } else if (newPassword.length > USER_PASSWORD_MAX_LENGTH) {
+    } else if (codePointLength(newPassword) > USER_PASSWORD_MAX_LENGTH) {
       nextErrors.newPassword =
         `New password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
@@ -690,7 +690,6 @@ function AccountSettings() {
                   clearError("name");
                 }}
                 placeholder="Enter your name"
-                maxLength={USER_NAME_MAX_LENGTH}
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your display name"
                 aria-invalid={!!errors.name || undefined}
@@ -939,7 +938,6 @@ function AccountSettings() {
               aria-label="New password"
               autoComplete="new-password"
               minLength={USER_PASSWORD_MIN_LENGTH}
-              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-invalid={!!errors.newPassword || undefined}
               aria-describedby={describedBy(
                 newPasswordDescriptionId,
