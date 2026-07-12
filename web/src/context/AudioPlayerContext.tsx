@@ -22,11 +22,16 @@ import {
   shuffleArray,
   trimQueueHistory,
 } from "@/lib/audio-utils";
+import {
+  SHUFFLE_TRACKS_LIMIT,
+  TRACKS_INFINITE_PAGE_SIZE,
+} from "@/lib/constants";
 
 const MINIMUM_PLAY_SECONDS = 30;
 const COMPLETION_THRESHOLD = 0.8;
 const PLAY_CHECK_INTERVAL_MS = 5000;
 const MAX_SHUFFLE_FETCH_ATTEMPTS = 3;
+const ENDLESS_QUEUE_LOAD_AHEAD_TRACKS = 10;
 // Endless queues (shuffle, play all) are trimmed when a new batch is appended;
 // this many played tracks stay reachable via previous-track navigation.
 const MAX_TRACKS_BEHIND = 50;
@@ -176,7 +181,7 @@ export function AudioPlayerProvider({
         attempts++;
 
         try {
-          const response = await getShuffleTracks(50);
+          const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
 
           if (response.error || response.data.tracks.length === 0) {
             break;
@@ -219,7 +224,8 @@ export function AudioPlayerProvider({
     const shouldFetchMore =
       queueState.isPlayAllMode &&
       currentTrackIndex >= 0 &&
-      queueState.tracks.length - currentTrackIndex < 10 &&
+      queueState.tracks.length - currentTrackIndex <
+        ENDLESS_QUEUE_LOAD_AHEAD_TRACKS &&
       !isFetchingMoreRef.current &&
       playAllOffsetRef.current < playAllTotalRef.current;
 
@@ -233,7 +239,10 @@ export function AudioPlayerProvider({
       isFetchingMoreRef.current = true;
 
       try {
-        const response = await getTracksPaginated(50, playAllOffsetRef.current);
+        const response = await getTracksPaginated(
+          TRACKS_INFINITE_PAGE_SIZE,
+          playAllOffsetRef.current,
+        );
 
         if (!isCancelled && !response.error && response.data.tracks.length > 0) {
           const rawTracks = response.data.tracks;
@@ -405,7 +414,7 @@ export function AudioPlayerProvider({
 
   const startShufflePlayback: AudioPlayerActions["startShufflePlayback"] =
     async () => {
-      const response = await getShuffleTracks(50);
+      const response = await getShuffleTracks(SHUFFLE_TRACKS_LIMIT);
       if (response.error || response.data.tracks.length === 0) {
         return;
       }
@@ -435,7 +444,7 @@ export function AudioPlayerProvider({
 
   const startPlayAllPlayback: AudioPlayerActions["startPlayAllPlayback"] =
     async () => {
-      const response = await getTracksPaginated(50, 0);
+      const response = await getTracksPaginated(TRACKS_INFINITE_PAGE_SIZE, 0);
       if (response.error || response.data.tracks.length === 0) {
         return;
       }

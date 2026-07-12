@@ -14,6 +14,8 @@ type LibraryPaginationProps = {
   onPageChange: (page: number) => void;
 };
 
+const MAX_VISIBLE_PAGES = 5;
+
 export default function LibraryPagination({
   currentPage,
   totalPages,
@@ -30,9 +32,7 @@ export default function LibraryPagination({
   // Generate page numbers to display
   const getPageNumbers = () => {
     const pages: (number | "start-ellipsis" | "end-ellipsis")[] = [];
-    const maxVisible = 5;
-
-    if (totalPages <= maxVisible + 2) {
+    if (totalPages <= MAX_VISIBLE_PAGES + 2) {
       // Show all pages if total is small
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);

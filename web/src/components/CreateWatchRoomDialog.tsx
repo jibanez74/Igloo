@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 import { createWatchRoom } from "@/lib/api";
-import { WATCH_ROOMS_KEY } from "@/lib/constants";
+import {
+  AUDIO_TRACK_DEFAULT_LABEL,
+  WATCH_ROOMS_KEY,
+} from "@/lib/constants";
 import {
   STREAM_MODES,
   formatPlaybackAudioLabel,
@@ -117,7 +120,7 @@ export default function CreateWatchRoomDialog({
           audioStreams[resolvedSettings.audioTrack],
           resolvedSettings.audioTrack,
         )
-      : "Default";
+      : AUDIO_TRACK_DEFAULT_LABEL;
   const subtitleLabel =
     resolvedSettings.subtitleTrack === null
       ? "Off"

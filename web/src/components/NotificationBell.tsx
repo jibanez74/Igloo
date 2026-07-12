@@ -14,6 +14,7 @@ import {
   markNotificationRead,
 } from "@/lib/api";
 import {
+  NOTIFICATION_TITLES,
   NOTIFICATIONS_KEY,
   NOTIFICATIONS_UNREAD_COUNT_KEY,
 } from "@/lib/constants";
@@ -26,19 +27,24 @@ import { cn } from "@/lib/utils";
 import type {
   ApiResponseType,
   NotificationListItemType,
+  NotificationTitle,
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
 } from "@/types";
 
-const NOTIFICATION_TITLE_LABELS: Record<string, string> = {
-  movie_request: "Movie request",
-  album_request: "Album request",
-  track_request: "Track request",
-  other: "Notification",
+const NOTIFICATION_TITLE_LABELS: Record<NotificationTitle, string> = {
+  [NOTIFICATION_TITLES.MOVIE_REQUEST]: "Movie request",
+  [NOTIFICATION_TITLES.ALBUM_REQUEST]: "Album request",
+  [NOTIFICATION_TITLES.TRACK_REQUEST]: "Track request",
+  [NOTIFICATION_TITLES.OTHER]: "Notification",
 };
 
 function notificationTitleLabel(title: string): string {
-  return NOTIFICATION_TITLE_LABELS[title] ?? "Notification";
+  if (!Object.hasOwn(NOTIFICATION_TITLE_LABELS, title)) {
+    return "Notification";
+  }
+
+  return NOTIFICATION_TITLE_LABELS[title as NotificationTitle];
 }
 
 // SQLite timestamps come back as "YYYY-MM-DD HH:MM:SS" in UTC; normalize to an

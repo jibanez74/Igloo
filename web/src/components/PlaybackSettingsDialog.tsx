@@ -8,7 +8,7 @@ import {
   PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS,
   PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS,
   PLAYBACK_SETTINGS_SUMMARY_LOADING,
-  SUBTITLE_TRACK_SELECT_OFF_VALUE,
+  SUBTITLE_OFF_VALUE,
   SUBTITLES_NONE_LABEL,
   MOTION_MEDIA_DIALOG_SURFACE_CLASS,
 } from "@/lib/constants";
@@ -257,18 +257,18 @@ function PlaybackSettingsDialogForm({
               className={PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS}
               value={
                 subtitleTrack === null
-                  ? SUBTITLE_TRACK_SELECT_OFF_VALUE
+                  ? SUBTITLE_OFF_VALUE
                   : String(subtitleTrack)
               }
               onChange={e => {
                 const v = e.target.value;
                 setSubtitleTrack(
-                  v === SUBTITLE_TRACK_SELECT_OFF_VALUE ? null : Number(v),
+                  v === SUBTITLE_OFF_VALUE ? null : Number(v),
                 );
               }}
               disabled={loadingSelectsDisabled}
             >
-              <option value={SUBTITLE_TRACK_SELECT_OFF_VALUE}>
+              <option value={SUBTITLE_OFF_VALUE}>
                 {SUBTITLES_NONE_LABEL}
               </option>
               {subtitleStreams.map((stream, index) => {
@@ -289,12 +289,12 @@ function PlaybackSettingsDialogForm({
             <Select
               value={
                 subtitleTrack === null
-                  ? SUBTITLE_TRACK_SELECT_OFF_VALUE
+                  ? SUBTITLE_OFF_VALUE
                   : String(subtitleTrack)
               }
               onValueChange={v =>
                 setSubtitleTrack(
-                  v === SUBTITLE_TRACK_SELECT_OFF_VALUE ? null : Number(v),
+                  v === SUBTITLE_OFF_VALUE ? null : Number(v),
                 )
               }
               disabled={loadingSelectsDisabled}
@@ -310,7 +310,7 @@ function PlaybackSettingsDialogForm({
                 className={PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS}
               >
                 <SelectItem
-                  value={SUBTITLE_TRACK_SELECT_OFF_VALUE}
+                  value={SUBTITLE_OFF_VALUE}
                   className="text-foreground"
                 >
                   {SUBTITLES_NONE_LABEL}

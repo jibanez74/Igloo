@@ -2,6 +2,8 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { joinWatchRoom } from "@/lib/api";
 import {
+  WATCH_ROOM_CLIENT_EVENT_TYPES,
+  WATCH_ROOM_EVENT_TYPES,
   WATCH_ROOM_SYNC_ANNOUNCE_DEBOUNCE_MS,
   WATCH_ROOM_SYNC_DRIFT_THRESHOLD_SEC,
 } from "@/lib/constants";
@@ -16,6 +18,11 @@ import type {
 } from "@/types";
 
 const MAX_RECONNECT_DELAY_MS = 16_000;
+
+type WatchRoomPlaybackEventType =
+  | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY
+  | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE
+  | typeof WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK;
 
 type UseWatchRoomConnectionOptions = {
   currentRoomId: number | null;
@@ -159,7 +166,7 @@ export function useWatchRoomConnection({
       return;
     }
 
-    if (event.type === "room_deleted") {
+    if (event.type === WATCH_ROOM_EVENT_TYPES.ROOM_DELETED) {
       if (roomDeletionHandledRef.current) {
         return;
       }
@@ -199,7 +206,9 @@ export function useWatchRoomConnection({
     if (!ws) return;
     heartbeatRef.current = window.setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "ping" }));
+        ws.send(
+          JSON.stringify({ type: WATCH_ROOM_CLIENT_EVENT_TYPES.PING }),
+        );
       }
     }, 25_000);
   });
@@ -336,7 +345,7 @@ export function useWatchRoomConnection({
   }, [streamUrl, currentRoomId, videoRef]);
 
   const sendPlaybackEvent = (
-    type: "play" | "pause" | "seek",
+    type: WatchRoomPlaybackEventType,
     positionSec: number,
   ) => {
     const socket = socketRef.current;

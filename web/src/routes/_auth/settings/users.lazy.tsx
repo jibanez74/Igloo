@@ -23,7 +23,12 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Users, UserPlus, Pencil, Trash2, KeyRound, ShieldCheck, ShieldOff } from "lucide-react";
 import { adminUsersQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
-import { ADMIN_USERS_KEY } from "@/lib/constants";
+import {
+  ADMIN_USERS_KEY,
+  USER_NAME_MAX_LENGTH,
+  USER_PASSWORD_MAX_LENGTH,
+  USER_PASSWORD_MIN_LENGTH,
+} from "@/lib/constants";
 import {
   adminCreateUser,
   adminUpdateUser,
@@ -49,9 +54,6 @@ type DialogState =
 type UserFormErrorField = "name" | "email" | "password" | "confirmPassword" | "form";
 type UserFormErrors = Partial<Record<UserFormErrorField, string>>;
 type DialogCloseAutoFocusHandler = (event: Event) => void;
-
-const MIN_PASSWORD_LENGTH = 9;
-const MAX_PASSWORD_LENGTH = 128;
 
 function describedBy(...ids: Array<string | false | null | undefined>) {
   const value = ids.filter(Boolean).join(" ");
@@ -444,8 +446,8 @@ function CreateUserDialog({
 
     if (trimmedName === "") {
       nextErrors.name = "Name is required.";
-    } else if (trimmedName.length > 100) {
-      nextErrors.name = "Name must be 100 characters or less.";
+    } else if (trimmedName.length > USER_NAME_MAX_LENGTH) {
+      nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
     }
 
     if (trimmedEmail === "") {
@@ -456,10 +458,10 @@ function CreateUserDialog({
       nextErrors.email = "A user with that email already exists.";
     }
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      nextErrors.password = "Password must be at least 9 characters.";
-    } else if (password.length > MAX_PASSWORD_LENGTH) {
-      nextErrors.password = "Password must be 128 characters or less.";
+    if (password.length < USER_PASSWORD_MIN_LENGTH) {
+      nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
+    } else if (password.length > USER_PASSWORD_MAX_LENGTH) {
+      nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -511,7 +513,7 @@ function CreateUserDialog({
                 onClearServerError();
               }}
               placeholder="Full name"
-              maxLength={100}
+              maxLength={USER_NAME_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
@@ -565,8 +567,10 @@ function CreateUserDialog({
                 setErrors(current => ({ ...current, password: undefined }));
                 onClearServerError();
               }}
-              placeholder="At least 9 characters"
+              placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
+              minLength={USER_PASSWORD_MIN_LENGTH}
+              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!errors.password || undefined}
               aria-describedby={describedBy(
@@ -577,7 +581,7 @@ function CreateUserDialog({
               aria-label="User password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be 9–128 characters
+              Must be {USER_PASSWORD_MIN_LENGTH}–{USER_PASSWORD_MAX_LENGTH} characters
             </p>
             {errors.password && (
               <p id={passwordErrorId} className="text-xs text-destructive" role="alert">
@@ -660,8 +664,8 @@ function EditUserDialog({
 
     if (trimmedName === "") {
       nextErrors.name = "Name is required.";
-    } else if (trimmedName.length > 100) {
-      nextErrors.name = "Name must be 100 characters or less.";
+    } else if (trimmedName.length > USER_NAME_MAX_LENGTH) {
+      nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
     }
 
     if (trimmedEmail === "") {
@@ -714,7 +718,7 @@ function EditUserDialog({
                 onClearServerError();
               }}
               placeholder="Full name"
-              maxLength={100}
+              maxLength={USER_NAME_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.name || undefined}
@@ -914,10 +918,10 @@ function ResetPasswordDialog({
     e.preventDefault();
     const nextErrors: UserFormErrors = {};
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      nextErrors.password = "Password must be at least 9 characters.";
-    } else if (password.length > MAX_PASSWORD_LENGTH) {
-      nextErrors.password = "Password must be 128 characters or less.";
+    if (password.length < USER_PASSWORD_MIN_LENGTH) {
+      nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
+    } else if (password.length > USER_PASSWORD_MAX_LENGTH) {
+      nextErrors.password = `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
 
     if (password !== confirmPassword) {
@@ -943,18 +947,18 @@ function ResetPasswordDialog({
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
   const passwordError =
     errors.password ??
-    (password.length > 0 && password.length < MIN_PASSWORD_LENGTH
-      ? "Password must be at least 9 characters."
+    (password.length > 0 && password.length < USER_PASSWORD_MIN_LENGTH
+      ? `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`
       : undefined) ??
-    (password.length > MAX_PASSWORD_LENGTH
-      ? "Password must be 128 characters or less."
+    (password.length > USER_PASSWORD_MAX_LENGTH
+      ? `Password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`
       : undefined);
   const confirmPasswordError =
     errors.confirmPassword ?? (mismatch ? "Passwords do not match." : undefined);
   const resetDisabled =
     isPending ||
-    password.length < MIN_PASSWORD_LENGTH ||
-    password.length > MAX_PASSWORD_LENGTH ||
+    password.length < USER_PASSWORD_MIN_LENGTH ||
+    password.length > USER_PASSWORD_MAX_LENGTH ||
     mismatch;
 
   return (
@@ -983,8 +987,10 @@ function ResetPasswordDialog({
                 setErrors(current => ({ ...current, password: undefined }));
                 onClearServerError();
               }}
-              placeholder="At least 9 characters"
+              placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
+              minLength={USER_PASSWORD_MIN_LENGTH}
+              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!passwordError || undefined}
               aria-describedby={describedBy(
@@ -995,7 +1001,7 @@ function ResetPasswordDialog({
               aria-label="New password"
             />
             <p id={passwordDescriptionId} className="text-xs text-muted-foreground">
-              Must be 9–128 characters
+              Must be {USER_PASSWORD_MIN_LENGTH}–{USER_PASSWORD_MAX_LENGTH} characters
             </p>
             {passwordError && (
               <p id={passwordErrorId} className="text-xs text-destructive" role="alert">

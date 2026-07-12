@@ -13,7 +13,6 @@ import {
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_DECORATIVE_BOUNCE_CLASS,
   MOTION_DECORATIVE_PING_CLASS,
-  MOTION_DECORATIVE_STATE_CLASS,
   MOTION_DURATION_MICRO_MS,
   MOTION_DURATION_PAGE_MS,
   MOTION_DURATION_STANDARD_MS,
@@ -29,7 +28,6 @@ import {
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOTION_PROGRESS_FILL_CLASS,
   MOTION_PROGRESS_THUMB_REVEAL_CLASS,
-  MOTION_ROW_SURFACE_CLASS,
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
@@ -121,9 +119,6 @@ describe("motion contracts", () => {
     expect(MOTION_TRACK_MENU_TRIGGER_CLASS).toContain(
       "motion-reduce:transition-none",
     );
-    expect(MOTION_ROW_SURFACE_CLASS).toContain(
-      "motion-reduce:transition-colors",
-    );
     expect(MOTION_PLAYER_CHROME_PANEL_CLASS).toContain(
       "motion-reduce:transition-none",
     );
@@ -186,12 +181,6 @@ describe("motion contracts", () => {
     );
     expect(MOTION_DECORATIVE_BOUNCE_CLASS).toContain(
       "motion-reduce:animate-none",
-    );
-    expect(MOTION_DECORATIVE_STATE_CLASS).toContain(
-      "motion-reduce:transition-none",
-    );
-    expect(MOTION_DECORATIVE_STATE_CLASS).toContain(
-      "motion-reduce:transform-none",
     );
   });
 

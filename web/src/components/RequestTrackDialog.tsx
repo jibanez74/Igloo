@@ -10,14 +10,13 @@ import {
 import SpotifyTrackPicker from "@/components/SpotifyTrackPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
+import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showCreated,
 } from "@/lib/toast-helpers";
 import type { SpotifyTrackSearchResultType } from "@/types";
-
-const TRACK_REQUEST_NOTIFICATION_TITLE = "track_request";
 
 type RequestTrackDialogProps = {
   open: boolean;
@@ -56,7 +55,7 @@ export default function RequestTrackDialog({
     ].filter(Boolean);
 
     const response = await createNotification({
-      title: TRACK_REQUEST_NOTIFICATION_TITLE,
+      title: NOTIFICATION_TITLES.TRACK_REQUEST,
       message: lines.join("\n"),
       isAdmin: true,
     });

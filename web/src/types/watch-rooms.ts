@@ -1,4 +1,8 @@
 import type { StreamModeId } from "./playback";
+import type { WATCH_ROOM_EVENT_TYPES } from "@/lib/constants";
+
+export type WatchRoomServerEventName =
+  (typeof WATCH_ROOM_EVENT_TYPES)[keyof typeof WATCH_ROOM_EVENT_TYPES];
 
 export type WatchRoomMemberType = {
   id: number;
@@ -71,13 +75,7 @@ export type WatchRoomPlaybackStateType = {
 };
 
 export type WatchRoomServerEventType = {
-  type:
-    | "room_snapshot"
-    | "playback_changed"
-    | "member_joined"
-    | "member_left"
-    | "room_deleted"
-    | "pong";
+  type: WatchRoomServerEventName;
   room_id: number;
   playback?: WatchRoomPlaybackStateType;
   member?: WatchRoomMemberType;

@@ -36,6 +36,7 @@ import {
   MOTION_SECTION_ENTER_CLASS,
   MOTION_SECTION_ENTER_DELAYED_CLASS,
   SEARCH_PER_PAGE,
+  TRACK_LIST_CONTAINER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -583,7 +584,7 @@ function CategoryTabFrame<T>({
 function TracksResultsList({ tracks }: { tracks: TrackListItemType[] }) {
   return (
     <ul
-      className="overflow-hidden rounded-xl border border-border bg-card/50"
+      className={TRACK_LIST_CONTAINER_CLASS}
       aria-label="Track results"
     >
       {tracks.map((track) => (

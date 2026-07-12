@@ -34,6 +34,9 @@ import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
   ADMIN_USERS_KEY,
+  USER_NAME_MAX_LENGTH,
+  USER_PASSWORD_MAX_LENGTH,
+  USER_PASSWORD_MIN_LENGTH,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -76,8 +79,7 @@ type AccountErrorField =
 
 type AccountErrors = Partial<Record<AccountErrorField, string>>;
 
-const MIN_PASSWORD_LENGTH = 9;
-const MAX_PASSWORD_LENGTH = 128;
+const USER_EMAIL_MAX_LENGTH = 255;
 const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
   "image/jpeg",
@@ -389,10 +391,10 @@ function AccountSettings() {
       return;
     }
 
-    if (trimmedName.length > 100) {
+    if (trimmedName.length > USER_NAME_MAX_LENGTH) {
       showFieldError(
         "name",
-        "Name must be 100 characters or less.",
+        `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`,
         nameId,
       );
       return;
@@ -413,10 +415,10 @@ function AccountSettings() {
       return;
     }
 
-    if (trimmedEmail.length > 255) {
+    if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
       showFieldError(
         "email",
-        "Email must be 255 characters or less.",
+        `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`,
         emailId,
       );
       return;
@@ -437,11 +439,11 @@ function AccountSettings() {
 
     if (!newPassword) {
       nextErrors.newPassword = "New password is required.";
-    } else if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      nextErrors.newPassword = "New password must be at least 9 characters.";
-    } else if (newPassword.length > MAX_PASSWORD_LENGTH) {
+    } else if (newPassword.length < USER_PASSWORD_MIN_LENGTH) {
+      nextErrors.newPassword = `New password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
+    } else if (newPassword.length > USER_PASSWORD_MAX_LENGTH) {
       nextErrors.newPassword =
-        "New password must be 128 characters or less.";
+        `New password must be ${USER_PASSWORD_MAX_LENGTH} characters or less.`;
     }
 
     if (!confirmPassword) {
@@ -648,6 +650,7 @@ function AccountSettings() {
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your email address"
                 required
+                maxLength={USER_EMAIL_MAX_LENGTH}
                 aria-required="true"
                 aria-invalid={!!errors.email || undefined}
                 aria-describedby={describedBy(errors.email && emailErrorId)}
@@ -687,7 +690,7 @@ function AccountSettings() {
                   clearError("name");
                 }}
                 placeholder="Enter your name"
-                maxLength={100}
+                maxLength={USER_NAME_MAX_LENGTH}
                 className={`sm:flex-1 ${lightInputClassName}`}
                 aria-label="Your display name"
                 aria-invalid={!!errors.name || undefined}
@@ -710,7 +713,7 @@ function AccountSettings() {
               </Button>
             </div>
             <p id={nameDescriptionId} className="text-xs text-muted-foreground">
-              Your display name (max 100 characters)
+              Your display name (max {USER_NAME_MAX_LENGTH} characters)
             </p>
             {errors.name && (
               <p id={nameErrorId} className="text-xs text-destructive" role="alert">
@@ -935,8 +938,8 @@ function AccountSettings() {
               className={lightInputClassName}
               aria-label="New password"
               autoComplete="new-password"
-              minLength={MIN_PASSWORD_LENGTH}
-              maxLength={MAX_PASSWORD_LENGTH}
+              minLength={USER_PASSWORD_MIN_LENGTH}
+              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-invalid={!!errors.newPassword || undefined}
               aria-describedby={describedBy(
                 newPasswordDescriptionId,
@@ -944,7 +947,8 @@ function AccountSettings() {
               )}
             />
             <p id={newPasswordDescriptionId} className="text-xs text-muted-foreground">
-              Must be at least 9 characters and no more than 128 characters
+              Must be at least {USER_PASSWORD_MIN_LENGTH} characters and no more
+              than {USER_PASSWORD_MAX_LENGTH} characters
             </p>
             {errors.newPassword && (
               <p

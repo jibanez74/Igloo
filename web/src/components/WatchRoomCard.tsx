@@ -17,6 +17,10 @@ type Props = {
   room: WatchRoomType;
 };
 
+// Avatar stack and text summary have separate limits so the card stays compact.
+const WATCH_ROOM_MEMBER_AVATAR_LIMIT = 4;
+const WATCH_ROOM_MEMBER_NAME_LIMIT = 3;
+
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -32,15 +36,16 @@ export default function WatchRoomCard({ room }: Props) {
     ? buildTmdbImageUrl(room.movie_poster, TMDB_POSTER_SIZE)
     : "";
 
-  // Show up to 4 members (owner + guests); overflow count shown as "+N"
-  const MAX_SHOWN = 4;
-  const shownMembers = room.members.slice(0, MAX_SHOWN);
-  const overflow = room.members.length - MAX_SHOWN;
+  const shownMembers = room.members.slice(0, WATCH_ROOM_MEMBER_AVATAR_LIMIT);
+  const overflow = room.members.length - WATCH_ROOM_MEMBER_AVATAR_LIMIT;
   const memberNames = room.members.map(member => member.name);
-  const displayedMemberNames = memberNames.slice(0, 3).join(", ");
-  const remainingMemberCount = memberNames.length - 3;
+  const displayedMemberNames = memberNames
+    .slice(0, WATCH_ROOM_MEMBER_NAME_LIMIT)
+    .join(", ");
+  const remainingMemberCount =
+    memberNames.length - WATCH_ROOM_MEMBER_NAME_LIMIT;
   const membersSummary =
-    memberNames.length <= 3
+    memberNames.length <= WATCH_ROOM_MEMBER_NAME_LIMIT
       ? displayedMemberNames
       : `${displayedMemberNames}, +${remainingMemberCount} more`;
 

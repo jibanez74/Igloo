@@ -8,17 +8,18 @@ import WatchRoomCard from "@/components/WatchRoomCard";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+const WATCH_ROOMS_DESCRIPTION_ID = "watch-rooms-description";
+const WATCH_ROOMS_SUMMARY_ID = "watch-rooms-summary";
+
 export default function WatchRooms() {
   const { data, isPending } = useQuery(watchRoomsQueryOpts());
 
   const rooms = data && !data.error ? (data.data?.rooms ?? []) : [];
   const hasError = data && data.error;
-  const sectionDescriptionId = "watch-rooms-description";
-  const sectionSummaryId = "watch-rooms-summary";
   const sectionDescribedBy =
     !isPending && !hasError && rooms.length > 0
-      ? `${sectionDescriptionId} ${sectionSummaryId}`
-      : sectionDescriptionId;
+      ? `${WATCH_ROOMS_DESCRIPTION_ID} ${WATCH_ROOMS_SUMMARY_ID}`
+      : WATCH_ROOMS_DESCRIPTION_ID;
   const announcementMessage = isPending
     ? undefined
     : hasError
@@ -55,7 +56,7 @@ export default function WatchRooms() {
               Watch Rooms
             </h2>
             <p
-              id={sectionDescriptionId}
+              id={WATCH_ROOMS_DESCRIPTION_ID}
               className="mt-2 max-w-2xl text-sm text-muted-foreground"
             >
               Jump back into rooms you own or rooms other people invited you to.
@@ -64,7 +65,7 @@ export default function WatchRooms() {
 
           {!isPending && !hasError && rooms.length > 0 && (
             <p
-              id={sectionSummaryId}
+              id={WATCH_ROOMS_SUMMARY_ID}
               className="rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground"
             >
               {rooms.length} room{rooms.length === 1 ? "" : "s"}

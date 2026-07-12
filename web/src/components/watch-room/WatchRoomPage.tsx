@@ -18,6 +18,7 @@ import {
 import {
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   TMDB_POSTER_SIZE,
+  WATCH_ROOM_CLIENT_EVENT_TYPES,
   WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
 import { formatTimeSeconds } from "@/lib/format";
@@ -124,7 +125,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
       await video.play();
       setPlaybackError(null);
       clearPendingPlayback();
-      sendPlaybackEvent("play", video.currentTime);
+      sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PLAY, video.currentTime);
     } catch {
       setPlaybackError(
         "Playback failed - the browser could not play this stream.",
@@ -138,7 +139,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
 
     video.pause();
     clearPendingPlayback();
-    sendPlaybackEvent("pause", video.currentTime);
+    sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE, video.currentTime);
   };
 
   const togglePlay = async () => {
@@ -165,7 +166,7 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
     video.currentTime = nextTime;
     setCurrentTime(nextTime);
     clearPendingPlayback();
-    sendPlaybackEvent("seek", nextTime);
+    sendPlaybackEvent(WATCH_ROOM_CLIENT_EVENT_TYPES.SEEK, nextTime);
   };
 
   const seekBackward = () => seek(currentTime - WATCH_ROOM_SEEK_STEP_SEC);
@@ -285,7 +286,10 @@ export function WatchRoomPage({ roomId }: WatchRoomPageProps) {
             onEnded={() => {
               setPlaying(false);
               const video = videoRef.current;
-              sendPlaybackEvent("pause", video ? video.currentTime : duration);
+              sendPlaybackEvent(
+                WATCH_ROOM_CLIENT_EVENT_TYPES.PAUSE,
+                video ? video.currentTime : duration,
+              );
             }}
             onSeek={seek}
             onSeekBackward={seekBackward}

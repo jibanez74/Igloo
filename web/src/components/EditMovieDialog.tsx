@@ -36,6 +36,8 @@ type Props = {
   restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
+const MANUAL_OVERVIEW_LABEL_ID = "manual-overview-label";
+
 const movieMetadataFields = [
   "title",
   "year",
@@ -305,8 +307,6 @@ function ManualTab({
   }, [movie]);
 
   const { draft, baseline } = form;
-  const overviewLabelId = "manual-overview-label";
-
   async function handleSave() {
     setSaving(true);
 
@@ -462,11 +462,11 @@ function ManualTab({
       <FieldGroup
         label="Overview"
         htmlFor="manual-overview"
-        labelId={overviewLabelId}
+        labelId={MANUAL_OVERVIEW_LABEL_ID}
       >
         <textarea
           id="manual-overview"
-          aria-labelledby={overviewLabelId}
+          aria-labelledby={MANUAL_OVERVIEW_LABEL_ID}
           value={draft.overview}
           onChange={(e) =>
             dispatchForm({

@@ -11,14 +11,13 @@ import {
 import TmdbMoviePicker from "@/components/TmdbMoviePicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
+import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showCreated,
 } from "@/lib/toast-helpers";
 import type { TmdbSearchResultType } from "@/types";
-
-const MOVIE_REQUEST_NOTIFICATION_TITLE = "movie_request";
 
 type RequestMovieDialogProps = {
   open: boolean;
@@ -53,7 +52,7 @@ export default function RequestMovieDialog({
     ].filter(Boolean);
 
     const response = await createNotification({
-      title: MOVIE_REQUEST_NOTIFICATION_TITLE,
+      title: NOTIFICATION_TITLES.MOVIE_REQUEST,
       message: lines.join("\n"),
       isAdmin: true,
     });
