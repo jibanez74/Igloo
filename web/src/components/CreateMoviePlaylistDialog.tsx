@@ -23,6 +23,7 @@ import {
   PLAYLIST_DESCRIPTION_MAX_LENGTH,
   PLAYLIST_NAME_MAX_LENGTH,
 } from "@/lib/constants";
+import { codePointLength } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type CreateMoviePlaylistDialogProps = {
@@ -87,9 +88,15 @@ export default function CreateMoviePlaylistDialog({
       showValidationError("Playlist name is required");
       return;
     }
-    if (name.trim().length > PLAYLIST_NAME_MAX_LENGTH) {
+    if (codePointLength(name.trim()) > PLAYLIST_NAME_MAX_LENGTH) {
       showValidationError(
         `Playlist name is too long (max ${PLAYLIST_NAME_MAX_LENGTH} characters)`,
+      );
+      return;
+    }
+    if (codePointLength(description.trim()) > PLAYLIST_DESCRIPTION_MAX_LENGTH) {
+      showValidationError(
+        `Playlist description is too long (max ${PLAYLIST_DESCRIPTION_MAX_LENGTH} characters)`,
       );
       return;
     }
@@ -128,7 +135,6 @@ export default function CreateMoviePlaylistDialog({
                 className="border-border bg-muted text-foreground"
                 placeholder="My watchlist"
                 autoComplete="off"
-                maxLength={PLAYLIST_NAME_MAX_LENGTH}
               />
             </div>
             <div className="grid gap-2">
@@ -142,7 +148,6 @@ export default function CreateMoviePlaylistDialog({
                 className="border-border bg-muted text-foreground"
                 placeholder="Optional notes"
                 autoComplete="off"
-                maxLength={PLAYLIST_DESCRIPTION_MAX_LENGTH}
               />
             </div>
           </div>

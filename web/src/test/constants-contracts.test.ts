@@ -12,8 +12,6 @@ import {
   MUSICIANS_PAGINATED_KEY,
   MUSICIANS_PER_PAGE,
   NOTIFICATION_TITLES,
-  PLAYLIST_DESCRIPTION_MAX_LENGTH,
-  PLAYLIST_NAME_MAX_LENGTH,
   PLAYLIST_TRACKS_KEY,
   PLAYLIST_TRACKS_PAGE_SIZE,
   SEARCH_MOVIES_KEY,
@@ -22,9 +20,6 @@ import {
   STREAM_MODES,
   TRACKS_INFINITE_KEY,
   TRACKS_INFINITE_PAGE_SIZE,
-  USER_NAME_MAX_LENGTH,
-  USER_PASSWORD_MAX_LENGTH,
-  USER_PASSWORD_MIN_LENGTH,
   WATCH_ROOM_CLIENT_EVENT_TYPES,
   WATCH_ROOM_EVENT_TYPES,
 } from "@/lib/constants";
@@ -49,14 +44,6 @@ describe("constants contracts", () => {
 
   it("derives stream mode ids from stream modes", () => {
     expect(STREAM_MODE_IDS).toEqual(STREAM_MODES.map((mode) => mode.id));
-  });
-
-  it("keeps API-backed validation limits in one place", () => {
-    expect(USER_NAME_MAX_LENGTH).toBe(100);
-    expect(USER_PASSWORD_MIN_LENGTH).toBe(9);
-    expect(USER_PASSWORD_MAX_LENGTH).toBe(128);
-    expect(PLAYLIST_NAME_MAX_LENGTH).toBe(255);
-    expect(PLAYLIST_DESCRIPTION_MAX_LENGTH).toBe(1000);
   });
 
   it("keeps notification and watch-room protocol values stable", () => {

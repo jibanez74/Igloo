@@ -20,6 +20,7 @@ import type { TrackType } from "@/types";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import {
+  AUDIO_SEEK_STEP_SECONDS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_ENTER_CLASS,
@@ -51,7 +52,6 @@ type AudioPlayerProps = {
 // has passed this many seconds.
 const RESTART_THRESHOLD_SECONDS = 3;
 const PREVIOUS_TRACK_ARIA_LABEL = "Previous track";
-const AUDIO_SEEK_STEP_SECONDS = 10;
 const AUDIO_VOLUME_STEP = 0.1;
 
 // Controls whose native keyboard interaction must win over the global

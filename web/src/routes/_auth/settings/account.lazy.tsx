@@ -34,6 +34,7 @@ import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
   ADMIN_USERS_KEY,
+  USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
@@ -79,7 +80,6 @@ type AccountErrorField =
 
 type AccountErrors = Partial<Record<AccountErrorField, string>>;
 
-const USER_EMAIL_MAX_LENGTH = 255;
 const MAX_AVATAR_SIZE = 20 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
   "image/jpeg",

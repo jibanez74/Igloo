@@ -25,6 +25,7 @@ import { Users, UserPlus, Pencil, Trash2, KeyRound, ShieldCheck, ShieldOff } fro
 import { adminUsersQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
 import {
   ADMIN_USERS_KEY,
+  USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
@@ -454,6 +455,8 @@ function CreateUserDialog({
       nextErrors.email = "Email is required.";
     } else if (!isValidEmail(trimmedEmail)) {
       nextErrors.email = "Enter a valid email address.";
+    } else if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
+      nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
     } else if (hasDuplicateEmail(users, trimmedEmail)) {
       nextErrors.email = "A user with that email already exists.";
     }
@@ -541,6 +544,7 @@ function CreateUserDialog({
                 onClearServerError();
               }}
               placeholder="user@example.com"
+              maxLength={USER_EMAIL_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.email || undefined}
@@ -569,8 +573,6 @@ function CreateUserDialog({
               }}
               placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
-              minLength={USER_PASSWORD_MIN_LENGTH}
-              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!errors.password || undefined}
               aria-describedby={describedBy(
@@ -672,6 +674,8 @@ function EditUserDialog({
       nextErrors.email = "Email is required.";
     } else if (!isValidEmail(trimmedEmail)) {
       nextErrors.email = "Enter a valid email address.";
+    } else if (trimmedEmail.length > USER_EMAIL_MAX_LENGTH) {
+      nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
     } else if (hasDuplicateEmail(users, trimmedEmail, user.id)) {
       nextErrors.email = "A user with that email already exists.";
     }
@@ -746,6 +750,7 @@ function EditUserDialog({
                 onClearServerError();
               }}
               placeholder="user@example.com"
+              maxLength={USER_EMAIL_MAX_LENGTH}
               required
               aria-required="true"
               aria-invalid={!!errors.email || undefined}
@@ -989,8 +994,6 @@ function ResetPasswordDialog({
               }}
               placeholder={`At least ${USER_PASSWORD_MIN_LENGTH} characters`}
               required
-              minLength={USER_PASSWORD_MIN_LENGTH}
-              maxLength={USER_PASSWORD_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!passwordError || undefined}
               aria-describedby={describedBy(

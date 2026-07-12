@@ -5,6 +5,7 @@ import { Users } from "lucide-react";
 import { createWatchRoom } from "@/lib/api";
 import {
   AUDIO_TRACK_DEFAULT_LABEL,
+  SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import {
@@ -123,13 +124,13 @@ export default function CreateWatchRoomDialog({
       : AUDIO_TRACK_DEFAULT_LABEL;
   const subtitleLabel =
     resolvedSettings.subtitleTrack === null
-      ? "Off"
+      ? SUBTITLES_NONE_LABEL
       : subtitleStreams[resolvedSettings.subtitleTrack] !== undefined
         ? formatSubtitleLabel(
             subtitleStreams[resolvedSettings.subtitleTrack],
             resolvedSettings.subtitleTrack,
           )
-        : "Off";
+        : SUBTITLES_NONE_LABEL;
 
   const mutation = useMutation({
     mutationFn: () =>

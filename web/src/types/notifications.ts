@@ -17,7 +17,7 @@ export type NotificationType = {
 export type CreateNotificationRequest = {
   title: NotificationTitle;
   message: string;
-  isAdmin?: boolean;
+  isAdmin: boolean;
 };
 
 export type CreateNotificationResponseType = {

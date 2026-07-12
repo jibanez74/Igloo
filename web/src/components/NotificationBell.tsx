@@ -32,19 +32,15 @@ import type {
   UnreadNotificationCountResponseType,
 } from "@/types";
 
-const NOTIFICATION_TITLE_LABELS: Record<NotificationTitle, string> = {
+const NOTIFICATION_TITLE_LABELS: Partial<Record<string, string>> = {
   [NOTIFICATION_TITLES.MOVIE_REQUEST]: "Movie request",
   [NOTIFICATION_TITLES.ALBUM_REQUEST]: "Album request",
   [NOTIFICATION_TITLES.TRACK_REQUEST]: "Track request",
   [NOTIFICATION_TITLES.OTHER]: "Notification",
-};
+} satisfies Record<NotificationTitle, string>;
 
 function notificationTitleLabel(title: string): string {
-  if (!Object.hasOwn(NOTIFICATION_TITLE_LABELS, title)) {
-    return "Notification";
-  }
-
-  return NOTIFICATION_TITLE_LABELS[title as NotificationTitle];
+  return NOTIFICATION_TITLE_LABELS[title] ?? "Notification";
 }
 
 // SQLite timestamps come back as "YYYY-MM-DD HH:MM:SS" in UTC; normalize to an

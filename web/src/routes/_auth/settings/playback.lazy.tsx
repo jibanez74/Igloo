@@ -102,15 +102,26 @@ function formsMatchSettings(
   );
 }
 
+function isDownloadSpeedOutOfRange(form: UpdatePlaybackSettingsRequest) {
+  return (
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= DOWNLOAD_SPEED_MAX_MBPS)
+  );
+}
+
+function isServerUploadOutOfRange(form: UpdatePlaybackSettingsRequest) {
+  return (
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 ||
+      form.server_upload_mbps >= SERVER_UPLOAD_MAX_MBPS)
+  );
+}
+
 function validatePlaybackSettingsForm(
   form: UpdatePlaybackSettingsRequest,
   settings: PlaybackSettingsType,
 ) {
-  if (
-    form.download_mbps != null &&
-    (form.download_mbps <= 0 ||
-      form.download_mbps >= DOWNLOAD_SPEED_MAX_MBPS)
-  ) {
+  if (isDownloadSpeedOutOfRange(form)) {
     return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
   }
   if (
@@ -132,12 +143,7 @@ function validatePlaybackSettingsForm(
   ) {
     return "Subtitle language must be a 2- or 3-letter lowercase code.";
   }
-  if (
-    settings.is_admin &&
-    form.server_upload_mbps != null &&
-    (form.server_upload_mbps <= 0 ||
-      form.server_upload_mbps >= SERVER_UPLOAD_MAX_MBPS)
-  ) {
+  if (settings.is_admin && isServerUploadOutOfRange(form)) {
     return SERVER_UPLOAD_VALIDATION_MESSAGE;
   }
   return "";
@@ -361,15 +367,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     : null;
   const downloadMbpsInvalid =
     validationMessage === DOWNLOAD_SPEED_VALIDATION_MESSAGE &&
-    form.download_mbps != null &&
-    (form.download_mbps <= 0 ||
-      form.download_mbps >= DOWNLOAD_SPEED_MAX_MBPS);
+    isDownloadSpeedOutOfRange(form);
   const serverUploadMbpsInvalid =
     validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
     settings.is_admin &&
-    form.server_upload_mbps != null &&
-    (form.server_upload_mbps <= 0 ||
-      form.server_upload_mbps >= SERVER_UPLOAD_MAX_MBPS);
+    isServerUploadOutOfRange(form);
 
   return (
     <form

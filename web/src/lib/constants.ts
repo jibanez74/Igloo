@@ -78,8 +78,14 @@ export const SEARCH_MUSICIANS_KEY = "search-musicians";
 export const SEARCH_TRACKS_KEY = "search-tracks";
 
 // Shared API validation limits. Keep form validation and user-facing limit
-// messages derived from these values so they cannot drift apart.
+// messages derived from these values so they cannot drift apart. The limits
+// are enforced server-side in server/cmd/api/user_handler.go (name, email,
+// password) and server/cmd/api/playlist_handler.go (playlist name,
+// description), which count Unicode code points — validate with code points
+// (e.g. Array.from(value).length), not .length, for fields that accept
+// astral characters.
 export const USER_NAME_MAX_LENGTH = 100;
+export const USER_EMAIL_MAX_LENGTH = 255;
 export const USER_PASSWORD_MIN_LENGTH = 9;
 export const USER_PASSWORD_MAX_LENGTH = 128;
 export const PLAYLIST_NAME_MAX_LENGTH = 255;
@@ -192,6 +198,7 @@ export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
 export const MOVIE_SEEK_STEP_SEC = 10;
+export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
