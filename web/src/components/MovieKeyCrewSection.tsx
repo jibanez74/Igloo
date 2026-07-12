@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { MOVIE_DETAILS_KEY_CREW_WRITERS_CAP } from "@/lib/constants";
 import { sortLibraryCrewForDisplay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MovieKeyCrewSectionProps } from "@/types";
+
+const KEY_CREW_WRITERS_CAP = 3;
 
 export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) {
   const [crewExpanded, setCrewExpanded] = useState(false);
@@ -11,7 +12,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
   const director = crew.find(c => c.job === "Director");
   const writers = crew
     .filter(c => c.department === "Writing")
-    .slice(0, MOVIE_DETAILS_KEY_CREW_WRITERS_CAP);
+    .slice(0, KEY_CREW_WRITERS_CAP);
 
   const keyCrewRowIds = new Set<number>();
   if (director) keyCrewRowIds.add(director.id);

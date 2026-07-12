@@ -15,7 +15,7 @@ import {
 } from "@/lib/constants";
 import { isApiFailure } from "@/lib/is-api-failure";
 
-export const MUSIC_LIBRARY_QUERY_KEYS = [
+const MUSIC_LIBRARY_QUERY_KEYS = [
   MUSIC_STATS_KEY,
   ALBUMS_PAGINATED_KEY,
   ALBUM_DETAILS_KEY,

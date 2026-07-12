@@ -84,6 +84,10 @@ import {
   type MusicSearchParams,
 } from "@/types/route-search";
 
+const MUSIC_PAGE_TITLE = "Music Library - Igloo";
+const MUSIC_PAGE_DESCRIPTION =
+  "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
+
 export const Route = createFileRoute("/_auth/music/")({
   validateSearch: musicSearchSchema,
   loaderDeps: ({ search: { albumsPage, musiciansPage } }) => ({
@@ -112,9 +116,6 @@ function MusicPage() {
   const { isExiting, runTransition, usesContentAnimation } =
     useContentFadeTransition(CONTENT_FADE_TRANSITION_MS);
 
-  // React 19 document metadata
-  const pageTitle = "Music Library - Igloo";
-  const pageDescription = "Browse your collection of musicians, albums, tracks, and playlists in your Igloo media library.";
   let topLevelTabContent = (
     <AlbumsTabContent currentPage={albumsPage} perPage={ALBUMS_PER_PAGE} />
   );
@@ -162,8 +163,8 @@ function MusicPage() {
   return (
     <div className="min-w-0">
       {/* React 19 Document Metadata */}
-      <title>{pageTitle}</title>
-      <meta name="description" content={pageDescription} />
+      <title>{MUSIC_PAGE_TITLE}</title>
+      <meta name="description" content={MUSIC_PAGE_DESCRIPTION} />
 
       {/* Page header */}
       <header className={cn("mb-6 sm:mb-7", MOTION_SECTION_ENTER_CLASS)}>

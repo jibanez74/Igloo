@@ -35,6 +35,7 @@ import {
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
+  SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
@@ -56,14 +57,14 @@ export const Route = createLazyFileRoute("/_auth/settings/playback")({
   component: PlaybackSettings,
 });
 
-const NO_PROFILE_VALUE = "__none__";
-const NO_LANGUAGE_VALUE = "__none__";
-const SUBTITLE_OFF_VALUE = "off";
+const NO_SELECTION_VALUE = "__none__";
+const DOWNLOAD_SPEED_MAX_MBPS = 10_000;
+const SERVER_UPLOAD_MAX_MBPS = 100_000;
 const LANGUAGE_CODE_PATTERN = /^[a-z]{2,3}$/;
 const DOWNLOAD_SPEED_VALIDATION_MESSAGE =
-  "Download speed must be between 0 and 10000 Mbps.";
+  `Download speed must be between 0 and ${DOWNLOAD_SPEED_MAX_MBPS} Mbps.`;
 const SERVER_UPLOAD_VALIDATION_MESSAGE =
-  "Server upload bandwidth must be greater than 0 and less than 100000 Mbps.";
+  `Server upload bandwidth must be greater than 0 and less than ${SERVER_UPLOAD_MAX_MBPS} Mbps.`;
 
 const SORTED_LANGUAGE_ENTRIES = Object.entries(LANGUAGE_NAMES).sort(
   ([, a], [, b]) => a.localeCompare(b),
@@ -101,14 +102,26 @@ function formsMatchSettings(
   );
 }
 
+function isDownloadSpeedOutOfRange(form: UpdatePlaybackSettingsRequest) {
+  return (
+    form.download_mbps != null &&
+    (form.download_mbps <= 0 || form.download_mbps >= DOWNLOAD_SPEED_MAX_MBPS)
+  );
+}
+
+function isServerUploadOutOfRange(form: UpdatePlaybackSettingsRequest) {
+  return (
+    form.server_upload_mbps != null &&
+    (form.server_upload_mbps <= 0 ||
+      form.server_upload_mbps >= SERVER_UPLOAD_MAX_MBPS)
+  );
+}
+
 function validatePlaybackSettingsForm(
   form: UpdatePlaybackSettingsRequest,
   settings: PlaybackSettingsType,
 ) {
-  if (
-    form.download_mbps != null &&
-    (form.download_mbps <= 0 || form.download_mbps >= 10000)
-  ) {
+  if (isDownloadSpeedOutOfRange(form)) {
     return DOWNLOAD_SPEED_VALIDATION_MESSAGE;
   }
   if (
@@ -130,11 +143,7 @@ function validatePlaybackSettingsForm(
   ) {
     return "Subtitle language must be a 2- or 3-letter lowercase code.";
   }
-  if (
-    settings.is_admin &&
-    form.server_upload_mbps != null &&
-    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000)
-  ) {
+  if (settings.is_admin && isServerUploadOutOfRange(form)) {
     return SERVER_UPLOAD_VALIDATION_MESSAGE;
   }
   return "";
@@ -300,7 +309,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     startTransition(() => {
       setForm(current => ({
         ...current,
-        preferred_profile: value === NO_PROFILE_VALUE ? null : value,
+        preferred_profile: value === NO_SELECTION_VALUE ? null : value,
       }));
     });
   };
@@ -310,7 +319,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       setForm(current => ({
         ...current,
         preferred_audio_language:
-          value === NO_LANGUAGE_VALUE ? null : value,
+          value === NO_SELECTION_VALUE ? null : value,
       }));
     });
   };
@@ -320,7 +329,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       setForm(current => ({
         ...current,
         preferred_subtitle_language:
-          value === NO_LANGUAGE_VALUE ? null : value,
+          value === NO_SELECTION_VALUE ? null : value,
       }));
     });
   };
@@ -358,13 +367,11 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
     : null;
   const downloadMbpsInvalid =
     validationMessage === DOWNLOAD_SPEED_VALIDATION_MESSAGE &&
-    form.download_mbps != null &&
-    (form.download_mbps <= 0 || form.download_mbps >= 10000);
+    isDownloadSpeedOutOfRange(form);
   const serverUploadMbpsInvalid =
     validationMessage === SERVER_UPLOAD_VALIDATION_MESSAGE &&
     settings.is_admin &&
-    form.server_upload_mbps != null &&
-    (form.server_upload_mbps <= 0 || form.server_upload_mbps >= 100000);
+    isServerUploadOutOfRange(form);
 
   return (
     <form
@@ -567,7 +574,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             <Label htmlFor={preferredProfileId}>Profile</Label>
             <Select
               name="preferred_profile"
-              value={form.preferred_profile ?? NO_PROFILE_VALUE}
+              value={form.preferred_profile ?? NO_SELECTION_VALUE}
               onValueChange={handleProfileChange}
               disabled={updateMutation.isPending}
             >
@@ -579,7 +586,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               </SelectTrigger>
               <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
-                  value={NO_PROFILE_VALUE}
+                  value={NO_SELECTION_VALUE}
                   className="focus:bg-muted focus:text-foreground"
                 >
                   Use recommended
@@ -622,7 +629,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
             <Select
               name="preferred_audio_language"
-              value={form.preferred_audio_language ?? NO_LANGUAGE_VALUE}
+              value={form.preferred_audio_language ?? NO_SELECTION_VALUE}
               onValueChange={handleAudioLanguageChange}
               disabled={updateMutation.isPending}
             >
@@ -634,7 +641,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               </SelectTrigger>
               <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
-                  value={NO_LANGUAGE_VALUE}
+                  value={NO_SELECTION_VALUE}
                   className="focus:bg-muted focus:text-foreground"
                 >
                   No preference
@@ -679,7 +686,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             </Label>
             <Select
               name="preferred_subtitle_language"
-              value={form.preferred_subtitle_language ?? NO_LANGUAGE_VALUE}
+              value={form.preferred_subtitle_language ?? NO_SELECTION_VALUE}
               onValueChange={handleSubtitleLanguageChange}
               disabled={updateMutation.isPending}
             >
@@ -691,7 +698,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
               </SelectTrigger>
               <SelectContent className="border-border bg-card text-foreground">
                 <SelectItem
-                  value={NO_LANGUAGE_VALUE}
+                  value={NO_SELECTION_VALUE}
                   className="focus:bg-muted focus:text-foreground"
                 >
                   No preference

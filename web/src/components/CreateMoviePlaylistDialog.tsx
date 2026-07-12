@@ -18,7 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { createMoviePlaylist } from "@/lib/api";
-import { MOVIE_PLAYLISTS_KEY } from "@/lib/constants";
+import {
+  MOVIE_PLAYLISTS_KEY,
+  PLAYLIST_DESCRIPTION_MAX_LENGTH,
+  PLAYLIST_NAME_MAX_LENGTH,
+} from "@/lib/constants";
+import { codePointLength } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type CreateMoviePlaylistDialogProps = {
@@ -83,8 +88,16 @@ export default function CreateMoviePlaylistDialog({
       showValidationError("Playlist name is required");
       return;
     }
-    if (name.trim().length > 255) {
-      showValidationError("Playlist name is too long (max 255 characters)");
+    if (codePointLength(name.trim()) > PLAYLIST_NAME_MAX_LENGTH) {
+      showValidationError(
+        `Playlist name is too long (max ${PLAYLIST_NAME_MAX_LENGTH} characters)`,
+      );
+      return;
+    }
+    if (codePointLength(description.trim()) > PLAYLIST_DESCRIPTION_MAX_LENGTH) {
+      showValidationError(
+        `Playlist description is too long (max ${PLAYLIST_DESCRIPTION_MAX_LENGTH} characters)`,
+      );
       return;
     }
     mutation.mutate();
@@ -122,7 +135,6 @@ export default function CreateMoviePlaylistDialog({
                 className="border-border bg-muted text-foreground"
                 placeholder="My watchlist"
                 autoComplete="off"
-                maxLength={255}
               />
             </div>
             <div className="grid gap-2">
@@ -136,7 +148,6 @@ export default function CreateMoviePlaylistDialog({
                 className="border-border bg-muted text-foreground"
                 placeholder="Optional notes"
                 autoComplete="off"
-                maxLength={1000}
               />
             </div>
           </div>

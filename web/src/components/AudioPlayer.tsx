@@ -20,6 +20,7 @@ import type { TrackType } from "@/types";
 import ProgressBar from "@/components/ProgressBar";
 import VolumeControl from "@/components/VolumeControl";
 import {
+  AUDIO_SEEK_STEP_SECONDS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_ENTER_CLASS,
@@ -50,6 +51,8 @@ type AudioPlayerProps = {
 // "Previous" restarts the current track instead of navigating once playback
 // has passed this many seconds.
 const RESTART_THRESHOLD_SECONDS = 3;
+const PREVIOUS_TRACK_ARIA_LABEL = "Previous track";
+const AUDIO_VOLUME_STEP = 0.1;
 
 // Controls whose native keyboard interaction must win over the global
 // playback shortcuts.
@@ -143,8 +146,13 @@ export default function AudioPlayer({
   const currentIndex = track ? tracks.findIndex(t => t.id === track.id) : -1;
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < tracks.length - 1 && currentIndex !== -1;
-  const prevAriaLabel = "Previous track";
   const nextAriaLabel = hasNext ? "Next track" : "No next track";
+  // Mirrors playPrevious(): past the restart threshold (or with no previous
+  // track) the button restarts the current track instead of navigating.
+  const previousAriaLabel =
+    hasPrevious && currentTime <= RESTART_THRESHOLD_SECONDS
+      ? PREVIOUS_TRACK_ARIA_LABEL
+      : "Restart track";
   const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
@@ -266,7 +274,7 @@ export default function AudioPlayer({
 
       audio.currentTime = Math.max(
         0,
-        audio.currentTime - (seekOffset ?? 10),
+        audio.currentTime - (seekOffset ?? AUDIO_SEEK_STEP_SECONDS),
       );
     },
   );
@@ -279,7 +287,7 @@ export default function AudioPlayer({
       const totalDuration = audio.duration || duration;
       audio.currentTime = Math.min(
         totalDuration,
-        audio.currentTime + (seekOffset ?? 10),
+        audio.currentTime + (seekOffset ?? AUDIO_SEEK_STEP_SECONDS),
       );
     },
   );
@@ -488,21 +496,27 @@ export default function AudioPlayer({
         break;
       case "ArrowLeft":
         event.preventDefault();
-        audio.currentTime = Math.max(0, audio.currentTime - 10);
+        audio.currentTime = Math.max(
+          0,
+          audio.currentTime - AUDIO_SEEK_STEP_SECONDS,
+        );
         break;
       case "ArrowRight": {
         event.preventDefault();
         const totalDuration = audio.duration || duration;
-        audio.currentTime = Math.min(totalDuration, audio.currentTime + 10);
+        audio.currentTime = Math.min(
+          totalDuration,
+          audio.currentTime + AUDIO_SEEK_STEP_SECONDS,
+        );
         break;
       }
       case "ArrowUp":
         event.preventDefault();
-        audio.volume = Math.min(1, audio.volume + 0.1);
+        audio.volume = Math.min(1, audio.volume + AUDIO_VOLUME_STEP);
         break;
       case "ArrowDown":
         event.preventDefault();
-        audio.volume = Math.max(0, audio.volume - 0.1);
+        audio.volume = Math.max(0, audio.volume - AUDIO_VOLUME_STEP);
         break;
       case "n":
       case "N":
@@ -709,7 +723,7 @@ export default function AudioPlayer({
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
                   )}
-                  aria-label={prevAriaLabel}
+                  aria-label={previousAriaLabel}
                 >
                   <SkipBack className="size-6" aria-hidden="true" />
                 </button>
@@ -823,7 +837,7 @@ export default function AudioPlayer({
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
                     "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
                   )}
-                  aria-label={prevAriaLabel}
+                  aria-label={previousAriaLabel}
                 >
                   <SkipBack className="size-4" aria-hidden="true" />
                 </button>

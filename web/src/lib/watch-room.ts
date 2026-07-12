@@ -1,4 +1,5 @@
 import type { WatchRoomServerEventType } from "@/types";
+import { WATCH_ROOM_EVENT_TYPES } from "@/lib/constants";
 
 export function watchRoomStreamUrl(roomId: number, playbackMode: string) {
   if (playbackMode === "direct") {
@@ -24,15 +25,15 @@ export function watchRoomAnnouncement(
   title: string,
 ): string | undefined {
   switch (event.type) {
-    case "playback_changed":
+    case WATCH_ROOM_EVENT_TYPES.PLAYBACK_CHANGED:
       if (!event.playback) return undefined;
       if (event.playback.paused) {
         return `Paused ${title}`;
       }
       return `Playing ${title}`;
-    case "member_joined":
+    case WATCH_ROOM_EVENT_TYPES.MEMBER_JOINED:
       return event.member ? `${event.member.name} joined the room` : undefined;
-    case "member_left":
+    case WATCH_ROOM_EVENT_TYPES.MEMBER_LEFT:
       return event.member ? `${event.member.name} left the room` : undefined;
     default:
       return undefined;

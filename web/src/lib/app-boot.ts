@@ -1,1 +1,0 @@
-export const SPLASH_REMOVE_DELAY_MS = 260;

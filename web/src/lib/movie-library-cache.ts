@@ -14,7 +14,7 @@ import {
 } from "@/lib/constants";
 import { isApiFailure } from "@/lib/is-api-failure";
 
-export const MOVIE_LIBRARY_QUERY_KEYS = [
+const MOVIE_LIBRARY_QUERY_KEYS = [
   MOVIES_STATS_KEY,
   MOVIES_LIBRARY_KEY,
   MOVIES_GENRES_KEY,

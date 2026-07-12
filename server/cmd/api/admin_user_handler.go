@@ -83,8 +83,8 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if len(req.Name) > 100 {
-		helpers.ErrorJSON(w, errors.New("name must be 100 characters or less"), http.StatusBadRequest)
+	if err := validateUserName(req.Name); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -163,8 +163,8 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if len(req.Name) > 100 {
-		helpers.ErrorJSON(w, errors.New("name must be 100 characters or less"), http.StatusBadRequest)
+	if err := validateUserName(req.Name); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 

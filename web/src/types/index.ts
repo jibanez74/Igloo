@@ -131,6 +131,7 @@ export type { DeviceType, DevicesListResponseType } from "./devices";
 
 // Notification types
 export type {
+  NotificationTitle,
   NotificationType,
   CreateNotificationRequest,
   CreateNotificationResponseType,

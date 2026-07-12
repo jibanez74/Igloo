@@ -11,6 +11,7 @@ import {
   MOVIES_PER_PAGE,
   MUSICIANS_PAGINATED_KEY,
   MUSICIANS_PER_PAGE,
+  NOTIFICATION_TITLES,
   PLAYLIST_TRACKS_KEY,
   PLAYLIST_TRACKS_PAGE_SIZE,
   SEARCH_MOVIES_KEY,
@@ -19,6 +20,8 @@ import {
   STREAM_MODES,
   TRACKS_INFINITE_KEY,
   TRACKS_INFINITE_PAGE_SIZE,
+  WATCH_ROOM_CLIENT_EVENT_TYPES,
+  WATCH_ROOM_EVENT_TYPES,
 } from "@/lib/constants";
 import {
   albumsPaginatedQueryOpts,
@@ -41,6 +44,29 @@ describe("constants contracts", () => {
 
   it("derives stream mode ids from stream modes", () => {
     expect(STREAM_MODE_IDS).toEqual(STREAM_MODES.map((mode) => mode.id));
+  });
+
+  it("keeps notification and watch-room protocol values stable", () => {
+    expect(Object.values(NOTIFICATION_TITLES)).toEqual([
+      "movie_request",
+      "album_request",
+      "track_request",
+      "other",
+    ]);
+    expect(Object.values(WATCH_ROOM_EVENT_TYPES)).toEqual([
+      "room_snapshot",
+      "playback_changed",
+      "member_joined",
+      "member_left",
+      "room_deleted",
+      "pong",
+    ]);
+    expect(Object.values(WATCH_ROOM_CLIENT_EVENT_TYPES)).toEqual([
+      "play",
+      "pause",
+      "seek",
+      "ping",
+    ]);
   });
 
   it("uses shared default page sizes in query option keys", () => {

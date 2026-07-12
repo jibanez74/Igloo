@@ -3,6 +3,7 @@ import {
   ISO_639_2_TO_1,
   LANGUAGE_NAMES,
   STREAM_MODES,
+  SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
@@ -144,7 +145,7 @@ export function getDefaultPlaybackSettings(
 
   let subtitleTrack: number | null = null;
   const preferredSubtitle = userPrefs?.preferred_subtitle_language ?? null;
-  if (preferredSubtitle && preferredSubtitle !== "off") {
+  if (preferredSubtitle && preferredSubtitle !== SUBTITLE_OFF_VALUE) {
     const normalized = normalizeLang(preferredSubtitle);
     if (normalized && subtitleStreams && subtitleStreams.length > 0) {
       const matchIndex = subtitleStreams.findIndex(

@@ -1,8 +1,13 @@
+import type { NOTIFICATION_TITLES } from "@/lib/constants";
+
+export type NotificationTitle =
+  (typeof NOTIFICATION_TITLES)[keyof typeof NOTIFICATION_TITLES];
+
 export type NotificationType = {
   id: number;
   created_by_user_id: number;
   user_id: number | null;
-  title: string;
+  title: NotificationTitle;
   message: string;
   is_admin: boolean;
   created_at: string;
@@ -10,7 +15,7 @@ export type NotificationType = {
 };
 
 export type CreateNotificationRequest = {
-  title: string;
+  title: NotificationTitle;
   message: string;
   isAdmin: boolean;
 };
@@ -23,7 +28,7 @@ export type CreateNotificationResponseType = {
 // and the viewer's read state are resolved server-side.
 export type NotificationListItemType = {
   id: number;
-  title: string;
+  title: NotificationTitle;
   message: string;
   is_admin: boolean;
   is_read: boolean;

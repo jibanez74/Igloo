@@ -19,8 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { createPlaylist, updatePlaylist } from "@/lib/api";
-import { PLAYLISTS_KEY, PLAYLIST_DETAILS_KEY } from "@/lib/constants";
+import {
+  PLAYLIST_DESCRIPTION_MAX_LENGTH,
+  PLAYLIST_DETAILS_KEY,
+  PLAYLIST_NAME_MAX_LENGTH,
+  PLAYLISTS_KEY,
+} from "@/lib/constants";
 import { unwrapString } from "@/lib/nullable";
+import { codePointLength } from "@/lib/utils";
 import type { NullableString } from "@/types";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -193,8 +199,17 @@ function PlaylistForm({
       return;
     }
 
-    if (name.trim().length > 255) {
-      showValidationError("Playlist name is too long (max 255 characters)");
+    if (codePointLength(name.trim()) > PLAYLIST_NAME_MAX_LENGTH) {
+      showValidationError(
+        `Playlist name is too long (max ${PLAYLIST_NAME_MAX_LENGTH} characters)`,
+      );
+      return;
+    }
+
+    if (codePointLength(description.trim()) > PLAYLIST_DESCRIPTION_MAX_LENGTH) {
+      showValidationError(
+        `Playlist description is too long (max ${PLAYLIST_DESCRIPTION_MAX_LENGTH} characters)`,
+      );
       return;
     }
 
@@ -238,7 +253,6 @@ function PlaylistForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="My Playlist"
-            maxLength={255}
             className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-ring"
             disabled={mutation.isPending}
             autoFocus
@@ -260,7 +274,6 @@ function PlaylistForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."
-            maxLength={1000}
             rows={3}
             className="w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
             disabled={mutation.isPending}

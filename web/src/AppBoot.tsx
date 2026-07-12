@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { SPLASH_REMOVE_DELAY_MS } from "@/lib/app-boot";
+import { SPLASH_REMOVE_DELAY_MS } from "@/lib/constants";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
 import App from "./App";
 import { AudioPlayerProvider } from "./context/AudioPlayerContext";

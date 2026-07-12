@@ -11,9 +11,32 @@ export const DEVICES_KEY = "devices";
 export const NOTIFICATIONS_KEY = "notifications";
 export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
 
+export const NOTIFICATION_TITLES = {
+  MOVIE_REQUEST: "movie_request",
+  ALBUM_REQUEST: "album_request",
+  TRACK_REQUEST: "track_request",
+  OTHER: "other",
+} as const;
+
 export const WATCH_ROOMS_KEY = "watch-rooms";
 export const WATCH_ROOM_KEY = "watch-room";
 export const WATCH_ROOM_INVITE_USERS_KEY = "watch-room-invite-users";
+
+export const WATCH_ROOM_EVENT_TYPES = {
+  ROOM_SNAPSHOT: "room_snapshot",
+  PLAYBACK_CHANGED: "playback_changed",
+  MEMBER_JOINED: "member_joined",
+  MEMBER_LEFT: "member_left",
+  ROOM_DELETED: "room_deleted",
+  PONG: "pong",
+} as const;
+
+export const WATCH_ROOM_CLIENT_EVENT_TYPES = {
+  PLAY: "play",
+  PAUSE: "pause",
+  SEEK: "seek",
+  PING: "ping",
+} as const;
 
 export const TMDB_STATUS_KEY = "tmdb-status";
 export const SPOTIFY_STATUS_KEY = "spotify-status";
@@ -54,6 +77,24 @@ export const SEARCH_ALBUMS_KEY = "search-albums";
 export const SEARCH_MUSICIANS_KEY = "search-musicians";
 export const SEARCH_TRACKS_KEY = "search-tracks";
 
+// Shared API validation limits. Keep form validation and user-facing limit
+// messages derived from these values so they cannot drift apart. The limits
+// are enforced server-side in server/cmd/api/user_handler.go (name, email,
+// password) and server/cmd/api/playlist_handler.go (playlist name,
+// description), which count Unicode code points — validate with code points
+// (e.g. Array.from(value).length), not .length, for fields that accept
+// astral characters.
+export const USER_NAME_MAX_LENGTH = 100;
+export const USER_EMAIL_MAX_LENGTH = 255;
+export const USER_PASSWORD_MIN_LENGTH = 9;
+export const USER_PASSWORD_MAX_LENGTH = 128;
+export const PLAYLIST_NAME_MAX_LENGTH = 255;
+export const PLAYLIST_DESCRIPTION_MAX_LENGTH = 1000;
+
+// App bootstrap timing. The splash CSS transition and AppBoot removal use the
+// same post-hydration window.
+export const SPLASH_REMOVE_DELAY_MS = 260;
+
 // Pagination and list-size defaults. These values mirror server defaults where
 // noted and should be used by API wrappers, query options, routes, and tests.
 export const SEARCH_PER_PAGE = 24;
@@ -93,9 +134,8 @@ export const TMDB_LOGO_SIZE = "w92";
 export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
 export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 
-// Shared surface for library track lists (tracks tab + liked tracks). Keeps the
-// two list frames on the music index visually identical: card radius + standard
-// surface/border tokens.
+// Shared surface for library and search track lists. Keeps list frames visually
+// identical: card radius plus standard surface and border tokens.
 export const TRACK_LIST_CONTAINER_CLASS =
   "overflow-hidden rounded-xl border border-border bg-card/50";
 
@@ -158,6 +198,7 @@ export const STREAM_MODE_IDS = streamModeIds(STREAM_MODES);
 
 export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
 export const MOVIE_SEEK_STEP_SEC = 10;
+export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
@@ -183,8 +224,8 @@ export const HLS_JS_BACK_BUFFER_LENGTH_SEC = 120;
 
 // Playback settings dialog UI values and class contracts.
 export const PLAYBACK_SETTINGS_SUMMARY_LOADING = "Loading playback options…";
-/** Subtitle `<select>` / Radix value when subtitles are off. */
-export const SUBTITLE_TRACK_SELECT_OFF_VALUE = "off";
+/** Subtitle preference and track-select value when subtitles are off. */
+export const SUBTITLE_OFF_VALUE = "off";
 /** Single audio stream placeholder option value/index. */
 export const AUDIO_TRACK_SELECT_DEFAULT_VALUE = "0";
 export const AUDIO_TRACK_DEFAULT_LABEL = "Default";
@@ -292,9 +333,6 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   zh: "Chinese",
 };
 
-/** Key crew: max writing-department rows before "Show all crew" */
-export const MOVIE_DETAILS_KEY_CREW_WRITERS_CAP = 3;
-
 // Shared motion tokens and class contracts. Keep reduced-motion behavior in
 // these constants so components stay consistent.
 export const MOTION_DURATION_MICRO_MS = 150;
@@ -320,8 +358,6 @@ export const MOTION_TRACK_ICON_BUTTON_CLASS =
   "transition-[color,opacity] duration-150 motion-reduce:transition-none";
 export const MOTION_TRACK_MENU_TRIGGER_CLASS =
   "transition-colors duration-150 motion-reduce:transition-none";
-export const MOTION_ROW_SURFACE_CLASS =
-  "transition-[background-color,border-color,box-shadow] duration-200 ease-out motion-reduce:transition-colors";
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
 export const MOTION_MEDIA_OVERLAY_CLASS =
@@ -347,9 +383,6 @@ export const MOTION_DECORATIVE_PING_CLASS =
   "animate-ping motion-reduce:animate-none";
 export const MOTION_DECORATIVE_BOUNCE_CLASS =
   "animate-bounce motion-reduce:animate-none";
-export const MOTION_DECORATIVE_STATE_CLASS =
-  "transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none motion-reduce:transform-none";
-
 export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";

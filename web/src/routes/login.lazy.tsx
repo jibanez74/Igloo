@@ -15,7 +15,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { MOTION_PAGE_ENTER_CLASS } from "@/lib/constants";
+import {
+  MOTION_PAGE_ENTER_CLASS,
+  USER_PASSWORD_MAX_LENGTH,
+  USER_PASSWORD_MIN_LENGTH,
+} from "@/lib/constants";
 import {
   inputIconClassName,
   lightInputActionClassName,
@@ -149,8 +153,8 @@ function LoginPage() {
                     />
                     <Input
                       type={showPassword ? "text" : "password"}
-                      minLength={9}
-                      maxLength={128}
+                      minLength={USER_PASSWORD_MIN_LENGTH}
+                      maxLength={USER_PASSWORD_MAX_LENGTH}
                       id="password"
                       name="password"
                       autoComplete="current-password"

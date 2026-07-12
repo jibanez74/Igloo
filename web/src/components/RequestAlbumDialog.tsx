@@ -11,14 +11,13 @@ import {
 import SpotifyAlbumPicker from "@/components/SpotifyAlbumPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
+import { NOTIFICATION_TITLES } from "@/lib/constants";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   showActionFailed,
   showCreated,
 } from "@/lib/toast-helpers";
 import type { SpotifyAlbumSearchResultType } from "@/types";
-
-const ALBUM_REQUEST_NOTIFICATION_TITLE = "album_request";
 
 type RequestAlbumDialogProps = {
   open: boolean;
@@ -80,7 +79,7 @@ export default function RequestAlbumDialog({
     ].filter(Boolean);
 
     const response = await createNotification({
-      title: ALBUM_REQUEST_NOTIFICATION_TITLE,
+      title: NOTIFICATION_TITLES.ALBUM_REQUEST,
       message: lines.join("\n"),
       isAdmin: true,
     });

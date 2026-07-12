@@ -44,6 +44,20 @@ func validatePassword(password, label string) error {
 	return nil
 }
 
+const (
+	userNameMaxLength  = 100
+	userEmailMaxLength = 255
+)
+
+// validateUserName enforces the shared name length bound in characters
+// (runes), matching the web client's validation.
+func validateUserName(name string) error {
+	if utf8.RuneCountInString(name) > userNameMaxLength {
+		return fmt.Errorf("name must be %d characters or less", userNameMaxLength)
+	}
+	return nil
+}
+
 type UpdateUserNameRequest struct {
 	Name string `json:"name"`
 }
@@ -66,8 +80,8 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Name) > 100 {
-		helpers.ErrorJSON(w, errors.New("name must be 100 characters or less"), http.StatusBadRequest)
+	if err := validateUserName(req.Name); err != nil {
+		helpers.ErrorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -115,8 +129,8 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if len(req.Email) > 255 {
-		helpers.ErrorJSON(w, errors.New("email must be 255 characters or less"), http.StatusBadRequest)
+	if utf8.RuneCountInString(req.Email) > userEmailMaxLength {
+		helpers.ErrorJSON(w, fmt.Errorf("email must be %d characters or less", userEmailMaxLength), http.StatusBadRequest)
 		return
 	}
 
