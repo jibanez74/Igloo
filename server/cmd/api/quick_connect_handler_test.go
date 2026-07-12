@@ -12,19 +12,15 @@ import (
 )
 
 type quickConnectInitiateResponse struct {
-	Error bool `json:"error"`
-	Data  struct {
+	Data struct {
 		Code                string `json:"code"`
 		Secret              string `json:"secret"`
-		ExpiresInSeconds    int    `json:"expires_in_seconds"`
 		PollIntervalSeconds int    `json:"poll_interval_seconds"`
 	} `json:"data"`
 }
 
 type quickConnectRedeemResponse struct {
-	Error   bool   `json:"error"`
-	Message string `json:"message"`
-	Data    struct {
+	Data struct {
 		Status string `json:"status"`
 		Token  string `json:"token"`
 		Device struct {

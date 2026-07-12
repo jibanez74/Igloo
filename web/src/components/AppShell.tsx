@@ -50,7 +50,10 @@ export default function AppShell({ children }: PropsWithChildren) {
 
         <div
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 lg:px-8",
+            // overflow-x-clip (not hidden/auto): clipping must not create a
+            // scroll container, or sticky elements inside pages stop sticking
+            // to the window scroll.
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip px-4 py-6 sm:px-6 lg:px-8",
             isMiniPlayerVisible && "pb-28 sm:pb-24",
           )}
         >

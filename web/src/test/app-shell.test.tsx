@@ -123,9 +123,9 @@ describe("AppShell", () => {
       );
 
       const main = screen.getByRole("main");
-      const scroller = main.querySelector(".overflow-y-auto");
+      const scroller = main.querySelector(".overflow-x-clip");
       if (!scroller) {
-        throw new Error("Scroll container was not rendered");
+        throw new Error("Content container was not rendered");
       }
 
       expect(scroller).not.toHaveClass("pb-28");

@@ -235,7 +235,7 @@ describe("settings route tab transitions", () => {
 
     await renderSettingsRoute("/settings");
 
-    expect(await screen.findByText("General Settings")).toBeInTheDocument();
+    expect(await screen.findByText("Application Behavior")).toBeInTheDocument();
 
     // Warm the lazy route chunk so navigation renders without a cold dynamic
     // import racing the waitFor timeout on slow CI runners.
@@ -243,7 +243,7 @@ describe("settings route tab transitions", () => {
 
     await user.click(screen.getByRole("tab", { name: "Account" }));
 
-    expect(screen.getByText("General Settings")).toBeInTheDocument();
+    expect(screen.getByText("Application Behavior")).toBeInTheDocument();
     expect(screen.queryByText("Profile Information")).not.toBeInTheDocument();
     expect(startViewTransition).not.toHaveBeenCalled();
 
@@ -261,7 +261,7 @@ describe("settings route tab transitions", () => {
   it("uses shared motion contracts for settings surfaces and switches", async () => {
     await renderSettingsRoute("/settings");
 
-    const title = await screen.findByText("General Settings");
+    const title = await screen.findByText("Application Behavior");
     expect(title.closest('[data-slot="card"]')).toHaveClass(
       ...MOTION_SETTINGS_SURFACE_CLASS.split(" "),
     );

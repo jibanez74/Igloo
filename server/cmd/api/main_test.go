@@ -11,7 +11,6 @@ import (
 	"igloo/cmd/internal/database"
 	applogger "igloo/cmd/internal/logger"
 
-	_ "github.com/mattn/go-sqlite3"
 	cache "github.com/patrickmn/go-cache"
 )
 

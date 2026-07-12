@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,25 +14,9 @@ import (
 	"igloo/cmd/internal/tmdb"
 )
 
-// processMoviesBatch is a test-only helper that loads the scan index and runs a
-// single batch through processMoviesBatchWithContext, mirroring music's
-// processMusicBatch test helper.
-func (app *Application) processMoviesBatch(ctx context.Context, files []helpers.ScanFile) (scanned, skipped, errCount int, processed []string) {
-	scanIndex, err := app.loadMovieScanIndex(ctx)
-	if err != nil {
-		app.Logger.Error(fmt.Sprintf("failed to load movie scan index: %s", err.Error()))
-		return 0, 0, 1, nil
-	}
-
-	scan := newMovieScanContext(scanIndex)
-	scanned, skipped, errCount = app.processMoviesBatchWithContext(ctx, scan, files)
-	return scanned, skipped, errCount, nil
-}
-
 type stubMovieScannerFfprobe struct {
 	result  *ffprobe.FfprobeResult
 	results []*ffprobe.FfprobeResult
-	err     error
 	errs    []error
 	calls   int
 }
@@ -47,7 +30,7 @@ func (s *stubMovieScannerFfprobe) GetMetadata(filePath string) (*ffprobe.Ffprobe
 	if callIndex < len(s.results) && s.results[callIndex] != nil {
 		return s.results[callIndex], nil
 	}
-	return s.result, s.err
+	return s.result, nil
 }
 
 func (s *stubMovieScannerFfprobe) GetAudioMetadata(filePath string) (*ffprobe.FfprobeResult, error) {
@@ -63,7 +46,6 @@ type stubMovieScannerTmdb struct {
 	theaterMovies []*tmdb.TmdbMovie
 	searchCalls   []stubMovieScannerTmdbSearchCall
 	detailCalls   []int
-	clearCalls    int
 }
 
 type stubMovieScannerTmdbSearchCall struct {
@@ -105,9 +87,7 @@ func (s *stubMovieScannerTmdb) GetMoviesInTheaters(_ context.Context) ([]*tmdb.T
 	return s.theaterMovies, nil
 }
 
-func (s *stubMovieScannerTmdb) ClearCache() {
-	s.clearCalls++
-}
+func (*stubMovieScannerTmdb) ClearCache() {}
 
 func testMovieMetadata() *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{

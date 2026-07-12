@@ -66,9 +66,7 @@ func createTestUser(t *testing.T, app *Application, name, email string, isAdmin 
 }
 
 type playbackSettingsEnvelope struct {
-	Error   bool   `json:"error"`
-	Message string `json:"message"`
-	Data    struct {
+	Data struct {
 		Settings playbackSettingsResponse `json:"settings"`
 	} `json:"data"`
 }
