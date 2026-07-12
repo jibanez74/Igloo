@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState, useTransition } from "react";
+import { useContext, useId, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -218,6 +219,11 @@ type GeneralSettingsFormProps = {
 
 function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
+  const playerState = useContext(AudioPlayerStateContext);
+  const isMiniPlayerVisible =
+    playerState !== null &&
+    playerState.currentTrack !== null &&
+    !playerState.isExpanded;
   const tmdbKeyId = useId();
   const jellyfinBaseUrlId = useId();
   const jellyfinApiKeyId = useId();
@@ -685,7 +691,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <div
         className={cn(
-          "sticky bottom-4 z-10 rounded-lg border border-border/50 bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-md supports-backdrop-filter:bg-card/85 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          "sticky z-10 rounded-lg border border-border/50 bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-md supports-backdrop-filter:bg-card/85 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          isMiniPlayerVisible ? "bottom-28 sm:bottom-24" : "bottom-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >

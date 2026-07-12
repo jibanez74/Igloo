@@ -7,6 +7,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AudioPlayerStateContext } from "@/context/AudioPlayerContext";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -15,6 +16,7 @@ import {
   SETTINGS_KEY,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
+import type { AudioPlayerState } from "@/types";
 import { runContentFadeTransitionTimeout } from "./content-fade-transition";
 
 const defaultMatchMedia = window.matchMedia;
@@ -163,7 +165,10 @@ function createSettingsQueryClient() {
   });
 }
 
-async function renderSettingsRoute(initialEntry: string) {
+async function renderSettingsRoute(
+  initialEntry: string,
+  playerState: AudioPlayerState | null = null,
+) {
   vi.stubGlobal("scrollTo", vi.fn());
   mockSettingsFetch();
 
@@ -185,7 +190,9 @@ async function renderSettingsRoute(initialEntry: string) {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} context={{ queryClient }} />
+      <AudioPlayerStateContext.Provider value={playerState}>
+        <RouterProvider router={router} context={{ queryClient }} />
+      </AudioPlayerStateContext.Provider>
     </QueryClientProvider>,
   );
 
@@ -269,6 +276,7 @@ describe("settings route tab transitions", () => {
     const savePanel =
       screen.getByText("General settings").parentElement?.parentElement;
     expect(savePanel).toHaveClass(...MOTION_SETTINGS_SURFACE_CLASS.split(" "));
+    expect(savePanel).toHaveClass("bottom-4");
 
     const switchControl = screen.getByRole("switch", { name: "Library watcher" });
     expect(switchControl).toHaveClass(
@@ -277,6 +285,27 @@ describe("settings route tab transitions", () => {
     expect(switchControl.firstElementChild).toHaveClass(
       ...MOTION_CONTROL_THUMB_TRANSFORM_CLASS.split(" "),
     );
+  });
+
+  it("keeps sticky actions above the minimized audio player", async () => {
+    await renderSettingsRoute("/settings", {
+      currentTrack: { id: 1 } as NonNullable<AudioPlayerState["currentTrack"]>,
+      tracks: [],
+      albumCover: null,
+      albumTitle: "",
+      musicianName: null,
+      isPlaying: true,
+      isExpanded: false,
+      isKeyboardSuspended: false,
+      isShuffleMode: false,
+      isPlayAllMode: false,
+      trimmedCount: 0,
+    });
+
+    const savePanel =
+      (await screen.findByText("General settings")).parentElement?.parentElement;
+    expect(savePanel).toHaveClass("bottom-28", "sm:bottom-24");
+    expect(savePanel).not.toHaveClass("bottom-4");
   });
 });
 
