@@ -5,15 +5,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
-
-	_ "github.com/mattn/go-sqlite3"
 )
-
-func init() {
-	var _ *database.Queries
-}
 
 func TestExtractYearFromReleaseDate(t *testing.T) {
 	tests := []struct {

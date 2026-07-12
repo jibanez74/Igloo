@@ -18,27 +18,18 @@ import (
 )
 
 type movieScannerCapturedLogger struct {
-	debugEntries []capturedLogEntry
-	infoEntries  []capturedLogEntry
-	warnEntries  []capturedLogEntry
-	errorEntries []capturedLogEntry
+	infoEntries []capturedLogEntry
 }
 
-func (l *movieScannerCapturedLogger) Debug(msg string, args ...any) {
-	l.debugEntries = append(l.debugEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
-}
+func (*movieScannerCapturedLogger) Debug(_ string, _ ...any) {}
 
 func (l *movieScannerCapturedLogger) Info(msg string, args ...any) {
 	l.infoEntries = append(l.infoEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
 }
 
-func (l *movieScannerCapturedLogger) Warn(msg string, args ...any) {
-	l.warnEntries = append(l.warnEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
-}
+func (*movieScannerCapturedLogger) Warn(_ string, _ ...any) {}
 
-func (l *movieScannerCapturedLogger) Error(msg string, args ...any) {
-	l.errorEntries = append(l.errorEntries, capturedLogEntry{msg: msg, args: append([]any(nil), args...)})
-}
+func (*movieScannerCapturedLogger) Error(_ string, _ ...any) {}
 
 func movieScannerMetadataFixture(duration, size string) *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{

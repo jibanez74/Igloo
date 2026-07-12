@@ -59,8 +59,7 @@ func createTestUserWithPassword(t *testing.T, app *Application, name, email, pas
 }
 
 type deviceListResponse struct {
-	Error bool `json:"error"`
-	Data  struct {
+	Data struct {
 		Devices []struct {
 			ID         int64   `json:"id"`
 			Name       string  `json:"name"`

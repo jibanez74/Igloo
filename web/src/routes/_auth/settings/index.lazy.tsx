@@ -17,7 +17,6 @@ import {
   MonitorCog,
   RotateCcw,
   Save,
-  Sliders,
 } from "lucide-react";
 import {
   Card,
@@ -37,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   GENERAL_SETTINGS_KEY,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
@@ -219,6 +219,7 @@ type GeneralSettingsFormProps = {
 
 function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   const queryClient = useQueryClient();
+  const isMiniPlayerVisible = useIsMiniPlayerVisible();
   const tmdbKeyId = useId();
   const jellyfinBaseUrlId = useId();
   const jellyfinApiKeyId = useId();
@@ -439,27 +440,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="max-w-5xl space-y-6"
+      className="@container max-w-5xl space-y-6"
     >
-      <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
-      >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Sliders className="size-5 text-primary" aria-hidden="true" />
-              General Settings
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Configure application behavior, integrations, and local storage.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
       <Card
         className={cn(
           "border-border/50 bg-muted/30",
@@ -477,7 +459,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Control background services and metadata handling.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid gap-4 @2xl:grid-cols-2">
           <SwitchField
             id={enableWatcherId}
             label="Library watcher"
@@ -586,69 +568,77 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Manage credentials used for metadata and interoperability.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 lg:grid-cols-2">
-          <SecretInput
-            id={tmdbKeyId}
-            name="tmdb_key"
-            label="TMDB API key"
-            value={form.tmdb_key}
-            onChange={value => handleSecretChange("tmdb_key", value)}
-            disabled={updateMutation.isPending}
-          />
-          <URLInput
-            id={jellyfinBaseUrlId}
-            name="jellyfin_base_url"
-            label="Jellyfin base URL"
-            value={form.jellyfin_base_url}
-            onChange={value =>
-              handleBaseURLChange("jellyfin_base_url", value)
-            }
-            disabled={updateMutation.isPending}
-            invalid={validationField === "jellyfin_base_url"}
-          />
-          <SecretInput
-            id={jellyfinApiKeyId}
-            name="jellyfin_api_key"
-            label="Jellyfin API key"
-            value={form.jellyfin_api_key}
-            onChange={value => handleSecretChange("jellyfin_api_key", value)}
-            disabled={updateMutation.isPending}
-          />
-          <URLInput
-            id={immichBaseUrlId}
-            name="immich_base_url"
-            label="Immich base URL"
-            value={form.immich_base_url}
-            onChange={value => handleBaseURLChange("immich_base_url", value)}
-            disabled={updateMutation.isPending}
-            invalid={validationField === "immich_base_url"}
-          />
-          <SecretInput
-            id={immichApiKeyId}
-            name="immich_api_key"
-            label="Immich API key"
-            value={form.immich_api_key}
-            onChange={value => handleSecretChange("immich_api_key", value)}
-            disabled={updateMutation.isPending}
-          />
-          <SecretInput
-            id={spotifyClientIdId}
-            name="spotify_client_id"
-            label="Spotify client ID"
-            value={form.spotify_client_id}
-            onChange={value => handleSecretChange("spotify_client_id", value)}
-            disabled={updateMutation.isPending}
-          />
-          <SecretInput
-            id={spotifyClientSecretId}
-            name="spotify_client_secret"
-            label="Spotify client secret"
-            value={form.spotify_client_secret}
-            onChange={value =>
-              handleSecretChange("spotify_client_secret", value)
-            }
-            disabled={updateMutation.isPending}
-          />
+        <CardContent className="divide-y divide-border/50">
+          <ServiceSection title="TMDB">
+            <SecretInput
+              id={tmdbKeyId}
+              name="tmdb_key"
+              label="TMDB API key"
+              value={form.tmdb_key}
+              onChange={value => handleSecretChange("tmdb_key", value)}
+              disabled={updateMutation.isPending}
+            />
+          </ServiceSection>
+          <ServiceSection title="Jellyfin">
+            <URLInput
+              id={jellyfinBaseUrlId}
+              name="jellyfin_base_url"
+              label="Jellyfin base URL"
+              value={form.jellyfin_base_url}
+              onChange={value =>
+                handleBaseURLChange("jellyfin_base_url", value)
+              }
+              disabled={updateMutation.isPending}
+              invalid={validationField === "jellyfin_base_url"}
+            />
+            <SecretInput
+              id={jellyfinApiKeyId}
+              name="jellyfin_api_key"
+              label="Jellyfin API key"
+              value={form.jellyfin_api_key}
+              onChange={value => handleSecretChange("jellyfin_api_key", value)}
+              disabled={updateMutation.isPending}
+            />
+          </ServiceSection>
+          <ServiceSection title="Immich">
+            <URLInput
+              id={immichBaseUrlId}
+              name="immich_base_url"
+              label="Immich base URL"
+              value={form.immich_base_url}
+              onChange={value => handleBaseURLChange("immich_base_url", value)}
+              disabled={updateMutation.isPending}
+              invalid={validationField === "immich_base_url"}
+            />
+            <SecretInput
+              id={immichApiKeyId}
+              name="immich_api_key"
+              label="Immich API key"
+              value={form.immich_api_key}
+              onChange={value => handleSecretChange("immich_api_key", value)}
+              disabled={updateMutation.isPending}
+            />
+          </ServiceSection>
+          <ServiceSection title="Spotify">
+            <SecretInput
+              id={spotifyClientIdId}
+              name="spotify_client_id"
+              label="Spotify client ID"
+              value={form.spotify_client_id}
+              onChange={value => handleSecretChange("spotify_client_id", value)}
+              disabled={updateMutation.isPending}
+            />
+            <SecretInput
+              id={spotifyClientSecretId}
+              name="spotify_client_secret"
+              label="Spotify client secret"
+              value={form.spotify_client_secret}
+              onChange={value =>
+                handleSecretChange("spotify_client_secret", value)
+              }
+              disabled={updateMutation.isPending}
+            />
+          </ServiceSection>
         </CardContent>
       </Card>
 
@@ -669,7 +659,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             Configure application-owned storage outside media libraries.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 lg:grid-cols-2">
+        <CardContent className="grid gap-5 @2xl:grid-cols-2">
           <PathInput
             id={staticDirId}
             name="static_dir"
@@ -697,7 +687,8 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
 
       <div
         className={cn(
-          "rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          "sticky z-10 rounded-lg border border-border/50 bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-md supports-backdrop-filter:bg-card/85 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          isMiniPlayerVisible ? "bottom-28 sm:bottom-24" : "bottom-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
@@ -741,6 +732,20 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </div>
       </div>
     </form>
+  );
+}
+
+type ServiceSectionProps = {
+  title: string;
+  children: ReactNode;
+};
+
+function ServiceSection({ title, children }: ServiceSectionProps) {
+  return (
+    <section className="py-5 first:pt-0 last:pb-0">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <div className="mt-3 grid gap-5 @2xl:grid-cols-2">{children}</div>
+    </section>
   );
 }
 
@@ -979,7 +984,7 @@ function GeneralSettingsLoading() {
 
   return (
     <div
-      className="max-w-5xl space-y-6"
+      className="@container max-w-5xl space-y-6"
       role="status"
       aria-labelledby={loadingId}
     >

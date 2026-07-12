@@ -99,13 +99,13 @@ function SettingsLayout() {
     ? cn(LIBRARY_TABS_LIST_CLASS, "grid-cols-2")
     : cn(
         LIBRARY_TABS_LIST_CLASS,
-        "grid-cols-2 min-[520px]:grid-cols-3 sm:grid-cols-5",
+        "grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-5",
       );
   const tabsTriggerClassName = isCompactLayout
     ? LIBRARY_TAB_TRIGGER_CLASS
     : cn(
         LIBRARY_TAB_TRIGGER_CLASS,
-        "last:col-span-2 min-[520px]:last:col-span-2 sm:last:col-span-1",
+        "last:col-span-2 @2xl:last:col-span-1",
       );
 
   return (
@@ -117,7 +117,7 @@ function SettingsLayout() {
         content="Configure your Igloo media center settings and preferences."
       />
 
-      <div className="min-w-0">
+      <div className="@container min-w-0">
         {/* Page header */}
         <header className="mb-6 sm:mb-7">
           <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">

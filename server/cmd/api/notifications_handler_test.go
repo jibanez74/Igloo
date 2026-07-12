@@ -164,8 +164,7 @@ func notificationTestServer(app *Application, userID int64) http.Handler {
 }
 
 type notificationListResponse struct {
-	Error bool `json:"error"`
-	Data  struct {
+	Data struct {
 		Notifications []struct {
 			ID            int64  `json:"id"`
 			Title         string `json:"title"`
