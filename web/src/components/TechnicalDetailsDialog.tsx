@@ -225,6 +225,7 @@ export default function TechnicalDetailsDialog({
 
   const details = data?.data;
   const runTime = details ? unwrapInt(details.movie.run_time) : null;
+  const formattedRuntime = formatRuntimeMinutes(runTime);
   const durationSec = details ? unwrapFloat(details.movie.duration) : null;
 
   const handleOpenAutoFocus = (e: Event) => {
@@ -304,10 +305,10 @@ export default function TechnicalDetailsDialog({
                     label="Media type (MIME)"
                     value={details.movie.mime_type}
                   />
-                  {runTime != null && (
+                  {formattedRuntime && (
                     <DetailRow
                       label="Duration (rounded, for display)"
-                      value={formatRuntimeMinutes(runTime)}
+                      value={formattedRuntime}
                     />
                   )}
                   {durationSec != null && (
