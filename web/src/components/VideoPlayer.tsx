@@ -60,11 +60,7 @@ export default function VideoPlayer({
   // spinner or a pending show timer from the previous stream.
   useEffect(() => {
     return () => {
-      if (bufferingDelayTimerRef.current !== null) {
-        window.clearTimeout(bufferingDelayTimerRef.current);
-        bufferingDelayTimerRef.current = null;
-      }
-      setShowBuffering(false);
+      clearBufferingIndicator();
     };
   }, [src]);
 
