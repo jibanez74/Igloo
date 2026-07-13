@@ -54,4 +54,32 @@ describe("MoviePlayerControls", () => {
       screen.getByRole("button", { name: "Adjust volume" }),
     ).toHaveClass(...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "));
   });
+
+  it("pads the current time to h:mm:ss for movies over an hour", () => {
+    render(
+      <MoviePlayerControls
+        chromeFullscreenMode
+        controlsVisible
+        isFullscreen={false}
+        isImmersiveViewport
+        currentTime={12}
+        duration={7500}
+        displayedDuration={7500}
+        playing={false}
+        qualityLabel="Direct"
+        chapters={[]}
+        videoRef={createRef<HTMLVideoElement>()}
+        onSeek={vi.fn()}
+        onSeekBackward={vi.fn()}
+        onSeekForward={vi.fn()}
+        onTogglePlay={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onSelectChapter={vi.fn()}
+      />,
+    );
+
+    // Rendered by both the chrome readout and the progress bar labels.
+    expect(screen.getAllByText("0:00:12").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2:05:00").length).toBeGreaterThan(0);
+  });
 });

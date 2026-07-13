@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatSpokenTime, formatTimecode } from "@/lib/format";
 import {
   MOTION_PROGRESS_FILL_CLASS,
   MOTION_PROGRESS_THUMB_REVEAL_CLASS,
@@ -214,15 +214,18 @@ export default function ProgressBar({
         aria-disabled={!isSeekable}
         aria-valuetext={
           isSeekable
-            ? `${formatTimeSeconds(safeCurrentTime)} of ${formatTimeSeconds(safeDuration)}`
+            ? `${formatSpokenTime(safeCurrentTime)} of ${formatSpokenTime(safeDuration)}`
             : "Seek unavailable"
         }
       />
     </div>
   );
 
-  const currentTimeLabel = formatTimeSeconds(safeCurrentTime);
-  const durationLabel = formatTimeSeconds(safeDuration);
+  const showHours = safeDuration >= 3600;
+  const currentTimeLabel = formatTimecode(safeCurrentTime, {
+    forceHours: showHours,
+  });
+  const durationLabel = formatTimecode(safeDuration);
 
   if (styles.timesLayout === "inline") {
     return (

@@ -15,7 +15,7 @@ import {
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
 } from "@/lib/constants";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ChapterType } from "@/types";
 
@@ -85,11 +85,13 @@ export default function MoviePlayerControls({
         <div className="flex items-center justify-between">
           <div className="flex min-w-25 items-center gap-2">
             <span className="text-sm text-muted-foreground tabular-nums">
-              {formatTimeSeconds(currentTime)}
+              {formatTimecode(currentTime, {
+                forceHours: displayedDuration >= 3600,
+              })}
             </span>
             <span className="text-muted-foreground">/</span>
             <span className="text-sm text-muted-foreground tabular-nums">
-              {formatTimeSeconds(displayedDuration)}
+              {formatTimecode(displayedDuration)}
             </span>
           </div>
 

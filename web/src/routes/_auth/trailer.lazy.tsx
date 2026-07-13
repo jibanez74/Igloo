@@ -29,7 +29,7 @@ import { movieDetailsQueryOpts } from "@/lib/query-opts";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { toast } from "sonner";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatTimecode } from "@/lib/format";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
@@ -478,11 +478,13 @@ function TrailerPage() {
           <div className="flex items-center justify-between">
             <div className="flex min-w-[100px] items-center gap-2">
               <span className="text-sm text-muted-foreground tabular-nums">
-                {formatTimeSeconds(currentTime)}
+                {formatTimecode(currentTime, {
+                  forceHours: duration >= 3600,
+                })}
               </span>
               <span className="text-muted-foreground">/</span>
               <span className="text-sm text-muted-foreground tabular-nums">
-                {formatTimeSeconds(duration)}
+                {formatTimecode(duration)}
               </span>
             </div>
 

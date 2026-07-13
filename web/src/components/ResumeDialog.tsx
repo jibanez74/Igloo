@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatTimecode } from "@/lib/format";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { MOTION_MEDIA_DIALOG_SURFACE_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -58,7 +58,7 @@ export default function ResumeDialog({
           <DialogTitle className="text-foreground">Resume movie?</DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {savedProgressSec !== null
-              ? `Resume from ${formatTimeSeconds(savedProgressSec)} or start from the beginning.`
+              ? `Resume from ${formatTimecode(savedProgressSec)} or start from the beginning.`
               : "Resume your saved progress or start from the beginning."}
           </DialogDescription>
         </DialogHeader>
