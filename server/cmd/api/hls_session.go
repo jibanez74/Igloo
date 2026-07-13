@@ -167,6 +167,11 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 	app.PersonalHLSMu.Lock()
 	defer app.PersonalHLSMu.Unlock()
 
+	return app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, keepKey)
+}
+
+// cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
+func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
 	removed := 0
 	for key, item := range app.HLSSessionCache.Items() {
 		if key == keepKey {
@@ -182,6 +187,19 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 		}
 	}
 	return removed
+}
+
+// storePersonalHLSSession caches a new personal session and removes superseded
+// sessions for the same playback_session under one PersonalHLSMu hold. Doing
+// both atomically means concurrent creations with different start offsets
+// serialize: the last one to store wins, so they can never remove each other's
+// session and leave zero live sessions.
+func (app *Application) storePersonalHLSSession(movieID int64, ownerUserID int64, playbackSession string, key string, session *HLSSession) {
+	app.PersonalHLSMu.Lock()
+	defer app.PersonalHLSMu.Unlock()
+
+	app.HLSSessionCache.Set(key, session, hlsSessionTTL)
+	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, key)
 }
 
 func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID int64) bool {
@@ -505,8 +523,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		app.HLSSessionCache.Set(key, session, hlsSessionTTL)
-		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, playbackSession, key)
+		app.storePersonalHLSSession(movieID, ownerUserID, playbackSession, key, session)
 		return session, nil
 	})
 

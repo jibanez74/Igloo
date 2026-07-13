@@ -1,4 +1,9 @@
-import { MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS } from "@/lib/constants";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+  CONTINUE_WATCHING_KEY,
+  MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
+  MOVIE_WATCH_PROGRESS_KEY,
+} from "@/lib/constants";
 
 type PlaybackLocation = {
   routeId: string;
@@ -8,9 +13,27 @@ type PlaybackLocation = {
 type MoviePlaybackExitSyncOptions = {
   pausePlayback: () => void;
   flushProgress: () => Promise<void>;
-  refreshContinueWatching: () => Promise<unknown>;
+  refreshWatchQueries: () => Promise<unknown>;
   onSaveError: () => void;
 };
+
+// Both watch-related caches must refresh on exit: continue-watching feeds the
+// home page, and the movie's watch-progress entry (staleTime 30s) feeds the
+// Resume dialog when the play page is reopened right away.
+export function refreshMovieWatchQueries(
+  queryClient: QueryClient,
+  movieId: number,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: [CONTINUE_WATCHING_KEY],
+      refetchType: "all",
+    }),
+    queryClient.invalidateQueries({
+      queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
+    }),
+  ]);
+}
 
 export function staysOnCurrentMoviePlayback(
   current: PlaybackLocation,
@@ -22,7 +45,7 @@ export function staysOnCurrentMoviePlayback(
 export async function synchronizeMoviePlaybackExit({
   pausePlayback,
   flushProgress,
-  refreshContinueWatching,
+  refreshWatchQueries,
   onSaveError,
 }: MoviePlaybackExitSyncOptions) {
   pausePlayback();
@@ -35,9 +58,9 @@ export async function synchronizeMoviePlaybackExit({
     }
 
     try {
-      await refreshContinueWatching();
+      await refreshWatchQueries();
     } catch {
-      // Navigation should not be trapped if refreshing the list fails.
+      // Navigation should not be trapped if refreshing the queries fails.
     }
   })();
 

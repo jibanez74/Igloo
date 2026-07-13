@@ -551,3 +551,57 @@ func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 		}
 	}
 }
+
+func TestStorePersonalHLSSession_RemovesSupersededSessions(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	audioTrack := 0
+	firstKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
+	secondKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
+
+	app.storePersonalHLSSession(5, userID, testPlaybackSessionID, firstKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+	app.storePersonalHLSSession(5, userID, testPlaybackSessionID, secondKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+
+	if _, ok := app.HLSSessionCache.Get(firstKey); ok {
+		t.Fatal("expected superseded session to be removed")
+	}
+	if _, ok := app.HLSSessionCache.Get(secondKey); !ok {
+		t.Fatal("expected newest session to remain")
+	}
+}
+
+func TestStorePersonalHLSSession_ConcurrentStoresLeaveOneSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	audioTrack := 0
+	firstKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
+	secondKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
+	firstSession := &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()}
+	secondSession := &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		app.storePersonalHLSSession(5, userID, testPlaybackSessionID, firstKey, firstSession)
+	}()
+	go func() {
+		defer wg.Done()
+		app.storePersonalHLSSession(5, userID, testPlaybackSessionID, secondKey, secondSession)
+	}()
+	wg.Wait()
+
+	remaining := 0
+	for _, key := range []string{firstKey, secondKey} {
+		if _, ok := app.HLSSessionCache.Get(key); ok {
+			remaining++
+		}
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining sessions=%d, want exactly 1 (store + supersede must be atomic)", remaining)
+	}
+}
