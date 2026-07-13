@@ -415,6 +415,15 @@ export const LIBRARY_TABS_LIST_CLASS =
   "grid! h-auto w-full max-w-full sm:w-fit sm:max-w-none";
 export const LIBRARY_TAB_TRIGGER_CLASS = "min-h-10 min-w-0 p-2 sm:px-4";
 
+/**
+ * Clearance for the fixed audio mini player (AudioPlayer.tsx). Both values
+ * encode the same player-bar height and must change together: the shell pads
+ * its content so pages scroll clear of the bar, and in-page sticky bottom
+ * elements offset above it.
+ */
+export const MINI_PLAYER_CLEARANCE_PADDING_CLASS = "pb-28 sm:pb-24";
+export const MINI_PLAYER_CLEARANCE_BOTTOM_CLASS = "bottom-28 sm:bottom-24";
+
 // Shared content fade transitions
 export const CONTENT_FADE_TRANSITION_MS = MOTION_DURATION_STANDARD_MS;
 export const CONTENT_FADE_ENTER_CLASS = MOTION_SECTION_ENTER_CLASS;
