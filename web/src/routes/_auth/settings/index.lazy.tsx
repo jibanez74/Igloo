@@ -39,6 +39,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   GENERAL_SETTINGS_KEY,
+  MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
@@ -440,7 +441,11 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="@container max-w-5xl space-y-6"
+      // scroll-mb on every focusable control: the sticky save bar overlays the
+      // bottom of the viewport, so keyboard-focus auto-scroll must clear it
+      // (bar height + its bottom offset, largest when stacked on mobile with
+      // the mini player visible).
+      className="@container max-w-5xl space-y-6 [&_:is(button,input,select)]:scroll-mb-72 sm:[&_:is(button,input,select)]:scroll-mb-44"
     >
       <Card
         className={cn(
@@ -688,7 +693,7 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       <div
         className={cn(
           "sticky z-10 rounded-lg border border-border/50 bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-md supports-backdrop-filter:bg-card/85 sm:flex sm:items-center sm:justify-between sm:gap-4",
-          isMiniPlayerVisible ? "bottom-28 sm:bottom-24" : "bottom-4",
+          isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
       >
@@ -984,7 +989,7 @@ function GeneralSettingsLoading() {
 
   return (
     <div
-      className="@container max-w-5xl space-y-6"
+      className="max-w-5xl space-y-6"
       role="status"
       aria-labelledby={loadingId}
     >

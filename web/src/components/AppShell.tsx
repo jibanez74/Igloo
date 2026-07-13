@@ -7,6 +7,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
+import { MINI_PLAYER_CLEARANCE_PADDING_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 export default function AppShell({ children }: PropsWithChildren) {
@@ -48,7 +49,7 @@ export default function AppShell({ children }: PropsWithChildren) {
             // scroll container, or sticky elements inside pages stop sticking
             // to the window scroll.
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip px-4 py-6 sm:px-6 lg:px-8",
-            isMiniPlayerVisible && "pb-28 sm:pb-24",
+            isMiniPlayerVisible && MINI_PLAYER_CLEARANCE_PADDING_CLASS,
           )}
         >
           {children}
