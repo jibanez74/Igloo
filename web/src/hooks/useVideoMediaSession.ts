@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import type { RefObject } from "react";
 
 type VideoMediaSessionOptions = {
@@ -17,6 +17,13 @@ type VideoMediaSessionOptions = {
 };
 
 const DEFAULT_SEEK_STEP_SEC = 10;
+
+/**
+ * timeupdate fires ~4x/sec; the OS extrapolates position from the last report,
+ * so re-reporting is only needed when the position drifts beyond what a seek
+ * would explain or when duration/rate/play-state change.
+ */
+const MEDIA_SESSION_POSITION_MIN_DELTA_SEC = 5;
 
 function mediaSessionSupported() {
   return (
@@ -135,8 +142,18 @@ export function useVideoMediaSession({
     };
   }, [enabled]);
 
+  const lastReportedPositionRef = useRef<{
+    position: number;
+    duration: number;
+    playbackRate: number;
+    playing: boolean;
+  } | null>(null);
+
   useEffect(() => {
-    if (!enabled || !mediaSessionSupported()) return;
+    if (!enabled || !mediaSessionSupported()) {
+      lastReportedPositionRef.current = null;
+      return;
+    }
 
     const video = videoRef.current;
     const state = safePositionState(
@@ -146,10 +163,21 @@ export function useVideoMediaSession({
     );
     if (!state) return;
 
+    const last = lastReportedPositionRef.current;
+    const isRedundantUpdate =
+      last !== null &&
+      last.duration === state.duration &&
+      last.playbackRate === state.playbackRate &&
+      last.playing === playing &&
+      Math.abs(state.position - last.position) <
+        MEDIA_SESSION_POSITION_MIN_DELTA_SEC;
+    if (isRedundantUpdate) return;
+
     try {
       navigator.mediaSession.setPositionState?.(state);
+      lastReportedPositionRef.current = { ...state, playing };
     } catch {
       // Some mobile browsers expose Media Session but reject position updates.
     }
-  }, [currentTime, duration, enabled, videoRef]);
+  }, [currentTime, duration, enabled, playing, videoRef]);
 }

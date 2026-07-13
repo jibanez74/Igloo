@@ -20,6 +20,9 @@ type ChapterMenuProps = {
   portalContainer?: HTMLElement | null;
 };
 
+// Runs on every render (~4x/sec while playing); a linear scan over at most a
+// few dozen chapters is cheaper than any caching the React Compiler can't
+// already do, so leave it unmemoized.
 function getActiveChapterIndex(
   chapters: ChapterType[],
   currentTimeSec: number,

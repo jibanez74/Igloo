@@ -113,7 +113,7 @@ export default function VolumeControl({
     }
   };
 
-  const iconClassName = isExpanded ? "size-5" : "size-4";
+  const iconClassName = "size-5";
 
   const getVolumeIcon = () => {
     if (isMuted || volume === 0) return <VolumeX className={iconClassName} />;
@@ -196,7 +196,7 @@ export default function VolumeControl({
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
             "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           )}
-          aria-label={isMuted ? "Unmute" : "Mute"}
+          aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
         >
           {getVolumeIcon()}
         </button>
@@ -219,7 +219,7 @@ export default function VolumeControl({
         onClick={() => setIsMinimizedPanelOpen(open => !open)}
         className={cn(
           MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+          "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
           isMinimizedPanelOpen && "bg-accent text-foreground",
         )}
         aria-label="Adjust volume"
@@ -246,9 +246,9 @@ export default function VolumeControl({
               onClick={toggleMute}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
-              aria-label={isMuted ? "Unmute" : "Mute"}
+              aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
             >
               {getVolumeIcon()}
             </button>
