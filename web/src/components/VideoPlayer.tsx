@@ -1,11 +1,15 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
+import { Spinner } from "@/components/ui/spinner";
 import {
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+  MOVIE_BUFFERING_SPINNER_DELAY_MS,
 } from "@/lib/constants";
 import { supportsNativeHLS } from "@/lib/playback";
+import { cn } from "@/lib/utils";
 import type { VideoPlayerProps } from "@/types";
 
 function loadHlsLight() {
@@ -30,6 +34,35 @@ export default function VideoPlayer({
   onSessionLost,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
+
+  // Mid-playback buffering indicator: shown only after a short delay so
+  // sub-perceptual stalls never flash a spinner.
+  const [showBuffering, setShowBuffering] = useState(false);
+  const bufferingDelayTimerRef = useRef<number | null>(null);
+
+  const clearBufferingIndicator = () => {
+    if (bufferingDelayTimerRef.current !== null) {
+      window.clearTimeout(bufferingDelayTimerRef.current);
+      bufferingDelayTimerRef.current = null;
+    }
+    setShowBuffering(false);
+  };
+
+  const scheduleBufferingIndicator = () => {
+    if (bufferingDelayTimerRef.current !== null || showBuffering) return;
+    bufferingDelayTimerRef.current = window.setTimeout(() => {
+      bufferingDelayTimerRef.current = null;
+      setShowBuffering(true);
+    }, MOVIE_BUFFERING_SPINNER_DELAY_MS);
+  };
+
+  // A source change (e.g. an HLS session rebase) must not inherit a stale
+  // spinner or a pending show timer from the previous stream.
+  useEffect(() => {
+    return () => {
+      clearBufferingIndicator();
+    };
+  }, [src]);
 
   const reportError = useEffectEvent((message: string) => {
     onError(message);
@@ -237,8 +270,20 @@ export default function VideoPlayer({
           playsInline
           aria-label={`Video player for ${title}`}
           onPlay={onPlay}
-          onPause={onPause}
-          onEnded={onEnded}
+          onPause={() => {
+            clearBufferingIndicator();
+            onPause?.();
+          }}
+          onEnded={() => {
+            clearBufferingIndicator();
+            onEnded?.();
+          }}
+          onWaiting={scheduleBufferingIndicator}
+          onStalled={scheduleBufferingIndicator}
+          onSeeking={scheduleBufferingIndicator}
+          onPlaying={clearBufferingIndicator}
+          onCanPlay={clearBufferingIndicator}
+          onSeeked={clearBufferingIndicator}
           onTimeUpdate={
             onTimeUpdate
               ? (e) => onTimeUpdate(e.currentTarget.currentTime)
@@ -250,6 +295,8 @@ export default function VideoPlayer({
               : undefined
           }
           onError={(e) => {
+            clearBufferingIndicator();
+
             const errorCode = e.currentTarget.error?.code;
 
             onNativeError?.(errorCode);
@@ -279,6 +326,18 @@ export default function VideoPlayer({
           }}
         />
       </div>
+      {showBuffering && (
+        <div
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "pointer-events-none absolute inset-0 z-10 flex items-center justify-center",
+          )}
+        >
+          <div className="flex size-16 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm">
+            <Spinner className="size-8 text-primary" aria-label="Buffering" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

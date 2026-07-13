@@ -679,6 +679,13 @@ function movieTechnicalDetails(id: number) {
         thumb: nullableString("/api/static/chapters/opening.svg"),
         movie_id: nullableInt(id),
       },
+      {
+        id: 2,
+        title: "The Journey",
+        start_time: 372,
+        thumb: nullableString(null),
+        movie_id: nullableInt(id),
+      },
     ],
   };
 }

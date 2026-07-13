@@ -40,10 +40,10 @@ describe("MoviePlayerControls", () => {
     ).toBeInTheDocument();
 
     for (const name of [
-      `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`,
-      "Play",
-      `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`,
-      "Exit expanded view",
+      `Seek backward ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`,
+      "Play (Space or K)",
+      `Seek forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`,
+      "Exit expanded view (F)",
     ]) {
       expect(screen.getByRole("button", { name })).toHaveClass(
         ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),

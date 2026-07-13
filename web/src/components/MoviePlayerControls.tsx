@@ -107,7 +107,7 @@ export default function MoviePlayerControls({
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
                 "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
-              aria-label={`Seek backward ${MOVIE_SEEK_STEP_SEC} seconds`}
+              aria-label={`Seek backward ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
             >
               <Rewind className="size-5" aria-hidden="true" />
             </button>
@@ -118,7 +118,7 @@ export default function MoviePlayerControls({
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
                 "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
               )}
-              aria-label={playing ? "Pause" : "Play"}
+              aria-label={playing ? "Pause (Space or K)" : "Play (Space or K)"}
             >
               {playing ? (
                 <Pause className="size-6 fill-current" aria-hidden="true" />
@@ -133,7 +133,7 @@ export default function MoviePlayerControls({
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
                 "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
               )}
-              aria-label={`Seek forward ${MOVIE_SEEK_STEP_SEC} seconds`}
+              aria-label={`Seek forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
             >
               <FastForward className="size-5" aria-hidden="true" />
             </button>
@@ -165,9 +165,9 @@ export default function MoviePlayerControls({
               aria-label={
                 chromeFullscreenMode
                   ? isImmersiveViewport && !isFullscreen
-                    ? "Exit expanded view"
-                    : "Exit fullscreen"
-                  : "Fullscreen"
+                    ? "Exit expanded view (F)"
+                    : "Exit fullscreen (F)"
+                  : "Fullscreen (F)"
               }
               aria-pressed={chromeFullscreenMode}
             >

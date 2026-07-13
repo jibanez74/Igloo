@@ -34,7 +34,7 @@ describe("VolumeControl", () => {
       screen.queryByRole("dialog", { name: "Volume controls" }),
     ).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mute" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Mute (M)" })).toHaveFocus();
     });
   });
 
@@ -45,7 +45,7 @@ describe("VolumeControl", () => {
     const trigger = screen.getByRole("button", { name: "Adjust volume" });
     await user.click(trigger);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mute" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Mute (M)" })).toHaveFocus();
     });
 
     await user.keyboard("{Escape}");
@@ -65,7 +65,7 @@ describe("VolumeControl", () => {
 
     await user.click(screen.getByRole("button", { name: "Adjust volume" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mute" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Mute (M)" })).toHaveFocus();
     });
 
     const outsideButton = screen.getByRole("button", { name: "Outside control" });
@@ -89,7 +89,7 @@ describe("VolumeControl", () => {
 
     await user.click(screen.getByRole("button", { name: "Adjust volume" }));
 
-    expect(screen.getByRole("button", { name: "Unmute" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Unmute (M)" })).toBeVisible();
     expect(screen.getByRole("slider", { name: "Volume" })).toHaveAttribute(
       "aria-valuetext",
       "0% volume",
@@ -113,6 +113,6 @@ describe("VolumeControl", () => {
     expect(media.volume).toBe(0.25);
     expect(media.muted).toBe(false);
     expect(slider).toHaveAttribute("aria-valuetext", "25% volume");
-    expect(screen.getByRole("button", { name: "Mute" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Mute (M)" })).toBeVisible();
   });
 });

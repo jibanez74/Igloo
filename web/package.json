@@ -20,6 +20,7 @@
     "test:e2e:movies": "playwright test e2e/movies.spec.ts",
     "test:e2e:movies:index": "playwright test e2e/movies-index.spec.ts",
     "test:e2e:movie-extra-videos": "playwright test e2e/movie-extra-videos.spec.ts",
+    "test:e2e:movie-player": "playwright test e2e/movie-player.spec.ts",
     "test:e2e:album-details": "playwright test e2e/album-details.spec.ts",
     "test:e2e:hls": "playwright test e2e/hls-transcode.spec.ts",
     "test:e2e:watch-room": "playwright test e2e/watch-room.spec.ts",

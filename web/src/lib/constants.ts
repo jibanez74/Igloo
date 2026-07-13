@@ -206,6 +206,8 @@ export const MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
 export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 180;
 export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
+/** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
+export const MOVIE_BUFFERING_SPINNER_DELAY_MS = 300;
 export const MEDIA_ERR_NETWORK = 2;
 export const MEDIA_ERR_DECODE = 3;
 export const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;

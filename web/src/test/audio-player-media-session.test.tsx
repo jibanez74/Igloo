@@ -433,7 +433,7 @@ describe("AudioPlayer Media Session", () => {
     expect(screen.getByRole("button", { name: "No next track" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
-    expect(screen.getByRole("button", { name: "Mute" })).toHaveClass(
+    expect(screen.getByRole("button", { name: "Mute (M)" })).toHaveClass(
       ...MOTION_PLAYER_CHROME_BUTTON_CLASS.split(" "),
     );
   });

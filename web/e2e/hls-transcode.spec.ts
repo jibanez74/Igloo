@@ -345,7 +345,7 @@ test.describe("HLS transcoding playback", () => {
         start: "0",
       };
 
-      const playButton = page.getByRole("button", { name: "Play" });
+      const playButton = page.getByRole("button", { name: "Play (Space or K)" });
       await expect(playButton).toBeVisible({
         timeout: hlsEnv!.responseTimeoutMs,
       });
