@@ -38,11 +38,13 @@ import {
   toMediaPlaybackTime,
 } from "@/lib/movie-playback";
 import {
+  refreshMovieWatchQueries,
   staysOnCurrentMoviePlayback,
   synchronizeMoviePlaybackExit,
 } from "@/lib/movie-playback-exit";
 import {
   CONTINUE_WATCHING_KEY,
+  MOVIE_WATCH_PROGRESS_KEY,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
@@ -444,11 +446,8 @@ function PlayMoviePage() {
       await synchronizeMoviePlaybackExit({
         pausePlayback: () => videoRef.current?.pause(),
         flushProgress,
-        refreshContinueWatching: () =>
-          queryClient.invalidateQueries({
-            queryKey: [CONTINUE_WATCHING_KEY],
-            refetchType: "all",
-          }),
+        refreshWatchQueries: () =>
+          refreshMovieWatchQueries(queryClient, movieId),
         onSaveError: () =>
           showActionFailed(
             "save watch progress",
@@ -543,6 +542,7 @@ function PlayMoviePage() {
     }
 
     queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
+    queryClient.removeQueries({ queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId] });
     setResumeDismissed(true);
   };
 

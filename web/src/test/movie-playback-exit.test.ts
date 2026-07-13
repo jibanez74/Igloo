@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS } from "@/lib/constants";
+import { QueryClient } from "@tanstack/react-query";
 import {
+  CONTINUE_WATCHING_KEY,
+  MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS,
+  MOVIE_WATCH_PROGRESS_KEY,
+} from "@/lib/constants";
+import {
+  refreshMovieWatchQueries,
   staysOnCurrentMoviePlayback,
   synchronizeMoviePlaybackExit,
 } from "@/lib/movie-playback-exit";
@@ -20,7 +26,7 @@ afterEach(() => {
 });
 
 describe("movie playback exit synchronization", () => {
-  it("saves progress before refreshing Continue Watching", async () => {
+  it("saves progress before refreshing the watch queries", async () => {
     const save = deferred<void>();
     const refresh = vi.fn().mockResolvedValue(undefined);
     const pause = vi.fn();
@@ -28,7 +34,7 @@ describe("movie playback exit synchronization", () => {
     const synchronization = synchronizeMoviePlaybackExit({
       pausePlayback: pause,
       flushProgress: () => save.promise,
-      refreshContinueWatching: refresh,
+      refreshWatchQueries: refresh,
       onSaveError: vi.fn(),
     });
 
@@ -49,7 +55,7 @@ describe("movie playback exit synchronization", () => {
       synchronizeMoviePlaybackExit({
         pausePlayback: vi.fn(),
         flushProgress: () => Promise.reject(new Error("save failed")),
-        refreshContinueWatching: refresh,
+        refreshWatchQueries: refresh,
         onSaveError,
       }),
     ).resolves.toBeUndefined();
@@ -67,7 +73,7 @@ describe("movie playback exit synchronization", () => {
     const synchronization = synchronizeMoviePlaybackExit({
       pausePlayback: vi.fn(),
       flushProgress: () => save.promise,
-      refreshContinueWatching: refresh,
+      refreshWatchQueries: refresh,
       onSaveError: vi.fn(),
     });
     void synchronization.then(onSettled);
@@ -93,12 +99,12 @@ describe("movie playback exit synchronization", () => {
     const save = deferred<void>();
     const refresh = deferred<void>();
     const onSettled = vi.fn();
-    const refreshContinueWatching = vi.fn(() => refresh.promise);
+    const refreshWatchQueries = vi.fn(() => refresh.promise);
 
     const synchronization = synchronizeMoviePlaybackExit({
       pausePlayback: vi.fn(),
       flushProgress: () => save.promise,
-      refreshContinueWatching,
+      refreshWatchQueries,
       onSaveError: vi.fn(),
     });
     void synchronization.then(onSettled);
@@ -106,7 +112,7 @@ describe("movie playback exit synchronization", () => {
     await vi.advanceTimersByTimeAsync(1_500);
     save.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(refreshContinueWatching).toHaveBeenCalledOnce();
+    expect(refreshWatchQueries).toHaveBeenCalledOnce();
 
     await vi.advanceTimersByTimeAsync(
       MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS - 1_501,
@@ -118,6 +124,32 @@ describe("movie playback exit synchronization", () => {
     expect(onSettled).toHaveBeenCalledOnce();
 
     refresh.resolve();
+  });
+
+  it("invalidates continue watching and the movie's watch progress", async () => {
+    const queryClient = new QueryClient();
+    const movieId = 7;
+    await queryClient.prefetchQuery({
+      queryKey: [CONTINUE_WATCHING_KEY],
+      queryFn: () => Promise.resolve("continue-watching"),
+    });
+    await queryClient.prefetchQuery({
+      queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId],
+      queryFn: () => Promise.resolve("watch-progress"),
+    });
+
+    await refreshMovieWatchQueries(queryClient, movieId);
+
+    // refetchType "all" refetches the inactive continue-watching query.
+    expect(
+      queryClient.getQueryState([CONTINUE_WATCHING_KEY])?.dataUpdateCount,
+    ).toBe(2);
+    expect(
+      queryClient.getQueryState([MOVIE_WATCH_PROGRESS_KEY, movieId])
+        ?.isInvalidated,
+    ).toBe(true);
+
+    queryClient.clear();
   });
 
   it("only bypasses synchronization within the same movie pathname", () => {
