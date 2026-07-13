@@ -14,11 +14,11 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { MonitorSmartphone } from "lucide-react";
 import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
-import { DEVICES_KEY } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type {
   ApiResponseType,
+  DeviceType,
   DevicesListResponseType,
   QuickConnectLookupType,
 } from "@/types";
@@ -36,6 +36,32 @@ const INVALID_CODE_MESSAGE =
 
 type Step = "enter" | "confirm" | "waiting" | "done";
 
+type ApprovalResult = {
+  baselineDeviceIds: number[] | null;
+  response: Awaited<ReturnType<typeof approveQuickConnect>>;
+};
+
+function getDeviceIds(
+  response: ApiResponseType<DevicesListResponseType>,
+): number[] | null {
+  if (response.error || !response.data?.devices) return null;
+
+  return response.data.devices.map(device => device.id);
+}
+
+function matchesPendingDevice(
+  device: DeviceType,
+  pendingDevice: QuickConnectLookupType | null,
+) {
+  if (!pendingDevice) return false;
+
+  return (
+    device.name === pendingDevice.device_name &&
+    device.platform === pendingDevice.platform &&
+    device.app_version === pendingDevice.app_version
+  );
+}
+
 export default function QuickConnectApproveCard() {
   const queryClient = useQueryClient();
   const codeId = useId();
@@ -46,7 +72,7 @@ export default function QuickConnectApproveCard() {
   const [error, setError] = useState<string | null>(null);
   const [pendingDevice, setPendingDevice] =
     useState<QuickConnectLookupType | null>(null);
-  const [knownDeviceIds, setKnownDeviceIds] = useState<number[]>([]);
+  const [knownDeviceIds, setKnownDeviceIds] = useState<number[] | null>(null);
   const [waitDeadline, setWaitDeadline] = useState<number | null>(null);
   const [connectedName, setConnectedName] = useState<string | null>(null);
 
@@ -85,8 +111,26 @@ export default function QuickConnectApproveCard() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (deviceCode: string) => approveQuickConnect(deviceCode),
-    onSuccess: res => {
+    mutationFn: async (deviceCode: string): Promise<ApprovalResult> => {
+      let baselineDeviceIds: number[] | null = null;
+
+      try {
+        baselineDeviceIds = getDeviceIds(
+          await queryClient.fetchQuery({
+            ...devicesQueryOpts(),
+            staleTime: 0,
+          }),
+        );
+      } catch {
+        baselineDeviceIds = null;
+      }
+
+      return {
+        baselineDeviceIds,
+        response: await approveQuickConnect(deviceCode),
+      };
+    },
+    onSuccess: ({ baselineDeviceIds, response: res }) => {
       if (res.error) {
         // A 404 here means the code expired (or was raced) between the
         // lookup and the approval, so start over from the code input.
@@ -101,14 +145,7 @@ export default function QuickConnectApproveCard() {
       }
 
       setError(null);
-      const cached = queryClient.getQueryData<
-        ApiResponseType<DevicesListResponseType>
-      >([DEVICES_KEY]);
-      setKnownDeviceIds(
-        cached && cached.error === false && cached.data?.devices
-          ? cached.data.devices.map(device => device.id)
-          : [],
-      );
+      setKnownDeviceIds(baselineDeviceIds);
       setWaitDeadline(Date.now() + WAIT_FOR_DEVICE_MS);
       setStep("waiting");
     },
@@ -135,8 +172,15 @@ export default function QuickConnectApproveCard() {
         data && data.error === false && data.data?.devices
           ? data.data.devices
           : null;
+      if (devices && knownDeviceIds === null) {
+        setKnownDeviceIds(devices.map(device => device.id));
+        return 2000;
+      }
+
       const fresh = devices?.find(
-        device => !knownDeviceIds.includes(device.id),
+        device =>
+          !knownDeviceIds.includes(device.id) &&
+          matchesPendingDevice(device, pendingDevice),
       );
       if (fresh) {
         setConnectedName(fresh.name);

@@ -196,6 +196,39 @@ describe("QuickConnectApproveCard", () => {
     expect(input).toHaveFocus();
   });
 
+  it("does not report prior uncached devices as newly connected", async () => {
+    vi.useFakeTimers();
+    renderCard();
+
+    const existing = makeDevice(1, "Old Phone");
+    getDevicesMock.mockResolvedValue(devicesResponse([existing]));
+
+    await submitCodeAndConfirm();
+
+    expect(approveQuickConnectMock).toHaveBeenCalledWith("XK4T7P");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /Waiting for Living Room TV to finish signing in/,
+    );
+    expect(showSuccessMock).not.toHaveBeenCalled();
+
+    await flushAsync(2000);
+    expect(screen.getByRole("status")).toHaveTextContent(/Waiting for/);
+    expect(showSuccessMock).not.toHaveBeenCalled();
+
+    getDevicesMock.mockResolvedValue(
+      devicesResponse([existing, makeDevice(2, "Living Room TV")]),
+    );
+    await flushAsync(2000);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Living Room TV is connected",
+    );
+    expect(showSuccessMock).toHaveBeenCalledWith(
+      "Device connected",
+      "Living Room TV is now signed in.",
+    );
+  });
+
   it("softens the message when the device has not connected before the deadline", async () => {
     vi.useFakeTimers();
     const queryClient = renderCard();
