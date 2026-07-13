@@ -2,7 +2,74 @@ import { describe, expect, it } from "vitest";
 import {
   formatRuntimeMinutes,
   formatSpokenRuntimeMinutes,
+  formatSpokenTime,
+  formatTimecode,
+  formatTrackDuration,
 } from "@/lib/format";
+
+describe("formatTrackDuration", () => {
+  it("returns an empty string for missing or invalid durations", () => {
+    expect(formatTrackDuration(0)).toBe("");
+    expect(formatTrackDuration(-1)).toBe("");
+    expect(formatTrackDuration(Number.NaN)).toBe("");
+    expect(formatTrackDuration(Number.POSITIVE_INFINITY)).toBe("");
+  });
+
+  it("formats millisecond durations as m:ss", () => {
+    expect(formatTrackDuration(225000)).toBe("3:45");
+    expect(formatTrackDuration(61000)).toBe("1:01");
+  });
+
+  it("floors partial seconds", () => {
+    expect(formatTrackDuration(200700)).toBe("3:20");
+  });
+});
+
+describe("formatTimecode", () => {
+  it("returns 0:00 for non-finite or negative input", () => {
+    expect(formatTimecode(Number.NaN)).toBe("0:00");
+    expect(formatTimecode(Number.POSITIVE_INFINITY)).toBe("0:00");
+    expect(formatTimecode(-1)).toBe("0:00");
+    expect(formatTimecode(-1, { forceHours: true })).toBe("0:00");
+  });
+
+  it("formats sub-hour values as m:ss", () => {
+    expect(formatTimecode(0)).toBe("0:00");
+    expect(formatTimecode(83)).toBe("1:23");
+    expect(formatTimecode(3599)).toBe("59:59");
+  });
+
+  it("includes the hours field past one hour", () => {
+    expect(formatTimecode(3600)).toBe("1:00:00");
+    expect(formatTimecode(3923)).toBe("1:05:23");
+    expect(formatTimecode(7500)).toBe("2:05:00");
+  });
+
+  it("pads sub-hour values to h:mm:ss when forceHours is set", () => {
+    expect(formatTimecode(300, { forceHours: true })).toBe("0:05:00");
+    expect(formatTimecode(12, { forceHours: true })).toBe("0:00:12");
+    expect(formatTimecode(3923, { forceHours: true })).toBe("1:05:23");
+  });
+
+  it("floors fractional seconds", () => {
+    expect(formatTimecode(89.9)).toBe("1:29");
+  });
+});
+
+describe("formatSpokenTime", () => {
+  it("returns 0 seconds for non-finite, negative, or zero input", () => {
+    expect(formatSpokenTime(Number.NaN)).toBe("0 seconds");
+    expect(formatSpokenTime(-5)).toBe("0 seconds");
+    expect(formatSpokenTime(0)).toBe("0 seconds");
+  });
+
+  it("formats playback positions as words, dropping zero fields", () => {
+    expect(formatSpokenTime(1)).toBe("1 second");
+    expect(formatSpokenTime(330)).toBe("5 minutes 30 seconds");
+    expect(formatSpokenTime(3600)).toBe("1 hour");
+    expect(formatSpokenTime(3923)).toBe("1 hour 5 minutes 23 seconds");
+  });
+});
 
 describe("formatRuntimeMinutes", () => {
   it("returns null for empty, non-finite, or non-positive runtimes", () => {

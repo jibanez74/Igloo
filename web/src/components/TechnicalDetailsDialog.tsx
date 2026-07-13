@@ -2,7 +2,7 @@ import { useRef, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { movieTechnicalDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
-import { formatBitRate } from "@/lib/format";
+import { formatBitRate, formatRuntimeMinutes } from "@/lib/format";
 import type {
   VideoStreamType,
   AudioStreamType,
@@ -24,12 +24,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024)
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function formatRuntime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function SectionHeading({
@@ -231,6 +225,7 @@ export default function TechnicalDetailsDialog({
 
   const details = data?.data;
   const runTime = details ? unwrapInt(details.movie.run_time) : null;
+  const formattedRuntime = formatRuntimeMinutes(runTime);
   const durationSec = details ? unwrapFloat(details.movie.duration) : null;
 
   const handleOpenAutoFocus = (e: Event) => {
@@ -310,10 +305,10 @@ export default function TechnicalDetailsDialog({
                     label="Media type (MIME)"
                     value={details.movie.mime_type}
                   />
-                  {runTime != null && (
+                  {formattedRuntime && (
                     <DetailRow
                       label="Duration (rounded, for display)"
-                      value={formatRuntime(runTime)}
+                      value={formattedRuntime}
                     />
                   )}
                   {durationSec != null && (

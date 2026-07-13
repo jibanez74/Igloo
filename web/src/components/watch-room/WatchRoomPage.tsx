@@ -21,7 +21,7 @@ import {
   WATCH_ROOM_CLIENT_EVENT_TYPES,
   WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatTimecode } from "@/lib/format";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import {
   movieTechnicalDetailsQueryOpts,
@@ -572,8 +572,10 @@ function WatchRoomPlayerPanel({
 
             <div className="flex items-center gap-4">
               <p className="text-sm font-medium text-muted-foreground">
-                {formatTimeSeconds(currentTime)} /{" "}
-                {formatTimeSeconds(duration)}
+                {formatTimecode(currentTime, {
+                  forceHours: duration >= 3600,
+                })}{" "}
+                / {formatTimecode(duration)}
               </p>
               <VolumeControl mediaRef={videoRef} />
               <button

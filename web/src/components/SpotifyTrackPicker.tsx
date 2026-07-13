@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { searchSpotifyTracks } from "@/lib/api";
+import { formatTrackDuration } from "@/lib/format";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -22,17 +23,6 @@ type SpotifyTrackPickerProps = {
     body: SpotifyTrackSearchRequest,
   ) => Promise<ApiResponseType<{ results: SpotifyTrackSearchResultType[] }>>;
 };
-
-function formatTrackDuration(durationMs: number): string {
-  if (!Number.isFinite(durationMs) || durationMs <= 0) {
-    return "";
-  }
-
-  const totalSeconds = Math.round(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
 
 export default function SpotifyTrackPicker({
   confirmLabel,

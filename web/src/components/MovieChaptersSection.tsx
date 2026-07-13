@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { formatTimeSeconds } from "@/lib/format";
+import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MovieChaptersSectionProps } from "@/types";
 
@@ -50,7 +50,7 @@ export default function MovieChaptersSection({
             >
               <span className="leading-snug font-medium">{chapter.title}</span>
               <span className="mt-0.5 text-muted-foreground">
-                {formatTimeSeconds(chapter.start_time)}
+                {formatTimecode(chapter.start_time)}
               </span>
             </Link>
           </li>

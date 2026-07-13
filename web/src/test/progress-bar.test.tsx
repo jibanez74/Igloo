@@ -204,6 +204,26 @@ describe("ProgressBar", () => {
     expect(slider.value).toBe("51");
   });
 
+  it("shows hour-padded time labels and spoken value text past one hour", () => {
+    render(
+      <ProgressBar
+        currentTime={300}
+        duration={7500}
+        onSeek={vi.fn()}
+        variant="video"
+      />,
+    );
+
+    // Current time is padded to the duration's h:mm:ss shape so the readout
+    // width stays stable across the hour mark.
+    expect(screen.getByText("0:05:00")).toBeInTheDocument();
+    expect(screen.getByText("2:05:00")).toBeInTheDocument();
+    expect(screen.getByRole("slider")).toHaveAttribute(
+      "aria-valuetext",
+      "5 minutes of 2 hours 5 minutes",
+    );
+  });
+
   it("drops a pending scrub value when resetKey changes", () => {
     const onSeek = vi.fn();
 

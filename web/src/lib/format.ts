@@ -48,7 +48,13 @@ export function formatDuration(ms: number) {
 }
 
 // takes in a duration in milliseconds and returns a formatted duration string
+// ("m:ss"); returns an empty string for missing or invalid durations so
+// callers can conditionally render it
 export function formatTrackDuration(ms: number) {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return "";
+  }
+
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -61,22 +67,17 @@ export function formatBitRate(bitRate: number) {
   return `${Math.round(bitRate / 1000)} kbps`;
 }
 
-// Format seconds into mm:ss format (for audio player progress)
-// Handles edge cases like NaN and Infinity
-export function formatTimeSeconds(seconds: number) {
-  if (!isFinite(seconds) || isNaN(seconds)) return "0:00";
-
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-// Format seconds into a clock timecode, including the hours field only when
-// needed: "1:23" under an hour, "1:05:23" once it crosses an hour. Use this for
-// long-form content (movies, chapter markers) where mm:ss would overflow into
-// confusing values like "65:23".
-export function formatTimecode(seconds: number) {
+// Format seconds into a clock timecode for playback positions, including the
+// hours field only when needed: "1:23" under an hour, "1:05:23" once it
+// crosses an hour. Use this wherever mm:ss would overflow into confusing
+// values like "65:23". When rendering a current-time/duration pair, pass
+// `forceHours` on the current-time side (keyed on the duration) so the readout
+// keeps the duration's shape ("0:05:00 / 2:05:00") instead of changing width
+// when playback crosses the hour mark.
+export function formatTimecode(
+  seconds: number,
+  options?: { forceHours?: boolean },
+) {
   if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
 
   const total = Math.floor(seconds);
@@ -84,7 +85,7 @@ export function formatTimecode(seconds: number) {
   const mins = Math.floor((total % 3600) / 60);
   const secs = total % 60;
 
-  if (hours > 0) {
+  if (hours > 0 || options?.forceHours) {
     return `${hours}:${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
