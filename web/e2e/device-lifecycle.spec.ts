@@ -100,10 +100,19 @@ test.describe("Device lifecycle (mocked)", () => {
     const pending = await redeem(request, code, secret);
     expect(pending.status).toBe("pending");
 
-    // The user approves the code from account settings.
+    // The user enters the code and is shown which device is asking before
+    // anything is approved.
     await page.goto("/settings/account");
     await page.getByRole("textbox", { name: "Quick Connect code" }).fill(code);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Approve this device?" }),
+    ).toBeVisible();
+    await expect(page.getByText(deviceName)).toBeVisible();
     await page.getByRole("button", { name: "Approve device" }).click();
+
+    // While the device finishes signing in, the card shows a waiting status.
+    await expect(page.getByText(/Waiting for/)).toBeVisible();
 
     // The device polls again and receives its token.
     let token = "";
@@ -118,9 +127,13 @@ test.describe("Device lifecycle (mocked)", () => {
       .toBe("approved");
     expect(token).toMatch(/^igd_/);
 
-    // The device appears in the list once the card refetches (it re-invalidates
-    // the devices query 5 seconds after approval).
-    const deviceItem = page.locator("li", { hasText: deviceName });
+    // The card polls the devices list every 2 seconds while waiting, so the
+    // new device shows up in the list shortly after it redeems its code.
+    // Exclude Sonner toasts: the "Device connected" toast is also a list
+    // item containing the device name.
+    const deviceItem = page.locator("li:not([data-sonner-toast])", {
+      hasText: deviceName,
+    });
     await expect(deviceItem).toBeVisible({ timeout: 15_000 });
 
     // Rename it inline (scope Save to the row — the page has other Save buttons).

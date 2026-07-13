@@ -52,6 +52,16 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 	return i, err
 }
 
+const deleteDevice = `-- name: DeleteDevice :exec
+DELETE FROM devices
+WHERE id = ?
+`
+
+func (q *Queries) DeleteDevice(ctx context.Context, id int64) error {
+	_, err := q.exec(ctx, q.deleteDeviceStmt, deleteDevice, id)
+	return err
+}
+
 const deleteDeviceForUser = `-- name: DeleteDeviceForUser :execrows
 DELETE FROM devices
 WHERE id = ?1
@@ -65,6 +75,19 @@ type DeleteDeviceForUserParams struct {
 
 func (q *Queries) DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error) {
 	result, err := q.exec(ctx, q.deleteDeviceForUserStmt, deleteDeviceForUser, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteDevicesUnusedSince = `-- name: DeleteDevicesUnusedSince :execrows
+DELETE FROM devices
+WHERE last_used_at < ?1
+`
+
+func (q *Queries) DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error) {
+	result, err := q.exec(ctx, q.deleteDevicesUnusedSinceStmt, deleteDevicesUnusedSince, cutoff)
 	if err != nil {
 		return 0, err
 	}

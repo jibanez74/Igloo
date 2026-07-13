@@ -127,7 +127,11 @@ export type {
 // User types
 export type { AuthUser, AdminUserType } from "./user";
 
-export type { DeviceType, DevicesListResponseType } from "./devices";
+export type {
+  DeviceType,
+  DevicesListResponseType,
+  QuickConnectLookupType,
+} from "./devices";
 
 // Notification types
 export type {

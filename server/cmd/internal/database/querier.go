@@ -41,7 +41,9 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWatchRoom(ctx context.Context, arg CreateWatchRoomParams) (WatchRoom, error)
 	DeleteAlbum(ctx context.Context, id int64) error
+	DeleteDevice(ctx context.Context, id int64) error
 	DeleteDeviceForUser(ctx context.Context, arg DeleteDeviceForUserParams) (int64, error)
+	DeleteDevicesUnusedSince(ctx context.Context, cutoff string) (int64, error)
 	// Delete a movie by ID. Related data is cascade-deleted via ON DELETE CASCADE.
 	DeleteMovie(ctx context.Context, id int64) error
 	// Delete all audio streams for a movie

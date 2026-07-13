@@ -83,6 +83,13 @@ test.describe("Quick Connect pairing", () => {
 
     const codeInput = page.getByRole("textbox", { name: "Quick Connect code" });
     await codeInput.fill(code);
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // The pending device's details are shown before anything is approved.
+    await expect(
+      page.getByRole("heading", { name: "Approve this device?" }),
+    ).toBeVisible();
+    await expect(page.getByText(deviceName)).toBeVisible();
     await page.getByRole("button", { name: "Approve device" }).click();
 
     // The device polls again and receives its token exactly once.
@@ -105,11 +112,13 @@ test.describe("Quick Connect pairing", () => {
     });
     expect(me.status()).toBe(200);
 
-    // The paired device shows up in the list (the card refetches a few
-    // seconds after approval, once the device has redeemed its code).
-    await expect(page.locator("li", { hasText: deviceName })).toBeVisible({
-      timeout: 15_000,
-    });
+    // The paired device shows up in the list (the card polls the devices
+    // query every 2 seconds until the device has redeemed its code).
+    // Exclude Sonner toasts: the "Device connected" toast is also a list
+    // item containing the device name.
+    await expect(
+      page.locator("li:not([data-sonner-toast])", { hasText: deviceName }),
+    ).toBeVisible({ timeout: 15_000 });
 
     // Revoke it from the UI.
     await page.getByRole("button", { name: `Revoke ${deviceName}` }).click();
@@ -117,7 +126,9 @@ test.describe("Quick Connect pairing", () => {
       .getByRole("alertdialog")
       .getByRole("button", { name: "Revoke" })
       .click();
-    await expect(page.locator("li", { hasText: deviceName })).toHaveCount(0);
+    await expect(
+      page.locator("li:not([data-sonner-toast])", { hasText: deviceName }),
+    ).toHaveCount(0);
 
     // The revoked token no longer authenticates.
     const revoked = await request.get("/api/auth/user", {

@@ -43,3 +43,11 @@ WHERE id = sqlc.arg(id)
 DELETE FROM devices
 WHERE id = sqlc.arg(id)
   AND user_id = sqlc.arg(user_id);
+
+-- name: DeleteDevice :exec
+DELETE FROM devices
+WHERE id = ?;
+
+-- name: DeleteDevicesUnusedSince :execrows
+DELETE FROM devices
+WHERE last_used_at < sqlc.arg(cutoff);

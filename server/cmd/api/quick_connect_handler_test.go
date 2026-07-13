@@ -74,6 +74,25 @@ func approveQuickConnectForTest(t *testing.T, app *Application, code string, coo
 	return w
 }
 
+type quickConnectLookupResponse struct {
+	Data struct {
+		DeviceName string  `json:"device_name"`
+		Platform   string  `json:"platform"`
+		AppVersion *string `json:"app_version"`
+	} `json:"data"`
+}
+
+func lookupQuickConnectForTest(t *testing.T, app *Application, code string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body := fmt.Sprintf(`{"code":%q}`, code)
+	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/lookup", strings.NewReader(body))
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+	return w
+}
+
 func redeemQuickConnectForTest(t *testing.T, app *Application, code, secret string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -107,8 +126,26 @@ func TestQuickConnect_FullPairingFlow(t *testing.T) {
 		t.Fatalf("status = %q, want pending", pending.Data.Status)
 	}
 
+	// The approving user first looks the code up to see which device it is.
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	w = lookupQuickConnectForTest(t, app, strings.ToLower(code), cookie)
+	if w.Code != http.StatusOK {
+		t.Fatalf("lookup status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+	var lookup quickConnectLookupResponse
+	err = json.Unmarshal(w.Body.Bytes(), &lookup)
+	if err != nil {
+		t.Fatalf("decode lookup response: %v", err)
+	}
+	if lookup.Data.DeviceName != "Living Room TV" || lookup.Data.Platform != "android_tv" {
+		t.Fatalf("lookup device = %+v, want the initiating device", lookup.Data)
+	}
+	if lookup.Data.AppVersion == nil || *lookup.Data.AppVersion != "1.0.0" {
+		t.Fatalf("lookup app_version = %v, want 1.0.0", lookup.Data.AppVersion)
+	}
+
 	// Codes are entered by hand, so approval must tolerate lowercase input.
-	w = approveQuickConnectForTest(t, app, strings.ToLower(code), newAuthSessionCookie(t, app, user.ID))
+	w = approveQuickConnectForTest(t, app, strings.ToLower(code), cookie)
 	if w.Code != http.StatusOK {
 		t.Fatalf("approve status = %d, want 200, body = %s", w.Code, w.Body.String())
 	}
@@ -335,6 +372,126 @@ func TestQuickConnect_ApproveRejectsDeviceTokenAuth(t *testing.T) {
 	}
 }
 
+func TestQuickConnect_LookupDoesNotBindOrConsumeCode(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	code, secret := initiateQuickConnectForTest(t, app)
+
+	// Repeated lookups keep returning the pending device without side effects.
+	for i := 0; i < 2; i++ {
+		w := lookupQuickConnectForTest(t, app, code, cookie)
+		if w.Code != http.StatusOK {
+			t.Fatalf("lookup #%d status = %d, want 200, body = %s", i+1, w.Code, w.Body.String())
+		}
+	}
+
+	// The device still polls as pending, and approval still works afterward.
+	w := redeemQuickConnectForTest(t, app, code, secret)
+	var pending quickConnectRedeemResponse
+	err := json.Unmarshal(w.Body.Bytes(), &pending)
+	if err != nil {
+		t.Fatalf("decode pending response: %v", err)
+	}
+	if pending.Data.Status != "pending" {
+		t.Fatalf("status after lookups = %q, want pending", pending.Data.Status)
+	}
+
+	w = approveQuickConnectForTest(t, app, code, cookie)
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve after lookup status = %d, want 200, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestQuickConnect_LookupUnknownCodeReturnsNotFound(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+
+	w := lookupQuickConnectForTest(t, app, "ZZZZZZ", newAuthSessionCookie(t, app, user.ID))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("lookup unknown code status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestQuickConnect_LookupApprovedCodeReturnsNotFound(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	code, _ := initiateQuickConnectForTest(t, app)
+
+	w := approveQuickConnectForTest(t, app, code, cookie)
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, want 200", w.Code)
+	}
+
+	// An already-approved code is indistinguishable from an unknown one.
+	w = lookupQuickConnectForTest(t, app, code, cookie)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("lookup approved code status = %d, want 404, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestQuickConnect_LookupRejectsDeviceTokenAuth(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+	token := createTestDevice(t, app, user.ID, "Phone", "android")
+
+	code, _ := initiateQuickConnectForTest(t, app)
+
+	body := fmt.Sprintf(`{"code":%q}`, code)
+	req := httptest.NewRequest(http.MethodPost, "/api/quick-connect/lookup", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	app.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("bearer lookup status = %d, want 401, body = %s", w.Code, w.Body.String())
+	}
+}
+
+func TestQuickConnect_LookupSharesApproveRateLimit(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.InitSession()
+	app.InitRouter()
+
+	user := createTestUser(t, app, "Approver", "approver@example.com", false)
+	cookie := newAuthSessionCookie(t, app, user.ID)
+
+	for i := 0; i < 10; i++ {
+		w := lookupQuickConnectForTest(t, app, "AAAAAA", cookie)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("attempt %d status = %d, want 404", i+1, w.Code)
+		}
+	}
+
+	// The bucket is shared, so both lookup and approve are now throttled.
+	w := lookupQuickConnectForTest(t, app, "AAAAAA", cookie)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("11th lookup status = %d, want 429, body = %s", w.Code, w.Body.String())
+	}
+	w = approveQuickConnectForTest(t, app, "AAAAAA", cookie)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("approve after exhausted lookups status = %d, want 429, body = %s", w.Code, w.Body.String())
+	}
+}
+
 func TestQuickConnect_ExpiredCodeCannotBeApprovedOrRedeemed(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -347,7 +504,13 @@ func TestQuickConnect_ExpiredCodeCannotBeApprovedOrRedeemed(t *testing.T) {
 	// Age the entry past its TTL from the broker's perspective.
 	app.QuickConnect.now = func() time.Time { return time.Now().Add(quickConnectCodeTTL + time.Second) }
 
-	w := approveQuickConnectForTest(t, app, code, newAuthSessionCookie(t, app, user.ID))
+	cookie := newAuthSessionCookie(t, app, user.ID)
+	w := lookupQuickConnectForTest(t, app, code, cookie)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("lookup expired code status = %d, want 404", w.Code)
+	}
+
+	w = approveQuickConnectForTest(t, app, code, cookie)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("approve expired code status = %d, want 404", w.Code)
 	}

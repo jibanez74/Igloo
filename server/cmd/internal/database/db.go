@@ -108,8 +108,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteAlbumStmt, err = db.PrepareContext(ctx, deleteAlbum); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteAlbum: %w", err)
 	}
+	if q.deleteDeviceStmt, err = db.PrepareContext(ctx, deleteDevice); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteDevice: %w", err)
+	}
 	if q.deleteDeviceForUserStmt, err = db.PrepareContext(ctx, deleteDeviceForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteDeviceForUser: %w", err)
+	}
+	if q.deleteDevicesUnusedSinceStmt, err = db.PrepareContext(ctx, deleteDevicesUnusedSince); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteDevicesUnusedSince: %w", err)
 	}
 	if q.deleteMovieStmt, err = db.PrepareContext(ctx, deleteMovie); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMovie: %w", err)
@@ -715,9 +721,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteAlbumStmt: %w", cerr)
 		}
 	}
+	if q.deleteDeviceStmt != nil {
+		if cerr := q.deleteDeviceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteDeviceStmt: %w", cerr)
+		}
+	}
 	if q.deleteDeviceForUserStmt != nil {
 		if cerr := q.deleteDeviceForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteDeviceForUserStmt: %w", cerr)
+		}
+	}
+	if q.deleteDevicesUnusedSinceStmt != nil {
+		if cerr := q.deleteDevicesUnusedSinceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteDevicesUnusedSinceStmt: %w", cerr)
 		}
 	}
 	if q.deleteMovieStmt != nil {
@@ -1552,7 +1568,9 @@ type Queries struct {
 	createUserStmt                              *sql.Stmt
 	createWatchRoomStmt                         *sql.Stmt
 	deleteAlbumStmt                             *sql.Stmt
+	deleteDeviceStmt                            *sql.Stmt
 	deleteDeviceForUserStmt                     *sql.Stmt
+	deleteDevicesUnusedSinceStmt                *sql.Stmt
 	deleteMovieStmt                             *sql.Stmt
 	deleteMovieAudioStreamsStmt                 *sql.Stmt
 	deleteMovieCastStmt                         *sql.Stmt
@@ -1740,7 +1758,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createUserStmt:                              q.createUserStmt,
 		createWatchRoomStmt:                         q.createWatchRoomStmt,
 		deleteAlbumStmt:                             q.deleteAlbumStmt,
+		deleteDeviceStmt:                            q.deleteDeviceStmt,
 		deleteDeviceForUserStmt:                     q.deleteDeviceForUserStmt,
+		deleteDevicesUnusedSinceStmt:                q.deleteDevicesUnusedSinceStmt,
 		deleteMovieStmt:                             q.deleteMovieStmt,
 		deleteMovieAudioStreamsStmt:                 q.deleteMovieAudioStreamsStmt,
 		deleteMovieCastStmt:                         q.deleteMovieCastStmt,

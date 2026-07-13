@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type contextKey string
@@ -60,6 +61,18 @@ func (app *Application) DeviceTokenAuth(next http.Handler) http.Handler {
 				app.Logger.Error("failed to look up device token", "error", err)
 			}
 			helpers.ErrorJSON(w, errors.New(internalServerErrorMessage))
+			return
+		}
+
+		// A device that has been idle past the inactivity TTL is revoked on
+		// the spot; it must pair again (public pairing routes stay reachable).
+		if device.LastUsedAt < deviceInactivityCutoff(time.Now()) {
+			err = app.Queries.DeleteDevice(r.Context(), device.ID)
+			if err != nil && app.Logger != nil {
+				app.Logger.Error("failed to delete stale device", "error", err, "device_id", device.ID)
+			}
+			app.DeviceLastSeen.Delete(strconv.FormatInt(device.ID, 10))
+			helpers.ErrorJSON(w, errors.New(notAuthorizedMessage), http.StatusUnauthorized)
 			return
 		}
 

@@ -106,6 +106,9 @@ func main() {
 
 	go app.ListenForShutdown()
 
+	app.sweepStaleDevices(context.Background())
+	go app.runDeviceExpirySweeper()
+
 	log.Printf("server listening on port %d", app.Config.Port)
 
 	err = app.Server.ListenAndServe()
@@ -647,6 +650,7 @@ func (app *Application) registerAuthRoutes(r chi.Router) {
 }
 
 func (app *Application) registerDeviceRoutes(r chi.Router) {
+	r.Post("/quick-connect/lookup", app.LookupQuickConnect)
 	r.Post("/quick-connect/approve", app.ApproveQuickConnect)
 
 	r.Route("/devices", func(r chi.Router) {

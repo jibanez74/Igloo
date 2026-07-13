@@ -85,6 +85,24 @@ describe("DevicesCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the platform with the app version when one is reported", async () => {
+    getDevicesMock.mockResolvedValue({
+      error: false,
+      data: {
+        devices: [
+          device(),
+          device({ id: 2, name: "Pixel", platform: "android", app_version: null }),
+        ],
+      },
+    });
+
+    renderCard();
+
+    expect(await screen.findByText("android_tv · 1.0.0")).toBeInTheDocument();
+    // A device without a reported version shows just the platform.
+    expect(screen.getByText("android")).toBeInTheDocument();
+  });
+
   it("revokes a device after confirmation", async () => {
     getDevicesMock.mockResolvedValue({
       error: false,

@@ -9,6 +9,7 @@ import type {
   CreateNotificationRequest,
   CreateNotificationResponseType,
   DevicesListResponseType,
+  QuickConnectLookupType,
   NotificationsListResponseType,
   UnreadNotificationCountResponseType,
   CreatePlaylistRequest,
@@ -161,6 +162,12 @@ export const getAuthUser = () =>
 // ============================================================================
 // Devices (Quick Connect)
 // ============================================================================
+
+export const lookupQuickConnect = (code: string) =>
+  apiRequest<QuickConnectLookupType>("/api/quick-connect/lookup", {
+    method: "POST",
+    body: { code },
+  });
 
 export const approveQuickConnect = (code: string) =>
   apiRequest("/api/quick-connect/approve", {

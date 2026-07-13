@@ -29,7 +29,22 @@ const (
 	deviceTokenPrefix = "igd_"
 
 	deviceLastSeenTTL = 5 * time.Minute
+
+	// Devices whose last_used_at is older than this are revoked automatically,
+	// both lazily at auth time and by the daily sweep.
+	deviceInactivityTTL = 90 * 24 * time.Hour
+
+	// Format produced by SQLite's CURRENT_TIMESTAMP (UTC, zero-padded).
+	sqliteTimeLayout = "2006-01-02 15:04:05"
 )
+
+// deviceInactivityCutoff returns the oldest last_used_at still considered
+// active, in SQLite CURRENT_TIMESTAMP format. Both sides are zero-padded
+// "YYYY-MM-DD HH:MM:SS" UTC strings, so plain string comparison orders
+// chronologically.
+func deviceInactivityCutoff(now time.Time) string {
+	return now.UTC().Add(-deviceInactivityTTL).Format(sqliteTimeLayout)
+}
 
 type quickConnectEntry struct {
 	secretHash     [32]byte
@@ -115,6 +130,36 @@ func (b *QuickConnectBroker) Approve(code string, userID int64) bool {
 
 	entry.approvedUserID = userID
 	return true
+}
+
+type quickConnectDeviceInfo struct {
+	deviceName string
+	platform   string
+	appVersion string
+}
+
+// Lookup returns the pending device's metadata without binding or consuming
+// the code, so the approving user can see what they are approving. ok is
+// false for unknown, expired, or already-approved codes — exactly the
+// conditions under which Approve fails, so lookup leaks nothing extra.
+func (b *QuickConnectBroker) Lookup(code string) (quickConnectDeviceInfo, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.purgeExpiredLocked()
+
+	entry, ok := b.entries[code]
+	if !ok {
+		return quickConnectDeviceInfo{}, false
+	}
+	if entry.approvedUserID != 0 {
+		return quickConnectDeviceInfo{}, false
+	}
+
+	return quickConnectDeviceInfo{
+		deviceName: entry.deviceName,
+		platform:   entry.platform,
+		appVersion: entry.appVersion,
+	}, true
 }
 
 type redeemStatus int
