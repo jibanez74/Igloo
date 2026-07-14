@@ -18,14 +18,16 @@ import (
 // userResponseMap is the canonical JSON shape for the authenticated user object
 // returned by the auth and user endpoints. It takes explicit fields because the
 // sqlc row types (GetUserRow, UpdateUserNameRow, ...) differ per query. Avatar is
-// kept as the raw sql.NullString to preserve the existing serialized shape.
-func userResponseMap(id int64, name, email string, isAdmin bool, avatar sql.NullString, createdAt, updatedAt string) map[string]any {
+// kept as the raw sql.NullString to preserve the existing serialized shape. The
+// plaintext PIN is never included — only whether one is set.
+func userResponseMap(id int64, name, email string, isAdmin bool, avatar, pin sql.NullString, createdAt, updatedAt string) map[string]any {
 	return map[string]any{
 		"id":         id,
 		"name":       name,
 		"email":      email,
 		"is_admin":   isAdmin,
 		"avatar":     avatar,
+		"has_pin":    pin.Valid,
 		"created_at": createdAt,
 		"updated_at": updatedAt,
 	}
@@ -98,7 +100,7 @@ func (app *Application) UpdateUserName(w http.ResponseWriter, r *http.Request) {
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -151,7 +153,7 @@ func (app *Application) UpdateUserEmail(w http.ResponseWriter, r *http.Request) 
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -282,7 +284,7 @@ func (app *Application) UpdateUserAvatar(w http.ResponseWriter, r *http.Request)
 	res := helpers.JSONResponse{
 		Error: false,
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 
@@ -403,7 +405,7 @@ func (app *Application) UploadUserAvatar(w http.ResponseWriter, r *http.Request)
 		Error:   false,
 		Message: "Avatar uploaded successfully",
 		Data: map[string]any{
-			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.CreatedAt, user.UpdatedAt),
+			"user": userResponseMap(user.ID, user.Name, user.Email, user.IsAdmin, user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt),
 		},
 	}
 

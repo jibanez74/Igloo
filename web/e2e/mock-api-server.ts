@@ -22,6 +22,7 @@ type User = {
   password: string;
   is_admin: boolean;
   avatar: string | null;
+  pin: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -128,6 +129,7 @@ const users: User[] = [
     password: ADMIN_PASSWORD,
     is_admin: true,
     avatar: null,
+    pin: null,
     created_at: startedAt,
     updated_at: startedAt,
   },
@@ -434,6 +436,7 @@ function publicUser(user: User) {
     email: user.email,
     is_admin: user.is_admin,
     avatar: user.avatar,
+    has_pin: user.pin !== null,
     created_at: user.created_at,
     updated_at: user.updated_at,
   };
@@ -1032,6 +1035,55 @@ async function handleUserRoutes(
     return true;
   }
 
+  if (url.pathname === "/api/user/pin" && method === "GET") {
+    sendSuccess(response, { pin: user.pin });
+    return true;
+  }
+
+  if (url.pathname === "/api/user/pin" && method === "PUT") {
+    const body = await readJSONBody(request);
+    const pin = stringField(body, "pin");
+    const currentPin = stringField(body, "current_pin");
+    if (pin !== "" && !/^\d{4}$/.test(pin)) {
+      sendFailure(response, 400, "pin must be exactly 4 digits");
+      return true;
+    }
+    if (user.pin !== null) {
+      if (!currentPin) {
+        sendFailure(response, 400, "current PIN is required");
+        return true;
+      }
+      if (currentPin !== user.pin) {
+        sendFailure(response, 401, "current PIN is incorrect");
+        return true;
+      }
+    }
+    user.pin = pin === "" ? null : pin;
+    touchUser(user);
+    sendSuccess(
+      response,
+      { user: publicUser(user) },
+      200,
+      pin === "" ? "PIN removed successfully" : "PIN updated successfully",
+    );
+    return true;
+  }
+
+  if (url.pathname === "/api/user/pin/verify" && method === "POST") {
+    const body = await readJSONBody(request);
+    const pin = stringField(body, "pin");
+    if (!/^\d{4}$/.test(pin)) {
+      sendFailure(response, 400, "pin must be exactly 4 digits");
+      return true;
+    }
+    if (user.pin === null) {
+      sendFailure(response, 400, "no PIN is set for this account");
+      return true;
+    }
+    sendSuccess(response, { valid: pin === user.pin });
+    return true;
+  }
+
   if (url.pathname === "/api/user/avatar" && method === "PUT") {
     const body = await readJSONBody(request);
     user.avatar = stringField(body, "avatar", user.avatar ?? "").trim() || null;
@@ -1093,6 +1145,7 @@ async function handleAdminRoutes(
       password: stringField(body, "password"),
       is_admin: booleanField(body, "is_admin"),
       avatar: null,
+      pin: null,
       created_at: now,
       updated_at: now,
     };

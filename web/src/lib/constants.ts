@@ -7,6 +7,7 @@ export const GENERAL_SETTINGS_KEY = "general-settings";
 export const PLAYBACK_SETTINGS_KEY = "playback-settings";
 
 export const DEVICES_KEY = "devices";
+export const USER_PIN_KEY = "user-pin";
 
 export const NOTIFICATIONS_KEY = "notifications";
 export const NOTIFICATIONS_UNREAD_COUNT_KEY = "notifications-unread-count";
@@ -88,6 +89,8 @@ export const USER_NAME_MAX_LENGTH = 100;
 export const USER_EMAIL_MAX_LENGTH = 255;
 export const USER_PASSWORD_MIN_LENGTH = 9;
 export const USER_PASSWORD_MAX_LENGTH = 128;
+/** Profile PIN is exactly 4 ASCII digits (server/cmd/api/user_pin_handler.go). */
+export const USER_PIN_LENGTH = 4;
 export const PLAYLIST_NAME_MAX_LENGTH = 255;
 export const PLAYLIST_DESCRIPTION_MAX_LENGTH = 1000;
 

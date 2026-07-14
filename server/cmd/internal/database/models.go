@@ -310,6 +310,7 @@ type User struct {
 	DownloadMbps              sql.NullFloat64 `json:"download_mbps"`
 	PreferredAudioLanguage    sql.NullString  `json:"preferred_audio_language"`
 	PreferredSubtitleLanguage sql.NullString  `json:"preferred_subtitle_language"`
+	Pin                       sql.NullString  `json:"pin"`
 	CreatedAt                 string          `json:"created_at"`
 	UpdatedAt                 string          `json:"updated_at"`
 }

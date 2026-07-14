@@ -19,11 +19,12 @@ type adminUserSummary struct {
 	Email     string  `json:"email"`
 	IsAdmin   bool    `json:"is_admin"`
 	Avatar    *string `json:"avatar"`
+	HasPin    bool    `json:"has_pin"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }
 
-func adminUserRow(id int64, name, email string, isAdmin bool, avatar sql.NullString, createdAt, updatedAt string) adminUserSummary {
+func adminUserRow(id int64, name, email string, isAdmin bool, avatar, pin sql.NullString, createdAt, updatedAt string) adminUserSummary {
 	var av *string
 	if avatar.Valid {
 		av = &avatar.String
@@ -34,6 +35,7 @@ func adminUserRow(id int64, name, email string, isAdmin bool, avatar sql.NullStr
 		Email:     email,
 		IsAdmin:   isAdmin,
 		Avatar:    av,
+		HasPin:    pin.Valid,
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 	}
@@ -51,7 +53,7 @@ func (app *Application) AdminGetUsers(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		users = append(users, adminUserRow(
 			row.ID, row.Name, row.Email, row.IsAdmin,
-			row.Avatar, row.CreatedAt, row.UpdatedAt,
+			row.Avatar, row.Pin, row.CreatedAt, row.UpdatedAt,
 		))
 	}
 
@@ -129,7 +131,7 @@ func (app *Application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		Data: map[string]any{
 			"user": adminUserRow(
 				user.ID, user.Name, user.Email, user.IsAdmin,
-				user.Avatar, user.CreatedAt, user.UpdatedAt,
+				user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt,
 			),
 		},
 	})
@@ -250,7 +252,7 @@ func (app *Application) AdminUpdateUser(w http.ResponseWriter, r *http.Request) 
 		Data: map[string]any{
 			"user": adminUserRow(
 				user.ID, user.Name, user.Email, user.IsAdmin,
-				user.Avatar, user.CreatedAt, user.UpdatedAt,
+				user.Avatar, user.Pin, user.CreatedAt, user.UpdatedAt,
 			),
 		},
 	})

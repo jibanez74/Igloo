@@ -214,6 +214,16 @@ export const updateUserPassword = (
     body: { current_password: currentPassword, new_password: newPassword },
   });
 
+export const getUserPin = () =>
+  apiRequest<{ pin: string | null }>("/api/user/pin");
+
+export const updateUserPin = (pin: string, currentPin?: string) =>
+  apiRequest<{ user: AuthUser }>("/api/user/pin", {
+    method: "PUT",
+    body:
+      currentPin === undefined ? { pin } : { pin, current_pin: currentPin },
+  });
+
 export const updateUserAvatar = (avatar: string) =>
   apiRequest("/api/user/avatar", {
     method: "PUT",

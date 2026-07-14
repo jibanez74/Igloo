@@ -43,6 +43,8 @@ const requiredAccountControlNames = [
   "New password",
   "Confirm new password",
   "Update Password",
+  "PIN",
+  "Set PIN",
   "Quick Connect code",
   "Continue",
   "Delete account",
@@ -634,6 +636,138 @@ test.describe("Account settings", () => {
         user => user.email === editedEmail || user.email === email,
       );
       expect(userStillExists).toBe(false);
+
+      tracker.assertClean();
+    } finally {
+      await cleanupAuditUsers(request, env, prefix);
+    }
+  });
+
+  test("manages the profile PIN accessibly without browser noise", async ({
+    page,
+    request,
+  }) => {
+    const env = readE2EEnv();
+    const tracker = trackBrowserIssues(page);
+    const stamp = Date.now();
+    const prefix = `playwright-profile-pin-${stamp}`;
+    const email = `${prefix}@example.com`;
+    const password = `ProfilePinPass${stamp}!`;
+
+    await cleanupAuditUsers(request, env, prefix);
+
+    await login(request, env);
+    const createResponse = await request.post(apiURL(env, "/api/admin/users"), {
+      data: {
+        name: `Playwright Profile PIN ${stamp}`,
+        email,
+        password,
+        is_admin: false,
+      },
+      failOnStatusCode: false,
+    });
+    expect(createResponse.status()).toBe(201);
+    await logout(page.context().request, env);
+    await login(page.context().request, env, email, password);
+
+    try {
+      await page.goto(apiURL(env, "/settings/account"), {
+        waitUntil: "networkidle",
+      });
+      await expect(
+        page.getByRole("heading", { name: "Profile PIN" }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("You have not set a profile PIN."),
+      ).toBeVisible();
+
+      // Invalid PIN is blocked client-side with accessible errors.
+      const setPinInput = page.getByLabel("PIN", { exact: true });
+      await setPinInput.fill("12");
+      await page.getByRole("button", { name: "Set PIN" }).click();
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "PIN must be exactly 4 digits." }),
+      ).toBeVisible();
+      await expect(setPinInput).toHaveAttribute("aria-invalid", "true");
+      await expect(setPinInput).toBeFocused();
+
+      // Set the first PIN.
+      await setPinInput.fill("1234");
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/pin") &&
+            response.request().method() === "PUT" &&
+            response.status() === 200,
+        ),
+        page.getByRole("button", { name: "Set PIN" }).click(),
+      ]);
+
+      // Reveal fetches the plaintext PIN on demand.
+      const showToggle = page.getByRole("button", { name: "Show PIN" });
+      await expect(showToggle).toBeVisible();
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/pin") &&
+            response.request().method() === "GET" &&
+            response.status() === 200,
+        ),
+        showToggle.click(),
+      ]);
+      await expect(page.getByText("1234")).toBeVisible();
+      const hideToggle = page.getByRole("button", { name: "Hide PIN" });
+      await expect(hideToggle).toHaveAttribute("aria-pressed", "true");
+      await hideToggle.click();
+      await expect(page.getByText("••••")).toBeVisible();
+
+      // Changing requires the current PIN and a wrong one is rejected.
+      await page.getByLabel("Current PIN").fill("0000");
+      await page.getByLabel("New PIN").fill("5678");
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/pin") &&
+            response.request().method() === "PUT" &&
+            response.status() === 401,
+        ),
+        page.getByRole("button", { name: "Update PIN" }).click(),
+      ]);
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "current PIN is incorrect" }),
+      ).toBeVisible();
+
+      // Correct current PIN changes it.
+      await page.getByLabel("Current PIN").fill("1234");
+      await page.getByLabel("New PIN").fill("5678");
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/pin") &&
+            response.request().method() === "PUT" &&
+            response.status() === 200,
+        ),
+        page.getByRole("button", { name: "Update PIN" }).click(),
+      ]);
+
+      // Remove clears it and the card returns to first-time setup.
+      await page.getByLabel("Current PIN").fill("5678");
+      await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.url().endsWith("/api/user/pin") &&
+            response.request().method() === "PUT" &&
+            response.status() === 200,
+        ),
+        page.getByRole("button", { name: "Remove PIN" }).click(),
+      ]);
+      await expect(
+        page.getByText("You have not set a profile PIN."),
+      ).toBeVisible();
 
       tracker.assertClean();
     } finally {

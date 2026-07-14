@@ -54,6 +54,14 @@ SET
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 
+-- name: UpdateUserPin :one
+UPDATE users
+SET
+  pin = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING *;
+
 -- name: UpdateUserAvatar :one
 UPDATE users
 SET
@@ -73,6 +81,7 @@ SELECT
   email,
   is_admin,
   avatar,
+  pin,
   created_at,
   updated_at
 FROM users

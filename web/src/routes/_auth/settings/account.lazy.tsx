@@ -63,6 +63,7 @@ import { cn, codePointLength } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
 import DevicesCard from "@/components/DevicesCard";
+import ProfilePinCard from "@/components/ProfilePinCard";
 
 export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,
@@ -1004,6 +1005,9 @@ function AccountSettings() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Profile PIN */}
+      <ProfilePinCard />
 
       {/* Quick Connect */}
       <QuickConnectApproveCard />
