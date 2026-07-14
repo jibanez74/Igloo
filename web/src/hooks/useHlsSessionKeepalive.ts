@@ -7,7 +7,7 @@ type HlsSessionKeepaliveOptions = {
 };
 
 /**
- * Keeps the server-side HLS session alive while the player is mounted.
+ * Keeps the server-side HLS session alive while the ready player is rendered.
  *
  * hls.js stops fetching once its buffer is full, and a paused tab fetches
  * nothing at all, so without this the session's short idle TTL would evict a

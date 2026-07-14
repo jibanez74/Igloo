@@ -212,6 +212,7 @@ function PlayMoviePage() {
     resolvedAudioTrack,
     resolvedSubtitleTrack,
     isHlsPlayback,
+    playbackStartSec,
     hlsStartSec,
     hlsPlaybackOffset,
     streamUrl,
@@ -235,6 +236,16 @@ function PlayMoviePage() {
         replace: true,
       });
     },
+  });
+
+  const status = deriveMoviePlaybackStatus({
+    movieNotFound,
+    movieIsPending,
+    hasMovie: !!movie,
+    requestedMode: mode,
+    techPending,
+    modeUnavailable,
+    playbackError,
   });
 
   useEffect(() => {
@@ -449,7 +460,7 @@ function PlayMoviePage() {
     });
 
   useHlsSessionKeepalive({
-    enabled: isHlsPlayback,
+    enabled: isHlsPlayback && status.kind === "ready",
     streamUrl,
   });
 
@@ -508,16 +519,6 @@ function PlayMoviePage() {
   const handleNativePlaybackError = (code: number | null | undefined) => {
     setPlaybackError(nativeMoviePlaybackErrorMessage(code));
   };
-
-  const status = deriveMoviePlaybackStatus({
-    movieNotFound,
-    movieIsPending,
-    hasMovie: !!movie,
-    requestedMode: mode,
-    techPending,
-    modeUnavailable,
-    playbackError,
-  });
 
   const keyboardShortcutsEnabled =
     status.kind === "ready" && !resumeDialogOpen;
@@ -606,7 +607,7 @@ function PlayMoviePage() {
       }}
       onNativeError={handleNativePlaybackError}
       subtitleTrack={subtitleInfo}
-      startSec={isHlsPlayback ? hlsPlaybackOffset : start}
+      startSec={isHlsPlayback ? hlsPlaybackOffset : playbackStartSec}
       onStartApplied={(time) => {
         const absoluteTime = toAbsolutePlaybackTime(time, playbackTiming);
         currentTimeRef.current = absoluteTime;

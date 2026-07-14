@@ -167,12 +167,21 @@ func RoomHLSSessionKey(roomID int64) string {
 	return fmt.Sprintf("room:%d", roomID)
 }
 
-func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
-	ttl := hlsPersonalSessionTTL
+func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) bool {
 	if session != nil && session.IsRoom {
-		ttl = hlsRoomSessionTTL
+		app.HLSSessionCache.Set(key, session, hlsRoomSessionTTL)
+		return true
 	}
-	app.HLSSessionCache.Set(key, session, ttl)
+
+	app.PersonalHLSMu.Lock()
+	defer app.PersonalHLSMu.Unlock()
+
+	raw, ok := app.HLSSessionCache.Get(key)
+	if !ok || raw != session {
+		return false
+	}
+	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	return true
 }
 
 func (app *Application) removeHLSSession(key string) {
@@ -216,21 +225,6 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 	return removed
 }
 
-// storePersonalHLSSession caches a new personal session, removes the same
-// client's superseded windows for the movie, and enforces the per-user session
-// cap — all under one PersonalHLSMu hold. keepKey (the just-stored key) is
-// exempt from both the supersede and the cap eviction, so a store can never
-// evict itself, and concurrent stores from different clients (distinct
-// playback_session UUIDs) serialize without removing each other.
-func (app *Application) storePersonalHLSSession(movieID int64, ownerUserID int64, key string, session *HLSSession) {
-	app.PersonalHLSMu.Lock()
-	defer app.PersonalHLSMu.Unlock()
-
-	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
-	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, session.PlaybackSession, key)
-	app.enforcePersonalHLSSessionCapLocked(ownerUserID, key)
-}
-
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
 // session cache entries across all movies, sorted least-recently-used first.
 // Every access re-sets the entry with the full personal TTL, so ascending
@@ -259,25 +253,96 @@ type hlsOwnedSessionEntry struct {
 	expiration int64
 }
 
-// enforcePersonalHLSSessionCapLocked evicts the owner's least-recently-used
-// personal sessions until the per-user cap is met, never evicting keepKey.
-// Requires PersonalHLSMu to be held.
-func (app *Application) enforcePersonalHLSSessionCapLocked(ownerUserID int64, keepKey string) int {
+type hlsPersonalSessionReservation struct {
+	app         *Application
+	ownerUserID int64
+	once        sync.Once
+}
+
+func (reservation *hlsPersonalSessionReservation) release() {
+	if reservation == nil || reservation.app == nil {
+		return
+	}
+
+	reservation.once.Do(func() {
+		app := reservation.app
+		app.PersonalHLSMu.Lock()
+		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
+		if remaining > 0 {
+			app.PersonalHLSReservations[reservation.ownerUserID] = remaining
+		} else {
+			delete(app.PersonalHLSReservations, reservation.ownerUserID)
+		}
+		app.PersonalHLSMu.Unlock()
+	})
+}
+
+func (reservation *hlsPersonalSessionReservation) commit(
+	movieID int64,
+	key string,
+	session *HLSSession,
+) {
+	reservation.once.Do(func() {
+		app := reservation.app
+		app.PersonalHLSMu.Lock()
+		app.cleanupPersonalHLSSessionsForOwnerLocked(
+			movieID,
+			reservation.ownerUserID,
+			session.PlaybackSession,
+			key,
+		)
+		app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+
+		remaining := app.PersonalHLSReservations[reservation.ownerUserID] - 1
+		if remaining > 0 {
+			app.PersonalHLSReservations[reservation.ownerUserID] = remaining
+		} else {
+			delete(app.PersonalHLSReservations, reservation.ownerUserID)
+		}
+		app.PersonalHLSMu.Unlock()
+	})
+}
+
+// reservePersonalHLSSession admits one personal session before FFmpeg starts.
+// Cached sessions and concurrent reservations share the same per-user cap.
+func (app *Application) reservePersonalHLSSession(
+	movieID int64,
+	ownerUserID int64,
+	playbackSession string,
+) (*hlsPersonalSessionReservation, error) {
+	app.PersonalHLSMu.Lock()
+	defer app.PersonalHLSMu.Unlock()
+
+	app.HLSSessionCache.DeleteExpired()
+	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, "")
+
 	limit := app.hlsMaxPersonalSessionsPerUser()
 	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
-	evicted := 0
-	for _, entry := range entries {
-		if len(entries)-evicted <= limit {
-			break
-		}
-		if entry.key == keepKey {
-			continue
-		}
-		app.removeHLSSession(entry.key)
-		evicted++
-		app.Logger.Info("hls session evicted by per-user cap", "owner_user_id", ownerUserID, "victim_key", entry.key, "limit", limit)
+	reserved := app.PersonalHLSReservations[ownerUserID]
+	for len(entries)+reserved >= limit && len(entries) > 0 {
+		victim := entries[0]
+		entries = entries[1:]
+		app.removeHLSSession(victim.key)
+		app.Logger.Info(
+			"hls session evicted by per-user cap",
+			"owner_user_id", ownerUserID,
+			"victim_key", victim.key,
+			"limit", limit,
+		)
 	}
-	return evicted
+
+	if len(entries)+reserved >= limit {
+		return nil, &hlsPersonalSessionCapacityError{MaxActive: limit}
+	}
+
+	if app.PersonalHLSReservations == nil {
+		app.PersonalHLSReservations = make(map[int64]int)
+	}
+	app.PersonalHLSReservations[ownerUserID] = reserved + 1
+	return &hlsPersonalSessionReservation{
+		app:         app,
+		ownerUserID: ownerUserID,
+	}, nil
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
@@ -297,6 +362,14 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64)
 		if entry.expiration > maxExpiration {
 			continue
 		}
+
+		entry.session.ExitMu.Lock()
+		exited := entry.session.Exited
+		entry.session.ExitMu.Unlock()
+		if exited {
+			continue
+		}
+
 		app.removeHLSSession(entry.key)
 		app.Logger.Info("idle hls session reclaimed for transcode capacity", "owner_user_id", ownerUserID, "victim_key", entry.key)
 		return true
@@ -430,6 +503,18 @@ func waitForHLSSessionExit(session *HLSSession, timeout time.Duration) bool {
 	exited := session.Exited
 	session.ExitMu.Unlock()
 	return exited
+}
+
+func normalizedHLSStartSec(startSec int, durationSec float64) int {
+	if float64(startSec) < durationSec {
+		return startSec
+	}
+
+	clampedStart := int(durationSec) - hlsStartClampTailSec
+	if clampedStart < 0 {
+		return 0
+	}
+	return clampedStart
 }
 
 func (app *Application) startHLSSession(params *hlsSessionStartParams) (*HLSSession, error) {
@@ -600,7 +685,28 @@ func (app *Application) GetOrCreateHLSSession(
 	startSec int,
 	ownerUserID int64,
 ) (*HLSSession, string, error) {
-	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
+	requestedKey := HLSSessionKey(movieID, profile, audioTrack, playbackSession, startSec)
+	movie, err := app.Queries.GetMovieByID(ctx, movieID)
+	if err != nil {
+		return nil, requestedKey, fmt.Errorf("movie not found: %w", err)
+	}
+	if !movie.Duration.Valid || movie.Duration.Float64 <= 0 {
+		return nil, requestedKey, fmt.Errorf("movie %d has no valid duration in the database", movieID)
+	}
+	if startSec < 0 {
+		return nil, requestedKey, fmt.Errorf("start %d is outside movie duration %.3f", startSec, movie.Duration.Float64)
+	}
+
+	effectiveStartSec := normalizedHLSStartSec(startSec, movie.Duration.Float64)
+	if effectiveStartSec != startSec {
+		app.Logger.Warn("hls start clamped to duration tail",
+			"movie_id", movieID,
+			"requested_start", startSec,
+			"clamped_start", effectiveStartSec,
+			"duration", movie.Duration.Float64,
+		)
+	}
+	key := HLSSessionKey(movieID, profile, audioTrack, playbackSession, effectiveStartSec)
 
 	if raw, ok := app.HLSSessionCache.Get(key); ok {
 		session, typeOK := raw.(*HLSSession)
@@ -609,8 +715,10 @@ func (app *Application) GetOrCreateHLSSession(
 		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
 			return nil, key, errHLSSessionNotFound
 		} else {
-			app.RefreshHLSSessionTTL(key, session)
-			return session, key, nil
+			refreshed := app.RefreshHLSSessionTTL(key, session)
+			if refreshed {
+				return session, key, nil
+			}
 		}
 	}
 
@@ -622,19 +730,32 @@ func (app *Application) GetOrCreateHLSSession(
 			} else if !canAccessPersonalHLSSession(existing, movieID, ownerUserID) {
 				return nil, errHLSSessionNotFound
 			} else {
-				return existing, nil
+				refreshed := app.RefreshHLSSessionTTL(key, existing)
+				if refreshed {
+					return existing, nil
+				}
 			}
 		}
 
-		// Reclaim this client's own superseded windows for the movie (seeks,
-		// profile/audio switches under the same playback_session UUID) and evict
-		// expired-but-unswept cache entries before creating, so the old window's
-		// transcode permit is released ahead of this session's acquire. Other
-		// clients' sessions — even for the same movie — are left alone.
-		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, playbackSession, "")
-		app.HLSSessionCache.DeleteExpired()
+		reservation, reserveErr := app.reservePersonalHLSSession(
+			movieID,
+			ownerUserID,
+			playbackSession,
+		)
+		if reserveErr != nil {
+			return nil, reserveErr
+		}
+		defer reservation.release()
 
-		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, playbackSession, startSec, false)
+		session, createErr := app.createHLSSession(
+			ctx,
+			movieID,
+			profile,
+			audioTrack,
+			playbackSession,
+			effectiveStartSec,
+			false,
+		)
 		if createErr != nil {
 			// On a full transcode pool, an abandoned client (closed browser that
 			// never sent a stop) may be holding a permit. Reclaim the owner's
@@ -642,7 +763,15 @@ func (app *Application) GetOrCreateHLSSession(
 			// qualifies, the 503 + Retry-After path stands.
 			var capErr *hlsTranscodeCapacityError
 			if errors.As(createErr, &capErr) && app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
-				session, createErr = app.createHLSSession(ctx, movieID, profile, audioTrack, playbackSession, startSec, false)
+				session, createErr = app.createHLSSession(
+					ctx,
+					movieID,
+					profile,
+					audioTrack,
+					playbackSession,
+					effectiveStartSec,
+					false,
+				)
 			}
 		}
 		if createErr != nil {
@@ -650,7 +779,7 @@ func (app *Application) GetOrCreateHLSSession(
 		}
 		session.OwnerUserID = ownerUserID
 
-		app.storePersonalHLSSession(movieID, ownerUserID, key, session)
+		reservation.commit(movieID, key, session)
 		return session, nil
 	})
 
@@ -773,18 +902,15 @@ func (app *Application) createHLSSession(
 	if startSec < 0 {
 		return nil, fmt.Errorf("start %d is outside movie duration %.3f", startSec, durationSec)
 	}
-	if float64(startSec) >= durationSec {
-		clampedStart := int(durationSec) - hlsStartClampTailSec
-		if clampedStart < 0 {
-			clampedStart = 0
-		}
+	effectiveStartSec := normalizedHLSStartSec(startSec, durationSec)
+	if effectiveStartSec != startSec {
 		app.Logger.Warn("hls start clamped to duration tail",
 			"movie_id", movieID,
 			"requested_start", startSec,
-			"clamped_start", clampedStart,
+			"clamped_start", effectiveStartSec,
 			"duration", durationSec,
 		)
-		startSec = clampedStart
+		startSec = effectiveStartSec
 	}
 
 	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movieID)

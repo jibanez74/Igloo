@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
 
 	"github.com/go-chi/chi/v5"
@@ -145,6 +146,21 @@ func TestValidateHLSFilename(t *testing.T) {
 				t.Fatalf("validateHLSFilename(%q) unexpected error: %v", tt.filename, err)
 			}
 		})
+	}
+}
+
+func TestWriteHLSSessionError_PersonalCapacityReturnsRetryable503(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeHLSSessionError(recorder, &hlsPersonalSessionCapacityError{MaxActive: 3})
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", recorder.Code)
+	}
+	if recorder.Header().Get("Retry-After") != "5" {
+		t.Fatalf("Retry-After = %q, want 5", recorder.Header().Get("Retry-After"))
+	}
+	if !strings.Contains(recorder.Body.String(), "personal HLS sessions") {
+		t.Fatalf("response does not distinguish personal-session capacity: %s", recorder.Body.String())
 	}
 }
 
@@ -323,9 +339,11 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	audioTrack := 0
 	app.InitSession()
 	userID := int64(42)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
 	session := &HLSSession{
-		MovieID:          5,
+		MovieID:          movieID,
 		OwnerUserID:      userID,
+		PlaybackSession:  testPlaybackSessionID,
 		TempDir:          t.TempDir(),
 		DurationSec:      12,
 		StartSec:         0,
@@ -333,7 +351,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 		EffectiveProfile: helpers.HLS_PROFILE_1080P_8MBPS,
 		CopyVideo:        false,
 	}
-	app.HLSSessionCache.SetDefault(HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
+	app.HLSSessionCache.SetDefault(HLSSessionKey(movieID, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0), session)
 
 	router := chi.NewRouter()
 	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
@@ -343,7 +361,7 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("/api/movies/5/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", testPlaybackSessionID),
+		fmt.Sprintf("/api/movies/%d/hls/remux/playlist.m3u8?audio_track=0&playback_session=%s&start=0", movieID, testPlaybackSessionID),
 		nil,
 	)
 	recorder := httptest.NewRecorder()
@@ -356,14 +374,89 @@ func TestHLSManifest_UsesRequestedRemuxPathWhenEffectiveProfileFallsBack(t *test
 	}
 
 	body := recorder.Body.String()
-	if !strings.Contains(body, fmt.Sprintf(`/api/movies/5/hls/remux/init.mp4?audio_track=0&playback_session=%s&start=0`, testPlaybackSessionID)) {
+	if !strings.Contains(body, fmt.Sprintf(`/api/movies/%d/hls/remux/init.mp4?audio_track=0&playback_session=%s&start=0`, movieID, testPlaybackSessionID)) {
 		t.Fatalf("playlist body missing remux init path: %s", body)
 	}
-	if !strings.Contains(body, fmt.Sprintf(`/api/movies/5/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0`, testPlaybackSessionID)) {
+	if !strings.Contains(body, fmt.Sprintf(`/api/movies/%d/hls/remux/segment_0.m4s?audio_track=0&playback_session=%s&start=0`, movieID, testPlaybackSessionID)) {
 		t.Fatalf("playlist body missing remux segment path: %s", body)
 	}
 	if strings.Contains(body, helpers.HLS_PROFILE_1080P_8MBPS) {
 		t.Fatalf("playlist body should not expose effective profile path: %s", body)
+	}
+}
+
+func TestHLSManifest_PropagatesEffectiveStartToAssetsAndSegmentLookup(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.InitSession()
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{
+		WriteFiles: func(outDir string) error {
+			segmentPath := filepath.Join(outDir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX)
+			return os.WriteFile(segmentPath, []byte("effective-segment"), 0o644)
+		},
+	}}}
+
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	userID := int64(42)
+	audioTrack := 0
+	effectiveStart := 7200 - hlsStartClampTailSec
+
+	router := chi.NewRouter()
+	router.Get("/api/movies/{id}/hls/{profile}/playlist.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.HLSManifest(w, r)
+	})
+	router.Get("/api/movies/{id}/hls/{profile}/{filename}", func(w http.ResponseWriter, r *http.Request) {
+		app.SessionManager.Put(r.Context(), cookieUserID, userID)
+		app.HLSSegment(w, r)
+	})
+	handler := app.SessionManager.LoadAndSave(router)
+
+	manifestURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/playlist.m3u8?audio_track=0&playback_session=%s&start=9000",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+	)
+	manifestRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(manifestRecorder, httptest.NewRequest(http.MethodGet, manifestURL, nil))
+	if manifestRecorder.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200: %s", manifestRecorder.Code, manifestRecorder.Body.String())
+	}
+	if !strings.Contains(manifestRecorder.Body.String(), fmt.Sprintf("start=%d", effectiveStart)) {
+		t.Fatalf("manifest assets do not use effective start %d: %s", effectiveStart, manifestRecorder.Body.String())
+	}
+	if strings.Contains(manifestRecorder.Body.String(), "start=9000") {
+		t.Fatalf("manifest assets expose invalid requested start: %s", manifestRecorder.Body.String())
+	}
+
+	effectiveKey := HLSSessionKey(
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		&audioTrack,
+		testPlaybackSessionID,
+		effectiveStart,
+	)
+	_, cached := app.HLSSessionCache.Get(effectiveKey)
+	if !cached {
+		t.Fatalf("effective key %q was not cached", effectiveKey)
+	}
+
+	segmentURL := fmt.Sprintf(
+		"/api/movies/%d/hls/%s/segment_0.m4s?audio_track=0&playback_session=%s&start=%d",
+		movieID,
+		helpers.HLS_PROFILE_720P_3MBPS,
+		testPlaybackSessionID,
+		effectiveStart,
+	)
+	segmentRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(segmentRecorder, httptest.NewRequest(http.MethodGet, segmentURL, nil))
+	if segmentRecorder.Code != http.StatusOK {
+		t.Fatalf("segment status = %d, want 200: %s", segmentRecorder.Code, segmentRecorder.Body.String())
+	}
+	if segmentRecorder.Body.String() != "effective-segment" {
+		t.Fatalf("segment body = %q, want effective-segment", segmentRecorder.Body.String())
 	}
 }
 
@@ -560,143 +653,6 @@ func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 	}
 }
 
-func TestStorePersonalHLSSession_RemovesSupersededSessions(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	audioTrack := 0
-	firstKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
-	secondKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
-
-	app.storePersonalHLSSession(5, userID, firstKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-	app.storePersonalHLSSession(5, userID, secondKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-
-	if _, ok := app.HLSSessionCache.Get(firstKey); ok {
-		t.Fatal("expected superseded session to be removed")
-	}
-	if _, ok := app.HLSSessionCache.Get(secondKey); !ok {
-		t.Fatal("expected newest session to remain")
-	}
-}
-
-func TestStorePersonalHLSSession_KeepsOtherPlaybackSessions(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	audioTrack := 0
-	// Same user, same movie, different playback_session UUID — another device
-	// (e.g. a TV on the shared account) watching the same movie concurrently.
-	otherDeviceKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 40)
-	otherMovieKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
-	otherOwnerKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 4)
-	roomKey := RoomHLSSessionKey(9)
-	newKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-
-	app.HLSSessionCache.SetDefault(otherDeviceKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(otherMovieKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(otherOwnerKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
-	app.HLSSessionCache.SetDefault(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true})
-
-	app.storePersonalHLSSession(5, userID, newKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-
-	for _, key := range []string{newKey, otherDeviceKey, otherMovieKey, otherOwnerKey, roomKey} {
-		if _, ok := app.HLSSessionCache.Get(key); !ok {
-			t.Fatalf("expected session %q to remain", key)
-		}
-	}
-}
-
-func TestStorePersonalHLSSession_EnforcesPerUserCap(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 2
-
-	userID := int64(100)
-	audioTrack := 0
-	oldestKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
-	newerKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
-	otherOwnerKey := HLSSessionKey(7, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
-	roomKey := RoomHLSSessionKey(9)
-	newKey := HLSSessionKey(8, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-
-	// Staggered TTLs make LRU order deterministic: oldestKey has the least
-	// remaining lifetime. The room session and the other user's session are
-	// even older but must never be cap-evicted for this user.
-	app.HLSSessionCache.Set(oldestKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, 2*time.Minute)
-	app.HLSSessionCache.Set(newerKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, 3*time.Minute)
-	app.HLSSessionCache.Set(otherOwnerKey, &HLSSession{MovieID: 7, OwnerUserID: userID + 1, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, time.Minute)
-	app.HLSSessionCache.Set(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true}, time.Minute)
-
-	app.storePersonalHLSSession(8, userID, newKey, &HLSSession{MovieID: 8, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-
-	if _, ok := app.HLSSessionCache.Get(oldestKey); ok {
-		t.Fatal("expected least-recently-used session to be evicted by the per-user cap")
-	}
-	for _, key := range []string{newKey, newerKey, otherOwnerKey, roomKey} {
-		if _, ok := app.HLSSessionCache.Get(key); !ok {
-			t.Fatalf("expected session %q to remain", key)
-		}
-	}
-}
-
-func TestStorePersonalHLSSession_CapNeverEvictsKeepKey(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-	app.HLSMaxPersonalSessionsPerUser = 1
-
-	userID := int64(100)
-	audioTrack := 0
-	oldKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
-	newKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
-
-	app.HLSSessionCache.Set(oldKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, time.Minute)
-
-	app.storePersonalHLSSession(6, userID, newKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
-
-	if _, ok := app.HLSSessionCache.Get(oldKey); ok {
-		t.Fatal("expected old session to be evicted at cap")
-	}
-	if _, ok := app.HLSSessionCache.Get(newKey); !ok {
-		t.Fatal("expected just-stored session to remain")
-	}
-}
-
-func TestStorePersonalHLSSession_ConcurrentStoresLeaveOneSession(t *testing.T) {
-	app := setupTestApp(t)
-	defer app.DB.Close()
-
-	userID := int64(100)
-	audioTrack := 0
-	firstKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 40)
-	secondKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 80)
-	firstSession := &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()}
-	secondSession := &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		app.storePersonalHLSSession(5, userID, firstKey, firstSession)
-	}()
-	go func() {
-		defer wg.Done()
-		app.storePersonalHLSSession(5, userID, secondKey, secondSession)
-	}()
-	wg.Wait()
-
-	remaining := 0
-	for _, key := range []string{firstKey, secondKey} {
-		if _, ok := app.HLSSessionCache.Get(key); ok {
-			remaining++
-		}
-	}
-	if remaining != 1 {
-		t.Fatalf("remaining sessions=%d, want exactly 1 (store + supersede must be atomic)", remaining)
-	}
-}
-
 func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -704,9 +660,11 @@ func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 	audioTrack := 0
 	personalKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
 	roomKey := RoomHLSSessionKey(9)
+	personalSession := &HLSSession{MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID}
 
 	before := time.Now()
-	app.RefreshHLSSessionTTL(personalKey, &HLSSession{MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID})
+	app.HLSSessionCache.Set(personalKey, personalSession, time.Minute)
+	app.RefreshHLSSessionTTL(personalKey, personalSession)
 	app.RefreshHLSSessionTTL(roomKey, &HLSSession{MovieID: 5, IsRoom: true})
 	after := time.Now()
 
@@ -729,5 +687,27 @@ func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 		if expiresTooEarly || expiresTooLate {
 			t.Fatalf("session %q expires at %v, want ~%v after refresh", check.key, expiration, check.ttl)
 		}
+	}
+}
+
+func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	audioTrack := 0
+	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	session := &HLSSession{
+		MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID,
+	}
+	app.HLSSessionCache.Set(key, session, time.Minute)
+	app.removeHLSSession(key)
+
+	refreshed := app.RefreshHLSSessionTTL(key, session)
+	if refreshed {
+		t.Fatal("evicted personal session was refreshed")
+	}
+	_, cached := app.HLSSessionCache.Get(key)
+	if cached {
+		t.Fatal("evicted personal session was reinserted")
 	}
 }

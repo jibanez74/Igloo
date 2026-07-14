@@ -34,7 +34,7 @@ describe("useHlsSessionKeepalive", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("stops on unmount and does nothing when disabled", async () => {
+  it("stops in a non-rendered error state and restarts after retry", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("#EXTM3U"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -51,9 +51,17 @@ describe("useHlsSessionKeepalive", () => {
     await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS);
     expect(fetchMock).toHaveBeenCalledOnce();
 
-    unmount();
+    rerender({ enabled: false });
     await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS * 2);
     expect(fetchMock).toHaveBeenCalledOnce();
+
+    rerender({ enabled: true });
+    await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    unmount();
+    await vi.advanceTimersByTimeAsync(HLS_SESSION_KEEPALIVE_INTERVAL_MS * 2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("survives fetch rejections", async () => {

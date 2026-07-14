@@ -23,6 +23,14 @@ func (e *hlsTranscodeCapacityError) Error() string {
 	return fmt.Sprintf("server is already running the maximum number of CPU HLS transcodes (%d)", e.MaxActive)
 }
 
+type hlsPersonalSessionCapacityError struct {
+	MaxActive int
+}
+
+func (e *hlsPersonalSessionCapacityError) Error() string {
+	return fmt.Sprintf("user is already running the maximum number of personal HLS sessions (%d)", e.MaxActive)
+}
+
 type hlsTranscodeLimiter struct {
 	permits chan struct{}
 }

@@ -40,9 +40,13 @@ export function useMovieWatchProgressSaver({
   }, [durationRef]);
 
   const queueProgressSave = useCallback(
-    (progressSec: number, durationSec: number) => {
+    (
+      progressSec: number,
+      durationSec: number,
+      options?: { keepalive?: boolean },
+    ) => {
       const save = pendingSaveRef.current.then(() =>
-        persistMovieWatchProgress(movieId, progressSec, durationSec),
+        persistMovieWatchProgress(movieId, progressSec, durationSec, options),
       );
       pendingSaveRef.current = save.catch(() => {});
       return save;
@@ -82,11 +86,12 @@ export function useMovieWatchProgressSaver({
           MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS;
       if (isDuplicate) return;
 
-      lastKeepalive = { progressSec, atMs: Date.now() };
-      void persistMovieWatchProgress(
-        movieId,
+      const atMs = Date.now();
+      const durationSec = effectiveDurationSec();
+      lastKeepalive = { progressSec, atMs };
+      void queueProgressSave(
         progressSec,
-        effectiveDurationSec(),
+        durationSec,
         { keepalive: true },
       );
     };
@@ -102,7 +107,7 @@ export function useMovieWatchProgressSaver({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", flushKeepalive);
     };
-  }, [movieId, currentTimeRef, effectiveDurationSec]);
+  }, [currentTimeRef, effectiveDurationSec, queueProgressSave]);
 
   const handlePauseSave = async () => {
     try {

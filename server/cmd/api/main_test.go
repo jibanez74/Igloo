@@ -680,6 +680,7 @@ func setupTestApp(t *testing.T) *Application {
 	// Tests do not attach real FFmpeg processes to HLS cache entries.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
 	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
+	app.PersonalHLSReservations = make(map[int64]int)
 	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.RemuxSafetyCache = cache.New(
 		hlsRemuxSafetyCacheTTL,

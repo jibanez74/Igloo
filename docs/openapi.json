@@ -4240,7 +4240,7 @@
         "name": "start",
         "in": "query",
         "required": true,
-        "description": "Session start time in seconds.",
+        "description": "Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value.",
         "schema": {
           "type": "integer",
           "minimum": 0
@@ -5609,7 +5609,16 @@
         }
       },
       "ServiceUnavailable": {
-        "description": "Generated media segment is not ready yet.",
+        "description": "Generated media is not ready yet or HLS session/transcode capacity is temporarily unavailable.",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds to wait before retrying when HLS capacity is unavailable.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
         "content": {
           "application/json": {
             "schema": {

@@ -46,42 +46,43 @@ const (
 )
 
 type Application struct {
-	DB                   *sql.DB
-	Queries              *database.Queries
-	Settings             *database.Setting
-	Config               RuntimeConfig
-	Logger               applogger.LoggerInterface
-	LoggerCloser         func() error
-	Ffprobe              ffprobe.FfprobeInterface
-	FFmpeg               ffmpeg.FFmpegInterface
-	Spotify              spotify.SpotifyInterface
-	Tmdb                 tmdb.TmdbInterface
-	TmdbImageBaseURL     string
-	TmdbImageHTTPClient  *http.Client
-	SessionManager       *scs.SessionManager
-	Wait                 *sync.WaitGroup
-	Router               *chi.Mux
-	Server               *http.Server
-	ScannerDBMu          sync.Mutex
-	SearchVocab          searchVocabCache
-	HLSSessionCache      *cache.Cache
-	HLSSessionGroup      singleflight.Group
-	HLSTranscodeLimiter  *hlsTranscodeLimiter
-	PersonalHLSMu        sync.Mutex
+	DB                      *sql.DB
+	Queries                 *database.Queries
+	Settings                *database.Setting
+	Config                  RuntimeConfig
+	Logger                  applogger.LoggerInterface
+	LoggerCloser            func() error
+	Ffprobe                 ffprobe.FfprobeInterface
+	FFmpeg                  ffmpeg.FFmpegInterface
+	Spotify                 spotify.SpotifyInterface
+	Tmdb                    tmdb.TmdbInterface
+	TmdbImageBaseURL        string
+	TmdbImageHTTPClient     *http.Client
+	SessionManager          *scs.SessionManager
+	Wait                    *sync.WaitGroup
+	Router                  *chi.Mux
+	Server                  *http.Server
+	ScannerDBMu             sync.Mutex
+	SearchVocab             searchVocabCache
+	HLSSessionCache         *cache.Cache
+	HLSSessionGroup         singleflight.Group
+	HLSTranscodeLimiter     *hlsTranscodeLimiter
+	PersonalHLSMu           sync.Mutex
+	PersonalHLSReservations map[int64]int
 
 	// HLSMaxPersonalSessionsPerUser caps concurrent personal HLS sessions per
 	// user; zero falls back to hlsMaxPersonalSessionsPerUserDefault.
 	HLSMaxPersonalSessionsPerUser int
-	RemuxSafetyCache     *cache.Cache
-	SubtitleVTTCache     *cache.Cache
-	SubtitleExtractGroup singleflight.Group
-	RoomHLSTombstone     *cache.Cache
-	RoomHLSMu            sync.Mutex
-	WatchRoomHub         *WatchRoomHub
-	QuickConnect         *QuickConnectBroker
-	AuthLimiter          *rateLimiter
-	DeviceLastSeen       *cache.Cache
-	DeviceExpiryCancel   context.CancelFunc
+	RemuxSafetyCache              *cache.Cache
+	SubtitleVTTCache              *cache.Cache
+	SubtitleExtractGroup          singleflight.Group
+	RoomHLSTombstone              *cache.Cache
+	RoomHLSMu                     sync.Mutex
+	WatchRoomHub                  *WatchRoomHub
+	QuickConnect                  *QuickConnectBroker
+	AuthLimiter                   *rateLimiter
+	DeviceLastSeen                *cache.Cache
+	DeviceExpiryCancel            context.CancelFunc
 }
 
 //go:embed all:webdist
@@ -248,6 +249,7 @@ func InitApp() (*Application, error) {
 func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
 	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
+	app.PersonalHLSReservations = make(map[int64]int)
 
 	// Eviction callback removes generated files when an HLS session ages out.
 	// The default TTL only applies to SetDefault, which this cache never uses;

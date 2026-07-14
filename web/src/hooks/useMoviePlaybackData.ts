@@ -10,6 +10,7 @@ import {
 import {
   buildMovieStreamUrl,
   buildMovieSubtitleTrackInfo,
+  clampMoviePlaybackTime,
   hlsPlaybackOffsetSec,
   hlsStartTimeSec,
 } from "@/lib/movie-playback";
@@ -96,10 +97,18 @@ export function useMoviePlaybackData({
   const resolvedAudioTrack = resolvedPlaybackSettings.audioTrack;
   const resolvedSubtitleTrack = resolvedPlaybackSettings.subtitleTrack;
   const isHlsPlayback = resolvedMode !== "direct";
-  const hlsStartSec = hlsStartTimeSec(isHlsPlayback, start);
+  const movieDurationSec =
+    unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
+    unwrapFloatOrUndefined(movie?.duration);
+  const playbackStartSec = clampMoviePlaybackTime(
+    start,
+    0,
+    movieDurationSec ?? 0,
+  );
+  const hlsStartSec = hlsStartTimeSec(isHlsPlayback, playbackStartSec);
   const hlsPlaybackOffset = hlsPlaybackOffsetSec(
     isHlsPlayback,
-    start,
+    playbackStartSec,
     hlsStartSec,
   );
   const streamAudioTrack = audioStreams.length > 0 ? resolvedAudioTrack : null;
@@ -115,9 +124,6 @@ export function useMoviePlaybackData({
     STREAM_MODES.find((m) => m.id === resolvedMode)?.label ?? resolvedMode;
   const modeUnavailable =
     availableModes !== null && availableModes.length === 0;
-  const movieDurationSec =
-    unwrapFloatOrUndefined(techData?.data?.movie?.duration) ??
-    unwrapFloatOrUndefined(movie?.duration);
   const playbackTiming = { isHlsPlayback, hlsStartSec, movieDurationSec };
   const subtitleInfo = buildMovieSubtitleTrackInfo({
     movieId,
@@ -175,6 +181,7 @@ export function useMoviePlaybackData({
     resolvedAudioTrack,
     resolvedSubtitleTrack,
     isHlsPlayback,
+    playbackStartSec,
     hlsStartSec,
     hlsPlaybackOffset,
     streamUrl,
