@@ -267,6 +267,44 @@
         }
       }
     },
+    "/api/quick-connect/lookup": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Look up the device behind a pending quick-connect code",
+        "description": "Returns the pending device's name, platform, and app version so the user can see what they are approving. Does not bind or consume the code. Session-authenticated users only, and it shares the approve endpoint's rate limit so lookups cannot be used to guess codes faster.",
+        "operationId": "lookupQuickConnect",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/QuickConnectApproveRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/QuickConnectLookupResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/quick-connect/approve": {
       "post": {
         "tags": [
@@ -3818,7 +3856,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Long-lived device token issued by POST /api/quick-connect/redeem or POST /api/auth/device-login. Tokens are prefixed with igd_."
+        "description": "Long-lived device token issued by POST /api/quick-connect/redeem or POST /api/auth/device-login. Tokens are prefixed with igd_. Devices unused for 90 days are revoked automatically; the device must pair again."
       }
     },
     "parameters": {
@@ -5423,6 +5461,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/QuickConnectRedeemEnvelope"
+            }
+          }
+        }
+      },
+      "QuickConnectLookupResponse": {
+        "description": "The pending device awaiting approval.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QuickConnectLookupEnvelope"
             }
           }
         }
@@ -10014,6 +10062,44 @@
                   },
                   "device": {
                     "$ref": "#/components/schemas/Device"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "QuickConnectLookupEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "device_name",
+                  "platform",
+                  "app_version"
+                ],
+                "properties": {
+                  "device_name": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "app_version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "additionalProperties": false

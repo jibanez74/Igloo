@@ -1028,3 +1028,5 @@ CREATE TABLE
   );
 
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_devices_last_used_at ON devices (last_used_at);

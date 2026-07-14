@@ -1924,6 +1924,24 @@ async function handleDeviceRoutes(
     return true;
   }
 
+  if (url.pathname === "/api/quick-connect/lookup" && method === "POST") {
+    const body = await readJSONBody(request);
+    const code = stringField(body, "code").trim().toUpperCase();
+    const pairing = pendingPairings.get(code);
+
+    if (!pairing || pairing.approved) {
+      sendFailure(response, 404, "invalid or expired code");
+      return true;
+    }
+
+    sendSuccess(response, {
+      device_name: pairing.device_name,
+      platform: pairing.platform,
+      app_version: pairing.app_version,
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/quick-connect/approve" && method === "POST") {
     const body = await readJSONBody(request);
     const code = stringField(body, "code").trim().toUpperCase();

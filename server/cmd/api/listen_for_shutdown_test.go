@@ -174,6 +174,13 @@ func runListenForShutdownHelper(t *testing.T) {
 
 	app := setupTestApp(t)
 	app.Wait = &sync.WaitGroup{}
+	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
+	app.DeviceExpiryCancel = cancelDeviceExpiry
+	app.Wait.Add(1)
+	go func() {
+		defer app.Wait.Done()
+		app.runDeviceExpirySweeper(deviceExpiryCtx)
+	}()
 	app.RemuxSafetyCache.SetDefault("shutdown-test-remux", struct{}{})
 	app.SubtitleVTTCache.SetDefault("shutdown-test-subtitle", []byte("subtitle"))
 	app.RoomHLSTombstone.SetDefault("room:shutdown-test", struct{}{})

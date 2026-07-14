@@ -116,6 +116,53 @@ func (app *Application) RedeemQuickConnect(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+type LookupQuickConnectRequest struct {
+	Code string `json:"code"`
+}
+
+func (app *Application) LookupQuickConnect(w http.ResponseWriter, r *http.Request) {
+	userID, ok := app.requireSessionUserID(w, r)
+	if !ok {
+		return
+	}
+
+	// Shares the approve bucket so lookup cannot be used to guess codes
+	// faster than approve alone would allow.
+	if !app.AuthLimiter.Allow("approve:"+strconv.FormatInt(userID, 10), 10, 5*time.Minute) {
+		helpers.ErrorJSON(w, errors.New(tooManyAttemptsMessage), http.StatusTooManyRequests)
+		return
+	}
+
+	var request LookupQuickConnectRequest
+
+	err := helpers.ReadJSON(w, r, &request, 0)
+	if err != nil {
+		helpers.ErrorJSON(w, errors.New("invalid request body"), http.StatusBadRequest)
+		return
+	}
+
+	code := normalizeQuickConnectCode(request.Code)
+	info, found := app.QuickConnect.Lookup(code)
+	if !found {
+		helpers.ErrorJSON(w, errors.New(quickConnectInvalidCodeMessage), http.StatusNotFound)
+		return
+	}
+
+	var version *string
+	if info.appVersion != "" {
+		version = &info.appVersion
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, helpers.JSONResponse{
+		Error: false,
+		Data: map[string]any{
+			"device_name": info.deviceName,
+			"platform":    info.platform,
+			"app_version": version,
+		},
+	})
+}
+
 type ApproveQuickConnectRequest struct {
 	Code string `json:"code"`
 }

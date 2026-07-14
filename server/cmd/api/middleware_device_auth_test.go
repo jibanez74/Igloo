@@ -199,8 +199,11 @@ func TestDeviceTokenAuth_ThrottlesLastUsedWrites(t *testing.T) {
 		t.Fatalf("lookup device: %v", err)
 	}
 
-	// Backdate last_used_at so the first request visibly bumps it.
-	_, err = app.DB.Exec("UPDATE devices SET last_used_at = '2000-01-01 00:00:00' WHERE id = ?", device.ID)
+	// Backdate last_used_at so the first request visibly bumps it. The
+	// timestamp must stay inside the inactivity cutoff or the middleware
+	// would revoke the device instead.
+	backdated := time.Now().UTC().Add(-time.Hour).Format(sqliteTimeLayout)
+	_, err = app.DB.Exec("UPDATE devices SET last_used_at = ? WHERE id = ?", backdated, device.ID)
 	if err != nil {
 		t.Fatalf("backdate last_used_at: %v", err)
 	}
@@ -220,12 +223,12 @@ func TestDeviceTokenAuth_ThrottlesLastUsedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup after first request: %v", err)
 	}
-	if first.LastUsedAt == "2000-01-01 00:00:00" {
+	if first.LastUsedAt == backdated {
 		t.Fatal("first request did not update last_used_at")
 	}
 
 	// Backdate again: within the throttle window no further write happens.
-	_, err = app.DB.Exec("UPDATE devices SET last_used_at = '2000-01-01 00:00:00' WHERE id = ?", device.ID)
+	_, err = app.DB.Exec("UPDATE devices SET last_used_at = ? WHERE id = ?", backdated, device.ID)
 	if err != nil {
 		t.Fatalf("backdate last_used_at: %v", err)
 	}
@@ -235,7 +238,7 @@ func TestDeviceTokenAuth_ThrottlesLastUsedWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup after second request: %v", err)
 	}
-	if second.LastUsedAt != "2000-01-01 00:00:00" {
+	if second.LastUsedAt != backdated {
 		t.Fatalf("second request wrote last_used_at = %q despite throttle", second.LastUsedAt)
 	}
 }
