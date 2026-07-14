@@ -77,6 +77,7 @@ type Application struct {
 	QuickConnect         *QuickConnectBroker
 	AuthLimiter          *rateLimiter
 	DeviceLastSeen       *cache.Cache
+	DeviceExpiryCancel   context.CancelFunc
 }
 
 //go:embed all:webdist
@@ -104,10 +105,19 @@ func main() {
 		Handler: app.Router,
 	}
 
+	deviceExpiryCtx, cancelDeviceExpiry := context.WithCancel(context.Background())
+	app.DeviceExpiryCancel = cancelDeviceExpiry
+	app.Wait.Add(1)
+	go func() {
+		defer app.Wait.Done()
+		app.runDeviceExpirySweeper(deviceExpiryCtx)
+	}()
+
 	go app.ListenForShutdown()
 
-	app.sweepStaleDevices(context.Background())
-	go app.runDeviceExpirySweeper()
+	startupSweepCtx, cancelStartupSweep := context.WithTimeout(deviceExpiryCtx, deviceExpirySweepTimeout)
+	app.sweepStaleDevices(startupSweepCtx)
+	cancelStartupSweep()
 
 	log.Printf("server listening on port %d", app.Config.Port)
 
@@ -117,6 +127,8 @@ func main() {
 		// database and logger, so a serve failure (e.g. port already in use) must
 		// run cleanup rather than exit bare.
 		app.Logger.Error("server failed to start", "error", err)
+		app.DeviceExpiryCancel()
+		app.Wait.Wait()
 		app.cleanupMediaBinaries()
 		app.closeDatabase()
 		app.closeLogger()
@@ -898,6 +910,9 @@ func (app *Application) ListenForShutdown() {
 
 	app.shutdownWatchRoomHub()
 	app.cleanupHLSSessions()
+	if app.DeviceExpiryCancel != nil {
+		app.DeviceExpiryCancel()
+	}
 
 	// Background tasks may still need database and logger access.
 	app.Wait.Wait()

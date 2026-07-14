@@ -409,6 +409,7 @@ func TestInitTables_Indexes(t *testing.T) {
 		"idx_sessions_expiry",
 		"idx_movie_watch_progress_user_updated_at",
 		"idx_settings_singleton",
+		"idx_devices_last_used_at",
 	}
 
 	for _, indexName := range expectedIndexes {
