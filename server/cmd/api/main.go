@@ -68,6 +68,10 @@ type Application struct {
 	HLSSessionGroup      singleflight.Group
 	HLSTranscodeLimiter  *hlsTranscodeLimiter
 	PersonalHLSMu        sync.Mutex
+
+	// HLSMaxPersonalSessionsPerUser caps concurrent personal HLS sessions per
+	// user; zero falls back to hlsMaxPersonalSessionsPerUserDefault.
+	HLSMaxPersonalSessionsPerUser int
 	RemuxSafetyCache     *cache.Cache
 	SubtitleVTTCache     *cache.Cache
 	SubtitleExtractGroup singleflight.Group
@@ -243,6 +247,7 @@ func InitApp() (*Application, error) {
 
 func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
+	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
 
 	// Eviction callback removes generated files when an HLS session ages out.
 	// The default TTL only applies to SetDefault, which this cache never uses;

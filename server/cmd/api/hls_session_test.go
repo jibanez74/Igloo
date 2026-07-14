@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -648,7 +649,7 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	app.Settings = &database.Setting{}
 	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
 
-	// A stale session (from a closed browser, different playback_session UUID)
+	// An idle session (from a closed browser, different playback_session UUID)
 	// holds the only transcode permit; it only releases it when cleaned up.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
 	release, err := app.acquireHLSTranscodeSlot()
@@ -672,7 +673,9 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 		Exited:          true,
 		Cancel:          releaseStalePermit,
 	}
-	app.HLSSessionCache.SetDefault(staleKey, staleSession)
+	// Remaining TTL below hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold
+	// marks the session as idle long enough to be reclaimed.
+	app.HLSSessionCache.Set(staleKey, staleSession, hlsPersonalSessionTTL-hlsIdlePermitReclaimThreshold-time.Second)
 
 	session, _, err := app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, userID)
 	if err != nil {
@@ -685,6 +688,44 @@ func TestGetOrCreateHLSSession_ReclaimsOwnStaleSessionCapacity(t *testing.T) {
 	}
 	if session.OwnerUserID != userID {
 		t.Fatalf("OwnerUserID = %d, want %d", session.OwnerUserID, userID)
+	}
+}
+
+func TestGetOrCreateHLSSession_DoesNotReclaimActiveSessionOnCapacity(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Settings = &database.Setting{}
+	app.FFmpeg = &fakeFFmpeg{plans: []fakeFFmpegRunPlan{{}}}
+
+	// Another device on the same account is actively playing (its TTL is fresh
+	// because segment fetches refresh it); a full pool must 503 the newcomer
+	// instead of killing the active stream.
+	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(1)
+	release, err := app.acquireHLSTranscodeSlot()
+	if err != nil {
+		t.Fatalf("acquireHLSTranscodeSlot: %v", err)
+	}
+	defer release()
+
+	userID := int64(100)
+	movieID := insertTestHLSMovieFixture(t, app, "h264", 1080)
+	activeKey := HLSSessionKey(movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testOtherPlaybackSessionID, 0)
+	activeSession := &HLSSession{
+		MovieID:         movieID,
+		OwnerUserID:     userID,
+		PlaybackSession: testOtherPlaybackSessionID,
+		TempDir:         t.TempDir(),
+		Exited:          true,
+	}
+	app.HLSSessionCache.Set(activeKey, activeSession, hlsPersonalSessionTTL)
+
+	_, _, err = app.GetOrCreateHLSSession(context.Background(), movieID, helpers.HLS_PROFILE_720P_3MBPS, testIntPtr(0), testPlaybackSessionID, 0, userID)
+	var capacityErr *hlsTranscodeCapacityError
+	if !errors.As(err, &capacityErr) {
+		t.Fatalf("expected hlsTranscodeCapacityError, got %v", err)
+	}
+	if _, ok := app.HLSSessionCache.Get(activeKey); !ok {
+		t.Fatal("expected the active device's session to remain cached")
 	}
 }
 

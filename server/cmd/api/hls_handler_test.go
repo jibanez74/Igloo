@@ -580,32 +580,86 @@ func TestStorePersonalHLSSession_RemovesSupersededSessions(t *testing.T) {
 	}
 }
 
-func TestStorePersonalHLSSession_SupersedesAcrossPlaybackSessions(t *testing.T) {
+func TestStorePersonalHLSSession_KeepsOtherPlaybackSessions(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
 	userID := int64(100)
 	audioTrack := 0
-	staleKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 40)
+	// Same user, same movie, different playback_session UUID — another device
+	// (e.g. a TV on the shared account) watching the same movie concurrently.
+	otherDeviceKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 40)
 	otherMovieKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
 	otherOwnerKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 4)
 	roomKey := RoomHLSSessionKey(9)
 	newKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
 
-	app.HLSSessionCache.SetDefault(staleKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
+	app.HLSSessionCache.SetDefault(otherDeviceKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(otherMovieKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(otherOwnerKey, &HLSSession{MovieID: 5, OwnerUserID: userID + 1, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()})
 	app.HLSSessionCache.SetDefault(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true})
 
 	app.storePersonalHLSSession(5, userID, newKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
 
-	if _, ok := app.HLSSessionCache.Get(staleKey); ok {
-		t.Fatal("expected stale session from another playback_session to be removed")
-	}
-	for _, key := range []string{newKey, otherMovieKey, otherOwnerKey, roomKey} {
+	for _, key := range []string{newKey, otherDeviceKey, otherMovieKey, otherOwnerKey, roomKey} {
 		if _, ok := app.HLSSessionCache.Get(key); !ok {
 			t.Fatalf("expected session %q to remain", key)
 		}
+	}
+}
+
+func TestStorePersonalHLSSession_EnforcesPerUserCap(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.HLSMaxPersonalSessionsPerUser = 2
+
+	userID := int64(100)
+	audioTrack := 0
+	oldestKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
+	newerKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
+	otherOwnerKey := HLSSessionKey(7, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
+	roomKey := RoomHLSSessionKey(9)
+	newKey := HLSSessionKey(8, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+
+	// Staggered TTLs make LRU order deterministic: oldestKey has the least
+	// remaining lifetime. The room session and the other user's session are
+	// even older but must never be cap-evicted for this user.
+	app.HLSSessionCache.Set(oldestKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, 2*time.Minute)
+	app.HLSSessionCache.Set(newerKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, 3*time.Minute)
+	app.HLSSessionCache.Set(otherOwnerKey, &HLSSession{MovieID: 7, OwnerUserID: userID + 1, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, time.Minute)
+	app.HLSSessionCache.Set(roomKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir(), IsRoom: true}, time.Minute)
+
+	app.storePersonalHLSSession(8, userID, newKey, &HLSSession{MovieID: 8, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+
+	if _, ok := app.HLSSessionCache.Get(oldestKey); ok {
+		t.Fatal("expected least-recently-used session to be evicted by the per-user cap")
+	}
+	for _, key := range []string{newKey, newerKey, otherOwnerKey, roomKey} {
+		if _, ok := app.HLSSessionCache.Get(key); !ok {
+			t.Fatalf("expected session %q to remain", key)
+		}
+	}
+}
+
+func TestStorePersonalHLSSession_CapNeverEvictsKeepKey(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.HLSMaxPersonalSessionsPerUser = 1
+
+	userID := int64(100)
+	audioTrack := 0
+	oldKey := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testOtherPlaybackSessionID, 0)
+	newKey := HLSSessionKey(6, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+
+	app.HLSSessionCache.Set(oldKey, &HLSSession{MovieID: 5, OwnerUserID: userID, PlaybackSession: testOtherPlaybackSessionID, TempDir: t.TempDir()}, time.Minute)
+
+	app.storePersonalHLSSession(6, userID, newKey, &HLSSession{MovieID: 6, OwnerUserID: userID, PlaybackSession: testPlaybackSessionID, TempDir: t.TempDir()})
+
+	if _, ok := app.HLSSessionCache.Get(oldKey); ok {
+		t.Fatal("expected old session to be evicted at cap")
+	}
+	if _, ok := app.HLSSessionCache.Get(newKey); !ok {
+		t.Fatal("expected just-stored session to remain")
 	}
 }
 

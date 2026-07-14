@@ -11,6 +11,7 @@ import (
 
 const (
 	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	hlsCPUTranscodeDefaultDivisor = 4
 )
 
@@ -45,6 +46,18 @@ func configuredHLSMaxCPUTranscodes() int {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < 1 {
 		return defaultHLSMaxCPUTranscodes()
+	}
+	return value
+}
+
+func configuredHLSMaxPersonalSessionsPerUser() int {
+	raw := strings.TrimSpace(os.Getenv(envHLSMaxSessionsPerUser))
+	if raw == "" {
+		return hlsMaxPersonalSessionsPerUserDefault
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return hlsMaxPersonalSessionsPerUserDefault
 	}
 	return value
 }

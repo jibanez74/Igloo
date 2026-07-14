@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +33,13 @@ const (
 	hlsStartClampTailSec = 5
 	hdrTransferPQ        = "smpte2084"
 	hdrTransferHLG       = "arib-std-b67"
+	// hlsMaxPersonalSessionsPerUserDefault caps concurrent personal sessions per
+	// user so abandoned clients cannot pile up ffmpeg processes and temp dirs.
+	hlsMaxPersonalSessionsPerUserDefault = 3
+	// hlsIdlePermitReclaimThreshold is the minimum idle time before a session may
+	// be reclaimed to free a transcode permit. Active clients refresh the TTL on
+	// every segment fetch, so a session this idle is abandoned or backgrounded.
+	hlsIdlePermitReclaimThreshold = 30 * time.Second
 )
 
 // HLSSession holds state for one HLS transcode session.
@@ -185,10 +194,10 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 }
 
 // cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
-// An empty playbackSession is a wildcard: it removes every personal session the
-// owner has for the movie regardless of playback_session UUID, so a session
-// left behind by a closed browser (which mints a new UUID on reopen) is
-// reclaimed as soon as the user starts the movie again.
+// It removes only the owner's other sessions for this movie and this
+// playback_session UUID — superseded windows from the same client (seeks,
+// profile or audio-track switches). Sessions from the owner's other clients
+// (different UUIDs, e.g. a TV playing the same movie) are never touched.
 func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
 	removed := 0
 	for key, item := range app.HLSSessionCache.Items() {
@@ -199,8 +208,7 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 		if !ok || session == nil || !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
 			continue
 		}
-		matchesPlaybackSession := playbackSession == "" || session.PlaybackSession == playbackSession
-		if matchesPlaybackSession {
+		if session.PlaybackSession == playbackSession {
 			app.removeHLSSession(key)
 			removed++
 		}
@@ -208,20 +216,99 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 	return removed
 }
 
-// storePersonalHLSSession caches a new personal session and removes all of the
-// owner's superseded sessions for the same movie — across playback_session
-// UUIDs — under one PersonalHLSMu hold. Doing both atomically means concurrent
-// creations with different start offsets serialize: the last one to store
-// wins, so they can never remove each other's session and leave zero live
-// sessions. Superseding across UUIDs is safe because the same movie is never
-// legitimately played on two devices by one user; different movies keep their
-// sessions (the cleanup filters by movie ID).
+// storePersonalHLSSession caches a new personal session, removes the same
+// client's superseded windows for the movie, and enforces the per-user session
+// cap — all under one PersonalHLSMu hold. keepKey (the just-stored key) is
+// exempt from both the supersede and the cap eviction, so a store can never
+// evict itself, and concurrent stores from different clients (distinct
+// playback_session UUIDs) serialize without removing each other.
 func (app *Application) storePersonalHLSSession(movieID int64, ownerUserID int64, key string, session *HLSSession) {
 	app.PersonalHLSMu.Lock()
 	defer app.PersonalHLSMu.Unlock()
 
 	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
-	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, "", key)
+	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, session.PlaybackSession, key)
+	app.enforcePersonalHLSSessionCapLocked(ownerUserID, key)
+}
+
+// personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
+// session cache entries across all movies, sorted least-recently-used first.
+// Every access re-sets the entry with the full personal TTL, so ascending
+// Item.Expiration is LRU order. Requires PersonalHLSMu to be held.
+func (app *Application) personalHLSSessionsForOwnerLocked(ownerUserID int64) []hlsOwnedSessionEntry {
+	var entries []hlsOwnedSessionEntry
+	for key, item := range app.HLSSessionCache.Items() {
+		session, ok := item.Object.(*HLSSession)
+		if !ok || session == nil || session.IsRoom || session.OwnerUserID != ownerUserID {
+			continue
+		}
+		entries = append(entries, hlsOwnedSessionEntry{key: key, session: session, expiration: item.Expiration})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].expiration != entries[j].expiration {
+			return entries[i].expiration < entries[j].expiration
+		}
+		return entries[i].key < entries[j].key
+	})
+	return entries
+}
+
+type hlsOwnedSessionEntry struct {
+	key        string
+	session    *HLSSession
+	expiration int64
+}
+
+// enforcePersonalHLSSessionCapLocked evicts the owner's least-recently-used
+// personal sessions until the per-user cap is met, never evicting keepKey.
+// Requires PersonalHLSMu to be held.
+func (app *Application) enforcePersonalHLSSessionCapLocked(ownerUserID int64, keepKey string) int {
+	limit := app.hlsMaxPersonalSessionsPerUser()
+	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
+	evicted := 0
+	for _, entry := range entries {
+		if len(entries)-evicted <= limit {
+			break
+		}
+		if entry.key == keepKey {
+			continue
+		}
+		app.removeHLSSession(entry.key)
+		evicted++
+		app.Logger.Info("hls session evicted by per-user cap", "owner_user_id", ownerUserID, "victim_key", entry.key, "limit", limit)
+	}
+	return evicted
+}
+
+// reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
+// transcoding (non-copy-video) session that has been idle for at least
+// hlsIdlePermitReclaimThreshold, freeing its transcode permit. Active clients
+// refresh the TTL on every segment fetch, so a genuinely-playing device is
+// never reclaimed. Returns whether a session was evicted.
+func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64) bool {
+	app.PersonalHLSMu.Lock()
+	defer app.PersonalHLSMu.Unlock()
+
+	maxExpiration := time.Now().Add(hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold).UnixNano()
+	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
+		if entry.session.CopyVideo {
+			continue
+		}
+		if entry.expiration > maxExpiration {
+			continue
+		}
+		app.removeHLSSession(entry.key)
+		app.Logger.Info("idle hls session reclaimed for transcode capacity", "owner_user_id", ownerUserID, "victim_key", entry.key)
+		return true
+	}
+	return false
+}
+
+func (app *Application) hlsMaxPersonalSessionsPerUser() int {
+	if app.HLSMaxPersonalSessionsPerUser > 0 {
+		return app.HLSMaxPersonalSessionsPerUser
+	}
+	return hlsMaxPersonalSessionsPerUserDefault
 }
 
 func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID int64) bool {
@@ -539,14 +626,25 @@ func (app *Application) GetOrCreateHLSSession(
 			}
 		}
 
-		// Reclaim the owner's stale sessions for this movie (any playback_session
-		// UUID) and evict expired-but-unswept cache entries before creating, so a
-		// session abandoned by a closed browser releases its transcode permit
-		// ahead of this session's acquire instead of forcing a 503.
-		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, "", "")
+		// Reclaim this client's own superseded windows for the movie (seeks,
+		// profile/audio switches under the same playback_session UUID) and evict
+		// expired-but-unswept cache entries before creating, so the old window's
+		// transcode permit is released ahead of this session's acquire. Other
+		// clients' sessions — even for the same movie — are left alone.
+		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, playbackSession, "")
 		app.HLSSessionCache.DeleteExpired()
 
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, playbackSession, startSec, false)
+		if createErr != nil {
+			// On a full transcode pool, an abandoned client (closed browser that
+			// never sent a stop) may be holding a permit. Reclaim the owner's
+			// least-recently-used idle transcode session and retry once; if none
+			// qualifies, the 503 + Retry-After path stands.
+			var capErr *hlsTranscodeCapacityError
+			if errors.As(createErr, &capErr) && app.reclaimIdlePersonalHLSSessionForOwner(ownerUserID) {
+				session, createErr = app.createHLSSession(ctx, movieID, profile, audioTrack, playbackSession, startSec, false)
+			}
+		}
 		if createErr != nil {
 			return nil, createErr
 		}
