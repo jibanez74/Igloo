@@ -285,6 +285,10 @@ func TestGetUserPin_SessionOnly(t *testing.T) {
 	if !strings.Contains(get.Body.String(), `"pin":"1234"`) {
 		t.Fatalf("expected pin 1234 for session read, got: %s", get.Body.String())
 	}
+	cacheControl := get.Header().Get("Cache-Control")
+	if cacheControl != "private, no-store" {
+		t.Fatalf("expected private no-store cache policy, got %q", cacheControl)
+	}
 }
 
 func TestGetUserPin_RejectsDeviceToken(t *testing.T) {

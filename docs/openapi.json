@@ -547,6 +547,11 @@
         "summary": "Get the current user's profile PIN",
         "description": "Session cookie only. Device bearer tokens receive 401 so a shared TV can never read the PIN.",
         "operationId": "getUserPin",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/UserPinResponse"
@@ -4707,6 +4712,14 @@
       },
       "UserPinResponse": {
         "description": "Current profile PIN for the session user.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            }
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
