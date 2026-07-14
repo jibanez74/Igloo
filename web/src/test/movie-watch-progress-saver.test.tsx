@@ -97,4 +97,111 @@ describe("movie watch progress saver", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(updateMovieWatchProgress).not.toHaveBeenCalled();
   });
+
+  it("saves with a keepalive request when the tab is hidden", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    renderHook(() =>
+      useMovieWatchProgressSaver({
+        movieId: 7,
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    const visibilitySpy = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    visibilitySpy.mockRestore();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/movies/7/watch-progress",
+      expect.objectContaining({
+        method: "PUT",
+        keepalive: true,
+        body: JSON.stringify({ progress_sec: 300, duration_sec: 1000 }),
+      }),
+    );
+  });
+
+  it("dedupes hidden-then-pagehide into a single keepalive save", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 1000 };
+    renderHook(() =>
+      useMovieWatchProgressSaver({
+        movieId: 7,
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    const visibilitySpy = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    visibilitySpy.mockRestore();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the tech-details duration when the video has none yet", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const currentTimeRef = { current: 300 };
+    const durationRef = { current: 0 };
+    renderHook(() =>
+      useMovieWatchProgressSaver({
+        movieId: 7,
+        playing: false,
+        currentTimeRef,
+        durationRef,
+        fallbackDurationSec: 5400,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/movies/7/watch-progress",
+      expect.objectContaining({
+        method: "PUT",
+        keepalive: true,
+        body: JSON.stringify({ progress_sec: 300, duration_sec: 5400 }),
+      }),
+    );
+  });
+
+  it("saves progress above the 30-second floor", async () => {
+    updateMovieWatchProgress.mockResolvedValueOnce(successfulUpdate);
+    const currentTimeRef = { current: 45 };
+    const durationRef = { current: 1000 };
+    const { result } = renderHook(() =>
+      useMovieWatchProgressSaver({
+        movieId: 7,
+        playing: false,
+        currentTimeRef,
+        durationRef,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handlePauseSave();
+    });
+
+    expect(updateMovieWatchProgress).toHaveBeenCalledWith(7, 45, 1000);
+  });
 });

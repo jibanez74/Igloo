@@ -51,6 +51,8 @@ SET
   updated_at = CURRENT_TIMESTAMP;
 
 -- name: GetContinueWatchingMovies :many
+-- The 30-second floor must match the web client's
+-- MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 SELECT
   m.id,
   m.title,
@@ -62,7 +64,7 @@ FROM movie_watch_progress AS mwp
 JOIN movies AS m ON m.id = mwp.movie_id
 WHERE mwp.user_id = ?
   AND mwp.watched = false
-  AND mwp.progress_sec > 0
+  AND mwp.progress_sec >= 30
   AND mwp.duration_sec > 0
   AND mwp.progress_sec < mwp.duration_sec
 ORDER BY mwp.updated_at DESC

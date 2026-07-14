@@ -245,7 +245,9 @@ func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
 
 	// Eviction callback removes generated files when an HLS session ages out.
-	hlsCache := cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	// The default TTL only applies to SetDefault, which this cache never uses;
+	// personal and room sessions pick their TTL explicitly on every Set.
+	hlsCache := cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	hlsCache.OnEvicted(func(key string, val interface{}) {
 		session, ok := val.(*HLSSession)
 		if ok {
@@ -260,7 +262,7 @@ func (app *Application) initRuntimeCaches() {
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
-	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()

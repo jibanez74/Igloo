@@ -679,13 +679,13 @@ func setupTestApp(t *testing.T) *Application {
 
 	// Tests do not attach real FFmpeg processes to HLS cache entries.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
-	app.HLSSessionCache = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.RemuxSafetyCache = cache.New(
 		hlsRemuxSafetyCacheTTL,
 		hlsRemuxSafetyCacheSweep,
 	)
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
-	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.WatchRoomHub = NewWatchRoomHub()
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()

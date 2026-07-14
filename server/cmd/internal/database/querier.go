@@ -95,6 +95,8 @@ type Querier interface {
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
 	// Chapters for a movie (for technical details display).
 	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
+	// The 30-second floor must match the web client's
+	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
 	// Crew for a movie with artist name and profile (for details view).
 	GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCrewByMovieIDRow, error)

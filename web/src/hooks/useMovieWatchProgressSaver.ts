@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { persistMovieWatchProgress } from "@/lib/movie-playback";
-import { MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS } from "@/lib/constants";
+import {
+  MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
+  MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
+} from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 
 type MovieWatchProgressSaverOptions = {
@@ -9,6 +12,12 @@ type MovieWatchProgressSaverOptions = {
   playing: boolean;
   currentTimeRef: RefObject<number>;
   durationRef: RefObject<number>;
+  /**
+   * Duration from the movie's technical details, used when the video element
+   * has not reported a duration yet (HLS streams report the session-local
+   * duration late). Without it, exit saves before metadata loads are dropped.
+   */
+  fallbackDurationSec?: number;
 };
 
 export function useMovieWatchProgressSaver({
@@ -16,8 +25,19 @@ export function useMovieWatchProgressSaver({
   playing,
   currentTimeRef,
   durationRef,
+  fallbackDurationSec,
 }: MovieWatchProgressSaverOptions) {
   const pendingSaveRef = useRef<Promise<void>>(Promise.resolve());
+  const fallbackDurationRef = useRef(fallbackDurationSec ?? 0);
+
+  useEffect(() => {
+    fallbackDurationRef.current = fallbackDurationSec ?? 0;
+  }, [fallbackDurationSec]);
+
+  const effectiveDurationSec = useCallback(() => {
+    if (durationRef.current > 0) return durationRef.current;
+    return fallbackDurationRef.current;
+  }, [durationRef]);
 
   const queueProgressSave = useCallback(
     (progressSec: number, durationSec: number) => {
@@ -36,7 +56,7 @@ export function useMovieWatchProgressSaver({
       try {
         await queueProgressSave(
           currentTimeRef.current,
-          durationRef.current,
+          effectiveDurationSec(),
         );
       } catch {
         // Silent background save failure; pause/end handlers surface failures when needed.
@@ -45,28 +65,50 @@ export function useMovieWatchProgressSaver({
     return () => {
       window.clearInterval(interval);
     };
-  }, [playing, currentTimeRef, durationRef, queueProgressSave]);
+  }, [playing, currentTimeRef, effectiveDurationSec, queueProgressSave]);
 
   useEffect(() => {
-    const handlePageHide = () => {
+    // On a real page close, visibilitychange (hidden) usually fires and then
+    // pagehide follows; the dedupe window keeps that from double-saving while
+    // still covering browsers/platforms that only deliver one of the two.
+    let lastKeepalive: { progressSec: number; atMs: number } | null = null;
+
+    const flushKeepalive = () => {
+      const progressSec = currentTimeRef.current;
+      const isDuplicate =
+        lastKeepalive !== null &&
+        Math.abs(lastKeepalive.progressSec - progressSec) < 1 &&
+        Date.now() - lastKeepalive.atMs <
+          MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS;
+      if (isDuplicate) return;
+
+      lastKeepalive = { progressSec, atMs: Date.now() };
       void persistMovieWatchProgress(
         movieId,
-        currentTimeRef.current,
-        durationRef.current,
+        progressSec,
+        effectiveDurationSec(),
         { keepalive: true },
       );
     };
-    window.addEventListener("pagehide", handlePageHide);
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") return;
+      flushKeepalive();
     };
-  }, [movieId, currentTimeRef, durationRef]);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", flushKeepalive);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", flushKeepalive);
+    };
+  }, [movieId, currentTimeRef, effectiveDurationSec]);
 
   const handlePauseSave = async () => {
     try {
       await queueProgressSave(
         currentTimeRef.current,
-        durationRef.current,
+        effectiveDurationSec(),
       );
     } catch {
       // Best effort on pause; avoid interrupting playback UI with repeated toasts.
@@ -74,11 +116,9 @@ export function useMovieWatchProgressSaver({
   };
 
   const handleEndedSave = async () => {
+    const durationSec = effectiveDurationSec();
     try {
-      await queueProgressSave(
-        durationRef.current,
-        durationRef.current,
-      );
+      await queueProgressSave(durationSec, durationSec);
     } catch {
       showActionFailed(
         "save watch progress",
@@ -88,7 +128,7 @@ export function useMovieWatchProgressSaver({
   };
 
   const flushProgress = () =>
-    queueProgressSave(currentTimeRef.current, durationRef.current);
+    queueProgressSave(currentTimeRef.current, effectiveDurationSec());
 
   return { handlePauseSave, handleEndedSave, flushProgress };
 }

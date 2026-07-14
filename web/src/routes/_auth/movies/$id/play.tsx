@@ -8,6 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
+import { Spinner } from "@/components/ui/spinner";
 import VideoPlayer from "@/components/VideoPlayer";
 import ResumeDialog from "@/components/ResumeDialog";
 import MoviePlayerControls from "@/components/MoviePlayerControls";
@@ -30,7 +31,6 @@ import {
   stopMovieHlsPlaybackSession,
   deriveMoviePlaybackStatus,
   displayedMovieDuration,
-  hasEligibleMovieResumeProgress,
   nativeMoviePlaybackErrorMessage,
   shouldRebaseHlsMovieSession,
   toAbsoluteDuration,
@@ -45,6 +45,7 @@ import {
 import {
   CONTINUE_WATCHING_KEY,
   MOVIE_WATCH_PROGRESS_KEY,
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
   MOVIE_CONTROLS_IDLE_MS,
@@ -61,8 +62,11 @@ import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";
 import { useIdleControls } from "@/hooks/useIdleControls";
 import { useMovieWatchProgressSaver } from "@/hooks/useMovieWatchProgressSaver";
+import { useHlsCapacityRetry } from "@/hooks/useHlsCapacityRetry";
+import { useHlsSessionKeepalive } from "@/hooks/useHlsSessionKeepalive";
 import { useHlsSessionRecovery } from "@/hooks/useHlsSessionRecovery";
 import { useMoviePlaybackData } from "@/hooks/useMoviePlaybackData";
+import { useMovieResumeDecision } from "@/hooks/useMovieResumeDecision";
 
 export const Route = createFileRoute("/_auth/movies/$id/play")({
   validateSearch: playSearchSchema,
@@ -166,7 +170,6 @@ function PlayMoviePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [resumeDismissed, setResumeDismissed] = useState(start > 0);
   const [resumeActionPending, setResumeActionPending] = useState(false);
   const [streamReloadKey, setStreamReloadKey] = useState(0);
   const playbackSessionId = useMemo(
@@ -277,15 +280,15 @@ function PlayMoviePage() {
     watchProgressData?.error === false ? watchProgressData.data : null;
   const savedProgressSec = savedProgress?.progress_sec ?? null;
   const savedDurationSec = savedProgress?.duration_sec ?? null;
-  const hasEligibleResumeProgress = hasEligibleMovieResumeProgress(
-    savedProgressSec,
-    savedDurationSec,
-  );
-  const resumeDialogOpen =
-    !resumeDismissed &&
-    start === 0 &&
-    !watchProgressPending &&
-    hasEligibleResumeProgress;
+  const { resumeDialogOpen, resumeTargetSec, dismissResumeDecision } =
+    useMovieResumeDecision({
+      movieId,
+      start,
+      playing,
+      watchProgressPending,
+      savedProgressSec,
+      savedDurationSec,
+    });
 
   const handleBack = () => {
     if (router.history.length > 1) {
@@ -331,6 +334,12 @@ function PlayMoviePage() {
     streamWindowKey: sessionWindowKey,
     onRecover: (currentTimeSec) =>
       navigateToPlaybackPosition(currentTimeSec, { forceReload: true }),
+    onMaxAttempts: setPlaybackError,
+  });
+
+  const { waitingForCapacity, handleCapacityBusy } = useHlsCapacityRetry({
+    streamWindowKey: sessionWindowKey,
+    onRetry: () => setStreamReloadKey((prev) => prev + 1),
     onMaxAttempts: setPlaybackError,
   });
 
@@ -436,7 +445,13 @@ function PlayMoviePage() {
       playing,
       currentTimeRef,
       durationRef,
+      fallbackDurationSec: movieDurationSec,
     });
+
+  useHlsSessionKeepalive({
+    enabled: isHlsPlayback,
+    streamUrl,
+  });
 
   useBlocker({
     enableBeforeUnload: false,
@@ -525,10 +540,10 @@ function PlayMoviePage() {
   const announcement = playing ? `Playing: ${title}` : `Paused: ${title}`;
 
   const handleResume = () => {
-    if (savedProgressSec === null) return;
+    if (resumeTargetSec === null) return;
 
-    setResumeDismissed(true);
-    navigateToPlaybackPosition(savedProgressSec);
+    dismissResumeDecision();
+    navigateToPlaybackPosition(resumeTargetSec);
   };
 
   const handleStartFromBeginning = async () => {
@@ -543,7 +558,7 @@ function PlayMoviePage() {
 
     queryClient.removeQueries({ queryKey: [CONTINUE_WATCHING_KEY] });
     queryClient.removeQueries({ queryKey: [MOVIE_WATCH_PROGRESS_KEY, movieId] });
-    setResumeDismissed(true);
+    dismissResumeDecision();
   };
 
   useVideoMediaSession({
@@ -600,8 +615,25 @@ function PlayMoviePage() {
       onSessionLost={(time) =>
         handleSessionLost(toAbsolutePlaybackTime(time, playbackTiming))
       }
+      onCapacityBusy={handleCapacityBusy}
     />
   );
+
+  const capacityOverlay = waitingForCapacity ? (
+    <div
+      className={cn(
+        MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+        "pointer-events-none absolute inset-0 z-10 flex items-center justify-center",
+      )}
+    >
+      <div className="flex items-center gap-3 rounded-full bg-background/80 px-5 py-3 backdrop-blur-sm">
+        <Spinner className="size-5 text-primary" aria-hidden="true" />
+        <p className="text-sm font-medium text-foreground">
+          Waiting for server capacity…
+        </p>
+      </div>
+    </div>
+  ) : null;
 
   if (status.kind !== "ready") {
     return (
@@ -640,13 +672,17 @@ function PlayMoviePage() {
     >
       <LiveAnnouncer message={announcement} politeness="polite" />
       <LiveAnnouncer
+        message={waitingForCapacity ? "Waiting for server capacity…" : ""}
+        politeness="polite"
+      />
+      <LiveAnnouncer
         message={chapterAnnouncement.text}
         announcementKey={chapterAnnouncement.key}
         politeness="assertive"
       />
       <ResumeDialog
         open={resumeDialogOpen}
-        savedProgressSec={savedProgressSec}
+        resumeTargetSec={resumeTargetSec}
         pending={resumeActionPending}
         onResume={handleResume}
         onStartFromBeginning={() => void handleStartFromBeginning()}
@@ -695,7 +731,7 @@ function PlayMoviePage() {
 
       {chromeFullscreenMode ? (
         <div
-          className="flex min-h-0 flex-1 flex-col"
+          className="relative flex min-h-0 flex-1 flex-col"
           role="button"
           tabIndex={0}
           aria-label="Toggle movie playback"
@@ -703,9 +739,13 @@ function PlayMoviePage() {
           onKeyDown={handlePlaybackSurfaceKeyDown}
         >
           {videoPlayer}
+          {capacityOverlay}
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col">{videoPlayer}</div>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {videoPlayer}
+          {capacityOverlay}
+        </div>
       )}
 
       <MoviePlayerControls

@@ -205,8 +205,11 @@ export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
+/** Window in which visibilitychange(hidden) + pagehide keepalive saves at the same position collapse into one PUT. */
+export const MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS = 2_000;
 export const MOVIE_PLAYBACK_EXIT_SYNC_TIMEOUT_MS = 2_000;
-export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 180;
+/** Floor for persisting/offering resume; the server's continue-watching query uses the same 30s floor. */
+export const MOVIE_WATCH_PROGRESS_MIN_SECONDS = 30;
 export const MOVIE_WATCH_PROGRESS_COMPLETION_THRESHOLD = 0.98;
 export const MOVIE_HLS_FORWARD_REBASE_THRESHOLD_SEC = 120;
 /** Delay before the mid-playback buffering spinner appears, to avoid flicker on sub-perceptual stalls. */
@@ -220,6 +223,13 @@ export const HLS_SESSION_LOST_MAX_ATTEMPTS = 3;
 /** Min ms between recovery attempts to avoid tight loops when `src` updates re-trigger 404. */
 export const HLS_SESSION_LOST_MIN_INTERVAL_MS = 2000;
 
+/** Max manifest retries per stream window while the server is at transcode capacity (503). */
+export const HLS_CAPACITY_RETRY_MAX_ATTEMPTS = 6;
+/** Retry delay when the server's 503 response carries no usable Retry-After header. */
+export const HLS_CAPACITY_RETRY_FALLBACK_SEC = 5;
+
+/** Manifest refetch cadence that keeps the server HLS session's idle TTL (5 min) refreshed while the player is mounted. */
+export const HLS_SESSION_KEEPALIVE_INTERVAL_MS = 120_000;
 /** hls.js: manifest / level / fragment request timeout (ms). */
 export const HLS_JS_LOAD_TIMEOUT_MS = 120_000;
 /** Resume HLS sessions this far before the target so short rewinds work without rebasing. */

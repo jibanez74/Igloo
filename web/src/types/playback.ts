@@ -78,6 +78,12 @@ export type HlsSessionRecoveryOptions = {
   onMaxAttempts: (message: string) => void;
 };
 
+export type HlsCapacityRetryOptions = {
+  streamWindowKey: string;
+  onRetry: () => void;
+  onMaxAttempts: (message: string) => void;
+};
+
 export type VideoPlayerProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
@@ -94,4 +100,5 @@ export type VideoPlayerProps = {
   startSec?: number;
   onStartApplied?: (time: number) => void;
   onSessionLost?: (currentTime: number) => void;
+  onCapacityBusy?: (retryAfterSec: number) => void;
 };

@@ -17,10 +17,20 @@ import (
 
 const (
 	hlsRemuxPrevalidateTimeout = 30 * time.Second
-	hlsSessionTTL              = 30 * time.Minute
-	hlsSessionCacheSweep       = 10 * time.Minute
-	hdrTransferPQ              = "smpte2084"
-	hdrTransferHLG             = "arib-std-b67"
+	// Personal sessions are refreshed by every manifest/segment fetch plus a
+	// periodic client keepalive, so a short TTL doubles as an idle timeout that
+	// reclaims transcode capacity soon after a browser closes without a stop.
+	hlsPersonalSessionTTL = 5 * time.Minute
+	// Room sessions have no per-client keepalive and always warm from start 0,
+	// so evicting an idle room would restart playback for every participant.
+	hlsRoomSessionTTL    = 30 * time.Minute
+	hlsSessionCacheSweep = 1 * time.Minute
+	// hlsStartClampTailSec is how far before the end a resume start offset at or
+	// past the movie duration is clamped, so stale progress plays out the tail
+	// instead of failing.
+	hlsStartClampTailSec = 5
+	hdrTransferPQ        = "smpte2084"
+	hdrTransferHLG       = "arib-std-b67"
 )
 
 // HLSSession holds state for one HLS transcode session.
@@ -149,7 +159,11 @@ func RoomHLSSessionKey(roomID int64) string {
 }
 
 func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) {
-	app.HLSSessionCache.Set(key, session, hlsSessionTTL)
+	ttl := hlsPersonalSessionTTL
+	if session != nil && session.IsRoom {
+		ttl = hlsRoomSessionTTL
+	}
+	app.HLSSessionCache.Set(key, session, ttl)
 }
 
 func (app *Application) removeHLSSession(key string) {
@@ -171,6 +185,10 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 }
 
 // cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
+// An empty playbackSession is a wildcard: it removes every personal session the
+// owner has for the movie regardless of playback_session UUID, so a session
+// left behind by a closed browser (which mints a new UUID on reopen) is
+// reclaimed as soon as the user starts the movie again.
 func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
 	removed := 0
 	for key, item := range app.HLSSessionCache.Items() {
@@ -181,7 +199,8 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 		if !ok || session == nil || !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
 			continue
 		}
-		if session.PlaybackSession == playbackSession {
+		matchesPlaybackSession := playbackSession == "" || session.PlaybackSession == playbackSession
+		if matchesPlaybackSession {
 			app.removeHLSSession(key)
 			removed++
 		}
@@ -189,17 +208,20 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 	return removed
 }
 
-// storePersonalHLSSession caches a new personal session and removes superseded
-// sessions for the same playback_session under one PersonalHLSMu hold. Doing
-// both atomically means concurrent creations with different start offsets
-// serialize: the last one to store wins, so they can never remove each other's
-// session and leave zero live sessions.
-func (app *Application) storePersonalHLSSession(movieID int64, ownerUserID int64, playbackSession string, key string, session *HLSSession) {
+// storePersonalHLSSession caches a new personal session and removes all of the
+// owner's superseded sessions for the same movie — across playback_session
+// UUIDs — under one PersonalHLSMu hold. Doing both atomically means concurrent
+// creations with different start offsets serialize: the last one to store
+// wins, so they can never remove each other's session and leave zero live
+// sessions. Superseding across UUIDs is safe because the same movie is never
+// legitimately played on two devices by one user; different movies keep their
+// sessions (the cleanup filters by movie ID).
+func (app *Application) storePersonalHLSSession(movieID int64, ownerUserID int64, key string, session *HLSSession) {
 	app.PersonalHLSMu.Lock()
 	defer app.PersonalHLSMu.Unlock()
 
-	app.HLSSessionCache.Set(key, session, hlsSessionTTL)
-	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, key)
+	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, "", key)
 }
 
 func canAccessPersonalHLSSession(session *HLSSession, movieID int64, ownerUserID int64) bool {
@@ -228,7 +250,7 @@ func (app *Application) storeRoomHLSSessionIfActive(roomID int64, key string, se
 	app.RoomHLSMu.Lock()
 	deleted := app.isRoomHLSSessionDeleted(roomID)
 	if !deleted {
-		app.HLSSessionCache.Set(key, session, hlsSessionTTL)
+		app.HLSSessionCache.Set(key, session, hlsRoomSessionTTL)
 	}
 	app.RoomHLSMu.Unlock()
 
@@ -517,13 +539,20 @@ func (app *Application) GetOrCreateHLSSession(
 			}
 		}
 
+		// Reclaim the owner's stale sessions for this movie (any playback_session
+		// UUID) and evict expired-but-unswept cache entries before creating, so a
+		// session abandoned by a closed browser releases its transcode permit
+		// ahead of this session's acquire instead of forcing a 503.
+		app.cleanupPersonalHLSSessionsForOwner(movieID, ownerUserID, "", "")
+		app.HLSSessionCache.DeleteExpired()
+
 		session, createErr := app.createHLSSession(ctx, movieID, profile, audioTrack, playbackSession, startSec, false)
 		if createErr != nil {
 			return nil, createErr
 		}
 		session.OwnerUserID = ownerUserID
 
-		app.storePersonalHLSSession(movieID, ownerUserID, playbackSession, key, session)
+		app.storePersonalHLSSession(movieID, ownerUserID, key, session)
 		return session, nil
 	})
 
@@ -643,8 +672,21 @@ func (app *Application) createHLSSession(
 		return nil, fmt.Errorf("movie %d has no valid duration in the database", movieID)
 	}
 	durationSec := movie.Duration.Float64
-	if startSec < 0 || float64(startSec) >= durationSec {
+	if startSec < 0 {
 		return nil, fmt.Errorf("start %d is outside movie duration %.3f", startSec, durationSec)
+	}
+	if float64(startSec) >= durationSec {
+		clampedStart := int(durationSec) - hlsStartClampTailSec
+		if clampedStart < 0 {
+			clampedStart = 0
+		}
+		app.Logger.Warn("hls start clamped to duration tail",
+			"movie_id", movieID,
+			"requested_start", startSec,
+			"clamped_start", clampedStart,
+			"duration", durationSec,
+		)
+		startSec = clampedStart
 	}
 
 	videoStreams, err := app.Queries.GetVideoStreamsByMovieID(ctx, movieID)
