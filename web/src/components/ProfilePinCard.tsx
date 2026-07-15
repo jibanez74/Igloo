@@ -83,6 +83,18 @@ export default function ProfilePinCard() {
     setErrors(current => ({ ...current, [field]: undefined }));
   };
 
+  const showMutationError = (
+    hasCurrentPin: boolean,
+    action: string,
+    message: string,
+  ) => {
+    const field = hasCurrentPin ? "currentPin" : "newPin";
+    const fieldId = hasCurrentPin ? currentPinId : newPinId;
+    setErrors({ [field]: message });
+    showActionFailed(action, message);
+    document.getElementById(fieldId)?.focus();
+  };
+
   const pinMutation = useMutation({
     mutationFn: ({ pin, current }: { pin: string; current?: string }) =>
       updateUserPin(pin, current),
@@ -91,12 +103,11 @@ export default function ProfilePinCard() {
       const action = removing ? "remove PIN" : "update PIN";
 
       if (res.error) {
-        setErrors(current => ({
-          ...current,
-          currentPin: res.message || `Failed to ${action}.`,
-        }));
-        showActionFailed(action, res.message);
-        document.getElementById(currentPinId)?.focus();
+        showMutationError(
+          variables.current !== undefined,
+          action,
+          res.message || `Failed to ${action}.`,
+        );
         return;
       }
 
@@ -114,8 +125,14 @@ export default function ProfilePinCard() {
       queryClient.invalidateQueries({ queryKey: [ADMIN_USERS_KEY] });
       showSuccess(removing ? "PIN removed" : "PIN saved");
     },
-    onError: () => {
-      showActionFailed("update PIN", "An unexpected error occurred");
+    onError: (_error, variables) => {
+      const removing = variables.pin === "";
+      const action = removing ? "remove PIN" : "update PIN";
+      showMutationError(
+        variables.current !== undefined,
+        action,
+        "An unexpected error occurred",
+      );
     },
   });
 

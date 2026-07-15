@@ -653,6 +653,49 @@ func TestCleanupPersonalHLSSessionsForOwner_KeepsCurrentWindow(t *testing.T) {
 	}
 }
 
+func TestCleanupPersonalHLSSessionsForOwner_ReleasesLockBeforeTeardown(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	userID := int64(100)
+	audioTrack := 0
+	key := HLSSessionKey(5, helpers.HLS_PROFILE_REMUX, &audioTrack, testPlaybackSessionID, 0)
+	session := &HLSSession{
+		MovieID:         5,
+		OwnerUserID:     userID,
+		PlaybackSession: testPlaybackSessionID,
+		TempDir:         t.TempDir(),
+	}
+	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
+	app.HLSSessionCache.Set(key, session, hlsPersonalSessionTTL)
+	resultCh := make(chan int, 1)
+	go func() {
+		resultCh <- app.cleanupPersonalHLSSessionsForOwner(5, userID, testPlaybackSessionID, "")
+	}()
+
+	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
+	_, cached := app.HLSSessionCache.Get(key)
+	if cached {
+		releaseCleanup()
+		t.Fatal("personal session remained cached while teardown was blocked")
+	}
+	if !app.PersonalHLSMu.TryLock() {
+		releaseCleanup()
+		t.Fatal("PersonalHLSMu remained locked while explicit teardown was blocked")
+	}
+	app.PersonalHLSMu.Unlock()
+
+	releaseCleanup()
+	removed := waitForHLSSessionCleanupResult(t, resultCh)
+	if removed != 1 {
+		t.Fatalf("removed = %d, want 1", removed)
+	}
+	_, err := os.Stat(session.TempDir)
+	if !os.IsNotExist(err) {
+		t.Fatalf("personal session temp dir still exists after cleanup: %v", err)
+	}
+}
+
 func TestRefreshHLSSessionTTL_PersonalAndRoomTTLs(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
@@ -700,7 +743,7 @@ func TestRefreshHLSSessionTTL_DoesNotReinsertEvictedPersonalSession(t *testing.T
 		MovieID: 5, OwnerUserID: 100, PlaybackSession: testPlaybackSessionID,
 	}
 	app.HLSSessionCache.Set(key, session, time.Minute)
-	app.removeHLSSession(key)
+	app.removePersonalHLSSession(key)
 
 	refreshed := app.RefreshHLSSessionTTL(key, session)
 	if refreshed {

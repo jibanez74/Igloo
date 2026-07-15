@@ -226,4 +226,40 @@ describe("ProfilePinCard", () => {
       "true",
     );
   });
+
+  it("surfaces initial setup rejections on the visible PIN field", async () => {
+    updateUserPinMock.mockResolvedValue({
+      error: true,
+      message: "PIN is not allowed",
+      status: 400,
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    const pinInput = await screen.findByLabelText("PIN");
+    await user.type(pinInput, "1234");
+    await user.click(screen.getByRole("button", { name: "Set PIN" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "PIN is not allowed",
+    );
+    expect(pinInput).toHaveAttribute("aria-invalid", "true");
+    expect(pinInput).toHaveFocus();
+  });
+
+  it("surfaces thrown initial setup errors on the visible PIN field", async () => {
+    updateUserPinMock.mockRejectedValue(new Error("network failure"));
+    const user = userEvent.setup();
+    renderCard();
+
+    const pinInput = await screen.findByLabelText("PIN");
+    await user.type(pinInput, "1234");
+    await user.click(screen.getByRole("button", { name: "Set PIN" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "An unexpected error occurred",
+    );
+    expect(pinInput).toHaveAttribute("aria-invalid", "true");
+    expect(pinInput).toHaveFocus();
+  });
 });

@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -24,7 +25,6 @@ type mp4Box struct {
 type trackFragment struct {
 	TrackID        uint32
 	BaseDataOffset *int64
-	DefaultIsMoof  bool
 	DefaultSize    *uint32
 	DefaultFlags   *uint32
 	Runs           []trackRun
@@ -257,6 +257,10 @@ func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, 
 
 	entryCount := int(binary.BigEndian.Uint32(payload[4:8]))
 	offset := stsd.PayloadStart + 8
+	maximumEntries := (stsd.End - offset) / 8
+	if entryCount > maximumEntries {
+		return mp4Box{}, false, fmt.Errorf("invalid stsd entry count")
+	}
 
 	for i := 0; i < entryCount; i++ {
 		entry, nextOffset, err := readBox(data, offset, stsd.End)
@@ -304,36 +308,45 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 			continue
 		}
 
-		baseOffset := moof.Start
+		baseOffset := int64(moof.Start)
 		if fragment.BaseDataOffset != nil {
-			baseOffset = int(*fragment.BaseDataOffset)
+			baseOffset = *fragment.BaseDataOffset
 		}
 
-		cursor := 0
+		var cursor int64
 		cursorInitialized := false
 		syncSamples := 0
 
 		for _, run := range fragment.Runs {
 			if run.DataOffset != nil {
-				cursor = baseOffset + int(*run.DataOffset)
+				dataOffset := int64(*run.DataOffset)
+				if dataOffset > 0 && baseOffset > math.MaxInt64-dataOffset {
+					return 0, fmt.Errorf("sample data offset overflows")
+				}
+				if dataOffset < 0 && baseOffset < math.MinInt64-dataOffset {
+					return 0, fmt.Errorf("sample data offset underflows")
+				}
+				cursor = baseOffset + dataOffset
 				cursorInitialized = true
 			} else if !cursorInitialized {
 				return 0, fmt.Errorf("missing initial trun data offset")
 			}
 
 			for _, sample := range run.Samples {
-				sampleSize := int(sample.Size)
-				if sampleSize <= 0 {
+				sampleSize := int64(sample.Size)
+				if sampleSize == 0 {
 					return 0, fmt.Errorf("invalid sample size %d", sample.Size)
 				}
-				if cursor < 0 || cursor+sampleSize > len(data) {
+				segmentSize := int64(len(data))
+				if cursor < 0 || cursor > segmentSize || sampleSize > segmentSize-cursor {
 					return 0, fmt.Errorf("sample exceeds segment bounds")
 				}
+				sampleEnd := cursor + sampleSize
 
 				if isSyncSample(sample.Flags) {
 					syncSamples++
 					validateErr := validateSyncSample(
-						data[cursor:cursor+sampleSize],
+						data[int(cursor):int(sampleEnd)],
 						nalLengthSize,
 					)
 					if validateErr != nil {
@@ -341,7 +354,7 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 					}
 				}
 
-				cursor += sampleSize
+				cursor = sampleEnd
 			}
 		}
 
@@ -432,19 +445,23 @@ func parseTFHD(data []byte, moof mp4Box, tfhd mp4Box) (trackFragment, error) {
 	}
 
 	fragment := trackFragment{
-		TrackID:       binary.BigEndian.Uint32(payload[offset : offset+4]),
-		DefaultIsMoof: flags&0x020000 != 0,
+		TrackID: binary.BigEndian.Uint32(payload[offset : offset+4]),
 	}
 	offset += 4
+	defaultBaseIsMoof := flags&0x020000 != 0
 
 	if flags&0x000001 != 0 {
 		if len(payload) < offset+8 {
 			return trackFragment{}, fmt.Errorf("invalid tfhd base data offset")
 		}
-		baseDataOffset := int64(binary.BigEndian.Uint64(payload[offset : offset+8]))
+		baseDataOffsetValue := binary.BigEndian.Uint64(payload[offset : offset+8])
+		if baseDataOffsetValue > math.MaxInt64 {
+			return trackFragment{}, fmt.Errorf("invalid tfhd base data offset")
+		}
+		baseDataOffset := int64(baseDataOffsetValue)
 		fragment.BaseDataOffset = &baseDataOffset
 		offset += 8
-	} else if fragment.DefaultIsMoof {
+	} else if defaultBaseIsMoof {
 		moofStart := int64(moof.Start)
 		fragment.BaseDataOffset = &moofStart
 	}
@@ -497,13 +514,10 @@ func parseTRUN(
 	if len(payload) < offset+4 {
 		return trackRun{}, fmt.Errorf("invalid trun payload")
 	}
-	sampleCount := int(binary.BigEndian.Uint32(payload[offset : offset+4]))
+	sampleCountValue := binary.BigEndian.Uint32(payload[offset : offset+4])
 	offset += 4
 
-	run := trackRun{
-		Samples: make([]fragmentSample, 0, sampleCount),
-	}
-
+	run := trackRun{}
 	if flags&0x000001 != 0 {
 		if len(payload) < offset+4 {
 			return trackRun{}, fmt.Errorf("invalid trun data offset")
@@ -523,7 +537,55 @@ func parseTRUN(
 		offset += 4
 	}
 
-	for i := 0; i < sampleCount; i++ {
+	sampleCount := uint64(sampleCountValue)
+	if sampleCount > uint64(len(data)) {
+		return trackRun{}, fmt.Errorf("invalid trun sample count %d", sampleCountValue)
+	}
+
+	perSampleFields := []struct {
+		flag uint32
+		name string
+	}{
+		{flag: 0x000100, name: "duration"},
+		{flag: 0x000200, name: "size"},
+		{flag: 0x000400, name: "flags"},
+		{flag: 0x000800, name: "composition time offset"},
+	}
+	perSampleBytes := uint64(0)
+	for _, field := range perSampleFields {
+		if flags&field.flag != 0 {
+			perSampleBytes += 4
+		}
+	}
+	requiredBytes := sampleCount * perSampleBytes
+	remainingBytes := uint64(len(payload) - offset)
+	if requiredBytes > remainingBytes {
+		position := remainingBytes % perSampleBytes
+		for _, field := range perSampleFields {
+			if flags&field.flag == 0 {
+				continue
+			}
+			if position < 4 {
+				return trackRun{}, fmt.Errorf("invalid trun sample %s", field.name)
+			}
+			position -= 4
+		}
+		return trackRun{}, fmt.Errorf("invalid trun sample fields")
+	}
+
+	hasSampleSizes := flags&0x000200 != 0
+	if !hasSampleSizes && defaultSampleSize == nil && sampleCount > 0 {
+		return trackRun{}, fmt.Errorf("missing sample size")
+	}
+	hasSampleFlags := flags&0x000400 != 0
+	needsDefaultFlags := sampleCount > 1 || (sampleCount == 1 && firstSampleFlags == nil)
+	if !hasSampleFlags && needsDefaultFlags && defaultSampleFlags == nil {
+		return trackRun{}, fmt.Errorf("missing sample flags")
+	}
+
+	run.Samples = make([]fragmentSample, 0, int(sampleCountValue))
+
+	for i := uint32(0); i < sampleCountValue; i++ {
 		var sampleSize *uint32
 		var sampleFlags *uint32
 
@@ -594,7 +656,7 @@ func validateSyncSample(sample []byte, nalLengthSize int) error {
 	for offset+nalLengthSize <= len(sample) {
 		nalSize := readNALUnitSize(sample[offset:offset+nalLengthSize], nalLengthSize)
 		offset += nalLengthSize
-		if nalSize <= 0 || offset+nalSize > len(sample) {
+		if nalSize == 0 || uint64(nalSize) > uint64(len(sample)-offset) {
 			return fmt.Errorf("invalid NAL unit size")
 		}
 
@@ -606,22 +668,22 @@ func validateSyncSample(sample []byte, nalLengthSize int) error {
 			return nil
 		}
 
-		offset += nalSize
+		offset += int(nalSize)
 	}
 
 	return fmt.Errorf("sync sample does not contain a VCL NAL")
 }
 
-func readNALUnitSize(data []byte, nalLengthSize int) int {
+func readNALUnitSize(data []byte, nalLengthSize int) uint32 {
 	switch nalLengthSize {
 	case 1:
-		return int(data[0])
+		return uint32(data[0])
 	case 2:
-		return int(binary.BigEndian.Uint16(data))
+		return uint32(binary.BigEndian.Uint16(data))
 	case 3:
-		return int(uint32(data[0])<<16 | uint32(data[1])<<8 | uint32(data[2]))
+		return uint32(data[0])<<16 | uint32(data[1])<<8 | uint32(data[2])
 	default:
-		return int(binary.BigEndian.Uint32(data))
+		return binary.BigEndian.Uint32(data)
 	}
 }
 
@@ -661,7 +723,7 @@ func listDirectChildBoxes(data []byte, start int, end int) ([]mp4Box, error) {
 }
 
 func readBox(data []byte, start int, end int) (mp4Box, int, error) {
-	if start < 0 || end > len(data) || start+8 > end {
+	if start < 0 || end < start || end > len(data) || end-start < 8 {
 		return mp4Box{}, 0, fmt.Errorf("invalid MP4 box bounds")
 	}
 
@@ -672,26 +734,26 @@ func readBox(data []byte, start int, end int) (mp4Box, int, error) {
 	}
 
 	headerSize := 8
-	boxSize := int64(size32)
+	boxSize := uint64(size32)
 	switch size32 {
 	case 0:
-		boxSize = int64(end - start)
+		boxSize = uint64(end - start)
 	case 1:
-		if start+16 > end {
+		if end-start < 16 {
 			return mp4Box{}, 0, fmt.Errorf("invalid extended MP4 box")
 		}
-		boxSize = int64(binary.BigEndian.Uint64(data[start+8 : start+16]))
+		boxSize = binary.BigEndian.Uint64(data[start+8 : start+16])
 		headerSize = 16
 	}
 
-	if boxSize < int64(headerSize) {
+	if boxSize < uint64(headerSize) {
 		return mp4Box{}, 0, fmt.Errorf("invalid MP4 box size")
 	}
-
-	boxEnd := start + int(boxSize)
-	if boxEnd > end {
+	remaining := uint64(end - start)
+	if boxSize > remaining {
 		return mp4Box{}, 0, fmt.Errorf("MP4 box exceeds parent bounds")
 	}
+	boxEnd := start + int(boxSize)
 
 	box.End = boxEnd
 	box.PayloadStart = start + headerSize

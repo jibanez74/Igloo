@@ -388,7 +388,8 @@ func (f *ffmpeg) RunHLS(
 		for scanner.Scan() {
 			appendTail(scanner.Text())
 		}
-		if scanErr := scanner.Err(); scanErr != nil {
+		scanErr := scanner.Err()
+		if scanErr != nil {
 			if isExpectedHLSStderrClose(scanErr) {
 				return
 			}

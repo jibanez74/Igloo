@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
 import { routeTree } from "@/routeTree.gen";
+import type { AuthUser } from "@/types";
 
 const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
@@ -29,24 +30,13 @@ vi.mock("@/lib/toast-helpers", () => ({
   showError: (...args: unknown[]) => showErrorMock(...args),
 }));
 
-type TestAuthUser = {
-  id: number;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  avatar: string | null;
-  has_pin: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
 type CapturedRequest = {
   method: string;
   url: string;
   body: unknown;
 };
 
-function testUser(overrides: Partial<TestAuthUser> = {}): TestAuthUser {
+function testUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
     id: 2,
     name: "Dana Scully",
@@ -75,9 +65,9 @@ function requestURL(input: RequestInfo | URL) {
   return input.url;
 }
 
-function setupAccountFetch(user: TestAuthUser = testUser()) {
+function setupAccountFetch(user: AuthUser = testUser()) {
   const requests: CapturedRequest[] = [];
-  let currentUser: TestAuthUser | null = user;
+  let currentUser: AuthUser | null = user;
 
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestURL(input);

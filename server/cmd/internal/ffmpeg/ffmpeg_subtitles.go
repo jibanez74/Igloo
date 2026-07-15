@@ -30,6 +30,11 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
+		commandErr := err
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			commandErr = contextErr
+		}
 		tail := strings.TrimSpace(stderr.String())
 		if len(tail) > 4096 {
 			tail = tail[len(tail)-4096:]
@@ -38,9 +43,9 @@ func (f *ffmpeg) ExtractSubtitleAsWebVTT(
 			}
 		}
 		if tail != "" {
-			return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w: %s", err, tail)
+			return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w: %s", commandErr, tail)
 		}
-		return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w", err)
+		return nil, fmt.Errorf("ffmpeg subtitle extraction failed: %w", commandErr)
 	}
 
 	out := stdout.Bytes()

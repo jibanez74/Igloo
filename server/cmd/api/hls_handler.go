@@ -130,7 +130,7 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	}
 	session, ok := raw.(*HLSSession)
 	if !ok || session == nil {
-		app.removeHLSSession(key)
+		app.removePersonalHLSSession(key)
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}

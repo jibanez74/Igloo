@@ -320,6 +320,24 @@ describe("VideoPlayer hls.js error routing", () => {
     );
   });
 
+  it("leaves nonfatal level-load 503 errors with hls.js", async () => {
+    const onCapacityBusy = vi.fn();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onCapacityBusy, onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "levelLoadError",
+        fatal: false,
+        response: { code: 503 },
+      });
+    });
+
+    expect(onCapacityBusy).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("surfaces a 503 as a fatal error when no capacity handler is wired", async () => {
     const onError = vi.fn();
     const hls = await renderHlsPlayer({ onError });
