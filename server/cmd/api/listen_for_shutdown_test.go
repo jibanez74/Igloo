@@ -242,7 +242,11 @@ func runListenForShutdownHelper(t *testing.T) {
 		t.Fatalf("signal process: %v", err)
 	}
 
-	time.Sleep(3 * time.Second)
+	// Failure backstop only: on success ListenForShutdown calls os.Exit(0)
+	// mid-sleep. The success path takes ~2s (graceful-wait timeout before the
+	// hung HLS child is killed) plus ~1s of race-runtime exit latency under
+	// -race, so the deadline needs generous headroom.
+	time.Sleep(10 * time.Second)
 	t.Fatal("ListenForShutdown did not exit helper process")
 }
 

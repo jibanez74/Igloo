@@ -302,6 +302,31 @@ func TestValidateRemuxSafetyRejectsSampleBoundsFailure(t *testing.T) {
 	}
 }
 
+func TestValidateRemuxSafetyRejectsSampleOutsideMdat(t *testing.T) {
+	dir := t.TempDir()
+	initData := fmp4testutil.BuildInitMP4()
+	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
+	if err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+	// Point the run at the moof interior; the bytes stay inside the segment but
+	// outside any mdat payload.
+	setFirstTRUNDataOffsetForTest(t, segment, 8)
+	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
+	if err != nil {
+		t.Fatalf("write segment: %v", err)
+	}
+
+	summary, err := ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "sample outside mdat payload") {
+		t.Fatalf("error = %v, want sample outside mdat payload", err)
+	}
+	if summary.CheckedSegments != 0 {
+		t.Fatalf("CheckedSegments = %d, want 0", summary.CheckedSegments)
+	}
+}
+
 func firstTRUNForTest(t *testing.T, segment []byte) mp4Box {
 	t.Helper()
 	moof, found, err := findDirectChildBox(segment, 0, len(segment), "moof")
@@ -327,6 +352,16 @@ func setFirstTRUNSampleSizeForTest(t *testing.T, segment []byte, size uint32) {
 		t.Fatal("trun sample size exceeds box bounds")
 	}
 	binary.BigEndian.PutUint32(segment[sampleSizeOffset:sampleSizeOffset+4], size)
+}
+
+func setFirstTRUNDataOffsetForTest(t *testing.T, segment []byte, dataOffset int32) {
+	t.Helper()
+	trun := firstTRUNForTest(t, segment)
+	dataOffsetStart := trun.PayloadStart + 8
+	if dataOffsetStart+4 > trun.End {
+		t.Fatal("trun data offset exceeds box bounds")
+	}
+	binary.BigEndian.PutUint32(segment[dataOffsetStart:dataOffsetStart+4], uint32(dataOffset))
 }
 
 func setFirstTFHDTrackIDForTest(t *testing.T, segment []byte, trackID uint32) {

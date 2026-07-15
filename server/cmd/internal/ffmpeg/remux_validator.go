@@ -290,12 +290,30 @@ func findAVCConfigInSampleDescriptions(data []byte, stsd mp4Box) (mp4Box, bool, 
 }
 
 func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize int) (int, error) {
-	moof, ok, err := findDirectChildBox(data, 0, len(data), "moof")
+	topLevel, err := listDirectChildBoxes(data, 0, len(data))
 	if err != nil {
 		return 0, err
 	}
-	if !ok {
+
+	var moof mp4Box
+	moofFound := false
+	var mdatRanges [][2]int64
+	for _, box := range topLevel {
+		switch box.Type {
+		case "moof":
+			if !moofFound {
+				moof = box
+				moofFound = true
+			}
+		case "mdat":
+			mdatRanges = append(mdatRanges, [2]int64{int64(box.PayloadStart), int64(box.End)})
+		}
+	}
+	if !moofFound {
 		return 0, fmt.Errorf("missing moof box")
+	}
+	if len(mdatRanges) == 0 {
+		return 0, fmt.Errorf("missing mdat box")
 	}
 
 	fragments, err := parseTrackFragments(data, moof)
@@ -342,6 +360,9 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 					return 0, fmt.Errorf("sample exceeds segment bounds")
 				}
 				sampleEnd := cursor + sampleSize
+				if !sampleWithinMdat(cursor, sampleEnd, mdatRanges) {
+					return 0, fmt.Errorf("sample outside mdat payload")
+				}
 
 				if isSyncSample(sample.Flags) {
 					syncSamples++
@@ -362,6 +383,17 @@ func validateSegmentVideoTrack(data []byte, videoTrackID uint32, nalLengthSize i
 	}
 
 	return 0, fmt.Errorf("missing video traf for track %d", videoTrackID)
+}
+
+// sampleWithinMdat reports whether [start, end) lies entirely inside a single
+// top-level mdat payload; trun offsets into moof or other boxes are invalid.
+func sampleWithinMdat(start int64, end int64, mdatRanges [][2]int64) bool {
+	for _, mdatRange := range mdatRanges {
+		if start >= mdatRange[0] && end <= mdatRange[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func parseTrackFragments(data []byte, moof mp4Box) ([]trackFragment, error) {

@@ -254,14 +254,20 @@ func (app *Application) initRuntimeCaches() {
 	// Eviction callback removes generated files when an HLS session ages out.
 	// It must not make an expiration sweep wait for FFmpeg teardown. Explicit
 	// removals also clean up synchronously after releasing their owner lock;
-	// CleanupOnce safely deduplicates the two paths.
+	// CleanupOnce safely deduplicates the two paths. Teardown goroutines are
+	// tracked in app.Wait so shutdown drains in-flight FFmpeg kills instead of
+	// exiting mid-teardown and orphaning the process.
 	// The default TTL only applies to SetDefault, which this cache never uses;
 	// personal and room sessions pick their TTL explicitly on every Set.
 	hlsCache := cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	hlsCache.OnEvicted(func(_ string, val interface{}) {
 		session, ok := val.(*HLSSession)
 		if ok {
-			go cleanupHLSSession(session)
+			app.Wait.Add(1)
+			go func() {
+				defer app.Wait.Done()
+				cleanupHLSSession(session)
+			}()
 		}
 	})
 	app.HLSSessionCache = hlsCache

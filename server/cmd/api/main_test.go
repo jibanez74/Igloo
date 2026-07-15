@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -202,7 +203,7 @@ func TestCleanupStaleHLSTempDirsUsesConfiguredTranscodeDir(t *testing.T) {
 }
 
 func TestHLSSessionCacheExpirationDoesNotWaitForTeardown(t *testing.T) {
-	app := &Application{}
+	app := &Application{Wait: &sync.WaitGroup{}}
 	app.initRuntimeCaches()
 
 	session := &HLSSession{TempDir: t.TempDir()}
