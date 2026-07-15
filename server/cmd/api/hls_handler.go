@@ -68,9 +68,10 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	baseURL := strings.TrimSuffix(r.URL.Path, helpers.HLS_PLAYLIST_FILENAME)
+	effectiveStartSec := int(session.StartSec)
 	querySuffix := buildHLSAssetQuerySuffix(hlsAssetQueryParams{
 		AudioTrack:      params.AudioTrack,
-		StartSec:        &params.StartSec,
+		StartSec:        &effectiveStartSec,
 		PlaybackSession: params.PlaybackSession,
 		Reload:          params.Reload,
 	})
@@ -91,7 +92,11 @@ func (app *Application) HLSManifest(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	app.RefreshHLSSessionTTL(key, session)
+	refreshed := app.RefreshHLSSessionTTL(key, session)
+	if !refreshed {
+		helpers.ErrorJSON(w, errors.New("session not found; request the manifest again"), http.StatusNotFound)
+		return
+	}
 
 	w.Header().Set("Content-Type", hlsPlaylistContentType)
 	w.Header().Set("Cache-Control", "no-store")
@@ -133,7 +138,11 @@ func (app *Application) HLSSegment(w http.ResponseWriter, r *http.Request) {
 		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
 		return
 	}
-	app.RefreshHLSSessionTTL(key, session)
+	refreshed := app.RefreshHLSSessionTTL(key, session)
+	if !refreshed {
+		helpers.ErrorJSON(w, errors.New("session not found; request the manifest first"), http.StatusNotFound)
+		return
+	}
 
 	err := validateHLSFilename(filename)
 	if err != nil {
@@ -213,9 +222,15 @@ func writeHLSSessionError(w http.ResponseWriter, err error) {
 		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
 		return
 	}
+
+	var personalCapacityErr *hlsPersonalSessionCapacityError
+	if errors.As(err, &personalCapacityErr) {
+		w.Header().Set("Retry-After", strconv.Itoa(hlsTranscodeBusyRetryAfterSec))
+		helpers.ErrorJSON(w, err, http.StatusServiceUnavailable)
+		return
+	}
 	helpers.ErrorJSON(w, err, http.StatusBadRequest)
 }
-
 func (app *Application) StopPersonalHLSSession(w http.ResponseWriter, r *http.Request) {
 	userID, ok := app.currentUserID(w, r)
 	if !ok {

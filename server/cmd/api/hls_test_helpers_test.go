@@ -14,6 +14,8 @@ type fakeFFmpegRunPlan struct {
 	StartErr   error
 	ExitErr    error
 	WriteFiles func(outDir string) error
+	Started    chan<- struct{}
+	Continue   <-chan struct{}
 }
 
 type fakeFFmpeg struct {
@@ -38,6 +40,12 @@ func (f *fakeFFmpeg) RunHLS(
 
 	plan := f.plans[callIndex]
 	f.mu.Unlock()
+	if plan.Started != nil {
+		plan.Started <- struct{}{}
+	}
+	if plan.Continue != nil {
+		<-plan.Continue
+	}
 
 	if plan.StartErr != nil {
 		return nil, plan.StartErr

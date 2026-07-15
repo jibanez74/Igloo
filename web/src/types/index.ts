@@ -170,6 +170,7 @@ export type {
 
 // Playback types
 export type {
+  HlsCapacityRetryOptions,
   HlsSessionRecoveryOptions,
   MoviePlaybackStatus,
   MoviePlaybackStatusArgs,

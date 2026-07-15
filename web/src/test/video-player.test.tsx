@@ -2,7 +2,64 @@ import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import VideoPlayer from "@/components/VideoPlayer";
-import { MOVIE_BUFFERING_SPINNER_DELAY_MS } from "@/lib/constants";
+import {
+  HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  MOVIE_BUFFERING_SPINNER_DELAY_MS,
+} from "@/lib/constants";
+
+type FakeHlsListener = (event: string, data: unknown) => void;
+
+const fakeHlsInstances = vi.hoisted(() => [] as FakeHlsInstance[]);
+
+type FakeHlsInstance = {
+  listeners: Map<string, FakeHlsListener[]>;
+  trigger: (event: string, data: unknown) => void;
+};
+
+vi.mock("hls.js/light", () => {
+  class FakeHls implements FakeHlsInstance {
+    static isSupported() {
+      return true;
+    }
+    static Events = {
+      ERROR: "hlsError",
+      MANIFEST_PARSED: "hlsManifestParsed",
+    };
+    static ErrorDetails = {
+      FRAG_LOAD_ERROR: "fragLoadError",
+      MANIFEST_LOAD_ERROR: "manifestLoadError",
+      LEVEL_LOAD_ERROR: "levelLoadError",
+    };
+
+    listeners = new Map<string, FakeHlsListener[]>();
+
+    constructor() {
+      fakeHlsInstances.push(this);
+    }
+
+    on(event: string, listener: FakeHlsListener) {
+      const existing = this.listeners.get(event) ?? [];
+      this.listeners.set(event, [...existing, listener]);
+    }
+
+    once(event: string, listener: FakeHlsListener) {
+      this.on(event, listener);
+    }
+
+    trigger(event: string, data: unknown) {
+      for (const listener of this.listeners.get(event) ?? []) {
+        listener(event, data);
+      }
+    }
+
+    loadSource() {}
+    attachMedia() {}
+    recoverMediaError() {}
+    destroy() {}
+  }
+
+  return { default: FakeHls };
+});
 
 // jsdom does not implement HTMLMediaElement.load (called by the native-source
 // cleanup path) or HTMLTrackElement.track (assigned `mode = "showing"` when a
@@ -43,6 +100,7 @@ afterAll(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  fakeHlsInstances.length = 0;
 });
 
 function renderPlayer(
@@ -204,5 +262,95 @@ describe("VideoPlayer buffering indicator", () => {
 
     expect(onPause).toHaveBeenCalledTimes(1);
     expect(onEnded).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("VideoPlayer hls.js error routing", () => {
+  const hlsSrc =
+    "/api/movies/1/hls/remux/playlist.m3u8?playback_session=uuid&start=0";
+
+  async function renderHlsPlayer(
+    props: Partial<React.ComponentProps<typeof VideoPlayer>> = {},
+  ) {
+    renderPlayer({ src: hlsSrc, ...props });
+    // The hls.js module loads through a dynamic import; flush it.
+    await act(async () => {});
+    expect(fakeHlsInstances).toHaveLength(1);
+    return fakeHlsInstances[0];
+  }
+
+  it("reports 503 manifest errors as capacity-busy with the Retry-After delay", async () => {
+    const onCapacityBusy = vi.fn();
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onCapacityBusy, onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "manifestLoadError",
+        fatal: true,
+        response: { code: 503 },
+        networkDetails: {
+          getResponseHeader: (name: string) =>
+            name === "Retry-After" ? "7" : null,
+        },
+      });
+    });
+
+    expect(onCapacityBusy).toHaveBeenCalledWith(7);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the default delay when Retry-After is missing", async () => {
+    const onCapacityBusy = vi.fn();
+    const hls = await renderHlsPlayer({ onCapacityBusy });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "levelLoadError",
+        fatal: true,
+        response: { code: 503 },
+        networkDetails: null,
+      });
+    });
+
+    expect(onCapacityBusy).toHaveBeenCalledWith(
+      HLS_CAPACITY_RETRY_FALLBACK_SEC,
+    );
+  });
+
+  it("surfaces a 503 as a fatal error when no capacity handler is wired", async () => {
+    const onError = vi.fn();
+    const hls = await renderHlsPlayer({ onError });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "manifestLoadError",
+        fatal: true,
+        response: { code: 503 },
+      });
+    });
+
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("still routes fragment 404s to onSessionLost", async () => {
+    const onSessionLost = vi.fn();
+    const onCapacityBusy = vi.fn();
+    const hls = await renderHlsPlayer({ onSessionLost, onCapacityBusy });
+
+    act(() => {
+      hls.trigger("hlsError", {
+        type: "networkError",
+        details: "fragLoadError",
+        fatal: false,
+        response: { code: 404 },
+      });
+    });
+
+    expect(onSessionLost).toHaveBeenCalledOnce();
+    expect(onCapacityBusy).not.toHaveBeenCalled();
   });
 });

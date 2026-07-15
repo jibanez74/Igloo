@@ -18,7 +18,7 @@ SET
   is_admin = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 `
 
 type AdminUpdateUserParams struct {
@@ -47,6 +47,7 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -76,7 +77,7 @@ INSERT INTO users (
 )
 VALUES
   (?, ?, ?, ?, ?)
-RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -107,6 +108,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -125,7 +127,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 
 const getAdminUser = `-- name: GetAdminUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 FROM users
 WHERE is_admin = true
 LIMIT 1
@@ -145,6 +147,7 @@ func (q *Queries) GetAdminUser(ctx context.Context) (User, error) {
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -158,6 +161,7 @@ SELECT
   email,
   is_admin,
   avatar,
+  pin,
   created_at,
   updated_at
 FROM users
@@ -170,6 +174,7 @@ type GetAllUsersRow struct {
 	Email     string         `json:"email"`
 	IsAdmin   bool           `json:"is_admin"`
 	Avatar    sql.NullString `json:"avatar"`
+	Pin       sql.NullString `json:"pin"`
 	CreatedAt string         `json:"created_at"`
 	UpdatedAt string         `json:"updated_at"`
 }
@@ -189,6 +194,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 			&i.Email,
 			&i.IsAdmin,
 			&i.Avatar,
+			&i.Pin,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -207,7 +213,7 @@ func (q *Queries) GetAllUsers(ctx context.Context) ([]GetAllUsersRow, error) {
 
 const getUser = `-- name: GetUser :one
 SELECT
-  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 FROM users
 WHERE id = ?
 LIMIT 1
@@ -227,6 +233,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -235,7 +242,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+  id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 FROM users
 WHERE email = ?
 LIMIT 1
@@ -255,6 +262,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -355,7 +363,7 @@ SET
   avatar = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 `
 
 type UpdateUserAvatarParams struct {
@@ -377,6 +385,7 @@ func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarPara
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -389,7 +398,7 @@ SET
   email = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 `
 
 type UpdateUserEmailParams struct {
@@ -411,6 +420,7 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -423,7 +433,7 @@ SET
   name = ?,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, created_at, updated_at
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
 `
 
 type UpdateUserNameParams struct {
@@ -445,6 +455,7 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.DownloadMbps,
 		&i.PreferredAudioLanguage,
 		&i.PreferredSubtitleLanguage,
+		&i.Pin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -467,6 +478,41 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.exec(ctx, q.updateUserPasswordStmt, updateUserPassword, arg.Password, arg.ID)
 	return err
+}
+
+const updateUserPin = `-- name: UpdateUserPin :one
+UPDATE users
+SET
+  pin = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, email, password, is_admin, avatar, preferred_hls_profile, download_mbps, preferred_audio_language, preferred_subtitle_language, pin, created_at, updated_at
+`
+
+type UpdateUserPinParams struct {
+	Pin sql.NullString `json:"pin"`
+	ID  int64          `json:"id"`
+}
+
+func (q *Queries) UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error) {
+	row := q.queryRow(ctx, q.updateUserPinStmt, updateUserPin, arg.Pin, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Password,
+		&i.IsAdmin,
+		&i.Avatar,
+		&i.PreferredHlsProfile,
+		&i.DownloadMbps,
+		&i.PreferredAudioLanguage,
+		&i.PreferredSubtitleLanguage,
+		&i.Pin,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateUserPlaybackPreferences = `-- name: UpdateUserPlaybackPreferences :one

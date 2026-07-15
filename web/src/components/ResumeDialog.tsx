@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   open: boolean;
-  savedProgressSec: number | null;
+  resumeTargetSec: number | null;
   pending: boolean;
   onResume: () => void;
   onStartFromBeginning: () => void;
@@ -25,7 +25,7 @@ type Props = {
 
 export default function ResumeDialog({
   open,
-  savedProgressSec,
+  resumeTargetSec,
   pending,
   onResume,
   onStartFromBeginning,
@@ -57,8 +57,8 @@ export default function ResumeDialog({
         <DialogHeader>
           <DialogTitle className="text-foreground">Resume movie?</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {savedProgressSec !== null
-              ? `Resume from ${formatTimecode(savedProgressSec)} or start from the beginning.`
+            {resumeTargetSec !== null
+              ? `Resume from ${formatTimecode(resumeTargetSec)} or start from the beginning.`
               : "Resume your saved progress or start from the beginning."}
           </DialogDescription>
         </DialogHeader>

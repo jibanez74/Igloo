@@ -35,6 +35,7 @@ type TestAuthUser = {
   email: string;
   is_admin: boolean;
   avatar: string | null;
+  has_pin: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -52,6 +53,7 @@ function testUser(overrides: Partial<TestAuthUser> = {}): TestAuthUser {
     email: "dana@example.com",
     is_admin: false,
     avatar: null,
+    has_pin: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,

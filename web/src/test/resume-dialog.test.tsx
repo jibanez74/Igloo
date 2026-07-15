@@ -20,7 +20,7 @@ function ResumeDialogHarness({
       <div ref={playerRef} role="region" aria-label="Video player" tabIndex={-1} />
       <ResumeDialog
         open={open}
-        savedProgressSec={125}
+        resumeTargetSec={125}
         pending={false}
         restoreFocusRef={playerRef}
         onResume={() => {
@@ -72,7 +72,7 @@ describe("ResumeDialog", () => {
     render(
       <ResumeDialog
         open
-        savedProgressSec={125}
+        resumeTargetSec={125}
         pending
         onResume={vi.fn()}
         onStartFromBeginning={vi.fn()}

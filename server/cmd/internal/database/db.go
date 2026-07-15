@@ -531,6 +531,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateUserPasswordStmt, err = db.PrepareContext(ctx, updateUserPassword); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserPassword: %w", err)
 	}
+	if q.updateUserPinStmt, err = db.PrepareContext(ctx, updateUserPin); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserPin: %w", err)
+	}
 	if q.updateUserPlaybackPreferencesStmt, err = db.PrepareContext(ctx, updateUserPlaybackPreferences); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserPlaybackPreferences: %w", err)
 	}
@@ -1426,6 +1429,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserPasswordStmt: %w", cerr)
 		}
 	}
+	if q.updateUserPinStmt != nil {
+		if cerr := q.updateUserPinStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserPinStmt: %w", cerr)
+		}
+	}
 	if q.updateUserPlaybackPreferencesStmt != nil {
 		if cerr := q.updateUserPlaybackPreferencesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserPlaybackPreferencesStmt: %w", cerr)
@@ -1709,6 +1717,7 @@ type Queries struct {
 	updateUserEmailStmt                         *sql.Stmt
 	updateUserNameStmt                          *sql.Stmt
 	updateUserPasswordStmt                      *sql.Stmt
+	updateUserPinStmt                           *sql.Stmt
 	updateUserPlaybackPreferencesStmt           *sql.Stmt
 	upsertAlbumStmt                             *sql.Stmt
 	upsertAlbumGenreStmt                        *sql.Stmt
@@ -1899,6 +1908,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateUserEmailStmt:                         q.updateUserEmailStmt,
 		updateUserNameStmt:                          q.updateUserNameStmt,
 		updateUserPasswordStmt:                      q.updateUserPasswordStmt,
+		updateUserPinStmt:                           q.updateUserPinStmt,
 		updateUserPlaybackPreferencesStmt:           q.updateUserPlaybackPreferencesStmt,
 		upsertAlbumStmt:                             q.upsertAlbumStmt,
 		upsertAlbumGenreStmt:                        q.upsertAlbumGenreStmt,

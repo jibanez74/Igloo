@@ -46,38 +46,43 @@ const (
 )
 
 type Application struct {
-	DB                   *sql.DB
-	Queries              *database.Queries
-	Settings             *database.Setting
-	Config               RuntimeConfig
-	Logger               applogger.LoggerInterface
-	LoggerCloser         func() error
-	Ffprobe              ffprobe.FfprobeInterface
-	FFmpeg               ffmpeg.FFmpegInterface
-	Spotify              spotify.SpotifyInterface
-	Tmdb                 tmdb.TmdbInterface
-	TmdbImageBaseURL     string
-	TmdbImageHTTPClient  *http.Client
-	SessionManager       *scs.SessionManager
-	Wait                 *sync.WaitGroup
-	Router               *chi.Mux
-	Server               *http.Server
-	ScannerDBMu          sync.Mutex
-	SearchVocab          searchVocabCache
-	HLSSessionCache      *cache.Cache
-	HLSSessionGroup      singleflight.Group
-	HLSTranscodeLimiter  *hlsTranscodeLimiter
-	PersonalHLSMu        sync.Mutex
-	RemuxSafetyCache     *cache.Cache
-	SubtitleVTTCache     *cache.Cache
-	SubtitleExtractGroup singleflight.Group
-	RoomHLSTombstone     *cache.Cache
-	RoomHLSMu            sync.Mutex
-	WatchRoomHub         *WatchRoomHub
-	QuickConnect         *QuickConnectBroker
-	AuthLimiter          *rateLimiter
-	DeviceLastSeen       *cache.Cache
-	DeviceExpiryCancel   context.CancelFunc
+	DB                      *sql.DB
+	Queries                 *database.Queries
+	Settings                *database.Setting
+	Config                  RuntimeConfig
+	Logger                  applogger.LoggerInterface
+	LoggerCloser            func() error
+	Ffprobe                 ffprobe.FfprobeInterface
+	FFmpeg                  ffmpeg.FFmpegInterface
+	Spotify                 spotify.SpotifyInterface
+	Tmdb                    tmdb.TmdbInterface
+	TmdbImageBaseURL        string
+	TmdbImageHTTPClient     *http.Client
+	SessionManager          *scs.SessionManager
+	Wait                    *sync.WaitGroup
+	Router                  *chi.Mux
+	Server                  *http.Server
+	ScannerDBMu             sync.Mutex
+	SearchVocab             searchVocabCache
+	HLSSessionCache         *cache.Cache
+	HLSSessionGroup         singleflight.Group
+	HLSTranscodeLimiter     *hlsTranscodeLimiter
+	PersonalHLSMu           sync.Mutex
+	PersonalHLSReservations map[int64]int
+
+	// HLSMaxPersonalSessionsPerUser caps concurrent personal HLS sessions per
+	// user; zero falls back to hlsMaxPersonalSessionsPerUserDefault.
+	HLSMaxPersonalSessionsPerUser int
+	RemuxSafetyCache              *cache.Cache
+	SubtitleVTTCache              *cache.Cache
+	SubtitleExtractGroup          singleflight.Group
+	RoomHLSTombstone              *cache.Cache
+	RoomHLSMu                     sync.Mutex
+	WatchRoomHub                  *WatchRoomHub
+	QuickConnect                  *QuickConnectBroker
+	AuthLimiter                   *rateLimiter
+	DeviceLastSeen                *cache.Cache
+	DeviceExpiryCancel            context.CancelFunc
 }
 
 //go:embed all:webdist
@@ -243,9 +248,13 @@ func InitApp() (*Application, error) {
 
 func (app *Application) initRuntimeCaches() {
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(configuredHLSMaxCPUTranscodes())
+	app.HLSMaxPersonalSessionsPerUser = configuredHLSMaxPersonalSessionsPerUser()
+	app.PersonalHLSReservations = make(map[int64]int)
 
 	// Eviction callback removes generated files when an HLS session ages out.
-	hlsCache := cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	// The default TTL only applies to SetDefault, which this cache never uses;
+	// personal and room sessions pick their TTL explicitly on every Set.
+	hlsCache := cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	hlsCache.OnEvicted(func(key string, val interface{}) {
 		session, ok := val.(*HLSSession)
 		if ok {
@@ -260,7 +269,7 @@ func (app *Application) initRuntimeCaches() {
 
 	// Cache extracted WebVTT payloads to avoid repeated subtitle conversion work.
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
-	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()
@@ -677,6 +686,9 @@ func (app *Application) registerUserRoutes(r chi.Router) {
 		r.Put("/name", app.UpdateUserName)
 		r.Put("/email", app.UpdateUserEmail)
 		r.Put("/password", app.UpdateUserPassword)
+		r.Get("/pin", app.GetUserPin)
+		r.Put("/pin", app.UpdateUserPin)
+		r.Post("/pin/verify", app.VerifyUserPin)
 		r.Put("/avatar", app.UpdateUserAvatar)
 		r.Post("/avatar/upload", app.UploadUserAvatar)
 		r.Delete("/", app.DeleteUserAccount)

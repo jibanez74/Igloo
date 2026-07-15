@@ -394,17 +394,10 @@ func TestInitTables_Indexes(t *testing.T) {
 
 	expectedIndexes := []string{
 		"idx_user_name",
-		"idx_musician_name",
-		"idx_album_title",
-		"idx_track_title",
 		"idx_track_album",
 		"idx_track_musician",
-		"idx_genre_tag",
-		"idx_musician_genres_musician",
 		"idx_musician_genres_genre",
-		"idx_musician_albums_musician",
 		"idx_musician_albums_album",
-		"idx_track_genres_track",
 		"idx_track_genres_genre",
 		"idx_sessions_expiry",
 		"idx_movie_watch_progress_user_updated_at",
@@ -686,13 +679,15 @@ func setupTestApp(t *testing.T) *Application {
 
 	// Tests do not attach real FFmpeg processes to HLS cache entries.
 	app.HLSTranscodeLimiter = newHLSTranscodeLimiter(100)
-	app.HLSSessionCache = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.HLSMaxPersonalSessionsPerUser = hlsMaxPersonalSessionsPerUserDefault
+	app.PersonalHLSReservations = make(map[int64]int)
+	app.HLSSessionCache = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.RemuxSafetyCache = cache.New(
 		hlsRemuxSafetyCacheTTL,
 		hlsRemuxSafetyCacheSweep,
 	)
 	app.SubtitleVTTCache = cache.New(subtitleCacheTTL, subtitleCacheCleanup)
-	app.RoomHLSTombstone = cache.New(hlsSessionTTL, hlsSessionCacheSweep)
+	app.RoomHLSTombstone = cache.New(hlsRoomSessionTTL, hlsSessionCacheSweep)
 	app.WatchRoomHub = NewWatchRoomHub()
 	app.QuickConnect = NewQuickConnectBroker()
 	app.AuthLimiter = newRateLimiter()

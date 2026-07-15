@@ -3,6 +3,7 @@ import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  HLS_CAPACITY_RETRY_FALLBACK_SEC,
   HLS_JS_BACK_BUFFER_LENGTH_SEC,
   HLS_JS_LOAD_TIMEOUT_MS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
@@ -32,6 +33,7 @@ export default function VideoPlayer({
   startSec = 0,
   onStartApplied,
   onSessionLost,
+  onCapacityBusy,
 }: VideoPlayerProps) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -77,6 +79,27 @@ export default function VideoPlayer({
     const nextTime = duration > 0 ? Math.min(startSec, duration) : startSec;
     video.currentTime = nextTime;
     handleStartApplied(nextTime);
+  });
+
+  // Returns false when no onCapacityBusy consumer exists so the caller can
+  // fall through to the regular fatal-error handling.
+  const handleCapacityBusy = useEffectEvent((data: ErrorData): boolean => {
+    if (!onCapacityBusy) return false;
+
+    let retryAfterSec = HLS_CAPACITY_RETRY_FALLBACK_SEC;
+    try {
+      const xhr = data.networkDetails as XMLHttpRequest | null | undefined;
+      const header = xhr?.getResponseHeader?.("Retry-After");
+      const parsed = header ? Number.parseInt(header, 10) : NaN;
+      if (Number.isFinite(parsed) && parsed > 0) {
+        retryAfterSec = parsed;
+      }
+    } catch {
+      // Header unavailable on this loader; keep the fallback delay.
+    }
+
+    onCapacityBusy(retryAfterSec);
+    return true;
   });
 
   const handleHlsError = useEffectEvent(
@@ -157,6 +180,15 @@ export default function VideoPlayer({
 
             if (isSessionLostError) {
               handleHlsError(video, data, sessionLostDetail);
+              return;
+            }
+
+            const isCapacityBusyError =
+              (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) &&
+              data.response?.code === 503;
+
+            if (isCapacityBusyError && handleCapacityBusy(data)) {
               return;
             }
 

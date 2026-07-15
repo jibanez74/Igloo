@@ -539,6 +539,90 @@
         }
       }
     },
+    "/api/user/pin": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Get the current user's profile PIN",
+        "description": "Session cookie only. Device bearer tokens receive 401 so a shared TV can never read the PIN.",
+        "operationId": "getUserPin",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UserPinResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Set, change, or remove the current user's profile PIN",
+        "description": "An empty pin removes the PIN. When a PIN is already set, current_pin is required and attempts are rate limited.",
+        "operationId": "updateUserPin",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/UpdateUserPinRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthUserResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/user/pin/verify": {
+      "post": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Verify the current user's profile PIN",
+        "description": "Used by TV clients when switching profiles. A wrong PIN returns 200 with valid=false; attempts are rate limited.",
+        "operationId": "verifyUserPin",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/VerifyUserPinRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UserPinVerifyResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/api/user/avatar": {
       "put": {
         "tags": [
@@ -629,6 +713,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/StaticPath"
+          },
+          {
+            "$ref": "#/components/parameters/RangeHeader"
           }
         ],
         "responses": {
@@ -643,6 +730,12 @@
               }
             }
           },
+          "206": {
+            "$ref": "#/components/responses/PartialBinaryMediaResponse"
+          },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
@@ -651,6 +744,9 @@
           },
           "404": {
             "description": "Static file not found."
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "description": "Failed to serve static file."
@@ -1885,6 +1981,9 @@
           },
           {
             "$ref": "#/components/parameters/PlaybackSessionQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSReloadQuery"
           }
         ],
         "responses": {
@@ -1896,6 +1995,12 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }
@@ -1925,6 +2030,9 @@
           },
           {
             "$ref": "#/components/parameters/PlaybackSessionQuery"
+          },
+          {
+            "$ref": "#/components/parameters/HLSReloadQuery"
           }
         ],
         "responses": {
@@ -1939,6 +2047,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
@@ -1968,6 +2079,9 @@
           "206": {
             "$ref": "#/components/responses/PartialBinaryMediaResponse"
           },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -1976,6 +2090,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2554,6 +2671,9 @@
           "206": {
             "$ref": "#/components/responses/PartialBinaryMediaResponse"
           },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -2565,6 +2685,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2596,6 +2719,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2633,6 +2759,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
@@ -2807,6 +2936,9 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
@@ -2830,6 +2962,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3136,6 +3271,9 @@
           "206": {
             "$ref": "#/components/responses/PartialBinaryMediaResponse"
           },
+          "304": {
+            "$ref": "#/components/responses/NotModified"
+          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -3144,6 +3282,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "416": {
+            "$ref": "#/components/responses/RangeNotSatisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -3572,7 +3713,7 @@
           "$ref": "#/components/requestBodies/AddCollaboratorRequest"
         },
         "responses": {
-          "200": {
+          "201": {
             "$ref": "#/components/responses/PlaylistCollaboratorMutationResponse"
           },
           "400": {
@@ -4089,21 +4230,20 @@
         "name": "audio_track",
         "in": "query",
         "required": false,
+        "description": "Zero-based audio track index. Required for movies with audio; omit for video-only movies.",
         "schema": {
           "type": "integer",
-          "minimum": 0,
-          "default": 0
+          "minimum": 0
         }
       },
       "StartQuery": {
         "name": "start",
         "in": "query",
-        "required": false,
-        "description": "Session start time in seconds.",
+        "required": true,
+        "description": "Session start time in seconds. Values at or beyond the movie duration are normalized to five seconds before the end, or zero when the movie is shorter than five seconds; rewritten HLS asset URLs use the normalized value.",
         "schema": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0
+          "type": "integer",
+          "minimum": 0
         }
       },
       "RangeHeader": {
@@ -4124,6 +4264,15 @@
         "schema": {
           "type": "string",
           "format": "uuid"
+        }
+      },
+      "HLSReloadQuery": {
+        "name": "reload",
+        "in": "query",
+        "required": false,
+        "description": "Opaque client-supplied value echoed into rewritten HLS asset URLs; not part of the session cache key.",
+        "schema": {
+          "type": "string"
         }
       }
     },
@@ -4164,6 +4313,26 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/UpdateUserPasswordRequest"
+            }
+          }
+        }
+      },
+      "UpdateUserPinRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateUserPinRequest"
+            }
+          }
+        }
+      },
+      "VerifyUserPinRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/VerifyUserPinRequest"
             }
           }
         }
@@ -4537,6 +4706,34 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/AuthUserEnvelope"
+            }
+          }
+        }
+      },
+      "UserPinResponse": {
+        "description": "Current profile PIN for the session user.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UserPinEnvelope"
+            }
+          }
+        }
+      },
+      "UserPinVerifyResponse": {
+        "description": "Profile PIN verification result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UserPinVerifyEnvelope"
             }
           }
         }
@@ -4966,6 +5163,12 @@
             }
           }
         }
+      },
+      "NotModified": {
+        "description": "Cached representation is still valid."
+      },
+      "RangeNotSatisfiable": {
+        "description": "Requested byte range cannot be satisfied."
       },
       "WebVTTResponse": {
         "description": "Extracted WebVTT subtitle payload.",
@@ -5406,7 +5609,16 @@
         }
       },
       "ServiceUnavailable": {
-        "description": "Generated media segment is not ready yet.",
+        "description": "Generated media is not ready yet or HLS session/transcode capacity is temporarily unavailable.",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds to wait before retrying when HLS capacity is unavailable.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -5709,6 +5921,97 @@
         },
         "additionalProperties": false
       },
+      "UpdateUserPinRequest": {
+        "type": "object",
+        "required": [
+          "pin"
+        ],
+        "properties": {
+          "pin": {
+            "type": "string",
+            "pattern": "^([0-9]{4})?$",
+            "description": "New 4-digit PIN. Empty string removes the PIN."
+          },
+          "current_pin": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Required when a PIN is already set."
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerifyUserPinRequest": {
+        "type": "object",
+        "required": [
+          "pin"
+        ],
+        "properties": {
+          "pin": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UserPinEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "pin"
+                ],
+                "properties": {
+                  "pin": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[0-9]{4}$",
+                    "description": "The plaintext PIN, or null when none is set."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "UserPinVerifyEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/JsonSuccess"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "valid"
+                ],
+                "properties": {
+                  "valid": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
       "AuthUser": {
         "type": "object",
         "required": [
@@ -5717,6 +6020,7 @@
           "email",
           "is_admin",
           "avatar",
+          "has_pin",
           "created_at",
           "updated_at"
         ],
@@ -5740,6 +6044,9 @@
               "string",
               "null"
             ]
+          },
+          "has_pin": {
+            "type": "boolean"
           },
           "created_at": {
             "type": "string"

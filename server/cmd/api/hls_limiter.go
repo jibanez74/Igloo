@@ -11,6 +11,7 @@ import (
 
 const (
 	envHLSMaxCPUTranscodes        = "HLS_MAX_CPU_TRANSCODES"
+	envHLSMaxSessionsPerUser      = "HLS_MAX_SESSIONS_PER_USER"
 	hlsCPUTranscodeDefaultDivisor = 4
 )
 
@@ -20,6 +21,14 @@ type hlsTranscodeCapacityError struct {
 
 func (e *hlsTranscodeCapacityError) Error() string {
 	return fmt.Sprintf("server is already running the maximum number of CPU HLS transcodes (%d)", e.MaxActive)
+}
+
+type hlsPersonalSessionCapacityError struct {
+	MaxActive int
+}
+
+func (e *hlsPersonalSessionCapacityError) Error() string {
+	return fmt.Sprintf("user is already running the maximum number of personal HLS sessions (%d)", e.MaxActive)
 }
 
 type hlsTranscodeLimiter struct {
@@ -45,6 +54,18 @@ func configuredHLSMaxCPUTranscodes() int {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < 1 {
 		return defaultHLSMaxCPUTranscodes()
+	}
+	return value
+}
+
+func configuredHLSMaxPersonalSessionsPerUser() int {
+	raw := strings.TrimSpace(os.Getenv(envHLSMaxSessionsPerUser))
+	if raw == "" {
+		return hlsMaxPersonalSessionsPerUserDefault
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 {
+		return hlsMaxPersonalSessionsPerUserDefault
 	}
 	return value
 }

@@ -95,6 +95,8 @@ type Querier interface {
 	GetCastByMovieID(ctx context.Context, movieID int64) ([]GetCastByMovieIDRow, error)
 	// Chapters for a movie (for technical details display).
 	GetChaptersByMovieID(ctx context.Context, movieID sql.NullInt64) ([]Chapter, error)
+	// The 30-second floor must match the web client's
+	// MOVIE_WATCH_PROGRESS_MIN_SECONDS resume-eligibility floor.
 	GetContinueWatchingMovies(ctx context.Context, userID int64) ([]GetContinueWatchingMoviesRow, error)
 	// Crew for a movie with artist name and profile (for details view).
 	GetCrewByMovieID(ctx context.Context, movieID int64) ([]GetCrewByMovieIDRow, error)
@@ -236,6 +238,7 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserPin(ctx context.Context, arg UpdateUserPinParams) (User, error)
 	UpdateUserPlaybackPreferences(ctx context.Context, arg UpdateUserPlaybackPreferencesParams) (UpdateUserPlaybackPreferencesRow, error)
 	UpsertAlbum(ctx context.Context, arg UpsertAlbumParams) (Album, error)
 	// Creates a relationship between an album and a genre (idempotent)

@@ -502,6 +502,8 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	completedID := createMovie("Completed", "completed.mkv")
 	watchedID := createMovie("Watched", "watched.mkv")
 	unwatchedZeroID := createMovie("Unwatched Zero", "unwatched-zero.mkv")
+	belowFloorID := createMovie("Below Floor", "below-floor.mkv")
+	atFloorID := createMovie("At Floor", "at-floor.mkv")
 	otherUserID := createMovie("Other User Movie", "other-user.mkv")
 
 	upsertProgress := func(userID, movieID int64, progressSec float64) {
@@ -519,6 +521,8 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	upsertProgress(user.ID, oldInProgressID, 300.0)
 	upsertProgress(user.ID, recentInProgressID, 1200.0)
 	upsertProgress(user.ID, completedID, 7200.0)
+	upsertProgress(user.ID, belowFloorID, 29.0)
+	upsertProgress(user.ID, atFloorID, 30.0)
 	upsertProgress(otherUser.ID, otherUserID, 900.0)
 
 	err = app.Queries.MarkMovieWatched(ctx, database.MarkMovieWatchedParams{
@@ -537,8 +541,8 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 		t.Fatalf("failed to mark movie unwatched: %v", err)
 	}
 
-	// CURRENT_TIMESTAMP has second resolution, so force a distinct older
-	// timestamp to make the recency ordering deterministic.
+	// CURRENT_TIMESTAMP has second resolution, so force distinct older
+	// timestamps to make the recency ordering deterministic.
 	_, err = app.DB.ExecContext(ctx,
 		"UPDATE movie_watch_progress SET updated_at = datetime('now', '-1 hour') WHERE user_id = ? AND movie_id = ?",
 		user.ID, oldInProgressID,
@@ -546,20 +550,35 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to backdate progress row: %v", err)
 	}
+	_, err = app.DB.ExecContext(ctx,
+		"UPDATE movie_watch_progress SET updated_at = datetime('now', '-2 hours') WHERE user_id = ? AND movie_id = ?",
+		user.ID, atFloorID,
+	)
+	if err != nil {
+		t.Fatalf("failed to backdate at-floor progress row: %v", err)
+	}
 
 	rows, err := app.Queries.GetContinueWatchingMovies(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("GetContinueWatchingMovies failed: %v", err)
 	}
 
-	if len(rows) != 2 {
-		t.Fatalf("expected 2 continue watching movies, got %d", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 continue watching movies, got %d", len(rows))
 	}
 	if rows[0].ID != recentInProgressID {
 		t.Errorf("expected most recently watched movie %d first, got %d", recentInProgressID, rows[0].ID)
 	}
 	if rows[1].ID != oldInProgressID {
 		t.Errorf("expected older movie %d second, got %d", oldInProgressID, rows[1].ID)
+	}
+	if rows[2].ID != atFloorID {
+		t.Errorf("expected at-floor movie %d third, got %d", atFloorID, rows[2].ID)
+	}
+	for _, row := range rows {
+		if row.ID == belowFloorID {
+			t.Error("expected below-floor progress (29s) to be excluded from continue watching")
+		}
 	}
 	if rows[0].ProgressSec != 1200.0 {
 		t.Errorf("expected progress_sec 1200.0, got %f", rows[0].ProgressSec)

@@ -32,6 +32,7 @@ import {
   getMusicStats,
   getNotifications,
   getUnreadNotificationCount,
+  getUserPin,
   getSpotifyStatus,
   getPlaylistDetails,
   getPlaylists,
@@ -56,6 +57,7 @@ import {
   ALBUMS_PER_PAGE,
   AUTH_USER_KEY,
   DEVICES_KEY,
+  USER_PIN_KEY,
   GENERAL_SETTINGS_KEY,
   PLAYBACK_SETTINGS_KEY,
   LATEST_ALBUMS_KEY,
@@ -140,6 +142,20 @@ export function authUserQueryOpts(options?: { revalidate?: boolean }) {
     queryKey: [AUTH_USER_KEY],
     queryFn: getAuthUser,
     staleTime: options?.revalidate ? 0 : STALE_1M,
+    gcTime: GC_DEFAULT,
+  });
+}
+
+/**
+ * The current user's plaintext profile PIN (session-only endpoint). Fetched on
+ * demand when the user reveals the PIN in account settings — always refetch so
+ * a stale PIN is never shown.
+ */
+export function userPinQueryOpts() {
+  return queryOptions({
+    queryKey: [USER_PIN_KEY],
+    queryFn: getUserPin,
+    staleTime: 0,
     gcTime: GC_DEFAULT,
   });
 }

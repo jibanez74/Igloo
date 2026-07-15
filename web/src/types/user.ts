@@ -6,6 +6,7 @@ export type AuthUser = {
   email: string;
   is_admin: boolean;
   avatar: string | null;
+  has_pin: boolean;
   created_at: string;
   updated_at: string;
 };
