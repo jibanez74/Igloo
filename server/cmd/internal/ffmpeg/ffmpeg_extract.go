@@ -6,15 +6,14 @@ import (
 	"igloo/cmd/internal/mediabin"
 )
 
-// resolveBinaryPath extracts the embedded ffmpeg binary to a temporary
-// directory and returns the path to the executable.
+// resolveBinaryCandidate extracts the embedded ffmpeg binary to a temporary
+// directory and returns the candidate path and extraction directory.
 // embeddedBinary is defined in platform-specific files (ffmpeg_darwin_arm64.go,
 // ffmpeg_linux_amd64.go) and is populated at compile time via //go:embed.
-func resolveBinaryPath() (string, error) {
+func resolveBinaryCandidate() (binaryCandidate, error) {
 	binPath, tempDir, err := mediabin.ExtractEmbedded("ffmpeg", embeddedBinary)
 	if err != nil {
-		return "", err
+		return binaryCandidate{}, err
 	}
-	extractedDir = tempDir
-	return binPath, nil
+	return binaryCandidate{path: binPath, extractedDir: tempDir}, nil
 }

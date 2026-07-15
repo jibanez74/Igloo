@@ -191,7 +191,7 @@ describe("movie watch progress saver", () => {
     );
   });
 
-  it("queues a captured lifecycle snapshot behind an in-flight ordinary save", async () => {
+  it("dispatches a captured lifecycle snapshot while an ordinary save is unresolved", async () => {
     const firstSave = deferred<typeof successfulUpdate>();
     updateMovieWatchProgress.mockReturnValueOnce(firstSave.promise);
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
@@ -218,11 +218,7 @@ describe("movie watch progress saver", () => {
       window.dispatchEvent(new Event("pagehide"));
     });
     currentTimeRef.current = 600;
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    firstSave.resolve(successfulUpdate);
-    await pauseSave;
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/movies/7/watch-progress",
       expect.objectContaining({
@@ -230,6 +226,9 @@ describe("movie watch progress saver", () => {
         body: JSON.stringify({ progress_sec: 450, duration_sec: 1000 }),
       }),
     );
+
+    firstSave.resolve(successfulUpdate);
+    await pauseSave;
   });
 
   it("saves progress above the 30-second floor", async () => {

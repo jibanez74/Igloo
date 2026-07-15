@@ -184,22 +184,41 @@ func (app *Application) RefreshHLSSessionTTL(key string, session *HLSSession) bo
 	return true
 }
 
-func (app *Application) removeHLSSession(key string) {
+// deleteHLSSession removes a cache entry without waiting for teardown. Personal
+// session callers clean up the returned session after releasing PersonalHLSMu.
+func (app *Application) deleteHLSSession(key string) *HLSSession {
 	raw, ok := app.HLSSessionCache.Get(key)
 	app.HLSSessionCache.Delete(key)
 	if !ok {
-		return
+		return nil
 	}
-	if session, ok := raw.(*HLSSession); ok {
-		cleanupHLSSession(session)
+	session, ok := raw.(*HLSSession)
+	if !ok {
+		return nil
 	}
+	return session
+}
+
+func (app *Application) removeHLSSession(key string) {
+	session := app.deleteHLSSession(key)
+	cleanupHLSSession(session)
+}
+
+func (app *Application) removePersonalHLSSession(key string) {
+	app.PersonalHLSMu.Lock()
+	session := app.deleteHLSSession(key)
+	app.PersonalHLSMu.Unlock()
+
+	cleanupHLSSession(session)
 }
 
 func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
 	app.PersonalHLSMu.Lock()
-	defer app.PersonalHLSMu.Unlock()
+	sessions := app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, keepKey)
+	app.PersonalHLSMu.Unlock()
 
-	return app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, keepKey)
+	cleanupRemovedHLSSessions(sessions)
+	return len(sessions)
 }
 
 // cleanupPersonalHLSSessionsForOwnerLocked requires PersonalHLSMu to be held.
@@ -207,8 +226,8 @@ func (app *Application) cleanupPersonalHLSSessionsForOwner(movieID int64, ownerU
 // playback_session UUID — superseded windows from the same client (seeks,
 // profile or audio-track switches). Sessions from the owner's other clients
 // (different UUIDs, e.g. a TV playing the same movie) are never touched.
-func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) int {
-	removed := 0
+func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, ownerUserID int64, playbackSession string, keepKey string) []*HLSSession {
+	var removed []*HLSSession
 	for key, item := range app.HLSSessionCache.Items() {
 		if key == keepKey {
 			continue
@@ -218,11 +237,16 @@ func (app *Application) cleanupPersonalHLSSessionsForOwnerLocked(movieID int64, 
 			continue
 		}
 		if session.PlaybackSession == playbackSession {
-			app.removeHLSSession(key)
-			removed++
+			removed = append(removed, app.deleteHLSSession(key))
 		}
 	}
 	return removed
+}
+
+func cleanupRemovedHLSSessions(sessions []*HLSSession) {
+	for _, session := range sessions {
+		cleanupHLSSession(session)
+	}
 }
 
 // personalHLSSessionsForOwnerLocked returns the owner's personal (non-room)
@@ -285,7 +309,7 @@ func (reservation *hlsPersonalSessionReservation) commit(
 	reservation.once.Do(func() {
 		app := reservation.app
 		app.PersonalHLSMu.Lock()
-		app.cleanupPersonalHLSSessionsForOwnerLocked(
+		removed := app.cleanupPersonalHLSSessionsForOwnerLocked(
 			movieID,
 			reservation.ownerUserID,
 			session.PlaybackSession,
@@ -300,6 +324,8 @@ func (reservation *hlsPersonalSessionReservation) commit(
 			delete(app.PersonalHLSReservations, reservation.ownerUserID)
 		}
 		app.PersonalHLSMu.Unlock()
+
+		cleanupRemovedHLSSessions(removed)
 	})
 }
 
@@ -311,10 +337,9 @@ func (app *Application) reservePersonalHLSSession(
 	playbackSession string,
 ) (*hlsPersonalSessionReservation, error) {
 	app.PersonalHLSMu.Lock()
-	defer app.PersonalHLSMu.Unlock()
 
 	app.HLSSessionCache.DeleteExpired()
-	app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, "")
+	removed := app.cleanupPersonalHLSSessionsForOwnerLocked(movieID, ownerUserID, playbackSession, "")
 
 	limit := app.hlsMaxPersonalSessionsPerUser()
 	entries := app.personalHLSSessionsForOwnerLocked(ownerUserID)
@@ -322,7 +347,7 @@ func (app *Application) reservePersonalHLSSession(
 	for len(entries)+reserved >= limit && len(entries) > 0 {
 		victim := entries[0]
 		entries = entries[1:]
-		app.removeHLSSession(victim.key)
+		removed = append(removed, app.deleteHLSSession(victim.key))
 		app.Logger.Info(
 			"hls session evicted by per-user cap",
 			"owner_user_id", ownerUserID,
@@ -332,6 +357,8 @@ func (app *Application) reservePersonalHLSSession(
 	}
 
 	if len(entries)+reserved >= limit {
+		app.PersonalHLSMu.Unlock()
+		cleanupRemovedHLSSessions(removed)
 		return nil, &hlsPersonalSessionCapacityError{MaxActive: limit}
 	}
 
@@ -339,10 +366,14 @@ func (app *Application) reservePersonalHLSSession(
 		app.PersonalHLSReservations = make(map[int64]int)
 	}
 	app.PersonalHLSReservations[ownerUserID] = reserved + 1
-	return &hlsPersonalSessionReservation{
+	reservation := &hlsPersonalSessionReservation{
 		app:         app,
 		ownerUserID: ownerUserID,
-	}, nil
+	}
+	app.PersonalHLSMu.Unlock()
+
+	cleanupRemovedHLSSessions(removed)
+	return reservation, nil
 }
 
 // reclaimIdlePersonalHLSSessionForOwner evicts the owner's least-recently-used
@@ -352,7 +383,6 @@ func (app *Application) reservePersonalHLSSession(
 // never reclaimed. Returns whether a session was evicted.
 func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64) bool {
 	app.PersonalHLSMu.Lock()
-	defer app.PersonalHLSMu.Unlock()
 
 	maxExpiration := time.Now().Add(hlsPersonalSessionTTL - hlsIdlePermitReclaimThreshold).UnixNano()
 	for _, entry := range app.personalHLSSessionsForOwnerLocked(ownerUserID) {
@@ -370,10 +400,13 @@ func (app *Application) reclaimIdlePersonalHLSSessionForOwner(ownerUserID int64)
 			continue
 		}
 
-		app.removeHLSSession(entry.key)
+		session := app.deleteHLSSession(entry.key)
+		app.PersonalHLSMu.Unlock()
+		cleanupHLSSession(session)
 		app.Logger.Info("idle hls session reclaimed for transcode capacity", "owner_user_id", ownerUserID, "victim_key", entry.key)
 		return true
 	}
+	app.PersonalHLSMu.Unlock()
 	return false
 }
 
@@ -711,7 +744,7 @@ func (app *Application) GetOrCreateHLSSession(
 	if raw, ok := app.HLSSessionCache.Get(key); ok {
 		session, typeOK := raw.(*HLSSession)
 		if !typeOK || session == nil {
-			app.removeHLSSession(key)
+			app.removePersonalHLSSession(key)
 		} else if !canAccessPersonalHLSSession(session, movieID, ownerUserID) {
 			return nil, key, errHLSSessionNotFound
 		} else {
@@ -726,7 +759,7 @@ func (app *Application) GetOrCreateHLSSession(
 		if raw, ok := app.HLSSessionCache.Get(key); ok {
 			existing, typeOK := raw.(*HLSSession)
 			if !typeOK || existing == nil {
-				app.removeHLSSession(key)
+				app.removePersonalHLSSession(key)
 			} else if !canAccessPersonalHLSSession(existing, movieID, ownerUserID) {
 				return nil, errHLSSessionNotFound
 			} else {

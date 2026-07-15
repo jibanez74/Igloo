@@ -216,9 +216,189 @@ func TestSupportsIntelQSVScaleRequiresEncodeAndScaleSupport(t *testing.T) {
 				tt.mutate(&caps)
 			}
 
-			if got := caps.SupportsIntelQSVScale(); got != tt.want {
+			got := caps.SupportsIntelQSVScale()
+			if got != tt.want {
 				t.Fatalf("SupportsIntelQSVScale() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveHLSDeviceScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		configured     string
+		caps           Capabilities
+		wantConfigured string
+		wantEffective  string
+		wantReason     string
+	}{
+		{
+			name:           "blank defaults to CPU",
+			configured:     "  ",
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		},
+		{
+			name:           "CPU is normalized",
+			configured:     " CPU ",
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+		},
+		{
+			name:           "unprobed NVIDIA remains configured",
+			configured:     " NVIDIA ",
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		},
+		{
+			name:           "missing NVENC",
+			configured:     helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps:           Capabilities{Probed: true},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "does not list h264_nvenc",
+		},
+		{
+			name:       "usable NVENC",
+			configured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			caps: Capabilities{
+				Probed:                 true,
+				Encoders:               map[string]bool{"h264_nvenc": true},
+				H264NVENCRuntimeUsable: true,
+			},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_NVIDIA,
+		},
+		{
+			name:           "missing QSV",
+			configured:     helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps:           Capabilities{Probed: true},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "does not list h264_qsv",
+		},
+		{
+			name:       "usable QSV",
+			configured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			caps: Capabilities{
+				Probed:               true,
+				Encoders:             map[string]bool{"h264_qsv": true},
+				H264QSVRuntimeUsable: true,
+			},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_INTEL,
+		},
+		{
+			name:           "missing VideoToolbox",
+			configured:     helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			caps:           Capabilities{Probed: true},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "does not list h264_videotoolbox",
+		},
+		{
+			name:       "usable VideoToolbox",
+			configured: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			caps: Capabilities{
+				Probed:   true,
+				Encoders: map[string]bool{"h264_videotoolbox": true},
+			},
+			wantConfigured: helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_APPLE,
+		},
+		{
+			name:           "unknown falls back",
+			configured:     " Mystery ",
+			caps:           Capabilities{Probed: true},
+			wantConfigured: "mystery",
+			wantEffective:  helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
+			wantReason:     "unknown hardware acceleration device",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := ResolveHLSDevice(tt.configured, tt.caps)
+			if decision.Configured != tt.wantConfigured {
+				t.Fatalf("Configured = %q, want %q", decision.Configured, tt.wantConfigured)
+			}
+			if decision.Effective != tt.wantEffective {
+				t.Fatalf("Effective = %q, want %q", decision.Effective, tt.wantEffective)
+			}
+			if !strings.Contains(decision.Reason, tt.wantReason) {
+				t.Fatalf("Reason = %q, want substring %q", decision.Reason, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestCapabilityLookupsNormalizeNamesAndHandleNilMaps(t *testing.T) {
+	caps := Capabilities{
+		Encoders:       map[string]bool{"h264_nvenc": true},
+		Filters:        map[string]bool{"scale_cuda": true},
+		HWAccels:       map[string]bool{"cuda": true},
+		CLIOptions:     map[string]bool{"readrate": true},
+		FilterOptions:  map[string]map[string]bool{"scale_cuda": {"format": true}},
+		EncoderOptions: map[string]map[string]bool{"h264_qsv": {"look_ahead": true}},
+	}
+
+	if !caps.SupportsEncoder(" H264_NVENC ") || !caps.SupportsFilter(" SCALE_CUDA ") {
+		t.Fatal("encoder/filter names were not normalized")
+	}
+	if !caps.SupportsHWAccel(" CUDA ") || !caps.SupportsCLIOption(" READRATE ") {
+		t.Fatal("hardware/CLI option names were not normalized")
+	}
+	if !caps.SupportsFilterOption(" SCALE_CUDA ", " FORMAT ") {
+		t.Fatal("filter option names were not normalized")
+	}
+	if !caps.SupportsEncoderOption(" H264_QSV ", " LOOK_AHEAD ") {
+		t.Fatal("encoder option names were not normalized")
+	}
+
+	empty := Capabilities{}
+	if empty.SupportsEncoder("x") || empty.SupportsFilter("x") || empty.SupportsHWAccel("x") {
+		t.Fatal("nil capability maps reported support")
+	}
+	if empty.SupportsCLIOption("x") || empty.SupportsFilterOption("x", "y") {
+		t.Fatal("nil option maps reported support")
+	}
+	if empty.SupportsEncoderOption("x", "y") {
+		t.Fatal("nil encoder option map reported support")
+	}
+}
+
+func TestCapabilityParsersHandleHeadersMalformedRowsAndCase(t *testing.T) {
+	named := parseFFmpegNamedRows(`
+Encoders:
+ V..... H264_NVENC description
+ -bad rejected
+ X
+ .. name=value malformed
+ ... SCALE_CUDA V->V
+`)
+	if !named["h264_nvenc"] || !named["scale_cuda"] {
+		t.Fatalf("parsed named rows = %#v", named)
+	}
+	if named["rejected"] || named["name=value"] {
+		t.Fatalf("malformed rows were accepted: %#v", named)
+	}
+
+	hwaccels := parseFFmpegHWAccels("Hardware acceleration methods:\n CUDA \nQSV\n\n")
+	if !hwaccels["cuda"] || !hwaccels["qsv"] || len(hwaccels) != 2 {
+		t.Fatalf("parsed hardware accelerators = %#v", hwaccels)
+	}
+}
+
+func TestFFmpegHelpHasOptionRejectsBlankAndMalformedLines(t *testing.T) {
+	output := "\n   \n-readrate value\nreadrate_initial_burst value\n"
+	if ffmpegHelpHasOption(output, "") {
+		t.Fatal("blank option matched")
+	}
+	if !ffmpegHelpHasOption(output, " READRATE ") {
+		t.Fatal("dashed option did not match after normalization")
+	}
+	if ffmpegHelpHasOption(output, "rate") {
+		t.Fatal("partial option matched")
 	}
 }

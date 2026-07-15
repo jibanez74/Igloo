@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"igloo/cmd/internal/database"
 	applogger "igloo/cmd/internal/logger"
@@ -197,6 +199,41 @@ func TestCleanupStaleHLSTempDirsUsesConfiguredTranscodeDir(t *testing.T) {
 
 	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
 		t.Fatalf("expected stale HLS dir to be removed, stat err=%v", err)
+	}
+}
+
+func TestHLSSessionCacheExpirationDoesNotWaitForTeardown(t *testing.T) {
+	app := &Application{Wait: &sync.WaitGroup{}}
+	app.initRuntimeCaches()
+
+	session := &HLSSession{TempDir: t.TempDir()}
+	cleanupStarted, releaseCleanup := blockHLSSessionCleanup(t, session)
+	app.HLSSessionCache.Set("expired-session", session, time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+
+	deleteDone := make(chan struct{})
+	go func() {
+		app.HLSSessionCache.DeleteExpired()
+		close(deleteDone)
+	}()
+	waitForHLSSessionCleanupToBlock(t, cleanupStarted, releaseCleanup)
+	select {
+	case <-deleteDone:
+	default:
+		releaseCleanup()
+		t.Fatal("DeleteExpired waited for HLS session teardown")
+	}
+	_, cached := app.HLSSessionCache.Get("expired-session")
+	if cached {
+		releaseCleanup()
+		t.Fatal("expired session remained cached while teardown was blocked")
+	}
+
+	releaseCleanup()
+	cleanupHLSSession(session)
+	_, err := os.Stat(session.TempDir)
+	if !os.IsNotExist(err) {
+		t.Fatalf("expired session temp dir still exists after cleanup: %v", err)
 	}
 }
 

@@ -184,6 +184,7 @@ export default function VideoPlayer({
             }
 
             const isCapacityBusyError =
+              data.fatal &&
               (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
                 data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) &&
               data.response?.code === 503;

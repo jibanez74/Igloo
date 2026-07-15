@@ -23,13 +23,10 @@ type Capabilities struct {
 	H264NVENCRuntimeUsable         bool
 	H264NVENCProbeError            string
 	NvidiaCUDAScaleRuntimeUsable   bool
-	NvidiaCUDAScaleProbeError      string
 	NvidiaCUDATonemapRuntimeUsable bool
-	NvidiaCUDATonemapProbeError    string
 	H264QSVRuntimeUsable           bool
 	H264QSVProbeError              string
 	QSVScaleRuntimeUsable          bool
-	QSVScaleProbeError             string
 }
 
 type HLSDeviceDecision struct {
@@ -40,6 +37,39 @@ type HLSDeviceDecision struct {
 
 func (c Capabilities) SupportsEncoder(name string) bool {
 	return c.Encoders[strings.ToLower(strings.TrimSpace(name))]
+}
+
+func cloneCapabilities(source Capabilities) Capabilities {
+	cloned := source
+	cloned.Encoders = cloneBoolMap(source.Encoders)
+	cloned.Filters = cloneBoolMap(source.Filters)
+	cloned.HWAccels = cloneBoolMap(source.HWAccels)
+	cloned.CLIOptions = cloneBoolMap(source.CLIOptions)
+	cloned.FilterOptions = cloneNestedBoolMap(source.FilterOptions)
+	cloned.EncoderOptions = cloneNestedBoolMap(source.EncoderOptions)
+	return cloned
+}
+
+func cloneBoolMap(source map[string]bool) map[string]bool {
+	if source == nil {
+		return nil
+	}
+	cloned := make(map[string]bool, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneNestedBoolMap(source map[string]map[string]bool) map[string]map[string]bool {
+	if source == nil {
+		return nil
+	}
+	cloned := make(map[string]map[string]bool, len(source))
+	for key, value := range source {
+		cloned[key] = cloneBoolMap(value)
+	}
+	return cloned
 }
 
 func (c Capabilities) SupportsFilter(name string) bool {
@@ -200,12 +230,12 @@ func probeCapabilities(bin string) Capabilities {
 			caps.SupportsFilter("hwupload") &&
 			caps.SupportsFilter("scale_cuda") &&
 			caps.SupportsFilterOption("scale_cuda", "format") {
-			caps.NvidiaCUDAScaleRuntimeUsable, caps.NvidiaCUDAScaleProbeError = probeNvidiaCUDAScale(bin)
+			caps.NvidiaCUDAScaleRuntimeUsable = probeNvidiaCUDAScale(bin)
 		}
 		if caps.NvidiaCUDAScaleRuntimeUsable &&
 			caps.SupportsFilter("tonemap_cuda") &&
 			caps.SupportsNvidiaCUDATonemapOptions() {
-			caps.NvidiaCUDATonemapRuntimeUsable, caps.NvidiaCUDATonemapProbeError = probeNvidiaCUDATonemap(bin)
+			caps.NvidiaCUDATonemapRuntimeUsable = probeNvidiaCUDATonemap(bin)
 		}
 	}
 	if caps.SupportsEncoder("h264_qsv") {
@@ -214,7 +244,7 @@ func probeCapabilities(bin string) Capabilities {
 			caps.SupportsHWAccel("qsv") &&
 			caps.SupportsFilter("scale_qsv") &&
 			caps.SupportsFilterOption("scale_qsv", "format") {
-			caps.QSVScaleRuntimeUsable, caps.QSVScaleProbeError = probeQSVScale(bin)
+			caps.QSVScaleRuntimeUsable = probeQSVScale(bin)
 		}
 	}
 
@@ -252,6 +282,9 @@ func (c *Capabilities) recordFilterOptions(bin string, filter string, options []
 	if err != nil {
 		return
 	}
+	if c.FilterOptions == nil {
+		c.FilterOptions = map[string]map[string]bool{}
+	}
 	key := strings.ToLower(filter)
 	if c.FilterOptions[key] == nil {
 		c.FilterOptions[key] = map[string]bool{}
@@ -269,6 +302,9 @@ func (c *Capabilities) recordEncoderOptions(bin string, encoder string, options 
 	output, err := runFFmpegProbe(bin, "-h", "encoder="+encoder)
 	if err != nil {
 		return
+	}
+	if c.EncoderOptions == nil {
+		c.EncoderOptions = map[string]map[string]bool{}
 	}
 	key := strings.ToLower(encoder)
 	if c.EncoderOptions[key] == nil {
@@ -316,7 +352,7 @@ func probeH264NVENC(bin string) (bool, string) {
 	return true, ""
 }
 
-func probeNvidiaCUDAScale(bin string) (bool, string) {
+func probeNvidiaCUDAScale(bin string) bool {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
@@ -331,12 +367,12 @@ func probeNvidiaCUDAScale(bin string) (bool, string) {
 		"-",
 	)
 	if err != nil {
-		return false, compactProbeError(err)
+		return false
 	}
-	return true, ""
+	return true
 }
 
-func probeNvidiaCUDATonemap(bin string) (bool, string) {
+func probeNvidiaCUDATonemap(bin string) bool {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
@@ -351,9 +387,9 @@ func probeNvidiaCUDATonemap(bin string) (bool, string) {
 		"-",
 	)
 	if err != nil {
-		return false, compactProbeError(err)
+		return false
 	}
-	return true, ""
+	return true
 }
 
 func probeH264QSV(bin string) (bool, string) {
@@ -374,7 +410,7 @@ func probeH264QSV(bin string) (bool, string) {
 	return true, ""
 }
 
-func probeQSVScale(bin string) (bool, string) {
+func probeQSVScale(bin string) bool {
 	_, err := runFFmpegProbe(
 		bin,
 		"-v", "error",
@@ -389,15 +425,18 @@ func probeQSVScale(bin string) (bool, string) {
 		"-",
 	)
 	if err != nil {
-		return false, compactProbeError(err)
+		return false
 	}
-	return true, ""
+	return true
 }
 
 func runFFmpegProbe(bin string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ffmpegProbeTimeout)
 	defer cancel()
+	return runFFmpegProbeContext(ctx, bin, args...)
+}
 
+func runFFmpegProbeContext(ctx context.Context, bin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {

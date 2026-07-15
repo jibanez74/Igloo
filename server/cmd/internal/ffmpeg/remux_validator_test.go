@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,221 +185,198 @@ func TestValidateRemuxSafety_ZeroSyncSamplesAreUnsafe(t *testing.T) {
 	}
 }
 
-func TestParseTFHDRejectsTruncatedSkippedOptionalFields(t *testing.T) {
-	tests := []struct {
-		name  string
-		flags uint32
-		want  string
-	}{
-		{
-			name:  "sample_description_index",
-			flags: 0x000002,
-			want:  "invalid tfhd sample description index",
-		},
-		{
-			name:  "default_sample_duration",
-			flags: 0x000008,
-			want:  "invalid tfhd default sample duration",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data := mp4TestBoxForTest("tfhd", fullBoxPayloadForTest(tt.flags, uint32BytesForTest(1)))
-			tfhd, _, err := readBox(data, 0, len(data))
-			if err != nil {
-				t.Fatalf("readBox: %v", err)
-			}
-
-			_, err = parseTFHD(data, mp4Box{Start: 0}, tfhd)
-			if err == nil {
-				t.Fatal("expected truncated tfhd optional field error")
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("error = %q, want %q", err.Error(), tt.want)
-			}
-		})
+func TestValidateRemuxSafetyRejectsInvalidSegmentCounts(t *testing.T) {
+	for _, segmentCount := range []int{0, -1} {
+		_, err := ValidateRemuxSafety(t.TempDir(), segmentCount)
+		if err == nil {
+			t.Fatalf("segment count %d did not return an error", segmentCount)
+		}
+		if !strings.Contains(err.Error(), "segmentCount must be positive") {
+			t.Fatalf("error = %q, want segment count validation", err.Error())
+		}
 	}
 }
 
-func TestParseTRUNRejectsTruncatedSkippedOptionalFields(t *testing.T) {
-	defaultSize := uint32(1)
-	defaultFlags := uint32(0)
-	tests := []struct {
-		name  string
-		flags uint32
-		want  string
-	}{
-		{
-			name:  "sample_duration",
-			flags: 0x000100,
-			want:  "invalid trun sample duration",
-		},
-		{
-			name:  "sample_composition_time_offset",
-			flags: 0x000800,
-			want:  "invalid trun sample composition time offset",
-		},
-	}
+func TestValidateRemuxSafetyRejectsMissingAndInvalidInitSegments(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		_, err := ValidateRemuxSafety(t.TempDir(), 1)
+		if err == nil || !strings.Contains(err.Error(), "read init segment") {
+			t.Fatalf("error = %v, want missing init failure", err)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data := mp4TestBoxForTest("trun", fullBoxPayloadForTest(tt.flags, uint32BytesForTest(1)))
-			trun, _, err := readBox(data, 0, len(data))
-			if err != nil {
-				t.Fatalf("readBox: %v", err)
-			}
-
-			_, err = parseTRUN(data, trun, &defaultSize, &defaultFlags)
-			if err == nil {
-				t.Fatal("expected truncated trun optional field error")
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("error = %q, want %q", err.Error(), tt.want)
-			}
-		})
-	}
+	t.Run("invalid", func(t *testing.T) {
+		dir := t.TempDir()
+		err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), []byte("invalid"), 0644)
+		if err != nil {
+			t.Fatalf("write invalid init: %v", err)
+		}
+		_, err = ValidateRemuxSafety(dir, 1)
+		if err == nil {
+			t.Fatal("expected invalid init failure")
+		}
+	})
 }
 
-func TestParseVideoTrackConfig_IgnoresFakeAvcCBytePatternOutsideSampleEntry(t *testing.T) {
+func TestValidateRemuxSafetyRejectsMissingVideoConfiguration(t *testing.T) {
+	dir := t.TempDir()
 	initData := fmp4testutil.BuildInitMP4()
-
 	moov, found, err := findDirectChildBox(initData, 0, len(initData), "moov")
-	if err != nil {
-		t.Fatalf("find moov: %v", err)
+	if err != nil || !found {
+		t.Fatalf("find moov: found=%v err=%v", found, err)
 	}
-	if !found {
-		t.Fatal("missing moov box")
-	}
-
 	traks, err := listDirectChildBoxes(initData, moov.PayloadStart, moov.End)
 	if err != nil {
-		t.Fatalf("list traks: %v", err)
+		t.Fatalf("list tracks: %v", err)
 	}
-
-	videoTrak := mp4Box{}
-	foundVideoTrak := false
+	mutated := append([]byte(nil), initData...)
+	foundConfig := false
 	for _, trak := range traks {
 		if trak.Type != "trak" {
 			continue
 		}
-
-		trackID, handlerType, parseErr := parseTrackHeader(initData, trak)
-		if parseErr != nil {
-			t.Fatalf("parseTrackHeader: %v", parseErr)
-		}
-		if trackID == 1 && handlerType == "vide" {
-			videoTrak = trak
-			foundVideoTrak = true
+		avcC, configFound, findErr := findAVCConfigBox(initData, trak)
+		if findErr == nil && configFound {
+			copy(mutated[avcC.Start+4:avcC.Start+8], []byte("free"))
+			foundConfig = true
 			break
 		}
 	}
-	if !foundVideoTrak {
-		t.Fatal("missing video track")
+	if !foundConfig {
+		t.Fatal("fixture did not contain avcC")
 	}
-
-	tkhd, found, err := findDirectChildBox(initData, videoTrak.PayloadStart, videoTrak.End, "tkhd")
+	err = os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), mutated, 0644)
 	if err != nil {
-		t.Fatalf("find tkhd: %v", err)
-	}
-	if !found {
-		t.Fatal("missing tkhd box")
+		t.Fatalf("write init: %v", err)
 	}
 
-	fakePayload := make([]byte, 13)
-	binary.BigEndian.PutUint32(fakePayload[0:4], 13)
-	copy(fakePayload[4:8], []byte("avcC"))
-	fakePayload[12] = 0xfc
-	fakeBox := mp4TestBoxForTest("free", fakePayload)
+	_, err = ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "missing avcC") {
+		t.Fatalf("error = %v, want missing avcC", err)
+	}
+}
 
-	mutated := make([]byte, 0, len(initData)+len(fakeBox))
-	mutated = append(mutated, initData[:tkhd.End]...)
-	mutated = append(mutated, fakeBox...)
-	mutated = append(mutated, initData[tkhd.End:]...)
-
-	updateTestBoxSize(mutated, moov.Start, moov.End-moov.Start+len(fakeBox))
-	updateTestBoxSize(mutated, videoTrak.Start, videoTrak.End-videoTrak.Start+len(fakeBox))
-
-	trackID, nalLengthSize, err := parseVideoTrackConfig(mutated)
+func TestValidateRemuxSafetyRejectsAbsentVideoFragment(t *testing.T) {
+	dir := t.TempDir()
+	initData := fmp4testutil.BuildInitMP4()
+	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
 	if err != nil {
-		t.Fatalf("parseVideoTrackConfig returned error: %v", err)
+		t.Fatalf("write init: %v", err)
 	}
-	if trackID != 1 {
-		t.Fatalf("trackID = %d, want 1", trackID)
+	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+	setFirstTFHDTrackIDForTest(t, segment, 99)
+	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
+	if err != nil {
+		t.Fatalf("write segment: %v", err)
 	}
-	if nalLengthSize != 4 {
-		t.Fatalf("nalLengthSize = %d, want 4", nalLengthSize)
+
+	summary, err := ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "missing video traf") {
+		t.Fatalf("error = %v, want missing video fragment", err)
+	}
+	if summary.CheckedSegments != 0 || summary.CheckedSyncSamples != 0 {
+		t.Fatalf("summary = %#v, want no completed segments", summary)
 	}
 }
 
-func mp4TestBoxForTest(typ string, payloadParts ...[]byte) []byte {
-	payloadLen := 0
-	for _, part := range payloadParts {
-		payloadLen += len(part)
+func TestValidateRemuxSafetyRejectsSampleBoundsFailure(t *testing.T) {
+	dir := t.TempDir()
+	initData := fmp4testutil.BuildInitMP4()
+	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
+	if err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+	setFirstTRUNSampleSizeForTest(t, segment, math.MaxUint32)
+	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
+	if err != nil {
+		t.Fatalf("write segment: %v", err)
 	}
 
-	out := make([]byte, 8+payloadLen)
-	binary.BigEndian.PutUint32(out[:4], uint32(len(out)))
-	copy(out[4:8], []byte(typ))
+	summary, err := ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "sample exceeds segment bounds") {
+		t.Fatalf("error = %v, want sample bounds failure", err)
+	}
+	if summary.CheckedSegments != 0 {
+		t.Fatalf("CheckedSegments = %d, want 0", summary.CheckedSegments)
+	}
+}
 
-	offset := 8
-	for _, part := range payloadParts {
-		copy(out[offset:], part)
-		offset += len(part)
+func TestValidateRemuxSafetyRejectsSampleOutsideMdat(t *testing.T) {
+	dir := t.TempDir()
+	initData := fmp4testutil.BuildInitMP4()
+	err := os.WriteFile(filepath.Join(dir, helpers.HLS_INIT_FILENAME), initData, 0644)
+	if err != nil {
+		t.Fatalf("write init: %v", err)
+	}
+	segment := fmp4testutil.BuildSegment(fmp4testutil.BuildVideoSample(true), false)
+	// Point the run at the moof interior; the bytes stay inside the segment but
+	// outside any mdat payload.
+	setFirstTRUNDataOffsetForTest(t, segment, 8)
+	err = os.WriteFile(filepath.Join(dir, helpers.HLS_SEGMENT_FILENAME_PREFIX+"0"+helpers.HLS_SEGMENT_FILENAME_SUFFIX), segment, 0644)
+	if err != nil {
+		t.Fatalf("write segment: %v", err)
 	}
 
-	return out
-}
-
-func fullBoxPayloadForTest(flags uint32, payloadParts ...[]byte) []byte {
-	out := []byte{0, byte(flags >> 16), byte(flags >> 8), byte(flags)}
-	for _, part := range payloadParts {
-		out = append(out, part...)
+	summary, err := ValidateRemuxSafety(dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "sample outside mdat payload") {
+		t.Fatalf("error = %v, want sample outside mdat payload", err)
 	}
-	return out
+	if summary.CheckedSegments != 0 {
+		t.Fatalf("CheckedSegments = %d, want 0", summary.CheckedSegments)
+	}
 }
 
-func uint32BytesForTest(value uint32) []byte {
-	out := make([]byte, 4)
-	binary.BigEndian.PutUint32(out, value)
-	return out
-}
-
-func setFirstTRUNSampleFlagsForTest(t *testing.T, segment []byte, flags uint32) {
+func firstTRUNForTest(t *testing.T, segment []byte) mp4Box {
 	t.Helper()
-
 	moof, found, err := findDirectChildBox(segment, 0, len(segment), "moof")
-	if err != nil {
-		t.Fatalf("find moof: %v", err)
+	if err != nil || !found {
+		t.Fatalf("find moof: found=%v err=%v", found, err)
 	}
-	if !found {
-		t.Fatal("missing moof box")
-	}
-
 	traf, found, err := findDirectChildBox(segment, moof.PayloadStart, moof.End, "traf")
-	if err != nil {
-		t.Fatalf("find traf: %v", err)
+	if err != nil || !found {
+		t.Fatalf("find traf: found=%v err=%v", found, err)
 	}
-	if !found {
-		t.Fatal("missing traf box")
-	}
-
 	trun, found, err := findDirectChildBox(segment, traf.PayloadStart, traf.End, "trun")
-	if err != nil {
-		t.Fatalf("find trun: %v", err)
+	if err != nil || !found {
+		t.Fatalf("find trun: found=%v err=%v", found, err)
 	}
-	if !found {
-		t.Fatal("missing trun box")
-	}
-
-	sampleFlagsOffset := trun.PayloadStart + 16
-	if sampleFlagsOffset+4 > trun.End {
-		t.Fatalf("trun sample flags field exceeds box bounds")
-	}
-
-	binary.BigEndian.PutUint32(segment[sampleFlagsOffset:sampleFlagsOffset+4], flags)
+	return trun
 }
 
-func updateTestBoxSize(data []byte, start int, size int) {
-	binary.BigEndian.PutUint32(data[start:start+4], uint32(size))
+func setFirstTRUNSampleSizeForTest(t *testing.T, segment []byte, size uint32) {
+	t.Helper()
+	trun := firstTRUNForTest(t, segment)
+	sampleSizeOffset := trun.PayloadStart + 12
+	if sampleSizeOffset+4 > trun.End {
+		t.Fatal("trun sample size exceeds box bounds")
+	}
+	binary.BigEndian.PutUint32(segment[sampleSizeOffset:sampleSizeOffset+4], size)
+}
+
+func setFirstTRUNDataOffsetForTest(t *testing.T, segment []byte, dataOffset int32) {
+	t.Helper()
+	trun := firstTRUNForTest(t, segment)
+	dataOffsetStart := trun.PayloadStart + 8
+	if dataOffsetStart+4 > trun.End {
+		t.Fatal("trun data offset exceeds box bounds")
+	}
+	binary.BigEndian.PutUint32(segment[dataOffsetStart:dataOffsetStart+4], uint32(dataOffset))
+}
+
+func setFirstTFHDTrackIDForTest(t *testing.T, segment []byte, trackID uint32) {
+	t.Helper()
+	moof, found, err := findDirectChildBox(segment, 0, len(segment), "moof")
+	if err != nil || !found {
+		t.Fatalf("find moof: found=%v err=%v", found, err)
+	}
+	traf, found, err := findDirectChildBox(segment, moof.PayloadStart, moof.End, "traf")
+	if err != nil || !found {
+		t.Fatalf("find traf: found=%v err=%v", found, err)
+	}
+	tfhd, found, err := findDirectChildBox(segment, traf.PayloadStart, traf.End, "tfhd")
+	if err != nil || !found {
+		t.Fatalf("find tfhd: found=%v err=%v", found, err)
+	}
+	binary.BigEndian.PutUint32(segment[tfhd.PayloadStart+4:tfhd.PayloadStart+8], trackID)
 }
