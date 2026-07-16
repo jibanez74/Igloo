@@ -428,7 +428,7 @@ describe("movie details route motion", () => {
     const { container } = await renderMovieDetailsRoute("/movies/57/");
 
     expect(
-      await screen.findByRole("heading", { name: /Arrival/i }),
+      await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
     ).toBeInTheDocument();
     expect(screen.getByText("1 hr 56 min")).toBeInTheDocument();
 
@@ -442,7 +442,8 @@ describe("movie details route motion", () => {
       (element) =>
         element !== heroWrapper &&
         element !== lowerWrapper &&
-        element.className === DETAIL_PAGE_CONTENT_ENTER_CLASS,
+        element.className.startsWith(DETAIL_PAGE_CONTENT_ENTER_CLASS) &&
+        !element.className.includes("delay-"),
     );
 
     expect(wrappers).toHaveLength(3);
@@ -466,7 +467,7 @@ describe("movie details route motion", () => {
     const { container, router } = await renderMovieDetailsRoute("/movies/57/");
 
     expect(
-      await screen.findByRole("heading", { name: /Arrival/i }),
+      await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Arrival overview for motion verification."),
@@ -484,7 +485,7 @@ describe("movie details route motion", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /Heat/i }),
+        screen.getByRole("heading", { name: /Heat/i, level: 1 }),
       ).toBeInTheDocument();
     });
 
@@ -521,7 +522,7 @@ describe("movie details route playback settings sync", () => {
     await renderMovieDetailsRouteWithQueryClient("/movies/57/", queryClient);
 
     expect(
-      await screen.findByRole("heading", { name: /Arrival/i }),
+      await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
     ).toBeInTheDocument();
     expect(getPlayLinkMode()).toBe("1080p_8mbps");
   });
@@ -530,7 +531,7 @@ describe("movie details route playback settings sync", () => {
     const { queryClient } = await renderMovieDetailsRoute("/movies/57/");
 
     expect(
-      await screen.findByRole("heading", { name: /Arrival/i }),
+      await screen.findByRole("heading", { name: /Arrival/i, level: 1 }),
     ).toBeInTheDocument();
     expect(getPlayLinkMode()).toBe("remux");
 

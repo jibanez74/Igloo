@@ -213,7 +213,7 @@ function formatLanguageName(
     : code.charAt(0).toUpperCase() + code.slice(1);
 }
 
-function describePlaybackChannelLayout(
+export function describePlaybackChannelLayout(
   channelLayout: string | undefined,
   channels: number,
 ): string {

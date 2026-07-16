@@ -1,4 +1,6 @@
 import { Star, Clock, Calendar, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import { audienceRatingClass, criticRatingClass } from "@/lib/rating";
 import type { MovieDetailsMetadataChipsProps } from "@/types";
@@ -11,6 +13,7 @@ export default function MovieDetailsMetadataChips({
   runTimeMins,
   releaseDateStr,
   tmdbVoteAverage,
+  capabilityBadges,
 }: MovieDetailsMetadataChipsProps) {
   const spokenRuntime = formatSpokenRuntimeMinutes(runTimeMins);
 
@@ -21,11 +24,14 @@ export default function MovieDetailsMetadataChips({
     >
       {tmdbVoteAverage != null && tmdbVoteAverage > 0 && (
         <li
-          className="flex items-center gap-2 rounded-full border border-primary/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-primary"
           aria-label={`TMDB user score: ${tmdbVoteAverage.toFixed(1)} out of 10`}
         >
-          <span className="text-muted-foreground">TMDB</span>
-          <span aria-hidden="true">{tmdbVoteAverage.toFixed(1)}</span>
+          <Badge variant="outline" className={OVER_MEDIA_BADGE_CLASS}>
+            <span className="text-white/70">TMDB</span>
+            <span aria-hidden="true" className="font-semibold">
+              {tmdbVoteAverage.toFixed(1)}
+            </span>
+          </Badge>
         </li>
       )}
       {criticRating != null && criticRating > 0 && (
@@ -47,13 +53,28 @@ export default function MovieDetailsMetadataChips({
         </li>
       )}
       {certificationLabel && (
-        <li className="rounded-full border border-primary/35 bg-muted/90 px-3 py-1.5 text-sm font-semibold text-primary">
-          {certificationLabel}
+        <li>
+          <Badge
+            variant="outline"
+            className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
+          >
+            {certificationLabel}
+          </Badge>
         </li>
       )}
+      {capabilityBadges?.map(badge => (
+        <li key={badge.label} aria-label={badge.description}>
+          <Badge
+            variant="outline"
+            className={`${OVER_MEDIA_BADGE_CLASS} font-semibold`}
+          >
+            <span aria-hidden="true">{badge.label}</span>
+          </Badge>
+        </li>
+      ))}
       {runtime && (
-        <li className="flex items-center gap-1.5 text-muted-foreground">
-          <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
+        <li className="flex items-center gap-1.5 text-white/80">
+          <Clock className="size-4" aria-hidden="true" />
           <time
             dateTime={runTimeMins != null ? `PT${runTimeMins}M` : undefined}
             aria-label={`Runtime: ${spokenRuntime ?? runtime}`}
@@ -63,8 +84,8 @@ export default function MovieDetailsMetadataChips({
         </li>
       )}
       {releaseDateStr && (
-        <li className="flex items-center gap-1.5 text-muted-foreground">
-          <Calendar className="size-4 text-muted-foreground" aria-hidden="true" />
+        <li className="flex items-center gap-1.5 text-white/80">
+          <Calendar className="size-4" aria-hidden="true" />
           <time dateTime={releaseDateStr}>{formatDate(releaseDateStr)}</time>
         </li>
       )}

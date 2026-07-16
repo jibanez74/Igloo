@@ -49,6 +49,10 @@
       "description": "TMDB-backed movie metadata"
     },
     {
+      "name": "YouTube",
+      "description": "YouTube-backed video thumbnails"
+    },
+    {
       "name": "Spotify",
       "description": "Spotify-backed music metadata"
     },
@@ -1119,6 +1123,48 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/api/youtube/thumbnails/{key}": {
+      "get": {
+        "tags": [
+          "YouTube"
+        ],
+        "summary": "Proxy a YouTube video thumbnail",
+        "operationId": "proxyYouTubeThumbnail",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/YouTubeThumbnailKeyPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "YouTube thumbnail image bytes.",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
           }
         }
       }
@@ -4084,6 +4130,16 @@
         "schema": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._-]+$"
+        }
+      },
+      "YouTubeThumbnailKeyPath": {
+        "name": "key",
+        "in": "path",
+        "required": true,
+        "description": "Safe YouTube video key.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
         }
       },
       "HLSProfilePath": {
