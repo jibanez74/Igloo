@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { trackBrowserIssues } from "./e2e-browser-issues";
 import { MOVIES_PER_PAGE } from "../src/lib/constants";
+import type { MovieWatchProgressType } from "../src/types";
 
 type NullableString = {
   String: string;
@@ -66,6 +67,12 @@ const moviesAllPath =
 const movieId = 711;
 const chapterStartSeconds = 372;
 const extraVideoKey = "signal-fire-trailer";
+const noWatchProgress: MovieWatchProgressType = {
+  progress_sec: null,
+  duration_sec: null,
+  watched: false,
+  updated_at: null,
+};
 
 const libraryMovie = {
   id: movieId,
@@ -213,7 +220,10 @@ const technicalDetailsPayload = {
   ],
 };
 
-async function mockMovieDetailsApi(page: Page) {
+async function mockMovieDetailsApi(
+  page: Page,
+  watchProgress: MovieWatchProgressType = noWatchProgress,
+) {
   const unexpectedApiRequests: string[] = [];
 
   await page.route("**/api/**", async route => {
@@ -303,12 +313,7 @@ async function mockMovieDetailsApi(page: Page) {
     }
 
     if (url.pathname === `/api/movies/${movieId}/watch-progress`) {
-      await fulfillJSON(route, apiResponse({
-        progress_sec: null,
-        duration_sec: null,
-        watched: false,
-        updated_at: null,
-      }));
+      await fulfillJSON(route, apiResponse(watchProgress));
       return;
     }
 
@@ -481,3 +486,68 @@ test("movie details page renders the mocked success path from the movies index",
 
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
+
+test("movie details page renders eligible resume progress", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockMovieDetailsApi(page, {
+    progress_sec: 1890,
+    duration_sec: 7560,
+    watched: false,
+    updated_at: "2026-07-16T12:00:00Z",
+  });
+
+  await page.goto(`/movies/${movieId}`);
+
+  const minutesLeft = page.getByText("95 min left", { exact: true });
+  await expect(minutesLeft).toBeVisible();
+
+  const progressFill = minutesLeft
+    .locator("..")
+    .locator(":scope > div[aria-hidden='true'] > div");
+  await expect(progressFill).toHaveAttribute("style", /width:\s*25%/);
+
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+for (const { state, watchProgress, watchedButtonName } of [
+  {
+    state: "watched",
+    watchProgress: {
+      progress_sec: 1890,
+      duration_sec: 7560,
+      watched: true,
+      updated_at: "2026-07-16T12:00:00Z",
+    },
+    watchedButtonName: "Mark movie as unwatched",
+  },
+  {
+    state: "completed",
+    watchProgress: {
+      progress_sec: 980,
+      duration_sec: 1000,
+      watched: false,
+      updated_at: "2026-07-16T12:00:00Z",
+    },
+    watchedButtonName: "Mark movie as watched",
+  },
+] satisfies {
+  state: string;
+  watchProgress: MovieWatchProgressType;
+  watchedButtonName: string;
+}[]) {
+  test(`movie details page suppresses resume progress when ${state}`, async ({
+    page,
+  }) => {
+    const browserIssues = trackBrowserIssues(page);
+    const unexpectedApiRequests = await mockMovieDetailsApi(page, watchProgress);
+
+    await page.goto(`/movies/${movieId}`);
+
+    await expect(
+      page.getByRole("button", { name: watchedButtonName }),
+    ).toBeEnabled();
+    await expect(page.getByText(/^\d+ min left$/)).toHaveCount(0);
+
+    assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+  });
+}
