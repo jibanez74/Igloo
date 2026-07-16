@@ -128,6 +128,7 @@ export const MOVIES_PLAYLISTS_TAB_SEARCH = {
 // TMDB image proxy settings. API responses provide paths only; the frontend
 // builds same-origin proxy URLs with these sizes.
 export const TMDB_IMAGE_BASE = "/api/tmdb/images";
+export const YOUTUBE_THUMBNAIL_BASE = "/api/youtube/thumbnails";
 export const TMDB_BACKDROP_SIZE = "w1280";
 export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
@@ -399,6 +400,40 @@ export const MOTION_DECORATIVE_PING_CLASS =
 export const MOTION_DECORATIVE_BOUNCE_CLASS =
   "animate-bounce motion-reduce:animate-none";
 export const DETAIL_PAGE_CONTENT_ENTER_CLASS = MOTION_PAGE_ENTER_CLASS;
+/**
+ * Detail-page hero scrims (design-system §1.2 over-media exception: literal
+ * black for text legibility on the backdrop; the fade tracks the theme so the
+ * hero blends into the page canvas). Shared by MovieDetailsBackdrop and
+ * MovieDetailsSkeleton. Static gradients — no motion involved.
+ */
+export const DETAIL_HERO_SCRIM_SIDE_CLASS =
+  "absolute inset-0 hidden bg-linear-to-r from-black/70 via-black/35 to-transparent lg:block";
+export const DETAIL_HERO_SCRIM_BOTTOM_CLASS =
+  "absolute inset-x-0 bottom-0 h-3/5 bg-linear-to-t from-black/90 via-black/50 to-transparent";
+export const DETAIL_HERO_SCRIM_FADE_CLASS =
+  "absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-background to-transparent";
+/**
+ * Detail-page hero geometry, shared by MovieDetailsHero and
+ * MovieDetailsSkeleton so the skeleton matches the real layout exactly
+ * (design-system §3.4). Full-bleed backdrop shell + bottom-anchored content.
+ */
+export const DETAIL_HERO_SHELL_CLASS =
+  "relative -mx-4 flex min-h-[26rem] flex-col justify-end overflow-hidden sm:-mx-6 sm:min-h-[30rem] lg:-mx-8 lg:min-h-[min(60svh,44rem)]";
+export const DETAIL_HERO_CONTENT_CLASS =
+  "relative z-10 w-full px-4 pt-40 pb-6 text-center sm:px-6 sm:pb-8 lg:max-w-4xl lg:px-8 lg:pb-12 lg:text-left";
+/**
+ * Extra bottom padding for heroes without an actions slot: keeps the
+ * bottom-most text line clear of the DETAIL_HERO_SCRIM_FADE_CLASS gradient
+ * (h-24), whose from-background stop is near-white in the light theme.
+ */
+export const DETAIL_HERO_CONTENT_NO_ACTIONS_CLASS =
+  "pb-24 sm:pb-24 lg:pb-24";
+/**
+ * Quiet informational chips (certification, capability badges) rendered over
+ * the hero backdrop — literal white/black per design-system §1.2.
+ */
+export const OVER_MEDIA_BADGE_CLASS =
+  "border-white/25 bg-black/30 px-3 py-1 text-sm text-white/90";
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
 /** Shared media-card chrome: tokenized surface + glacier hover glow. */

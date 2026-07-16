@@ -23,18 +23,15 @@ import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
 import CastSection from "@/components/CastSection";
-import MovieDetailsBackdrop from "@/components/MovieDetailsBackdrop";
+import MovieDetailsHero from "@/components/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/MovieDetailsSkipLinks";
-import MovieDetailsPosterBlock from "@/components/MovieDetailsPosterBlock";
-import MovieDetailsTitleHeading from "@/components/MovieDetailsTitleHeading";
 import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
-import MovieDetailsGenresList from "@/components/MovieDetailsGenresList";
 import MovieDetailsHeroActions from "@/components/MovieDetailsHeroActions";
+import MovieDetailsResumeProgress from "@/components/MovieDetailsResumeProgress";
 import MovieOverviewSection from "@/components/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
-import MovieAdditionalDetailsSection from "@/components/MovieAdditionalDetailsSection";
+import MovieAboutSection from "@/components/MovieAboutSection";
 import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
-import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
 import MovieChaptersSection from "@/components/MovieChaptersSection";
 import {
   getAvailableModes,
@@ -42,6 +39,7 @@ import {
   getPrimaryVideoStream,
   resolvePlaybackSettings
 } from "@/lib/playback";
+import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type { PlaybackSettings } from "@/types/playback";
 import { cn } from "@/lib/utils";
 import type {
@@ -247,6 +245,8 @@ function LibraryMovieDetailsContent({
 
   const showCrewSection = crew.length > 0;
 
+  const capabilityBadges = deriveMediaCapabilityBadges(techData?.data);
+
   return (
     <article
       aria-labelledby="movie-title"
@@ -260,100 +260,77 @@ function LibraryMovieDetailsContent({
         castNonEmpty={castForSection.length > 0}
         chaptersNonEmpty={chapters.length > 0}
         extrasNonEmpty={youtubeExtraVideos.length > 0}
-        companiesNonEmpty={production_companies.length > 0}
       />
 
-      <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MovieDetailsBackdrop backdropUrl={backdropUrl} />
-      </div>
-
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
-        <div
-          className={cn(
-            DETAIL_PAGE_CONTENT_ENTER_CLASS,
-            "delay-75 motion-reduce:delay-0",
-          )}
-        >
-          <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-            <MovieDetailsPosterBlock
-              posterUrl={posterUrl}
-              movieTitle={movie.title}
-            />
-
-            <div className="min-w-0 flex-1 text-center lg:text-left">
-              <MovieDetailsTitleHeading
-                title={movie.title}
-                releaseYear={releaseYear}
-                releaseDateStr={releaseDateStr}
-              />
-
-              {tagLine && (
-                <p className="mt-2 max-w-full text-base wrap-break-word text-muted-foreground italic sm:text-lg">
-                  <q>{tagLine}</q>
-                </p>
-              )}
-
-              <MovieDetailsMetadataChips
-                criticRating={criticRating}
-                audienceRating={audienceRating}
-                certificationLabel={certificationLabel}
-                runtime={runtime}
-                runTimeMins={runTimeMins}
-                releaseDateStr={releaseDateStr}
-              />
-
-              <MovieDetailsGenresList genres={genres} />
-
-              <MovieDetailsHeroActions
-                movieId={movieId}
-                movie={movie}
-                movieTitle={movie.title}
-                user={user}
-                playbackSettings={playbackSettings}
-                onPlaybackSettingsChange={setPlaybackSettings}
-                playbackSettingsOpen={playbackSettingsOpen}
-                onPlaybackSettingsOpenChange={setPlaybackSettingsOpen}
-                technicalDetailsOpen={technicalDetailsOpen}
-                onTechnicalDetailsOpenChange={setTechnicalDetailsOpen}
-                editOpen={editOpen}
-                onEditOpenChange={setEditOpen}
-                deleteOpen={deleteOpen}
-                onDeleteOpenChange={setDeleteOpen}
-              />
-
-              <MovieOverviewSection overview={overview} />
-              <MovieKeyCrewSection crew={crew} />
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={cn(
-            DETAIL_PAGE_CONTENT_ENTER_CLASS,
-            "delay-150 motion-reduce:delay-0",
-          )}
-        >
-          {castForSection.length > 0 && <CastSection cast={castForSection} />}
-
-          <MovieChaptersSection
-            chapters={chapters}
+      <MovieDetailsHero
+        backdropUrl={backdropUrl}
+        posterUrl={posterUrl}
+        movieTitle={movie.title}
+        releaseYear={releaseYear}
+        releaseDateStr={releaseDateStr}
+        tagLine={tagLine}
+        genres={genres}
+        metadataSlot={
+          <MovieDetailsMetadataChips
+            criticRating={criticRating}
+            audienceRating={audienceRating}
+            certificationLabel={certificationLabel}
+            runtime={runtime}
+            runTimeMins={runTimeMins}
+            releaseDateStr={releaseDateStr}
+            capabilityBadges={capabilityBadges}
+          />
+        }
+        progressSlot={<MovieDetailsResumeProgress movieId={movieId} />}
+        actionsSlot={
+          <MovieDetailsHeroActions
             movieId={movieId}
+            movie={movie}
+            movieTitle={movie.title}
+            user={user}
             playbackSettings={playbackSettings}
+            onPlaybackSettingsChange={setPlaybackSettings}
+            playbackSettingsOpen={playbackSettingsOpen}
+            onPlaybackSettingsOpenChange={setPlaybackSettingsOpen}
+            technicalDetailsOpen={technicalDetailsOpen}
+            onTechnicalDetailsOpenChange={setTechnicalDetailsOpen}
+            editOpen={editOpen}
+            onEditOpenChange={setEditOpen}
+            deleteOpen={deleteOpen}
+            onDeleteOpenChange={setDeleteOpen}
           />
+        }
+      />
 
-          <MovieAdditionalDetailsSection
-            language={language}
-            budget={budget}
-            revenue={revenue}
-          />
+      <div
+        className={cn(
+          DETAIL_PAGE_CONTENT_ENTER_CLASS,
+          "delay-150 motion-reduce:delay-0",
+        )}
+      >
+        <MovieOverviewSection overview={overview} />
+        <MovieKeyCrewSection crew={crew} />
 
-          <MovieExtraVideosSection
-            videos={youtubeExtraVideos}
-            movieId={movieId}
-          />
+        {castForSection.length > 0 && <CastSection cast={castForSection} />}
 
-          <MovieProductionCompaniesSection companies={production_companies} />
-        </div>
+        <MovieChaptersSection
+          chapters={chapters}
+          movieId={movieId}
+          playbackSettings={playbackSettings}
+        />
+
+        <MovieExtraVideosSection
+          videos={youtubeExtraVideos}
+          movieId={movieId}
+        />
+
+        <MovieAboutSection
+          movieTitle={movie.title}
+          language={language}
+          budget={budget}
+          revenue={revenue}
+          companies={production_companies}
+        />
       </div>
     </article>
   );

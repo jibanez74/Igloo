@@ -15,17 +15,13 @@ import {
 import MediaNotFound from "@/components/MediaNotFound";
 import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
 import CastSection from "@/components/CastSection";
-import MovieDetailsBackdrop from "@/components/MovieDetailsBackdrop";
+import MovieDetailsHero from "@/components/MovieDetailsHero";
 import MovieDetailsSkipLinks from "@/components/MovieDetailsSkipLinks";
-import MovieDetailsPosterBlock from "@/components/MovieDetailsPosterBlock";
-import MovieDetailsTitleHeading from "@/components/MovieDetailsTitleHeading";
 import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
-import MovieDetailsGenresList from "@/components/MovieDetailsGenresList";
 import MovieOverviewSection from "@/components/MovieOverviewSection";
 import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
-import MovieAdditionalDetailsSection from "@/components/MovieAdditionalDetailsSection";
+import MovieAboutSection from "@/components/MovieAboutSection";
 import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
-import MovieProductionCompaniesSection from "@/components/MovieProductionCompaniesSection";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
@@ -196,106 +192,81 @@ function MovieDetailsContent({ movie }: { movie: MovieDetailsType }) {
         castNonEmpty={castList.length > 0}
         chaptersNonEmpty={false}
         extrasNonEmpty={youtubeExtraVideos.length > 0}
-        companiesNonEmpty={productionCompanies.length > 0}
       />
 
-      <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
-        <MovieDetailsBackdrop backdropUrl={backdropUrl} />
-      </div>
-
-      <div className="relative z-10 -mt-20 sm:-mt-24 md:-mt-28 lg:-mt-32">
-        <div
-          className={cn(
-            DETAIL_PAGE_CONTENT_ENTER_CLASS,
-            "delay-75 motion-reduce:delay-0",
-          )}
-        >
-          <div className="flex min-w-0 flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-10">
-            <MovieDetailsPosterBlock
-              posterUrl={posterUrl}
-              movieTitle={movie.title}
-            />
-
-            <div className="min-w-0 flex-1 text-center lg:text-left">
-              <MovieDetailsTitleHeading
-                title={movie.title}
-                releaseYear={releaseYear}
-                releaseDateStr={releaseDateStr}
-              />
-
-              {movie.tagline && (
-                <p className="mt-2 max-w-full text-base wrap-break-word text-muted-foreground italic sm:text-lg">
-                  <q>{movie.tagline}</q>
-                </p>
-              )}
-
-              <MovieDetailsMetadataChips
-                criticRating={null}
-                audienceRating={null}
-                certificationLabel={null}
-                runtime={runtime}
-                runTimeMins={movie.runtime ?? null}
-                releaseDateStr={releaseDateStr}
-                tmdbVoteAverage={
-                  movie.vote_average > 0 ? movie.vote_average : null
-                }
-              />
-
-              <MovieDetailsGenresList genres={genresForList} />
-
-              {trailer && (
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start">
-                  <Link
-                    to="/trailer"
-                    search={{
-                      mediaType: "movie",
-                      mediaId: movie.id,
-                      returnTo: trailerReturnPath,
-                    }}
-                    mask={{
-                      to: "/movies/in-theaters/$id",
-                      params: { id: String(movie.id) },
-                    }}
-                    className={cn(
-                      buttonVariants({ variant: "accent", size: "lg" }),
-                      "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
-                    )}
-                  >
-                    <Play className="size-4 fill-current" aria-hidden="true" />
-                    Play Trailer
-                  </Link>
-                </div>
-              )}
-
-              <MovieOverviewSection overview={movie.overview || null} />
-              <MovieKeyCrewSection crew={crewForSection} />
+      <MovieDetailsHero
+        backdropUrl={backdropUrl}
+        posterUrl={posterUrl}
+        movieTitle={movie.title}
+        releaseYear={releaseYear}
+        releaseDateStr={releaseDateStr}
+        tagLine={movie.tagline || null}
+        genres={genresForList}
+        metadataSlot={
+          <MovieDetailsMetadataChips
+            criticRating={null}
+            audienceRating={null}
+            certificationLabel={null}
+            runtime={runtime}
+            runTimeMins={movie.runtime ?? null}
+            releaseDateStr={releaseDateStr}
+            tmdbVoteAverage={
+              movie.vote_average > 0 ? movie.vote_average : null
+            }
+          />
+        }
+        actionsSlot={
+          trailer ? (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start">
+              <Link
+                to="/trailer"
+                search={{
+                  mediaType: "movie",
+                  mediaId: movie.id,
+                  returnTo: trailerReturnPath,
+                }}
+                mask={{
+                  to: "/movies/in-theaters/$id",
+                  params: { id: String(movie.id) },
+                }}
+                className={cn(
+                  buttonVariants({ variant: "accent", size: "lg" }),
+                  "min-h-11 min-w-34 touch-manipulation sm:min-w-0",
+                )}
+              >
+                <Play className="size-4 fill-current" aria-hidden="true" />
+                Play Trailer
+              </Link>
             </div>
-          </div>
-        </div>
+          ) : undefined
+        }
+      />
 
-        <div
-          className={cn(
-            DETAIL_PAGE_CONTENT_ENTER_CLASS,
-            "delay-150 motion-reduce:delay-0",
-          )}
-        >
-          {castList.length > 0 && <CastSection cast={castList} />}
+      <div
+        className={cn(
+          DETAIL_PAGE_CONTENT_ENTER_CLASS,
+          "delay-150 motion-reduce:delay-0",
+        )}
+      >
+        <MovieOverviewSection overview={movie.overview || null} />
+        <MovieKeyCrewSection crew={crewForSection} />
 
-          <MovieAdditionalDetailsSection
-            status={movie.status || null}
-            language={movie.original_language || null}
-            budget={movie.budget}
-            revenue={movie.revenue}
-          />
+        {castList.length > 0 && <CastSection cast={castList} />}
 
-          <MovieExtraVideosSection
-            videos={youtubeExtraVideos}
-            movieId={movie.id}
-            trailerReturnTo={trailerReturnPath}
-          />
+        <MovieExtraVideosSection
+          videos={youtubeExtraVideos}
+          movieId={movie.id}
+          trailerReturnTo={trailerReturnPath}
+        />
 
-          <MovieProductionCompaniesSection companies={productionCompanies} />
-        </div>
+        <MovieAboutSection
+          movieTitle={movie.title}
+          status={movie.status || null}
+          language={movie.original_language || null}
+          budget={movie.budget}
+          revenue={movie.revenue}
+          companies={productionCompanies}
+        />
       </div>
     </article>
   );

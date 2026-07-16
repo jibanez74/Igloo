@@ -58,6 +58,8 @@ type Application struct {
 	Tmdb                    tmdb.TmdbInterface
 	TmdbImageBaseURL        string
 	TmdbImageHTTPClient     *http.Client
+	YouTubeThumbBaseURL     string
+	YouTubeThumbHTTPClient  *http.Client
 	SessionManager          *scs.SessionManager
 	Wait                    *sync.WaitGroup
 	Router                  *chi.Mux
@@ -662,6 +664,7 @@ func (app *Application) registerAuthenticatedAPIRoutes(r chi.Router) {
 		app.registerNotificationRoutes(r)
 		r.Get("/static/*", app.ServeStaticFiles)
 		app.registerTMDBRoutes(r)
+		app.registerYouTubeRoutes(r)
 		app.registerSpotifyRoutes(r)
 		app.registerSearchRoutes(r)
 		app.registerMovieRoutes(r)
@@ -722,6 +725,12 @@ func (app *Application) registerTMDBRoutes(r chi.Router) {
 		r.Post("/movies/search", app.SearchTmdbMovies)
 		r.Get("/movies/in-theaters", app.GetMoviesInTheaters)
 		r.Get("/movies/{id}", app.GetMovieByTmdbID)
+	})
+}
+
+func (app *Application) registerYouTubeRoutes(r chi.Router) {
+	r.Route("/youtube", func(r chi.Router) {
+		r.Get("/thumbnails/{key}", app.ProxyYouTubeThumbnail)
 	})
 }
 

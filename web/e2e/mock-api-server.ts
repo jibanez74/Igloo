@@ -846,6 +846,7 @@ function canHandleWithoutAuth(pathname: string) {
     pathname === "/api/quick-connect/initiate" ||
     pathname === "/api/quick-connect/redeem" ||
     pathname.startsWith("/api/tmdb/images/") ||
+    pathname.startsWith("/api/youtube/thumbnails/") ||
     pathname.startsWith("/api/static/")
   );
 }
@@ -2088,6 +2089,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname.startsWith("/api/tmdb/images/")) {
+    sendPlaceholderImage(response, "Igloo");
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/youtube/thumbnails/")) {
     sendPlaceholderImage(response, "Igloo");
     return;
   }

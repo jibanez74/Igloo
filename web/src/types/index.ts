@@ -62,6 +62,7 @@ export type {
   LibraryMovieGenreType,
   LibraryMovieProductionCompanyType,
   LibraryMovieExtraVideoType,
+  MediaCapabilityBadge,
   MovieTechnicalDetailsResponse,
   MovieWatchProgressType,
   TmdbSearchResultType,
@@ -94,17 +95,16 @@ export type {
 // Library movie details page (UI sections)
 export type {
   MovieDetailsBackdropProps,
+  MovieDetailsHeroProps,
   MovieDetailsSkipLinksProps,
-  MovieDetailsPosterBlockProps,
   MovieDetailsTitleHeadingProps,
   MovieDetailsMetadataChipsProps,
   MovieDetailsGenresListProps,
   MovieDetailsHeroActionsProps,
   MovieOverviewSectionProps,
   MovieKeyCrewSectionProps,
-  MovieAdditionalDetailsSectionProps,
+  MovieAboutSectionProps,
   MovieExtraVideosSectionProps,
-  MovieProductionCompaniesSectionProps,
   MovieChaptersSectionProps,
 } from "./movie-details-page";
 

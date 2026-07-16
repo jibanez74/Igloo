@@ -203,7 +203,10 @@ async function mockMovieDetailsApi(page: Page) {
     const url = new URL(route.request().url());
     const method = route.request().method();
 
-    if (url.pathname.startsWith("/api/tmdb/images/")) {
+    if (
+      url.pathname.startsWith("/api/tmdb/images/") ||
+      url.pathname.startsWith("/api/youtube/thumbnails/")
+    ) {
       await route.fulfill({
         status: 200,
         contentType: "image/svg+xml",

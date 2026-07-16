@@ -8,7 +8,6 @@ export default function MovieDetailsSkipLinks({
   castNonEmpty,
   chaptersNonEmpty,
   extrasNonEmpty,
-  companiesNonEmpty,
 }: MovieDetailsSkipLinksProps) {
   return (
     <nav
@@ -47,11 +46,6 @@ export default function MovieDetailsSkipLinks({
             </a>
           </li>
         )}
-        <li>
-          <a href="#details-heading" className={linkClass}>
-            Skip to details
-          </a>
-        </li>
         {extrasNonEmpty && (
           <li>
             <a href="#extra-videos-heading" className={linkClass}>
@@ -59,13 +53,11 @@ export default function MovieDetailsSkipLinks({
             </a>
           </li>
         )}
-        {companiesNonEmpty && (
-          <li>
-            <a href="#companies-heading" className={linkClass}>
-              Skip to production companies
-            </a>
-          </li>
-        )}
+        <li>
+          <a href="#details-heading" className={linkClass}>
+            Skip to about
+          </a>
+        </li>
       </ul>
     </nav>
   );

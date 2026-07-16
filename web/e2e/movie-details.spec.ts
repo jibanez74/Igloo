@@ -220,7 +220,10 @@ async function mockMovieDetailsApi(page: Page) {
     const url = new URL(route.request().url());
     const method = route.request().method();
 
-    if (url.pathname.startsWith("/api/tmdb/images/")) {
+    if (
+      url.pathname.startsWith("/api/tmdb/images/") ||
+      url.pathname.startsWith("/api/youtube/thumbnails/")
+    ) {
       await route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
@@ -365,9 +368,16 @@ test("movie details page renders the mocked success path from the movies index",
       "A rescue pilot returns to a coastal town and uncovers the wildfire cover-up that drove her family apart.",
     ),
   ).toBeVisible();
-  await expect(
-    page.getByRole("img", { name: "Movie poster for Signal Fire" }),
-  ).toBeVisible();
+  // The hero drops the poster at lg+ (backdrop-as-hero); it only renders on
+  // small viewports.
+  const heroPoster = page.getByRole("img", {
+    name: "Movie poster for Signal Fire",
+  });
+  await expect(heroPoster).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(heroPoster).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  await expect(heroPoster).toBeHidden();
 
   const metadataRow = page.getByRole("list", { name: "Movie details" });
   await expect(metadataRow).toBeVisible();
@@ -398,9 +408,8 @@ test("movie details page renders the mocked success path from the movies index",
     ["Skip to key crew", "#crew-heading"],
     ["Skip to cast", "#cast-heading"],
     ["Skip to chapters", "#chapters-heading"],
-    ["Skip to details", "#details-heading"],
     ["Skip to extra videos", "#extra-videos-heading"],
-    ["Skip to production companies", "#companies-heading"],
+    ["Skip to about", "#details-heading"],
   ] as const) {
     await expect(skipLinksNav.getByRole("link", { name: label })).toHaveAttribute(
       "href",
@@ -423,25 +432,6 @@ test("movie details page renders the mocked success path from the movies index",
   ).toBeVisible();
 
   await expect(
-    page.getByRole("heading", { name: "Additional Details" }),
-  ).toBeVisible();
-  const additionalDetailsSection = page.locator("section", {
-    has: page.getByRole("heading", { name: "Additional Details" }),
-  });
-  await expect(
-    additionalDetailsSection.getByText("Original Language"),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("en", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("$95,000,000"),
-  ).toBeVisible();
-  await expect(
-    additionalDetailsSection.getByText("$215,000,000"),
-  ).toBeVisible();
-
-  await expect(
     page.getByRole("heading", { name: "Extra Videos" }),
   ).toBeVisible();
   await expect(
@@ -449,9 +439,16 @@ test("movie details page renders the mocked success path from the movies index",
   ).toBeVisible();
 
   await expect(
-    page.getByRole("heading", { name: "Production Companies" }),
+    page.getByRole("heading", { name: "About Signal Fire" }),
   ).toBeVisible();
-  await expect(page.getByText("Northwind Pictures")).toBeVisible();
+  const aboutSection = page.locator("section", {
+    has: page.getByRole("heading", { name: "About Signal Fire" }),
+  });
+  await expect(aboutSection.getByText("Original language")).toBeVisible();
+  await expect(aboutSection.getByText("EN", { exact: true })).toBeVisible();
+  await expect(aboutSection.getByText("$95,000,000")).toBeVisible();
+  await expect(aboutSection.getByText("$215,000,000")).toBeVisible();
+  await expect(aboutSection.getByText("Northwind Pictures")).toBeVisible();
 
   const playHref = await playLink.getAttribute("href");
   expect(playHref).not.toBeNull();

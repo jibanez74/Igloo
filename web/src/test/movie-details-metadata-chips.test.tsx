@@ -36,4 +36,31 @@ describe("MovieDetailsMetadataChips", () => {
       screen.getByLabelText("Runtime: 1 hour 56 minutes"),
     ).toBeInTheDocument();
   });
+
+  it("renders capability badges with accessible descriptions", () => {
+    render(
+      <MovieDetailsMetadataChips
+        {...baseProps}
+        runtime={null}
+        runTimeMins={null}
+        capabilityBadges={[
+          { label: "4K", description: "4K Ultra HD video" },
+          { label: "HDR", description: "High dynamic range video" },
+          { label: "7.1", description: "7.1 surround sound audio" },
+          { label: "CC", description: "Subtitles available" },
+        ]}
+      />,
+    );
+
+    for (const description of [
+      "4K Ultra HD video",
+      "High dynamic range video",
+      "7.1 surround sound audio",
+      "Subtitles available",
+    ]) {
+      expect(screen.getByLabelText(description)).toBeInTheDocument();
+    }
+    expect(screen.getByText("4K")).toBeInTheDocument();
+    expect(screen.getByText("CC")).toBeInTheDocument();
+  });
 });

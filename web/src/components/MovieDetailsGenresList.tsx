@@ -7,14 +7,12 @@ export default function MovieDetailsGenresList({
 
   return (
     <ul
-      className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
+      className="mt-3 flex list-none flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-white/75 drop-shadow-sm lg:justify-start"
       aria-label={`Genres: ${genres.map(g => g.tag).join(", ")}`}
     >
-      {genres.map(genre => (
-        <li
-          key={genre.id}
-          className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
-        >
+      {genres.map((genre, index) => (
+        <li key={genre.id} className="flex items-center gap-x-2">
+          {index > 0 && <span aria-hidden="true">·</span>}
           {genre.tag}
         </li>
       ))}

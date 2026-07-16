@@ -131,6 +131,19 @@ export function formatRuntimeMinutes(
   return parts.join(" ");
 }
 
+/**
+ * Remaining watch time for the details-page resume bar, e.g. "43 min left".
+ * Rounds up and never reports less than 1 minute.
+ */
+export function formatMinutesLeft(
+  progressSec: number,
+  durationSec: number,
+): string {
+  const remaining = Math.max(durationSec - progressSec, 0);
+  const minutes = Math.max(1, Math.ceil(remaining / 60));
+  return `${minutes} min left`;
+}
+
 export function formatSpokenRuntimeMinutes(
   minutes: number | null | undefined,
 ): string | null {

@@ -289,6 +289,14 @@ export type SubtitleType = {
   is_default: boolean;
 };
 
+/** Source-capability chip (4K / HDR / 7.1 / CC) shown in the details hero. */
+export type MediaCapabilityBadge = {
+  /** Short chip text, e.g. "4K". */
+  label: string;
+  /** Accessible description, e.g. "4K Ultra HD video". */
+  description: string;
+};
+
 export type ChapterType = {
   id: number;
   title: string;
