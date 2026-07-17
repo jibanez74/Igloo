@@ -5,9 +5,11 @@ import { Users } from "lucide-react";
 import { createWatchRoom } from "@/lib/api";
 import {
   AUDIO_TRACK_DEFAULT_LABEL,
+  MOTION_MICRO_COLORS_CLASS,
   SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import {
   STREAM_MODES,
   formatPlaybackAudioLabel,
@@ -304,7 +306,10 @@ export default function CreateWatchRoomDialog({
                       key={user.id}
                       type="button"
                       onClick={() => handleToggleUser(user.id, false)}
-                      className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary transition-colors hover:bg-primary/20"
+                      className={cn(
+                        MOTION_MICRO_COLORS_CLASS,
+                        "inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20",
+                      )}
                       aria-label={`Remove ${user.name} from invited users`}
                     >
                       <span>{user.name}</span>
@@ -339,7 +344,12 @@ export default function CreateWatchRoomDialog({
                       const checked = selectedUserIds.includes(user.id);
                       return (
                         <li key={user.id}>
-                          <label className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                          <label
+                            className={cn(
+                              MOTION_MICRO_COLORS_CLASS,
+                              "flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-muted/50",
+                            )}
+                          >
                             <Checkbox
                               checked={checked}
                               onCheckedChange={value =>

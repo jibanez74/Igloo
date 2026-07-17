@@ -8,7 +8,7 @@ export default function MovieOverviewSection({
       <h2
         id="overview-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-foreground outline-none sm:text-xl"
+        className="mb-3 text-lg font-semibold text-foreground outline-hidden sm:text-xl"
       >
         Overview
       </h2>

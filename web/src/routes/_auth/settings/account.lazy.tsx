@@ -38,6 +38,7 @@ import {
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -785,7 +786,8 @@ function AccountSettings() {
                 <label
                   htmlFor={avatarUploadId}
                   className={cn(
-                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm transition-colors peer-focus-visible:border-ring/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/20",
+                    MOTION_MICRO_COLORS_CLASS,
+                    "flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm peer-focus-visible:border-ring/70 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/20",
                     lightInputClassName,
                     uploadAvatarMutation.isPending
                       ? "cursor-not-allowed opacity-70"

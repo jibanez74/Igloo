@@ -4,6 +4,7 @@ import { Film, Trash2, Users } from "lucide-react";
 import {
   CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
   TMDB_POSTER_SIZE,
 } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
@@ -147,7 +148,10 @@ export default function WatchRoomCard({ room }: Props) {
           <Link
             to="/watch-rooms/$id"
             params={{ id: room.id }}
-            className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+            className={cn(
+              MOTION_MICRO_COLORS_CLASS,
+              "inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden",
+            )}
             aria-label={`Join watch room for ${room.movie_title}`}
           >
             Join room

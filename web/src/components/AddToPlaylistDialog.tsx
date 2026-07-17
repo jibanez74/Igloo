@@ -15,7 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { playlistsQueryOpts } from "@/lib/query-opts";
 import { addTracksToPlaylist } from "@/lib/api";
-import { PLAYLISTS_KEY, PLAYLIST_TRACKS_KEY } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  PLAYLISTS_KEY,
+  PLAYLIST_TRACKS_KEY,
+} from "@/lib/constants";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
@@ -191,7 +195,7 @@ export default function AddToPlaylistDialog({
                     type="button"
                     onClick={() => togglePlaylist(playlist.id, playlist.name)}
                     aria-pressed={selectedPlaylists.has(playlist.id)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${MOTION_MICRO_COLORS_CLASS} ${
                       selectedPlaylists.has(playlist.id)
                         ? "bg-primary/20 text-foreground"
                         : "text-muted-foreground hover:bg-muted"

@@ -5,7 +5,6 @@ import { libraryMovieDetailsQueryOpts } from "@/lib/query-opts";
 import { Film, Play } from "lucide-react";
 import {
   CARD_ACTION_REVEAL_CLASS,
-  CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
@@ -53,7 +52,6 @@ export default function MovieCard({ movie, watchProgress }: MovieCardProps) {
   return (
     <article
       className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
         CARD_SURFACE_CLASS,
         "min-w-0 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
       )}

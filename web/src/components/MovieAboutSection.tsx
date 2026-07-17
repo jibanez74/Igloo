@@ -34,7 +34,7 @@ export default function MovieAboutSection({
       <h2
         id="details-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-foreground outline-none sm:text-xl"
+        className="mb-3 text-lg font-semibold text-foreground outline-hidden sm:text-xl"
       >
         About {movieTitle}
       </h2>

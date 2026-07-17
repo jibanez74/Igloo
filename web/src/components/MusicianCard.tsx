@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
 import {
-  CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
 } from "@/lib/constants";
@@ -24,16 +23,12 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
 
   return (
     <article
-      className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
-        CARD_SURFACE_CLASS,
-        "p-4",
-      )}
+      className={cn(CARD_SURFACE_CLASS, "p-4")}
     >
       <Link
         to="/music/musician/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-ring focus:outline-none focus:ring-inset"
+        className="block focus:ring-2 focus:ring-ring focus:outline-hidden focus:ring-inset"
         aria-label={`${name}, ${album_count} albums, ${track_count} tracks`}
       >
         {/* Musician thumbnail - circular; fallback to User icon on load error */}

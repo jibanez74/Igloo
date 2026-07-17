@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { searchSpotifyAlbums } from "@/lib/api";
+import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type {
@@ -234,7 +235,8 @@ function SpotifyAlbumResultCard({
   return (
     <li
       className={cn(
-        "overflow-hidden rounded-lg border transition-colors",
+        MOTION_MICRO_COLORS_CLASS,
+        "overflow-hidden rounded-lg border",
         selected
           ? "border-primary bg-primary/10"
           : "border-border bg-muted/60 hover:border-border",

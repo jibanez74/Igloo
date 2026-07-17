@@ -1,5 +1,9 @@
 import { User } from "lucide-react";
-import { TMDB_PROFILE_SIZE } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  TMDB_PROFILE_SIZE,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { CastMemberType } from "@/types";
 
@@ -22,7 +26,7 @@ export default function CastSection({
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-hidden sm:text-2xl"
         tabIndex={-1}
       >
         Cast
@@ -41,7 +45,10 @@ export default function CastSection({
         {displayedCast.map((actor, index) => (
           <li
             key={actor.id}
-            className="w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40"
+            className={cn(
+              MOTION_MICRO_COLORS_CLASS,
+              "w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40",
+            )}
           >
             <article
               tabIndex={0}
@@ -49,7 +56,7 @@ export default function CastSection({
               aria-label={`${actor.name} as ${actor.character}`}
               aria-posinset={index + 1}
               aria-setsize={displayedCast.length}
-              className="cursor-default outline-none"
+              className="cursor-default outline-hidden"
             >
               {actor.profile_path ? (
                 <img

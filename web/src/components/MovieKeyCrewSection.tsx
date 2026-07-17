@@ -33,7 +33,7 @@ export default function MovieKeyCrewSection({ crew }: MovieKeyCrewSectionProps) 
       <h2
         id="crew-heading"
         tabIndex={-1}
-        className="mb-3 text-lg font-semibold text-foreground outline-none sm:text-xl"
+        className="mb-3 text-lg font-semibold text-foreground outline-hidden sm:text-xl"
       >
         Key Crew
       </h2>

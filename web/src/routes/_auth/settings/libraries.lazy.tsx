@@ -47,6 +47,7 @@ import {
   PLAYLISTS_KEY,
   SETTINGS_KEY,
   TRACKS_INFINITE_KEY,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
@@ -415,7 +416,8 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
           <p
             id={formStatusId}
             className={cn(
-              "mt-1 text-sm transition-colors",
+              MOTION_MICRO_COLORS_CLASS,
+              "mt-1 text-sm",
               feedback.tone === "error"
                 ? "text-destructive"
                 : feedback.tone === "success"

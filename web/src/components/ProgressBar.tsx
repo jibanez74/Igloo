@@ -207,7 +207,7 @@ export default function ProgressBar({
         onBlur={clearScrub}
         tabIndex={isSeekable ? 0 : -1}
         className={cn(
-          "absolute top-1/2 left-0 h-6 w-full -translate-y-1/2 appearance-none bg-transparent opacity-0 focus:outline-none",
+          "absolute top-1/2 left-0 h-6 w-full -translate-y-1/2 appearance-none bg-transparent opacity-0 focus:outline-hidden",
           isSeekable ? "cursor-pointer touch-none" : "cursor-default",
         )}
         aria-label={ariaLabel}

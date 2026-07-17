@@ -3,7 +3,6 @@ import { Film, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
-  CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
@@ -30,10 +29,7 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
   return (
     <article
-      className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
-        CARD_SURFACE_CLASS,
-      )}
+      className={CARD_SURFACE_CLASS}
     >
       <Link
         to="/movies/in-theaters/$id"

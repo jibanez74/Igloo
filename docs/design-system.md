@@ -25,7 +25,7 @@ this doc, prefer adding a guard too.
 |---|---|
 | Token contrast: body text ≥ 7:1 (AAA), all other fg/surface pairs ≥ 4.5:1 (AA), plus `text-success` on `background`/`card`, both themes | `web/src/test/contrast.test.ts` |
 | Generated theme blocks in `styles.css` / `boot.css` / `index.html` match `src/lib/theme-tokens.ts`; every token's OKLCH↔hex pair round-trips | `web/src/test/theme-drift.test.ts` |
-| Every shared motion constant carries a `motion-reduce:` escape; every `ui/*.tsx` transition has `motion-reduce:transition-none` | `web/src/test/motion-contracts.test.ts` |
+| Every shared motion constant carries a `motion-reduce:` escape; every `src/` file with an inline transition/animation has the matching `motion-reduce:` escape | `web/src/test/motion-contracts.test.ts` |
 | No raw Tailwind palette classes (all 22 color families) | ESLint `no-restricted-syntax` (error) in `web/eslint.config.js` |
 | Class order, duplicates, unknown/conflicting classes | `eslint-plugin-better-tailwindcss` |
 | Input styling contracts | `web/src/test/input-styles.test.ts` |
@@ -157,14 +157,19 @@ constant exists — and when you create a new recurring one, add it there so
 
 - **Durations**: 150ms micro (controls), 200ms standard (surfaces, fades),
   300ms page enter — exported both as numbers (`MOTION_DURATION_*_MS`) and in
-  the class constants. Easing is `ease-out` (exits `ease-in`).
+  the class constants. Easing is `ease-out` (exits `ease-in`). Applied to
+  color changes: control/text hovers use 150ms (`MOTION_MICRO_COLORS_CLASS`);
+  whole-card surface tints use 200ms (`MOTION_SETTINGS_SURFACE_CLASS`).
+  Applied to floating surfaces: modal surfaces (dialog, sheet, alert-dialog)
+  enter/exit at 200ms standard; anchored transient popups (popover, dropdown,
+  select, tooltip) at 150ms micro — this split is deliberate, don't unify it.
 - **Transitions enumerate properties** — e.g.
   `transition-[background-color,border-color,color,box-shadow,opacity]` —
   never `transition-all`.
 - **Enter/exit animations** come from `tw-animate-css`:
   `animate-in fade-in slide-in-from-bottom-2 fill-mode-both` for page/section
   entrances (`MOTION_PAGE_ENTER_CLASS`, `MOTION_SECTION_ENTER_CLASS`, and the
-  `delay-75`/`delay-150` staggered `_DELAYED_` variants), `animate-out` +
+  `delay-75` staggered `MOTION_SECTION_ENTER_DELAYED_CLASS`), `animate-out` +
   `fade-out-0` for exits. There are no custom `@keyframes` in `styles.css`.
 - **The motion-reduce contract (hard rule)**: every animation/transition ships
   a `motion-reduce:` escape — `motion-reduce:transition-none`,
@@ -172,7 +177,8 @@ constant exists — and when you create a new recurring one, add it there so
   (`motion-reduce:opacity-100 motion-reduce:translate-y-0
   motion-reduce:scale-100`) so reduced-motion users see the final state, not a
   broken mid-state. Guarded by `motion-contracts.test.ts`, which also scans
-  every `components/ui/*.tsx` for unescaped transitions.
+  every source file under `src/` (excluding tests and generated files) for
+  unescaped transitions and animations.
 - Common vocabulary beyond entrances: `group-hover:opacity-100` overlay
   reveals, `group-hover:scale-105` poster zoom, `hover:-translate-y-1` card
   lift, `backdrop-blur-sm` on sticky/glass chrome, `bg-linear-to-*` gradients
@@ -222,7 +228,10 @@ stamps `data-variant`/`data-size`.
   controls as `FOCUS_VISIBLE_RING_CLASS` in `constants.ts` (pinned by
   `constants-contracts.test.ts`). Media cards keep `focus-within:ring-2` on
   the `<article>` — the intentional whole-card variant — so the card shows
-  focus wherever it lands inside.
+  focus wherever it lands inside. When suppressing the browser outline in
+  favor of a ring, always use `outline-hidden`, never `outline-none`: rings
+  are box-shadows, which forced-colors mode strips, and `outline-hidden`
+  keeps a transparent outline the OS makes visible there.
 - **Hover/focus parity.** Every `group-hover` reveal pairs with
   `group-focus-within` (cards) or `focus-visible` (rows) so keyboard users get
   the same affordances. Never gate an action behind hover alone.
@@ -290,10 +299,11 @@ stamps `data-variant`/`data-size`.
 Cross-component class strings are exported, documented constants — the de
 facto token layer above Tailwind. Key families:
 
-- `CARD_SURFACE_CLASS` + `CARD_INTERACTIVE_SURFACE_CLASS` — the media-card
-  chrome: `group relative overflow-hidden rounded-xl border bg-card`, hover
-  lift + primary border + glacier glow, property-scoped 200ms transition,
-  motion-reduce fallbacks.
+- `CARD_SURFACE_CLASS` — the media-card chrome: `group relative
+  overflow-hidden rounded-xl border bg-card`, hover lift + primary border +
+  glacier glow, with the property-scoped 200ms transition and motion-reduce
+  fallbacks embedded (via `CARD_INTERACTIVE_SURFACE_CLASS`, which stays
+  exported for bespoke card shells that bring their own hover styles).
 - `CARD_MEDIA_HOVER_CLASS` (poster zoom), `CARD_OVERLAY_REVEAL_CLASS` /
   `CARD_ACTION_REVEAL_CLASS` (hover/focus-within overlay + scaled action
   reveal).
@@ -374,7 +384,7 @@ One anatomy, shared by `MovieCard`, `InTheatersCard`, `AlbumCard`,
 `MusicianCard`, `PlaylistCard`, `WatchRoomCard`:
 
 ```
-<article class={cn(CARD_SURFACE_CLASS, CARD_INTERACTIVE_SURFACE_CLASS)}>
+<article class={CARD_SURFACE_CLASS}>
   <Link aria-label="Uncut Gems 2019" …>            ← whole-card link, full label
     <div class="aspect-2/3 bg-muted">              ← fixed-ratio box (no CLS)
       <img loading="lazy" decoding="async" fetchPriority="low"
@@ -587,7 +597,7 @@ Each item maps to a §4 finding; the chosen resolution is recorded here.
 7. **Focus ring (§4.5) — unified on the shadcn recipe.**
    `FOCUS_VISIBLE_RING_CLASS` =
    `focus-visible:border-ring focus-visible:ring-[3px]
-   focus-visible:ring-ring/50 focus-visible:outline-none`, pinned by
+   focus-visible:ring-ring/50 focus-visible:outline-hidden`, pinned by
    `constants-contracts.test.ts`. Card `focus-within:ring-2` stays as the
    whole-card variant.
 8. **`MediaNotFound` (§4.9) — done.** Required `backTo` (`"/" | "/movies" |

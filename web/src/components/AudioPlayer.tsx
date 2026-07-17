@@ -645,7 +645,7 @@ export default function AudioPlayer({
                 onClick={handleMinimize}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label="Minimize player (Escape)"
               >
@@ -663,7 +663,7 @@ export default function AudioPlayer({
                   onClick={onClose}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                   )}
                   aria-label="Stop playback and close player"
                 >
@@ -721,7 +721,7 @@ export default function AudioPlayer({
                   onClick={playPrevious}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                   )}
                   aria-label={previousAriaLabel}
                 >
@@ -735,7 +735,7 @@ export default function AudioPlayer({
                   disabled={isLoading}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 hover:bg-primary/90 focus:ring-4 focus:ring-ring/50 focus:outline-none disabled:opacity-50",
+                    "flex size-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 hover:bg-primary/90 focus:ring-4 focus:ring-ring/50 focus:outline-hidden disabled:opacity-50",
                   )}
                   aria-label={isLoading ? "Loading" : playPauseAriaLabel}
                 >
@@ -754,7 +754,7 @@ export default function AudioPlayer({
                   aria-disabled={!hasNext}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
+                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
                   )}
                   aria-label={nextAriaLabel}
                 >
@@ -796,7 +796,7 @@ export default function AudioPlayer({
                 onClick={onExpand}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
               >
@@ -835,7 +835,7 @@ export default function AudioPlayer({
                   onClick={playPrevious}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                   )}
                   aria-label={previousAriaLabel}
                 >
@@ -848,7 +848,7 @@ export default function AudioPlayer({
                   disabled={isLoading}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none disabled:opacity-50",
+                    "flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden disabled:opacity-50",
                   )}
                   aria-label={isLoading ? "Loading" : playPauseAriaLabel}
                 >
@@ -867,7 +867,7 @@ export default function AudioPlayer({
                   aria-disabled={!hasNext}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
+                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
                   )}
                   aria-label={nextAriaLabel}
                 >
@@ -895,7 +895,7 @@ export default function AudioPlayer({
                 onClick={onExpand}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "hidden size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none sm:flex",
+                  "hidden size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden sm:flex",
                 )}
                 aria-label="Expand to fullscreen player"
               >
@@ -908,7 +908,7 @@ export default function AudioPlayer({
                   onClick={onClose}
                   className={cn(
                     MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                    "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                   )}
                   aria-label="Stop playback and close player"
                 >
