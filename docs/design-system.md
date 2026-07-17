@@ -211,7 +211,12 @@ stamps `data-variant`/`data-size`.
 - **`Badge`** (`ui/badge.tsx`) is the primitive for static pills — count
   pills, rating chips, status tags. It is non-interactive by design (a
   `span`); actionable chips are Buttons. Rating-tier colors come from the
-  shared helpers in `lib/rating.ts` (§3.2).
+  shared helpers in `lib/rating.ts` (§3.2). Pills that live in a semantic
+  list nest the Badge inside the `<li>` (movie metadata chips, album
+  metadata/genre pills). Navigational pills (e.g. the album page's artist
+  pill) are `Link`s composing the pill classes with
+  `FOCUS_VISIBLE_RING_CLASS` — deliberately not Badge, which stays
+  non-interactive.
 - **When to add a variant vs. a constant**: a new *look* for an existing
   primitive (e.g. another Button treatment) → add a cva variant next to its
   siblings. A *cross-component* treatment (card chrome, motion, focus) → an

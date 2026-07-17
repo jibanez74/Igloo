@@ -24,6 +24,7 @@ import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,11 +46,13 @@ import type {
 import MediaNotFound from "@/components/MediaNotFound";
 import AlbumDetailsBackdrop from "@/components/AlbumDetailsBackdrop";
 import AlbumDetailsCoverBlock from "@/components/AlbumDetailsCoverBlock";
+import AlbumDetailsSkipLinks from "@/components/AlbumDetailsSkipLinks";
 import { SpotifyPopularityMeter } from "@/components/SpotifyPopularity";
 import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
   LATEST_ALBUMS_KEY,
   MUSIC_STATS_KEY,
   MOTION_LOADING_STATE_CLASS,
@@ -210,6 +213,13 @@ function AlbumDetailsContent({
   const musicianName = unwrapString(album.musician);
   const spotifyPopularity = unwrapFloat(album.spotify_popularity);
 
+  // The album artist links to the musician page when it matches one of the
+  // album's artists (which are musician rows server-side). A non-match (e.g.
+  // "Various Artists") stays plain text.
+  const linkedArtist = musicianName
+    ? artists.find(a => a.name.toLowerCase() === musicianName.toLowerCase())
+    : undefined;
+
   // React 19 document metadata - dynamic based on album
   const pageTitle = musicianName
     ? `${album.title} by ${musicianName} - Igloo`
@@ -279,6 +289,46 @@ function AlbumDetailsContent({
     .sort((a, b) => a - b);
   const hasMultipleDiscs = discNumbers.length > 1;
 
+  // Audio quality summary: dominant codec, peak bitrate, and channel layout
+  // when it's uniform across the album.
+  const codecCounts = new Map<string, number>();
+  tracks.forEach(track => {
+    if (track.codec) {
+      codecCounts.set(track.codec, (codecCounts.get(track.codec) ?? 0) + 1);
+    }
+  });
+  let dominantCodec = "";
+  let dominantCodecCount = 0;
+  codecCounts.forEach((count, codec) => {
+    if (count > dominantCodecCount) {
+      dominantCodec = codec;
+      dominantCodecCount = count;
+    }
+  });
+  const maxBitRate = tracks.reduce(
+    (max, track) => Math.max(max, track.bit_rate),
+    0,
+  );
+  const uniformChannelLayout =
+    tracks.length > 0 &&
+    tracks[0].channel_layout &&
+    tracks.every(track => track.channel_layout === tracks[0].channel_layout)
+      ? tracks[0].channel_layout
+      : null;
+  const audioQuality = dominantCodec
+    ? [
+        dominantCodec.toUpperCase(),
+        maxBitRate > 0 ? `${Math.round(maxBitRate / 1000)} kbps` : null,
+        uniformChannelLayout,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  // Screen reader announcement summarizing the page
+  const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
+  const pageAnnouncementId = `album-${album.id}-summary`;
+
   // Check if a specific track is currently playing
   const isTrackPlaying = (track: TrackType) => {
     return (
@@ -304,6 +354,8 @@ function AlbumDetailsContent({
 
   // Handle playing the album from the beginning
   const handlePlayAlbum = () => {
+    if (tracks.length === 0) return;
+
     audioPlayer.playAlbum(tracks, {
       cover: coverUrl,
       title: album.title,
@@ -313,6 +365,8 @@ function AlbumDetailsContent({
 
   // Handle shuffle play
   const handleShufflePlay = () => {
+    if (tracks.length === 0) return;
+
     audioPlayer.shuffleAlbum(tracks, {
       cover: coverUrl,
       title: album.title,
@@ -323,10 +377,18 @@ function AlbumDetailsContent({
   return (
     <article
       aria-labelledby="album-title"
+      aria-describedby={pageAnnouncementId}
       className="w-full min-w-0 pb-6 sm:pb-10"
     >
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
+
+      {/* Screen reader announcement */}
+      <span id={pageAnnouncementId} className="sr-only">
+        {pageAnnouncement}
+      </span>
+
+      <AlbumDetailsSkipLinks />
 
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
         <AlbumDetailsBackdrop coverUrl={coverUrl} albumTitle={album.title} />
@@ -356,7 +418,21 @@ function AlbumDetailsContent({
 
               {musicianName && (
                 <p className="mt-2 text-lg font-medium text-primary sm:text-xl lg:text-2xl">
-                  {musicianName}
+                  {linkedArtist ? (
+                    <Link
+                      to="/music/musician/$id"
+                      params={{ id: String(linkedArtist.id) }}
+                      className={cn(
+                        MOTION_MICRO_COLORS_CLASS,
+                        FOCUS_VISIBLE_RING_CLASS,
+                        "rounded-sm hover:underline",
+                      )}
+                    >
+                      {musicianName}
+                    </Link>
+                  ) : (
+                    musicianName
+                  )}
                 </p>
               )}
 
@@ -365,42 +441,57 @@ function AlbumDetailsContent({
                 aria-label="Album details"
               >
                 {(album.release_date.Valid || releaseYear) && (
-                  <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
-                    <Calendar
+                  <li>
+                    <Badge
+                      variant="outline"
+                      className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                    >
+                      <Calendar
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <time
+                        dateTime={
+                          album.release_date.String || String(releaseYear ?? "")
+                        }
+                      >
+                        {album.release_date.Valid
+                          ? formatDate(album.release_date.String)
+                          : releaseYear}
+                      </time>
+                    </Badge>
+                  </li>
+                )}
+                <li>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                  >
+                    <Music
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+                    </span>
+                  </Badge>
+                </li>
+                <li>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                  >
+                    <Clock
                       className="size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <time
-                      dateTime={
-                        album.release_date.String || String(releaseYear ?? "")
-                      }
+                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
+                      aria-label={`Total duration ${formatDuration(total_duration)}`}
                     >
-                      {album.release_date.Valid
-                        ? formatDate(album.release_date.String)
-                        : releaseYear}
+                      {formatDuration(total_duration)}
                     </time>
-                  </li>
-                )}
-                <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
-                  <Music
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-                  </span>
-                </li>
-                <li className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/90 px-3 py-1.5 text-sm text-foreground">
-                  <Clock
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <time
-                    dateTime={`PT${total_duration}S`}
-                    aria-label={`Total duration ${formatDuration(total_duration)}`}
-                  >
-                    {formatDuration(total_duration)}
-                  </time>
+                  </Badge>
                 </li>
               </ul>
 
@@ -410,11 +501,13 @@ function AlbumDetailsContent({
                   aria-label={`Genres: ${album_genres.join(", ")}`}
                 >
                   {album_genres.map(genre => (
-                    <li
-                      key={genre}
-                      className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
-                    >
-                      {genre}
+                    <li key={genre}>
+                      <Badge
+                        variant="outline"
+                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
+                      >
+                        {genre}
+                      </Badge>
                     </li>
                   ))}
                 </ul>
@@ -425,27 +518,34 @@ function AlbumDetailsContent({
               )}
 
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
-                <Button
-                  type="button"
-                  variant="accent-pill"
-                  size="lg"
-                  onClick={handlePlayAlbum}
-                  className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
-                >
-                  <Play className="size-4 fill-current" aria-hidden="true" />
-                  Play Album
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={handleShufflePlay}
-                  className="w-full rounded-full font-semibold sm:w-auto"
-                  aria-label="Shuffle play album"
-                >
-                  <Shuffle className="size-4" aria-hidden="true" />
-                  Shuffle
-                </Button>
+                {tracks.length > 0 && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="accent-pill"
+                      size="lg"
+                      onClick={handlePlayAlbum}
+                      className="w-full font-semibold shadow-lg shadow-primary/20 sm:w-auto"
+                    >
+                      <Play
+                        className="size-4 fill-current"
+                        aria-hidden="true"
+                      />
+                      Play Album
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      onClick={handleShufflePlay}
+                      className="w-full rounded-full font-semibold sm:w-auto"
+                      aria-label="Shuffle play album"
+                    >
+                      <Shuffle className="size-4" aria-hidden="true" />
+                      Shuffle
+                    </Button>
+                  </>
+                )}
 
                 {isAdmin && (
                   <DropdownMenu>
@@ -531,7 +631,8 @@ function AlbumDetailsContent({
           <section className="min-w-0" aria-labelledby="tracklist-heading">
             <h2
               id="tracklist-heading"
-              className="mb-4 flex items-center justify-center gap-2 text-lg font-semibold text-foreground sm:text-xl lg:justify-start"
+              tabIndex={-1}
+              className="mb-4 flex items-center justify-center gap-2 text-lg font-semibold text-foreground outline-hidden sm:text-xl lg:justify-start"
             >
               <ListOrdered
                 className="size-5 shrink-0 text-primary"
@@ -541,6 +642,17 @@ function AlbumDetailsContent({
             </h2>
 
             <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
+              {tracks.length === 0 && (
+                <div className="flex flex-col items-center gap-3 p-10 text-center">
+                  <Music
+                    className="size-8 text-muted-foreground opacity-60"
+                    aria-hidden="true"
+                  />
+                  <p className="text-muted-foreground">
+                    No tracks in this album
+                  </p>
+                </div>
+              )}
               {discNumbers.map(discNum => (
                 <div key={discNum}>
                   {hasMultipleDiscs && (
@@ -582,7 +694,8 @@ function AlbumDetailsContent({
           >
             <h2
               id="details-heading"
-              className="mb-4 text-lg font-semibold text-foreground"
+              tabIndex={-1}
+              className="mb-4 text-lg font-semibold text-foreground outline-hidden"
             >
               Album Details
             </h2>
@@ -611,6 +724,56 @@ function AlbumDetailsContent({
                   {formatDuration(total_duration)}
                 </dd>
               </div>
+              {musicianName && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                    Artist
+                  </dt>
+                  <dd className="mt-1 text-foreground">
+                    {linkedArtist ? (
+                      <Link
+                        to="/music/musician/$id"
+                        params={{ id: String(linkedArtist.id) }}
+                        className={cn(
+                          MOTION_MICRO_COLORS_CLASS,
+                          FOCUS_VISIBLE_RING_CLASS,
+                          "rounded-sm text-primary hover:underline",
+                        )}
+                      >
+                        {musicianName}
+                      </Link>
+                    ) : (
+                      musicianName
+                    )}
+                  </dd>
+                </div>
+              )}
+              {album_genres.length > 0 && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                    Genres
+                  </dt>
+                  <dd className="mt-1 text-foreground">
+                    {album_genres.join(", ")}
+                  </dd>
+                </div>
+              )}
+              {hasMultipleDiscs && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                    Discs
+                  </dt>
+                  <dd className="mt-1 text-foreground">{discNumbers.length}</dd>
+                </div>
+              )}
+              {audioQuality && (
+                <div>
+                  <dt className="font-semibold tracking-wide text-primary/70 uppercase">
+                    Audio Quality
+                  </dt>
+                  <dd className="mt-1 text-foreground">{audioQuality}</dd>
+                </div>
+              )}
               {spotifyPopularity != null && (
                 <div>
                   <dt className="font-semibold tracking-wide text-primary/70 uppercase">
@@ -661,21 +824,30 @@ function AlbumDetailsContent({
 }
 
 function ArtistBadge({ artist }: { artist: ArtistType }) {
+  const [thumbFailed, setThumbFailed] = useState(false);
   const thumbUrl = getMediaImageUrl(
     artist.thumb.Valid ? artist.thumb.String : null
   );
+  const showThumb = thumbUrl && !thumbFailed;
+
   return (
-    <div
+    <Link
+      to="/music/musician/$id"
+      params={{ id: String(artist.id) }}
       className={cn(
         MOTION_MICRO_COLORS_CLASS,
+        FOCUS_VISIBLE_RING_CLASS,
         "flex items-center gap-2 rounded-full border border-border/50 bg-muted/60 px-3 py-1.5 hover:border-primary/30",
       )}
     >
-      {thumbUrl ? (
+      {showThumb ? (
         <img
           src={thumbUrl}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="size-6 rounded-full object-cover"
+          onError={() => setThumbFailed(true)}
         />
       ) : (
         <div className="flex size-6 items-center justify-center rounded-full bg-accent">
@@ -683,6 +855,6 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
         </div>
       )}
       <span className="text-sm font-medium text-foreground">{artist.name}</span>
-    </div>
+    </Link>
   );
 }

@@ -39,7 +39,7 @@ function makeTrack(overrides: Record<string, unknown>) {
     codec: "flac",
     size: 12_000_000,
     track_index: 1,
-    duration: 200,
+    duration: 200_000,
     disc: 1,
     channels: "2",
     channel_layout: "stereo",
@@ -74,9 +74,9 @@ const albumDetails = {
     updated_at: "2026-01-01T00:00:00Z",
   },
   tracks: [
-    makeTrack({ id: 101, title: "Northern Drift", track_index: 1, disc: 1, duration: 214 }),
-    makeTrack({ id: 102, title: "Cold Current", track_index: 2, disc: 1, duration: 198 }),
-    makeTrack({ id: 103, title: "Second Disc Opener", track_index: 1, disc: 2, duration: 245 }),
+    makeTrack({ id: 101, title: "Northern Drift", track_index: 1, disc: 1, duration: 214_000 }),
+    makeTrack({ id: 102, title: "Cold Current", track_index: 2, disc: 1, duration: 198_000 }),
+    makeTrack({ id: 103, title: "Second Disc Opener", track_index: 1, disc: 2, duration: 245_000 }),
   ],
   artists: [
     { id: 7, name: "Aurora Pines", thumb: nullableString(), spotify_id: nullableString("sp-aurora") },
@@ -86,7 +86,43 @@ const albumDetails = {
     { track_id: 102, genre_id: 2, tag: "Electronic" },
   ],
   album_genres: ["Ambient", "Electronic"],
-  total_duration: 657,
+  total_duration: 657_000,
+};
+
+const EMPTY_ALBUM_ID = 43;
+
+const emptyAlbumDetails = {
+  album: {
+    ...albumDetails.album,
+    id: EMPTY_ALBUM_ID,
+    title: "Silent Sessions",
+    sort_title: "Silent Sessions",
+    total_tracks: nullableInt64(0),
+  },
+  tracks: [],
+  artists: albumDetails.artists,
+  track_genres: [],
+  album_genres: [],
+  total_duration: 0,
+};
+
+const musicianDetails = {
+  musician: {
+    id: 7,
+    name: "Aurora Pines",
+    sort_name: "Aurora Pines",
+    summary: nullableString("Aurora Pines makes ambient music."),
+    spotify_popularity: nullableFloat64(null),
+    spotify_followers: nullableInt64(null),
+    spotify_id: nullableString("sp-aurora"),
+    thumb: nullableString(),
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  },
+  albums: [],
+  tracks: [],
+  genres: ["Ambient"],
+  total_duration: 0,
 };
 
 async function fulfillJSON(route: Route, body: unknown, status = 200) {
@@ -126,6 +162,16 @@ async function mockAlbumDetailsApi(page: Page, { isAdmin = true }: { isAdmin?: b
 
     if (url.pathname === `/api/music/albums/details/${ALBUM_ID}` && method === "GET") {
       await fulfillJSON(route, apiResponse(albumDetails));
+      return;
+    }
+
+    if (url.pathname === `/api/music/albums/details/${EMPTY_ALBUM_ID}` && method === "GET") {
+      await fulfillJSON(route, apiResponse(emptyAlbumDetails));
+      return;
+    }
+
+    if (url.pathname === "/api/music/musicians/7" && method === "GET") {
+      await fulfillJSON(route, apiResponse(musicianDetails));
       return;
     }
 
@@ -199,6 +245,49 @@ test("album details renders hero, tracklist, and details without console issues"
   await expect(page.getByRole("group", { name: "Spotify popularity 73 out of 100" })).toBeVisible();
 
   await expectPageHasNoHorizontalScroll(page);
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
+});
+
+test("artist links navigate to the musician details page", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/music/album/${ALBUM_ID}`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  // Hero name, artist badge, and Album Details entry all link to the musician.
+  const artistLinks = page.getByRole("link", { name: "Aurora Pines" });
+  await expect(artistLinks).toHaveCount(3);
+
+  // Artist links are keyboard-focusable (shared focus-visible ring recipe).
+  await artistLinks.first().focus();
+  await expect(artistLinks.first()).toBeFocused();
+
+  await artistLinks.first().click();
+  await expect(page).toHaveURL("/music/musician/7");
+  await expect(page.getByRole("heading", { level: 1, name: "Aurora Pines" })).toBeVisible();
+
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
+});
+
+test("album with no tracks shows an empty state and hides playback buttons", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/music/album/${EMPTY_ALBUM_ID}`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Silent Sessions" })).toBeVisible();
+  await expect(page.getByText("No tracks in this album")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Album", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Shuffle play album" })).toHaveCount(0);
+  // Admins keep the delete path for empty albums.
+  await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
+
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();
 });

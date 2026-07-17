@@ -241,7 +241,7 @@ const tracks = [
   {
     id: 401,
     title: "Beacon Line",
-    duration: 214,
+    duration: 214_000,
     codec: "flac",
     bit_rate: 890000,
     file_path: "/srv/media/music/beacon-line.flac",
@@ -254,7 +254,7 @@ const tracks = [
   {
     id: 402,
     title: "Soft Cutoff",
-    duration: 188,
+    duration: 188_000,
     codec: "flac",
     bit_rate: 820000,
     file_path: "/srv/media/music/soft-cutoff.flac",
@@ -267,7 +267,7 @@ const tracks = [
   {
     id: 403,
     title: "Late Platform",
-    duration: 236,
+    duration: 236_000,
     codec: "aac",
     bit_rate: 256000,
     file_path: "/srv/media/music/late-platform.m4a",
@@ -696,6 +696,9 @@ function movieTechnicalDetails(id: number) {
 function albumDetails(id: number) {
   const album = latestAlbums.find(item => item.id === id) ?? latestAlbums[0];
   const albumTracks = tracks.filter(track => track.album_id.Int64 === album.id);
+  const albumMusician = musicians.find(
+    item => item.name === album.musician.String,
+  );
 
   return {
     album: {
@@ -734,9 +737,11 @@ function albumDetails(id: number) {
     })),
     artists: [
       {
-        id: 1,
+        id: albumMusician?.id ?? 1,
         name: album.musician.String || "Unknown Artist",
-        thumb: nullableString("/api/static/musicians/the-signals.svg"),
+        thumb:
+          albumMusician?.thumb ??
+          nullableString("/api/static/musicians/the-signals.svg"),
         spotify_id: nullableString(null),
       },
     ],
@@ -1690,7 +1695,7 @@ function handleMusicRoutes(
           created_at: startedAt,
           updated_at: startedAt,
           track_count: 2,
-          total_duration: 402,
+          total_duration: 402_000,
           is_owner: true,
           can_edit: true,
         },

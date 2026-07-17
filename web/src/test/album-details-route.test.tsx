@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -97,7 +97,7 @@ function albumTrack(
     codec: "flac",
     size: 1024,
     track_index: trackIndex,
-    duration: 180,
+    duration: 180_000,
     disc: 1,
     channels: "2",
     channel_layout: "stereo",
@@ -153,7 +153,7 @@ function albumDetailsResponse(
       },
     ],
     album_genres: ["Alternative"],
-    total_duration: 180,
+    total_duration: 180_000,
   };
 }
 
@@ -163,15 +163,18 @@ type MockAlbumDetailsFetchOptions = {
     status?: number;
   };
   isAdmin?: boolean;
+  additionalAlbums?: Array<[number, AlbumDetailsResponseType]>;
 };
 
 function mockAlbumDetailsFetch({
   deleteAlbumResponse,
   isAdmin = false,
+  additionalAlbums = [],
 }: MockAlbumDetailsFetchOptions = {}) {
   const detailsById = new Map<number, AlbumDetailsResponseType>([
     [42, albumDetailsResponse(42, "Blue Record", "The Band", "Alabaster")],
     [43, albumDetailsResponse(43, "Red Record", "The Trio", "Ember")],
+    ...additionalAlbums,
   ]);
 
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -378,6 +381,139 @@ describe("album details route motion", () => {
     expect(secondHeroWrapper).not.toBe(firstHeroWrapper);
     expect(screen.getByText("Ember")).toBeInTheDocument();
     expect(screen.queryByText("Alabaster")).not.toBeInTheDocument();
+  });
+});
+
+describe("album details content", () => {
+  it("links the hero artist name, artist badge, and details entry to the musician page", async () => {
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+
+    const artistLinks = screen.getAllByRole("link", { name: "The Band" });
+    // Hero name, artist badge pill, and the Album Details entry
+    expect(artistLinks).toHaveLength(3);
+    artistLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/music/musician/142");
+    });
+  });
+
+  it("keeps the hero artist name as plain text when it matches no album artist", async () => {
+    const compilation = albumDetailsResponse(
+      44,
+      "Mixed Signals",
+      "The Band",
+      "Opening Track",
+    );
+    compilation.album.musician = nullableString("Various Artists");
+
+    await renderAlbumDetailsRoute("/music/album/44", {
+      additionalAlbums: [[44, compilation]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: /Mixed Signals/i }),
+    ).toBeInTheDocument();
+
+    expect(screen.getAllByText("Various Artists").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("link", { name: "Various Artists" }),
+    ).not.toBeInTheDocument();
+    // The badge for the actual artist still links
+    expect(screen.getByRole("link", { name: "The Band" })).toHaveAttribute(
+      "href",
+      "/music/musician/144",
+    );
+  });
+
+  it("shows an empty state and hides playback buttons for an album with no tracks", async () => {
+    const emptyAlbum = albumDetailsResponse(
+      45,
+      "Silent Record",
+      "The Band",
+      "Unused",
+    );
+    emptyAlbum.tracks = [];
+    emptyAlbum.track_genres = [];
+    emptyAlbum.total_duration = 0;
+
+    await renderAlbumDetailsRoute("/music/album/45", {
+      isAdmin: true,
+      additionalAlbums: [[45, emptyAlbum]],
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: /Silent Record/i }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("No tracks in this album")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Play Album" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Shuffle play album" }),
+    ).not.toBeInTheDocument();
+    // Admins keep the delete path for broken/empty albums
+    expect(
+      screen.getByRole("button", { name: "More options" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the a11y contract: labeled pill lists, skip links, and page summary", async () => {
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("list", { name: "Album details" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Genres: Alternative" }),
+    ).toBeInTheDocument();
+
+    const durationTime = screen.getByText("3m 0s", { selector: "time" });
+    expect(durationTime).toHaveAttribute("dateTime", "PT180S");
+
+    const skipNav = screen.getByRole("navigation", {
+      name: "Skip to section",
+    });
+    expect(skipNav).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Skip to track list" }),
+    ).toHaveAttribute("href", "#tracklist-heading");
+
+    const article = screen.getByRole("article");
+    expect(article).toHaveAttribute("aria-describedby", "album-42-summary");
+    const summary = document.getElementById("album-42-summary");
+    expect(summary?.textContent).toContain("Blue Record by The Band");
+    expect(summary?.textContent).toContain("1 track");
+  });
+
+  it("renders the enriched album details section", async () => {
+    await renderAlbumDetailsRoute("/music/album/42");
+
+    expect(
+      await screen.findByRole("heading", { name: /Blue Record/i }),
+    ).toBeInTheDocument();
+
+    const details = within(
+      screen.getByRole("region", { name: "Album Details" }),
+    );
+    expect(details.getByText("Audio Quality")).toBeInTheDocument();
+    expect(details.getByText("FLAC · 900 kbps · stereo")).toBeInTheDocument();
+    expect(details.getByText("Genres")).toBeInTheDocument();
+    expect(details.getByText("Alternative")).toBeInTheDocument();
+    expect(details.getByText("Artist")).toBeInTheDocument();
+    expect(details.getByRole("link", { name: "The Band" })).toHaveAttribute(
+      "href",
+      "/music/musician/142",
+    );
+    // Single disc album: no Discs entry
+    expect(details.queryByText("Discs")).not.toBeInTheDocument();
   });
 });
 
