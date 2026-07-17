@@ -275,7 +275,7 @@ function PlaylistForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description..."
             rows={3}
-            className="w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
+            className="w-full resize-none rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring focus:outline-hidden disabled:opacity-50"
             disabled={mutation.isPending}
           />
         </div>

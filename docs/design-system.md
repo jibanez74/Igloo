@@ -228,7 +228,10 @@ stamps `data-variant`/`data-size`.
   controls as `FOCUS_VISIBLE_RING_CLASS` in `constants.ts` (pinned by
   `constants-contracts.test.ts`). Media cards keep `focus-within:ring-2` on
   the `<article>` — the intentional whole-card variant — so the card shows
-  focus wherever it lands inside.
+  focus wherever it lands inside. When suppressing the browser outline in
+  favor of a ring, always use `outline-hidden`, never `outline-none`: rings
+  are box-shadows, which forced-colors mode strips, and `outline-hidden`
+  keeps a transparent outline the OS makes visible there.
 - **Hover/focus parity.** Every `group-hover` reveal pairs with
   `group-focus-within` (cards) or `focus-visible` (rows) so keyboard users get
   the same affordances. Never gate an action behind hover alone.
@@ -594,7 +597,7 @@ Each item maps to a §4 finding; the chosen resolution is recorded here.
 7. **Focus ring (§4.5) — unified on the shadcn recipe.**
    `FOCUS_VISIBLE_RING_CLASS` =
    `focus-visible:border-ring focus-visible:ring-[3px]
-   focus-visible:ring-ring/50 focus-visible:outline-none`, pinned by
+   focus-visible:ring-ring/50 focus-visible:outline-hidden`, pinned by
    `constants-contracts.test.ts`. Card `focus-within:ring-2` stays as the
    whole-card variant.
 8. **`MediaNotFound` (§4.9) — done.** Required `backTo` (`"/" | "/movies" |

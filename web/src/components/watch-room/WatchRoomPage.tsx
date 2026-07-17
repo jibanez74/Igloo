@@ -365,7 +365,7 @@ export function WatchRoomUnavailable({
           onClick={onBackHome}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+            "inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
           )}
         >
           <ArrowLeft className="size-5" aria-hidden="true" />
@@ -430,7 +430,7 @@ function WatchRoomHeader({
             onClick={onLeave}
             className={cn(
               MOTION_MICRO_COLORS_CLASS,
-              "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+              "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
             )}
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
@@ -541,7 +541,7 @@ function WatchRoomPlayerPanel({
                 onClick={onSeekBackward}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={`Rewind ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
@@ -553,7 +553,7 @@ function WatchRoomPlayerPanel({
                 onClick={onTogglePlay}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-13 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-13 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={playing ? "Pause playback" : "Play playback"}
               >
@@ -569,7 +569,7 @@ function WatchRoomPlayerPanel({
                 onClick={onSeekForward}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={`Fast-forward ${WATCH_ROOM_SEEK_STEP_SEC} seconds`}
               >
@@ -590,7 +590,7 @@ function WatchRoomPlayerPanel({
                 onClick={onToggleFullscreen}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background/60 text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={
                   playerFullscreenMode

@@ -358,7 +358,7 @@ function MusicianDetailsContent({
               <h1
                 id="musician-name"
                 tabIndex={-1}
-                className="max-w-full min-w-0 text-2xl font-bold text-balance wrap-break-word text-foreground outline-none sm:text-3xl md:text-4xl lg:text-5xl"
+                className="max-w-full min-w-0 text-2xl font-bold text-balance wrap-break-word text-foreground outline-hidden sm:text-3xl md:text-4xl lg:text-5xl"
                 title={musician.name}
               >
                 {musician.name}
@@ -548,7 +548,7 @@ function MusicianDetailsContent({
               search={{ tab: "musicians" }}
               className={cn(
                 MOTION_MICRO_COLORS_CLASS,
-                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none",
+                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-hidden",
               )}
               aria-label="Back to Musicians library"
             >
@@ -614,7 +614,7 @@ function AlbumCard({ album }: { album: MusicianAlbumType }) {
         params={{ id: album.id.toString() }}
         className={cn(
           CARD_INTERACTIVE_SURFACE_CLASS,
-          "block overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-none",
+          "block overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-hidden",
         )}
         aria-label={`${album.title}${year ? `, ${year}` : ""}, ${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`}
       >

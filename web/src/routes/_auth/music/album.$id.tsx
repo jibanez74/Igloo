@@ -349,7 +349,7 @@ function AlbumDetailsContent({
               <h1
                 id="album-title"
                 tabIndex={-1}
-                className="flex w-full max-w-full min-w-0 flex-col gap-1 text-2xl font-bold wrap-break-word text-foreground outline-none sm:text-3xl lg:text-4xl xl:text-5xl"
+                className="flex w-full max-w-full min-w-0 flex-col gap-1 text-2xl font-bold wrap-break-word text-foreground outline-hidden sm:text-3xl lg:text-4xl xl:text-5xl"
               >
                 <span className="min-w-0 text-balance">{album.title}</span>
               </h1>

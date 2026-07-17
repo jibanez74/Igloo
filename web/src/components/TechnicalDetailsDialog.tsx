@@ -256,7 +256,7 @@ export default function TechnicalDetailsDialog({
             ref={titleRef}
             id="technical-details-dialog-title"
             tabIndex={-1}
-            className="text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Technical details
           </DialogTitle>
@@ -284,7 +284,7 @@ export default function TechnicalDetailsDialog({
           <div className="space-y-8">
             <section
               aria-label="File"
-              className="rounded-lg outline-none"
+              className="rounded-lg outline-hidden"
             >
               <SectionHeading id="td-file">File</SectionHeading>
               <div className="rounded-lg border border-border bg-muted/60 p-3">

@@ -26,7 +26,7 @@ export default function CastSection({
     <section className="mt-8 sm:mt-10" aria-labelledby="cast-heading">
       <h2
         id="cast-heading"
-        className="mb-4 text-xl font-semibold text-foreground outline-none sm:text-2xl"
+        className="mb-4 text-xl font-semibold text-foreground outline-hidden sm:text-2xl"
         tabIndex={-1}
       >
         Cast
@@ -56,7 +56,7 @@ export default function CastSection({
               aria-label={`${actor.name} as ${actor.character}`}
               aria-posinset={index + 1}
               aria-setsize={displayedCast.length}
-              className="cursor-default outline-none"
+              className="cursor-default outline-hidden"
             >
               {actor.profile_path ? (
                 <img

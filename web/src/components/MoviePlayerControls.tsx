@@ -105,7 +105,7 @@ export default function MoviePlayerControls({
               onClick={onSeekBackward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
               )}
               aria-label={`Seek backward ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
             >
@@ -116,7 +116,7 @@ export default function MoviePlayerControls({
               onClick={onTogglePlay}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
               )}
               aria-label={playing ? "Pause (Space or K)" : "Play (Space or K)"}
             >
@@ -131,7 +131,7 @@ export default function MoviePlayerControls({
               onClick={onSeekForward}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
               )}
               aria-label={`Seek forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
             >
@@ -160,7 +160,7 @@ export default function MoviePlayerControls({
               onClick={onToggleFullscreen}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
               )}
               aria-label={
                 chromeFullscreenMode

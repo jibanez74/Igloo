@@ -252,7 +252,7 @@ export const SUBTITLES_NONE_LABEL = "None";
  */
 export const SELECT_CONTENT_SLOT_SELECTOR = "[data-slot='select-content']";
 export const PLAYBACK_SETTINGS_NATIVE_SELECT_CLASS =
-  "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 export const PLAYBACK_SETTINGS_SELECT_TRIGGER_CLASS =
   "w-full min-w-0 border-border bg-muted text-foreground";
 export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
@@ -456,7 +456,7 @@ export const CARD_ACTION_REVEAL_CLASS =
  * `focus`). Pinned by src/test/constants-contracts.test.ts.
  */
 export const FOCUS_VISIBLE_RING_CLASS =
-  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none";
+  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";
 
 /**
  * Layout-only shell for the full-width library/settings tab bars (movies /

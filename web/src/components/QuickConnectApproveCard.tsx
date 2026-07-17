@@ -296,7 +296,7 @@ export default function QuickConnectApproveCard() {
             <h3
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="text-sm font-medium text-foreground outline-none"
+              className="text-sm font-medium text-foreground outline-hidden"
             >
               Approve this device?
             </h3>
@@ -358,7 +358,7 @@ export default function QuickConnectApproveCard() {
             <h3
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="flex items-center gap-2 text-sm font-medium text-foreground outline-none"
+              className="flex items-center gap-2 text-sm font-medium text-foreground outline-hidden"
             >
               <Spinner className="size-4 text-primary" aria-hidden="true" />
               Waiting for {pendingDevice?.device_name ?? "the device"} to
@@ -376,7 +376,7 @@ export default function QuickConnectApproveCard() {
             <h3
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="text-sm font-medium text-foreground outline-none"
+              className="text-sm font-medium text-foreground outline-hidden"
             >
               {connectedName
                 ? `${connectedName} is connected`

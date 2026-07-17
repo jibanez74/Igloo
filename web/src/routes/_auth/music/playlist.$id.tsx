@@ -275,7 +275,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
       {/* Screen reader announcement */}
       <span
         tabIndex={0}
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring focus:outline-none"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-muted focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden"
         aria-label={pageAnnouncement}
       >
         {playlist.name} - {track_count} tracks
@@ -349,7 +349,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 onClick={handlePlayAll}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base",
+                  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
                 )}
                 aria-label={`Play all ${track_count} tracks`}
               >
@@ -361,7 +361,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 onClick={handleShuffle}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base",
+                  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden sm:px-6 sm:py-3 sm:text-base",
                 )}
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
@@ -380,7 +380,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 onClick={() => setShowEditDialog(true)}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary focus:text-primary focus:outline-none sm:gap-2 sm:text-sm",
+                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary focus:text-primary focus:outline-hidden sm:gap-2 sm:text-sm",
                 )}
                 aria-label="Edit playlist"
               >
@@ -395,7 +395,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 disabled={deleteMutation.isPending}
                 className={cn(
                   MOTION_MICRO_COLORS_CLASS,
-                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive focus:text-destructive focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm",
+                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive focus:text-destructive focus:outline-hidden disabled:opacity-50 sm:gap-2 sm:text-sm",
                 )}
                 aria-label="Delete playlist"
               >
@@ -459,7 +459,7 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
           search={{ tab: "playlists" }}
           className={cn(
             MOTION_MICRO_COLORS_CLASS,
-            "inline-flex items-center gap-2 text-muted-foreground hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none",
+            "inline-flex items-center gap-2 text-muted-foreground hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-hidden",
           )}
           aria-label="Back to Playlists"
         >

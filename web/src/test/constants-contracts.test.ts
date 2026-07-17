@@ -38,7 +38,7 @@ import {
 describe("constants contracts", () => {
   it("keeps the single shadcn focus-ring recipe (design-system §1.7)", () => {
     expect(FOCUS_VISIBLE_RING_CLASS).toBe(
-      "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+      "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden",
     );
   });
 

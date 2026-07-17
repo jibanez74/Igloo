@@ -1,7 +1,7 @@
 import type { MovieDetailsSkipLinksProps } from "@/types";
 
 const linkClass =
-  "rounded-sm px-2 py-1 text-primary underline focus:ring-2 focus:ring-ring focus:outline-none";
+  "rounded-sm px-2 py-1 text-primary underline focus:ring-2 focus:ring-ring focus:outline-hidden";
 
 export default function MovieDetailsSkipLinks({
   showCrewSection,

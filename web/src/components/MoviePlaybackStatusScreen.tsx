@@ -23,8 +23,8 @@ type MoviePlaybackStatusScreenProps = {
 
 const EMPTY_STATUS_ACTIONS: StatusAction[] = [];
 
-const primaryActionClass = `inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none ${MOTION_MICRO_COLORS_CLASS}`;
-const secondaryActionClass = `inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none ${MOTION_MICRO_COLORS_CLASS}`;
+const primaryActionClass = `inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden ${MOTION_MICRO_COLORS_CLASS}`;
+const secondaryActionClass = `inline-flex items-center gap-2 rounded-full border border-border px-6 py-3 font-semibold text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden ${MOTION_MICRO_COLORS_CLASS}`;
 
 function StatusActionIcon({ icon }: { icon: StatusAction["icon"] }) {
   if (icon === "retry") {

@@ -194,7 +194,7 @@ export default function VolumeControl({
           onClick={toggleMute}
           className={cn(
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
           )}
           aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
         >
@@ -219,7 +219,7 @@ export default function VolumeControl({
         onClick={() => setIsMinimizedPanelOpen(open => !open)}
         className={cn(
           MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+          "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
           isMinimizedPanelOpen && "bg-accent text-foreground",
         )}
         aria-label="Adjust volume"
@@ -246,7 +246,7 @@ export default function VolumeControl({
               onClick={toggleMute}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
               )}
               aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
             >

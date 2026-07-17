@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   CARD_ACTION_REVEAL_CLASS,
@@ -195,9 +196,11 @@ describe("motion contracts", () => {
   it("keeps inline transitions and animations reduced-motion safe", () => {
     // Shared MOTION_* constants are covered above, but some files declare
     // motion classes inline — scan every source file so a new one can't slip
-    // through. The check is file-granular: a file that mixes an escaped and a
-    // bare motion class would pass, but clean files (the norm — product code
-    // consumes the constants) trip it on their first bare literal.
+    // through. The check is per string literal: a class list that declares a
+    // transition or animation must carry its reduced-motion fallback in the
+    // same literal, so one escaped declaration can't exempt the rest of the
+    // file. Transitions may downgrade to motion-reduce:transition-colors
+    // instead of transition-none (color fades aren't motion).
     const srcDir = resolve(process.cwd(), "src");
     const sourceFiles = readdirSync(srcDir, {
       recursive: true,
@@ -211,22 +214,45 @@ describe("motion contracts", () => {
     for (const path of sourceFiles) {
       const source = readFileSync(path, "utf8");
       const name = path.slice(srcDir.length + 1);
-      if (
-        /transition-(?!none\b)/.test(source) &&
-        !source.includes("motion-reduce:transition-none")
-      ) {
-        violations.push(
-          `${name} declares a transition without motion-reduce:transition-none`,
-        );
-      }
-      if (
-        /(?<!motion-reduce:)animate-(?!none\b)/.test(source) &&
-        !source.includes("motion-reduce:animate-none")
-      ) {
-        violations.push(
-          `${name} declares an animation without motion-reduce:animate-none`,
-        );
-      }
+      const sourceFile = ts.createSourceFile(
+        name,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+      const checkLiteral = (text: string) => {
+        const snippet = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+        if (
+          /(?<!motion-reduce:)transition-(?!none\b)/.test(text) &&
+          !/motion-reduce:transition-(none|colors)\b/.test(text)
+        ) {
+          violations.push(
+            `${name}: "${snippet}" declares a transition without a motion-reduce:transition-none/colors fallback`,
+          );
+        }
+        if (
+          /(?<!motion-reduce:)animate-(?!none\b)/.test(text) &&
+          !text.includes("motion-reduce:animate-none")
+        ) {
+          violations.push(
+            `${name}: "${snippet}" declares an animation without motion-reduce:animate-none`,
+          );
+        }
+      };
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isStringLiteral(node) ||
+          ts.isNoSubstitutionTemplateLiteral(node) ||
+          ts.isTemplateHead(node) ||
+          ts.isTemplateMiddle(node) ||
+          ts.isTemplateTail(node)
+        ) {
+          checkLiteral(node.text);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sourceFile);
     }
     expect(violations).toEqual([]);
   });

@@ -36,7 +36,7 @@ export default function AppShell({ children }: PropsWithChildren) {
       <SidebarInset
         id="main"
         tabIndex={-1}
-        className="bg-background focus:outline-none"
+        className="bg-background focus:outline-hidden"
       >
         <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
           <SidebarTrigger className="-ml-1 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden" />

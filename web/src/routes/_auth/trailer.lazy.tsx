@@ -291,7 +291,7 @@ function TrailerPage() {
                 onClick={retry}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex items-center rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
               >
                 <RotateCcw className="mr-2 size-4" aria-hidden="true" />
@@ -302,7 +302,7 @@ function TrailerPage() {
                 onClick={handleClose}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "inline-flex items-center rounded-full border border-border px-6 py-3 font-semibold text-foreground hover:bg-muted focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
               >
                 <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -343,7 +343,7 @@ function TrailerPage() {
               onClick={handleClose}
               className={cn(
                 MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                "rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
               )}
             >
               <ArrowLeft className="mr-2 size-4" aria-hidden="true" />
@@ -429,7 +429,7 @@ function TrailerPage() {
           onClick={handleClose}
           className={cn(
             MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
           )}
           aria-label="Close trailer (Escape)"
         >
@@ -498,7 +498,7 @@ function TrailerPage() {
                 onClick={() => seekBackward(MOVIE_SEEK_STEP_SEC)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                 )}
                 aria-label={`Rewind ${MOVIE_SEEK_STEP_SEC} seconds (J or Left Arrow)`}
               >
@@ -510,7 +510,7 @@ function TrailerPage() {
                 onClick={togglePlay}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none",
+                  "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
                 )}
                 aria-label={
                   isPlaying ? "Pause (Space or K)" : "Play (Space or K)"
@@ -528,7 +528,7 @@ function TrailerPage() {
                 onClick={() => seekForward(MOVIE_SEEK_STEP_SEC)}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                 )}
                 aria-label={`Forward ${MOVIE_SEEK_STEP_SEC} seconds (L or Right Arrow)`}
               >
@@ -542,7 +542,7 @@ function TrailerPage() {
                 onClick={toggleMute}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                 )}
                 aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
               >
@@ -560,7 +560,7 @@ function TrailerPage() {
                 onClick={toggleFullscreen}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-none",
+                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
                 )}
                 aria-label={
                   isBrowserFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
