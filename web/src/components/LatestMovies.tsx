@@ -3,6 +3,7 @@ import { latestMoviesQueryOpts } from "@/lib/query-opts";
 import { Film } from "lucide-react";
 import HomeMediaSection from "@/components/HomeMediaSection";
 import MovieCard from "@/components/MovieCard";
+import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 
 export default function LatestMovies() {
   const { data, isPending } = useQuery(latestMoviesQueryOpts());
@@ -12,13 +13,6 @@ export default function LatestMovies() {
   const errorMessage = hasError
     ? data.message || "Failed to load movies. Please try again later."
     : undefined;
-
-  const getAnnouncementMessage = () => {
-    if (isPending) return undefined;
-    if (hasError) return data.message || "Failed to load movies";
-    if (movies.length === 0) return "No movies in your library";
-    return undefined;
-  };
 
   return (
     <HomeMediaSection
@@ -31,9 +25,8 @@ export default function LatestMovies() {
       emptyTitle="No Movies Yet"
       emptyDescription="Your movie library is empty. Add a movies folder in settings and run a scan to get started."
       emptyIcon={Film}
-      countLabel="movies"
-      gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4"
-      announcementMessage={getAnnouncementMessage()}
+      countNoun="movie"
+      gridClassName={HOME_POSTER_GRID_CLASS}
       getKey={movie => String(movie.id)}
       renderItem={movie => <MovieCard movie={movie} />}
     />

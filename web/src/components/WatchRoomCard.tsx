@@ -54,7 +54,7 @@ export default function WatchRoomCard({ room }: Props) {
     <article
       className={cn(
         CARD_INTERACTIVE_SURFACE_CLASS,
-        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10",
+        "group flex gap-4 rounded-2xl border border-border bg-card/95 p-4 focus-within:border-ring/40 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20",
       )}
       aria-label={`Watch room: ${room.movie_title}`}
     >

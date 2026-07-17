@@ -227,8 +227,9 @@ stamps `data-variant`/`data-size`.
   style, shipped by the primitives and exported for inline (non-shadcn)
   controls as `FOCUS_VISIBLE_RING_CLASS` in `constants.ts` (pinned by
   `constants-contracts.test.ts`). Media cards keep `focus-within:ring-2` on
-  the `<article>` — the intentional whole-card variant — so the card shows
-  focus wherever it lands inside. When suppressing the browser outline in
+  the `<article>` (`CARD_FOCUS_WITHIN_RING_CLASS` in `constants.ts`) — the
+  intentional whole-card variant — so the card shows focus wherever it lands
+  inside. When suppressing the browser outline in
   favor of a ring, always use `outline-hidden`, never `outline-none`: rings
   are box-shadows, which forced-colors mode strips, and `outline-hidden`
   keeps a transparent outline the OS makes visible there.
@@ -410,8 +411,12 @@ primitive where no list semantics are needed (§1.6).
 
 Grids: the canonical poster grid is
 `grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6`; home
-sections use auto-fit grids
-(`grid-cols-[repeat(auto-fit,minmax(min(7.5rem,100%),1fr))]`) inside the
+sections use the shared auto-fill grid constants (`HOME_POSTER_GRID_CLASS` /
+`HOME_ALBUM_GRID_CLASS` in `lib/constants.ts` —
+`grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))]`; **auto-fill,
+not auto-fit**, so sparse sections keep cards near the track min width
+instead of stretching one poster across the content column; pinned by
+`constants-contracts.test.ts`) inside the
 shared `HomeMediaSection` wrapper (heading + count pill + announced summary +
 pending/error/empty/grid states). True horizontal rails (cast, chapters,
 extras) are `-mx-4 flex overflow-x-auto px-4` with thin glacier scrollbars.

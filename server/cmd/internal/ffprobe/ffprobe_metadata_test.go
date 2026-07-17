@@ -65,9 +65,6 @@ func TestRunMetadataValidJSON(t *testing.T) {
 	if result.Streams[0].CodecType != "audio" {
 		t.Fatalf("CodecType = %q, want %q", result.Streams[0].CodecType, "audio")
 	}
-	if result.Format.Filename != "song.mp3" {
-		t.Fatalf("Format.Filename = %q, want %q", result.Format.Filename, "song.mp3")
-	}
 	if result.Format.Tags.Title != "Song Title" {
 		t.Fatalf("Format.Tags.Title = %q, want %q", result.Format.Tags.Title, "Song Title")
 	}
@@ -123,6 +120,52 @@ func TestRunMetadataEmptyStreamsRejected(t *testing.T) {
 	}
 }
 
+func TestGetAudioMetadataRequestsScannerFields(t *testing.T) {
+	argsPath := filepath.Join(t.TempDir(), "args.log")
+	t.Setenv("FFPROBE_ARGS_LOG", argsPath)
+
+	binPath := filepath.Join(t.TempDir(), "ffprobe")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FFPROBE_ARGS_LOG"
+printf '%s\n' '{"streams":[{"codec_name":"aac","codec_type":"audio","channels":2}],"format":{"duration":"12.34","bit_rate":"256000","tags":{"title":"Song Title"}}}'
+`
+	err := os.WriteFile(binPath, []byte(script), 0755)
+	if err != nil {
+		t.Fatalf("write fake ffprobe: %v", err)
+	}
+
+	probe := &ffprobe{bin: binPath}
+	_, err = probe.GetAudioMetadata("/tmp/song.mp3")
+	if err != nil {
+		t.Fatalf("GetAudioMetadata failed: %v", err)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read ffprobe arguments: %v", err)
+	}
+	got := strings.Split(strings.TrimSpace(string(argsData)), "\n")
+	want := []string{
+		"-v",
+		"quiet",
+		"-print_format",
+		"json",
+		"-show_format",
+		"-show_streams",
+		"-show_entries",
+		"format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language",
+		"/tmp/song.mp3",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("argument count = %d, want %d: %q", len(got), len(want), got)
+	}
+	for index, wantArg := range want {
+		if got[index] != wantArg {
+			t.Fatalf("argument %d = %q, want %q", index, got[index], wantArg)
+		}
+	}
+}
+
 func TestFormatTagsUnmarshalAliases(t *testing.T) {
 	var tags FormatTags
 	err := json.Unmarshal([]byte(`{
@@ -168,7 +211,7 @@ func fakeFFprobe(t *testing.T) string {
 	script := `#!/bin/sh
 case "$FFPROBE_FAKE_MODE" in
 valid)
-	printf '%s\n' '{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"filename":"song.mp3","duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}'
+	printf '%s\n' '{"streams":[{"index":1,"codec_name":"aac","codec_type":"audio","sample_rate":"44100"}],"format":{"duration":"12.34","tags":{"title":"Song Title"}},"chapters":[]}'
 	;;
 invalid)
 	printf '%s\n' '{invalid json'
@@ -178,7 +221,7 @@ fail)
 	exit 2
 	;;
 empty)
-	printf '%s\n' '{"streams":[],"format":{"filename":"empty.mp3"},"chapters":[]}'
+	printf '%s\n' '{"streams":[],"format":{},"chapters":[]}'
 	;;
 *)
 	printf '%s\n' 'unknown fake mode' >&2

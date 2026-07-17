@@ -58,12 +58,9 @@ type StreamTags struct {
 }
 
 type Format struct {
-	Filename   string     `json:"filename"`
-	Duration   string     `json:"duration"`
-	Size       string     `json:"size"`
-	BitRate    string     `json:"bit_rate"`
-	FormatName string     `json:"format_name"`
-	Tags       FormatTags `json:"tags"`
+	Duration string     `json:"duration"`
+	BitRate  string     `json:"bit_rate"`
+	Tags     FormatTags `json:"tags"`
 }
 
 type FormatTags struct {
@@ -172,7 +169,7 @@ func (f *ffprobe) GetAudioMetadata(filePath string) (*FfprobeResult, error) {
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
-		"-show_entries", "format=filename,duration,size,bit_rate,format_name:format_tags:stream=index,codec_name,codec_type,profile,bit_rate,sample_rate,channels,channel_layout:stream_tags=title,language",
+		"-show_entries", "format=duration,bit_rate:format_tags:stream=codec_name,codec_type,profile,channels,channel_layout:stream_tags=language",
 		filePath,
 	)
 }

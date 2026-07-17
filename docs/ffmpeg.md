@@ -46,7 +46,7 @@ For movies, Igloo calls `app.Ffprobe.GetMetadata(path)` while processing each mo
 - audio codecs, language tags, channel layout, sample rate, and bitrate
 - subtitle codecs, language tags, stream indices, and titles
 
-For music, Igloo uses ffprobe to populate track metadata such as title, sort title, artist, album, genre, track number, disc number, release date, duration, bitrate, size, composer, and copyright.
+For music, Igloo uses ffprobe to populate track metadata such as title, sort title, artist, album, genre, track number, disc number, release date, duration, bitrate, composer, and copyright. The library scan supplies each source file's size from the filesystem.
 
 The scanner stores stream data in SQLite so playback does not need to run ffprobe on every HLS request. That is intentional. HLS session creation reads movie, video stream, and audio stream rows from the database and starts FFmpeg from that stored metadata. This keeps playback startup predictable and avoids probing the same file repeatedly while users are trying to watch something.
 

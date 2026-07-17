@@ -236,6 +236,19 @@ describe("home route motion", () => {
   });
 });
 
+describe("home section summaries", () => {
+  it("pluralizes item counts in the summary and count badge", async () => {
+    await renderHomeRoute();
+
+    expect(
+      await screen.findByText("1 movie available in recently added movies."),
+    ).toBeInTheDocument();
+    // Count badges for the single-item sections render the singular noun.
+    expect(screen.getAllByText("1 movie").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1 movies/)).not.toBeInTheDocument();
+  });
+});
+
 describe("home continue watching section", () => {
   it("announces watch progress on the card link", async () => {
     await renderHomeRoute();

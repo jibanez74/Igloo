@@ -44,7 +44,7 @@ function HomePage() {
       <section
         aria-labelledby="home-heading"
         className={cn(
-          "rounded-3xl border border-border bg-linear-to-br from-card via-card to-background p-5 shadow-[0_24px_80px_-56px_rgba(56,189,248,0.45)] sm:p-6",
+          "rounded-3xl border border-border bg-linear-to-br from-card via-card to-background p-5 shadow-[0_24px_80px_-56px] shadow-primary/45 sm:p-6",
           MOTION_SECTION_ENTER_CLASS,
         )}
       >

@@ -5,9 +5,11 @@ import { showActionFailed } from "@/lib/toast-helpers";
 import { Music, Play } from "lucide-react";
 import { albumDetailsQueryOpts } from "@/lib/query-opts";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { usePosterFallback } from "@/hooks/usePosterFallback";
 import { Spinner } from "@/components/ui/spinner";
 import {
   CARD_ACTION_REVEAL_CLASS,
+  CARD_FOCUS_WITHIN_RING_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
@@ -26,9 +28,9 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
   const [isLoading, setIsLoading] = useState(false);
-  const [failedCoverUrl, setFailedCoverUrl] = useState<string | null>(null);
 
-  const coverUrl = getMediaImageUrl(unwrapString(cover));
+  const coverUrl = getMediaImageUrl(unwrapString(cover)) ?? "";
+  const { showPoster: showCover, onError } = usePosterFallback(coverUrl);
 
   const handlePrefetch = () =>
     queryClient.prefetchQuery(albumDetailsQueryOpts(id));
@@ -36,6 +38,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   const handlePlayAlbum = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isLoading) return;
     setIsLoading(true);
 
     try {
@@ -58,18 +61,17 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   };
 
   const musicianName = unwrapString(musician);
-  const showCover = coverUrl && failedCoverUrl !== coverUrl;
 
   return (
     <article
-      className={CARD_SURFACE_CLASS}
+      className={cn(CARD_SURFACE_CLASS, CARD_FOCUS_WITHIN_RING_CLASS)}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >
       <Link
         to="/music/album/$id"
         params={{ id: id.toString() }}
-        className="block focus:ring-2 focus:ring-ring focus:outline-hidden focus:ring-inset"
+        className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={`${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >
         {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
@@ -85,7 +87,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
               fetchPriority="low"
               sizes="(min-width: 1024px) 16.66vw, (min-width: 768px) 25vw, (min-width: 640px) 33.33vw, 50vw"
               className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-              onError={() => setFailedCoverUrl(coverUrl)}
+              onError={onError}
             />
           ) : (
             <div className="flex size-full items-center justify-center">
@@ -120,10 +122,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
       <button
         type="button"
         onClick={handlePlayAlbum}
-        disabled={isLoading}
+        aria-disabled={isLoading}
         className={cn(
           CARD_ACTION_REVEAL_CLASS,
-          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus:scale-100 focus:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden disabled:opacity-50",
+          "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-disabled:opacity-50",
         )}
         aria-label={`Play ${title}${musicianName ? ` by ${musicianName}` : ""}`}
       >

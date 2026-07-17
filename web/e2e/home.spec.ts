@@ -403,9 +403,16 @@ test("continue watching section announces progress", async ({ page }) => {
     name: "Continue Watching",
   });
   await expect(watchingRegion).toBeVisible();
-  await expect(
-    watchingRegion.getByRole("link", { name: "Ember Line 2026, 34% watched" }),
-  ).toBeVisible();
+  const emberCard = watchingRegion.getByRole("link", {
+    name: "Ember Line 2026, 34% watched",
+  });
+  await expect(emberCard).toBeVisible();
+
+  // Sparse sections must not stretch posters across the content column —
+  // the auto-fill grid keeps cards near the track min width.
+  const box = await emberCard.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeLessThan(300);
 
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();

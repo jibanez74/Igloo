@@ -32,10 +32,8 @@ func (app *Application) processMusicBatch(ctx context.Context, files []helpers.S
 func testMusicMetadata() *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
 		Format: ffprobe.Format{
-			Duration:   "180",
-			Size:       "5",
-			BitRate:    "256000",
-			FormatName: "mov,mp4,m4a,3gp,3g2,mj2",
+			Duration: "180",
+			BitRate:  "256000",
 			Tags: ffprobe.FormatTags{
 				Title:  "Test Track",
 				Artist: "Test Artist",
@@ -58,11 +56,9 @@ func testMusicMetadata() *ffprobe.FfprobeResult {
 func testMusicMetadataWithTags(tags ffprobe.FormatTags) *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
 		Format: ffprobe.Format{
-			Duration:   "180.250",
-			Size:       "5",
-			BitRate:    "256000",
-			FormatName: "mov,mp4,m4a,3gp,3g2,mj2",
-			Tags:       tags,
+			Duration: "180.250",
+			BitRate:  "256000",
+			Tags:     tags,
 		},
 		Streams: []ffprobe.Stream{
 			{
@@ -1157,9 +1153,8 @@ func TestResolveTrackFileMapsAudioMetadata(t *testing.T) {
 	trackPath := filepath.Join(t.TempDir(), "Mapped Track.flac")
 	metadata := &ffprobe.FfprobeResult{
 		Format: ffprobe.Format{
-			Duration:   "245.125",
-			BitRate:    "1411200",
-			FormatName: "flac",
+			Duration: "245.125",
+			BitRate:  "1411200",
 			Tags: ffprobe.FormatTags{
 				Title:       "Mapped Title",
 				Artist:      "Mapped Artist",

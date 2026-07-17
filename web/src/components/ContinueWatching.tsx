@@ -3,6 +3,7 @@ import { continueWatchingQueryOpts } from "@/lib/query-opts";
 import { Play } from "lucide-react";
 import HomeMediaSection from "@/components/HomeMediaSection";
 import MovieCard from "@/components/MovieCard";
+import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 
 export default function ContinueWatching() {
   const { data, isPending } = useQuery(continueWatchingQueryOpts());
@@ -23,15 +24,12 @@ export default function ContinueWatching() {
       title="Continue Watching"
       headingId="continue-watching"
       items={movies}
-      isPending={false}
       errorMessage={errorMessage}
-      loadingLabel="Loading continue watching..."
       emptyTitle="Nothing In Progress"
       emptyDescription="Movies you start watching will appear here."
       emptyIcon={Play}
-      countLabel="movies"
-      gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4"
-      announcementMessage={errorMessage}
+      countNoun="movie"
+      gridClassName={HOME_POSTER_GRID_CLASS}
       getKey={movie => String(movie.id)}
       renderItem={movie => (
         <MovieCard

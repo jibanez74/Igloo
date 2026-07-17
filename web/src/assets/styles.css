@@ -139,6 +139,26 @@
 }
 /* END GENERATED: theme tokens */
 
+/* Theme-switch cross-fade: setTheme() in src/lib/theme.ts adds
+   `theme-switching` to <html> during a user toggle, removed after
+   MOTION_DURATION_STANDARD_MS (200ms — keep in sync). !important lets the
+   fade override per-component Tailwind transitions (e.g. duration-150
+   micro-motion classes). JS also guards reduced motion; the media query
+   is belt-and-braces. */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-switching,
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition:
+      background-color 200ms ease-out,
+      color 200ms ease-out,
+      border-color 200ms ease-out,
+      fill 200ms ease-out,
+      stroke 200ms ease-out !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
