@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
   MOTION_PAGE_ENTER_CLASS,
   USER_PASSWORD_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
@@ -80,126 +82,113 @@ function LoginPage() {
   };
 
   return (
-    <div className="h-full bg-background text-foreground antialiased">
+    <main className="relative flex min-h-svh items-center justify-center px-4">
       {/* React 19 Document Metadata */}
       <title>{pageTitle}</title>
       <meta name="description" content={pageDescription} />
 
-      <div className="relative min-h-screen">
-        <img
-          src={loginBg}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 size-full object-cover"
-          decoding="async"
-          fetchPriority="high"
-        />
-        {/* Dark overlay */}
-        <div className="absolute inset-0 bg-background/70" />
+      <img
+        src={loginBg}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 size-full object-cover"
+        decoding="async"
+        fetchPriority="high"
+      />
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-background/70" />
 
-        <main className="relative z-10 flex min-h-screen items-center justify-center px-4">
-          <Card
-            className={cn(
-              MOTION_PAGE_ENTER_CLASS,
-              "w-full max-w-md border-border bg-card/80 shadow-xl backdrop-blur-sm",
-            )}
-          >
-            <CardHeader className="pb-2 text-center">
-              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
-                <Snowflake
-                  className="size-5 text-primary"
-                  aria-hidden="true"
+      <Card
+        className={cn(
+          MOTION_PAGE_ENTER_CLASS,
+          "z-10 w-full max-w-md border-border bg-card/80 shadow-xl backdrop-blur-sm",
+        )}
+      >
+        <CardHeader className="pb-2 text-center">
+          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
+            <Snowflake className="size-5 text-primary" aria-hidden="true" />
+          </div>
+          <CardTitle asChild className="text-2xl font-semibold tracking-tight text-foreground">
+            <h1>Welcome to Igloo</h1>
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Sign in to access your private media library.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <form onSubmit={loginHandler} className="space-y-4">
+            {/* Email field */}
+            <div className="space-y-1">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className={inputIconClassName} aria-hidden="true" />
+                <Input
+                  autoFocus
+                  type="email"
+                  id="email"
+                  name="email"
+                  inputMode="email"
+                  autoComplete="username"
+                  required
+                  className={cn("pl-10", lightInputClassName)}
+                  disabled={isSubmitting}
                 />
               </div>
-              <CardTitle asChild className="text-2xl font-semibold tracking-tight text-foreground">
-                <h1>Welcome to Igloo</h1>
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Sign in to access your private media library.
-              </CardDescription>
-            </CardHeader>
+            </div>
 
-            <CardContent>
-              <form onSubmit={loginHandler} className="space-y-4">
-                {/* Email field */}
-                <div className="space-y-1">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail
-                      className={inputIconClassName}
-                      aria-hidden="true"
-                    />
-                    <Input
-                      autoFocus
-                      type="email"
-                      id="email"
-                      name="email"
-                      inputMode="email"
-                      autoComplete="username"
-                      required
-                      className={`pl-10 ${lightInputClassName}`}
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                </div>
+            {/* Password field */}
+            <div className="space-y-1">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className={inputIconClassName} aria-hidden="true" />
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  minLength={USER_PASSWORD_MIN_LENGTH}
+                  maxLength={USER_PASSWORD_MAX_LENGTH}
+                  id="password"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  className={cn("px-10", lightInputClassName)}
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  className={cn(
+                    "absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2",
+                    FOCUS_VISIBLE_RING_CLASS,
+                    MOTION_MICRO_COLORS_CLASS,
+                    lightInputActionClassName,
+                  )}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSubmitting}
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="size-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
 
-                {/* Password field */}
-                <div className="space-y-1">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock
-                      className={inputIconClassName}
-                      aria-hidden="true"
-                    />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      minLength={USER_PASSWORD_MIN_LENGTH}
-                      maxLength={USER_PASSWORD_MAX_LENGTH}
-                      id="password"
-                      name="password"
-                      autoComplete="current-password"
-                      required
-                      className={`px-10 ${lightInputClassName}`}
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      className={cn(
-                        "absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 focus:ring-2 focus:ring-ring focus:outline-none",
-                        lightInputActionClassName,
-                      )}
-                      aria-label={
-                        showPassword ? "Hide password" : "Show password"
-                      }
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={isSubmitting}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="size-4" aria-hidden="true" />
-                      ) : (
-                        <Eye className="size-4" aria-hidden="true" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Submit button */}
-                <div className="pt-2">
-                  <Button
-                    type="submit"
-                    variant="accent"
-                    className="w-full"
-                    disabled={isSubmitting}
-                  >
-                    <LogIn className="size-4" aria-hidden="true" />
-                    <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    </div>
+            {/* Submit button */}
+            <div className="pt-2">
+              <Button
+                type="submit"
+                variant="accent"
+                className="w-full"
+                disabled={isSubmitting}
+              >
+                <LogIn className="size-4" aria-hidden="true" />
+                <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </main>
   );
 }
