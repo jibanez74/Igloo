@@ -3,6 +3,8 @@ import {
   ALBUMS_PAGINATED_KEY,
   ALBUMS_PER_PAGE,
   FOCUS_VISIBLE_RING_CLASS,
+  HOME_ALBUM_GRID_CLASS,
+  HOME_POSTER_GRID_CLASS,
   LIKED_TRACKS_KEY,
   LIKED_TRACKS_PER_PAGE,
   MOVIES_BY_GENRE_KEY,
@@ -40,6 +42,17 @@ describe("constants contracts", () => {
     expect(FOCUS_VISIBLE_RING_CLASS).toBe(
       "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden",
     );
+  });
+
+  it("keeps home grids on auto-fill so sparse sections don't stretch (design-system §3.2)", () => {
+    expect(HOME_POSTER_GRID_CLASS).toContain(
+      "repeat(auto-fill,minmax(min(7.5rem,100%),1fr))",
+    );
+    expect(HOME_ALBUM_GRID_CLASS).toContain(
+      "repeat(auto-fill,minmax(min(8rem,100%),1fr))",
+    );
+    expect(HOME_POSTER_GRID_CLASS).not.toContain("auto-fit");
+    expect(HOME_ALBUM_GRID_CLASS).not.toContain("auto-fit");
   });
 
   it("derives stream mode ids from stream modes", () => {

@@ -22,6 +22,11 @@ type ffprobe struct {
 	bin string
 }
 
+type binaryCandidate struct {
+	path         string
+	extractedDir string
+}
+
 var _ FfprobeInterface = (*ffprobe)(nil)
 
 var (
@@ -31,7 +36,7 @@ var (
 )
 
 // New returns a singleton ffprobe instance.
-// resolveBinaryPath is defined in build-tag-specific files:
+// resolveBinaryCandidate is defined in build-tag-specific files:
 // embedded mode extracts a release payload; externalbin mode uses host ffprobe.
 func New() (FfprobeInterface, error) {
 	instanceMu.Lock()
@@ -41,21 +46,41 @@ func New() (FfprobeInterface, error) {
 		return instance, nil
 	}
 
-	binPath, err := resolveBinaryPath()
+	candidate, err := resolveBinaryCandidate()
 	if err != nil {
 		return nil, err
 	}
 
+	created, err := initializeCandidate(candidate)
+	if err != nil {
+		return nil, err
+	}
+
+	instance = created
+	extractedDir = candidate.extractedDir
+
+	return instance, nil
+}
+
+func initializeCandidate(candidate binaryCandidate) (*ffprobe, error) {
 	// Confirm the binary actually executes; path resolution alone does not catch a
 	// corrupt, wrong-arch, or non-executable ffprobe. The server must not boot
 	// without a working ffprobe.
-	if err := verifyExecutable(binPath); err != nil {
-		return nil, fmt.Errorf("ffprobe binary at %s is not executable: %w", binPath, err)
+	err := verifyExecutable(candidate.path)
+	if err != nil {
+		cleanupErr := mediabin.CleanupExtracted("ffprobe", candidate.extractedDir)
+		if cleanupErr != nil {
+			return nil, fmt.Errorf(
+				"ffprobe binary at %s is not executable: %w (cleanup failed: %v)",
+				candidate.path,
+				err,
+				cleanupErr,
+			)
+		}
+		return nil, fmt.Errorf("ffprobe binary at %s is not executable: %w", candidate.path, err)
 	}
 
-	instance = &ffprobe{bin: binPath}
-
-	return instance, nil
+	return &ffprobe{bin: candidate.path}, nil
 }
 
 func verifyExecutable(binPath string) error {
@@ -75,6 +100,7 @@ func verifyExecutable(binPath string) error {
 
 // Cleanup removes the extracted binary and its temp directory.
 // Should be called when the application shuts down.
+// After calling Cleanup(), New() can be called again to re-extract the binary.
 func Cleanup() error {
 	instanceMu.Lock()
 	defer instanceMu.Unlock()
@@ -84,7 +110,8 @@ func Cleanup() error {
 		return nil
 	}
 
-	if err := mediabin.CleanupExtracted("ffprobe", extractedDir); err != nil {
+	err := mediabin.CleanupExtracted("ffprobe", extractedDir)
+	if err != nil {
 		return err
 	}
 

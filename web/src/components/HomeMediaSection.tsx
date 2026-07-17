@@ -1,10 +1,10 @@
 import { Fragment, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import EmptyState from "@/components/EmptyState";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
+import SectionErrorAlert from "@/components/SectionErrorAlert";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -12,15 +12,15 @@ type HomeMediaSectionProps<T> = {
   title: string;
   headingId: string;
   items: T[];
-  isPending: boolean;
+  isPending?: boolean;
   errorMessage: string | undefined;
-  loadingLabel: string;
+  loadingLabel?: string;
   emptyTitle: string;
   emptyDescription: string;
   emptyIcon: LucideIcon;
-  countLabel: string;
+  /** Singular noun for the item count ("movie", "album") — pluralized here. */
+  countNoun: string;
   gridClassName: string;
-  announcementMessage?: string;
   getKey: (item: T, index: number) => string;
   renderItem: (item: T, index: number) => ReactNode;
 };
@@ -29,31 +29,34 @@ export default function HomeMediaSection<T>({
   title,
   headingId,
   items,
-  isPending,
+  isPending = false,
   errorMessage,
   loadingLabel,
   emptyTitle,
   emptyDescription,
   emptyIcon: EmptyIcon,
-  countLabel,
+  countNoun,
   gridClassName,
-  announcementMessage,
   getKey,
   renderItem,
 }: HomeMediaSectionProps<T>) {
-  const hasError = Boolean(errorMessage);
   const sectionSummaryId = `${headingId}-summary`;
+  const countLabel = `${items.length} ${countNoun}${items.length === 1 ? "" : "s"}`;
   let sectionSummary = "";
 
   if (isPending) {
-    sectionSummary = loadingLabel;
-  } else if (hasError && errorMessage) {
+    sectionSummary = loadingLabel ?? "";
+  } else if (errorMessage) {
     sectionSummary = errorMessage;
   } else if (items.length > 0) {
-    sectionSummary = `${items.length} ${countLabel} available in ${title.toLowerCase()}.`;
+    sectionSummary = `${countLabel} available in ${title.toLowerCase()}.`;
   } else {
     sectionSummary = emptyDescription;
   }
+
+  const announcementMessage = isPending
+    ? undefined
+    : (errorMessage ?? (items.length === 0 ? emptyDescription : undefined));
 
   return (
     <section
@@ -80,9 +83,9 @@ export default function HomeMediaSection<T>({
           </p>
         </div>
 
-        {!isPending && !hasError && items.length > 0 && (
+        {!isPending && !errorMessage && items.length > 0 && (
           <Badge variant="outline" className="px-3 py-1">
-            {items.length} {countLabel}
+            {countLabel}
           </Badge>
         )}
       </div>
@@ -95,15 +98,8 @@ export default function HomeMediaSection<T>({
         >
           <Spinner className="size-8 text-primary" />
         </div>
-      ) : hasError ? (
-        <Alert
-          variant="destructive"
-          className="border-destructive/20 bg-destructive/10 text-destructive"
-        >
-          <AlertCircle className="size-4" aria-hidden="true" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
+      ) : errorMessage ? (
+        <SectionErrorAlert message={errorMessage} />
       ) : items.length > 0 ? (
         <div className={gridClassName}>
           {items.map((item, index) => (
@@ -113,17 +109,11 @@ export default function HomeMediaSection<T>({
           ))}
         </div>
       ) : (
-        <div className="py-12 text-center sm:py-16">
-          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full border border-primary/20 bg-muted">
-            <EmptyIcon className="size-6 text-primary" aria-hidden="true" />
-          </div>
-          <h3 className="mb-2 text-lg font-semibold text-foreground">
-            {emptyTitle}
-          </h3>
-          <p className="mx-auto max-w-md px-4 text-muted-foreground sm:px-0">
-            {emptyDescription}
-          </p>
-        </div>
+        <EmptyState
+          icon={EmptyIcon}
+          title={emptyTitle}
+          description={emptyDescription}
+        />
       )}
     </section>
   );

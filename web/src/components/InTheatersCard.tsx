@@ -3,6 +3,7 @@ import { Film, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
+  CARD_FOCUS_WITHIN_RING_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
   TMDB_POSTER_SIZE,
@@ -12,11 +13,11 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { cn } from "@/lib/utils";
 import type { TheaterMovieType } from "@/types";
 
-type MovieCardProps = {
+type InTheatersCardProps = {
   movie: TheaterMovieType;
 };
 
-export default function MovieCard({ movie }: MovieCardProps) {
+export default function InTheatersCard({ movie }: InTheatersCardProps) {
   const { id, title, poster_path, vote_average, release_date } = movie;
 
   const posterUrl = poster_path
@@ -29,12 +30,12 @@ export default function MovieCard({ movie }: MovieCardProps) {
 
   return (
     <article
-      className={CARD_SURFACE_CLASS}
+      className={cn(CARD_SURFACE_CLASS, "min-w-0", CARD_FOCUS_WITHIN_RING_CLASS)}
     >
       <Link
         to="/movies/in-theaters/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+        className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={`${title}${year ? `, ${year}` : ""}${rating ? `, rated ${rating} out of 10` : ""}`}
       >
         {/* Poster with 2:3 aspect ratio (standard movie poster) */}

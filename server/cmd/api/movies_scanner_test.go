@@ -92,9 +92,7 @@ func (*stubMovieScannerTmdb) ClearCache() {}
 func testMovieMetadata() *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
 		Format: ffprobe.Format{
-			Duration:   "120",
-			Size:       "5",
-			FormatName: "matroska,webm",
+			Duration: "120",
 		},
 		Streams: []ffprobe.Stream{
 			{
@@ -160,9 +158,7 @@ func TestProcessMoviesBatchRollsBackInvalidMovieFile(t *testing.T) {
 	app.Ffprobe = &stubMovieScannerFfprobe{
 		result: &ffprobe.FfprobeResult{
 			Format: ffprobe.Format{
-				Duration:   "120",
-				Size:       "5",
-				FormatName: "matroska,webm",
+				Duration: "120",
 			},
 			Streams: []ffprobe.Stream{
 				{

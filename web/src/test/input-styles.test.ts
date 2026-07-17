@@ -63,7 +63,7 @@ describe("light input styles", () => {
       "utf8",
     );
 
-    expect(source).toContain("focus:ring-ring");
-    expect(source).not.toContain("focus:ring-primary-foreground");
+    expect(source).toContain("focus-visible:ring-ring");
+    expect(source).not.toContain("ring-primary-foreground");
   });
 });

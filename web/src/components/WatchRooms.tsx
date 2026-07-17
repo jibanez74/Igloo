@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { watchRoomsQueryOpts } from "@/lib/query-opts";
-import { AlertCircle, Radio } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Radio } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
+import SectionErrorAlert from "@/components/SectionErrorAlert";
 import WatchRoomCard from "@/components/WatchRoomCard";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -64,12 +65,13 @@ export default function WatchRooms() {
           </div>
 
           {!isPending && !hasError && rooms.length > 0 && (
-            <p
+            <Badge
               id={WATCH_ROOMS_SUMMARY_ID}
-              className="rounded-full border border-border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground"
+              variant="outline"
+              className="px-3 py-1"
             >
               {rooms.length} room{rooms.length === 1 ? "" : "s"}
-            </p>
+            </Badge>
           )}
         </div>
       </div>
@@ -81,19 +83,13 @@ export default function WatchRooms() {
           aria-label="Loading watch rooms..."
         >
           <Spinner className="size-6 text-primary" />
-          <span className="sr-only">Loading watch rooms...</span>
         </div>
       ) : hasError ? (
-        <Alert
-          variant="destructive"
-          className="border-destructive/20 bg-destructive/10 text-destructive"
-        >
-          <AlertCircle className="size-4" aria-hidden="true" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {data.message || "Failed to load watch rooms. Please try again later."}
-          </AlertDescription>
-        </Alert>
+        <SectionErrorAlert
+          message={
+            data.message || "Failed to load watch rooms. Please try again later."
+          }
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rooms.map((room) => (

@@ -31,12 +31,10 @@ func (*movieScannerCapturedLogger) Warn(_ string, _ ...any) {}
 
 func (*movieScannerCapturedLogger) Error(_ string, _ ...any) {}
 
-func movieScannerMetadataFixture(duration, size string) *ffprobe.FfprobeResult {
+func movieScannerMetadataFixture(duration string) *ffprobe.FfprobeResult {
 	return &ffprobe.FfprobeResult{
 		Format: ffprobe.Format{
-			Duration:   duration,
-			Size:       size,
-			FormatName: "matroska,webm",
+			Duration: duration,
 		},
 		Streams: []ffprobe.Stream{
 			{
@@ -405,7 +403,7 @@ func TestProcessMoviesBatchWithTmdbPersistsMetadataRelationshipsAndStreams(t *te
 		detailMovies: map[int]tmdb.TmdbMovie{603: tmdbDetails},
 	}
 	app.Tmdb = tmdbStub
-	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4", "12345")}
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("5432.4")}
 
 	scanned, skipped, errCount := app.processMoviesBatchWithContext(ctx, newMovieScanContext(nil), []helpers.ScanFile{
 		{Path: path, Ext: "mkv", Size: 5},
@@ -605,9 +603,9 @@ func TestProcessMoviesBatchWithTmdbReplacesScannerOwnedRelationshipsOnRescan(t *
 	app.Tmdb = tmdbStub
 	app.Ffprobe = &stubMovieScannerFfprobe{
 		results: []*ffprobe.FfprobeResult{
-			movieScannerMetadataFixture("120", "100"),
+			movieScannerMetadataFixture("120"),
 			{
-				Format: ffprobe.Format{Duration: "180", Size: "200", FormatName: "matroska,webm"},
+				Format: ffprobe.Format{Duration: "180"},
 				Streams: []ffprobe.Stream{
 					{Index: 4, CodecName: "hevc", CodecType: "video", Width: 3840, Height: 2160},
 					{Index: 5, CodecName: "aac", CodecType: "audio", Channels: 2},
@@ -821,7 +819,7 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 	resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
 		Path: "/movies/Local.Only.2024.mkv",
 		Ext:  "mkv",
@@ -840,7 +838,7 @@ func TestResolveMovieFileFallsBackWhenTmdbUnavailable(t *testing.T) {
 		t.Fatalf("year = %+v, want 2024", resolved.params.Year)
 	}
 	if resolved.params.Size != 321 {
-		t.Fatalf("size = %d, want filesystem size 321 even when ffprobe size is present", resolved.params.Size)
+		t.Fatalf("size = %d, want filesystem size 321", resolved.params.Size)
 	}
 }
 
@@ -857,7 +855,7 @@ func TestResolveMovieFileFallsBackWhenTmdbDetailFails(t *testing.T) {
 		detailErr: sql.ErrNoRows,
 	}
 	app.Tmdb = tmdbStub
-	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600", "999")}
+	app.Ffprobe = &stubMovieScannerFfprobe{result: movieScannerMetadataFixture("3600")}
 
 	resolved, err := app.resolveMovieFile(context.Background(), helpers.ScanFile{
 		Path: "/movies/Detail.Fails.2022.mkv",

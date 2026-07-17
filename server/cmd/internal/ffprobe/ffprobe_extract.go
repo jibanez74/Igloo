@@ -6,15 +6,14 @@ import (
 	"igloo/cmd/internal/mediabin"
 )
 
-// resolveBinaryPath extracts the embedded ffprobe binary to a temporary
-// directory and returns the path to the executable.
+// resolveBinaryCandidate extracts the embedded ffprobe binary to a temporary
+// directory and returns its candidate path and extraction directory.
 // embeddedBinary is defined in platform-specific files (ffprobe_darwin_arm64.go,
 // ffprobe_linux_amd64.go) and is populated at compile time via //go:embed.
-func resolveBinaryPath() (string, error) {
+func resolveBinaryCandidate() (binaryCandidate, error) {
 	binPath, tempDir, err := mediabin.ExtractEmbedded("ffprobe", embeddedBinary)
 	if err != nil {
-		return "", err
+		return binaryCandidate{}, err
 	}
-	extractedDir = tempDir
-	return binPath, nil
+	return binaryCandidate{path: binPath, extractedDir: tempDir}, nil
 }

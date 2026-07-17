@@ -448,6 +448,22 @@ export const CARD_MEDIA_HOVER_CLASS =
 export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;
 export const CARD_ACTION_REVEAL_CLASS =
   "transition-[background-color,opacity,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:scale-100";
+/**
+ * Whole-card focus ring for media cards (design-system §1.7) — the intentional
+ * focus-within variant of the single ring recipe, shown on the `<article>` so
+ * the card indicates focus wherever it lands inside.
+ */
+export const CARD_FOCUS_WITHIN_RING_CLASS =
+  "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background";
+/**
+ * Home-section media grids (design-system §3.2). auto-fill (not auto-fit) so
+ * sparse sections (1–2 items, e.g. Continue Watching) keep cards near the
+ * track min width instead of stretching one poster across the content column.
+ */
+export const HOME_POSTER_GRID_CLASS =
+  "grid grid-cols-[repeat(auto-fill,minmax(min(7.5rem,100%),1fr))] gap-3 sm:gap-4";
+export const HOME_ALBUM_GRID_CLASS =
+  "grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]";
 
 /**
  * The one focus ring, per design-system §1.7 — the shadcn

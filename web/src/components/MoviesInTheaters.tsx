@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { inTheatersQueryOpts } from "@/lib/query-opts";
 import { Film } from "lucide-react";
 import HomeMediaSection from "@/components/HomeMediaSection";
-import MovieCard from "@/components/InTheatersCard";
+import InTheatersCard from "@/components/InTheatersCard";
+import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import type { TheaterMovieType } from "@/types";
 
 export default function MoviesInTheaters() {
@@ -23,13 +24,6 @@ export default function MoviesInTheaters() {
     ? data.message || "Failed to load movies. Please try again later."
     : undefined;
 
-  const getAnnouncementMessage = () => {
-    if (isPending) return undefined;
-    if (hasError) return data.message || "Failed to load movies";
-    if (movies.length === 0) return "No movies currently available";
-    return undefined;
-  };
-
   return (
     <HomeMediaSection
       title="Now Playing in Theaters"
@@ -41,11 +35,10 @@ export default function MoviesInTheaters() {
       emptyTitle="No Movies Available"
       emptyDescription="Unable to fetch movies currently playing in theaters. Check back later."
       emptyIcon={Film}
-      countLabel="movies"
-      gridClassName="grid grid-cols-[repeat(auto-fit,minmax(min(8rem,100%),1fr))] gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]"
-      announcementMessage={getAnnouncementMessage()}
+      countNoun="movie"
+      gridClassName={HOME_POSTER_GRID_CLASS}
       getKey={(movie: TheaterMovieType) => String(movie.id)}
-      renderItem={(movie: TheaterMovieType) => <MovieCard movie={movie} />}
+      renderItem={(movie: TheaterMovieType) => <InTheatersCard movie={movie} />}
     />
   );
 }
