@@ -45,6 +45,58 @@ function durationClass(durationMs: number) {
   return `duration-${durationMs}`;
 }
 
+function findInlineMotionViolations(name: string, source: string) {
+  const violations: string[] = [];
+  const sourceFile = ts.createSourceFile(
+    name,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    name.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const checkLiteral = (text: string) => {
+    const snippet = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+    if (
+      /(?<!motion-reduce:)transition-(?!none\b)/.test(text) &&
+      !/motion-reduce:transition-(none|colors)\b/.test(text)
+    ) {
+      violations.push(
+        `${name}: "${snippet}" declares a transition without a motion-reduce:transition-none/colors fallback`,
+      );
+    }
+    if (
+      /(?<!motion-reduce:)animate-(?!none\b)/.test(text) &&
+      !text.includes("motion-reduce:animate-none")
+    ) {
+      violations.push(
+        `${name}: "${snippet}" declares an animation without motion-reduce:animate-none`,
+      );
+    }
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isTemplateExpression(node)) {
+      const text = [
+        node.head.text,
+        ...node.templateSpans.map((span) => span.literal.text),
+      ].join("");
+      checkLiteral(text);
+      for (const span of node.templateSpans) {
+        visit(span.expression);
+      }
+      return;
+    }
+    if (
+      ts.isStringLiteral(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node)
+    ) {
+      checkLiteral(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return violations;
+}
+
 describe("motion contracts", () => {
   it("exports shared duration tokens", () => {
     expect(MOTION_DURATION_MICRO_MS).toBe(150);
@@ -193,6 +245,22 @@ describe("motion contracts", () => {
     );
   });
 
+  it("treats template expressions as one class-bearing literal", () => {
+    const safeSource = [
+      "const transition = `transition-opacity ${state} motion-reduce:transition-none`;",
+      "const animation = `animate-pulse ${state} motion-reduce:animate-none`;",
+    ].join("\n");
+    expect(findInlineMotionViolations("safe.tsx", safeSource)).toEqual([]);
+
+    const unsafeSource =
+      'const classes = `opacity-100 ${active ? "animate-pulse" : ""}`;';
+    expect(findInlineMotionViolations("unsafe.tsx", unsafeSource)).toEqual([
+      expect.stringContaining(
+        "declares an animation without motion-reduce:animate-none",
+      ),
+    ]);
+  });
+
   it("keeps inline transitions and animations reduced-motion safe", () => {
     // Shared MOTION_* constants are covered above, but some files declare
     // motion classes inline — scan every source file so a new one can't slip
@@ -214,45 +282,7 @@ describe("motion contracts", () => {
     for (const path of sourceFiles) {
       const source = readFileSync(path, "utf8");
       const name = path.slice(srcDir.length + 1);
-      const sourceFile = ts.createSourceFile(
-        name,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-        path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-      );
-      const checkLiteral = (text: string) => {
-        const snippet = text.length > 60 ? `${text.slice(0, 60)}…` : text;
-        if (
-          /(?<!motion-reduce:)transition-(?!none\b)/.test(text) &&
-          !/motion-reduce:transition-(none|colors)\b/.test(text)
-        ) {
-          violations.push(
-            `${name}: "${snippet}" declares a transition without a motion-reduce:transition-none/colors fallback`,
-          );
-        }
-        if (
-          /(?<!motion-reduce:)animate-(?!none\b)/.test(text) &&
-          !text.includes("motion-reduce:animate-none")
-        ) {
-          violations.push(
-            `${name}: "${snippet}" declares an animation without motion-reduce:animate-none`,
-          );
-        }
-      };
-      const visit = (node: ts.Node) => {
-        if (
-          ts.isStringLiteral(node) ||
-          ts.isNoSubstitutionTemplateLiteral(node) ||
-          ts.isTemplateHead(node) ||
-          ts.isTemplateMiddle(node) ||
-          ts.isTemplateTail(node)
-        ) {
-          checkLiteral(node.text);
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(sourceFile);
+      violations.push(...findInlineMotionViolations(name, source));
     }
     expect(violations).toEqual([]);
   });

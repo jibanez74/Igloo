@@ -405,8 +405,8 @@ func (f *ffmpeg) RunHLS(
 	}
 
 	go func() {
-		exitErr := cmd.Wait()
 		stderrWg.Wait()
+		exitErr := cmd.Wait()
 		if onExit != nil {
 			n := hlsStderrTailLines
 			if ringIdx < n {
