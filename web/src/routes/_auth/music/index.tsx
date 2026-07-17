@@ -35,6 +35,8 @@ import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
 import LiveAnnouncer from "@/components/LiveAnnouncer";
+import { MoviesLoadError } from "@/components/MoviesLoadError";
+import { isApiFailure } from "@/lib/is-api-failure";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import {
   albumsPaginatedQueryOpts,
@@ -425,12 +427,6 @@ type MusiciansTabContentProps = {
 function MusiciansTabSkeleton() {
   return (
     <div>
-      {/* Skeleton header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className={cn("h-4 w-24 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-        <div className={cn("h-4 w-20 rounded-sm bg-muted", MOTION_LOADING_STATE_CLASS)} />
-      </div>
-
       {/* Skeleton grid - matches actual grid dimensions */}
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: MUSICIANS_PER_PAGE }).map((_, i) => (
@@ -454,7 +450,7 @@ function MusiciansTabSkeleton() {
 function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
   const navigate = Route.useNavigate();
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError, refetch } = useQuery(
     musiciansPaginatedQueryOpts(currentPage, MUSICIANS_PER_PAGE),
   );
 
@@ -466,7 +462,7 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
   const getAnnouncement = () => {
     if (isLoading) return undefined;
     if (musicians.length === 0) return "No musicians found";
-    return `Showing ${musicians.length} musicians, page ${currentPage} of ${totalPages}`;
+    return `Showing ${musicians.length} musician${musicians.length === 1 ? "" : "s"}, page ${currentPage} of ${totalPages}`;
   };
 
   const handlePageChange = (newPage: number) => {
@@ -486,9 +482,23 @@ function MusiciansTabContent({ currentPage }: MusiciansTabContentProps) {
     return <MusiciansTabSkeleton />;
   }
 
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load musicians. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
   if (musicians.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
+        <LiveAnnouncer message={getAnnouncement()} />
         <Users className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No musicians found in your library.</p>
       </div>
@@ -560,7 +570,7 @@ function AlbumsTabSkeleton() {
 function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   const navigate = Route.useNavigate();
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError, refetch } = useQuery(
     albumsPaginatedQueryOpts(currentPage, perPage),
   );
 
@@ -572,7 +582,7 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
   const getAnnouncement = () => {
     if (isLoading) return undefined;
     if (albums.length === 0) return "No albums found";
-    return `Showing ${albums.length} albums, page ${currentPage} of ${totalPages}`;
+    return `Showing ${albums.length} album${albums.length === 1 ? "" : "s"}, page ${currentPage} of ${totalPages}`;
   };
 
   const handlePageChange = (newPage: number) => {
@@ -592,9 +602,23 @@ function AlbumsTabContent({ currentPage, perPage }: AlbumsTabContentProps) {
     return <AlbumsTabSkeleton />;
   }
 
+  if (isError || isApiFailure(data)) {
+    return (
+      <MoviesLoadError
+        message={
+          isApiFailure(data)
+            ? data.message
+            : "Couldn’t load albums. Check your connection and try again."
+        }
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
   if (albums.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
+        <LiveAnnouncer message={getAnnouncement()} />
         <Disc3 className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No albums found in your library.</p>
       </div>

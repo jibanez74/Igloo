@@ -277,7 +277,7 @@ test("music library shell and URL-backed tabs render accessibly", async ({ page 
   await musiciansTab.click();
   await expect(page).toHaveURL(/tab=musicians/);
   await expect(musiciansTab).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("link", { name: "Mock Artist, 1 albums, 2267 tracks" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Mock Artist, 1 album, 2267 tracks" })).toBeVisible();
 
   await albumsTab.click();
   await expect(page).toHaveURL(/tab=albums/);
