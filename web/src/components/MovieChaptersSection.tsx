@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { formatTimecode } from "@/lib/format";
+import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { MovieChaptersSectionProps } from "@/types";
 
@@ -42,7 +43,8 @@ export default function MovieChaptersSection({
                 start: chapter.start_time,
               }}
               className={cn(
-                "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-primary/20 bg-muted/80 px-3 py-2.5 text-left text-sm text-primary transition-colors",
+                MOTION_MICRO_COLORS_CLASS,
+                "flex min-h-13 touch-manipulation flex-col justify-center rounded-lg border border-primary/20 bg-muted/80 px-3 py-2.5 text-left text-sm text-primary",
                 "hover:border-primary/40 hover:bg-muted",
                 "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
                 "sm:min-h-0",

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { searchTmdbMovies } from "@/lib/api";
-import { TMDB_POSTER_SIZE } from "@/lib/constants";
+import { MOTION_MICRO_COLORS_CLASS, TMDB_POSTER_SIZE } from "@/lib/constants";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { showActionFailed, showInfo } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
@@ -281,7 +281,8 @@ function TmdbResultCard({
   return (
     <li
       className={cn(
-        "overflow-hidden rounded-lg border transition-colors",
+        MOTION_MICRO_COLORS_CLASS,
+        "overflow-hidden rounded-lg border",
         selected
           ? "border-primary bg-primary/10"
           : "border-border bg-muted/60 hover:border-border",

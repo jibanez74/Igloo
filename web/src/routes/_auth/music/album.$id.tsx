@@ -55,6 +55,7 @@ import {
   MOTION_LOADING_STATE_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
   TRACKS_INFINITE_KEY,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -635,14 +636,20 @@ function AlbumDetailsContent({
             <Link
               to="/music"
               search={{ tab: "albums" }}
-              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary sm:justify-start"
+              className={cn(
+                MOTION_MICRO_COLORS_CLASS,
+                "inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-primary sm:justify-start",
+              )}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to Music
             </Link>
             <Link
               to="/"
-              className="inline-flex items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-primary sm:justify-start"
+              className={cn(
+                MOTION_MICRO_COLORS_CLASS,
+                "inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-primary sm:justify-start",
+              )}
             >
               Home
             </Link>
@@ -658,7 +665,12 @@ function ArtistBadge({ artist }: { artist: ArtistType }) {
     artist.thumb.Valid ? artist.thumb.String : null
   );
   return (
-    <div className="flex items-center gap-2 rounded-full border border-border/50 bg-muted/60 px-3 py-1.5 transition-colors hover:border-primary/30">
+    <div
+      className={cn(
+        MOTION_MICRO_COLORS_CLASS,
+        "flex items-center gap-2 rounded-full border border-border/50 bg-muted/60 px-3 py-1.5 hover:border-primary/30",
+      )}
+    >
       {thumbUrl ? (
         <img
           src={thumbUrl}

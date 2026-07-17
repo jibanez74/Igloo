@@ -6,9 +6,12 @@ import {
   updateMovieMetadata,
 } from "@/lib/api";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   LIBRARY_MOVIE_DETAILS_KEY,
+  MOTION_MICRO_CONTROL_CLASS,
   MOVIE_TECHNICAL_DETAILS_KEY,
 } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { unwrapInt, unwrapString } from "@/lib/nullable";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -476,7 +479,11 @@ function ManualTab({
             })
           }
           rows={4}
-          className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className={cn(
+            MOTION_MICRO_CONTROL_CLASS,
+            FOCUS_VISIBLE_RING_CLASS,
+            "w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground",
+          )}
         />
       </FieldGroup>
 

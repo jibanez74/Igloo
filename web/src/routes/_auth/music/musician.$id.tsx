@@ -35,6 +35,7 @@ import {
   MOTION_LOADING_STATE_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -545,7 +546,10 @@ function MusicianDetailsContent({
             <Link
               to="/music"
               search={{ tab: "musicians" }}
-              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none motion-reduce:transition-none"
+              className={cn(
+                MOTION_MICRO_COLORS_CLASS,
+                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none",
+              )}
               aria-label="Back to Musicians library"
             >
               <ArrowLeft className="size-4" aria-hidden="true" />

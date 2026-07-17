@@ -1,5 +1,9 @@
 import { User } from "lucide-react";
-import { TMDB_PROFILE_SIZE } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  TMDB_PROFILE_SIZE,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import type { CastMemberType } from "@/types";
 
@@ -41,7 +45,10 @@ export default function CastSection({
         {displayedCast.map((actor, index) => (
           <li
             key={actor.id}
-            className="w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40"
+            className={cn(
+              MOTION_MICRO_COLORS_CLASS,
+              "w-32 shrink-0 overflow-hidden rounded-lg border border-primary/20 bg-muted/50 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 hover:border-primary/40",
+            )}
           >
             <article
               tabIndex={0}

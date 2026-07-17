@@ -10,7 +10,12 @@ import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
 } from "@/lib/query-opts";
-import { MOVIES_PER_PAGE, MOVIES_PLAYLISTS_TAB_SEARCH } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  MOVIES_PER_PAGE,
+  MOVIES_PLAYLISTS_TAB_SEARCH,
+} from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
 import { MoviesLoadError } from "@/components/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
@@ -104,7 +109,10 @@ function MoviePlaylistPage() {
       <Link
         to="/movies"
         search={MOVIES_PLAYLISTS_TAB_SEARCH}
-        className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+        className={cn(
+          MOTION_MICRO_COLORS_CLASS,
+          "mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary",
+        )}
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         Movie playlists

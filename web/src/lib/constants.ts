@@ -359,6 +359,8 @@ export const MOTION_MICRO_CONTROL_CLASS =
   "transition-[background-color,border-color,color,box-shadow,opacity] duration-150 ease-out motion-reduce:transition-none";
 export const MOTION_MICRO_OPACITY_CLASS =
   "transition-opacity duration-150 motion-reduce:transition-none";
+export const MOTION_MICRO_COLORS_CLASS =
+  "transition-colors duration-150 motion-reduce:transition-none";
 export const MOTION_PROGRESS_FILL_CLASS =
   "transition-[width] duration-150 ease-out motion-reduce:transition-none";
 export const MOTION_PROGRESS_THUMB_REVEAL_CLASS = MOTION_MICRO_OPACITY_CLASS;
@@ -372,8 +374,7 @@ export const MOTION_TRACK_PLAY_BUTTON_CLASS =
   "transition-[background-color,opacity] duration-150 motion-reduce:transition-none";
 export const MOTION_TRACK_ICON_BUTTON_CLASS =
   "transition-[color,opacity] duration-150 motion-reduce:transition-none";
-export const MOTION_TRACK_MENU_TRIGGER_CLASS =
-  "transition-colors duration-150 motion-reduce:transition-none";
+export const MOTION_TRACK_MENU_TRIGGER_CLASS = MOTION_MICRO_COLORS_CLASS;
 export const MOTION_PLAYER_CHROME_PANEL_CLASS =
   "transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none";
 export const MOTION_MEDIA_OVERLAY_CLASS =
@@ -436,9 +437,12 @@ export const OVER_MEDIA_BADGE_CLASS =
   "border-white/25 bg-black/30 px-3 py-1 text-sm text-white/90";
 export const CARD_INTERACTIVE_SURFACE_CLASS =
   "transition-[border-color,box-shadow,transform] duration-200 ease-out motion-reduce:transition-colors motion-reduce:hover:translate-y-0";
-/** Shared media-card chrome: tokenized surface + glacier hover glow. */
-export const CARD_SURFACE_CLASS =
-  "group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20";
+/**
+ * Shared media-card chrome: tokenized surface + glacier hover glow. Embeds
+ * CARD_INTERACTIVE_SURFACE_CLASS so the hover effects always animate, even
+ * when the surface is used on its own.
+ */
+export const CARD_SURFACE_CLASS = `${CARD_INTERACTIVE_SURFACE_CLASS} group relative overflow-hidden rounded-xl border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20`;
 export const CARD_MEDIA_HOVER_CLASS =
   "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
 export const CARD_OVERLAY_REVEAL_CLASS = MOTION_MEDIA_OVERLAY_CLASS;

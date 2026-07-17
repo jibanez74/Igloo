@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   CARD_ACTION_REVEAL_CLASS,
   CARD_INTERACTIVE_SURFACE_CLASS,
+  CARD_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CONTENT_FADE_ENTER_CLASS,
@@ -20,6 +21,7 @@ import {
   MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_MEDIA_OVERLAY_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
   MOTION_MICRO_OPACITY_CLASS,
   MOTION_MICRO_CONTROL_CLASS,
   MOTION_PAGE_ENTER_CLASS,
@@ -54,6 +56,7 @@ describe("motion contracts", () => {
     for (const className of [
       DETAIL_PAGE_CONTENT_ENTER_CLASS,
       CARD_INTERACTIVE_SURFACE_CLASS,
+      CARD_SURFACE_CLASS,
       CARD_MEDIA_HOVER_CLASS,
       CARD_OVERLAY_REVEAL_CLASS,
       CARD_ACTION_REVEAL_CLASS,
@@ -74,6 +77,7 @@ describe("motion contracts", () => {
     );
     expect(CONTENT_FADE_ENTER_CLASS).toContain("motion-reduce:animate-none");
     expect(CONTENT_FADE_ENTER_CLASS).toContain("motion-reduce:opacity-100");
+    expect(CARD_SURFACE_CLASS).toContain(CARD_INTERACTIVE_SURFACE_CLASS);
   });
 
   it("exports reduced-motion behavior for shared contracts", () => {
@@ -84,6 +88,12 @@ describe("motion contracts", () => {
       "motion-reduce:transition-none",
     );
     expect(MOTION_MICRO_OPACITY_CLASS).toContain(
+      durationClass(MOTION_DURATION_MICRO_MS),
+    );
+    expect(MOTION_MICRO_COLORS_CLASS).toContain(
+      "motion-reduce:transition-none",
+    );
+    expect(MOTION_MICRO_COLORS_CLASS).toContain(
       durationClass(MOTION_DURATION_MICRO_MS),
     );
     expect(MOTION_PROGRESS_FILL_CLASS).toContain(
@@ -116,9 +126,7 @@ describe("motion contracts", () => {
     expect(MOTION_TRACK_ICON_BUTTON_CLASS).toContain(
       "motion-reduce:transition-none",
     );
-    expect(MOTION_TRACK_MENU_TRIGGER_CLASS).toContain(
-      "motion-reduce:transition-none",
-    );
+    expect(MOTION_TRACK_MENU_TRIGGER_CLASS).toBe(MOTION_MICRO_COLORS_CLASS);
     expect(MOTION_PLAYER_CHROME_PANEL_CLASS).toContain(
       "motion-reduce:transition-none",
     );
@@ -184,21 +192,42 @@ describe("motion contracts", () => {
     );
   });
 
-  it("keeps ui primitives with inline transitions reduced-motion safe", () => {
-    // Shared MOTION_* constants are covered above, but ui/ primitives declare
-    // transitions inline — scan their sources so a new one can't slip through.
-    const uiDir = resolve(process.cwd(), "src/components/ui");
-    const animatedFiles = readdirSync(uiDir)
-      .filter((name) => name.endsWith(".tsx"))
-      .filter((name) =>
-        /transition-(?!none)/.test(readFileSync(resolve(uiDir, name), "utf8")),
-      );
-    for (const name of animatedFiles) {
-      const source = readFileSync(resolve(uiDir, name), "utf8");
-      expect(
-        source,
-        `${name} declares a transition without motion-reduce:transition-none`,
-      ).toContain("motion-reduce:transition-none");
+  it("keeps inline transitions and animations reduced-motion safe", () => {
+    // Shared MOTION_* constants are covered above, but some files declare
+    // motion classes inline — scan every source file so a new one can't slip
+    // through. The check is file-granular: a file that mixes an escaped and a
+    // bare motion class would pass, but clean files (the norm — product code
+    // consumes the constants) trip it on their first bare literal.
+    const srcDir = resolve(process.cwd(), "src");
+    const sourceFiles = readdirSync(srcDir, {
+      recursive: true,
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+      .map((entry) => resolve(entry.parentPath, entry.name))
+      .filter((path) => !path.startsWith(resolve(srcDir, "test")))
+      .filter((path) => path !== resolve(srcDir, "routeTree.gen.ts"));
+    const violations: string[] = [];
+    for (const path of sourceFiles) {
+      const source = readFileSync(path, "utf8");
+      const name = path.slice(srcDir.length + 1);
+      if (
+        /transition-(?!none\b)/.test(source) &&
+        !source.includes("motion-reduce:transition-none")
+      ) {
+        violations.push(
+          `${name} declares a transition without motion-reduce:transition-none`,
+        );
+      }
+      if (
+        /(?<!motion-reduce:)animate-(?!none\b)/.test(source) &&
+        !source.includes("motion-reduce:animate-none")
+      ) {
+        violations.push(
+          `${name} declares an animation without motion-reduce:animate-none`,
+        );
+      }
     }
+    expect(violations).toEqual([]);
   });
 });

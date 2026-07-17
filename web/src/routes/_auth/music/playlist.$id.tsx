@@ -47,6 +47,7 @@ import {
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
   VIRTUAL_LIST_TRACK_HEIGHT,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { PlaylistTrackType } from "@/types";
@@ -346,7 +347,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handlePlayAll}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className={cn(
+                  MOTION_MICRO_COLORS_CLASS,
+                  "inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base",
+                )}
                 aria-label={`Play all ${track_count} tracks`}
               >
                 <Play className="size-4 fill-current" aria-hidden="true" />
@@ -355,7 +359,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
               <button
                 type="button"
                 onClick={handleShuffle}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base"
+                className={cn(
+                  MOTION_MICRO_COLORS_CLASS,
+                  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-accent px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-accent focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-none sm:px-6 sm:py-3 sm:text-base",
+                )}
                 aria-label={`Shuffle all ${track_count} tracks`}
               >
                 <Shuffle className="size-4" aria-hidden="true" />
@@ -371,7 +378,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 type="button"
                 ref={editButtonRef}
                 onClick={() => setShowEditDialog(true)}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none sm:gap-2 sm:text-sm"
+                className={cn(
+                  MOTION_MICRO_COLORS_CLASS,
+                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary focus:text-primary focus:outline-none sm:gap-2 sm:text-sm",
+                )}
                 aria-label="Edit playlist"
               >
                 <Pencil className="size-4" aria-hidden="true" />
@@ -383,7 +393,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
                 ref={deleteButtonRef}
                 onClick={handleDeletePlaylist}
                 disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-destructive focus:text-destructive focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm"
+                className={cn(
+                  MOTION_MICRO_COLORS_CLASS,
+                  "inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive focus:text-destructive focus:outline-none disabled:opacity-50 sm:gap-2 sm:text-sm",
+                )}
                 aria-label="Delete playlist"
               >
                 {deleteMutation.isPending ? (
@@ -444,7 +457,10 @@ function PlaylistContent({ playlistId, data }: PlaylistContentProps) {
         <Link
           to="/music"
           search={{ tab: "playlists" }}
-          className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none"
+          className={cn(
+            MOTION_MICRO_COLORS_CLASS,
+            "inline-flex items-center gap-2 text-muted-foreground hover:text-foreground focus:text-primary focus:ring-2 focus:ring-ring focus:outline-none",
+          )}
           aria-label="Back to Playlists"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />

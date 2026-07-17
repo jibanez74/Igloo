@@ -4,7 +4,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { buttonVariants } from "@/components/ui/button";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { toggleLikeMovie } from "@/lib/api";
-import { MOVIES_LIKED_KEY, MOVIE_LIKE_STATUS_KEY } from "@/lib/constants";
+import {
+  MOTION_MICRO_COLORS_CLASS,
+  MOVIES_LIKED_KEY,
+  MOVIE_LIKE_STATUS_KEY,
+} from "@/lib/constants";
 import { movieLikeStatusQueryOpts } from "@/lib/query-opts";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType } from "@/types";
@@ -141,7 +145,8 @@ export default function MovieLikeButton({
       }}
       disabled={mutation.isPending || isLoading}
       className={cn(
-        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus:ring-2 focus:ring-ring focus:outline-none disabled:opacity-60",
+        MOTION_MICRO_COLORS_CLASS,
+        "flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm hover:bg-black/70 focus:ring-2 focus:ring-ring focus:outline-none disabled:opacity-60",
         className,
       )}
       aria-label={label}

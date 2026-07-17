@@ -8,7 +8,6 @@ import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { Spinner } from "@/components/ui/spinner";
 import {
   CARD_ACTION_REVEAL_CLASS,
-  CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   CARD_SURFACE_CLASS,
@@ -63,7 +62,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
 
   return (
     <article
-      className={cn(CARD_INTERACTIVE_SURFACE_CLASS, CARD_SURFACE_CLASS)}
+      className={CARD_SURFACE_CLASS}
       onMouseEnter={handlePrefetch}
       onFocus={handlePrefetch}
     >

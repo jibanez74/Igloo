@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ListVideo } from "lucide-react";
 import {
-  CARD_INTERACTIVE_SURFACE_CLASS,
   CARD_MEDIA_HOVER_CLASS,
   CARD_SURFACE_CLASS,
 } from "@/lib/constants";
@@ -21,11 +20,7 @@ export default function MoviePlaylistCard({ playlist }: MoviePlaylistCardProps) 
 
   return (
     <article
-      className={cn(
-        CARD_INTERACTIVE_SURFACE_CLASS,
-        CARD_SURFACE_CLASS,
-        "min-w-0 p-4",
-      )}
+      className={cn(CARD_SURFACE_CLASS, "min-w-0 p-4")}
     >
       <Link
         to="/movies/playlist/$id"

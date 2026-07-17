@@ -5,6 +5,7 @@ import {
   CARD_MEDIA_HOVER_CLASS,
   CARD_OVERLAY_REVEAL_CLASS,
   FOCUS_VISIBLE_RING_CLASS,
+  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { formatExtraVideoType } from "@/lib/format";
 import { buildYouTubeThumbnailUrl } from "@/lib/youtube-thumb-url";
@@ -30,7 +31,8 @@ function ExtraVideoCard({
         returnTo,
       }}
       className={cn(
-        "group block touch-manipulation overflow-hidden rounded-lg border border-primary/20 bg-muted/50 transition-colors hover:border-primary/40",
+        MOTION_MICRO_COLORS_CLASS,
+        "group block touch-manipulation overflow-hidden rounded-lg border border-primary/20 bg-muted/50 hover:border-primary/40",
         FOCUS_VISIBLE_RING_CLASS,
       )}
     >
