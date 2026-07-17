@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Disc3 } from "lucide-react";
 
 type AlbumDetailsBackdropProps = {
@@ -9,14 +10,21 @@ export default function AlbumDetailsBackdrop({
   coverUrl,
   albumTitle,
 }: AlbumDetailsBackdropProps) {
+  const [failed, setFailed] = useState(false);
+  const showImage = coverUrl && !failed;
+
   return (
     <header className="relative -mx-4 sm:-mx-6 lg:-mx-8">
-      {coverUrl ? (
+      {showImage ? (
         <img
           src={coverUrl}
           alt=""
           aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
           className="h-44 w-full object-cover object-center sm:h-52 md:aspect-21/9 md:h-auto md:max-h-[min(42vh,22rem)] md:min-h-48"
+          onError={() => setFailed(true)}
         />
       ) : (
         <div
