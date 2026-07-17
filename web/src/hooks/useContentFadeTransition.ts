@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getPrefersReducedMotion } from "@/lib/motion";
 
 type RunContentFadeTransitionArgs = {
   onTransition: () => void | Promise<void>;
@@ -8,14 +9,6 @@ type RunContentFadeTransitionArgs = {
 type PendingContentFadeTransition = {
   onTransition: () => void | Promise<void>;
 };
-
-function getPrefersReducedMotion() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
 
 export function useContentFadeTransition(
   transitionMs: number,
