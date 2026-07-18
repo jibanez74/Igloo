@@ -251,7 +251,7 @@ test("skip links surface on keyboard focus and target the page sections", async 
   await expect(skipNav.getByRole("link", { name: "Skip to all tracks" })).toHaveAttribute("href", /#tracks-heading$/);
 
   await skipToDiscography.click();
-  await expect(page).toHaveURL(new RegExp(`/music/musician/${MUSICIAN_ID}#discography-heading$`));
+  await expect(page).toHaveURL(`**/music/musician/${MUSICIAN_ID}#discography-heading`);
   await expect(page.getByRole("heading", { name: "Discography" })).toBeInViewport();
 
   expect(unexpectedApiRequests).toEqual([]);
