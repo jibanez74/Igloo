@@ -39,7 +39,7 @@ export default function MusicianCard({ musician }: MusicianCardProps) {
       <Link
         to="/music/musician/$id"
         params={{ id: id.toString() }}
-        className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="block rounded-xl outline-hidden"
         aria-label={`${name}, ${pluralize(album_count, "album")}, ${pluralize(track_count, "track")}`}
       >
         {/* Musician thumbnail - circular; fallback to User icon on load error */}
