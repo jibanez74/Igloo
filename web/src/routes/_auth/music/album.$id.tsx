@@ -59,6 +59,7 @@ import {
   SPOTIFY_BRAND_TEXT_CLASS,
   TRACKS_INFINITE_KEY,
   MOTION_MICRO_COLORS_CLASS,
+  DETAIL_TRACK_LIST_CONTAINER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -641,7 +642,7 @@ function AlbumDetailsContent({
               Track List
             </h2>
 
-            <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
+            <div className={DETAIL_TRACK_LIST_CONTAINER_CLASS}>
               {tracks.length === 0 && (
                 <div className="flex flex-col items-center gap-3 p-10 text-center">
                   <Music
@@ -801,7 +802,8 @@ function AlbumDetailsContent({
               search={{ tab: "albums" }}
               className={cn(
                 MOTION_MICRO_COLORS_CLASS,
-                "inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-primary sm:justify-start",
+                FOCUS_VISIBLE_RING_CLASS,
+                "inline-flex items-center justify-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary sm:justify-start",
               )}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
@@ -811,7 +813,8 @@ function AlbumDetailsContent({
               to="/"
               className={cn(
                 MOTION_MICRO_COLORS_CLASS,
-                "inline-flex items-center justify-center gap-2 text-muted-foreground hover:text-primary sm:justify-start",
+                FOCUS_VISIBLE_RING_CLASS,
+                "inline-flex items-center justify-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary sm:justify-start",
               )}
             >
               Home

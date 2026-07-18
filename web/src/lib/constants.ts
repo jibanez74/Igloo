@@ -143,6 +143,11 @@ export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
 export const TRACK_LIST_CONTAINER_CLASS =
   "overflow-hidden rounded-xl border border-border bg-card/50";
 
+// Shared surface for the track lists on the album and musician detail pages —
+// a softer glacier-tinted frame, deliberately distinct from the library look.
+export const DETAIL_TRACK_LIST_CONTAINER_CLASS =
+  "overflow-hidden rounded-xl border border-primary/10 bg-muted/30";
+
 // Playback and HLS constants. Stream modes are the source of truth for IDs,
 // labels, and profile metadata used by route validation and playback UI.
 export const STREAM_MODES = [

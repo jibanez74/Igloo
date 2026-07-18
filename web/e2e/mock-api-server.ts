@@ -761,8 +761,8 @@ function musicianDetails(id: number) {
       name: musician.name,
       sort_name: musician.sort_name,
       summary: nullableString(`${musician.name} is part of the E2E mock library.`),
-      spotify_popularity: nullableFloat(null),
-      spotify_followers: nullableInt(null),
+      spotify_popularity: nullableFloat(82),
+      spotify_followers: nullableInt(1234567),
       spotify_id: nullableString(null),
       thumb: musician.thumb,
       created_at: startedAt,
@@ -785,7 +785,7 @@ function musicianDetails(id: number) {
       track_index: index + 1,
       disc: 1,
     })),
-    genres: ["Indie"],
+    genres: ["Indie", "Electronic"],
     total_duration: musicianTracks.reduce((sum, track) => sum + track.duration, 0),
   };
 }

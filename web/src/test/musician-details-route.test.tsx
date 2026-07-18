@@ -14,12 +14,16 @@ import type { MusicianDetailsResponseType, MusicianTrackType } from "@/types";
 const DETAIL_PAGE_ANIMATION_MARKER =
   "animate-in fade-in slide-in-from-bottom-2";
 
-const { audioPlayerActionsMock } = vi.hoisted(() => ({
+const { audioPlayerActionsMock, audioPlayerStateMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {
     playAlbum: vi.fn(),
     playTrack: vi.fn(),
     shuffleAlbum: vi.fn(),
     togglePlay: vi.fn(),
+  },
+  audioPlayerStateMock: {
+    currentTrack: null as { id: number } | null,
+    isPlaying: false,
   },
 }));
 
@@ -28,10 +32,7 @@ vi.mock("@/hooks/useAudioPlayerActions", () => ({
 }));
 
 vi.mock("@/hooks/useAudioPlayerState", () => ({
-  useAudioPlayerState: () => ({
-    currentTrack: null,
-    isPlaying: false,
-  }),
+  useAudioPlayerState: () => audioPlayerStateMock,
 }));
 
 function jsonResponse(body: unknown, status = 200) {
@@ -294,6 +295,8 @@ function getLowerMotionWrapper(container: HTMLElement) {
 }
 
 afterEach(() => {
+  audioPlayerStateMock.currentTrack = null;
+  audioPlayerStateMock.isPlaying = false;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -330,6 +333,79 @@ describe("musician details route accessibility", () => {
     }
 
     expect(playAll).toHaveFocus();
+  });
+
+  it("renders section skip links targeting the page headings", async () => {
+    await renderMusicianDetailsRoute();
+
+    expect(
+      await screen.findByRole("heading", { name: "The Band" }),
+    ).toBeInTheDocument();
+
+    const skipNav = screen.getByRole("navigation", { name: "Skip to section" });
+    const links = [
+      { name: "Skip to musician info", href: "#musician-name" },
+      { name: "Skip to discography", href: "#discography-heading" },
+      { name: "Skip to all tracks", href: "#tracks-heading" },
+    ];
+
+    for (const { name, href } of links) {
+      const link = screen.getByRole("link", { name });
+      expect(skipNav).toContainElement(link);
+      expect(link).toHaveAttribute("href", href);
+      expect(document.getElementById(href.slice(1))).toHaveAttribute(
+        "tabindex",
+        "-1",
+      );
+    }
+  });
+
+  it("renders the discography with the shared album card and Badge-based chips", async () => {
+    await renderMusicianDetailsRoute();
+
+    expect(
+      await screen.findByRole("heading", { name: "The Band" }),
+    ).toBeInTheDocument();
+
+    // Shared AlbumCard: full-label link plus the play overlay button.
+    expect(
+      screen.getByRole("link", { name: "Blue Record, 2026 · 2 tracks" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Play Blue Record, 2026 · 2 tracks" }),
+    ).toBeInTheDocument();
+
+    // Genre and stat chips render as Badge pills inside their labeled lists.
+    const genreList = screen.getByRole("list", {
+      name: "Genres: Alternative",
+    });
+    expect(
+      genreList.querySelector('[data-slot="badge"]'),
+    ).toHaveTextContent("Alternative");
+
+    const statsList = screen.getByRole("list", {
+      name: "Musician statistics",
+    });
+    expect(statsList.querySelectorAll('[data-slot="badge"]')).toHaveLength(3);
+    expect(statsList.querySelector("time")).toHaveAttribute(
+      "datetime",
+      "PT360S",
+    );
+  });
+
+  it("marks the currently playing track row with aria-current", async () => {
+    audioPlayerStateMock.currentTrack = { id: 1 };
+    audioPlayerStateMock.isPlaying = true;
+
+    const { container } = await renderMusicianDetailsRoute();
+
+    expect(
+      await screen.findByRole("heading", { name: "The Band" }),
+    ).toBeInTheDocument();
+
+    const currentRow = container.querySelector('[aria-current="true"]');
+    expect(currentRow).not.toBeNull();
+    expect(currentRow).toHaveTextContent("Alabaster");
   });
 });
 

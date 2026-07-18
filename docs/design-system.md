@@ -317,8 +317,10 @@ facto token layer above Tailwind. Key families:
   enter-exit classes and loading/spinner states (§1.5).
 - `FOCUS_VISIBLE_RING_CLASS` (§1.7).
 - `LIBRARY_TABS_LIST_CLASS` / `LIBRARY_TAB_TRIGGER_CLASS`,
-  `TRACK_LIST_CONTAINER_CLASS`, playback-settings select classes, virtual-list
-  row heights (`VIRTUAL_LIST_*`).
+  `TRACK_LIST_CONTAINER_CLASS` (library/search lists) and
+  `DETAIL_TRACK_LIST_CONTAINER_CLASS` (the softer glacier-tinted frame shared
+  by the album and musician detail pages), playback-settings select classes,
+  virtual-list row heights (`VIRTUAL_LIST_*`).
 
 **Promotion rule**: a class string used by ≥2 components, or containing
 motion/focus behavior, moves here (where the contracts tests can see it)
