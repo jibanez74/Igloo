@@ -4,6 +4,7 @@ import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
 import { toggleLikeTrack } from "@/lib/api";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   LIKED_TRACK_IDS_KEY,
   LIKED_TRACKS_KEY,
   MOTION_LOADING_STATE_CLASS,
@@ -108,6 +109,7 @@ export default function TrackItem({
   const getPlayButtonClasses = () => {
     const baseClasses = cn(
       "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90",
+      FOCUS_VISIBLE_RING_CLASS,
       MOTION_TRACK_PLAY_BUTTON_CLASS,
     );
 
@@ -133,6 +135,7 @@ export default function TrackItem({
         isCurrentTrack && "bg-muted/40",
         isDragging && "opacity-50 shadow-lg ring-2 ring-ring/50",
       )}
+      aria-current={isCurrentTrack || undefined}
     >
       {/* Drag handle - only for draggable items */}
       {isDraggable && (
@@ -141,6 +144,7 @@ export default function TrackItem({
           {...dragHandleProps}
           className={cn(
             "flex size-8 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-muted-foreground active:cursor-grabbing",
+            FOCUS_VISIBLE_RING_CLASS,
             MOTION_TRACK_MENU_TRIGGER_CLASS,
           )}
           aria-label="Drag to reorder"
@@ -197,6 +201,7 @@ export default function TrackItem({
         disabled={isLikeLoading}
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
+          FOCUS_VISIBLE_RING_CLASS,
           MOTION_TRACK_ICON_BUTTON_CLASS,
           isLiked
             ? "text-destructive"

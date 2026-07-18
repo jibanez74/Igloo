@@ -18,7 +18,10 @@ import {
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import MediaNotFound from "@/components/MediaNotFound";
+import MusicianDetailsSkipLinks from "@/components/MusicianDetailsSkipLinks";
+import AlbumCard from "@/components/AlbumCard";
 import {
   SpotifyGlyph,
   SpotifyPopularityMeter,
@@ -29,9 +32,9 @@ import TrackItem from "@/components/TrackItem";
 import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import {
-  CARD_INTERACTIVE_SURFACE_CLASS,
-  CARD_MEDIA_HOVER_CLASS,
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
+  DETAIL_TRACK_LIST_CONTAINER_CLASS,
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
   SPOTIFY_BRAND_ICON_CLASS,
   SPOTIFY_BRAND_TEXT_CLASS,
@@ -151,11 +154,11 @@ function MusicianDetailsSkeleton() {
 
         <div className="mt-10">
           <div className="mb-4 h-7 w-40 rounded-sm bg-muted" />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="overflow-hidden rounded-lg border border-border bg-card"
+                className="overflow-hidden rounded-xl border border-border bg-card"
               >
                 <div className="aspect-square bg-muted" />
                 <div className="space-y-2 p-3">
@@ -311,6 +314,11 @@ function MusicianDetailsContent({
         {pageAnnouncement}
       </span>
 
+      <MusicianDetailsSkipLinks
+        hasDiscography={albums.length > 0}
+        hasTracks={tracks.length > 0}
+      />
+
       <div className={cn(DETAIL_PAGE_CONTENT_ENTER_CLASS)}>
         <MusicianDetailsBackdrop thumbUrl={thumbUrl} name={musician.name} />
       </div>
@@ -374,15 +382,17 @@ function MusicianDetailsContent({
               {/* Genre tags */}
               {genres.length > 0 && (
                 <ul
-                  className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start"
+                  className="mt-4 flex list-none flex-wrap justify-center gap-2 lg:justify-start"
                   aria-label={`Genres: ${genres.join(", ")}`}
                 >
                   {genres.map((genre) => (
-                    <li
-                      key={genre}
-                      className="rounded-full border border-primary/30 bg-muted/80 px-3 py-1 text-sm text-primary backdrop-blur-sm"
-                    >
-                      {genre}
+                    <li key={genre}>
+                      <Badge
+                        variant="outline"
+                        className="border-primary/30 bg-muted/80 px-3 py-1 text-sm font-normal text-primary backdrop-blur-sm"
+                      >
+                        {genre}
+                      </Badge>
                     </li>
                   ))}
                 </ul>
@@ -390,33 +400,53 @@ function MusicianDetailsContent({
 
               {/* Stats row */}
               <ul
-                className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground sm:text-base lg:justify-start"
+                className="mt-4 flex list-none flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-start"
                 aria-label="Musician statistics"
               >
-                <li className="flex items-center gap-1.5">
-                  <Disc3
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {albums.length} {albums.length === 1 ? "album" : "albums"}
-                  </span>
+                <li>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                  >
+                    <Disc3
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {albums.length} {albums.length === 1 ? "album" : "albums"}
+                    </span>
+                  </Badge>
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Music
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
-                  </span>
+                <li>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                  >
+                    <Music
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+                    </span>
+                  </Badge>
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Clock
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span>{formatDuration(total_duration)}</span>
+                <li>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/40 bg-muted/90 px-3 py-1.5 text-sm font-normal text-foreground"
+                  >
+                    <Clock
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <time
+                      dateTime={`PT${Math.round(total_duration / 1000)}S`}
+                      aria-label={`Total duration ${formatDuration(total_duration)}`}
+                    >
+                      {formatDuration(total_duration)}
+                    </time>
+                  </Badge>
                 </li>
               </ul>
 
@@ -479,7 +509,7 @@ function MusicianDetailsContent({
         <div
           className={cn(
             DETAIL_PAGE_CONTENT_ENTER_CLASS,
-            "space-y-10 delay-150 motion-reduce:delay-0",
+            "space-y-8 delay-150 motion-reduce:delay-0 sm:space-y-10",
           )}
         >
           {/* Discography section */}
@@ -487,15 +517,26 @@ function MusicianDetailsContent({
             <section aria-labelledby="discography-heading">
               <h2
                 id="discography-heading"
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
+                tabIndex={-1}
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground outline-hidden"
               >
                 <Disc3 className="size-5 text-primary" aria-hidden="true" />
                 Discography
               </h2>
 
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {albums.map((album) => (
-                  <AlbumCard key={album.id} album={album} />
+                  <AlbumCard
+                    key={album.id}
+                    album={{
+                      id: album.id,
+                      title: album.title,
+                      cover: album.cover,
+                      musician: { String: musician.name, Valid: true },
+                      year: album.year,
+                    }}
+                    subtitle={albumSubtitle(album)}
+                  />
                 ))}
               </div>
             </section>
@@ -506,7 +547,8 @@ function MusicianDetailsContent({
             <section aria-labelledby="tracks-heading">
               <h2
                 id="tracks-heading"
-                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground"
+                tabIndex={-1}
+                className="mb-4 flex items-center gap-2 text-xl font-semibold text-foreground outline-hidden"
               >
                 <ListOrdered
                   className="size-5 text-primary"
@@ -515,7 +557,7 @@ function MusicianDetailsContent({
                 All Tracks
               </h2>
 
-              <div className="overflow-hidden rounded-xl border border-primary/10 bg-muted/30">
+              <div className={DETAIL_TRACK_LIST_CONTAINER_CLASS}>
                 <div className="divide-y divide-border/30">
                   {tracks.map((track) => (
                     <TrackItem
@@ -548,7 +590,8 @@ function MusicianDetailsContent({
               search={{ tab: "musicians" }}
               className={cn(
                 MOTION_MICRO_COLORS_CLASS,
-                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary focus:text-primary focus:ring-2 focus:ring-ring focus:outline-hidden",
+                FOCUS_VISIBLE_RING_CLASS,
+                "inline-flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground hover:text-primary",
               )}
               aria-label="Back to Musicians library"
             >
@@ -601,56 +644,9 @@ function MusicianDetailsBackdrop({
   );
 }
 
-function AlbumCard({ album }: { album: MusicianAlbumType }) {
-  const [coverFailed, setCoverFailed] = useState(false);
-  const coverUrl = getMediaImageUrl(unwrapString(album.cover));
-  const showCover = coverUrl && !coverFailed;
+function albumSubtitle(album: MusicianAlbumType) {
   const year = unwrapInt(album.year);
+  const trackCount = `${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`;
 
-  return (
-    <article className="group">
-      <Link
-        to="/music/album/$id"
-        params={{ id: album.id.toString() }}
-        className={cn(
-          CARD_INTERACTIVE_SURFACE_CLASS,
-          "block overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 focus:border-ring focus:ring-2 focus:ring-ring focus:outline-hidden",
-        )}
-        aria-label={`${album.title}${year ? `, ${year}` : ""}, ${album.track_count} ${album.track_count === 1 ? "track" : "tracks"}`}
-      >
-        {/* Album cover */}
-        <div className="aspect-square overflow-hidden bg-muted">
-          {showCover ? (
-            <img
-              src={coverUrl}
-              alt={album.title}
-              loading="lazy"
-              decoding="async"
-              fetchPriority="low"
-              className={cn("size-full object-cover", CARD_MEDIA_HOVER_CLASS)}
-              onError={() => setCoverFailed(true)}
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center">
-              <Disc3
-                className="size-10 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Album info */}
-        <div className="p-3">
-          <h3 className="truncate text-sm font-semibold text-foreground">
-            {album.title}
-          </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {year && <span>{year} · </span>}
-            {album.track_count} {album.track_count === 1 ? "track" : "tracks"}
-          </p>
-        </div>
-      </Link>
-    </article>
-  );
+  return year ? `${year} · ${trackCount}` : trackCount;
 }

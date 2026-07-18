@@ -21,9 +21,11 @@ import type { SimpleAlbumType } from "@/types";
 
 type AlbumCardProps = {
   album: SimpleAlbumType;
+  /** Replaces the musician-name line (e.g. "2024 · 8 tracks" on the musician page). */
+  subtitle?: string;
 };
 
-export default function AlbumCard({ album }: AlbumCardProps) {
+export default function AlbumCard({ album, subtitle }: AlbumCardProps) {
   const { id, title, cover, musician } = album;
   const queryClient = useQueryClient();
   const audioPlayer = useAudioPlayerActions();
@@ -61,6 +63,10 @@ export default function AlbumCard({ album }: AlbumCardProps) {
   };
 
   const musicianName = unwrapString(musician);
+  const infoLine = subtitle ?? musicianName;
+  const cardLabel = subtitle
+    ? `${title}, ${subtitle}`
+    : `${title}${musicianName ? ` by ${musicianName}` : ""}`;
 
   return (
     <article
@@ -72,7 +78,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
         to="/music/album/$id"
         params={{ id: id.toString() }}
         className="block rounded-xl outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        aria-label={`${title}${musicianName ? ` by ${musicianName}` : ""}`}
+        aria-label={cardLabel}
       >
         {/* Album cover: local /api/static/albums/... or external URL; fallback on load error */}
         <div className="relative aspect-square bg-muted">
@@ -110,9 +116,9 @@ export default function AlbumCard({ album }: AlbumCardProps) {
           <h3 className="line-clamp-2 text-sm/tight font-semibold text-foreground">
             {title}
           </h3>
-          {musicianName && (
+          {infoLine && (
             <p className="mt-1 truncate text-xs text-muted-foreground">
-              {musicianName}
+              {infoLine}
             </p>
           )}
         </div>
@@ -127,7 +133,7 @@ export default function AlbumCard({ album }: AlbumCardProps) {
           CARD_ACTION_REVEAL_CLASS,
           "absolute top-1/2 left-1/2 flex size-12 -translate-x-1/2 -translate-y-[calc(50%+1rem)] scale-90 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg shadow-black/30 outline-hidden group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-primary/90 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-disabled:opacity-50",
         )}
-        aria-label={`Play ${title}${musicianName ? ` by ${musicianName}` : ""}`}
+        aria-label={`Play ${cardLabel}`}
       >
         {isLoading ? (
           <Spinner className="size-5" />
