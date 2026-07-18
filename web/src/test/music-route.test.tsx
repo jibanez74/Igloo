@@ -87,10 +87,12 @@ function track(id: number, title: string) {
 
 type MockMusicFetchOptions = {
   spotifyAvailable?: boolean;
+  emptyMusicians?: boolean;
 };
 
 function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
+  const emptyMusicians = options.emptyMusicians ?? false;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -153,6 +155,19 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === `/api/music/musicians?page=1&per_page=${MUSICIANS_PER_PAGE}`) {
+      if (emptyMusicians) {
+        return jsonResponse({
+          error: false,
+          data: {
+            musicians: [],
+            total: 0,
+            page: 1,
+            per_page: MUSICIANS_PER_PAGE,
+            total_pages: 0,
+          },
+        });
+      }
+
       return jsonResponse({
         error: false,
         data: {
@@ -323,6 +338,27 @@ describe("music route tab transitions", () => {
         ([, delay]) => delay === CONTENT_FADE_TRANSITION_MS,
       ),
     ).toBe(false);
+  });
+});
+
+describe("musicians tab empty state", () => {
+  it("renders and announces the empty musicians state", async () => {
+    setReducedMotionPreference(true);
+
+    await renderMusicRoute("/music/?tab=musicians", { emptyMusicians: true });
+
+    expect(
+      await screen.findByText("No musicians found in your library."),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      const statusRegions = screen.getAllByRole("status");
+      expect(
+        statusRegions.some(
+          region => region.textContent === "No musicians found",
+        ),
+      ).toBe(true);
+    });
   });
 });
 

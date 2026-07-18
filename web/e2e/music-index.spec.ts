@@ -448,7 +448,7 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
   await expect(musiciansTab).toHaveAttribute("aria-selected", "true");
 
   await expect(page.getByRole("link", { name: "Aurora Pines, 2 albums, 18 tracks" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Midnight Static, 1 albums, 9 tracks" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Midnight Static, 1 album, 9 tracks" })).toBeVisible();
 
   await page.getByRole("button", { name: "Go to next page" }).click();
 
@@ -466,6 +466,41 @@ test("musicians tab renders accessible count text and URL-backed pagination", as
     )
     .toBe(true);
   await expect(page.getByRole("link", { name: "Northern Signal, 3 albums, 27 tracks" })).toBeVisible();
+  assertMockSuiteClean(browserIssues, unexpectedApiRequests);
+});
+
+test("musicians tab shows an inline error with a working retry", async ({ page }) => {
+  const requestedMusicianRequests: string[] = [];
+  const browserIssues = trackBrowserIssues(page);
+
+  const unexpectedApiRequests = await mockMusicIndexApi(
+    page,
+    requestedMusicianRequests,
+  );
+
+  let failNextMusiciansRequest = true;
+  await page.route(/\/api\/music\/musicians\?/, async route => {
+    if (!failNextMusiciansRequest) {
+      await route.fallback();
+      return;
+    }
+
+    failNextMusiciansRequest = false;
+    await fulfillJSON(route, {
+      error: true,
+      message: "Music library is unavailable",
+    });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/music?tab=musicians");
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("Music library is unavailable");
+
+  await alert.getByRole("button", { name: "Try again" }).click();
+
+  await expect(page.getByRole("link", { name: "Aurora Pines, 2 albums, 18 tracks" })).toBeVisible();
   assertMockSuiteClean(browserIssues, unexpectedApiRequests);
 });
 
