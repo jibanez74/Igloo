@@ -7,7 +7,7 @@ import {
   showSuccess,
 } from "@/lib/toast-helpers";
 import type { ApiResponseType, WatchRoomType } from "@/types";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 type DeleteWatchRoomDialogProps = {
   roomId: number;

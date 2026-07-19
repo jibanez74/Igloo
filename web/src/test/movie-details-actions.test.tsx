@@ -4,8 +4,8 @@ import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren, ReactElement, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import MovieDetailsHeroActions from "@/components/MovieDetailsHeroActions";
-import MovieLikeButton from "@/components/MovieLikeButton";
+import MovieDetailsHeroActions from "@/components/movies/MovieDetailsHeroActions";
+import MovieLikeButton from "@/components/movies/MovieLikeButton";
 import {
   MOVIES_LIKED_KEY,
   MOVIE_LIKE_STATUS_KEY,

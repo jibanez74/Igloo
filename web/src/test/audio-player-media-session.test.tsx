@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AudioPlayer from "@/components/AudioPlayer";
+import AudioPlayer from "@/components/playback/AudioPlayer";
 import {
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,

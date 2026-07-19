@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
-import Header from "@/components/Header";
-import AppSidebar from "@/components/app-sidebar";
+import Header from "@/components/app/Header";
+import AppSidebar from "@/components/app/app-sidebar";
 import {
   SidebarInset,
   SidebarProvider,

@@ -1,6 +1,6 @@
 import { redirect, Outlet, createFileRoute } from "@tanstack/react-router";
 import { authUserQueryOpts } from "@/lib/query-opts";
-import AppShell from "@/components/AppShell";
+import AppShell from "@/components/app/AppShell";
 
 export const Route = createFileRoute("/_auth")({
   beforeLoad: async ({ context, location }) => {

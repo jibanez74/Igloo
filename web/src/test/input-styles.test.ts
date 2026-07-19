@@ -59,7 +59,7 @@ describe("light input styles", () => {
 
   it("uses the theme focus ring for album play overlays", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/components/AlbumCard.tsx"),
+      resolve(process.cwd(), "src/components/music/AlbumCard.tsx"),
       "utf8",
     );
 

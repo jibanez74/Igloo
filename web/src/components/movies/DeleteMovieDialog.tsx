@@ -6,7 +6,7 @@ import { deleteMovie } from "@/lib/api";
 import { LATEST_MOVIES_KEY, LIBRARY_MOVIE_DETAILS_KEY } from "@/lib/constants";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 type Props = {
   movieId: number;

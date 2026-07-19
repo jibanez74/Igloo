@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import MovieLikeButton from "@/components/MovieLikeButton";
+import MovieLikeButton from "@/components/movies/MovieLikeButton";
 import { setMovieWatched } from "@/lib/api";
 import {
   CONTINUE_WATCHING_KEY,
@@ -31,11 +31,11 @@ import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, MovieDetailsHeroActionsProps, MovieWatchProgressType } from "@/types";
 
-const loadPlaybackSettingsDialog = () => import("@/components/PlaybackSettingsDialog");
-const loadTechnicalDetailsDialog = () => import("@/components/TechnicalDetailsDialog");
-const loadEditMovieDialog = () => import("@/components/EditMovieDialog");
-const loadDeleteMovieDialog = () => import("@/components/DeleteMovieDialog");
-const loadCreateWatchRoomDialog = () => import("@/components/CreateWatchRoomDialog");
+const loadPlaybackSettingsDialog = () => import("@/components/movies/PlaybackSettingsDialog");
+const loadTechnicalDetailsDialog = () => import("@/components/movies/TechnicalDetailsDialog");
+const loadEditMovieDialog = () => import("@/components/movies/EditMovieDialog");
+const loadDeleteMovieDialog = () => import("@/components/movies/DeleteMovieDialog");
+const loadCreateWatchRoomDialog = () => import("@/components/watch-room/CreateWatchRoomDialog");
 
 const PlaybackSettingsDialog = lazy(loadPlaybackSettingsDialog);
 const TechnicalDetailsDialog = lazy(loadTechnicalDetailsDialog);

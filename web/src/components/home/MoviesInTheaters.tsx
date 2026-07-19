@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { inTheatersQueryOpts } from "@/lib/query-opts";
 import { Film } from "lucide-react";
-import HomeMediaSection from "@/components/HomeMediaSection";
-import InTheatersCard from "@/components/InTheatersCard";
+import HomeMediaSection from "@/components/home/HomeMediaSection";
+import InTheatersCard from "@/components/home/InTheatersCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 import type { TheaterMovieType } from "@/types";
 

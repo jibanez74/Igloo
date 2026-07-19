@@ -19,16 +19,16 @@ import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import MediaNotFound from "@/components/MediaNotFound";
-import MusicianDetailsSkipLinks from "@/components/MusicianDetailsSkipLinks";
-import AlbumCard from "@/components/AlbumCard";
+import MediaNotFound from "@/components/shared/MediaNotFound";
+import MusicianDetailsSkipLinks from "@/components/music/MusicianDetailsSkipLinks";
+import AlbumCard from "@/components/music/AlbumCard";
 import {
   SpotifyGlyph,
   SpotifyPopularityMeter,
-} from "@/components/SpotifyPopularity";
+} from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
-import TrackItem from "@/components/TrackItem";
+import TrackItem from "@/components/music/TrackItem";
 import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import {

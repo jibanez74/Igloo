@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import SpotifyTrackPicker from "@/components/SpotifyTrackPicker";
+import SpotifyTrackPicker from "@/components/music/SpotifyTrackPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";

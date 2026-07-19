@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import AddToPlaylistDialog from "@/components/AddToPlaylistDialog";
+import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
 import { MOTION_TRACK_MENU_TRIGGER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 

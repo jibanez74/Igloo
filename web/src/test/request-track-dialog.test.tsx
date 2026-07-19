@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import RequestTrackDialog from "@/components/RequestTrackDialog";
+import RequestTrackDialog from "@/components/music/RequestTrackDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,

@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import RequestAlbumDialog from "@/components/RequestAlbumDialog";
+import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,

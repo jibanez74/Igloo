@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { continueWatchingQueryOpts } from "@/lib/query-opts";
 import { Play } from "lucide-react";
-import HomeMediaSection from "@/components/HomeMediaSection";
-import MovieCard from "@/components/MovieCard";
+import HomeMediaSection from "@/components/home/HomeMediaSection";
+import MovieCard from "@/components/movies/MovieCard";
 import { HOME_POSTER_GRID_CLASS } from "@/lib/constants";
 
 export default function ContinueWatching() {

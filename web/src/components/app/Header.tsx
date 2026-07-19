@@ -3,8 +3,8 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import NotificationBell from "@/components/NotificationBell";
-import ThemeToggle from "@/components/ThemeToggle";
+import NotificationBell from "@/components/app/NotificationBell";
+import ThemeToggle from "@/components/app/ThemeToggle";
 import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 export default function Header() {

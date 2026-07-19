@@ -17,8 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { TrackType } from "@/types";
-import ProgressBar from "@/components/ProgressBar";
-import VolumeControl from "@/components/VolumeControl";
+import ProgressBar from "@/components/playback/ProgressBar";
+import VolumeControl from "@/components/playback/VolumeControl";
 import {
   AUDIO_SEEK_STEP_SECONDS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,

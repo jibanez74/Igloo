@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import MoviePlayerControls from "@/components/MoviePlayerControls";
+import MoviePlayerControls from "@/components/movies/MoviePlayerControls";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,

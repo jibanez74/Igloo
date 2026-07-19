@@ -20,7 +20,7 @@ import {
   PLAYLISTS_KEY,
   PLAYLIST_TRACKS_KEY,
 } from "@/lib/constants";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 
 type AddToPlaylistDialogProps = {

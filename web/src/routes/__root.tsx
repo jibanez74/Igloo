@@ -1,5 +1,5 @@
 import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
-import BootstrapHeadMetadataSync from "@/components/BootstrapHeadMetadataSync";
+import BootstrapHeadMetadataSync from "@/components/app/BootstrapHeadMetadataSync";
 import type { RouterContextType } from "@/types";
 
 export const Route = createRootRouteWithContext<RouterContextType>()({

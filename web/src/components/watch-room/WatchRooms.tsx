@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { watchRoomsQueryOpts } from "@/lib/query-opts";
 import { Radio } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
-import SectionErrorAlert from "@/components/SectionErrorAlert";
-import WatchRoomCard from "@/components/WatchRoomCard";
+import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
+import WatchRoomCard from "@/components/watch-room/WatchRoomCard";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 

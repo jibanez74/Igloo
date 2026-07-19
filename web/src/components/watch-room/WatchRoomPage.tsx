@@ -31,13 +31,13 @@ import {
 import { buildMovieSubtitleTrackInfo } from "@/lib/movie-playback";
 import { watchRoomStreamUrl } from "@/lib/watch-room";
 import { cn } from "@/lib/utils";
-import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
+import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import ProgressBar from "@/components/ProgressBar";
-import VolumeControl from "@/components/VolumeControl";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
-import VideoPlayer from "@/components/VideoPlayer";
+import ProgressBar from "@/components/playback/ProgressBar";
+import VolumeControl from "@/components/playback/VolumeControl";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import VideoPlayer from "@/components/playback/VideoPlayer";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";
 import { useVideoPlaybackKeyboard } from "@/hooks/useVideoPlaybackKeyboard";

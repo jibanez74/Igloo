@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell from "@/components/app/NotificationBell";
 import type {
   ApiResponseType,
   NotificationListItemType,

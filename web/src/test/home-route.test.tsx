@@ -13,7 +13,7 @@ import {
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 
-vi.mock("@/components/AppShell", () => ({
+vi.mock("@/components/app/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => (
     <main id="main">{children}</main>
   ),

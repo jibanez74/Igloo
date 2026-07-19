@@ -3,9 +3,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ListVideo } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import MovieCard from "@/components/MovieCard";
-import LibraryPagination from "@/components/LibraryPagination";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
+import MovieCard from "@/components/movies/MovieCard";
+import LibraryPagination from "@/components/shared/LibraryPagination";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import {
   moviePlaylistDetailsQueryOpts,
   moviePlaylistMoviesQueryOpts,
@@ -17,7 +17,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { unwrapString } from "@/lib/nullable";
-import { MoviesLoadError } from "@/components/MoviesLoadError";
+import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 
 export const Route = createFileRoute("/_auth/movies/playlist/$id")({

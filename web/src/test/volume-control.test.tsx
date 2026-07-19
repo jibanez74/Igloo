@@ -2,7 +2,7 @@ import { type RefObject } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import VolumeControl from "@/components/VolumeControl";
+import VolumeControl from "@/components/playback/VolumeControl";
 
 function renderVolumeControl() {
   const media = document.createElement("audio");

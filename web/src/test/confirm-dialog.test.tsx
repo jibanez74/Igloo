@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 function ConfirmDialogHarness({ onConfirm }: { onConfirm: () => void }) {
   const [open, setOpen] = useState(true);

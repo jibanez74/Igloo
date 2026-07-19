@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Music } from "lucide-react";
 import { latestAlbumsQueryOpts } from "@/lib/query-opts";
-import AlbumCard from "@/components/AlbumCard";
-import HomeMediaSection from "@/components/HomeMediaSection";
+import AlbumCard from "@/components/music/AlbumCard";
+import HomeMediaSection from "@/components/home/HomeMediaSection";
 import { HOME_ALBUM_GRID_CLASS } from "@/lib/constants";
 
 export default function LatestAlbums() {

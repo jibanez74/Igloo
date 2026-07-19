@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
+import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
 
 const baseProps = {
   criticRating: null,

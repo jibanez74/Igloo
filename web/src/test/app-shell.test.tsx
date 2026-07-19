@@ -1,12 +1,12 @@
 import type React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AppShell from "@/components/AppShell";
+import AppShell from "@/components/app/AppShell";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 
-vi.mock("@/components/app-sidebar", () => ({
+vi.mock("@/components/app/app-sidebar", () => ({
   default: () => (
     <nav aria-label="Main navigation">
       <a href="/">Home</a>
@@ -14,7 +14,7 @@ vi.mock("@/components/app-sidebar", () => ({
   ),
 }));
 
-vi.mock("@/components/Header", () => ({
+vi.mock("@/components/app/Header", () => ({
   default: () => <div role="search" aria-label="Search library" />,
 }));
 

@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import TrackActionsMenu from "@/components/TrackActionsMenu";
-import TrackItem from "@/components/TrackItem";
+import TrackActionsMenu from "@/components/music/TrackActionsMenu";
+import TrackItem from "@/components/music/TrackItem";
 import {
   MOTION_TRACK_ICON_BUTTON_CLASS,
   MOTION_TRACK_MENU_TRIGGER_CLASS,

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import PlaybackSettingsDialog from "@/components/PlaybackSettingsDialog";
+import PlaybackSettingsDialog from "@/components/movies/PlaybackSettingsDialog";
 import {
   MOTION_MEDIA_DIALOG_SURFACE_CLASS,
   MOVIE_TECHNICAL_DETAILS_KEY,

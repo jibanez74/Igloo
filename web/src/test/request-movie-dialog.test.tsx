@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import RequestMovieDialog from "@/components/RequestMovieDialog";
+import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import { AUTH_USER_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,

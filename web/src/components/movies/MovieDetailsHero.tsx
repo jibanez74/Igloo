@@ -1,7 +1,7 @@
 import { Film } from "lucide-react";
-import MovieDetailsBackdrop from "@/components/MovieDetailsBackdrop";
-import MovieDetailsTitleHeading from "@/components/MovieDetailsTitleHeading";
-import MovieDetailsGenresList from "@/components/MovieDetailsGenresList";
+import MovieDetailsBackdrop from "@/components/movies/MovieDetailsBackdrop";
+import MovieDetailsTitleHeading from "@/components/movies/MovieDetailsTitleHeading";
+import MovieDetailsGenresList from "@/components/movies/MovieDetailsGenresList";
 import { usePosterFallback } from "@/hooks/usePosterFallback";
 import {
   DETAIL_HERO_CONTENT_CLASS,

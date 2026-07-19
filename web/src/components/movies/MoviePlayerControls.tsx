@@ -7,9 +7,9 @@ import {
   Play,
   Rewind,
 } from "lucide-react";
-import ProgressBar from "@/components/ProgressBar";
-import ChapterMenu from "@/components/ChapterMenu";
-import VolumeControl from "@/components/VolumeControl";
+import ProgressBar from "@/components/playback/ProgressBar";
+import ChapterMenu from "@/components/movies/ChapterMenu";
+import VolumeControl from "@/components/playback/VolumeControl";
 import {
   MOVIE_SEEK_STEP_SEC,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,

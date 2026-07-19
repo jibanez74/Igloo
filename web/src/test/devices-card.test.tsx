@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import DevicesCard from "@/components/DevicesCard";
+import DevicesCard from "@/components/settings/DevicesCard";
 import type { DeviceType } from "@/types";
 
 const getDevicesMock = vi.fn();

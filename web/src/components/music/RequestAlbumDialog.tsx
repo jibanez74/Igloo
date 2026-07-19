@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import TmdbMoviePicker from "@/components/TmdbMoviePicker";
+import SpotifyAlbumPicker from "@/components/music/SpotifyAlbumPicker";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import { createNotification } from "@/lib/api";
 import { NOTIFICATION_TITLES } from "@/lib/constants";
@@ -17,58 +17,83 @@ import {
   showActionFailed,
   showCreated,
 } from "@/lib/toast-helpers";
-import type { TmdbSearchResultType } from "@/types";
+import type { SpotifyAlbumSearchResultType } from "@/types";
 
-type RequestMovieDialogProps = {
+type RequestAlbumDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
 };
 
-export default function RequestMovieDialog({
+export default function RequestAlbumDialog({
   open,
   onOpenChange,
   restoreFocusRef,
-}: RequestMovieDialogProps) {
+}: RequestAlbumDialogProps) {
+  const navigate = useNavigate();
   const { data: authData } = useQuery(authUserQueryOpts());
 
-  async function handleConfirm(selectedResult: TmdbSearchResultType) {
+  async function handleConfirm(selectedResult: SpotifyAlbumSearchResultType) {
+    if (selectedResult.already_in_library) {
+      if (selectedResult.library_album_id == null) {
+        showActionFailed(
+          "open existing album",
+          "The matching album exists, but its page could not be identified.",
+        );
+        return;
+      }
+
+      onOpenChange(false);
+      void navigate({
+        to: "/music/album/$id",
+        params: { id: String(selectedResult.library_album_id) },
+      });
+      return;
+    }
+
     if (authData?.error !== false) {
       showActionFailed(
-        "send movie request",
+        "send album request",
         "Your account details are unavailable right now.",
       );
       return;
     }
 
     const requester = authData.data.user;
-    const releaseYear = selectedResult.release_date?.slice(0, 4).trim();
+    const spotifyURL =
+      selectedResult.spotify_url ||
+      `https://open.spotify.com/album/${selectedResult.spotify_id}`;
+    const artists = selectedResult.artist_names.join(", ");
     const lines = [
       `Requester: ${requester.name} <${requester.email}>`,
-      `Movie: ${selectedResult.title}`,
-      releaseYear ? `Year: ${releaseYear}` : null,
-      `TMDB ID: ${selectedResult.tmdb_id}`,
-      `TMDB URL: https://www.themoviedb.org/movie/${selectedResult.tmdb_id}`,
+      `Album: ${selectedResult.title}`,
+      artists ? `Artists: ${artists}` : null,
+      selectedResult.release_date
+        ? `Release date: ${selectedResult.release_date}`
+        : null,
+      selectedResult.total_tracks > 0
+        ? `Total tracks: ${selectedResult.total_tracks}`
+        : null,
+      `Spotify ID: ${selectedResult.spotify_id}`,
+      `Spotify URL: ${spotifyURL}`,
     ].filter(Boolean);
 
     const response = await createNotification({
-      title: NOTIFICATION_TITLES.MOVIE_REQUEST,
+      title: NOTIFICATION_TITLES.ALBUM_REQUEST,
       message: lines.join("\n"),
       isAdmin: true,
     });
 
     if (response.error) {
-      showActionFailed("send movie request", response.message);
+      showActionFailed("send album request", response.message);
       return;
     }
 
+    showCreated(
+      "Album request",
+      `"${selectedResult.title}" was sent to the admin notification queue.`,
+    );
     onOpenChange(false);
-    window.setTimeout(() => {
-      showCreated(
-        "Movie request",
-        `"${selectedResult.title}" was sent to the admin notification queue.`,
-      );
-    }, 0);
   }
 
   return (
@@ -85,34 +110,24 @@ export default function RequestMovieDialog({
         }
       >
         <DialogHeader>
-          <DialogTitle className="text-foreground">Request Movie</DialogTitle>
+          <DialogTitle className="text-foreground">Request Album</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Search TMDB, pick the exact movie you want, and send the request to an admin.
+            Search Spotify, pick the exact album you want, and send the request to an admin.
           </DialogDescription>
         </DialogHeader>
 
-        <TmdbMoviePicker
+        <SpotifyAlbumPicker
           confirmLabel="Send Request"
           initialTitle=""
-          initialYear=""
-          isResultBlocked={result => result.already_in_library}
           onConfirm={handleConfirm}
           renderResultMeta={result => {
-            if (!result.already_in_library || result.library_movie_id == null) {
+            if (!result.already_in_library) {
               return null;
             }
 
             return (
               <p className="text-primary">
-                This movie is already in your library.
-                {" "}
-                <Link
-                  to="/movies/$id"
-                  params={{ id: String(result.library_movie_id) }}
-                  className="underline decoration-primary/60 underline-offset-2 hover:text-primary"
-                >
-                  Open existing movie
-                </Link>
+                This album is already in your library. Submitting will open the existing album page.
               </p>
             );
           }}

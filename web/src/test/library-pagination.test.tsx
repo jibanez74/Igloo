@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import LibraryPagination from "@/components/LibraryPagination";
+import LibraryPagination from "@/components/shared/LibraryPagination";
 
 describe("LibraryPagination", () => {
   it("keeps pagination controls in a predictable tab order", async () => {

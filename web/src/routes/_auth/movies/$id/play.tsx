@@ -7,12 +7,12 @@ import {
 } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Film } from "lucide-react";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
 import { Spinner } from "@/components/ui/spinner";
-import VideoPlayer from "@/components/VideoPlayer";
-import ResumeDialog from "@/components/ResumeDialog";
-import MoviePlayerControls from "@/components/MoviePlayerControls";
-import PlaybackStatusView from "@/components/MoviePlaybackStatus";
+import VideoPlayer from "@/components/playback/VideoPlayer";
+import ResumeDialog from "@/components/movies/ResumeDialog";
+import MoviePlayerControls from "@/components/movies/MoviePlayerControls";
+import PlaybackStatusView from "@/components/movies/MoviePlaybackStatus";
 import {
   authUserQueryOpts,
   libraryMovieDetailsQueryOpts,

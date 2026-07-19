@@ -14,7 +14,7 @@ const showValidationErrorMock = vi.fn();
 const showActionFailedMock = vi.fn();
 const showSuccessMock = vi.fn();
 
-vi.mock("@/components/AppShell", () => ({
+vi.mock("@/components/app/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => (
     <main id="main">{children}</main>
   ),

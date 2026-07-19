@@ -17,7 +17,7 @@ import {
   Minimize,
   RotateCcw,
 } from "lucide-react";
-import ProgressBar from "@/components/ProgressBar";
+import ProgressBar from "@/components/playback/ProgressBar";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,

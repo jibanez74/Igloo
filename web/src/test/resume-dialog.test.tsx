@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ResumeDialog from "@/components/ResumeDialog";
+import ResumeDialog from "@/components/movies/ResumeDialog";
 import { MOTION_MEDIA_DIALOG_SURFACE_CLASS } from "@/lib/constants";
 
 function ResumeDialogHarness({

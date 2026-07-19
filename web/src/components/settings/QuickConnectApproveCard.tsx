@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { MonitorSmartphone } from "lucide-react";
-import SettingsCardHeader from "@/components/SettingsCardHeader";
+import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
 import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
 import { SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import ChapterMenu from "@/components/ChapterMenu";
+import ChapterMenu from "@/components/movies/ChapterMenu";
 import type { ChapterType } from "@/types";
 
 const nullString = { String: "", Valid: false };

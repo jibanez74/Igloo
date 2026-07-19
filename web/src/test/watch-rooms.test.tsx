@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import WatchRooms from "@/components/WatchRooms";
+import WatchRooms from "@/components/watch-room/WatchRooms";
 import type { WatchRoomType } from "@/types";
 
 const useQueryMock = vi.fn();
@@ -17,13 +17,13 @@ vi.mock("@tanstack/react-query", async () => {
   };
 });
 
-vi.mock("@/components/LiveAnnouncer", () => ({
+vi.mock("@/components/shared/LiveAnnouncer", () => ({
   default: ({ message }: { message?: string }) => (
     <div data-testid="live-announcer">{message}</div>
   ),
 }));
 
-vi.mock("@/components/WatchRoomCard", () => ({
+vi.mock("@/components/watch-room/WatchRoomCard", () => ({
   default: ({ room }: { room: WatchRoomType }) => (
     <article aria-label={`Watch room card for ${room.movie_title}`}>
       {room.movie_title}

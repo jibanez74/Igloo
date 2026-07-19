@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle from "@/components/app/ThemeToggle";
 import { THEME_COLORS, THEME_STORAGE_KEY } from "@/lib/theme";
 
 function themeColorMeta() {

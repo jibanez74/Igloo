@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import MoviePlaybackStatusScreen from "@/components/MoviePlaybackStatusScreen";
+import MoviePlaybackStatusScreen from "@/components/movies/MoviePlaybackStatusScreen";
 import type { MoviePlaybackStatus } from "@/types";
 
 type PlaybackStatusViewProps = {

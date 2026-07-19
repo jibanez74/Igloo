@@ -34,8 +34,8 @@ import { useVirtualizedInfiniteLoader } from "@/hooks/useVirtualizedInfiniteLoad
 import { useWindowScrollMargin } from "@/hooks/useWindowScrollMargin";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { refreshMusicLibraryCache } from "@/lib/music-library-cache";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
-import { MoviesLoadError } from "@/components/MoviesLoadError";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import {
@@ -70,16 +70,16 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-import AlbumCard from "@/components/AlbumCard";
-import MusicianCard from "@/components/MusicianCard";
-import LibraryPagination from "@/components/LibraryPagination";
-import TrackItem from "@/components/TrackItem";
-import PlaylistCard from "@/components/PlaylistCard";
-import EmptyState from "@/components/EmptyState";
+import AlbumCard from "@/components/music/AlbumCard";
+import MusicianCard from "@/components/music/MusicianCard";
+import LibraryPagination from "@/components/shared/LibraryPagination";
+import TrackItem from "@/components/music/TrackItem";
+import PlaylistCard from "@/components/music/PlaylistCard";
+import EmptyState from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
-import CreatePlaylistDialog from "@/components/CreatePlaylistDialog";
-import RequestAlbumDialog from "@/components/RequestAlbumDialog";
-import RequestTrackDialog from "@/components/RequestTrackDialog";
+import CreatePlaylistDialog from "@/components/music/CreatePlaylistDialog";
+import RequestAlbumDialog from "@/components/music/RequestAlbumDialog";
+import RequestTrackDialog from "@/components/music/RequestTrackDialog";
 import type { TrackListItemType, VirtualItem } from "@/types";
 import {
   musicSearchSchema,

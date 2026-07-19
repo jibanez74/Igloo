@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import AddToPlaylistDialog from "@/components/AddToPlaylistDialog";
+import AddToPlaylistDialog from "@/components/music/AddToPlaylistDialog";
 import { PLAYLISTS_KEY } from "@/lib/constants";
 import type { ApiResponseType, PlaylistsListResponseType } from "@/types";
 

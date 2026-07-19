@@ -28,11 +28,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
-import CreateMoviePlaylistDialog from "@/components/CreateMoviePlaylistDialog";
-import MovieCard from "@/components/MovieCard";
-import MoviePlaylistCard from "@/components/MoviePlaylistCard";
-import LibraryPagination from "@/components/LibraryPagination";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import CreateMoviePlaylistDialog from "@/components/movies/CreateMoviePlaylistDialog";
+import MovieCard from "@/components/movies/MovieCard";
+import MoviePlaylistCard from "@/components/movies/MoviePlaylistCard";
+import LibraryPagination from "@/components/shared/LibraryPagination";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import {
   CONTENT_FADE_ENTER_CLASS,
@@ -56,13 +56,13 @@ import {
   moviesStatsQueryOpts,
   tmdbStatusQueryOpts,
 } from "@/lib/query-opts";
-import { MoviesLoadError } from "@/components/MoviesLoadError";
+import { MoviesLoadError } from "@/components/shared/MoviesLoadError";
 import { isApiFailure } from "@/lib/is-api-failure";
 import { refreshMovieLibraryCache } from "@/lib/movie-library-cache";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import RequestMovieDialog from "@/components/RequestMovieDialog";
+import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import {
   moviesSearchSchema,
   type MoviesSearchParams,

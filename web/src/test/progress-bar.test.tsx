@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ProgressBar from "@/components/ProgressBar";
+import ProgressBar from "@/components/playback/ProgressBar";
 import {
   MOTION_PROGRESS_FILL_CLASS,
   MOTION_PROGRESS_THUMB_REVEAL_CLASS,

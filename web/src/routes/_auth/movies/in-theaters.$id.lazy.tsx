@@ -12,16 +12,16 @@ import {
   formatRuntimeMinutes,
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
-import MediaNotFound from "@/components/MediaNotFound";
-import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
-import CastSection from "@/components/CastSection";
-import MovieDetailsHero from "@/components/MovieDetailsHero";
-import MovieDetailsSkipLinks from "@/components/MovieDetailsSkipLinks";
-import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
-import MovieOverviewSection from "@/components/MovieOverviewSection";
-import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
-import MovieAboutSection from "@/components/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
+import MediaNotFound from "@/components/shared/MediaNotFound";
+import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
+import CastSection from "@/components/movies/CastSection";
+import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
+import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
+import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
+import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
+import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
+import MovieAboutSection from "@/components/movies/MovieAboutSection";
+import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {

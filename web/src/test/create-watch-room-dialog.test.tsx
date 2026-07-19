@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps, PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import CreateWatchRoomDialog from "@/components/CreateWatchRoomDialog";
+import CreateWatchRoomDialog from "@/components/watch-room/CreateWatchRoomDialog";
 import {
   MOVIE_TECHNICAL_DETAILS_KEY,
   WATCH_ROOM_INVITE_USERS_KEY,

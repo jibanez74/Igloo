@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AppBoot from "@/AppBoot";
 import { SPLASH_REMOVE_DELAY_MS } from "@/lib/constants";
-import RouterPending from "@/components/RouterPending";
+import RouterPending from "@/components/app/RouterPending";
 
 vi.mock("@/App", () => ({
   default: () => <div data-testid="app-shell" />,

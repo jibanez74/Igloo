@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import VideoPlayer from "@/components/VideoPlayer";
+import VideoPlayer from "@/components/playback/VideoPlayer";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
   MOVIE_BUFFERING_SPINNER_DELAY_MS,

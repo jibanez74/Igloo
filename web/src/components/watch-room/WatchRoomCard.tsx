@@ -10,7 +10,7 @@ import {
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
+import DeleteWatchRoomDialog from "@/components/watch-room/DeleteWatchRoomDialog";
 import { cn, getInitials } from "@/lib/utils";
 import type { WatchRoomType } from "@/types";
 

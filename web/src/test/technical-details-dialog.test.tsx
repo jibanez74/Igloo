@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import TechnicalDetailsDialog from "@/components/TechnicalDetailsDialog";
+import TechnicalDetailsDialog from "@/components/movies/TechnicalDetailsDialog";
 import { MOVIE_TECHNICAL_DETAILS_KEY } from "@/lib/constants";
 import type {
   ApiResponseType,

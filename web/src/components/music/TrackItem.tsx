@@ -14,7 +14,7 @@ import {
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import TrackActionsMenu from "@/components/TrackActionsMenu";
+import TrackActionsMenu from "@/components/music/TrackActionsMenu";
 import type { TrackItemVariant } from "@/types";
 
 type TrackItemProps = {

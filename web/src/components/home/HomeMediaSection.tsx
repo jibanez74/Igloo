@@ -2,9 +2,9 @@ import { Fragment, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import EmptyState from "@/components/EmptyState";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
-import SectionErrorAlert from "@/components/SectionErrorAlert";
+import EmptyState from "@/components/shared/EmptyState";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import SectionErrorAlert from "@/components/shared/SectionErrorAlert";
 import { MOTION_SECTION_ENTER_DELAYED_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 

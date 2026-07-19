@@ -184,7 +184,7 @@ vi.mock("@/lib/toast-helpers", async () => {
   };
 });
 
-vi.mock("@/components/VideoPlayer", () => ({
+vi.mock("@/components/playback/VideoPlayer", () => ({
   default: (props: MockVideoPlayerProps) => (
     <video
       data-testid="video-player"
@@ -196,11 +196,11 @@ vi.mock("@/components/VideoPlayer", () => ({
   ),
 }));
 
-vi.mock("@/components/ProgressBar", () => ({
+vi.mock("@/components/playback/ProgressBar", () => ({
   default: () => <div data-testid="progress-bar" />,
 }));
 
-vi.mock("@/components/LiveAnnouncer", () => ({
+vi.mock("@/components/shared/LiveAnnouncer", () => ({
   default: ({ message }: { message?: string }) => (
     <div data-testid="live-announcer">{message}</div>
   ),

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import EditMovieDialog from "@/components/EditMovieDialog";
+import EditMovieDialog from "@/components/movies/EditMovieDialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ApiResponseType, LibraryMovieDetailsMovieType, TmdbSearchResultType } from "@/types";
 
