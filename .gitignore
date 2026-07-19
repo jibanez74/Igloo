@@ -32,7 +32,6 @@
 /web/node_modules/
 /web/dist/
 /web/.tanstack/
-/web/src/routeTree.gen.ts
 /web/test-results/
 /web/playwright-report/
 /web/blob-report/

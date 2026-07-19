@@ -30,9 +30,9 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react";
-import SettingsCardHeader from "@/components/SettingsCardHeader";
-import SettingsErrorCard from "@/components/SettingsErrorCard";
-import SettingsLoadingCard from "@/components/SettingsLoadingCard";
+import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
@@ -66,9 +66,9 @@ import {
 } from "@/lib/input-styles";
 import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
-import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
-import DevicesCard from "@/components/DevicesCard";
-import ProfilePinCard from "@/components/ProfilePinCard";
+import QuickConnectApproveCard from "@/components/settings/QuickConnectApproveCard";
+import DevicesCard from "@/components/settings/DevicesCard";
+import ProfilePinCard from "@/components/settings/ProfilePinCard";
 
 export const Route = createLazyFileRoute("/_auth/settings/account")({
   component: AccountSettings,

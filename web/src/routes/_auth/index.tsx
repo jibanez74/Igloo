@@ -7,11 +7,11 @@ import {
   watchRoomsQueryOpts,
 } from "@/lib/query-opts";
 import { Home } from "lucide-react";
-import ContinueWatching from "@/components/ContinueWatching";
-import LatestAlbums from "@/components/LatestAlbums";
-import LatestMovies from "@/components/LatestMovies";
-import MoviesInTheaters from "@/components/MoviesInTheaters";
-import WatchRooms from "@/components/WatchRooms";
+import ContinueWatching from "@/components/home/ContinueWatching";
+import LatestAlbums from "@/components/home/LatestAlbums";
+import LatestMovies from "@/components/home/LatestMovies";
+import MoviesInTheaters from "@/components/home/MoviesInTheaters";
+import WatchRooms from "@/components/watch-room/WatchRooms";
 import { MOTION_SECTION_ENTER_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 

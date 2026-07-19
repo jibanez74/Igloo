@@ -89,7 +89,7 @@ Use [`.env.example`](.env.example) as the canonical runtime reference. The most 
 | `LOGS_DIR` | First-run default for file logs, default `logs` |
 | `TRANSCODE_DIR` | First-run default for the temporary HLS workspace, default `transcode` |
 | `SESSION_COOKIE_SECURE` | `true` behind HTTPS; `false` for plain HTTP development |
-| `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user |
+| `DEFAULT_ADMIN_NAME`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` | Bootstrap admin account, used only when the database has no admin user; `DEFAULT_ADMIN_PASSWORD` is required |
 | `MOVIES_DIR`, `SHOWS_DIR`, `MUSIC_DIR` | First-run media library defaults; configured paths must already exist |
 | `TMDB_API_KEY` | First-run default for optional TMDB movie metadata |
 | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | First-run defaults for optional Spotify music metadata enrichment |

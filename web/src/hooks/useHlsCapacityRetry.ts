@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { HLS_CAPACITY_RETRY_MAX_ATTEMPTS } from "@/lib/constants";
-import type { HlsCapacityRetryOptions } from "@/types";
+type HlsCapacityRetryOptions = {
+  streamWindowKey: string;
+  onRetry: () => void;
+  onMaxAttempts: (message: string) => void;
+};
 
 /**
  * Retries HLS manifest loads that fail with 503 (server at transcode

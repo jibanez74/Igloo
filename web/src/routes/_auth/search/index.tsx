@@ -7,7 +7,7 @@ import {
   searchTracksQueryOpts,
 } from "@/lib/query-opts";
 import { SEARCH_PER_PAGE } from "@/lib/constants";
-import { searchSearchSchema } from "@/types/route-search";
+import { searchSearchSchema } from "@/lib/route-search";
 import type { SearchTab } from "@/types";
 
 type PagedSearchTab = Exclude<SearchTab, "all">;

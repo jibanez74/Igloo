@@ -27,10 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import SettingsCardHeader from "@/components/SettingsCardHeader";
-import SettingsErrorCard from "@/components/SettingsErrorCard";
-import SettingsLoadingCard from "@/components/SettingsLoadingCard";
-import SettingsSaveBar from "@/components/SettingsSaveBar";
+import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
   FOCUS_VISIBLE_RING_CLASS,

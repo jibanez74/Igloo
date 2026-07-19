@@ -33,8 +33,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
-import TrackItem from "@/components/TrackItem";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import TrackItem from "@/components/music/TrackItem";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { formatDate, formatDuration } from "@/lib/format";
 import type {
   AlbumDetailsResponseType,
@@ -43,11 +43,11 @@ import type {
   TrackGenreType,
   TrackType,
 } from "@/types";
-import MediaNotFound from "@/components/MediaNotFound";
-import AlbumDetailsBackdrop from "@/components/AlbumDetailsBackdrop";
-import AlbumDetailsCoverBlock from "@/components/AlbumDetailsCoverBlock";
-import AlbumDetailsSkipLinks from "@/components/AlbumDetailsSkipLinks";
-import { SpotifyPopularityMeter } from "@/components/SpotifyPopularity";
+import MediaNotFound from "@/components/shared/MediaNotFound";
+import AlbumDetailsBackdrop from "@/components/music/AlbumDetailsBackdrop";
+import AlbumDetailsCoverBlock from "@/components/music/AlbumDetailsCoverBlock";
+import AlbumDetailsSkipLinks from "@/components/music/AlbumDetailsSkipLinks";
+import { SpotifyPopularityMeter } from "@/components/music/SpotifyPopularity";
 import {
   ALBUM_DETAILS_KEY,
   ALBUMS_PAGINATED_KEY,

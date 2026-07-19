@@ -5,7 +5,7 @@
 //   bun run generate:theme          rewrite the generated blocks in place
 //   bun run generate:theme --check  exit 1 if any block is stale (CI-friendly)
 //
-// The pure render functions are also imported by src/test/theme-drift.test.ts,
+// The pure render functions are also imported by src/test/shared/theme-drift.test.ts,
 // which fails whenever a generated block no longer matches its renderer.
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -39,7 +39,7 @@ export function renderStylesBlock(): string {
     ":root {",
     "  /* Light igloo palette — icy glacier on a cool near-white canvas. Mirrors",
     "     the .dark token set below (the dark igloo theme, the default). Both",
-    "     themes are contrast-verified by src/test/contrast.test.ts; see",
+    "     themes are contrast-verified by src/test/shared/contrast.test.ts; see",
     "     docs/design-system.md §1.2. The app boots from the stored browser",
     "     theme, defaulting to dark. */",
     renderDeclarations({ ...ROOT_ONLY_TOKENS, ...THEME_TOKENS.light }),

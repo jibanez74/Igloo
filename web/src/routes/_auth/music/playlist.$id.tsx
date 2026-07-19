@@ -21,13 +21,13 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import TrackItem from "@/components/TrackItem";
-import EditPlaylistDialog from "@/components/EditPlaylistDialog";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import TrackItem from "@/components/music/TrackItem";
+import EditPlaylistDialog from "@/components/music/EditPlaylistDialog";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 
 // Lazy load DraggableTrackList to reduce initial bundle size
 // This component includes the heavy @dnd-kit packages
-const DraggableTrackList = lazy(() => import("@/components/DraggableTrackList"));
+const DraggableTrackList = lazy(() => import("@/components/music/DraggableTrackList"));
 import {
   playlistDetailsQueryOpts,
   playlistTracksInfiniteQueryOpts,

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -36,13 +35,8 @@ import (
 )
 
 const (
-	defaultAdminName     = "Admin"
-	defaultAdminEmail    = "admin@sample.com"
-	defaultAdminPassword = "AdminPassword"
-
-	envDefaultAdminName     = "DEFAULT_ADMIN_NAME"
-	envDefaultAdminEmail    = "DEFAULT_ADMIN_EMAIL"
-	envDefaultAdminPassword = "DEFAULT_ADMIN_PASSWORD"
+	defaultAdminName  = "Admin"
+	defaultAdminEmail = "admin@sample.com"
 )
 
 type Application struct {
@@ -85,6 +79,8 @@ type Application struct {
 	AuthLimiter                   *rateLimiter
 	DeviceLastSeen                *cache.Cache
 	DeviceExpiryCancel            context.CancelFunc
+	ScanCancel                    context.CancelFunc
+	ScanContext                   context.Context
 }
 
 //go:embed all:webdist
@@ -135,15 +131,14 @@ func main() {
 		// run cleanup rather than exit bare.
 		app.Logger.Error("server failed to start", "error", err)
 		app.DeviceExpiryCancel()
+		app.cancelScans()
 		app.Wait.Wait()
-		app.cleanupMediaBinaries()
-		app.closeDatabase()
-		app.closeLogger()
+		app.cleanupStartupResources()
 		os.Exit(1)
 	}
 }
 
-func InitApp() (*Application, error) {
+func InitApp() (initializedApp *Application, err error) {
 	config, err := NewRuntimeConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load runtime config: %v", err)
@@ -153,6 +148,11 @@ func InitApp() (*Application, error) {
 		Config: config,
 		Wait:   &sync.WaitGroup{},
 	}
+	defer func() {
+		if err != nil {
+			app.cleanupStartupResources()
+		}
+	}()
 
 	ctx := context.Background()
 
@@ -182,10 +182,6 @@ func InitApp() (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize settings: %v", err)
 	}
 
-	// Remove any leftover HLS temp directories from a previous run that did not
-	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
-	cleanupStaleHLSTempDirs(app.Logger, app.Settings.TranscodeDir)
-
 	app.WatchRoomHub = NewWatchRoomHub()
 
 	// Directory paths come from settings, so this must run after InitSettings.
@@ -193,6 +189,10 @@ func InitApp() (*Application, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize directories: %v", err)
 	}
+
+	// Remove any leftover HLS temp directories from a previous run that did not
+	// shut down cleanly (crash, SIGKILL from systemd, power loss, etc.).
+	cleanupStaleHLSTempDirs(app.Logger, app.Settings.TranscodeDir)
 
 	err = app.InitDefaultUser(ctx)
 	if err != nil {
@@ -240,6 +240,7 @@ func InitApp() (*Application, error) {
 	}
 
 	app.initRuntimeCaches()
+	app.ScanContext, app.ScanCancel = context.WithCancel(context.Background())
 	app.ScanMoviesLibrary()
 	app.MusicScanLibrary()
 
@@ -320,11 +321,13 @@ func (app *Application) InitDB() error {
 
 	err = db.Ping()
 	if err != nil {
+		db.Close()
 		return fmt.Errorf("failed to connect to database %s: %w", dbPath, err)
 	}
 
 	_, err = db.Exec("PRAGMA journal_mode=WAL;")
 	if err != nil {
+		db.Close()
 		return fmt.Errorf("failed to enable WAL journal mode for database %s: %w", dbPath, err)
 	}
 
@@ -395,30 +398,19 @@ func (app *Application) InitSettings(ctx context.Context) error {
 
 	app.Logger.Info("no settings found, creating default settings...")
 
-	downloadImages, _ := strconv.ParseBool(os.Getenv("DOWNLOAD_IMAGES"))
-	enableWatcher, _ := strconv.ParseBool(os.Getenv("ENABLE_WATCHER"))
-
-	staticDir := configuredStaticDir()
-	transcodeDir := configuredTranscodeDir()
-
-	hardwareAccelerationDevice := os.Getenv("HARDWARE_ACCELERATION_DEVICE")
-	if hardwareAccelerationDevice == "" {
-		hardwareAccelerationDevice = helpers.HARDWARE_ACCELERATION_DEVICE_CPU
-	}
-
 	params := database.CreateSettingsParams{
-		TmdbKey:                    helpers.NullString(os.Getenv("TMDB_API_KEY")),
-		JellyfinApiKey:             helpers.NullString(os.Getenv("JELLYFIN_API_KEY")),
-		SpotifyClientID:            helpers.NullString(os.Getenv("SPOTIFY_CLIENT_ID")),
-		SpotifyClientSecret:        helpers.NullString(os.Getenv("SPOTIFY_CLIENT_SECRET")),
-		HardwareAccelerationDevice: helpers.NullString(hardwareAccelerationDevice),
-		EnableWatcher:              enableWatcher,
-		DownloadImages:             downloadImages,
-		MoviesDir:                  optionalEnvSetting("MOVIES_DIR"),
-		ShowsDir:                   optionalEnvSetting("SHOWS_DIR"),
-		MusicDir:                   optionalEnvSetting("MUSIC_DIR"),
-		StaticDir:                  staticDir,
-		TranscodeDir:               transcodeDir,
+		TmdbKey:                    helpers.NullString(app.Config.TmdbAPIKey),
+		JellyfinApiKey:             helpers.NullString(app.Config.JellyfinAPIKey),
+		SpotifyClientID:            helpers.NullString(app.Config.SpotifyClientID),
+		SpotifyClientSecret:        helpers.NullString(app.Config.SpotifyClientSecret),
+		HardwareAccelerationDevice: helpers.NullString(app.Config.HardwareAccelerationDevice),
+		EnableWatcher:              app.Config.EnableWatcher,
+		DownloadImages:             app.Config.DownloadImages,
+		MoviesDir:                  helpers.NullString(app.Config.MoviesDir),
+		ShowsDir:                   helpers.NullString(app.Config.ShowsDir),
+		MusicDir:                   helpers.NullString(app.Config.MusicDir),
+		StaticDir:                  app.Config.effectiveStaticDir(),
+		TranscodeDir:               app.Config.effectiveTranscodeDir(),
 	}
 
 	settings, err = app.Queries.CreateSettings(ctx, params)
@@ -514,8 +506,8 @@ func validateExistingDir(path string) error {
 }
 
 func (app *Application) InitLogger() error {
-	debug := envBool("DEBUG", app.Config.Debug)
-	logToStdout := envBool(envLogToStdout, app.Config.LogToStdout || debug)
+	debug := app.Config.Debug
+	logToStdout := app.Config.LogToStdout
 
 	logsDir := app.Config.effectiveLogsDir()
 
@@ -557,19 +549,9 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 
 	app.Logger.Info("no admin user found, creating default admin user...")
 
-	name := strings.TrimSpace(os.Getenv(envDefaultAdminName))
-	if name == "" {
-		name = defaultAdminName
-	}
-
-	email := strings.TrimSpace(os.Getenv(envDefaultAdminEmail))
-	if email == "" {
-		email = defaultAdminEmail
-	}
-
-	password := strings.TrimSpace(os.Getenv(envDefaultAdminPassword))
+	password := app.Config.DefaultAdminPassword
 	if password == "" {
-		password = defaultAdminPassword
+		return fmt.Errorf("%s must be set before creating the initial administrator", envDefaultAdminPassword)
 	}
 
 	hashedPassword, err := helpers.HashPassword(password)
@@ -578,8 +560,8 @@ func (app *Application) InitDefaultUser(ctx context.Context) error {
 	}
 
 	params := database.CreateUserParams{
-		Name:     name,
-		Email:    email,
+		Name:     app.Config.DefaultAdminName,
+		Email:    app.Config.DefaultAdminEmail,
 		Password: hashedPassword,
 		IsAdmin:  true,
 		Avatar:   sql.NullString{Valid: false},
@@ -601,15 +583,11 @@ func (app *Application) InitSession() {
 	sessionManager.Lifetime = 30 * 24 * time.Hour
 	sessionManager.Cookie.HttpOnly = true
 	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
-	sessionManager.Cookie.Secure = envBool(envSessionCookieSecure, app.Config.SessionCookieSecure)
+	sessionManager.Cookie.Secure = app.Config.SessionCookieSecure
 
 	app.SessionManager = sessionManager
 
 	app.Logger.Info("session manager initialized successfully", "cookie_secure", sessionManager.Cookie.Secure)
-}
-
-func optionalEnvSetting(envName string) sql.NullString {
-	return helpers.NullString(strings.TrimSpace(os.Getenv(envName)))
 }
 
 func (app *Application) InitRouter() {
@@ -903,6 +881,10 @@ func (app *Application) registerUserStatsRoutes(r chi.Router) {
 }
 
 func cleanupStaleHLSTempDirs(logger applogger.LoggerInterface, transcodeDir string) {
+	if strings.TrimSpace(transcodeDir) == "" {
+		return
+	}
+
 	pattern := filepath.Join(transcodeDir, "igloo-hls-*")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
@@ -943,6 +925,7 @@ func (app *Application) ListenForShutdown() {
 	if app.DeviceExpiryCancel != nil {
 		app.DeviceExpiryCancel()
 	}
+	app.cancelScans()
 
 	// Background tasks may still need database and logger access.
 	app.Wait.Wait()
@@ -954,6 +937,12 @@ func (app *Application) ListenForShutdown() {
 	app.closeLogger()
 
 	os.Exit(0)
+}
+
+func (app *Application) cancelScans() {
+	if app.ScanCancel != nil {
+		app.ScanCancel()
+	}
 }
 
 func (app *Application) shutdownHTTPServer(ctx context.Context) {
@@ -1021,6 +1010,14 @@ func (app *Application) cleanupMediaBinaries() {
 	if err != nil {
 		app.Logger.Error("failed to cleanup ffmpeg", "error", err)
 	}
+}
+
+func (app *Application) cleanupStartupResources() {
+	if app.Ffprobe != nil || app.FFmpeg != nil {
+		app.cleanupMediaBinaries()
+	}
+	app.closeDatabase()
+	app.closeLogger()
 }
 
 func (app *Application) closeDatabase() {

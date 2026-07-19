@@ -52,7 +52,7 @@
 :root {
   /* Light igloo palette — icy glacier on a cool near-white canvas. Mirrors
      the .dark token set below (the dark igloo theme, the default). Both
-     themes are contrast-verified by src/test/contrast.test.ts; see
+     themes are contrast-verified by src/test/shared/contrast.test.ts; see
      docs/design-system.md §1.2. The app boots from the stored browser
      theme, defaulting to dark. */
   --radius: 0.625rem;

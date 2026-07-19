@@ -20,19 +20,19 @@ import {
   prepareYouTubeExtrasForDisplay,
 } from "@/lib/format";
 import { unwrapFloat, unwrapInt, unwrapString } from "@/lib/nullable";
-import MediaNotFound from "@/components/MediaNotFound";
-import MovieDetailsSkeleton from "@/components/MovieDetailsSkeleton";
-import CastSection from "@/components/CastSection";
-import MovieDetailsHero from "@/components/MovieDetailsHero";
-import MovieDetailsSkipLinks from "@/components/MovieDetailsSkipLinks";
-import MovieDetailsMetadataChips from "@/components/MovieDetailsMetadataChips";
-import MovieDetailsHeroActions from "@/components/MovieDetailsHeroActions";
-import MovieDetailsResumeProgress from "@/components/MovieDetailsResumeProgress";
-import MovieOverviewSection from "@/components/MovieOverviewSection";
-import MovieKeyCrewSection from "@/components/MovieKeyCrewSection";
-import MovieAboutSection from "@/components/MovieAboutSection";
-import MovieExtraVideosSection from "@/components/MovieExtraVideosSection";
-import MovieChaptersSection from "@/components/MovieChaptersSection";
+import MediaNotFound from "@/components/shared/MediaNotFound";
+import MovieDetailsSkeleton from "@/components/movies/MovieDetailsSkeleton";
+import CastSection from "@/components/movies/CastSection";
+import MovieDetailsHero from "@/components/movies/MovieDetailsHero";
+import MovieDetailsSkipLinks from "@/components/movies/MovieDetailsSkipLinks";
+import MovieDetailsMetadataChips from "@/components/movies/MovieDetailsMetadataChips";
+import MovieDetailsHeroActions from "@/components/movies/MovieDetailsHeroActions";
+import MovieDetailsResumeProgress from "@/components/movies/MovieDetailsResumeProgress";
+import MovieOverviewSection from "@/components/movies/MovieOverviewSection";
+import MovieKeyCrewSection from "@/components/movies/MovieKeyCrewSection";
+import MovieAboutSection from "@/components/movies/MovieAboutSection";
+import MovieExtraVideosSection from "@/components/movies/MovieExtraVideosSection";
+import MovieChaptersSection from "@/components/movies/MovieChaptersSection";
 import {
   getAvailableModes,
   getDefaultPlaybackSettings,

@@ -2,12 +2,12 @@ import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import { Search, Film, Disc3, User, Music } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import LiveAnnouncer from "@/components/LiveAnnouncer";
-import LibraryPagination from "@/components/LibraryPagination";
-import MovieCard from "@/components/MovieCard";
-import AlbumCard from "@/components/AlbumCard";
-import MusicianCard from "@/components/MusicianCard";
-import TrackItem from "@/components/TrackItem";
+import LiveAnnouncer from "@/components/shared/LiveAnnouncer";
+import LibraryPagination from "@/components/shared/LibraryPagination";
+import MovieCard from "@/components/movies/MovieCard";
+import AlbumCard from "@/components/music/AlbumCard";
+import MusicianCard from "@/components/music/MusicianCard";
+import TrackItem from "@/components/music/TrackItem";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
@@ -48,7 +48,7 @@ import type {
   SimpleMusicianType,
   TrackListItemType,
 } from "@/types";
-import type { SearchParams } from "@/types/route-search";
+import type { SearchParams } from "@/lib/route-search";
 
 export const Route = createLazyFileRoute("/_auth/search/")({
   component: SearchPage,

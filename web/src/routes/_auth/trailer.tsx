@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { movieDetailsQueryOpts } from "@/lib/query-opts";
-import { trailerSearchSchema } from "@/types/route-search";
+import { trailerSearchSchema } from "@/lib/route-search";
 
 export const Route = createFileRoute("/_auth/trailer")({
   validateSearch: trailerSearchSchema,

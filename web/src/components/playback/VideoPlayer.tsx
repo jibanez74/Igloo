@@ -1,0 +1,405 @@
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { RefObject } from "react";
+import type Hls from "hls.js";
+import type { ErrorData } from "hls.js";
+import type { Events } from "hls.js";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  HLS_CAPACITY_RETRY_FALLBACK_SEC,
+  HLS_JS_BACK_BUFFER_LENGTH_SEC,
+  HLS_JS_LOAD_TIMEOUT_MS,
+  MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+  MOVIE_BUFFERING_SPINNER_DELAY_MS,
+} from "@/lib/constants";
+import { supportsNativeHLS } from "@/lib/playback";
+import { cn } from "@/lib/utils";
+
+type SubtitleTrackInfo = {
+  url: string;
+  label: string;
+  srclang: string;
+};
+
+type VideoPlayerProps = {
+  videoRef: RefObject<HTMLVideoElement | null>;
+  src: string;
+  title: string;
+  isFullscreen?: boolean;
+  onError: (message: string) => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onEnded?: () => void;
+  onTimeUpdate?: (time: number) => void;
+  onDurationChange?: (duration: number) => void;
+  onNativeError?: (code: number | null | undefined) => void;
+  subtitleTrack?: SubtitleTrackInfo | null;
+  startSec?: number;
+  onStartApplied?: (time: number) => void;
+  onSessionLost?: (currentTime: number) => void;
+  onCapacityBusy?: (retryAfterSec: number) => void;
+};
+
+function loadHlsLight() {
+  return import("hls.js/light");
+}
+
+const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
+const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
+
+export default function VideoPlayer({
+  videoRef,
+  src,
+  title,
+  isFullscreen = false,
+  onError,
+  onPlay,
+  onPause,
+  onEnded,
+  onTimeUpdate,
+  onDurationChange,
+  onNativeError,
+  subtitleTrack = null,
+  startSec = 0,
+  onStartApplied,
+  onSessionLost,
+  onCapacityBusy,
+}: VideoPlayerProps) {
+  const hlsRef = useRef<Hls | null>(null);
+
+  // Mid-playback buffering indicator: shown only after a short delay so
+  // sub-perceptual stalls never flash a spinner.
+  const [showBuffering, setShowBuffering] = useState(false);
+  const bufferingDelayTimerRef = useRef<number | null>(null);
+
+  const clearBufferingIndicator = () => {
+    if (bufferingDelayTimerRef.current !== null) {
+      window.clearTimeout(bufferingDelayTimerRef.current);
+      bufferingDelayTimerRef.current = null;
+    }
+    setShowBuffering(false);
+  };
+
+  const scheduleBufferingIndicator = () => {
+    if (bufferingDelayTimerRef.current !== null || showBuffering) return;
+    bufferingDelayTimerRef.current = window.setTimeout(() => {
+      bufferingDelayTimerRef.current = null;
+      setShowBuffering(true);
+    }, MOVIE_BUFFERING_SPINNER_DELAY_MS);
+  };
+
+  // A source change (e.g. an HLS session rebase) must not inherit a stale
+  // spinner or a pending show timer from the previous stream.
+  useEffect(() => {
+    return () => {
+      clearBufferingIndicator();
+    };
+  }, [src]);
+
+  const reportError = useEffectEvent((message: string) => {
+    onError(message);
+  });
+
+  const handleStartApplied = useEffectEvent((time: number) => {
+    onStartApplied?.(time);
+  });
+
+  const applyStartTime = useEffectEvent((video: HTMLVideoElement) => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const nextTime = duration > 0 ? Math.min(startSec, duration) : startSec;
+    video.currentTime = nextTime;
+    handleStartApplied(nextTime);
+  });
+
+  // Returns false when no onCapacityBusy consumer exists so the caller can
+  // fall through to the regular fatal-error handling.
+  const handleCapacityBusy = useEffectEvent((data: ErrorData): boolean => {
+    if (!onCapacityBusy) return false;
+
+    let retryAfterSec = HLS_CAPACITY_RETRY_FALLBACK_SEC;
+    try {
+      const xhr = data.networkDetails as XMLHttpRequest | null | undefined;
+      const header = xhr?.getResponseHeader?.("Retry-After");
+      const parsed = header ? Number.parseInt(header, 10) : NaN;
+      if (Number.isFinite(parsed) && parsed > 0) {
+        retryAfterSec = parsed;
+      }
+    } catch {
+      // Header unavailable on this loader; keep the fallback delay.
+    }
+
+    onCapacityBusy(retryAfterSec);
+    return true;
+  });
+
+  const handleHlsError = useEffectEvent(
+    (
+      video: HTMLVideoElement,
+      data: ErrorData,
+      sessionLostDetail: ErrorData["details"],
+    ) => {
+      // Rate limiting and the max-attempt budget live in useHlsSessionRecovery
+      // (the onSessionLost consumer); this component only reports the event.
+      if (
+        data.details === sessionLostDetail &&
+        data.response?.code === 404 &&
+        onSessionLost
+      ) {
+        onSessionLost(video.currentTime);
+        return;
+      }
+
+      const detail = data.details ?? "unknown error";
+      if (data.type === HLS_NETWORK_ERROR) {
+        reportError(`Network error loading stream (${detail}).`);
+      } else if (data.type === HLS_MEDIA_ERROR) {
+        reportError(`The browser could not decode this stream (${detail}).`);
+      } else {
+        reportError(`Stream error: ${detail}`);
+      }
+    },
+  );
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    if (
+      (src.endsWith(".m3u8") || src.includes(".m3u8?")) &&
+      !supportsNativeHLS
+    ) {
+      let cancelled = false;
+      let disposeHls: (() => void) | null = null;
+
+      void (async () => {
+        try {
+          const { default: Hls } = await loadHlsLight();
+          if (cancelled || !Hls.isSupported()) return;
+
+          const hls = new Hls({
+            xhrSetup(xhr: XMLHttpRequest) {
+              xhr.withCredentials = true;
+            },
+            manifestLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            levelLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            fragLoadingTimeOut: HLS_JS_LOAD_TIMEOUT_MS,
+            backBufferLength: HLS_JS_BACK_BUFFER_LENGTH_SEC,
+            startPosition: startSec > 0 ? startSec : -1,
+          });
+          const sessionLostDetail = Hls.ErrorDetails.FRAG_LOAD_ERROR;
+          hlsRef.current = hls;
+          disposeHls = () => {
+            hls.destroy();
+            hlsRef.current = null;
+          };
+
+          hls.loadSource(src);
+          hls.attachMedia(video);
+
+          if (startSec > 0) {
+            hls.once(Hls.Events.MANIFEST_PARSED, () => {
+              handleStartApplied(startSec);
+            });
+          }
+
+          let mediaRecoveryAttempted = false;
+          hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
+            const isSessionLostError =
+              data.details === sessionLostDetail &&
+              data.response?.code === 404;
+
+            if (isSessionLostError) {
+              handleHlsError(video, data, sessionLostDetail);
+              return;
+            }
+
+            const isCapacityBusyError =
+              data.fatal &&
+              (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) &&
+              data.response?.code === 503;
+
+            if (isCapacityBusyError && handleCapacityBusy(data)) {
+              return;
+            }
+
+            if (!data.fatal) return;
+
+            if (data.type === HLS_MEDIA_ERROR && !mediaRecoveryAttempted) {
+              mediaRecoveryAttempted = true;
+              hls.recoverMediaError();
+              return;
+            }
+
+            handleHlsError(video, data, sessionLostDetail);
+          });
+        } catch {
+          if (!cancelled) {
+            reportError("Failed to load the video playback engine.");
+          }
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        disposeHls?.();
+      };
+    }
+
+    video.src = src;
+    return () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [src, startSec, videoRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || startSec <= 0) return;
+    // HLS.js owns the initial seek via its startPosition config and fires
+    // onStartApplied via MANIFEST_PARSED; don't compete with it.
+    if (hlsRef.current) return;
+
+    if (video.readyState >= 1) {
+      applyStartTime(video);
+      return;
+    }
+
+    const handleLoadedMetadata = () => {
+      applyStartTime(video);
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    };
+  }, [startSec, src, videoRef]);
+
+  // The subtitleTrack object gets a new reference on every parent render;
+  // key on the URL which uniquely identifies the active subtitle so the
+  // effect only re-runs when the subtitle actually changes.
+  const subtitleUrl = subtitleTrack?.url ?? null;
+  const subtitleTrackRef = useRef(subtitleTrack);
+  useEffect(() => {
+    subtitleTrackRef.current = subtitleTrack;
+  }, [subtitleTrack]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const existing = video.querySelector("track[data-subtitle]");
+    if (existing) {
+      video.removeChild(existing);
+    }
+
+    const sub = subtitleTrackRef.current;
+    if (!sub) return;
+
+    const track = document.createElement("track");
+    track.kind = "subtitles";
+    track.src = sub.url;
+    track.srclang = sub.srclang;
+    track.label = sub.label;
+    track.setAttribute("data-subtitle", "");
+    video.appendChild(track);
+    track.track.mode = "showing";
+
+    return () => {
+      if (video.contains(track)) {
+        video.removeChild(track);
+      }
+    };
+  }, [subtitleUrl, videoRef]);
+
+  return (
+    <div
+      className={
+        isFullscreen
+          ? "relative flex min-h-0 w-full flex-1 items-center justify-center bg-black"
+          : "relative flex min-h-0 w-full flex-1 items-center justify-center p-4"
+      }
+    >
+      <div
+        className={
+          isFullscreen
+            ? "size-full min-h-0 min-w-0"
+            : "aspect-video w-full max-w-6xl"
+        }
+      >
+        <video
+          ref={videoRef}
+          className={`size-full bg-black object-contain ${isFullscreen ? "rounded-none" : "rounded-lg"}`}
+          playsInline
+          aria-label={`Video player for ${title}`}
+          onPlay={onPlay}
+          onPause={() => {
+            clearBufferingIndicator();
+            onPause?.();
+          }}
+          onEnded={() => {
+            clearBufferingIndicator();
+            onEnded?.();
+          }}
+          onWaiting={scheduleBufferingIndicator}
+          onStalled={scheduleBufferingIndicator}
+          onSeeking={scheduleBufferingIndicator}
+          onPlaying={clearBufferingIndicator}
+          onCanPlay={clearBufferingIndicator}
+          onSeeked={clearBufferingIndicator}
+          onTimeUpdate={
+            onTimeUpdate
+              ? (e) => onTimeUpdate(e.currentTarget.currentTime)
+              : undefined
+          }
+          onDurationChange={
+            onDurationChange
+              ? (e) => onDurationChange(e.currentTarget.duration)
+              : undefined
+          }
+          onError={(e) => {
+            clearBufferingIndicator();
+
+            const errorCode = e.currentTarget.error?.code;
+
+            onNativeError?.(errorCode);
+
+            switch (errorCode) {
+              case MediaError.MEDIA_ERR_ABORTED:
+                onError(
+                  "Playback was interrupted before the stream finished loading.",
+                );
+                return;
+              case MediaError.MEDIA_ERR_NETWORK:
+                onError("A network error interrupted video playback.");
+                return;
+              case MediaError.MEDIA_ERR_DECODE:
+                onError("The browser could not decode this video stream.");
+                return;
+              case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                onError(
+                  "This video format or stream is not supported by the browser.",
+                );
+                return;
+              default:
+                onError(
+                  "Playback failed — the browser could not play this stream.",
+                );
+            }
+          }}
+        />
+      </div>
+      {showBuffering && (
+        <div
+          className={cn(
+            MOTION_MEDIA_OVERLAY_ENTER_CLASS,
+            "pointer-events-none absolute inset-0 z-10 flex items-center justify-center",
+          )}
+        >
+          <div className="flex size-16 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm">
+            <Spinner className="size-8 text-primary" aria-label="Buffering" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

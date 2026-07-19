@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -10,7 +11,7 @@ import (
 
 func (app *Application) MusicScanLibrary() {
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
-		app.Logger.Error("music directory not configured")
+		app.Logger.Info("skipping music library scan: music directory is not configured")
 		return
 	}
 
@@ -32,13 +33,13 @@ func (app *Application) runMusicScan() {
 	defer musicScanGuard.Finish()
 
 	if !app.Settings.MusicDir.Valid || app.Settings.MusicDir.String == "" {
-		app.Logger.Error("music directory not configured")
+		app.Logger.Info("skipping music library scan: music directory is not configured")
 		return
 	}
 
 	app.Logger.Info(fmt.Sprintf("scanning music directory: %s", app.Settings.MusicDir.String))
 
-	ctx := context.Background()
+	ctx := app.scanContext()
 	errorCount := 0
 	tracksScanned := 0
 	tracksSkipped := 0
@@ -62,7 +63,8 @@ func (app *Application) runMusicScan() {
 		batch = batch[:0]
 	}
 
-	err = helpers.WalkMediaLibrary(
+	err = helpers.WalkMediaLibraryContext(
+		ctx,
 		app.Settings.MusicDir.String,
 		helpers.ValidAudioExtensions,
 		func(err error) {
@@ -86,6 +88,10 @@ func (app *Application) runMusicScan() {
 	)
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			app.Logger.Info("music library scan canceled")
+			return
+		}
 		app.Logger.Error(fmt.Sprintf("unexpected error walking music directory: %s", err.Error()))
 		return
 	}
@@ -98,6 +104,10 @@ func (app *Application) runMusicScan() {
 
 func (app *Application) processMusicBatchWithContext(ctx context.Context, scan *musicScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
+		if ctx.Err() != nil {
+			return scanned, skipped, errCount
+		}
+
 		if scan.trackUnchanged(file.Path, file.Size) {
 			skipped++
 			continue

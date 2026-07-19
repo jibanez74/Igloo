@@ -10,7 +10,7 @@ import type {
   PlayableTrackData,
   TrackType,
 } from "@/types";
-import AudioPlayer from "@/components/AudioPlayer";
+import AudioPlayer from "@/components/playback/AudioPlayer";
 import {
   getShuffleTracks,
   getTracksPaginated,

@@ -13,10 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import SettingsCardHeader from "@/components/SettingsCardHeader";
-import SettingsErrorCard from "@/components/SettingsErrorCard";
-import SettingsLoadingCard from "@/components/SettingsLoadingCard";
-import SettingsSaveBar from "@/components/SettingsSaveBar";
+import SettingsCardHeader from "@/components/settings/SettingsCardHeader";
+import SettingsErrorCard from "@/components/settings/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/settings/SettingsLoadingCard";
+import SettingsSaveBar from "@/components/settings/SettingsSaveBar";
 import {
   GENERAL_SETTINGS_KEY,
   LANGUAGE_NAMES,

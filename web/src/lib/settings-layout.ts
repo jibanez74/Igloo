@@ -1,9 +1,27 @@
-import type {
-  SettingsLayoutInput,
-  SettingsLayoutState,
-  SettingsTabDef,
-  SettingsTabId,
-} from "@/types";
+type SettingsTabId =
+  | "general"
+  | "account"
+  | "libraries"
+  | "playback"
+  | "users";
+
+type SettingsTabDef = {
+  id: SettingsTabId;
+  path: string;
+};
+
+type SettingsLayoutInput<T extends SettingsTabDef> = {
+  isAdmin: boolean;
+  pathname: string;
+  tabs: readonly T[];
+};
+
+type SettingsLayoutState<T extends SettingsTabDef> = {
+  visibleTabs: T[];
+  currentTab: SettingsTabId;
+  defaultTabPath: string;
+  redirectTo: string | null;
+};
 
 const ADMIN_ONLY_SETTINGS_TABS: ReadonlySet<SettingsTabId> = new Set([
   "general",
