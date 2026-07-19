@@ -161,6 +161,19 @@ function PlaybackSettings() {
     return <SettingsLoadingCard label="Loading playback settings..." />;
   }
 
+  if (authData?.error || userId === null) {
+    return (
+      <SettingsErrorCard
+        title="Settings unavailable"
+        message={
+          authData?.error
+            ? authData.message || "Failed to load user information."
+            : "User information not available."
+        }
+      />
+    );
+  }
+
   if (data?.error) {
     return (
       <SettingsErrorCard
@@ -170,7 +183,7 @@ function PlaybackSettings() {
     );
   }
 
-  if (!settings || userId === null) {
+  if (!settings) {
     return null;
   }
 

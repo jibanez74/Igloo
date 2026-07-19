@@ -24,7 +24,7 @@ export default function SettingsErrorCard({
   className,
 }: SettingsErrorCardProps) {
   return (
-    <div className={cn("max-w-3xl", className)}>
+    <div className={cn("max-w-3xl", className)} role="alert">
       <Card className="border-destructive/20 bg-destructive/10">
         <CardHeader>
           <CardTitle asChild className="text-destructive">
