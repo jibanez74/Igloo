@@ -134,9 +134,12 @@ export const TMDB_POSTER_SIZE = "w500";
 export const TMDB_PROFILE_SIZE = "w185";
 export const TMDB_LOGO_SIZE = "w92";
 
-// Virtual-list measurements in pixels. These keep virtualized rows stable.
-export const VIRTUAL_LIST_LETTER_HEIGHT = 52;
-export const VIRTUAL_LIST_TRACK_HEIGHT = 60;
+// Virtual-list measurements in pixels. These keep virtualized rows stable and
+// must match the rendered heights of TrackItem (p-3 row + two text lines) and
+// LetterHeader (py-3 + text-2xl + 1px border); an undersized estimate makes the
+// absolutely-positioned rows overlap their neighbors.
+export const VIRTUAL_LIST_LETTER_HEIGHT = 57;
+export const VIRTUAL_LIST_TRACK_HEIGHT = 68;
 
 // Shared surface for library and search track lists. Keeps list frames visually
 // identical: card radius plus standard surface and border tokens.

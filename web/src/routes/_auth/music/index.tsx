@@ -685,8 +685,15 @@ function TracksListSkeleton() {
 }
 
 function TracksTabContent() {
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery(tracksInfiniteQueryOpts());
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    refetch,
+  } = useInfiniteQuery(tracksInfiniteQueryOpts());
 
   const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
   const likedSet = new Set<number>(
@@ -718,9 +725,19 @@ function TracksTabContent() {
     return <TracksListSkeleton />;
   }
 
+  if (isError) {
+    return (
+      <MoviesLoadError
+        message="Couldn’t load tracks. Check your connection and try again."
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
   if (allTracks.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
+        <LiveAnnouncer message={getAnnouncement()} />
         <Music className="mx-auto mb-4 size-10 opacity-50" aria-hidden="true" />
         <p>No tracks found in your library.</p>
       </div>
@@ -821,7 +838,10 @@ function VirtualizedTracksList({
       role="list"
       aria-label="Tracks"
     >
+      {/* Presentational spacer: keeps the list -> listitem ownership intact so
+          the intervening positioning wrapper doesn't strip the list semantics. */}
       <div
+        role="presentation"
         style={{
           height: `${virtualizer.getTotalSize()}px`,
           width: "100%",
@@ -836,7 +856,7 @@ function VirtualizedTracksList({
           return (
             <div
               key={virtualRow.key}
-              role={item.type === "track" ? "listitem" : undefined}
+              role={item.type === "track" ? "listitem" : "presentation"}
               aria-posinset={item.type === "track" ? item.trackIndex : undefined}
               aria-setsize={item.type === "track" ? totalTracks : undefined}
               style={{
@@ -944,14 +964,12 @@ function ShuffleButton() {
 
 function LetterHeader({ letter }: { letter: string }) {
   return (
-    <div
-      className="border-b border-primary/20 bg-muted/50 px-4 py-3"
-      role="heading"
-      aria-level={3}
+    <h3
+      className="border-b border-primary/20 bg-muted/50 px-4 py-3 text-2xl font-bold text-primary"
       aria-label={`Tracks starting with ${letter}`}
     >
-      <span className="text-2xl font-bold text-primary">{letter}</span>
-    </div>
+      {letter}
+    </h3>
   );
 }
 

@@ -431,10 +431,17 @@ export const updateMovieWatchProgress = (
   movieId: number,
   progressSec: number,
   durationSec: number,
+  saveSessionId: string,
+  saveSequence: number,
 ) =>
   apiRequest<{ watched: boolean }>(`/api/movies/${movieId}/watch-progress`, {
     method: "PUT",
-    body: { progress_sec: progressSec, duration_sec: durationSec },
+    body: {
+      progress_sec: progressSec,
+      duration_sec: durationSec,
+      save_session_id: saveSessionId,
+      save_sequence: saveSequence,
+    },
   });
 
 export const deleteMovieWatchProgress = (movieId: number) =>

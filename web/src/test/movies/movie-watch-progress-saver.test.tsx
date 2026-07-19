@@ -16,6 +16,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function requestBody(fetchMock: ReturnType<typeof vi.fn>) {
+  const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+  return JSON.parse(options.body as string) as Record<string, unknown>;
+}
+
 const successfulUpdate = {
   error: false as const,
   data: { watched: false },
@@ -62,8 +67,24 @@ describe("movie watch progress saver", () => {
     );
     await exitSave;
 
-    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(1, 7, 300, 1000);
-    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(2, 7, 450, 1000);
+    const saveSessionId = updateMovieWatchProgress.mock.calls[0]?.[3];
+    expect(saveSessionId).toEqual(expect.any(String));
+    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(
+      1,
+      7,
+      300,
+      1000,
+      saveSessionId,
+      1,
+    );
+    expect(updateMovieWatchProgress).toHaveBeenNthCalledWith(
+      2,
+      7,
+      450,
+      1000,
+      saveSessionId,
+      2,
+    );
   });
 
   it("uses a keepalive request on pagehide without saving again on unmount", async () => {
@@ -90,10 +111,15 @@ describe("movie watch progress saver", () => {
         expect.objectContaining({
           method: "PUT",
           keepalive: true,
-          body: JSON.stringify({ progress_sec: 300, duration_sec: 1000 }),
         }),
       ),
     );
+    expect(requestBody(fetchMock)).toEqual({
+      progress_sec: 300,
+      duration_sec: 1000,
+      save_session_id: expect.any(String),
+      save_sequence: 1,
+    });
 
     unmount();
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -128,10 +154,15 @@ describe("movie watch progress saver", () => {
         expect.objectContaining({
           method: "PUT",
           keepalive: true,
-          body: JSON.stringify({ progress_sec: 300, duration_sec: 1000 }),
         }),
       ),
     );
+    expect(requestBody(fetchMock)).toEqual({
+      progress_sec: 300,
+      duration_sec: 1000,
+      save_session_id: expect.any(String),
+      save_sequence: 1,
+    });
   });
 
   it("dedupes hidden-then-pagehide into a single keepalive save", async () => {
@@ -185,10 +216,15 @@ describe("movie watch progress saver", () => {
         expect.objectContaining({
           method: "PUT",
           keepalive: true,
-          body: JSON.stringify({ progress_sec: 300, duration_sec: 5400 }),
         }),
       ),
     );
+    expect(requestBody(fetchMock)).toEqual({
+      progress_sec: 300,
+      duration_sec: 5400,
+      save_session_id: expect.any(String),
+      save_sequence: 1,
+    });
   });
 
   it("dispatches a captured lifecycle snapshot while an ordinary save is unresolved", async () => {
@@ -223,9 +259,22 @@ describe("movie watch progress saver", () => {
       "/api/movies/7/watch-progress",
       expect.objectContaining({
         keepalive: true,
-        body: JSON.stringify({ progress_sec: 450, duration_sec: 1000 }),
       }),
     );
+    const saveSessionId = updateMovieWatchProgress.mock.calls[0]?.[3];
+    expect(updateMovieWatchProgress).toHaveBeenCalledWith(
+      7,
+      300,
+      1000,
+      saveSessionId,
+      1,
+    );
+    expect(requestBody(fetchMock)).toEqual({
+      progress_sec: 450,
+      duration_sec: 1000,
+      save_session_id: saveSessionId,
+      save_sequence: 2,
+    });
 
     firstSave.resolve(successfulUpdate);
     await pauseSave;
@@ -248,6 +297,12 @@ describe("movie watch progress saver", () => {
       await result.current.handlePauseSave();
     });
 
-    expect(updateMovieWatchProgress).toHaveBeenCalledWith(7, 45, 1000);
+    expect(updateMovieWatchProgress).toHaveBeenCalledWith(
+      7,
+      45,
+      1000,
+      expect.any(String),
+      1,
+    );
   });
 });

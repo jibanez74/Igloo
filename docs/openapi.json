@@ -7433,7 +7433,9 @@
         "type": "object",
         "required": [
           "progress_sec",
-          "duration_sec"
+          "duration_sec",
+          "save_session_id",
+          "save_sequence"
         ],
         "properties": {
           "progress_sec": {
@@ -7443,6 +7445,15 @@
           "duration_sec": {
             "type": "number",
             "exclusiveMinimum": 0
+          },
+          "save_session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "save_sequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
           }
         },
         "additionalProperties": false

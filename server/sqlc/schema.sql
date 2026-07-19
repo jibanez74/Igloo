@@ -511,6 +511,8 @@ CREATE TABLE
     progress_sec REAL NOT NULL DEFAULT 0,
     duration_sec REAL NOT NULL DEFAULT 0,
     watched BOOLEAN NOT NULL DEFAULT false,
+    save_session_id TEXT NOT NULL DEFAULT '',
+    save_sequence INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, movie_id),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,

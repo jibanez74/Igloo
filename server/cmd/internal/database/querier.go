@@ -208,6 +208,7 @@ type Querier interface {
 	MarkAllNotificationsReadForUser(ctx context.Context, arg MarkAllNotificationsReadForUserParams) error
 	MarkMovieUnwatched(ctx context.Context, arg MarkMovieUnwatchedParams) error
 	MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedParams) error
+	MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error
 	// Idempotent and relevance-gated: only records a read when the notification is
 	// actually visible to the viewer.
 	MarkNotificationReadForUser(ctx context.Context, arg MarkNotificationReadForUserParams) error
