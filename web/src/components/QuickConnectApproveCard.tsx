@@ -1,19 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { MonitorSmartphone } from "lucide-react";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
 import { approveQuickConnect, lookupQuickConnect } from "@/lib/api";
+import { SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type {
@@ -228,21 +224,12 @@ export default function QuickConnectApproveCard() {
   };
 
   return (
-    <Card className="border-border/50 bg-muted/30">
-      <CardHeader>
-        <CardTitle asChild className="flex items-center gap-2 text-foreground">
-          <h2>
-            <MonitorSmartphone
-              className="size-5 text-primary"
-              aria-hidden="true"
-            />
-            Quick Connect
-          </h2>
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          Sign in a TV or mobile app by entering the code it shows you
-        </CardDescription>
-      </CardHeader>
+    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <SettingsCardHeader
+        icon={MonitorSmartphone}
+        title="Quick Connect"
+        description="Sign in a TV or mobile app by entering the code it shows you"
+      />
       <CardContent className="max-w-2xl">
         {step === "enter" && (
           <form onSubmit={handleSubmit} className="space-y-2" noValidate>

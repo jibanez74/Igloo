@@ -15,16 +15,8 @@ import {
   HardDrive,
   KeyRound,
   MonitorCog,
-  RotateCcw,
-  Save,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,14 +27,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
+import SettingsErrorCard from "@/components/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/SettingsLoadingCard";
+import SettingsSaveBar from "@/components/SettingsSaveBar";
 import { useIsMiniPlayerVisible } from "@/hooks/useIsMiniPlayerVisible";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   GENERAL_SETTINGS_KEY,
   MINI_PLAYER_CLEARANCE_BOTTOM_CLASS,
   MOTION_CONTROL_THUMB_TRANSFORM_CLASS,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
+  SETTINGS_CARD_SURFACE_CLASS,
+  SETTINGS_INPUT_CLASS,
+  SETTINGS_SELECT_CONTENT_CLASS,
+  SETTINGS_SELECT_ITEM_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
 } from "@/lib/constants";
 import { updateGeneralSettings } from "@/lib/api";
 import { generalSettingsQueryOpts } from "@/lib/query-opts";
@@ -187,23 +188,15 @@ function GeneralSettings() {
     data?.error === false && data.data?.settings ? data.data.settings : null;
 
   if (isLoading) {
-    return <GeneralSettingsLoading />;
+    return <SettingsLoadingCard label="Loading general settings..." />;
   }
 
   if (data?.error) {
     return (
-      <div className="max-w-3xl">
-        <Card className="border-destructive/20 bg-destructive/10">
-          <CardHeader>
-            <CardTitle asChild className="text-destructive">
-              <h2>Settings unavailable</h2>
-            </CardTitle>
-            <CardDescription className="text-destructive">
-              {data.message || "Failed to load general settings."}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <SettingsErrorCard
+        title="Settings unavailable"
+        message={data.message || "Failed to load general settings."}
+      />
     );
   }
 
@@ -438,6 +431,10 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
   };
 
   return (
+    // Deliberately one form with a single "Save Settings" action. Its masked
+    // API-key fields (type="password" in SecretInput) trip Chrome's
+    // password-manager "multiple forms" heuristic (a benign verbose advisory,
+    // not an error); splitting the form would break the single-save UX.
     <form
       onSubmit={handleSubmit}
       noValidate
@@ -448,22 +445,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       className="@container max-w-5xl space-y-6 [&_:is(button,input,select)]:scroll-mb-72 sm:[&_:is(button,input,select)]:scroll-mb-44"
     >
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Gauge className="size-5 text-primary" aria-hidden="true" />
-              Application Behavior
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Control background services and metadata handling.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Gauge}
+          title="Application Behavior"
+          description="Control background services and metadata handling."
+        />
         <CardContent className="grid gap-4 @2xl:grid-cols-2">
           <SwitchField
             id={enableWatcherId}
@@ -498,25 +486,23 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <MonitorCog className="size-5 text-primary" aria-hidden="true" />
-              Playback Runtime
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Choose the hardware acceleration mode used for new transcodes.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={MonitorCog}
+          title="Playback Runtime"
+          description="Choose the hardware acceleration mode used for new transcodes."
+        />
         <CardContent>
           <div className="grid gap-2">
             <Label htmlFor={hardwareDeviceId}>Hardware acceleration</Label>
+            {/*
+              Radix renders a visually-hidden aria-hidden <select name> here for
+              native form integration; it's never submitted (this form is
+              JS-controlled). Chrome's Issues panel flags it "no label" — a
+              false-positive on an aria-hidden field, not fixable without ejecting
+              Radix. Keep the name so the field stays identified.
+            */}
             <Select
               name="hardware_acceleration_device"
               value={form.hardware_acceleration_device}
@@ -525,16 +511,16 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
             >
               <SelectTrigger
                 id={hardwareDeviceId}
-                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
+                className={SETTINGS_SELECT_TRIGGER_CLASS}
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="border-border bg-card text-foreground">
+              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
                 {HARDWARE_OPTIONS.map(option => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
-                    className="focus:bg-muted focus:text-foreground"
+                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     <span className="flex items-center gap-2">
                       {option.icon}
@@ -557,22 +543,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <KeyRound className="size-5 text-primary" aria-hidden="true" />
-              External Services
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Manage credentials used for metadata and interoperability.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={KeyRound}
+          title="External Services"
+          description="Manage credentials used for metadata and interoperability."
+        />
         <CardContent className="divide-y divide-border/50">
           <ServiceSection title="TMDB">
             <SecretInput
@@ -648,22 +625,13 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <HardDrive className="size-5 text-primary" aria-hidden="true" />
-              Local Storage
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Configure application-owned storage outside media libraries.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={HardDrive}
+          title="Local Storage"
+          description="Configure application-owned storage outside media libraries."
+        />
         <CardContent className="grid gap-5 @2xl:grid-cols-2">
           <PathInput
             id={staticDirId}
@@ -690,52 +658,22 @@ function GeneralSettingsForm({ settings }: GeneralSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <div
+      <SettingsSaveBar
+        title="General settings"
+        statusMessage={
+          validationMessage ||
+          "Saved settings are used by the backend on future requests."
+        }
+        statusTone={validationMessage ? "error" : "neutral"}
+        onReset={resetForm}
+        resetDisabled={updateMutation.isPending}
+        isPending={updateMutation.isPending}
         className={cn(
-          "sticky z-10 rounded-lg border border-border/50 bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-md supports-backdrop-filter:bg-card/85 sm:flex sm:items-center sm:justify-between sm:gap-4",
+          "sticky z-10 bg-card/95 backdrop-blur-md supports-backdrop-filter:bg-card/85",
           isMiniPlayerVisible ? MINI_PLAYER_CLEARANCE_BOTTOM_CLASS : "bottom-4",
           MOTION_SETTINGS_SURFACE_CLASS,
         )}
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">General settings</p>
-          <p
-            className={cn(
-              "mt-1 text-sm",
-              MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-destructive" : "text-muted-foreground",
-            )}
-            aria-live="polite"
-          >
-            {validationMessage ||
-              "Saved settings are used by the backend on future requests."}
-          </p>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={resetForm}
-            disabled={!settings || updateMutation.isPending}
-            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            disabled={updateMutation.isPending}
-          >
-            {updateMutation.isPending ? (
-              <Spinner className="size-4" aria-hidden="true" />
-            ) : (
-              <Save className="size-4" aria-hidden="true" />
-            )}
-            {updateMutation.isPending ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      </div>
+      />
     </form>
   );
 }
@@ -802,7 +740,8 @@ function SwitchField({
           disabled={disabled}
           onClick={() => onCheckedChange(!checked)}
           className={cn(
-            "relative mt-1 h-6 w-11 shrink-0 rounded-full border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-60",
+            "relative mt-1 h-6 w-11 shrink-0 rounded-full border disabled:cursor-not-allowed disabled:opacity-60",
+            FOCUS_VISIBLE_RING_CLASS,
             MOTION_SETTINGS_SURFACE_CLASS,
             checked
               ? "border-primary bg-primary"
@@ -873,7 +812,7 @@ function URLInput({
         aria-describedby={descriptionId}
         aria-invalid={invalid || undefined}
         autoComplete="off"
-        className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+        className={SETTINGS_INPUT_CLASS}
       />
       <p id={descriptionId} className="text-sm text-muted-foreground">
         Use http:// or https://. Leave blank to clear this value.
@@ -906,7 +845,7 @@ function SecretInput({
           disabled={disabled}
           aria-describedby={descriptionId}
           autoComplete="off"
-          className="h-10 border-border bg-background/60 pr-11 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+          className={cn(SETTINGS_INPUT_CLASS, "pr-11")}
         />
         <Button
           type="button"
@@ -974,7 +913,7 @@ function PathInput({
           aria-required={required || undefined}
           aria-invalid={invalid || undefined}
           aria-describedby={descriptionId}
-          className="h-10 border-border bg-background/60 pl-10 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+          className={cn(SETTINGS_INPUT_CLASS, "pl-10")}
         />
       </div>
       <p id={descriptionId} className="text-sm text-muted-foreground">
@@ -984,23 +923,3 @@ function PathInput({
   );
 }
 
-function GeneralSettingsLoading() {
-  const loadingId = useId();
-
-  return (
-    <div
-      className="max-w-5xl space-y-6"
-      role="status"
-      aria-labelledby={loadingId}
-    >
-      <Card className="border-border/50 bg-muted/30">
-        <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Spinner className="size-5 text-primary" aria-hidden="true" />
-            <span id={loadingId}>Loading general settings...</span>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}

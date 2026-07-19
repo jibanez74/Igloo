@@ -2,24 +2,8 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, useTransition } from "react";
 import type { FormEvent } from "react";
-import {
-  Gauge,
-  Languages,
-  Play,
-  RotateCcw,
-  Save,
-  Sliders,
-  Subtitles,
-  Wifi,
-} from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Gauge, Languages, Play, Sliders, Subtitles, Wifi } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,12 +13,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
+import SettingsErrorCard from "@/components/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/SettingsLoadingCard";
+import SettingsSaveBar from "@/components/SettingsSaveBar";
 import {
   GENERAL_SETTINGS_KEY,
   LANGUAGE_NAMES,
   MOTION_SETTINGS_SURFACE_CLASS,
   PLAYBACK_SETTINGS_KEY,
+  SETTINGS_CARD_SURFACE_CLASS,
+  SETTINGS_INPUT_CLASS,
+  SETTINGS_SELECT_CONTENT_CLASS,
+  SETTINGS_SELECT_ITEM_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
   SUBTITLE_OFF_VALUE,
 } from "@/lib/constants";
 import { updatePlaybackSettings } from "@/lib/api";
@@ -166,27 +158,19 @@ function PlaybackSettings() {
     data?.error === false && data.data?.settings ? data.data.settings : null;
 
   if (authLoading || isLoading) {
-    return <PlaybackSettingsLoading />;
+    return <SettingsLoadingCard label="Loading playback settings..." />;
   }
 
   if (data?.error) {
     return (
-      <div className="max-w-3xl">
-        <Card className="border-destructive/20 bg-destructive/10">
-          <CardHeader>
-            <CardTitle asChild className="text-destructive">
-              <h2>Settings unavailable</h2>
-            </CardTitle>
-            <CardDescription className="text-destructive">
-              {data.message || "Failed to load playback settings."}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <SettingsErrorCard
+        title="Settings unavailable"
+        message={data.message || "Failed to load playback settings."}
+      />
     );
   }
 
-  if (!settings) {
+  if (!settings || userId === null) {
     return null;
   }
 
@@ -380,42 +364,23 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       className="max-w-5xl space-y-6"
     >
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Play className="size-5 text-primary" aria-hidden="true" />
-              Playback Settings
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Tell Igloo about your connection so it can pick the right stream
-            quality for you.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Play}
+          title="Playback Settings"
+          description="Tell Igloo about your connection so it can pick the right stream quality for you."
+        />
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Gauge className="size-5 text-primary" aria-hidden="true" />
-              Your network speed
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Used to recommend a stream profile for your viewing.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Gauge}
+          title="Your network speed"
+          description="Used to recommend a stream profile for your viewing."
+        />
         <CardContent>
           <div className="grid max-w-md gap-2">
             <Label htmlFor={downloadMbpsId}>Download speed (Mbps)</Label>
@@ -435,7 +400,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   ? `${downloadMbpsId}-description ${statusId}`
                   : `${downloadMbpsId}-description`
               }
-              className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+              className={SETTINGS_INPUT_CLASS}
             />
             <p
               id={`${downloadMbpsId}-description`}
@@ -448,23 +413,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Wifi className="size-5 text-primary" aria-hidden="true" />
-              Server upload cap
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            The home server&apos;s outbound bandwidth limit, applied when you
-            stream from outside the home network.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Wifi}
+          title="Server upload cap"
+          description="The home server's outbound bandwidth limit, applied when you stream from outside the home network."
+        />
         <CardContent>
           {settings.is_admin ? (
             <div className="grid max-w-md gap-2">
@@ -489,7 +444,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                     ? `${serverUploadMbpsId}-description ${statusId}`
                     : `${serverUploadMbpsId}-description`
                 }
-                className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+                className={SETTINGS_INPUT_CLASS}
               />
               <p
                 id={`${serverUploadMbpsId}-description`}
@@ -515,27 +470,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle
-            asChild
-            id={recommendationTitleId}
-            className="flex items-center gap-2 text-foreground"
-          >
-            <h2>
-              <Sliders className="size-5 text-primary" aria-hidden="true" />
-              Recommended profile
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Calculated from your download speed and the server upload cap, with
-            20% headroom for audio and overhead.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Sliders}
+          titleId={recommendationTitleId}
+          title="Recommended profile"
+          description="Calculated from your download speed and the server upload cap, with 20% headroom for audio and overhead."
+        />
         <CardContent>
           <p
             id={recommendationId}
@@ -552,26 +494,23 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Play className="size-5 text-primary" aria-hidden="true" />
-              Preferred profile
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            The default profile when you start a stream. You can still pick a
-            different one per video.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Play}
+          title="Preferred profile"
+          description="The default profile when you start a stream. You can still pick a different one per video."
+        />
         <CardContent>
           <div className="grid max-w-md gap-2">
             <Label htmlFor={preferredProfileId}>Profile</Label>
+            {/*
+              Radix renders a visually-hidden aria-hidden <select name> for each
+              of these for native form integration; they're never submitted (this
+              form is JS-controlled). Chrome's Issues panel flags them "no label" —
+              a false-positive on aria-hidden fields, not fixable without ejecting
+              Radix. Keep the names so the fields stay identified.
+            */}
             <Select
               name="preferred_profile"
               value={form.preferred_profile ?? NO_SELECTION_VALUE}
@@ -580,14 +519,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredProfileId}
-                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
+                className={SETTINGS_SELECT_TRIGGER_CLASS}
               >
                 <SelectValue placeholder="Use recommended" />
               </SelectTrigger>
-              <SelectContent className="border-border bg-card text-foreground">
+              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
                 <SelectItem
                   value={NO_SELECTION_VALUE}
-                  className="focus:bg-muted focus:text-foreground"
+                  className={SETTINGS_SELECT_ITEM_CLASS}
                 >
                   Use recommended
                 </SelectItem>
@@ -595,7 +534,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={profile.id}
                     value={profile.id}
-                    className="focus:bg-muted focus:text-foreground"
+                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     {profile.label}
                   </SelectItem>
@@ -607,23 +546,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Languages className="size-5 text-primary" aria-hidden="true" />
-              Preferred audio language
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Igloo will pick the matching audio track when a movie has one. You
-            can still change it per video.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Languages}
+          title="Preferred audio language"
+          description="Igloo will pick the matching audio track when a movie has one. You can still change it per video."
+        />
         <CardContent>
           <div className="grid max-w-md gap-2">
             <Label htmlFor={preferredAudioLanguageId}>Audio language</Label>
@@ -635,14 +564,14 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredAudioLanguageId}
-                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
+                className={SETTINGS_SELECT_TRIGGER_CLASS}
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
-              <SelectContent className="border-border bg-card text-foreground">
+              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
                 <SelectItem
                   value={NO_SELECTION_VALUE}
-                  className="focus:bg-muted focus:text-foreground"
+                  className={SETTINGS_SELECT_ITEM_CLASS}
                 >
                   No preference
                 </SelectItem>
@@ -650,7 +579,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={code}
                     value={code}
-                    className="focus:bg-muted focus:text-foreground"
+                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     {name}
                   </SelectItem>
@@ -662,23 +591,13 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
       </Card>
 
       <Card
-        className={cn(
-          "border-border/50 bg-muted/30",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
+        className={cn(SETTINGS_CARD_SURFACE_CLASS, MOTION_SETTINGS_SURFACE_CLASS)}
       >
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Subtitles className="size-5 text-primary" aria-hidden="true" />
-              Preferred subtitles
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Pick a default subtitle language, or always start with subtitles
-            off.
-          </CardDescription>
-        </CardHeader>
+        <SettingsCardHeader
+          icon={Subtitles}
+          title="Preferred subtitles"
+          description="Pick a default subtitle language, or always start with subtitles off."
+        />
         <CardContent>
           <div className="grid max-w-md gap-2">
             <Label htmlFor={preferredSubtitleLanguageId}>
@@ -692,20 +611,20 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
             >
               <SelectTrigger
                 id={preferredSubtitleLanguageId}
-                className="h-10 w-full border-border bg-background/60 text-foreground shadow-none focus-visible:ring-ring/30"
+                className={SETTINGS_SELECT_TRIGGER_CLASS}
               >
                 <SelectValue placeholder="No preference" />
               </SelectTrigger>
-              <SelectContent className="border-border bg-card text-foreground">
+              <SelectContent className={SETTINGS_SELECT_CONTENT_CLASS}>
                 <SelectItem
                   value={NO_SELECTION_VALUE}
-                  className="focus:bg-muted focus:text-foreground"
+                  className={SETTINGS_SELECT_ITEM_CLASS}
                 >
                   No preference
                 </SelectItem>
                 <SelectItem
                   value={SUBTITLE_OFF_VALUE}
-                  className="focus:bg-muted focus:text-foreground"
+                  className={SETTINGS_SELECT_ITEM_CLASS}
                 >
                   Always off
                 </SelectItem>
@@ -713,7 +632,7 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
                   <SelectItem
                     key={code}
                     value={code}
-                    className="focus:bg-muted focus:text-foreground"
+                    className={SETTINGS_SELECT_ITEM_CLASS}
                   >
                     {name}
                   </SelectItem>
@@ -724,73 +643,18 @@ function PlaybackSettingsForm({ settings, userId }: PlaybackSettingsFormProps) {
         </CardContent>
       </Card>
 
-      <div
-        className={cn(
-          "rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4",
-          MOTION_SETTINGS_SURFACE_CLASS,
-        )}
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">Playback settings</p>
-          <p
-            id={statusId}
-            className={cn(
-              "mt-1 text-sm",
-              MOTION_SETTINGS_SURFACE_CLASS,
-              validationMessage ? "text-destructive" : "text-muted-foreground",
-            )}
-            aria-live="polite"
-          >
-            {validationMessage ||
-              "Saved preferences apply to your future streams."}
-          </p>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={resetForm}
-            disabled={updateMutation.isPending}
-            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            disabled={updateMutation.isPending}
-          >
-            {updateMutation.isPending ? (
-              <Spinner className="size-4" aria-hidden="true" />
-            ) : (
-              <Save className="size-4" aria-hidden="true" />
-            )}
-            {updateMutation.isPending ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      </div>
+      <SettingsSaveBar
+        title="Playback settings"
+        statusId={statusId}
+        statusMessage={
+          validationMessage || "Saved preferences apply to your future streams."
+        }
+        statusTone={validationMessage ? "error" : "neutral"}
+        onReset={resetForm}
+        resetDisabled={updateMutation.isPending}
+        isPending={updateMutation.isPending}
+        className={cn("bg-card/70", MOTION_SETTINGS_SURFACE_CLASS)}
+      />
     </form>
-  );
-}
-
-function PlaybackSettingsLoading() {
-  const loadingId = useId();
-
-  return (
-    <div
-      className="max-w-5xl space-y-6"
-      role="status"
-      aria-labelledby={loadingId}
-    >
-      <Card className="border-border/50 bg-muted/30">
-        <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Spinner className="size-5 text-primary" aria-hidden="true" />
-            <span id={loadingId}>Loading playback settings...</span>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
   );
 }

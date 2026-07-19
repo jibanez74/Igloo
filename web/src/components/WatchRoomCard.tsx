@@ -11,7 +11,7 @@ import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import DeleteWatchRoomDialog from "@/components/DeleteWatchRoomDialog";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import type { WatchRoomType } from "@/types";
 
 type Props = {
@@ -21,13 +21,6 @@ type Props = {
 // Avatar stack and text summary have separate limits so the card stays compact.
 const WATCH_ROOM_MEMBER_AVATAR_LIMIT = 4;
 const WATCH_ROOM_MEMBER_NAME_LIMIT = 3;
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
-  return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
-}
 
 export default function WatchRoomCard({ room }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -127,7 +120,7 @@ export default function WatchRoomCard({ room }: Props) {
                     />
                   ) : null}
                   <AvatarFallback className="bg-accent text-[10px] font-semibold text-foreground">
-                    {getInitials(member.name)}
+                    {getInitials(member.name, "?")}
                   </AvatarFallback>
                 </Avatar>
               ))}

@@ -1,22 +1,18 @@
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound } from "lucide-react";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
 import { updateUserPin } from "@/lib/api";
 import { authUserQueryOpts, userPinQueryOpts } from "@/lib/query-opts";
 import {
   ADMIN_USERS_KEY,
   AUTH_USER_KEY,
+  SETTINGS_CARD_SURFACE_CLASS,
   USER_PIN_KEY,
   USER_PIN_LENGTH,
 } from "@/lib/constants";
@@ -26,16 +22,12 @@ import {
   showValidationError,
 } from "@/lib/toast-helpers";
 import { lightInputClassName } from "@/lib/input-styles";
+import { describedBy } from "@/lib/utils";
 
 type PinErrorField = "currentPin" | "newPin";
 type PinErrors = Partial<Record<PinErrorField, string>>;
 
 const PIN_PATTERN = /^\d{4}$/;
-
-function describedBy(...ids: Array<string | false | null | undefined>) {
-  const value = ids.filter(Boolean).join(" ");
-  return value || undefined;
-}
 
 /**
  * Account-settings card for the optional 4-digit profile PIN that protects a
@@ -202,19 +194,12 @@ export default function ProfilePinCard() {
   }
 
   return (
-    <Card className="border-border/50 bg-muted/30">
-      <CardHeader>
-        <CardTitle asChild className="flex items-center gap-2 text-foreground">
-          <h2>
-            <KeyRound className="size-5 text-primary" aria-hidden="true" />
-            Profile PIN
-          </h2>
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          An optional {USER_PIN_LENGTH}-digit PIN that protects your profile on
-          shared TV devices
-        </CardDescription>
-      </CardHeader>
+    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <SettingsCardHeader
+        icon={KeyRound}
+        title="Profile PIN"
+        description={`An optional ${USER_PIN_LENGTH}-digit PIN that protects your profile on shared TV devices`}
+      />
       <CardContent className="max-w-2xl space-y-4">
         {hasPin ? (
           <div className="flex items-center gap-3">

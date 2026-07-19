@@ -264,6 +264,25 @@ export const PLAYBACK_SETTINGS_SELECT_CONTENT_CLASS =
   "z-100 border-border bg-muted";
 
 /**
+ * Shared chrome for the Settings pages (design-system §2.3, §3.7). The card
+ * surface pairs with MOTION_SETTINGS_SURFACE_CLASS; the input/select classes
+ * restyle the shadcn primitives for the muted settings surface and deliberately
+ * keep the primitives' own `focus-visible:ring-ring/50` recipe (the one ring,
+ * §1.7) rather than overriding it. The reset-button class is the settings
+ * save-bar's secondary action.
+ */
+export const SETTINGS_CARD_SURFACE_CLASS = "border-border/50 bg-muted/30";
+export const SETTINGS_INPUT_CLASS =
+  "h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground";
+export const SETTINGS_SELECT_TRIGGER_CLASS =
+  "h-10 w-full border-border bg-background/60 text-foreground shadow-none";
+export const SETTINGS_SELECT_CONTENT_CLASS =
+  "border-border bg-card text-foreground";
+export const SETTINGS_SELECT_ITEM_CLASS = "focus:bg-muted focus:text-foreground";
+export const SETTINGS_RESET_BUTTON_CLASS =
+  "border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground";
+
+/**
  * Spotify brand accent (the recognizable Spotify green). This is a deliberate
  * *brand* color, not a semantic design token — it identifies Spotify-sourced data
  * (the popularity meter/glyph) and intentionally sits outside the OKLCH token system.

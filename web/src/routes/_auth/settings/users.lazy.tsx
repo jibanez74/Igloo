@@ -25,6 +25,7 @@ import { Users, UserPlus, Pencil, Trash2, KeyRound, ShieldCheck, ShieldOff } fro
 import { adminUsersQueryOpts, authUserQueryOpts } from "@/lib/query-opts";
 import {
   ADMIN_USERS_KEY,
+  SETTINGS_CARD_SURFACE_CLASS,
   USER_EMAIL_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
   USER_PASSWORD_MAX_LENGTH,
@@ -37,7 +38,7 @@ import {
   adminResetUserPassword,
 } from "@/lib/api";
 import { lightInputClassName } from "@/lib/input-styles";
-import { codePointLength } from "@/lib/utils";
+import { codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { showSuccess, showActionFailed, showValidationError } from "@/lib/toast-helpers";
 import type { AdminUserType } from "@/types";
 import { useDialogFocusRestore } from "@/hooks/useDialogFocusRestore";
@@ -57,10 +58,8 @@ type UserFormErrorField = "name" | "email" | "password" | "confirmPassword" | "f
 type UserFormErrors = Partial<Record<UserFormErrorField, string>>;
 type DialogCloseAutoFocusHandler = (event: Event) => void;
 
-function describedBy(...ids: Array<string | false | null | undefined>) {
-  const value = ids.filter(Boolean).join(" ");
-  return value || undefined;
-}
+// Shared checkbox chrome for the "grant admin" toggle in the create/edit dialogs.
+const ADMIN_CHECKBOX_CLASS = "size-4 rounded-sm border-border bg-muted accent-primary";
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+$/.test(email);
@@ -80,6 +79,36 @@ function hasDuplicateEmail(
   });
 }
 
+// Shared name/email validation for the create and edit user dialogs. Inputs are
+// already trimmed; `ignoredUserId` excludes the edited user from the duplicate
+// check. Returns only the fields that failed.
+function validateNameEmail(
+  users: AdminUserType[],
+  name: string,
+  email: string,
+  ignoredUserId?: number,
+): UserFormErrors {
+  const errors: UserFormErrors = {};
+
+  if (name === "") {
+    errors.name = "Name is required.";
+  } else if (codePointLength(name) > USER_NAME_MAX_LENGTH) {
+    errors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
+  }
+
+  if (email === "") {
+    errors.email = "Email is required.";
+  } else if (!isValidEmail(email)) {
+    errors.email = "Enter a valid email address.";
+  } else if (codePointLength(email) > USER_EMAIL_MAX_LENGTH) {
+    errors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
+  } else if (hasDuplicateEmail(users, email, ignoredUserId)) {
+    errors.email = "A user with that email already exists.";
+  }
+
+  return errors;
+}
+
 function firstErrorMessage(errors: UserFormErrors) {
   return (
     errors.name ??
@@ -89,14 +118,6 @@ function firstErrorMessage(errors: UserFormErrors) {
     errors.form ??
     "Check the form for errors."
   );
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-  }
-  return name[0]?.toUpperCase() ?? "U";
 }
 
 function UsersSettings() {
@@ -211,7 +232,7 @@ function UsersSettings() {
 
   return (
     <div className="space-y-8">
-      <Card className="border-border/50 bg-muted/30">
+      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle asChild className="flex items-center gap-2 text-foreground">
@@ -444,23 +465,7 @@ function CreateUserDialog({
     e.preventDefault();
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
-    const nextErrors: UserFormErrors = {};
-
-    if (trimmedName === "") {
-      nextErrors.name = "Name is required.";
-    } else if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
-      nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
-    }
-
-    if (trimmedEmail === "") {
-      nextErrors.email = "Email is required.";
-    } else if (!isValidEmail(trimmedEmail)) {
-      nextErrors.email = "Enter a valid email address.";
-    } else if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
-      nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
-    } else if (hasDuplicateEmail(users, trimmedEmail)) {
-      nextErrors.email = "A user with that email already exists.";
-    }
+    const nextErrors = validateNameEmail(users, trimmedName, trimmedEmail);
 
     if (codePointLength(password) < USER_PASSWORD_MIN_LENGTH) {
       nextErrors.password = `Password must be at least ${USER_PASSWORD_MIN_LENGTH} characters.`;
@@ -598,7 +603,7 @@ function CreateUserDialog({
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded-sm border-border bg-muted accent-primary"
+              className={ADMIN_CHECKBOX_CLASS}
               aria-label="Grant admin privileges"
             />
             <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">
@@ -662,23 +667,7 @@ function EditUserDialog({
     e.preventDefault();
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
-    const nextErrors: UserFormErrors = {};
-
-    if (trimmedName === "") {
-      nextErrors.name = "Name is required.";
-    } else if (codePointLength(trimmedName) > USER_NAME_MAX_LENGTH) {
-      nextErrors.name = `Name must be ${USER_NAME_MAX_LENGTH} characters or less.`;
-    }
-
-    if (trimmedEmail === "") {
-      nextErrors.email = "Email is required.";
-    } else if (!isValidEmail(trimmedEmail)) {
-      nextErrors.email = "Enter a valid email address.";
-    } else if (codePointLength(trimmedEmail) > USER_EMAIL_MAX_LENGTH) {
-      nextErrors.email = `Email must be ${USER_EMAIL_MAX_LENGTH} characters or less.`;
-    } else if (hasDuplicateEmail(users, trimmedEmail, user.id)) {
-      nextErrors.email = "A user with that email already exists.";
-    }
+    const nextErrors = validateNameEmail(users, trimmedName, trimmedEmail, user.id);
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -770,7 +759,7 @@ function EditUserDialog({
               type="checkbox"
               checked={isAdmin}
               onChange={e => setIsAdmin(e.target.checked)}
-              className="size-4 rounded-sm border-border bg-muted accent-primary"
+              className={ADMIN_CHECKBOX_CLASS}
               aria-label="Admin privileges"
             />
             <Label htmlFor={isAdminId} className="cursor-pointer text-muted-foreground">

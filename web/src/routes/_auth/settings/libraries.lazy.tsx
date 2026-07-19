@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   AlertCircle,
@@ -9,26 +9,22 @@ import {
   FolderOpen,
   Library,
   Music,
-  RotateCcw,
-  Save,
   Scan,
   Trash2,
   Tv,
   User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
+import SettingsErrorCard from "@/components/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/SettingsLoadingCard";
+import SettingsSaveBar from "@/components/SettingsSaveBar";
 import { musicStatsQueryOpts, moviesStatsQueryOpts, settingsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed, showSuccess } from "@/lib/toast-helpers";
 import { triggerMusicScan, triggerMovieScan, updateLibrarySettings } from "@/lib/api";
@@ -45,9 +41,10 @@ import {
   PLAYLIST_DETAILS_KEY,
   PLAYLIST_TRACKS_KEY,
   PLAYLISTS_KEY,
+  SETTINGS_CARD_SURFACE_CLASS,
+  SETTINGS_INPUT_CLASS,
   SETTINGS_KEY,
   TRACKS_INFINITE_KEY,
-  MOTION_MICRO_COLORS_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { ApiResponseType, SettingsType } from "@/types";
@@ -182,23 +179,15 @@ function LibrariesSettings() {
   const { data, isLoading } = useQuery(settingsQueryOpts());
 
   if (isLoading) {
-    return <LibrariesSettingsLoading />;
+    return <SettingsLoadingCard label="Loading library settings..." />;
   }
 
   if (data?.error) {
     return (
-      <div className="max-w-5xl">
-        <Card className="border-destructive/20 bg-destructive/10">
-          <CardHeader>
-            <CardTitle asChild className="text-destructive">
-              <h2>Library settings unavailable</h2>
-            </CardTitle>
-            <CardDescription className="text-destructive">
-              {data.message || "Failed to load library settings."}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <SettingsErrorCard
+        title="Library settings unavailable"
+        message={data.message || "Failed to load library settings."}
+      />
     );
   }
 
@@ -358,21 +347,16 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
       noValidate
       className="max-w-5xl space-y-6"
     >
-      <Card className="border-border/50 bg-muted/30">
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Library className="size-5 text-primary" aria-hidden="true" />
-              Library Management
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Manage your media library paths and scanning.
-          </CardDescription>
-        </CardHeader>
+      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={Library}
+          title="Library Management"
+          description="Manage your media library paths and scanning."
+        />
         <CardContent className="space-y-6">
           {LIBRARY_SECTIONS.map((section, index) => (
-            <LibrarySectionGroup key={section.field} showSeparator={index > 0}>
+            <Fragment key={section.field}>
+              {index > 0 && <Separator className="bg-accent/50" />}
               <LibraryPathSection
                 config={section}
                 pathValue={form[section.field]}
@@ -403,75 +387,25 @@ function LibrariesSettingsForm({ settings }: LibrariesSettingsFormProps) {
                   <MusicLibraryStats hasLibrary={Boolean(syncedSettings.music_dir)} />
                 )}
               </LibraryPathSection>
-            </LibrarySectionGroup>
+            </Fragment>
           ))}
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-border/50 bg-card/70 p-4 shadow-lg shadow-black/10 sm:flex sm:items-center sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            Library path settings
-          </p>
-          <p
-            id={formStatusId}
-            className={cn(
-              MOTION_MICRO_COLORS_CLASS,
-              "mt-1 text-sm",
-              feedback.tone === "error"
-                ? "text-destructive"
-                : feedback.tone === "success"
-                  ? "text-success"
-                  : "text-muted-foreground",
-            )}
-            aria-live="polite"
-          >
-            {feedback.message}
-          </p>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleReset}
-            disabled={!hasChanges || updateMutation.isPending}
-            className="border-border bg-muted/90 text-foreground hover:bg-accent hover:text-foreground"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-            Reset library paths
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            disabled={!hasChanges || updateMutation.isPending}
-          >
-            {updateMutation.isPending ? (
-              <Spinner className="size-4" aria-hidden="true" />
-            ) : (
-              <Save className="size-4" aria-hidden="true" />
-            )}
-            {updateMutation.isPending ? "Saving..." : "Save library paths"}
-          </Button>
-        </div>
-      </div>
+      <SettingsSaveBar
+        title="Library path settings"
+        statusId={formStatusId}
+        statusMessage={feedback.message}
+        statusTone={feedback.tone}
+        onReset={handleReset}
+        resetLabel="Reset library paths"
+        resetDisabled={!hasChanges || updateMutation.isPending}
+        saveLabel="Save library paths"
+        saveDisabled={!hasChanges || updateMutation.isPending}
+        isPending={updateMutation.isPending}
+        className="bg-card/70"
+      />
     </form>
-  );
-}
-
-type LibrarySectionGroupProps = {
-  showSeparator: boolean;
-  children: ReactNode;
-};
-
-function LibrarySectionGroup({
-  showSeparator,
-  children,
-}: LibrarySectionGroupProps) {
-  return (
-    <>
-      {showSeparator && <Separator className="bg-accent/50" />}
-      {children}
-    </>
   );
 }
 
@@ -562,7 +496,7 @@ function LibraryPathSection({
             aria-invalid={invalid || undefined}
             aria-describedby={`${descriptionId} ${pathStatusId} ${formStatusId}`}
             autoComplete="off"
-            className="h-10 border-border bg-background/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/30"
+            className={SETTINGS_INPUT_CLASS}
           />
           <p id={descriptionId} className="text-sm text-muted-foreground">
             Enter a directory path readable by the Igloo server. Leave blank to
@@ -802,25 +736,4 @@ function invalidateScanQueries(
   queryKeys.forEach(key => {
     queryClient.invalidateQueries({ queryKey: [key] });
   });
-}
-
-function LibrariesSettingsLoading() {
-  const loadingId = useId();
-
-  return (
-    <div
-      className="max-w-5xl"
-      role="status"
-      aria-labelledby={loadingId}
-    >
-      <Card className="border-border/50 bg-muted/30">
-        <CardContent className="flex min-h-40 items-center justify-center">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Spinner className="size-5 text-primary" aria-hidden="true" />
-            <span id={loadingId}>Loading library settings...</span>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
 }
