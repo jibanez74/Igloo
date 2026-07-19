@@ -3,11 +3,10 @@ import { deriveMediaCapabilityBadges } from "@/lib/media-capabilities";
 import type {
   AudioStreamType,
   MovieTechnicalDetailsResponse,
-  NullableInt64,
-  NullableString,
   SubtitleType,
   VideoStreamType,
 } from "@/types/movies";
+import type { NullableInt64, NullableString } from "@/types";
 
 function nullableString(value?: string): NullableString {
   return value == null

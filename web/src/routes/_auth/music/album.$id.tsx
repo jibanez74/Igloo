@@ -201,7 +201,7 @@ function AlbumDetailsContent({
   const { data: userData } = useQuery(authUserQueryOpts());
   const user: AuthUser | null =
     userData?.error === false && userData.data?.user
-      ? (userData.data.user as AuthUser)
+      ? (userData.data.user)
       : null;
   const isAdmin = user?.is_admin === true;
 

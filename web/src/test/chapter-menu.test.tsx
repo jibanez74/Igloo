@@ -4,13 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import ChapterMenu from "@/components/ChapterMenu";
 import type { ChapterType } from "@/types";
 
+const nullString = { String: "", Valid: false };
+const nullInt64 = { Int64: 0, Valid: false };
+
 function makeChapter(overrides: Partial<ChapterType>): ChapterType {
   return {
     id: 0,
     title: "",
     start_time: 0,
-    thumb: null,
-    movie_id: null,
+    thumb: nullString,
+    movie_id: nullInt64,
     ...overrides,
   };
 }

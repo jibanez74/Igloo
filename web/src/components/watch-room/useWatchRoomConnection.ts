@@ -161,6 +161,9 @@ export function useWatchRoomConnection({
   const handleSocketMessage = useEffectEvent(async (rawEvent: MessageEvent) => {
     let event: WatchRoomServerEventType;
     try {
+      if (typeof rawEvent.data !== "string") {
+        return;
+      }
       event = JSON.parse(rawEvent.data) as WatchRoomServerEventType;
     } catch {
       return;

@@ -12,13 +12,6 @@ import type { SearchTab } from "@/types";
 
 type PagedSearchTab = Exclude<SearchTab, "all">;
 
-const pagedSearchQueryOpts = {
-  movies: searchMoviesQueryOpts,
-  albums: searchAlbumsQueryOpts,
-  musicians: searchMusiciansQueryOpts,
-  tracks: searchTracksQueryOpts,
-} satisfies Record<PagedSearchTab, unknown>;
-
 function redirectToLastSearchPage({
   q,
   tab,
@@ -58,9 +51,22 @@ export const Route = createFileRoute("/_auth/search/")({
       return;
     }
 
-    const result = await queryClient.ensureQueryData(
-      pagedSearchQueryOpts[tab](trimmed, page, SEARCH_PER_PAGE),
-    );
+    const result =
+      tab === "movies"
+        ? await queryClient.ensureQueryData(
+            searchMoviesQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+          )
+        : tab === "albums"
+          ? await queryClient.ensureQueryData(
+              searchAlbumsQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+            )
+          : tab === "musicians"
+            ? await queryClient.ensureQueryData(
+                searchMusiciansQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+              )
+            : await queryClient.ensureQueryData(
+                searchTracksQueryOpts(trimmed, page, SEARCH_PER_PAGE),
+              );
 
     if (result.error === false) {
       redirectToLastSearchPage({

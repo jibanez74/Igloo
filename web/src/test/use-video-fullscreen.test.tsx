@@ -38,7 +38,7 @@ function restoreDocumentProperty(
     return;
   }
 
-  delete (document as Record<string, unknown>)[key];
+  delete (document as unknown as Record<string, unknown>)[key];
 }
 
 function VideoFullscreenHarness() {

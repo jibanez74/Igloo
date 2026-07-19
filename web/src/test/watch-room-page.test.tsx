@@ -607,7 +607,7 @@ describe("WatchRoomPageContent", () => {
         if (typeof handler === "function") {
           callbacks.heartbeat = handler as () => void;
         }
-        return 1;
+        return 1 as unknown as ReturnType<typeof window.setInterval>;
       });
     const clearIntervalSpy = vi
       .spyOn(window, "clearInterval")
@@ -664,7 +664,7 @@ describe("WatchRoomPageContent", () => {
         if (timeout === 1000 && typeof handler === "function") {
           callbacks.reconnect = handler as () => void;
         }
-        return 1;
+        return 1 as unknown as ReturnType<typeof window.setTimeout>;
       });
 
     try {
@@ -720,7 +720,7 @@ describe("WatchRoomPageContent", () => {
             callbacks.reconnect = handler as () => void;
             scheduledDelays.push(timeout);
           }
-          return 1;
+          return 1 as unknown as ReturnType<typeof window.setTimeout>;
         });
 
       try {

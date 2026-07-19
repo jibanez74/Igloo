@@ -81,7 +81,7 @@ export async function stopMovieHlsPlaybackSession(
   });
 
   try {
-    await fetch("/api/movies/" + movieId + "/hls/session/stop?" + params, {
+    await fetch(`/api/movies/${movieId}/hls/session/stop?${params.toString()}`, {
       method: "POST",
       credentials: "include",
       keepalive: options?.keepalive === true,

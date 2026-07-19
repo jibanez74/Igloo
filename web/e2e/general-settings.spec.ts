@@ -1,7 +1,15 @@
-import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 import { apiURL, readE2EEnv, type E2EEnv } from "./e2e-env";
 import { isIgnorableFailedRequest } from "./e2e-browser-issues";
+
+type RouteHandlerRoute = Parameters<Parameters<Page["route"]>[1]>[0];
 
 type ApiResponse<T> = {
   error: boolean;
@@ -65,8 +73,13 @@ function requestFromSettings(settings: GeneralSettings): GeneralSettingsRequest 
   };
 }
 
-async function readJSON<T>(response: APIResponse) {
+async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
+}
+
+function expectDefined<T>(value: T, message: string): NonNullable<T> {
+  expect(value, message).not.toBeNull();
+  return value as NonNullable<T>;
 }
 
 async function expectAPIData<T>(response: APIResponse, expectedStatus: number) {
@@ -364,9 +377,10 @@ test.describe("General settings", () => {
       immich_api_key: `playwright-immich-key-${stamp}`,
     };
 
-    let delayedRoute:
-      | Parameters<Parameters<typeof page.route>[1]>[0]
-      | null = null;
+    const delayed = {
+      route: null as RouteHandlerRoute | null,
+      body: null as GeneralSettingsRequest | null,
+    };
 
     try {
       await page.goto(apiURL(env, "/settings"), { waitUntil: "networkidle" });
@@ -375,12 +389,11 @@ test.describe("General settings", () => {
       await expectKeyboardFlow(page);
       await fillIntegrationSettings(page, nextSettings);
 
-      let delayedBody: GeneralSettingsRequest | null = null;
       await page.route("**/api/settings/general", async route => {
         const request = route.request();
-        if (request.method() === "PUT" && delayedRoute === null) {
-          delayedRoute = route;
-          delayedBody = request.postDataJSON() as GeneralSettingsRequest;
+        if (request.method() === "PUT" && delayed.route === null) {
+          delayed.route = route;
+          delayed.body = request.postDataJSON() as GeneralSettingsRequest;
           return;
         }
 
@@ -389,17 +402,22 @@ test.describe("General settings", () => {
 
       await page.getByRole("button", { name: "Save Settings" }).click();
       await expect
-        .poll(() => delayedRoute !== null, { timeout: 5_000 })
+        .poll(() => delayed.route !== null, { timeout: 5_000 })
         .toBe(true);
 
-      expect(delayedBody?.jellyfin_base_url).toBe(
+      const capturedBody = expectDefined(
+        delayed.body,
+        "Expected the settings request body to be captured.",
+      );
+
+      expect(capturedBody.jellyfin_base_url).toBe(
         nextSettings.jellyfin_base_url,
       );
-      expect(delayedBody?.jellyfin_api_key).toBe(
+      expect(capturedBody.jellyfin_api_key).toBe(
         nextSettings.jellyfin_api_key,
       );
-      expect(delayedBody?.immich_base_url).toBe(nextSettings.immich_base_url);
-      expect(delayedBody?.immich_api_key).toBe(nextSettings.immich_api_key);
+      expect(capturedBody.immich_base_url).toBe(nextSettings.immich_base_url);
+      expect(capturedBody.immich_api_key).toBe(nextSettings.immich_api_key);
 
       await page.getByRole("tab", { name: "Account" }).click();
       await page.getByRole("tab", { name: "General" }).click();
@@ -421,8 +439,11 @@ test.describe("General settings", () => {
           response.url().includes("/api/settings/general") &&
           response.request().method() === "PUT",
       );
-      await delayedRoute?.continue();
-      delayedRoute = null;
+      await expectDefined(
+        delayed.route,
+        "Expected the delayed settings route to be captured.",
+      ).continue();
+      delayed.route = null;
 
       const putResponse = await putResponsePromise;
       expect(putResponse.status()).toBe(200);
@@ -442,8 +463,9 @@ test.describe("General settings", () => {
       expect(savedSettings.immich_base_url).toBe(nextSettings.immich_base_url);
       expect(savedSettings.immich_api_key).toBe(nextSettings.immich_api_key);
     } finally {
-      if (delayedRoute) {
-        await delayedRoute.continue().catch(() => undefined);
+      const routeToContinue = delayed.route;
+      if (routeToContinue !== null) {
+        await routeToContinue.continue().catch(() => undefined);
       }
       await page.unroute("**/api/settings/general").catch(() => undefined);
       await restoreGeneralSettings(page, env, baselineRequest);

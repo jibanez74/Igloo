@@ -5,7 +5,7 @@ export function isApiFailure(data: unknown): data is { error: true; message: str
     typeof data === "object" &&
     data !== null &&
     "error" in data &&
-    (data as { error: unknown }).error === true &&
+    (data).error === true &&
     "message" in data &&
     typeof (data as { message: string }).message === "string"
   );

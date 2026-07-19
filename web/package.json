@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "generate:theme": "bun scripts/generate-theme.ts",
-    "build": "vite build && tsc --noEmit",
-    "build:analyze": "vite build --mode analyze && tsc --noEmit",
+    "typecheck": "tsc -b",
+    "build": "bun run typecheck && vite build",
+    "build:analyze": "bun run typecheck && vite build --mode analyze",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:e2e": "playwright test",

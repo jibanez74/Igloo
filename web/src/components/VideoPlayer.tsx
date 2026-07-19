@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
+import type { Events } from "hls.js";
 import { Spinner } from "@/components/ui/spinner";
 import {
   HLS_CAPACITY_RETRY_FALLBACK_SEC,
@@ -16,6 +17,9 @@ import type { VideoPlayerProps } from "@/types";
 function loadHlsLight() {
   return import("hls.js/light");
 }
+
+const HLS_NETWORK_ERROR = "networkError" as ErrorData["type"];
+const HLS_MEDIA_ERROR = "mediaError" as ErrorData["type"];
 
 export default function VideoPlayer({
   videoRef,
@@ -106,7 +110,7 @@ export default function VideoPlayer({
     (
       video: HTMLVideoElement,
       data: ErrorData,
-      sessionLostDetail: string,
+      sessionLostDetail: ErrorData["details"],
     ) => {
       // Rate limiting and the max-attempt budget live in useHlsSessionRecovery
       // (the onSessionLost consumer); this component only reports the event.
@@ -120,9 +124,9 @@ export default function VideoPlayer({
       }
 
       const detail = data.details ?? "unknown error";
-      if (data.type === "networkError") {
+      if (data.type === HLS_NETWORK_ERROR) {
         reportError(`Network error loading stream (${detail}).`);
-      } else if (data.type === "mediaError") {
+      } else if (data.type === HLS_MEDIA_ERROR) {
         reportError(`The browser could not decode this stream (${detail}).`);
       } else {
         reportError(`Stream error: ${detail}`);
@@ -173,7 +177,7 @@ export default function VideoPlayer({
           }
 
           let mediaRecoveryAttempted = false;
-          hls.on(Hls.Events.ERROR, (_event, data: ErrorData) => {
+          hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
             const isSessionLostError =
               data.details === sessionLostDetail &&
               data.response?.code === 404;
@@ -195,7 +199,7 @@ export default function VideoPlayer({
 
             if (!data.fatal) return;
 
-            if (data.type === "mediaError" && !mediaRecoveryAttempted) {
+            if (data.type === HLS_MEDIA_ERROR && !mediaRecoveryAttempted) {
               mediaRecoveryAttempted = true;
               hls.recoverMediaError();
               return;

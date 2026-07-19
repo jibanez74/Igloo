@@ -9,7 +9,7 @@ import { inputIconClassName, lightInputClassName } from "@/lib/input-styles";
 
 export default function Header() {
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { q?: string };
+  const search = useSearch({ strict: false });
   const [value, setValue] = useState(search.q ?? "");
   const [prevQ, setPrevQ] = useState(search.q);
 

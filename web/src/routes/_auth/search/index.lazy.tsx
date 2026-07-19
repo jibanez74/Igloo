@@ -437,7 +437,12 @@ type CategoryResultsTabProps<T> = {
   label: Exclude<SearchTab, "all">;
   q: string;
   page: number;
-  queryOpts: UseQueryOptions<ApiResponseType<PaginatedSearchResponse<T>>>;
+  queryOpts: UseQueryOptions<
+    ApiResponseType<PaginatedSearchResponse<T>>,
+    Error,
+    ApiResponseType<PaginatedSearchResponse<T>>,
+    (string | number)[]
+  >;
   renderGrid: (items: T[]) => React.ReactNode;
 };
 

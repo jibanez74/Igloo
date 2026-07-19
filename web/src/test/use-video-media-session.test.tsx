@@ -188,13 +188,22 @@ describe("useVideoMediaSession", () => {
       );
     }
 
-    capturedActionHandler(mediaSession, "seekbackward")?.({ seekOffset: 50 });
+    capturedActionHandler(mediaSession, "seekbackward")?.({
+      action: "seekbackward",
+      seekOffset: 50,
+    });
     expect(onSeek).toHaveBeenLastCalledWith(0);
 
-    capturedActionHandler(mediaSession, "seekforward")?.({ seekOffset: 1000 });
+    capturedActionHandler(mediaSession, "seekforward")?.({
+      action: "seekforward",
+      seekOffset: 1000,
+    });
     expect(onSeek).toHaveBeenLastCalledWith(600);
 
-    capturedActionHandler(mediaSession, "seekto")?.({ seekTime: 120 });
+    capturedActionHandler(mediaSession, "seekto")?.({
+      action: "seekto",
+      seekTime: 120,
+    });
     expect(onSeek).toHaveBeenLastCalledWith(120);
 
     unmount();

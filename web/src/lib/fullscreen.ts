@@ -30,9 +30,9 @@ export function exitDocumentFullscreen(): Promise<void> {
     const result = exit();
     if (
       result !== undefined &&
-      typeof (result as Promise<void>).then === "function"
+      typeof (result).then === "function"
     ) {
-      return result as Promise<void>;
+      return result;
     }
   } catch {
     return Promise.resolve();
@@ -51,12 +51,14 @@ export function requestElementFullscreen(el: HTMLElement): Promise<void> {
     const result = req();
     if (
       result !== undefined &&
-      typeof (result as Promise<void>).then === "function"
+      typeof (result).then === "function"
     ) {
-      return result as Promise<void>;
+      return result;
     }
   } catch (error) {
-    return Promise.reject(error);
+    return Promise.reject(
+      error instanceof Error ? error : new Error("Fullscreen request failed"),
+    );
   }
   return Promise.resolve();
 }

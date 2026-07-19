@@ -66,6 +66,11 @@ async function readJSON<T>(response: APIResponse | Response) {
   return (await response.json()) as ApiResponse<T>;
 }
 
+function expectDefined<T>(value: T, message: string): NonNullable<T> {
+  expect(value, message).not.toBeNull();
+  return value as NonNullable<T>;
+}
+
 async function login(
   page: Page,
   env: E2EEnv,
@@ -245,7 +250,9 @@ test.describe("Playback settings", () => {
   }) => {
     const env = readE2EEnv();
     const tracker = trackBrowserIssues(page);
-    let putBody: UpdatePlaybackSettingsRequest | null = null;
+    const capturedRequest = {
+      body: null as UpdatePlaybackSettingsRequest | null,
+    };
 
     page.on("request", request => {
       const url = new URL(request.url());
@@ -253,7 +260,8 @@ test.describe("Playback settings", () => {
         url.pathname === "/api/settings/playback" &&
         request.method() === "PUT"
       ) {
-        putBody = request.postDataJSON() as UpdatePlaybackSettingsRequest;
+        capturedRequest.body =
+          request.postDataJSON() as UpdatePlaybackSettingsRequest;
       }
     });
 
@@ -325,8 +333,12 @@ test.describe("Playback settings", () => {
 
       const putResponse = await putResponsePromise;
       expect(putResponse.status()).toBe(200);
-      expect(putBody?.download_mbps).toBe(100);
-      expect(putBody?.server_upload_mbps).toBe(5);
+      const capturedPutBody = expectDefined(
+        capturedRequest.body,
+        "Expected playback settings request body to be captured.",
+      );
+      expect(capturedPutBody.download_mbps).toBe(100);
+      expect(capturedPutBody.server_upload_mbps).toBe(5);
 
       await expect(page.getByText("Playback settings saved")).toBeVisible();
       const savedSettings = await fetchPlaybackSettings(page, env);
@@ -392,7 +404,9 @@ test.describe("Playback settings", () => {
     const tracker = trackBrowserIssues(page);
     let regularUser: AdminUser | null = null;
     let regularPassword = "";
-    let putBody: UpdatePlaybackSettingsRequest | null = null;
+    const capturedRequest = {
+      body: null as UpdatePlaybackSettingsRequest | null,
+    };
 
     page.on("request", request => {
       const url = new URL(request.url());
@@ -400,7 +414,8 @@ test.describe("Playback settings", () => {
         url.pathname === "/api/settings/playback" &&
         request.method() === "PUT"
       ) {
-        putBody = request.postDataJSON() as UpdatePlaybackSettingsRequest;
+        capturedRequest.body =
+          request.postDataJSON() as UpdatePlaybackSettingsRequest;
       }
     });
 
@@ -444,9 +459,16 @@ test.describe("Playback settings", () => {
       await page.getByRole("button", { name: "Save Settings" }).click();
       const putResponse = await putResponsePromise;
       expect(putResponse.status()).toBe(200);
-      expect(putBody?.download_mbps).toBe(30);
+      const capturedPutBody = expectDefined(
+        capturedRequest.body,
+        "Expected playback settings request body to be captured.",
+      );
+      expect(capturedPutBody.download_mbps).toBe(30);
       expect(
-        Object.prototype.hasOwnProperty.call(putBody ?? {}, "server_upload_mbps"),
+        Object.prototype.hasOwnProperty.call(
+          capturedRequest.body ?? {},
+          "server_upload_mbps",
+        ),
       ).toBe(false);
 
       const maliciousResponse = await page.context().request.put(

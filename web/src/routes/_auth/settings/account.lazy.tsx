@@ -127,7 +127,7 @@ function AccountSettings() {
 
   const user: AuthUser | null =
     userData?.error === false && userData.data?.user
-      ? (userData.data.user as AuthUser)
+      ? (userData.data.user)
       : null;
 
   // Form input state (controlled inputs)

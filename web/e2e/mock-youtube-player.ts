@@ -18,14 +18,6 @@ export async function mockYouTubePlayer(
   { failFirstLoad = false }: MockYouTubePlayerOptions = {},
 ) {
   await page.addInitScript(({ failFirstLoad }) => {
-    type FakePlayerEvent = { target: FakePlayer };
-    type FakePlayerStateEvent = { data: number; target: FakePlayer };
-    type FakePlayerErrorEvent = { data: number; target: FakePlayer };
-    type FakePlayerEvents = {
-      onReady?: (event: FakePlayerEvent) => void;
-      onStateChange?: (event: FakePlayerStateEvent) => void;
-      onError?: (event: FakePlayerErrorEvent) => void;
-    };
     let playerCreations = 0;
 
     class FakePlayer {
@@ -34,22 +26,24 @@ export async function mockYouTubePlayer(
       muted = false;
       volume = 80;
       state = window.YT.PlayerState.CUED;
-      events: FakePlayerEvents;
+      events: YT.PlayerEvents;
 
       constructor(_id: string, options: YT.PlayerOptions) {
         this.events = options.events ?? {};
         playerCreations += 1;
 
         window.setTimeout(() => {
+          const target = this as unknown as YT.Player;
+
           if (failFirstLoad && playerCreations === 1) {
             this.events.onError?.({
               data: window.YT.PlayerError.HTML5_ERROR,
-              target: this,
+              target,
             });
             return;
           }
 
-          this.events.onReady?.({ target: this });
+          this.events.onReady?.({ target });
         }, 0);
       }
 
@@ -77,7 +71,7 @@ export async function mockYouTubePlayer(
         this.state = window.YT.PlayerState.PLAYING;
         this.events.onStateChange?.({
           data: this.state,
-          target: this,
+          target: this as unknown as YT.Player,
         });
       }
 
@@ -85,7 +79,7 @@ export async function mockYouTubePlayer(
         this.state = window.YT.PlayerState.PAUSED;
         this.events.onStateChange?.({
           data: this.state,
-          target: this,
+          target: this as unknown as YT.Player,
         });
       }
 

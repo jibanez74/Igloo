@@ -73,7 +73,7 @@ export function useMoviePlaybackData({
         primaryVideo?.height ?? 0,
         primaryVideo?.codec,
         audioStreams[0]?.codec,
-        techData.data!.movie?.mime_type,
+        techData.data.movie?.mime_type,
       )
     : null;
   const resolvedPlaybackSettings =

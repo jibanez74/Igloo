@@ -168,14 +168,19 @@ export default function QuickConnectApproveCard() {
         data && data.error === false && data.data?.devices
           ? data.data.devices
           : null;
-      if (devices && knownDeviceIds === null) {
+      if (!devices) {
+        return 2000;
+      }
+
+      const currentKnownDeviceIds = knownDeviceIds;
+      if (currentKnownDeviceIds === null) {
         setKnownDeviceIds(devices.map(device => device.id));
         return 2000;
       }
 
-      const fresh = devices?.find(
+      const fresh = devices.find(
         device =>
-          !knownDeviceIds.includes(device.id) &&
+          !currentKnownDeviceIds.includes(device.id) &&
           matchesPendingDevice(device, pendingDevice),
       );
       if (fresh) {

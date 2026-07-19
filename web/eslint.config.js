@@ -6,142 +6,131 @@ import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
-/**
- * ESLint Configuration for Igloo
- *
- * This is the single source of truth for all ESLint rules.
- * Uses ESLint 9's flat config format.
- *
- * Includes:
- * - JavaScript/TypeScript recommended rules
- * - React Hooks rules with STRICT React Compiler enforcement
- * - React Refresh for Vite HMR
- * - Tailwind CSS v4 validation for JSX/TSX class attributes
- *
- * React Compiler Strict Mode:
- * All React Compiler rules are set to 'error' to enforce best practices.
- * Use eslint-disable comments sparingly for legitimate exceptions.
- */
+const tailwindSettings = {
+  "better-tailwindcss": {
+    entryPoint: "src/assets/styles.css",
+  },
+};
+
+const externalClassAllowlist = [
+  "fa-.*",
+  "lucide-.*",
+  "animate-in",
+  "animate-out",
+];
+
+const rawTailwindPaletteRule = [
+  "error",
+  {
+    selector:
+      "Literal[value=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+    message:
+      "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, text-destructive, text-success, ...) instead of raw Tailwind palette colors; see docs/design-system.md section 1.2.",
+  },
+  {
+    selector:
+      "TemplateElement[value.cooked=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
+    message:
+      "Use semantic tokens instead of raw Tailwind palette colors; see docs/design-system.md section 1.2.",
+  },
+];
 
 export default defineConfig([
-  globalIgnores(["dist", "playwright-report", "test-results", "blob-report"]),
+  globalIgnores([
+    "dist",
+    "playwright-report",
+    "test-results",
+    "blob-report",
+    "coverage",
+    ".vite",
+    ".bun",
+    "node_modules",
+    "src/routeTree.gen.ts",
+  ]),
 
-  // TypeScript/React files
   {
     files: ["**/*.{ts,tsx}"],
-    extends: [
-      js.configs.recommended,
-      tseslint.configs.recommended,
-      // Use recommended-latest for React Compiler support
-      // See: https://react.dev/learn/react-compiler/installation#eslint-integration
-      reactHooks.configs.flat["recommended-latest"],
-      reactRefresh.configs.vite,
-    ],
-    plugins: {
-      "better-tailwindcss": betterTailwindcss,
-    },
+    extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       globals: globals.browser,
     },
-    settings: {
-      "better-tailwindcss": {
-        // Path to main CSS file with Tailwind v4 theme
-        entryPoint: "src/assets/styles.css",
+  },
+
+  {
+    files: ["src/**/*.{ts,tsx}", "vite.config.ts", "scripts/**/*.ts"],
+    ignores: ["src/test/**/*.{ts,tsx}", "src/routeTree.gen.ts"],
+    extends: [tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
-      // Allow exporting both components and utilities from the same file
-      // This is a common pattern with shadcn/ui components (e.g., Button + buttonVariants)
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: false },
+      ],
+      "@typescript-eslint/only-throw-error": "off",
+    },
+  },
+
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/test/**/*.{ts,tsx}", "src/routeTree.gen.ts"],
+    extends: [
+      reactHooks.configs.flat["recommended-latest"],
+      reactRefresh.configs.vite,
+      betterTailwindcss.configs["recommended-warn"],
+    ],
+    settings: tailwindSettings,
+    rules: {
       "react-refresh/only-export-components": [
         "warn",
         { allowExportNames: ["buttonVariants"] },
       ],
-
-      // ============================================
-      // REACT COMPILER STRICT MODE
-      // All rules enforced as errors for best performance practices
-      // ============================================
-
-      // Upgrade warnings to errors for strict mode
       "react-hooks/exhaustive-deps": "error",
       "react-hooks/unsupported-syntax": "error",
-
-      // These are already 'error' in recommended-latest, but explicitly stated for clarity:
-      // - react-hooks/rules-of-hooks: error
-      // - react-hooks/immutability: error
-      // - react-hooks/purity: error
-      // - react-hooks/refs: error
-      // - react-hooks/set-state-in-render: error
-      // - react-hooks/set-state-in-effect: error
-      // - react-hooks/static-components: error
-      // - react-hooks/globals: error
-
-      // Tailwind CSS v4 rules (eslint-plugin-better-tailwindcss)
-      // Stylistic rules (warnings) - auto-fixable
-      "better-tailwindcss/enforce-consistent-class-order": "warn",
-      "better-tailwindcss/no-duplicate-classes": "warn",
-      "better-tailwindcss/no-unnecessary-whitespace": "warn",
-      "better-tailwindcss/enforce-canonical-classes": "warn",
-      "better-tailwindcss/no-deprecated-classes": "warn",
-
-      // Disabled: Line wrapping is too aggressive for this codebase
       "better-tailwindcss/enforce-consistent-line-wrapping": "off",
-
-      // Correctness rules (warnings) - allow Font Awesome and other external classes
       "better-tailwindcss/no-unknown-classes": [
         "warn",
-        {
-          // Allow external/plugin classes:
-          // - Font Awesome icons (fa-*)
-          // - Lucide icons (lucide-*)
-          // - tw-animate-css (animate-in, animate-out)
-          ignore: [
-            "fa-.*",
-            "lucide-.*",
-            "animate-in",
-            "animate-out",
-          ],
-        },
+        { ignore: externalClassAllowlist },
       ],
-      "better-tailwindcss/no-conflicting-classes": "warn",
-
-      // Design-system guardrail: forbid raw Tailwind palette colors (every
-      // family). Components must read semantic tokens (bg-background,
-      // text-muted-foreground, bg-aurora, text-destructive, text-success, …) so
-      // the codebase doesn't drift back off the igloo palette. Documented
-      // brand exceptions use eslint-disable comments (Spotify green in
-      // src/lib/constants.ts). See docs/design-system.md §1.2.
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector:
-            "Literal[value=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
-          message:
-            "Use semantic tokens (bg-background, text-muted-foreground, bg-aurora, text-destructive, text-success, …) instead of raw Tailwind palette colors — see docs/design-system.md §1.2.",
-        },
-        {
-          selector:
-            "TemplateElement[value.cooked=/(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/]",
-          message:
-            "Use semantic tokens instead of raw Tailwind palette colors — see docs/design-system.md §1.2.",
-        },
-      ],
+      "no-restricted-syntax": rawTailwindPaletteRule,
     },
   },
+
   {
-    // Sanctioned exceptions: intentional light "frosted" input surfaces that stay
-    // light-on-dark by design (search/login inputs), predating the light theme.
     files: ["src/lib/input-styles.ts", "src/routes/login.lazy.tsx"],
     rules: { "no-restricted-syntax": "off" },
   },
+
   {
-    files: ["playwright.config.ts", "e2e/**/*.ts"],
+    files: ["vite.config.ts", "playwright.config.ts", "scripts/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+
+  {
+    files: ["e2e/**/*.ts"],
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.node,
       },
+    },
+  },
+
+  {
+    files: ["eslint.config.js"],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: globals.node,
     },
   },
 ]);

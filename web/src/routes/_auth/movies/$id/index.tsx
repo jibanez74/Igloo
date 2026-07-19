@@ -145,7 +145,7 @@ function LibraryMovieDetailsContent({
   const { data: userData } = useQuery(authUserQueryOpts());
   const user: AuthUser | null =
     userData?.error === false && userData.data?.user
-      ? (userData.data.user as AuthUser)
+      ? (userData.data.user)
       : null;
   const { data: playbackSettingsData } = useQuery({
     ...playbackSettingsQueryOpts(user?.id ?? 0),

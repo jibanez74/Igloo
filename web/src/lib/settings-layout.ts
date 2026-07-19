@@ -33,7 +33,7 @@ export function computeSettingsLayoutState<T extends SettingsTabDef>(
   const urlTabAllowed =
     urlTabId !== undefined && visibleTabs.some(tab => tab.id === urlTabId);
   const currentTab: SettingsTabId = urlTabAllowed
-    ? (urlTabId as SettingsTabId)
+    ? (urlTabId)
     : defaultTab;
 
   const redirectTo =

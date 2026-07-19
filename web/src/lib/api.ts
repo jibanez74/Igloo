@@ -132,7 +132,8 @@ async function apiRequest<T extends Record<string, unknown>>(
       return ERROR_NOTFOUND;
     }
 
-    return await res.json();
+    const data: unknown = await res.json();
+    return data as ApiResponseType<T>;
   } catch (err) {
     if (!(err instanceof DOMException && err.name === "AbortError")) {
       console.warn(`apiRequest failed: ${endpoint}`, err);
@@ -245,8 +246,8 @@ export const uploadUserAvatar = async (
       credentials: "include",
     });
 
-    const data = await response.json();
-    return data;
+    const data: unknown = await response.json();
+    return data as ApiResponseType<{ user: AuthUser }>;
   } catch {
     return NETWORK_ERROR;
   }

@@ -80,6 +80,8 @@ type PendingPairing = {
   approved: boolean;
 };
 
+type SortDirection = "asc" | "desc";
+
 const HOST = "127.0.0.1";
 const PORT = Number.parseInt(process.env.E2E_MOCK_API_PORT ?? "8080", 10);
 const SESSION_COOKIE = "igloo_e2e_session";
@@ -487,7 +489,8 @@ function paginationParams(url: URL) {
       10,
     ),
   );
-  const sort = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
+  const sort: SortDirection =
+    url.searchParams.get("sort") === "desc" ? "desc" : "asc";
   return { page, perPage, sort };
 }
 
@@ -500,7 +503,7 @@ function paginate<T>(items: T[], page: number, perPage: number) {
   };
 }
 
-function sortedMovies(sort: "asc" | "desc") {
+function sortedMovies(sort: SortDirection) {
   return [...libraryMovies].sort((a, b) => {
     const value = a.title.localeCompare(b.title);
     return sort === "asc" ? value : -value;
