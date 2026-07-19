@@ -699,6 +699,8 @@ function TracksTabContent() {
   const likedSet = new Set<number>(
     likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
   );
+  const firstPage = data?.pages[0];
+  const firstPageFailed = isApiFailure(firstPage);
 
   // Get total tracks count from first page
   const totalTracks =
@@ -725,10 +727,14 @@ function TracksTabContent() {
     return <TracksListSkeleton />;
   }
 
-  if (isError) {
+  if (isError || firstPageFailed) {
     return (
       <MoviesLoadError
-        message="Couldn’t load tracks. Check your connection and try again."
+        message={
+          firstPageFailed
+            ? firstPage.message
+            : "Couldn’t load tracks. Check your connection and try again."
+        }
         onRetry={() => void refetch()}
       />
     );
