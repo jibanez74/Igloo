@@ -29,7 +29,27 @@ import {
 import { movieWatchProgressQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { ApiResponseType, MovieDetailsHeroActionsProps, MovieWatchProgressType } from "@/types";
+import type { ApiResponseType, MovieWatchProgressType } from "@/types";
+import type { LibraryMovieDetailsMovieType } from "@/types/movies";
+import type { PlaybackSettings } from "@/types/playback";
+import type { AuthUser } from "@/types/user";
+
+type MovieDetailsHeroActionsProps = {
+  movieId: number;
+  movie: LibraryMovieDetailsMovieType;
+  movieTitle: string;
+  user: AuthUser | null;
+  playbackSettings: PlaybackSettings;
+  onPlaybackSettingsChange: (settings: PlaybackSettings) => void;
+  playbackSettingsOpen: boolean;
+  onPlaybackSettingsOpenChange: (open: boolean) => void;
+  technicalDetailsOpen: boolean;
+  onTechnicalDetailsOpenChange: (open: boolean) => void;
+  editOpen: boolean;
+  onEditOpenChange: (open: boolean) => void;
+  deleteOpen: boolean;
+  onDeleteOpenChange: (open: boolean) => void;
+};
 
 const loadPlaybackSettingsDialog = () => import("@/components/movies/PlaybackSettingsDialog");
 const loadTechnicalDetailsDialog = () => import("@/components/movies/TechnicalDetailsDialog");

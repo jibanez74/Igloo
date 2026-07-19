@@ -6,7 +6,7 @@ import {
   extractRuleBody,
   parseOklchTokens,
   type Oklch,
-} from "./color";
+} from "../helpers/color";
 
 // Guards both igloo themes against accessibility regressions: every key
 // text/surface pair must meet WCAG AA (and AAA for body text). The token values

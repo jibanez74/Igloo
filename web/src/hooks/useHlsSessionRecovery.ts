@@ -4,7 +4,11 @@ import {
   HLS_SESSION_LOST_MIN_INTERVAL_MS,
 } from "@/lib/constants";
 import { currentPlaybackTimestampMs } from "@/lib/movie-playback";
-import type { HlsSessionRecoveryOptions } from "@/types";
+type HlsSessionRecoveryOptions = {
+  streamWindowKey: string;
+  onRecover: (currentTimeSec: number) => void;
+  onMaxAttempts: (message: string) => void;
+};
 
 export function useHlsSessionRecovery({
   streamWindowKey,

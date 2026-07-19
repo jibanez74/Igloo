@@ -2,7 +2,14 @@ import { Link } from "@tanstack/react-router";
 import { formatTimecode } from "@/lib/format";
 import { MOTION_MICRO_COLORS_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { MovieChaptersSectionProps } from "@/types";
+import type { ChapterType } from "@/types/movies";
+import type { PlaybackSettings } from "@/types/playback";
+
+type MovieChaptersSectionProps = {
+  chapters: ChapterType[];
+  movieId: number;
+  playbackSettings: PlaybackSettings;
+};
 
 export default function MovieChaptersSection({
   chapters,

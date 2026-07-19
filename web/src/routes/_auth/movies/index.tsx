@@ -66,7 +66,7 @@ import RequestMovieDialog from "@/components/movies/RequestMovieDialog";
 import {
   moviesSearchSchema,
   type MoviesSearchParams,
-} from "@/types/route-search";
+} from "@/lib/route-search";
 
 export const Route = createFileRoute("/_auth/movies/")({
   validateSearch: moviesSearchSchema,

@@ -2,11 +2,11 @@
 // (docs/design-system.md §2.4). Every themed color lives here as OKLCH + hex;
 // scripts/generate-theme.ts renders these into the marked blocks in
 // src/assets/styles.css, src/assets/boot.css, and index.html. After editing
-// this module, run `bun run generate:theme`. src/test/theme-drift.test.ts
+// this module, run `bun run generate:theme`. src/test/shared/theme-drift.test.ts
 // fails if the generated blocks or the OKLCH↔hex pairs fall out of sync.
 //
 // OKLCH values carry enough decimals to round-trip exactly to their hex
-// through src/test/color.ts oklchToHex — keep that property when editing.
+// through src/test/helpers/color.ts oklchToHex — keep that property when editing.
 
 export type ThemeName = "light" | "dark";
 

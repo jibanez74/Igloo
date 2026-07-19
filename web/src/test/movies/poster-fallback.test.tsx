@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import InTheatersCard from "@/components/home/InTheatersCard";
 import MovieCard from "@/components/movies/MovieCard";
 import type { LatestMovieType, TheaterMovieType } from "@/types";
-import { renderWithQueryClient } from "@/test/render";
+import { renderWithQueryClient } from "@/test/helpers/render";
 
 vi.mock("@tanstack/react-router", async () => {
   const actual =

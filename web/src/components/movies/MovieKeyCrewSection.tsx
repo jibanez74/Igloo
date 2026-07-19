@@ -2,7 +2,11 @@ import { useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { sortLibraryCrewForDisplay } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { MovieKeyCrewSectionProps } from "@/types";
+import type { LibraryMovieCrewType } from "@/types/movies";
+
+type MovieKeyCrewSectionProps = {
+  crew: LibraryMovieCrewType[];
+};
 
 const KEY_CREW_WRITERS_CAP = 3;
 

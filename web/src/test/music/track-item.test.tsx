@@ -8,7 +8,7 @@ import {
   MOTION_TRACK_PLAY_BUTTON_CLASS,
   MOTION_TRACK_ROW_CLASS,
 } from "@/lib/constants";
-import { renderWithQueryClient } from "@/test/render";
+import { renderWithQueryClient } from "@/test/helpers/render";
 
 describe("TrackItem motion", () => {
   it("uses shared motion contracts for row controls", () => {

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Film } from "lucide-react";
 import MovieDetailsBackdrop from "@/components/movies/MovieDetailsBackdrop";
 import MovieDetailsTitleHeading from "@/components/movies/MovieDetailsTitleHeading";
@@ -10,7 +11,20 @@ import {
   DETAIL_PAGE_CONTENT_ENTER_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import type { MovieDetailsHeroProps } from "@/types";
+import type { LibraryMovieGenreType } from "@/types/movies";
+
+type MovieDetailsHeroProps = {
+  backdropUrl: string | null;
+  posterUrl: string | null;
+  movieTitle: string;
+  releaseYear: number | null;
+  releaseDateStr: string | null;
+  tagLine: string | null;
+  genres: LibraryMovieGenreType[];
+  metadataSlot: ReactNode;
+  progressSlot?: ReactNode;
+  actionsSlot?: ReactNode;
+};
 
 export default function MovieDetailsHero({
   backdropUrl,

@@ -1,7 +1,6 @@
 // API RESPONSE TYPES
 // Types for API responses and router context
 
-import type { QueryClient } from "@tanstack/react-query";
 
 // Successful API response structure
 export type ApiSuccessType<T extends Record<string, unknown>> = {
@@ -23,10 +22,3 @@ export type ApiFailureType = {
 export type ApiResponseType<T extends Record<string, unknown>> =
   | ApiSuccessType<T>
   | ApiFailureType;
-
-// ROUTER CONTEXT TYPES
-
-// Context provided to TanStack Router
-export type RouterContextType = {
-  queryClient: QueryClient;
-};

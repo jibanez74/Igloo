@@ -9,7 +9,7 @@ import {
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
 import type { ApiResponseType, WatchRoomType } from "@/types";
-import { renderWithQueryClient } from "@/test/render";
+import { renderWithQueryClient } from "@/test/helpers/render";
 
 const deleteWatchRoomMock = vi.fn();
 const showActionFailedMock = vi.fn();

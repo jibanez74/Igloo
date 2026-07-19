@@ -1,6 +1,10 @@
 import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import BootstrapHeadMetadataSync from "@/components/app/BootstrapHeadMetadataSync";
-import type { RouterContextType } from "@/types";
+
+type RouterContextType = {
+  queryClient: QueryClient;
+};
 
 export const Route = createRootRouteWithContext<RouterContextType>()({
   component: RootLayout,

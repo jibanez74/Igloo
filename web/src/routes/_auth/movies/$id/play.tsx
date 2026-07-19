@@ -54,8 +54,7 @@ import {
 } from "@/lib/constants";
 import { showActionFailed } from "@/lib/toast-helpers";
 import { cn } from "@/lib/utils";
-import type { PlaySearchParams } from "@/types";
-import { playSearchSchema } from "@/types/route-search";
+import { playSearchSchema, type PlaySearchParams } from "@/lib/route-search";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useVideoMediaSession } from "@/hooks/useVideoMediaSession";
 import { useVideoFullscreen } from "@/hooks/useVideoFullscreen";

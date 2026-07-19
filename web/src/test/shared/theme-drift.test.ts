@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   extractGeneratedBlock,
   GENERATED_TARGETS,
-} from "../../scripts/generate-theme";
+} from "../../../scripts/generate-theme";
 import { THEME_COLORS } from "@/lib/theme";
 import { THEME_TOKENS, type ThemeName } from "@/lib/theme-tokens";
-import { oklchToHex, parseOklchTokens } from "./color";
+import { oklchToHex, parseOklchTokens } from "../helpers/color";
 
 // The theme sync points (styles.css tokens, boot.css pre-hydration paint, the
 // index.html anti-flash script) are GENERATED from src/lib/theme-tokens.ts by

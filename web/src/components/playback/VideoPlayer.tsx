@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { RefObject } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import type { Events } from "hls.js";
@@ -12,7 +13,31 @@ import {
 } from "@/lib/constants";
 import { supportsNativeHLS } from "@/lib/playback";
 import { cn } from "@/lib/utils";
-import type { VideoPlayerProps } from "@/types";
+
+type SubtitleTrackInfo = {
+  url: string;
+  label: string;
+  srclang: string;
+};
+
+type VideoPlayerProps = {
+  videoRef: RefObject<HTMLVideoElement | null>;
+  src: string;
+  title: string;
+  isFullscreen?: boolean;
+  onError: (message: string) => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onEnded?: () => void;
+  onTimeUpdate?: (time: number) => void;
+  onDurationChange?: (duration: number) => void;
+  onNativeError?: (code: number | null | undefined) => void;
+  subtitleTrack?: SubtitleTrackInfo | null;
+  startSec?: number;
+  onStartApplied?: (time: number) => void;
+  onSessionLost?: (currentTime: number) => void;
+  onCapacityBusy?: (retryAfterSec: number) => void;
+};
 
 function loadHlsLight() {
   return import("hls.js/light");

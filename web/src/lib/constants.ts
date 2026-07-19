@@ -493,7 +493,7 @@ export const HOME_ALBUM_GRID_CLASS =
  * The one focus ring, per design-system §1.7 — the shadcn
  * `ring-[3px] ring-ring/50` recipe, so inline (non-shadcn) controls match the
  * primitives exactly. Only shows for keyboard users (`focus-visible`, not
- * `focus`). Pinned by src/test/constants-contracts.test.ts.
+ * `focus`). Pinned by src/test/lib/constants-contracts.test.ts.
  */
 export const FOCUS_VISIBLE_RING_CLASS =
   "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";

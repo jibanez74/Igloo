@@ -18,24 +18,50 @@ const (
 	defaultLogsDir      = "logs"
 	defaultTranscodeDir = "transcode"
 
-	envDBPath              = "DB_PATH"
-	envStaticDir           = "STATIC_DIR"
-	envLogsDir             = "LOGS_DIR"
-	envTranscodeDir        = "TRANSCODE_DIR"
-	envSessionCookieSecure = "SESSION_COOKIE_SECURE"
-	envLogToStdout         = "LOG_TO_STDOUT"
-	envPort                = "PORT"
+	envDBPath                     = "DB_PATH"
+	envStaticDir                  = "STATIC_DIR"
+	envLogsDir                    = "LOGS_DIR"
+	envTranscodeDir               = "TRANSCODE_DIR"
+	envSessionCookieSecure        = "SESSION_COOKIE_SECURE"
+	envLogToStdout                = "LOG_TO_STDOUT"
+	envPort                       = "PORT"
+	envDefaultAdminName           = "DEFAULT_ADMIN_NAME"
+	envDefaultAdminEmail          = "DEFAULT_ADMIN_EMAIL"
+	envDefaultAdminPassword       = "DEFAULT_ADMIN_PASSWORD"
+	envTmdbAPIKey                 = "TMDB_API_KEY"
+	envJellyfinAPIKey             = "JELLYFIN_API_KEY"
+	envSpotifyClientID            = "SPOTIFY_CLIENT_ID"
+	envSpotifyClientSecret        = "SPOTIFY_CLIENT_SECRET"
+	envHardwareAccelerationDevice = "HARDWARE_ACCELERATION_DEVICE"
+	envEnableWatcher              = "ENABLE_WATCHER"
+	envDownloadImages             = "DOWNLOAD_IMAGES"
+	envMoviesDir                  = "MOVIES_DIR"
+	envShowsDir                   = "SHOWS_DIR"
+	envMusicDir                   = "MUSIC_DIR"
 )
 
 type RuntimeConfig struct {
-	DBPath              string
-	StaticDir           string
-	LogsDir             string
-	TranscodeDir        string
-	Port                int
-	Debug               bool
-	LogToStdout         bool
-	SessionCookieSecure bool
+	DBPath                     string
+	StaticDir                  string
+	LogsDir                    string
+	TranscodeDir               string
+	Port                       int
+	Debug                      bool
+	LogToStdout                bool
+	SessionCookieSecure        bool
+	DefaultAdminName           string
+	DefaultAdminEmail          string
+	DefaultAdminPassword       string
+	TmdbAPIKey                 string
+	JellyfinAPIKey             string
+	SpotifyClientID            string
+	SpotifyClientSecret        string
+	HardwareAccelerationDevice string
+	EnableWatcher              bool
+	DownloadImages             bool
+	MoviesDir                  string
+	ShowsDir                   string
+	MusicDir                   string
 }
 
 func LoadRuntimeEnvFile() (string, bool, error) {
@@ -60,10 +86,23 @@ func NewRuntimeConfig() (RuntimeConfig, error) {
 	}
 
 	config := RuntimeConfig{
-		Port:                port,
-		Debug:               debug,
-		LogToStdout:         envBool(envLogToStdout, debug),
-		SessionCookieSecure: envBool(envSessionCookieSecure, false),
+		Port:                       port,
+		Debug:                      debug,
+		LogToStdout:                envBool(envLogToStdout, debug),
+		SessionCookieSecure:        envBool(envSessionCookieSecure, false),
+		DefaultAdminName:           envString(envDefaultAdminName, defaultAdminName),
+		DefaultAdminEmail:          envString(envDefaultAdminEmail, defaultAdminEmail),
+		DefaultAdminPassword:       strings.TrimSpace(os.Getenv(envDefaultAdminPassword)),
+		TmdbAPIKey:                 strings.TrimSpace(os.Getenv(envTmdbAPIKey)),
+		JellyfinAPIKey:             strings.TrimSpace(os.Getenv(envJellyfinAPIKey)),
+		SpotifyClientID:            strings.TrimSpace(os.Getenv(envSpotifyClientID)),
+		SpotifyClientSecret:        strings.TrimSpace(os.Getenv(envSpotifyClientSecret)),
+		HardwareAccelerationDevice: envString(envHardwareAccelerationDevice, helpers.HARDWARE_ACCELERATION_DEVICE_CPU),
+		EnableWatcher:              envBool(envEnableWatcher, false),
+		DownloadImages:             envBool(envDownloadImages, false),
+		MoviesDir:                  strings.TrimSpace(os.Getenv(envMoviesDir)),
+		ShowsDir:                   strings.TrimSpace(os.Getenv(envShowsDir)),
+		MusicDir:                   strings.TrimSpace(os.Getenv(envMusicDir)),
 	}
 	config.DBPath = config.effectiveDBPath()
 	config.StaticDir = config.effectiveStaticDir()

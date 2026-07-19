@@ -13,12 +13,39 @@ import { STREAM_MODES, formatSubtitleLabel, normalizeLang } from "@/lib/playback
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import type {
   MoviePlaybackStatus,
-  MoviePlaybackStatusArgs,
-  PlaybackTimingOptions,
-  RebaseOptions,
   StreamModeId,
-  SubtitleTrackInfoOptions,
 } from "@/types/playback";
+import type { SubtitleType } from "@/types/movies";
+
+type MoviePlaybackStatusArgs = {
+  movieNotFound: boolean;
+  movieIsPending: boolean;
+  hasMovie: boolean;
+  requestedMode: StreamModeId;
+  techPending: boolean;
+  modeUnavailable: boolean;
+  playbackError: string | null;
+};
+
+type PlaybackTimingOptions = {
+  isHlsPlayback: boolean;
+  hlsStartSec: number;
+  movieDurationSec?: number;
+};
+
+type SubtitleTrackInfoOptions = {
+  movieId: number;
+  resolvedSubtitleTrack: number | null;
+  techLoaded: boolean;
+  subtitleStreams: SubtitleType[];
+};
+
+type RebaseOptions = {
+  isHlsPlayback: boolean;
+  targetTimeSec: number;
+  hlsStartSec: number;
+  currentVideoTimeSec: number;
+};
 
 const MOVIE_HLS_PLAYBACK_SESSION_STORAGE_PREFIX = "igloo:movie-hls-playback-session:";
 const HLS_PLAYBACK_SESSION_ID_PATTERN = new RegExp(

@@ -9,7 +9,7 @@ import {
   WATCH_ROOM_SEEK_STEP_SEC,
 } from "@/lib/constants";
 import type { WatchRoomDetailType } from "@/types";
-import { renderWithQueryClient } from "@/test/render";
+import { renderWithQueryClient } from "@/test/helpers/render";
 
 const navigateMock = vi.fn();
 let routeParamId: number | null = 7;

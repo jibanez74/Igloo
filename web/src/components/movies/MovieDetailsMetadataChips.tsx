@@ -3,7 +3,18 @@ import { Badge } from "@/components/ui/badge";
 import { OVER_MEDIA_BADGE_CLASS } from "@/lib/constants";
 import { formatDate, formatSpokenRuntimeMinutes } from "@/lib/format";
 import { audienceRatingClass, criticRatingClass } from "@/lib/rating";
-import type { MovieDetailsMetadataChipsProps } from "@/types";
+import type { MediaCapabilityBadge } from "@/types/movies";
+
+type MovieDetailsMetadataChipsProps = {
+  criticRating: number | null;
+  audienceRating: number | null;
+  certificationLabel: string | null;
+  runtime: string | null;
+  runTimeMins: number | null;
+  releaseDateStr: string | null;
+  tmdbVoteAverage?: number | null;
+  capabilityBadges?: MediaCapabilityBadge[];
+};
 
 export default function MovieDetailsMetadataChips({
   criticRating,

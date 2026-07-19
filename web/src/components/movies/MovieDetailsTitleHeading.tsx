@@ -1,4 +1,8 @@
-import type { MovieDetailsTitleHeadingProps } from "@/types";
+type MovieDetailsTitleHeadingProps = {
+  title: string;
+  releaseYear: number | null;
+  releaseDateStr: string | null;
+};
 
 export default function MovieDetailsTitleHeading({
   title,

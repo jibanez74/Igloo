@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -13,7 +14,7 @@ const scannerBatchSize = 54
 
 func (app *Application) ScanMoviesLibrary() {
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
-		app.Logger.Error("movies directory not configured")
+		app.Logger.Info("skipping movie library scan: movies directory is not configured")
 		return
 	}
 
@@ -35,13 +36,13 @@ func (app *Application) runMovieScan() {
 	defer movieScanGuard.Finish()
 
 	if !app.Settings.MoviesDir.Valid || app.Settings.MoviesDir.String == "" {
-		app.Logger.Error("movies directory not configured")
+		app.Logger.Info("skipping movie library scan: movies directory is not configured")
 		return
 	}
 
 	app.Logger.Info(fmt.Sprintf("scanning movies directory: %s", app.Settings.MoviesDir.String))
 
-	ctx := context.Background()
+	ctx := app.scanContext()
 	errorCount := 0
 	moviesScanned := 0
 	moviesSkipped := 0
@@ -67,7 +68,8 @@ func (app *Application) runMovieScan() {
 		batch = batch[:0]
 	}
 
-	err = helpers.WalkMediaLibrary(
+	err = helpers.WalkMediaLibraryContext(
+		ctx,
 		app.Settings.MoviesDir.String,
 		helpers.ValidVideoExtensions,
 		func(err error) {
@@ -91,6 +93,10 @@ func (app *Application) runMovieScan() {
 	)
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			app.Logger.Info("movie library scan canceled")
+			return
+		}
 		app.Logger.Error(fmt.Sprintf("unexpected error walking movies directory: %s", err.Error()))
 		return
 	}
@@ -101,8 +107,20 @@ func (app *Application) runMovieScan() {
 		moviesScanned, moviesSkipped, errorCount, helpers.FormatDuration(time.Since(startTime))))
 }
 
+func (app *Application) scanContext() context.Context {
+	if app.ScanContext != nil {
+		return app.ScanContext
+	}
+
+	return context.Background()
+}
+
 func (app *Application) processMoviesBatchWithContext(ctx context.Context, scan *movieScanContext, files []helpers.ScanFile) (scanned, skipped, errCount int) {
 	for _, file := range files {
+		if ctx.Err() != nil {
+			return scanned, skipped, errCount
+		}
+
 		if scan.movieUnchanged(file.Path, file.Size) {
 			skipped++
 			continue

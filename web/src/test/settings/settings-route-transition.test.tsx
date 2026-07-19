@@ -17,7 +17,7 @@ import {
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
 import type { AudioPlayerState } from "@/types";
-import { runContentFadeTransitionTimeout } from "./content-fade-transition";
+import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 
 const defaultMatchMedia = window.matchMedia;
 const originalStartViewTransition = (document as Document & {

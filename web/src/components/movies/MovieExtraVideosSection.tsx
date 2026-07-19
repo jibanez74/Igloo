@@ -11,7 +11,12 @@ import { formatExtraVideoType } from "@/lib/format";
 import { buildYouTubeThumbnailUrl } from "@/lib/youtube-thumb-url";
 import { cn } from "@/lib/utils";
 import type { LibraryMovieExtraVideoType } from "@/types";
-import type { MovieExtraVideosSectionProps } from "@/types";
+
+type MovieExtraVideosSectionProps = {
+  videos: LibraryMovieExtraVideoType[];
+  movieId: number;
+  trailerReturnTo?: string;
+};
 
 function ExtraVideoCard({
   video,

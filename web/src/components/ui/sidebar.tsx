@@ -26,7 +26,7 @@ import {
   SidebarContext,
   useSidebar,
 } from "@/components/ui/sidebar-context"
-import type { SidebarContextProps } from "@/types"
+import type { SidebarContextProps } from "./sidebar-context"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7

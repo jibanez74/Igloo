@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"igloo/cmd/internal/database"
+	"igloo/cmd/internal/helpers"
 	applogger "igloo/cmd/internal/logger"
 
 	cache "github.com/patrickmn/go-cache"
@@ -40,6 +41,19 @@ func clearRuntimeConfigEnv(t *testing.T) {
 		envLogToStdout,
 		envSessionCookieSecure,
 		"DEBUG",
+		envDefaultAdminName,
+		envDefaultAdminEmail,
+		envDefaultAdminPassword,
+		envTmdbAPIKey,
+		envJellyfinAPIKey,
+		envSpotifyClientID,
+		envSpotifyClientSecret,
+		envHardwareAccelerationDevice,
+		envEnableWatcher,
+		envDownloadImages,
+		envMoviesDir,
+		envShowsDir,
+		envMusicDir,
 	} {
 		t.Setenv(key, "")
 	}
@@ -199,6 +213,24 @@ func TestCleanupStaleHLSTempDirsUsesConfiguredTranscodeDir(t *testing.T) {
 
 	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
 		t.Fatalf("expected stale HLS dir to be removed, stat err=%v", err)
+	}
+}
+
+func TestCleanupStaleHLSTempDirsSkipsBlankDirectory(t *testing.T) {
+	workingDir := t.TempDir()
+	changeWorkingDirectory(t, workingDir)
+
+	staleDir, err := os.MkdirTemp(workingDir, "igloo-hls-*")
+	if err != nil {
+		t.Fatalf("create stale HLS dir: %v", err)
+	}
+
+	app := &Application{}
+	setupTestLogger(t, app)
+	cleanupStaleHLSTempDirs(app.Logger, "")
+
+	if _, err := os.Stat(staleDir); err != nil {
+		t.Fatalf("expected directory in working directory to remain: %v", err)
 	}
 }
 
@@ -698,8 +730,12 @@ func setupTestApp(t *testing.T) *Application {
 	app := &Application{
 		DB: db,
 		Config: RuntimeConfig{
-			TranscodeDir: filepath.Join(dataDir, "transcode"),
-			Port:         defaultAppPort,
+			StaticDir:                  defaultStaticDir,
+			TranscodeDir:               filepath.Join(dataDir, "transcode"),
+			Port:                       defaultAppPort,
+			DefaultAdminName:           defaultAdminName,
+			DefaultAdminEmail:          defaultAdminEmail,
+			HardwareAccelerationDevice: helpers.HARDWARE_ACCELERATION_DEVICE_CPU,
 		},
 	}
 	setupTestLogger(t, app)
@@ -759,9 +795,14 @@ func TestInitSettings_CreatesDefaultSettings(t *testing.T) {
 	defer app.DB.Close()
 
 	clearSettingsEnv(t)
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+	app.Config = config
 	ctx := context.Background()
 
-	err := app.InitSettings(ctx)
+	err = app.InitSettings(ctx)
 	if err != nil {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
@@ -833,9 +874,14 @@ func TestInitSettings_UsesEnvVars(t *testing.T) {
 	t.Setenv("MUSIC_DIR", "/host/music")
 	t.Setenv("STATIC_DIR", "/host/static")
 	t.Setenv("TRANSCODE_DIR", "/host/transcode")
+	config, err := NewRuntimeConfig()
+	if err != nil {
+		t.Fatalf("NewRuntimeConfig failed: %v", err)
+	}
+	app.Config = config
 
 	ctx := context.Background()
-	err := app.InitSettings(ctx)
+	err = app.InitSettings(ctx)
 	if err != nil {
 		t.Fatalf("InitSettings failed: %v", err)
 	}
@@ -1057,11 +1103,45 @@ func TestInitSession_UsesSessionCookieSecureEnv(t *testing.T) {
 	app := setupTestApp(t)
 	defer app.DB.Close()
 
-	t.Setenv(envSessionCookieSecure, "true")
+	app.Config.SessionCookieSecure = true
 	app.InitSession()
 
 	if !app.SessionManager.Cookie.Secure {
 		t.Fatal("expected secure cookies to honor SESSION_COOKIE_SECURE=true")
+	}
+}
+
+func TestInitDefaultUser_RequiresConfiguredPassword(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+
+	err := app.InitDefaultUser(context.Background())
+	if err == nil {
+		t.Fatal("expected missing bootstrap password to fail")
+	}
+	if !strings.Contains(err.Error(), envDefaultAdminPassword) {
+		t.Fatalf("expected error to mention %s, got %v", envDefaultAdminPassword, err)
+	}
+}
+
+func TestInitDefaultUser_UsesConfiguredCredentials(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	app.Config.DefaultAdminName = "First Admin"
+	app.Config.DefaultAdminEmail = "first-admin@example.com"
+	app.Config.DefaultAdminPassword = "long-unique-bootstrap-password"
+
+	err := app.InitDefaultUser(context.Background())
+	if err != nil {
+		t.Fatalf("InitDefaultUser failed: %v", err)
+	}
+
+	admin, err := app.Queries.GetAdminUser(context.Background())
+	if err != nil {
+		t.Fatalf("GetAdminUser failed: %v", err)
+	}
+	if admin.Name != app.Config.DefaultAdminName || admin.Email != app.Config.DefaultAdminEmail {
+		t.Fatalf("admin credentials = (%q, %q), want (%q, %q)", admin.Name, admin.Email, app.Config.DefaultAdminName, app.Config.DefaultAdminEmail)
 	}
 }
 

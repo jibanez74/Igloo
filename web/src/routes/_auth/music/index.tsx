@@ -84,7 +84,7 @@ import type { TrackListItemType, VirtualItem } from "@/types";
 import {
   musicSearchSchema,
   type MusicSearchParams,
-} from "@/types/route-search";
+} from "@/lib/route-search";
 
 const MUSIC_PAGE_TITLE = "Music Library - Igloo";
 const MUSIC_PAGE_DESCRIPTION =

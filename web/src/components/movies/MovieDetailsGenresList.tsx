@@ -1,4 +1,8 @@
-import type { MovieDetailsGenresListProps } from "@/types";
+import type { LibraryMovieGenreType } from "@/types/movies";
+
+type MovieDetailsGenresListProps = {
+  genres: LibraryMovieGenreType[];
+};
 
 export default function MovieDetailsGenresList({
   genres,

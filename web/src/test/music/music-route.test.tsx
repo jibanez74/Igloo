@@ -16,7 +16,7 @@ import {
   TRACKS_INFINITE_PAGE_SIZE,
 } from "@/lib/constants";
 import { routeTree } from "@/routeTree.gen";
-import { runContentFadeTransitionTimeout } from "./content-fade-transition";
+import { runContentFadeTransitionTimeout } from "../helpers/content-fade-transition";
 
 const { audioPlayerActionsMock } = vi.hoisted(() => ({
   audioPlayerActionsMock: {

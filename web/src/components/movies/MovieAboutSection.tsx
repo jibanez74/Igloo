@@ -1,5 +1,14 @@
 import { formatCurrency } from "@/lib/format";
-import type { MovieAboutSectionProps } from "@/types";
+import type { LibraryMovieProductionCompanyType } from "@/types/movies";
+
+type MovieAboutSectionProps = {
+  movieTitle: string;
+  status?: string | null;
+  language: string | null;
+  budget: number | null;
+  revenue: number | null;
+  companies: LibraryMovieProductionCompanyType[];
+};
 
 function AboutRow({ label, children }: { label: string; children: string }) {
   return (

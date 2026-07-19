@@ -21,11 +21,22 @@ import {
 } from "@/lib/query-opts";
 import { buildTmdbImageUrl } from "@/lib/tmdb-image-url";
 import { unwrapFloatOrUndefined, unwrapString } from "@/lib/nullable";
-import type {
-  MoviePlaybackSyncTarget,
-  StreamModeId,
-  UseMoviePlaybackDataArgs,
-} from "@/types";
+import type { PlaySearchParams } from "@/lib/route-search";
+import type { StreamModeId } from "@/types";
+
+type MoviePlaybackSyncTarget = {
+  mode: StreamModeId;
+  audioTrack: number;
+  subtitleTrack: number | null;
+};
+
+type UseMoviePlaybackDataArgs = {
+  movieId: number;
+  search: PlaySearchParams;
+  streamReloadKey: number;
+  playbackSessionId: string;
+  onSyncSearch: (target: MoviePlaybackSyncTarget) => void;
+};
 
 export function useMoviePlaybackData({
   movieId,

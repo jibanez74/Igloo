@@ -1,4 +1,9 @@
-import type { MovieDetailsSkipLinksProps } from "@/types";
+type MovieDetailsSkipLinksProps = {
+  showCrewSection: boolean;
+  castNonEmpty: boolean;
+  chaptersNonEmpty: boolean;
+  extrasNonEmpty: boolean;
+};
 
 const linkClass =
   "rounded-sm px-2 py-1 text-primary underline focus:ring-2 focus:ring-ring focus:outline-hidden";

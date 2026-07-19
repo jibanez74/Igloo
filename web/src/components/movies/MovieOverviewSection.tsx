@@ -1,4 +1,6 @@
-import type { MovieOverviewSectionProps } from "@/types";
+type MovieOverviewSectionProps = {
+  overview: string | null;
+};
 
 export default function MovieOverviewSection({
   overview,

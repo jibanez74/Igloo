@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -87,7 +88,34 @@ func WalkMediaLibrary(
 	onError func(error),
 	onFile func(ScanFile) error,
 ) error {
+	return walkMediaLibrary(context.Background(), root, validExts, onError, onFile)
+}
+
+// WalkMediaLibraryContext walks a media library until it completes or ctx is
+// canceled. It otherwise has the same per-entry error behavior as
+// WalkMediaLibrary.
+func WalkMediaLibraryContext(
+	ctx context.Context,
+	root string,
+	validExts map[string]bool,
+	onError func(error),
+	onFile func(ScanFile) error,
+) error {
+	return walkMediaLibrary(ctx, root, validExts, onError, onFile)
+}
+
+func walkMediaLibrary(
+	ctx context.Context,
+	root string,
+	validExts map[string]bool,
+	onError func(error),
+	onFile func(ScanFile) error,
+) error {
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		contextErr := ctx.Err()
+		if contextErr != nil {
+			return contextErr
+		}
 		if err != nil {
 			if path == root {
 				return err

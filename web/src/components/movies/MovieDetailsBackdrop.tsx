@@ -3,7 +3,9 @@ import {
   DETAIL_HERO_SCRIM_FADE_CLASS,
   DETAIL_HERO_SCRIM_SIDE_CLASS,
 } from "@/lib/constants";
-import type { MovieDetailsBackdropProps } from "@/types";
+type MovieDetailsBackdropProps = {
+  backdropUrl: string | null;
+};
 
 export default function MovieDetailsBackdrop({
   backdropUrl,

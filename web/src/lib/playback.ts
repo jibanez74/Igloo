@@ -8,8 +8,12 @@ import {
 import { unwrapStringOrUndefined } from "@/lib/nullable";
 import { recommendedProfileId } from "@/lib/playback-recommendation";
 import type { AudioStreamType, SubtitleType, VideoStreamType } from "@/types/movies";
-import type { PlaybackModeOption, PlaybackSettings, StreamModeId } from "@/types/playback";
+import type { PlaybackSettings, StreamModeId } from "@/types/playback";
 import type { PlaybackSettingsType } from "@/types/settings";
+
+type PlaybackModeOption = {
+  id: StreamModeId;
+};
 
 const BROWSER_COMPATIBLE_VIDEO_CODECS = ["h264", "h.264", "avc", "avc1"];
 const BROWSER_COMPATIBLE_AUDIO_CODECS = ["aac", "mp3", "opus", "vorbis", "flac"];

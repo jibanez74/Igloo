@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -157,6 +158,28 @@ func TestWalkMediaLibrary(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("files = %+v, want %+v", got, want)
+	}
+}
+
+func TestWalkMediaLibraryContextStopsWhenCanceled(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "movie.mkv")
+	if err := os.WriteFile(path, []byte("movie"), 0o600); err != nil {
+		t.Fatalf("write media file: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	err := WalkMediaLibraryContext(ctx, root, map[string]bool{"mkv": true}, func(error) {}, func(ScanFile) error {
+		called = true
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("WalkMediaLibraryContext error = %v, want context canceled", err)
+	}
+	if called {
+		t.Fatal("expected no files to be processed after cancellation")
 	}
 }
 
