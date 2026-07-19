@@ -30,6 +30,9 @@ import {
   Trash2,
   AlertTriangle,
 } from "lucide-react";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
+import SettingsErrorCard from "@/components/SettingsErrorCard";
+import SettingsLoadingCard from "@/components/SettingsLoadingCard";
 import { authUserQueryOpts } from "@/lib/query-opts";
 import {
   AUTH_USER_KEY,
@@ -39,6 +42,7 @@ import {
   USER_PASSWORD_MAX_LENGTH,
   USER_PASSWORD_MIN_LENGTH,
   MOTION_MICRO_COLORS_CLASS,
+  SETTINGS_CARD_SURFACE_CLASS,
 } from "@/lib/constants";
 import {
   updateUserName,
@@ -60,7 +64,7 @@ import {
   lightInputClassName,
   lightInputPeerHoverClassName,
 } from "@/lib/input-styles";
-import { cn, codePointLength } from "@/lib/utils";
+import { cn, codePointLength, describedBy, getInitials } from "@/lib/utils";
 import { focusDialogRestoreTarget } from "@/hooks/useDialogFocusRestore";
 import QuickConnectApproveCard from "@/components/QuickConnectApproveCard";
 import DevicesCard from "@/components/DevicesCard";
@@ -90,11 +94,6 @@ const ALLOWED_AVATAR_TYPES = [
   "image/webp",
   "image/avif",
 ];
-
-function describedBy(...ids: Array<string | false | null | undefined>) {
-  const value = ids.filter(Boolean).join(" ");
-  return value || undefined;
-}
 
 function AccountSettings() {
   const { queryClient } = Route.useRouteContext();
@@ -564,75 +563,36 @@ function AccountSettings() {
     }
   };
 
-  const getAvatarUrl = () => {
-    if (!user?.avatar) return null;
-
-    // Ensure avatar is a string (handle cases where it might be an object or other type)
-    const avatarStr =
-      typeof user.avatar === "string" ? user.avatar : String(user.avatar || "");
-    if (!avatarStr) return null;
-
-    // If it's a relative path, prepend the API base
-    if (avatarStr.startsWith("/api/")) {
-      return avatarStr;
-    }
-    return avatarStr;
-  };
-
-  const getInitials = () => {
-    if (!user?.name) return "U";
-    const parts = user.name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return user.name[0].toUpperCase();
-  };
+  const getAvatarUrl = () => user?.avatar || null;
 
   // Show loading state while fetching user data
   if (isLoading) {
-    return (
-      <div className="space-y-8">
-        <Card className="border-border/50 bg-muted/30">
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">Loading user information...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <SettingsLoadingCard label="Loading user information..." />;
   }
 
   // Show error state if user data failed to load
   if (userData?.error || !user) {
     return (
-      <div className="space-y-8">
-        <Card className="border-border/50 bg-muted/30">
-          <CardContent className="pt-6">
-            <p className="text-destructive">
-              {userData?.error
-                ? userData.message || "Failed to load user information"
-                : "User information not available"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <SettingsErrorCard
+        title="Account unavailable"
+        message={
+          userData?.error
+            ? userData.message || "Failed to load user information"
+            : "User information not available"
+        }
+      />
     );
   }
 
   return (
     <div className="space-y-8">
       {/* Profile Information */}
-      <Card className="border-border/50 bg-muted/30">
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <User className="size-5 text-primary" aria-hidden="true" />
-              Profile Information
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Manage your account information and preferences
-          </CardDescription>
-        </CardHeader>
+      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={User}
+          title="Profile Information"
+          description="Manage your account information and preferences"
+        />
         <CardContent className="max-w-2xl space-y-6">
           {/* Email */}
           <div className="space-y-2">
@@ -726,18 +686,12 @@ function AccountSettings() {
       </Card>
 
       {/* Avatar */}
-      <Card className="border-border/50 bg-muted/30">
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <ImageIcon className="size-5 text-primary" aria-hidden="true" />
-              Avatar
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Update your profile picture
-          </CardDescription>
-        </CardHeader>
+      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={ImageIcon}
+          title="Avatar"
+          description="Update your profile picture"
+        />
         <CardContent className="max-w-2xl space-y-6">
           {/* Current Avatar */}
           <div className="flex items-center gap-4">
@@ -748,7 +702,7 @@ function AccountSettings() {
                   alt={user.name}
                 />
                 <AvatarFallback className="bg-primary/20 text-lg text-primary">
-                  {getInitials()}
+                  {getInitials(user.name)}
                 </AvatarFallback>
               </Avatar>
             ) : (
@@ -772,7 +726,7 @@ function AccountSettings() {
                 <input
                   id={avatarUploadId}
                   type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+                  accept={ALLOWED_AVATAR_TYPES.join(",")}
                   onChange={handleUploadAvatar}
                   disabled={uploadAvatarMutation.isPending}
                   className="peer absolute inset-0 z-10 h-9 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -863,19 +817,19 @@ function AccountSettings() {
       </Card>
 
       {/* Change Password */}
-      <Card className="border-border/50 bg-muted/30">
-        <CardHeader>
-          <CardTitle asChild className="flex items-center gap-2 text-foreground">
-            <h2>
-              <Lock className="size-5 text-primary" aria-hidden="true" />
-              Change Password
-            </h2>
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            Update your account password
-          </CardDescription>
-        </CardHeader>
+      <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+        <SettingsCardHeader
+          icon={Lock}
+          title="Change Password"
+          description="Update your account password"
+        />
         <CardContent className="max-w-2xl">
+          {/*
+            Standard change-password form (current + new + confirm) with the
+            hidden username field below for password managers. Chrome's verbose
+            "multiple forms" advisory here is the expected change-password
+            heuristic — not actionable.
+          */}
           <form
             onSubmit={handleUpdatePassword}
             noValidate

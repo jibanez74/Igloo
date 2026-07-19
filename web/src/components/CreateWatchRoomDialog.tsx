@@ -9,7 +9,7 @@ import {
   SUBTITLES_NONE_LABEL,
   WATCH_ROOMS_KEY,
 } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import {
   STREAM_MODES,
   formatPlaybackAudioLabel,
@@ -52,13 +52,6 @@ type CreateWatchRoomDialogProps = {
   onOpenChange: (open: boolean) => void;
   restoreFocusRef?: RefObject<HTMLElement | null>;
 };
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
-  return `${parts[0].slice(0, 1)}${parts[1].slice(0, 1)}`.toUpperCase();
-}
 
 export default function CreateWatchRoomDialog({
   movieId,
@@ -365,7 +358,7 @@ export default function CreateWatchRoomDialog({
                                 />
                               ) : null}
                               <AvatarFallback className="bg-accent text-xs font-semibold text-foreground">
-                                {getInitials(user.name)}
+                                {getInitials(user.name, "?")}
                               </AvatarFallback>
                             </Avatar>
                             <span className="min-w-0 flex-1">

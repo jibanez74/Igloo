@@ -1,20 +1,15 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pencil, Smartphone, Tv } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import SettingsCardHeader from "@/components/SettingsCardHeader";
 import { renameDevice, revokeDevice } from "@/lib/api";
-import { DEVICES_KEY } from "@/lib/constants";
+import { DEVICES_KEY, SETTINGS_CARD_SURFACE_CLASS } from "@/lib/constants";
 import { devicesQueryOpts } from "@/lib/query-opts";
 import { showSuccess, showActionFailed } from "@/lib/toast-helpers";
 import type { DeviceType } from "@/types";
@@ -93,18 +88,12 @@ export default function DevicesCard() {
     data?.error === false && data.data?.devices ? data.data.devices : [];
 
   return (
-    <Card className="border-border/50 bg-muted/30">
-      <CardHeader>
-        <CardTitle asChild className="flex items-center gap-2 text-foreground">
-          <h2>
-            <Smartphone className="size-5 text-primary" aria-hidden="true" />
-            Devices
-          </h2>
-        </CardTitle>
-        <CardDescription className="text-muted-foreground">
-          TV and mobile apps signed in to your account
-        </CardDescription>
-      </CardHeader>
+    <Card className={SETTINGS_CARD_SURFACE_CLASS}>
+      <SettingsCardHeader
+        icon={Smartphone}
+        title="Devices"
+        description="TV and mobile apps signed in to your account"
+      />
       <CardContent className="max-w-2xl">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading devices...</p>
