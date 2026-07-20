@@ -1,5 +1,27 @@
 import type { PlayableTrackData } from "@/types";
 
+// Start playback, swallowing the rejection browsers throw when autoplay is
+// blocked — the UI simply stays paused in that case.
+export async function playMediaElement(media: HTMLMediaElement | null) {
+  if (!media) return;
+
+  try {
+    await media.play();
+  } catch {
+    // Autoplay can still be blocked by the browser in some cases.
+  }
+}
+
+export function toggleMediaPlayback(media: HTMLMediaElement | null) {
+  if (!media) return;
+
+  if (media.paused) {
+    void playMediaElement(media);
+  } else {
+    media.pause();
+  }
+}
+
 // Convert minimal track data to a full TrackType for the audio player
 // Fills in default values for fields not needed for playback
 export function convertToAudioTrack(track: PlayableTrackData) {

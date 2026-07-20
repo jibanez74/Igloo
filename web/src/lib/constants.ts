@@ -212,6 +212,7 @@ export const HLS_PLAYBACK_SESSION_QUERY_PARAM = "playback_session";
 export const MOVIE_SEEK_STEP_SEC = 10;
 export const AUDIO_SEEK_STEP_SECONDS = 10;
 export const MOVIE_VOLUME_STEP = 0.1;
+export const AUDIO_VOLUME_STEP = 0.1;
 export const MOVIE_CONTROLS_IDLE_MS = 3000;
 export const MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS = 15_000;
 /** Window in which visibilitychange(hidden) + pagehide keepalive saves at the same position collapse into one PUT. */
@@ -500,6 +501,23 @@ export const HOME_ALBUM_GRID_CLASS =
  */
 export const FOCUS_VISIBLE_RING_CLASS =
   "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden";
+
+/**
+ * Circular icon button in the audio player chrome (design-system §1.7, §2.3).
+ * Call sites add the size (`size-10`, `size-14`, …) and hover surface
+ * (`hover:bg-accent/50` in the expanded dialog, `hover:bg-accent` in the mini
+ * bar and volume panel).
+ */
+export const PLAYER_ICON_BUTTON_CLASS = `${MOTION_PLAYER_CHROME_BUTTON_CLASS} flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground ${FOCUS_VISIBLE_RING_CLASS}`;
+/**
+ * Primary play/pause transport button. Dimming while loading comes from
+ * `aria-disabled` — never `disabled`, which breaks VoiceOver focus on media
+ * transport controls (design-system §1.7). Call sites add size + shadow.
+ */
+export const PLAYER_PRIMARY_BUTTON_CLASS = `${MOTION_PLAYER_CHROME_BUTTON_CLASS} flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 aria-disabled:opacity-50 ${FOCUS_VISIBLE_RING_CLASS}`;
+/** Inert-but-focusable transport control (e.g. next on the last track). */
+export const PLAYER_TRANSPORT_INERT_CLASS =
+  "aria-disabled:cursor-not-allowed aria-disabled:opacity-30";
 
 /**
  * Layout-only shell for the full-width library/settings tab bars (movies /

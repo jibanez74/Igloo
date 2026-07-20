@@ -20,6 +20,7 @@ import {
   convertToAudioTrack,
   extractTrackMetadata,
   shuffleArray,
+  toggleMediaPlayback,
   trimQueueHistory,
 } from "@/lib/audio-utils";
 import {
@@ -133,17 +134,6 @@ export function AudioPlayerProvider({
     trackAlbumTitlesRef.current?.clear();
     playAllOffsetRef.current = 0;
     playAllTotalRef.current = 0;
-  };
-
-  const playAudio = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    try {
-      await audio.play();
-    } catch {
-      // Playback can still be blocked by the browser in some cases.
-    }
   };
 
   const currentTrackIndex = queueState.currentTrack
@@ -504,15 +494,7 @@ export function AudioPlayerProvider({
   };
 
   const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (audio.paused) {
-      void playAudio();
-      return;
-    }
-
-    audio.pause();
+    toggleMediaPlayback(audioRef.current);
   };
 
   const suspendKeyboard = () => {

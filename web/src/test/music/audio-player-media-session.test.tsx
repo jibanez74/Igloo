@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "@/components/playback/AudioPlayer";
 import {
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_ENTER_CLASS,
@@ -438,6 +439,47 @@ describe("AudioPlayer Media Session", () => {
     );
   });
 
+  it("keeps transport controls on the single focus-visible ring recipe (design-system §1.7)", () => {
+    renderAudioPlayer({ onClose: vi.fn() });
+
+    for (const name of [
+      "Restart track",
+      "Play",
+      "No next track",
+      "Stop playback and close player",
+    ]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(
+        ...FOCUS_VISIBLE_RING_CLASS.split(" "),
+      );
+    }
+  });
+
+  it("keeps play/pause focusable while loading via aria-disabled, and ignores clicks", () => {
+    const { audio } = renderAudioPlayer({ onClose: vi.fn() });
+
+    const playButton = screen.getByRole("button", { name: "Play" });
+    expect(playButton).not.toHaveAttribute("disabled");
+    expect(playButton).not.toHaveAttribute("aria-disabled");
+
+    fireEvent(audio, new Event("loadstart"));
+
+    const loadingButton = screen.getByRole("button", { name: "Loading" });
+    expect(loadingButton).not.toHaveAttribute("disabled");
+    expect(loadingButton).toHaveAttribute("aria-disabled", "true");
+    expect(loadingButton).toHaveAttribute("aria-busy", "true");
+
+    // The click guard replaces `disabled`: no play/pause while loading.
+    (HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(loadingButton);
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+
+    fireEvent(audio, new Event("canplay"));
+    expect(
+      screen.getByRole("button", { name: "Play" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
   it("focuses playback controls when the expanded player opens", async () => {
     renderAudioPlayer({ isExpanded: true, onClose: vi.fn() });
 
@@ -687,6 +729,72 @@ describe("AudioPlayer Media Session", () => {
       fireEvent.keyDown(document.body, { key: "ArrowRight" });
 
       expect(setCurrentTime).toHaveBeenCalledWith(40);
+    });
+
+    it("restarts the track with Home from a non-range target", () => {
+      const { audio } = renderAudioPlayer();
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+
+      const defaultNotPrevented = fireEvent.keyDown(document.body, {
+        key: "Home",
+      });
+
+      expect(defaultNotPrevented).toBe(false);
+      expect(setCurrentTime).toHaveBeenCalledWith(0);
+    });
+
+    it("leaves Home on the expanded volume slider to the native control", () => {
+      const { audio } = renderAudioPlayer({ isExpanded: true });
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+      const volumeSlider = screen.getByRole("slider", { name: "Volume" });
+      volumeSlider.focus();
+
+      // jsdom does not perform the range input's native Home action, so the
+      // global guard must leave the event unprevented for a browser to do it.
+      const defaultNotPrevented = fireEvent.keyDown(volumeSlider, {
+        key: "Home",
+      });
+
+      expect(defaultNotPrevented).toBe(true);
+      expect(setCurrentTime).not.toHaveBeenCalled();
+    });
+
+    it("keeps letter shortcuts working from the player's own sliders, leaving arrows to the slider", () => {
+      const { audio } = renderAudioPlayer();
+      setAudioNumber(audio, "duration", 120);
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+      // Sync the component's displayed position/duration with the element.
+      fireEvent(audio, new Event("durationchange"));
+      fireEvent(audio, new Event("timeupdate"));
+
+      // The mini bar renders the sm+ strip and the mobile strip; either works.
+      const [seekSlider] = screen.getAllByRole("slider", {
+        name: "Seek through track",
+      });
+      seekSlider.focus();
+
+      // m must reach the global shortcut even with the slider focused…
+      fireEvent.keyDown(seekSlider, { key: "m" });
+      expect(audio.muted).toBe(true);
+
+      // …while the global arrow handler stays out of the slider's way
+      // (the slider's own handler seeks ±5; the global one would add ±10).
+      fireEvent.keyDown(seekSlider, { key: "ArrowRight" });
+      expect(setCurrentTime).toHaveBeenCalledTimes(1);
+      expect(setCurrentTime).toHaveBeenCalledWith(35);
+    });
+
+    it("suppresses shortcuts from text inputs", () => {
+      const { audio } = renderAudioPlayer({
+        siblings: <input type="text" aria-label="Search stub" />,
+      });
+      setAudioNumber(audio, "duration", 120);
+
+      const textInput = screen.getByRole("textbox", { name: "Search stub" });
+      textInput.focus();
+      fireEvent.keyDown(textInput, { key: "m" });
+
+      expect(audio.muted).toBe(false);
     });
   });
 

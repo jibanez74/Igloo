@@ -472,7 +472,6 @@ function TrailerPage() {
             duration={duration}
             onSeek={seekTo}
             ariaLabel="Seek through trailer"
-            groupLabel="Playback progress"
           />
 
           <div className="flex items-center justify-between">

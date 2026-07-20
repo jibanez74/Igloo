@@ -50,7 +50,7 @@ import {
 } from "@/lib/query-opts";
 import { convertToAudioTrack } from "@/lib/audio-utils";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import {
   ALBUMS_PER_PAGE,
   CONTENT_FADE_ENTER_CLASS,
@@ -996,7 +996,7 @@ const TrackListItem = memo(function TrackListItem({
   queueRef: React.RefObject<TrackListItemType[]>;
 }) {
   const audioPlayer = useAudioPlayerActions();
-  const playerState = useAudioPlayerState();
+  const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const handlePlay = () => {
     audioPlayer.playTrackFromList(queueRef.current, track.id);
@@ -1013,8 +1013,7 @@ const TrackListItem = memo(function TrackListItem({
       musicianId={unwrapInt(track.musician_id)}
       musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
-      isPlaying={playerState.currentTrack?.id === track.id && playerState.isPlaying}
-      isCurrentTrack={playerState.currentTrack?.id === track.id}
+      {...matchTrackPlayback(track.id)}
       isLiked={isLiked}
       onPlay={handlePlay}
       showActionsMenu
@@ -1166,7 +1165,7 @@ type LikedTracksInPlaylistsTabProps = {
 function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPlaylistsTabProps) {
   const navigate = Route.useNavigate();
   const audioPlayer = useAudioPlayerActions();
-  const audioPlayerState = useAudioPlayerState();
+  const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const { data, isLoading } = useQuery(likedTracksQueryOpts(likedTracksPage));
 
@@ -1260,11 +1259,7 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
               musicianName={unwrapStringOrUndefined(track.musician_name)}
               variant="library"
               isLiked
-              isPlaying={
-                audioPlayerState.currentTrack?.id === track.id &&
-                audioPlayerState.isPlaying
-              }
-              isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
+              {...matchTrackPlayback(track.id)}
               onPlay={() => handlePlayTrack(track)}
               showActionsMenu
             />

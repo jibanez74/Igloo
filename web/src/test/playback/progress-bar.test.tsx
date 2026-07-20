@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProgressBar from "@/components/playback/ProgressBar";
 import {
+  CARD_FOCUS_WITHIN_RING_CLASS,
   MOTION_PROGRESS_FILL_CLASS,
   MOTION_PROGRESS_THUMB_REVEAL_CLASS,
 } from "@/lib/constants";
@@ -115,6 +116,30 @@ describe("ProgressBar", () => {
       ...MOTION_PROGRESS_THUMB_REVEAL_CLASS.split(" "),
     );
   });
+
+  it.each(["expanded", "minimized", "video", "trailer"] as const)(
+    "uses a semantic thumb and the whole-group focus ring on the %s variant",
+    variant => {
+      render(
+        <ProgressBar
+          currentTime={30}
+          duration={120}
+          onSeek={vi.fn()}
+          variant={variant}
+        />,
+      );
+
+      const slider = screen.getByRole("slider");
+      const bar = slider.parentElement;
+      const thumb = bar?.firstElementChild?.nextElementSibling;
+
+      // Every variant sits on a themed panel, so the thumb is bg-foreground —
+      // the over-media white exception (design-system §1.2) does not apply.
+      expect(thumb).toHaveClass("bg-foreground");
+      expect(thumb).not.toHaveClass("bg-white");
+      expect(bar).toHaveClass(...CARD_FOCUS_WITHIN_RING_CLASS.split(" "));
+    },
+  );
 
   it("seeks when the range input value changes", () => {
     const onSeek = vi.fn();

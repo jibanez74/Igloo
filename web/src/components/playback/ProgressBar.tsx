@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatSpokenTime, formatTimecode } from "@/lib/format";
 import {
+  CARD_FOCUS_WITHIN_RING_CLASS,
   MOTION_PROGRESS_FILL_CLASS,
   MOTION_PROGRESS_THUMB_REVEAL_CLASS,
 } from "@/lib/constants";
@@ -34,52 +35,54 @@ const variantStyles: Record<
     showTimes: boolean;
     timesLayout: "below" | "inline";
   }
-> = {
-  expanded: {
+> = (() => {
+  // Shared pieces the variants compose. All bars carry the whole-group
+  // focus-within variant of the single ring recipe (design-system §1.7);
+  // thumbs are bg-foreground — every variant sits on a themed panel, so the
+  // over-media white/black exception (§1.2) does not apply here.
+  const barBase = cn("relative rounded-full bg-muted", CARD_FOCUS_WITHIN_RING_CLASS);
+  const thumbBase =
+    "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100";
+  const timeTextBase = "text-muted-foreground tabular-nums";
+
+  const expanded = {
     container: "mb-6 w-full max-w-md",
-    bar: "group relative h-2 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
-    thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100",
-    timeText: "text-sm text-muted-foreground tabular-nums",
+    bar: cn("group h-2", barBase),
+    thumb: cn("size-4 shadow-lg", thumbBase),
+    timeText: cn("text-sm", timeTextBase),
     showTimes: true,
-    timesLayout: "below",
-  },
-  minimized: {
-    container: "hidden max-w-md flex-1 items-center gap-3 sm:flex",
-    bar: "group relative h-1.5 flex-1 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
-    thumb:
-      "absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus-within:opacity-100",
-    timeText: "w-10 text-xs text-muted-foreground tabular-nums",
-    showTimes: true,
-    timesLayout: "inline",
-  },
-  mobile: {
-    container: "mt-2 sm:hidden",
-    bar: "relative h-1 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
-    thumb: "", // No thumb on mobile for cleaner look
-    timeText: "text-xs text-muted-foreground tabular-nums",
-    showTimes: true,
-    timesLayout: "below",
-  },
-  video: {
-    container: "mb-4 w-full",
-    bar: "group relative h-2 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
-    thumb:
-      "absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-lg group-hover:opacity-100 group-focus-within:opacity-100",
-    timeText: "text-sm text-muted-foreground tabular-nums",
-    showTimes: true,
-    timesLayout: "below",
-  },
-  trailer: {
-    container: "mb-4 w-full",
-    bar: "group relative h-1.5 rounded-full bg-muted focus-within:ring-2 focus-within:ring-ring",
-    thumb:
-      "absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow-md group-hover:opacity-100 group-focus-within:opacity-100",
-    timeText: "text-sm text-muted-foreground tabular-nums",
-    showTimes: false,
-    timesLayout: "below",
-  },
-};
+    timesLayout: "below" as const,
+  };
+
+  return {
+    expanded,
+    minimized: {
+      container: "hidden max-w-md flex-1 items-center gap-3 sm:flex",
+      bar: cn("group h-1.5 flex-1", barBase),
+      thumb: cn("size-3 shadow-md", thumbBase),
+      timeText: cn("w-10 text-xs", timeTextBase),
+      showTimes: true,
+      timesLayout: "inline",
+    },
+    mobile: {
+      container: "mt-2 sm:hidden",
+      bar: cn("h-1", barBase),
+      thumb: "", // No thumb on mobile for cleaner look
+      timeText: cn("text-xs", timeTextBase),
+      showTimes: true,
+      timesLayout: "below",
+    },
+    video: { ...expanded, container: "mb-4 w-full" },
+    trailer: {
+      container: "mb-4 w-full",
+      bar: cn("group h-1.5", barBase),
+      thumb: cn("size-3 shadow-md", thumbBase),
+      timeText: cn("text-sm", timeTextBase),
+      showTimes: false,
+      timesLayout: "below",
+    },
+  };
+})();
 
 function clampToRange(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) {
