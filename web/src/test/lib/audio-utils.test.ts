@@ -1,9 +1,45 @@
-import { describe, expect, it } from "vitest";
-import { trimQueueHistory } from "@/lib/audio-utils";
+import { describe, expect, it, vi } from "vitest";
+import {
+  playMediaElement,
+  toggleMediaPlayback,
+  trimQueueHistory,
+} from "@/lib/audio-utils";
 
 function makeTracks(count: number) {
   return Array.from({ length: count }, (_, index) => ({ id: index + 1 }));
 }
+
+describe("playMediaElement", () => {
+  it("swallows the rejection when the browser blocks playback", async () => {
+    const media = {
+      play: vi.fn().mockRejectedValue(new Error("NotAllowedError")),
+    } as unknown as HTMLMediaElement;
+
+    await expect(playMediaElement(media)).resolves.toBeUndefined();
+    expect(media.play).toHaveBeenCalledOnce();
+  });
+
+  it("ignores a missing element", async () => {
+    await expect(playMediaElement(null)).resolves.toBeUndefined();
+  });
+});
+
+describe("toggleMediaPlayback", () => {
+  it("plays when paused and pauses when playing", () => {
+    const media = {
+      paused: true,
+      play: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+    } as unknown as HTMLMediaElement;
+
+    toggleMediaPlayback(media);
+    expect(media.play).toHaveBeenCalledOnce();
+
+    (media as unknown as { paused: boolean }).paused = false;
+    toggleMediaPlayback(media);
+    expect(media.pause).toHaveBeenCalledOnce();
+  });
+});
 
 describe("trimQueueHistory", () => {
   it("returns the queue unchanged while the current track is within the window", () => {

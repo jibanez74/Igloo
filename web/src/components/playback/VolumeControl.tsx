@@ -8,8 +8,8 @@ import {
 } from "react";
 import { Volume, Volume1, Volume2, VolumeX } from "lucide-react";
 import {
-  MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_PANEL_CLASS,
+  PLAYER_ICON_BUTTON_CLASS,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -192,10 +192,7 @@ export default function VolumeControl({
         <button
           type="button"
           onClick={toggleMute}
-          className={cn(
-            MOTION_PLAYER_CHROME_BUTTON_CLASS,
-            "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
-          )}
+          className={cn(PLAYER_ICON_BUTTON_CLASS, "size-10")}
           aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
         >
           {getVolumeIcon()}
@@ -218,8 +215,8 @@ export default function VolumeControl({
         type="button"
         onClick={() => setIsMinimizedPanelOpen(open => !open)}
         className={cn(
-          MOTION_PLAYER_CHROME_BUTTON_CLASS,
-          "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
+          PLAYER_ICON_BUTTON_CLASS,
+          "size-11 hover:bg-accent",
           isMinimizedPanelOpen && "bg-accent text-foreground",
         )}
         aria-label="Adjust volume"
@@ -244,10 +241,7 @@ export default function VolumeControl({
               ref={minimizedMuteButtonRef}
               type="button"
               onClick={toggleMute}
-              className={cn(
-                MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                "flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
-              )}
+              className={cn(PLAYER_ICON_BUTTON_CLASS, "size-11 hover:bg-accent")}
               aria-label={isMuted ? "Unmute (M)" : "Mute (M)"}
             >
               {getVolumeIcon()}

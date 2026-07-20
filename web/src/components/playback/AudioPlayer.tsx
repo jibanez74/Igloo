@@ -21,10 +21,16 @@ import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import {
   AUDIO_SEEK_STEP_SECONDS,
+  AUDIO_VOLUME_STEP,
+  FOCUS_VISIBLE_RING_CLASS,
   MOTION_MEDIA_OVERLAY_ENTER_CLASS,
   MOTION_PLAYER_CHROME_BUTTON_CLASS,
   MOTION_PLAYER_CHROME_ENTER_CLASS,
+  PLAYER_ICON_BUTTON_CLASS,
+  PLAYER_PRIMARY_BUTTON_CLASS,
+  PLAYER_TRANSPORT_INERT_CLASS,
 } from "@/lib/constants";
+import { playMediaElement, toggleMediaPlayback } from "@/lib/audio-utils";
 import { cn } from "@/lib/utils";
 
 type AudioPlayerProps = {
@@ -52,7 +58,6 @@ type AudioPlayerProps = {
 // has passed this many seconds.
 const RESTART_THRESHOLD_SECONDS = 3;
 const PREVIOUS_TRACK_ARIA_LABEL = "Previous track";
-const AUDIO_VOLUME_STEP = 0.1;
 
 // Controls whose native keyboard interaction must win over the global
 // playback shortcuts.
@@ -156,15 +161,16 @@ export default function AudioPlayer({
   const playPauseAriaLabel = isPlaying ? "Pause" : "Play";
   const streamUrl = track ? `/api/music/tracks/${track.id}/stream` : null;
 
-  const playAudio = async () => {
+  // Seek relative to the current position, clamped to the track bounds.
+  const seekBy = (offsetSeconds: number) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    try {
-      await audio.play();
-    } catch {
-      // Autoplay can still be blocked by the browser in some cases.
-    }
+    const totalDuration = audio.duration || duration;
+    audio.currentTime = Math.min(
+      totalDuration,
+      Math.max(0, audio.currentTime + offsetSeconds),
+    );
   };
 
   // Spotify-style previous: within the first few seconds go to the previous
@@ -221,10 +227,10 @@ export default function AudioPlayer({
       return;
     }
 
+    // MediaMetadata artwork wants absolute URLs; new URL() leaves already
+    // absolute covers untouched and resolves /api paths against the origin.
     const artworkUrl = albumCover
-      ? albumCover.startsWith("http")
-        ? albumCover
-        : `${window.location.origin}${albumCover}`
+      ? new URL(albumCover, window.location.origin).toString()
       : null;
 
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -246,7 +252,7 @@ export default function AudioPlayer({
   }, [isPlaying, track]);
 
   const handleMediaSessionPlay = useEffectEvent(() => {
-    void playAudio();
+    void playMediaElement(audioRef.current);
   });
 
   const handleMediaSessionPause = useEffectEvent(() => {
@@ -269,26 +275,13 @@ export default function AudioPlayer({
 
   const handleMediaSessionSeekBackward = useEffectEvent(
     ({ seekOffset }: { seekOffset?: number }) => {
-      const audio = audioRef.current;
-      if (!audio) return;
-
-      audio.currentTime = Math.max(
-        0,
-        audio.currentTime - (seekOffset ?? AUDIO_SEEK_STEP_SECONDS),
-      );
+      seekBy(-(seekOffset ?? AUDIO_SEEK_STEP_SECONDS));
     },
   );
 
   const handleMediaSessionSeekForward = useEffectEvent(
     ({ seekOffset }: { seekOffset?: number }) => {
-      const audio = audioRef.current;
-      if (!audio) return;
-
-      const totalDuration = audio.duration || duration;
-      audio.currentTime = Math.min(
-        totalDuration,
-        audio.currentTime + (seekOffset ?? AUDIO_SEEK_STEP_SECONDS),
-      );
+      seekBy(seekOffset ?? AUDIO_SEEK_STEP_SECONDS);
     },
   );
 
@@ -440,6 +433,13 @@ export default function AudioPlayer({
     };
   }, [audioRef, track]);
 
+  const handleTogglePlay = () => {
+    // While loading the button is aria-disabled (never `disabled`, which
+    // would drop it from the VoiceOver focus order) — guard here instead.
+    if (isLoading) return;
+    toggleMediaPlayback(audioRef.current);
+  };
+
   const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const audio = audioRef.current;
 
@@ -449,11 +449,28 @@ export default function AudioPlayer({
 
     const target = event.target instanceof HTMLElement ? event.target : null;
 
+    // The player's own sliders (seek, volume) stay eligible for the global
+    // shortcuts — they never take text input — but their range navigation keys
+    // belong to the native slider. Anything else that takes typing suppresses
+    // shortcuts.
+    const isPlayerRangeInput =
+      target instanceof HTMLInputElement &&
+      target.type === "range" &&
+      target.closest("[data-audio-player]") !== null;
+
     if (
       target &&
+      !isPlayerRangeInput &&
       (target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
         target.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (
+      isPlayerRangeInput &&
+      (ARROW_KEYS.has(event.key) || event.key === "Home")
     ) {
       return;
     }
@@ -469,15 +486,15 @@ export default function AudioPlayer({
 
       const interactive = target.closest(INTERACTIVE_SELECTOR);
       if (interactive) {
-        // Space must activate the focused control everywhere, and arrow keys
-        // belong to widgets like tabs and radios — except inside the player's
-        // own chrome, where arrows keep seeking and adjusting volume.
+        // Space must activate the focused control everywhere, and navigation
+        // keys belong to widgets like tabs and radios — except inside the
+        // player's own chrome, where they keep controlling playback.
         if (event.key === " ") {
           return;
         }
 
         if (
-          ARROW_KEYS.has(event.key) &&
+          (ARROW_KEYS.has(event.key) || event.key === "Home") &&
           !interactive.closest("[data-audio-player]")
         ) {
           return;
@@ -488,28 +505,16 @@ export default function AudioPlayer({
     switch (event.key) {
       case " ":
         event.preventDefault();
-        if (audio.paused) {
-          void playAudio();
-        } else {
-          audio.pause();
-        }
+        handleTogglePlay();
         break;
       case "ArrowLeft":
         event.preventDefault();
-        audio.currentTime = Math.max(
-          0,
-          audio.currentTime - AUDIO_SEEK_STEP_SECONDS,
-        );
+        seekBy(-AUDIO_SEEK_STEP_SECONDS);
         break;
-      case "ArrowRight": {
+      case "ArrowRight":
         event.preventDefault();
-        const totalDuration = audio.duration || duration;
-        audio.currentTime = Math.min(
-          totalDuration,
-          audio.currentTime + AUDIO_SEEK_STEP_SECONDS,
-        );
+        seekBy(AUDIO_SEEK_STEP_SECONDS);
         break;
-      }
       case "ArrowUp":
         event.preventDefault();
         audio.volume = Math.min(1, audio.volume + AUDIO_VOLUME_STEP);
@@ -552,17 +557,6 @@ export default function AudioPlayer({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
-  const handleTogglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (audio.paused) {
-      void playAudio();
-    } else {
-      audio.pause();
-    }
-  };
-
   const playNext = () => {
     if (hasNext) {
       onTrackChange(tracks[currentIndex + 1]);
@@ -580,17 +574,8 @@ export default function AudioPlayer({
     if (!audioRef.current || !streamUrl) return;
 
     const audio = audioRef.current;
-
-    const loadTrack = async () => {
-      audio.load();
-      try {
-        await audio.play();
-      } catch {
-        // Autoplay can still be blocked by the browser in some cases.
-      }
-    };
-
-    void loadTrack();
+    audio.load();
+    void playMediaElement(audio);
   }, [audioRef, streamUrl]);
 
   if (!track) return null;
@@ -644,8 +629,8 @@ export default function AudioPlayer({
                 type="button"
                 onClick={handleMinimize}
                 className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                  PLAYER_ICON_BUTTON_CLASS,
+                  "size-10 hover:bg-accent/50",
                 )}
                 aria-label="Minimize player (Escape)"
               >
@@ -662,8 +647,8 @@ export default function AudioPlayer({
                   type="button"
                   onClick={onClose}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                    PLAYER_ICON_BUTTON_CLASS,
+                    "size-10 hover:bg-accent/50",
                   )}
                   aria-label="Stop playback and close player"
                 >
@@ -720,8 +705,8 @@ export default function AudioPlayer({
                   type="button"
                   onClick={playPrevious}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                    PLAYER_ICON_BUTTON_CLASS,
+                    "size-14 hover:bg-accent/50",
                   )}
                   aria-label={previousAriaLabel}
                 >
@@ -732,10 +717,11 @@ export default function AudioPlayer({
                   type="button"
                   ref={playPauseButtonRef}
                   onClick={handleTogglePlay}
-                  disabled={isLoading}
+                  aria-disabled={isLoading || undefined}
+                  aria-busy={isLoading || undefined}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 hover:bg-primary/90 focus:ring-4 focus:ring-ring/50 focus:outline-hidden disabled:opacity-50",
+                    PLAYER_PRIMARY_BUTTON_CLASS,
+                    "size-20 shadow-xl shadow-primary/30",
                   )}
                   aria-label={isLoading ? "Loading" : playPauseAriaLabel}
                 >
@@ -753,8 +739,9 @@ export default function AudioPlayer({
                   onClick={playNext}
                   aria-disabled={!hasNext}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-14 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
+                    PLAYER_ICON_BUTTON_CLASS,
+                    PLAYER_TRANSPORT_INERT_CLASS,
+                    "size-14 hover:bg-accent/50",
                   )}
                   aria-label={nextAriaLabel}
                 >
@@ -796,7 +783,8 @@ export default function AudioPlayer({
                 onClick={onExpand}
                 className={cn(
                   MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden",
+                  FOCUS_VISIBLE_RING_CLASS,
+                  "flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left hover:opacity-80",
                 )}
                 aria-label={`Expand player. Now playing: ${track.title} by ${artist}`}
               >
@@ -833,10 +821,7 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={playPrevious}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
-                  )}
+                  className={cn(PLAYER_ICON_BUTTON_CLASS, "size-10 hover:bg-accent")}
                   aria-label={previousAriaLabel}
                 >
                   <SkipBack className="size-4" aria-hidden="true" />
@@ -845,10 +830,11 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={handleTogglePlay}
-                  disabled={isLoading}
+                  aria-disabled={isLoading || undefined}
+                  aria-busy={isLoading || undefined}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background focus:outline-hidden disabled:opacity-50",
+                    PLAYER_PRIMARY_BUTTON_CLASS,
+                    "size-12 shadow-lg shadow-primary/20",
                   )}
                   aria-label={isLoading ? "Loading" : playPauseAriaLabel}
                 >
@@ -866,8 +852,9 @@ export default function AudioPlayer({
                   onClick={playNext}
                   aria-disabled={!hasNext}
                   className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:opacity-30",
+                    PLAYER_ICON_BUTTON_CLASS,
+                    PLAYER_TRANSPORT_INERT_CLASS,
+                    "size-10 hover:bg-accent",
                   )}
                   aria-label={nextAriaLabel}
                 >
@@ -894,8 +881,8 @@ export default function AudioPlayer({
                 type="button"
                 onClick={onExpand}
                 className={cn(
-                  MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                  "hidden size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden sm:flex",
+                  PLAYER_ICON_BUTTON_CLASS,
+                  "hidden size-8 hover:bg-accent sm:flex",
                 )}
                 aria-label="Expand to fullscreen player"
               >
@@ -906,10 +893,7 @@ export default function AudioPlayer({
                 <button
                   type="button"
                   onClick={onClose}
-                  className={cn(
-                    MOTION_PLAYER_CHROME_BUTTON_CLASS,
-                    "flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-2 focus:ring-ring focus:outline-hidden",
-                  )}
+                  className={cn(PLAYER_ICON_BUTTON_CLASS, "size-8 hover:bg-accent")}
                   aria-label="Stop playback and close player"
                 >
                   <X className="size-4" aria-hidden="true" />

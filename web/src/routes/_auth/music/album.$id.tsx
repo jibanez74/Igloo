@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { formatDate, formatDuration } from "@/lib/format";
@@ -189,7 +189,7 @@ function AlbumDetailsContent({
   total_duration,
 }: AlbumDetailsResponseType) {
   const audioPlayer = useAudioPlayerActions();
-  const audioPlayerState = useAudioPlayerState();
+  const matchTrackPlayback = useTrackPlaybackMatcher();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
 
@@ -330,17 +330,9 @@ function AlbumDetailsContent({
   const pageAnnouncement = `${album.title}${musicianName ? ` by ${musicianName}` : ""}. ${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}. Total duration: ${formatDuration(total_duration)}.${album_genres.length > 0 ? ` Genres: ${album_genres.join(", ")}.` : ""}`;
   const pageAnnouncementId = `album-${album.id}-summary`;
 
-  // Check if a specific track is currently playing
-  const isTrackPlaying = (track: TrackType) => {
-    return (
-      audioPlayerState.currentTrack?.id === track.id &&
-      audioPlayerState.isPlaying
-    );
-  };
-
   // Handle playing/pausing a track
   const handleToggleTrack = (track: TrackType) => {
-    if (audioPlayerState.currentTrack?.id === track.id) {
+    if (matchTrackPlayback(track.id).isCurrentTrack) {
       // Toggle play/pause for the current track
       audioPlayer.togglePlay();
     } else {
@@ -678,8 +670,7 @@ function AlbumDetailsContent({
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
                         isLiked={likedSet.has(track.id)}
-                        isPlaying={isTrackPlaying(track)}
-                        isCurrentTrack={audioPlayerState.currentTrack?.id === track.id}
+                        {...matchTrackPlayback(track.id)}
                         onPlay={() => handleToggleTrack(track)}
                       />
                     ))}

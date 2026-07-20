@@ -27,7 +27,7 @@ import {
   SpotifyPopularityMeter,
 } from "@/components/music/SpotifyPopularity";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import TrackItem from "@/components/music/TrackItem";
 import { formatDuration } from "@/lib/format";
 import { convertToAudioTrack } from "@/lib/audio-utils";
@@ -198,7 +198,7 @@ function MusicianDetailsContent({
   total_duration,
 }: MusicianDetailsResponseType) {
   const audioPlayer = useAudioPlayerActions();
-  const audioPlayerState = useAudioPlayerState();
+  const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const [thumbFailed, setThumbFailed] = useState(false);
 
@@ -286,13 +286,6 @@ function MusicianDetailsContent({
       title: musician.name,
       musician: musician.name,
     });
-  };
-
-  const isTrackPlaying = (track: MusicianTrackType) => {
-    return (
-      audioPlayerState.currentTrack?.id === track.id &&
-      audioPlayerState.isPlaying
-    );
   };
 
   // Screen reader announcement summarizing the page
@@ -571,10 +564,7 @@ function MusicianDetailsContent({
                       albumId={unwrapInt(track.album_id)}
                       variant="musician"
                       isLiked={likedSet.has(track.id)}
-                      isPlaying={isTrackPlaying(track)}
-                      isCurrentTrack={
-                        audioPlayerState.currentTrack?.id === track.id
-                      }
+                      {...matchTrackPlayback(track.id)}
                       onPlay={() => handlePlayTrack(track)}
                     />
                   ))}

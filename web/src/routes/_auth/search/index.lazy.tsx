@@ -10,7 +10,7 @@ import MusicianCard from "@/components/music/MusicianCard";
 import TrackItem from "@/components/music/TrackItem";
 import { useContentFadeTransition } from "@/hooks/useContentFadeTransition";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
-import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
+import { useTrackPlaybackMatcher } from "@/hooks/useTrackPlaybackMatcher";
 import {
   unwrapInt,
   unwrapString,
@@ -609,7 +609,7 @@ function SearchTrackItem({
   queue: TrackListItemType[];
 }) {
   const audioPlayer = useAudioPlayerActions();
-  const playerState = useAudioPlayerState();
+  const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const handlePlay = () => {
     audioPlayer.playTrackFromList(queue, track.id);
@@ -626,10 +626,7 @@ function SearchTrackItem({
       musicianId={unwrapInt(track.musician_id)}
       musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
-      isPlaying={
-        playerState.currentTrack?.id === track.id && playerState.isPlaying
-      }
-      isCurrentTrack={playerState.currentTrack?.id === track.id}
+      {...matchTrackPlayback(track.id)}
       onPlay={handlePlay}
       showActionsMenu
     />

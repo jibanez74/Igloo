@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import VolumeControl from "@/components/playback/VolumeControl";
+import { PLAYER_ICON_BUTTON_CLASS } from "@/lib/constants";
 
 function renderVolumeControl() {
   const media = document.createElement("audio");
@@ -19,6 +20,14 @@ function renderVolumeControl() {
 }
 
 describe("VolumeControl", () => {
+  it("keeps the trigger on the shared player chrome recipe (design-system §1.7)", () => {
+    renderVolumeControl();
+
+    expect(
+      screen.getByRole("button", { name: "Adjust volume" }),
+    ).toHaveClass(...PLAYER_ICON_BUTTON_CLASS.split(" "));
+  });
+
   it("opens the minimized panel as a non-modal control group", async () => {
     const user = userEvent.setup();
     renderVolumeControl();
