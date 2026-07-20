@@ -93,6 +93,8 @@ SELECT
   progress_sec,
   duration_sec,
   watched,
+  save_session_id,
+  save_sequence,
   updated_at
 FROM movie_watch_progress
 WHERE user_id = ?
@@ -113,6 +115,8 @@ func (q *Queries) GetMovieWatchProgress(ctx context.Context, arg GetMovieWatchPr
 		&i.ProgressSec,
 		&i.DurationSec,
 		&i.Watched,
+		&i.SaveSessionID,
+		&i.SaveSequence,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -173,6 +177,47 @@ func (q *Queries) MarkMovieWatched(ctx context.Context, arg MarkMovieWatchedPara
 	return err
 }
 
+const markMovieWatchedFromProgress = `-- name: MarkMovieWatchedFromProgress :exec
+INSERT INTO movie_watch_progress (
+  user_id,
+  movie_id,
+  progress_sec,
+  duration_sec,
+  watched,
+  save_session_id,
+  save_sequence,
+  updated_at
+)
+VALUES
+  (?, ?, 0, 0, true, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, movie_id) DO UPDATE
+SET
+  progress_sec = 0,
+  watched = true,
+  save_session_id = excluded.save_session_id,
+  save_sequence = excluded.save_sequence,
+  updated_at = CURRENT_TIMESTAMP
+WHERE movie_watch_progress.save_session_id <> excluded.save_session_id
+   OR movie_watch_progress.save_sequence < excluded.save_sequence
+`
+
+type MarkMovieWatchedFromProgressParams struct {
+	UserID        int64  `json:"user_id"`
+	MovieID       int64  `json:"movie_id"`
+	SaveSessionID string `json:"save_session_id"`
+	SaveSequence  int64  `json:"save_sequence"`
+}
+
+func (q *Queries) MarkMovieWatchedFromProgress(ctx context.Context, arg MarkMovieWatchedFromProgressParams) error {
+	_, err := q.exec(ctx, q.markMovieWatchedFromProgressStmt, markMovieWatchedFromProgress,
+		arg.UserID,
+		arg.MovieID,
+		arg.SaveSessionID,
+		arg.SaveSequence,
+	)
+	return err
+}
+
 const upsertMovieWatchProgress = `-- name: UpsertMovieWatchProgress :exec
 INSERT INTO movie_watch_progress (
   user_id,
@@ -180,23 +225,31 @@ INSERT INTO movie_watch_progress (
   progress_sec,
   duration_sec,
   watched,
+  save_session_id,
+  save_sequence,
   updated_at
 )
 VALUES
-  (?, ?, ?, ?, false, CURRENT_TIMESTAMP)
+  (?, ?, ?, ?, false, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT (user_id, movie_id) DO UPDATE
 SET
   progress_sec = excluded.progress_sec,
   duration_sec = excluded.duration_sec,
   watched = false,
+  save_session_id = excluded.save_session_id,
+  save_sequence = excluded.save_sequence,
   updated_at = CURRENT_TIMESTAMP
+WHERE movie_watch_progress.save_session_id <> excluded.save_session_id
+   OR movie_watch_progress.save_sequence < excluded.save_sequence
 `
 
 type UpsertMovieWatchProgressParams struct {
-	UserID      int64   `json:"user_id"`
-	MovieID     int64   `json:"movie_id"`
-	ProgressSec float64 `json:"progress_sec"`
-	DurationSec float64 `json:"duration_sec"`
+	UserID        int64   `json:"user_id"`
+	MovieID       int64   `json:"movie_id"`
+	ProgressSec   float64 `json:"progress_sec"`
+	DurationSec   float64 `json:"duration_sec"`
+	SaveSessionID string  `json:"save_session_id"`
+	SaveSequence  int64   `json:"save_sequence"`
 }
 
 func (q *Queries) UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieWatchProgressParams) error {
@@ -205,6 +258,8 @@ func (q *Queries) UpsertMovieWatchProgress(ctx context.Context, arg UpsertMovieW
 		arg.MovieID,
 		arg.ProgressSec,
 		arg.DurationSec,
+		arg.SaveSessionID,
+		arg.SaveSequence,
 	)
 	return err
 }

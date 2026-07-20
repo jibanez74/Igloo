@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
-import { persistMovieWatchProgress } from "@/lib/movie-playback";
+import {
+  createPlaybackSessionId,
+  persistMovieWatchProgress,
+} from "@/lib/movie-playback";
 import {
   MOVIE_WATCH_PROGRESS_KEEPALIVE_DEDUPE_MS,
   MOVIE_WATCH_PROGRESS_SAVE_INTERVAL_MS,
@@ -29,6 +32,12 @@ export function useMovieWatchProgressSaver({
 }: MovieWatchProgressSaverOptions) {
   const pendingSaveRef = useRef<Promise<void>>(Promise.resolve());
   const fallbackDurationRef = useRef(fallbackDurationSec ?? 0);
+  const saveSessionIdRef = useRef<string | null>(null);
+  const saveSequenceRef = useRef(0);
+
+  if (saveSessionIdRef.current === null) {
+    saveSessionIdRef.current = createPlaybackSessionId();
+  }
 
   useEffect(() => {
     fallbackDurationRef.current = fallbackDurationSec ?? 0;
@@ -41,8 +50,15 @@ export function useMovieWatchProgressSaver({
 
   const queueProgressSave = useCallback(
     (progressSec: number, durationSec: number) => {
+      const saveSequence = ++saveSequenceRef.current;
       const save = pendingSaveRef.current.then(() =>
-        persistMovieWatchProgress(movieId, progressSec, durationSec),
+        persistMovieWatchProgress(
+          movieId,
+          progressSec,
+          durationSec,
+          saveSessionIdRef.current!,
+          saveSequence,
+        ),
       );
       pendingSaveRef.current = save.catch(() => {});
       return save;
@@ -84,11 +100,14 @@ export function useMovieWatchProgressSaver({
 
       const atMs = Date.now();
       const durationSec = effectiveDurationSec();
+      const saveSequence = ++saveSequenceRef.current;
       lastKeepalive = { progressSec, atMs };
       void persistMovieWatchProgress(
         movieId,
         progressSec,
         durationSec,
+        saveSessionIdRef.current!,
+        saveSequence,
         { keepalive: true },
       );
     };

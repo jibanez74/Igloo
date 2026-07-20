@@ -72,7 +72,7 @@ export function getOrCreateMovieHlsPlaybackSessionId(
   movieId: number,
   storage: HlsPlaybackSessionStorage | null = browserSessionStorage(),
 ): string {
-  const create = () => createHlsPlaybackSessionId();
+  const create = () => createPlaybackSessionId();
   if (!Number.isFinite(movieId) || movieId <= 0 || !storage) return create();
 
   const key = movieHlsPlaybackSessionStorageKey(movieId);
@@ -138,7 +138,7 @@ export function deriveMoviePlaybackStatus(
   return { kind: "ready" };
 }
 
-function createHlsPlaybackSessionId(): string {
+export function createPlaybackSessionId(): string {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
@@ -331,6 +331,8 @@ export async function persistMovieWatchProgress(
   movieId: number,
   progressSec: number,
   durationSec: number,
+  saveSessionId: string,
+  saveSequence: number,
   options?: { keepalive?: boolean },
 ) {
   if (!(durationSec > 0)) return;
@@ -350,6 +352,8 @@ export async function persistMovieWatchProgress(
         body: JSON.stringify({
           progress_sec: clampedProgress,
           duration_sec: durationSec,
+          save_session_id: saveSessionId,
+          save_sequence: saveSequence,
         }),
       });
     } catch {
@@ -362,6 +366,8 @@ export async function persistMovieWatchProgress(
     movieId,
     clampedProgress,
     durationSec,
+    saveSessionId,
+    saveSequence,
   );
   if (res.error) {
     throw new Error(res.message);

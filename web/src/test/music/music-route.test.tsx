@@ -88,11 +88,13 @@ function track(id: number, title: string) {
 type MockMusicFetchOptions = {
   spotifyAvailable?: boolean;
   emptyMusicians?: boolean;
+  failFirstTracksRequest?: boolean;
 };
 
 function mockMusicFetch(options: MockMusicFetchOptions = {}) {
   const spotifyAvailable = options.spotifyAvailable ?? true;
   const emptyMusicians = options.emptyMusicians ?? false;
+  let tracksRequestCount = 0;
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input);
 
@@ -190,6 +192,15 @@ function mockMusicFetch(options: MockMusicFetchOptions = {}) {
     }
 
     if (url === `/api/music/tracks?limit=${TRACKS_INFINITE_PAGE_SIZE}&offset=0`) {
+      tracksRequestCount += 1;
+
+      if (options.failFirstTracksRequest && tracksRequestCount === 1) {
+        return jsonResponse({
+          error: true,
+          message: "The tracks library is temporarily unavailable.",
+        });
+      }
+
       return jsonResponse({
         error: false,
         data: {
@@ -425,6 +436,27 @@ describe("music route more menu", () => {
 });
 
 describe("music route tracks tab", () => {
+  it("shows an API failure and loads tracks after retrying", async () => {
+    const user = userEvent.setup();
+
+    await renderMusicRoute("/music/?tab=tracks", {
+      failFirstTracksRequest: true,
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The tracks library is temporarily unavailable.",
+    );
+    expect(
+      screen.queryByText("No tracks found in your library."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("list", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByText("Alabaster")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("labels the virtualized track list and track action menus", async () => {
     await renderMusicRoute("/music/?tab=tracks");
 

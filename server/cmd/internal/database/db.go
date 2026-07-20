@@ -465,6 +465,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.markMovieWatchedStmt, err = db.PrepareContext(ctx, markMovieWatched); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkMovieWatched: %w", err)
 	}
+	if q.markMovieWatchedFromProgressStmt, err = db.PrepareContext(ctx, markMovieWatchedFromProgress); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkMovieWatchedFromProgress: %w", err)
+	}
 	if q.markNotificationReadForUserStmt, err = db.PrepareContext(ctx, markNotificationReadForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkNotificationReadForUser: %w", err)
 	}
@@ -1319,6 +1322,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing markMovieWatchedStmt: %w", cerr)
 		}
 	}
+	if q.markMovieWatchedFromProgressStmt != nil {
+		if cerr := q.markMovieWatchedFromProgressStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markMovieWatchedFromProgressStmt: %w", cerr)
+		}
+	}
 	if q.markNotificationReadForUserStmt != nil {
 		if cerr := q.markNotificationReadForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markNotificationReadForUserStmt: %w", cerr)
@@ -1695,6 +1703,7 @@ type Queries struct {
 	markAllNotificationsReadForUserStmt         *sql.Stmt
 	markMovieUnwatchedStmt                      *sql.Stmt
 	markMovieWatchedStmt                        *sql.Stmt
+	markMovieWatchedFromProgressStmt            *sql.Stmt
 	markNotificationReadForUserStmt             *sql.Stmt
 	recordPlayEventStmt                         *sql.Stmt
 	removeCollaboratorStmt                      *sql.Stmt
@@ -1886,6 +1895,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		markAllNotificationsReadForUserStmt:         q.markAllNotificationsReadForUserStmt,
 		markMovieUnwatchedStmt:                      q.markMovieUnwatchedStmt,
 		markMovieWatchedStmt:                        q.markMovieWatchedStmt,
+		markMovieWatchedFromProgressStmt:            q.markMovieWatchedFromProgressStmt,
 		markNotificationReadForUserStmt:             q.markNotificationReadForUserStmt,
 		recordPlayEventStmt:                         q.recordPlayEventStmt,
 		removeCollaboratorStmt:                      q.removeCollaboratorStmt,

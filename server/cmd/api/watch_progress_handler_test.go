@@ -16,6 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const testWatchProgressSaveSessionID = "11111111-1111-4111-8111-111111111111"
+
 func createTestUserAndMovie(t *testing.T, app *Application) (userID, movieID int64) {
 	t.Helper()
 	ctx := context.Background()
@@ -53,10 +55,12 @@ func TestWatchProgress_UpsertAndGet(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 300.5,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   300.5,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -89,20 +93,24 @@ func TestWatchProgress_UpsertUpdatesExisting(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 100.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   100.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("first upsert failed: %v", err)
 	}
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 500.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   500.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  2,
 	})
 	if err != nil {
 		t.Fatalf("second upsert failed: %v", err)
@@ -148,10 +156,12 @@ func TestWatchProgress_UpsertResetsWatchedFlag(t *testing.T) {
 	}
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 60.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   60.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -199,10 +209,12 @@ func TestWatchProgress_Delete(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 300.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   300.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -280,10 +292,12 @@ func TestWatchProgress_MarkWatchedClearsExistingProgress(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 3600.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   3600.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -416,20 +430,24 @@ func TestWatchProgress_PerUserIsolation(t *testing.T) {
 	}
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      user1.ID,
-		MovieID:     movie.ID,
-		ProgressSec: 600.0,
-		DurationSec: 7200.0,
+		UserID:        user1.ID,
+		MovieID:       movie.ID,
+		ProgressSec:   600.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("upsert for user1 failed: %v", err)
 	}
 
 	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      user2.ID,
-		MovieID:     movie.ID,
-		ProgressSec: 1800.0,
-		DurationSec: 7200.0,
+		UserID:        user2.ID,
+		MovieID:       movie.ID,
+		ProgressSec:   1800.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("upsert for user2 failed: %v", err)
@@ -508,10 +526,12 @@ func TestGetContinueWatchingMovies(t *testing.T) {
 
 	upsertProgress := func(userID, movieID int64, progressSec float64) {
 		err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-			UserID:      userID,
-			MovieID:     movieID,
-			ProgressSec: progressSec,
-			DurationSec: 7200.0,
+			UserID:        userID,
+			MovieID:       movieID,
+			ProgressSec:   progressSec,
+			DurationSec:   7200.0,
+			SaveSessionID: testWatchProgressSaveSessionID,
+			SaveSequence:  1,
 		})
 		if err != nil {
 			t.Fatalf("failed to upsert progress for movie %d: %v", movieID, err)
@@ -604,10 +624,12 @@ func TestWatchProgress_CascadeDeleteMovie(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 300.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   300.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -635,10 +657,12 @@ func TestWatchProgress_CascadeDeleteUser(t *testing.T) {
 	userID, movieID := createTestUserAndMovie(t, app)
 
 	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: 300.0,
-		DurationSec: 7200.0,
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   300.0,
+		DurationSec:   7200.0,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
 	})
 	if err != nil {
 		t.Fatalf("UpsertMovieWatchProgress failed: %v", err)
@@ -682,6 +706,152 @@ func TestWatchProgress_CompletionThreshold(t *testing.T) {
 					tt.progressSec, tt.durationSec, ratio, isWatched, tt.wantWatched)
 			}
 		})
+	}
+}
+
+func TestWatchProgress_SaveOrdering(t *testing.T) {
+	app := setupTestApp(t)
+	defer app.DB.Close()
+	ctx := context.Background()
+
+	userID, movieID := createTestUserAndMovie(t, app)
+	otherSessionID := "22222222-2222-4222-8222-222222222222"
+
+	err := app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   500,
+		DurationSec:   1000,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  2,
+	})
+	if err != nil {
+		t.Fatalf("save sequence 2: %v", err)
+	}
+
+	const preservedUpdatedAt = "2001-02-03 04:05:06"
+	_, err = app.DB.ExecContext(ctx,
+		"UPDATE movie_watch_progress SET updated_at = ? WHERE user_id = ? AND movie_id = ?",
+		preservedUpdatedAt, userID, movieID,
+	)
+	if err != nil {
+		t.Fatalf("set updated_at: %v", err)
+	}
+
+	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   100,
+		DurationSec:   1000,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  1,
+	})
+	if err != nil {
+		t.Fatalf("stale save: %v", err)
+	}
+
+	row, err := app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID: userID, MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("get after stale save: %v", err)
+	}
+	if row.ProgressSec != 500 || row.SaveSequence != 2 || row.UpdatedAt != preservedUpdatedAt {
+		t.Fatalf("stale save changed row: %+v", row)
+	}
+
+	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   200,
+		DurationSec:   1000,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  2,
+	})
+	if err != nil {
+		t.Fatalf("equal-sequence save: %v", err)
+	}
+	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID: userID, MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("get after equal-sequence save: %v", err)
+	}
+	if row.ProgressSec != 500 || row.SaveSequence != 2 || row.UpdatedAt != preservedUpdatedAt {
+		t.Fatalf("equal-sequence save changed row: %+v", row)
+	}
+
+	err = app.Queries.MarkMovieWatchedFromProgress(ctx, database.MarkMovieWatchedFromProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  3,
+	})
+	if err != nil {
+		t.Fatalf("completion save: %v", err)
+	}
+
+	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   700,
+		DurationSec:   1000,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  2,
+	})
+	if err != nil {
+		t.Fatalf("stale save after completion: %v", err)
+	}
+	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID: userID, MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("get after stale completion overwrite: %v", err)
+	}
+	if !row.Watched || row.SaveSequence != 3 {
+		t.Fatalf("stale save overwrote completion: %+v", row)
+	}
+
+	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   60,
+		DurationSec:   1000,
+		SaveSessionID: testWatchProgressSaveSessionID,
+		SaveSequence:  4,
+	})
+	if err != nil {
+		t.Fatalf("higher-sequence rewind: %v", err)
+	}
+	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID: userID, MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("get after rewind: %v", err)
+	}
+	if row.Watched || row.ProgressSec != 60 {
+		t.Fatalf("higher-sequence rewind was not saved: %+v", row)
+	}
+
+	err = app.Queries.UpsertMovieWatchProgress(ctx, database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   250,
+		DurationSec:   1000,
+		SaveSessionID: otherSessionID,
+		SaveSequence:  1,
+	})
+	if err != nil {
+		t.Fatalf("different-session save: %v", err)
+	}
+	row, err = app.Queries.GetMovieWatchProgress(ctx, database.GetMovieWatchProgressParams{
+		UserID: userID, MovieID: movieID,
+	})
+	if err != nil {
+		t.Fatalf("get after different-session save: %v", err)
+	}
+	if row.ProgressSec != 250 || row.SaveSessionID != otherSessionID || row.SaveSequence != 1 {
+		t.Fatalf("different-session last write was not saved: %+v", row)
 	}
 }
 
@@ -783,8 +953,23 @@ func TestUpdateMovieWatchProgress_HTTPMissingFields(t *testing.T) {
 	t.Run("missing progress", func(t *testing.T) {
 		run(t, `{"duration_sec": 7200}`, http.StatusBadRequest)
 	})
+	t.Run("missing save session", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_sequence": 1}`, http.StatusBadRequest)
+	})
+	t.Run("malformed save session", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_session_id": "invalid", "save_sequence": 1}`, http.StatusBadRequest)
+	})
+	t.Run("missing save sequence", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_session_id": "11111111-1111-4111-8111-111111111111"}`, http.StatusBadRequest)
+	})
+	t.Run("zero save sequence", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": 0}`, http.StatusBadRequest)
+	})
+	t.Run("negative save sequence", func(t *testing.T) {
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": -1}`, http.StatusBadRequest)
+	})
 	t.Run("valid body", func(t *testing.T) {
-		run(t, `{"progress_sec": 100, "duration_sec": 7200}`, http.StatusOK)
+		run(t, `{"progress_sec": 100, "duration_sec": 7200, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": 1}`, http.StatusOK)
 	})
 }
 
@@ -886,7 +1071,7 @@ func TestSetMovieWatched_HTTPMissingWatched(t *testing.T) {
 
 func TestReadJSON_WatchProgressRequest_DisallowUnknownFields(t *testing.T) {
 	var req updateMovieWatchProgressRequest
-	body := strings.NewReader(`{"progress_sec": 1, "duration_sec": 2, "extra": true}`)
+	body := strings.NewReader(`{"progress_sec": 1, "duration_sec": 2, "save_session_id": "11111111-1111-4111-8111-111111111111", "save_sequence": 1, "extra": true}`)
 	r := httptest.NewRequest(http.MethodPut, "/", body)
 	w := httptest.NewRecorder()
 	err := helpers.ReadJSON(w, r, &req, 1024)

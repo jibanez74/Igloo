@@ -137,12 +137,14 @@ type Movie struct {
 }
 
 type MovieWatchProgress struct {
-	UserID      int64   `json:"user_id"`
-	MovieID     int64   `json:"movie_id"`
-	ProgressSec float64 `json:"progress_sec"`
-	DurationSec float64 `json:"duration_sec"`
-	Watched     bool    `json:"watched"`
-	UpdatedAt   string  `json:"updated_at"`
+	UserID        int64   `json:"user_id"`
+	MovieID       int64   `json:"movie_id"`
+	ProgressSec   float64 `json:"progress_sec"`
+	DurationSec   float64 `json:"duration_sec"`
+	Watched       bool    `json:"watched"`
+	SaveSessionID string  `json:"save_session_id"`
+	SaveSequence  int64   `json:"save_sequence"`
+	UpdatedAt     string  `json:"updated_at"`
 }
 
 type MusicSpotifyMatch struct {

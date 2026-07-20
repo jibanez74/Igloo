@@ -2,10 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"igloo/cmd/internal/database"
 	"igloo/cmd/internal/helpers"
@@ -16,8 +18,20 @@ import (
 const watchCompletionThreshold = 0.98
 
 type updateMovieWatchProgressRequest struct {
-	ProgressSec *float64 `json:"progress_sec"`
-	DurationSec *float64 `json:"duration_sec"`
+	ProgressSec   *float64 `json:"progress_sec"`
+	DurationSec   *float64 `json:"duration_sec"`
+	SaveSessionID *string  `json:"save_session_id"`
+	SaveSequence  *int64   `json:"save_sequence"`
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+
+	hexValue := strings.ReplaceAll(value, "-", "")
+	_, err := hex.DecodeString(hexValue)
+	return err == nil
 }
 
 type setMovieWatchedRequest struct {
@@ -175,6 +189,22 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		helpers.ErrorJSON(w, errors.New("duration_sec is required"), http.StatusBadRequest)
 		return
 	}
+	if req.SaveSessionID == nil {
+		helpers.ErrorJSON(w, errors.New("save_session_id is required"), http.StatusBadRequest)
+		return
+	}
+	if !validUUID(*req.SaveSessionID) {
+		helpers.ErrorJSON(w, errors.New("save_session_id must be a valid UUID"), http.StatusBadRequest)
+		return
+	}
+	if req.SaveSequence == nil {
+		helpers.ErrorJSON(w, errors.New("save_sequence is required"), http.StatusBadRequest)
+		return
+	}
+	if *req.SaveSequence <= 0 {
+		helpers.ErrorJSON(w, errors.New("save_sequence must be greater than 0"), http.StatusBadRequest)
+		return
+	}
 
 	progressVal := *req.ProgressSec
 	durationVal := *req.DurationSec
@@ -192,10 +222,13 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 	durationSec := durationVal
 
 	if progressSec/durationSec >= watchCompletionThreshold {
-		if err := app.Queries.MarkMovieWatched(r.Context(), database.MarkMovieWatchedParams{
-			UserID:  userID,
-			MovieID: movieID,
-		}); err != nil {
+		err := app.Queries.MarkMovieWatchedFromProgress(r.Context(), database.MarkMovieWatchedFromProgressParams{
+			UserID:        userID,
+			MovieID:       movieID,
+			SaveSessionID: *req.SaveSessionID,
+			SaveSequence:  *req.SaveSequence,
+		})
+		if err != nil {
 			app.Logger.Error("failed to mark movie watched from progress update", "error", err, "movie_id", movieID, "user_id", userID)
 			helpers.ErrorJSON(w, errors.New("failed to update watch progress"))
 			return
@@ -210,12 +243,15 @@ func (app *Application) UpdateMovieWatchProgress(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := app.Queries.UpsertMovieWatchProgress(r.Context(), database.UpsertMovieWatchProgressParams{
-		UserID:      userID,
-		MovieID:     movieID,
-		ProgressSec: progressSec,
-		DurationSec: durationSec,
-	}); err != nil {
+	err = app.Queries.UpsertMovieWatchProgress(r.Context(), database.UpsertMovieWatchProgressParams{
+		UserID:        userID,
+		MovieID:       movieID,
+		ProgressSec:   progressSec,
+		DurationSec:   durationSec,
+		SaveSessionID: *req.SaveSessionID,
+		SaveSequence:  *req.SaveSequence,
+	})
+	if err != nil {
 		app.Logger.Error("failed to upsert movie watch progress", "error", err, "movie_id", movieID, "user_id", userID)
 		helpers.ErrorJSON(w, errors.New("failed to update watch progress"))
 		return
