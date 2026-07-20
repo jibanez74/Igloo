@@ -97,6 +97,27 @@ describe("audio player like button", () => {
     HTMLMediaElement.prototype.pause = originalPause;
   });
 
+  it("disables the action until the liked state is known", async () => {
+    const likedQuery = deferred<Awaited<ReturnType<typeof getLikedTrackIds>>>();
+    vi.mocked(getLikedTrackIds).mockReturnValue(likedQuery.promise);
+    renderPlayer();
+
+    const loadingButton = await screen.findByRole("button", {
+      name: "Loading liked status for Alabaster",
+    });
+    expect(loadingButton).toHaveAttribute("aria-disabled", "true");
+    expect(loadingButton).not.toHaveAttribute("aria-pressed");
+    fireEvent.click(loadingButton);
+    expect(toggleLikeTrack).not.toHaveBeenCalled();
+
+    likedQuery.resolve(likedIds([TRACK_ID]));
+    const resolvedButton = await screen.findByRole("button", {
+      name: REMOVE_LABEL,
+    });
+    expect(resolvedButton).not.toHaveAttribute("aria-disabled");
+    expect(resolvedButton).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("shows an unliked heart in both layouts when the track is not liked", async () => {
     vi.mocked(getLikedTrackIds).mockResolvedValue(likedIds([]));
     renderPlayer();
@@ -165,14 +186,22 @@ describe("audio player like button", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("ignores clicks while a toggle is already in flight", async () => {
+  it("shares pending state when the player layout changes", async () => {
     vi.mocked(getLikedTrackIds).mockResolvedValue(likedIds([]));
     const toggle = deferred<Awaited<ReturnType<typeof toggleLikeTrack>>>();
     vi.mocked(toggleLikeTrack).mockReturnValue(toggle.promise);
     renderPlayer();
 
     fireEvent.click(await screen.findByRole("button", { name: ADD_LABEL }));
-    fireEvent.click(await screen.findByRole("button", { name: REMOVE_LABEL }));
+    await screen.findByRole("button", { name: REMOVE_LABEL });
+    fireEvent.click(screen.getByText("minimize player"));
+
+    const miniBar = screen.getByRole("region", { name: "Audio player" });
+    const minimizedButton = within(miniBar).getByRole("button", {
+      name: REMOVE_LABEL,
+    });
+    expect(minimizedButton).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(minimizedButton);
 
     expect(toggleLikeTrack).toHaveBeenCalledTimes(1);
 
@@ -182,7 +211,7 @@ describe("audio player like button", () => {
     });
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: REMOVE_LABEL }),
+        within(miniBar).getByRole("button", { name: REMOVE_LABEL }),
       ).not.toHaveAttribute("aria-busy");
     });
   });

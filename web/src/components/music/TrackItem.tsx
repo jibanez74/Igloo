@@ -34,7 +34,6 @@ type TrackItemProps = {
   variant: TrackItemVariant;
   isPlaying?: boolean;
   isCurrentTrack?: boolean;
-  isLiked?: boolean;
 
   // Actions
   onPlay: () => void;
@@ -65,7 +64,6 @@ export default function TrackItem({
   variant,
   isPlaying = false,
   isCurrentTrack = false,
-  isLiked = false,
   onPlay,
   showActionsMenu,
   canRemoveFromPlaylist = false,
@@ -74,15 +72,23 @@ export default function TrackItem({
   isDragging = false,
   dragHandleProps,
 }: TrackItemProps) {
-  const likeMutation = useTrackLikeToggle();
+  const likeToggle = useTrackLikeToggle(id);
+  const isLikeDisabled = !likeToggle.isReady || likeToggle.isPending;
+  const likeAriaLabel = likeToggle.isReady
+    ? likeToggle.isLiked
+      ? `Remove ${title} from liked`
+      : `Add ${title} to liked`
+    : likeToggle.isStatusPending
+      ? `Loading liked status for ${title}`
+      : `Liked status unavailable for ${title}`;
 
   // Determine if actions menu should show based on variant or explicit prop
   const shouldShowActions = showActionsMenu ?? variant === "library";
 
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (likeMutation.isPending) return;
-    likeMutation.mutate(id);
+    if (isLikeDisabled) return;
+    likeToggle.toggle();
   };
 
   // Play button visibility classes based on variant
@@ -178,21 +184,24 @@ export default function TrackItem({
       <button
         type="button"
         onClick={handleLikeClick}
-        disabled={likeMutation.isPending}
+        disabled={isLikeDisabled}
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
           FOCUS_VISIBLE_RING_CLASS,
           MOTION_TRACK_ICON_BUTTON_CLASS,
-          isLiked
+          likeToggle.isLiked
             ? "text-destructive"
             : "text-muted-foreground hover:text-destructive",
-          likeMutation.isPending && "opacity-50",
+          isLikeDisabled && "cursor-not-allowed opacity-50",
         )}
-        aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
-        aria-pressed={isLiked}
+        aria-label={likeAriaLabel}
+        aria-pressed={likeToggle.isReady ? likeToggle.isLiked : undefined}
+        aria-busy={
+          likeToggle.isStatusPending || likeToggle.isPending || undefined
+        }
       >
         <Heart
-          className={`size-4 ${isLiked ? "fill-current" : ""}`}
+          className={`size-4 ${likeToggle.isLiked ? "fill-current" : ""}`}
           aria-hidden="true"
         />
       </button>

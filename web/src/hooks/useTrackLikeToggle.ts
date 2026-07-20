@@ -1,10 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toggleLikeTrack } from "@/lib/api";
 import { LIKED_TRACK_IDS_KEY, LIKED_TRACKS_KEY } from "@/lib/constants";
+import { likedTrackIdsQueryOpts } from "@/lib/query-opts";
 import { showActionFailed } from "@/lib/toast-helpers";
 import type { ApiResponseType } from "@/types";
 
 type LikedTrackIdsPayload = { liked_track_ids: number[] };
+const TRACK_LIKE_MUTATION_KEY = "track-like-toggle";
 
 const likedIdsResponse = (
   ids: number[],
@@ -19,28 +26,49 @@ function setTrackLiked(ids: number[], trackId: number, isLiked: boolean) {
 }
 
 /**
- * Shared like/unlike mutation for tracks. Optimistically toggles the track's
- * membership in the cached liked-ids list (the single source of liked state
- * for track rows and the audio player), rolls back on failure, and reconciles
- * with the server response on success.
+ * Shared like/unlike controller for a track. The liked-ids cache is the single
+ * source of liked state for track rows and the audio player. Mutations are
+ * keyed per track so duplicate controls share their pending state.
  */
-export function useTrackLikeToggle() {
+export function useTrackLikeToggle(trackId: number) {
   const queryClient = useQueryClient();
   const key = [LIKED_TRACK_IDS_KEY] as const;
+  const mutationKey = [TRACK_LIKE_MUTATION_KEY, trackId] as const;
+  const likedIdsQuery = useQuery({
+    ...likedTrackIdsQueryOpts(),
+    select: response =>
+      response.error
+        ? undefined
+        : response.data.liked_track_ids.includes(trackId),
+  });
+  const isLiked = likedIdsQuery.data;
+  const isReady = typeof isLiked === "boolean";
+  const pendingCount = useIsMutating({ mutationKey, exact: true });
 
-  const rollback = (
-    previous: ApiResponseType<LikedTrackIdsPayload> | undefined,
-  ) => {
-    if (previous !== undefined) {
-      queryClient.setQueryData(key, previous);
-    } else {
+  const rollback = (previousIsLiked: boolean | undefined) => {
+    const current =
+      queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(key);
+    if (previousIsLiked === undefined || current?.error !== false) {
       void queryClient.invalidateQueries({ queryKey: key });
+      return;
     }
+
+    queryClient.setQueryData(
+      key,
+      likedIdsResponse(
+        setTrackLiked(
+          current.data.liked_track_ids,
+          trackId,
+          previousIsLiked,
+        ),
+      ),
+    );
   };
 
-  return useMutation({
-    mutationFn: (trackId: number) => toggleLikeTrack(trackId),
-    onMutate: async (trackId: number) => {
+  const mutation = useMutation({
+    mutationKey,
+    mutationFn: () => toggleLikeTrack(trackId),
+    onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous =
         queryClient.getQueryData<ApiResponseType<LikedTrackIdsPayload>>(key);
@@ -53,18 +81,23 @@ export function useTrackLikeToggle() {
           ),
         );
       }
-      return { previous };
+      return {
+        previousIsLiked:
+          previous?.error === false
+            ? previous.data.liked_track_ids.includes(trackId)
+            : undefined,
+      };
     },
-    onError: (_err, _trackId, context) => {
-      rollback(context?.previous);
+    onError: (_err, _variables, context) => {
+      rollback(context?.previousIsLiked);
       showActionFailed(
         "update like",
         "Unable to update liked status. Please try again.",
       );
     },
-    onSuccess: (res, trackId, context) => {
+    onSuccess: (res, _variables, context) => {
       if (res.error) {
-        rollback(context?.previous);
+        rollback(context?.previousIsLiked);
         showActionFailed("update like", res.message);
         return;
       }
@@ -81,8 +114,28 @@ export function useTrackLikeToggle() {
             ),
           ),
         );
+      } else {
+        void queryClient.invalidateQueries({ queryKey: key });
       }
       void queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
     },
   });
+
+  const toggle = () => {
+    if (
+      !isReady ||
+      queryClient.isMutating({ mutationKey, exact: true }) > 0
+    ) {
+      return;
+    }
+    mutation.mutate();
+  };
+
+  return {
+    isLiked,
+    isReady,
+    isStatusPending: likedIdsQuery.isPending,
+    isPending: pendingCount > 0,
+    toggle,
+  };
 }

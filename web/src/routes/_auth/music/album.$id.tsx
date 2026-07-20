@@ -18,7 +18,6 @@ import {
 import {
   albumDetailsQueryOpts,
   authUserQueryOpts,
-  likedTrackIdsQueryOpts,
 } from "@/lib/query-opts";
 import { deleteAlbum } from "@/lib/api";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
@@ -192,11 +191,6 @@ function AlbumDetailsContent({
   const matchTrackPlayback = useTrackPlaybackMatcher();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
-
-  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
-  const likedSet = new Set<number>(
-    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : []
-  );
 
   const { data: userData } = useQuery(authUserQueryOpts());
   const user: AuthUser | null =
@@ -669,7 +663,6 @@ function AlbumDetailsContent({
                         trackIndex={track.track_index}
                         genres={trackGenreMap.get(track.id) || []}
                         variant="album"
-                        isLiked={likedSet.has(track.id)}
                         {...matchTrackPlayback(track.id)}
                         onPlay={() => handleToggleTrack(track)}
                       />

@@ -40,7 +40,6 @@ import { isApiFailure } from "@/lib/is-api-failure";
 import { unwrapString, unwrapInt, unwrapStringOrUndefined } from "@/lib/nullable";
 import {
   albumsPaginatedQueryOpts,
-  likedTrackIdsQueryOpts,
   likedTracksQueryOpts,
   musiciansPaginatedQueryOpts,
   musicStatsQueryOpts,
@@ -695,10 +694,6 @@ function TracksTabContent() {
     refetch,
   } = useInfiniteQuery(tracksInfiniteQueryOpts());
 
-  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
-  const likedSet = new Set<number>(
-    likedIdsData?.error === false ? (likedIdsData.data.liked_track_ids ?? []) : [],
-  );
   const firstPage = data?.pages[0];
   const firstPageFailed = isApiFailure(firstPage);
 
@@ -766,7 +761,6 @@ function TracksTabContent() {
       <VirtualizedTracksList
         virtualItems={virtualItems}
         allTracks={allTracks}
-        likedSet={likedSet}
         totalTracks={totalTracks}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
@@ -779,7 +773,6 @@ function TracksTabContent() {
 type VirtualizedTracksListProps = {
   virtualItems: VirtualItem[];
   allTracks: TrackListItemType[];
-  likedSet: Set<number>;
   totalTracks: number;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -789,7 +782,6 @@ type VirtualizedTracksListProps = {
 function VirtualizedTracksList({
   virtualItems,
   allTracks,
-  likedSet,
   totalTracks,
   hasNextPage,
   isFetchingNextPage,
@@ -879,7 +871,6 @@ function VirtualizedTracksList({
               ) : (
                 <TrackListItem
                   track={item.track}
-                  isLiked={likedSet.has(item.track.id)}
                   queueRef={allTracksRef}
                 />
               )}
@@ -981,18 +972,16 @@ function LetterHeader({ letter }: { letter: string }) {
 
 // Memoized because the parent VirtualizedTracksList opts out of the React
 // Compiler ("use no memo") and re-renders on every scroll tick; without memo,
-// each windowed row re-renders each frame even though `track` (stable identity
-// from the cached query pages) and `isLiked` (boolean) are unchanged. The
-// compiler can't cover this: it only memoizes within a component, and the
-// opted-out parent hands fresh row JSX each render, so this memo is required.
+// each windowed row re-renders each frame even though `track` has stable
+// identity from the cached query pages. The compiler can't cover this: it only
+// memoizes within a component, and the opted-out parent hands fresh row JSX
+// each render, so this memo is required.
 // react-doctor-disable-next-line react-doctor/react-compiler-no-manual-memoization
 const TrackListItem = memo(function TrackListItem({
   track,
-  isLiked,
   queueRef,
 }: {
   track: TrackListItemType;
-  isLiked: boolean;
   queueRef: React.RefObject<TrackListItemType[]>;
 }) {
   const audioPlayer = useAudioPlayerActions();
@@ -1014,7 +1003,6 @@ const TrackListItem = memo(function TrackListItem({
       musicianName={unwrapStringOrUndefined(track.musician_name)}
       variant="library"
       {...matchTrackPlayback(track.id)}
-      isLiked={isLiked}
       onPlay={handlePlay}
       showActionsMenu
     />
@@ -1258,7 +1246,6 @@ function LikedTracksInPlaylistsTab({ likedTracksPage, onExit }: LikedTracksInPla
               musicianId={unwrapInt(track.musician_id)}
               musicianName={unwrapStringOrUndefined(track.musician_name)}
               variant="library"
-              isLiked
               {...matchTrackPlayback(track.id)}
               onPlay={() => handlePlayTrack(track)}
               showActionsMenu

@@ -27,7 +27,6 @@ type SortableTrackItemProps = {
   variant: TrackItemVariant;
   isPlaying?: boolean;
   isCurrentTrack?: boolean;
-  isLiked?: boolean;
 
   // Actions
   onPlay: () => void;
