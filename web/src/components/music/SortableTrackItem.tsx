@@ -27,12 +27,10 @@ type SortableTrackItemProps = {
   variant: TrackItemVariant;
   isPlaying?: boolean;
   isCurrentTrack?: boolean;
-  isLiked?: boolean;
 
   // Actions
   onPlay: () => void;
   showActionsMenu?: boolean;
-  onLikeToggle?: (trackId: number, isLiked: boolean) => void;
 
   // Playlist-specific
   playlistId?: number;

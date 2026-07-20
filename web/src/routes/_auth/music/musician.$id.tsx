@@ -11,10 +11,7 @@ import {
   ListOrdered,
   ArrowLeft,
 } from "lucide-react";
-import {
-  likedTrackIdsQueryOpts,
-  musicianDetailsQueryOpts,
-} from "@/lib/query-opts";
+import { musicianDetailsQueryOpts } from "@/lib/query-opts";
 import { unwrapString, unwrapInt, unwrapFloat } from "@/lib/nullable";
 import { getMediaImageUrl } from "@/lib/media-image-url";
 import { Button } from "@/components/ui/button";
@@ -201,13 +198,6 @@ function MusicianDetailsContent({
   const matchTrackPlayback = useTrackPlaybackMatcher();
 
   const [thumbFailed, setThumbFailed] = useState(false);
-
-  const { data: likedIdsData } = useQuery(likedTrackIdsQueryOpts());
-  const likedSet = new Set<number>(
-    likedIdsData?.error === false
-      ? (likedIdsData.data.liked_track_ids ?? [])
-      : [],
-  );
 
   const thumbUrl = getMediaImageUrl(unwrapString(musician.thumb));
   const showThumb = thumbUrl && !thumbFailed;
@@ -563,7 +553,6 @@ function MusicianDetailsContent({
                       }
                       albumId={unwrapInt(track.album_id)}
                       variant="musician"
-                      isLiked={likedSet.has(track.id)}
                       {...matchTrackPlayback(track.id)}
                       onPlay={() => handlePlayTrack(track)}
                     />

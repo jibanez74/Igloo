@@ -1,8 +1,17 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
+import { renderWithQueryClient } from "@/test/helpers/render";
 import type { PlayableTrackData } from "@/types";
+
+vi.mock("@/lib/api", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
+  getLikedTrackIds: vi.fn().mockResolvedValue({
+    error: false,
+    data: { liked_track_ids: [] },
+  }),
+}));
 
 const originalLoad = HTMLMediaElement.prototype.load;
 const originalPlay = HTMLMediaElement.prototype.play;
@@ -61,7 +70,7 @@ function QueueHarness({
 }
 
 function renderQueue(rawTracks: PlayableTrackData[], startTrackId: number) {
-  render(
+  renderWithQueryClient(
     <AudioPlayerProvider>
       <QueueHarness rawTracks={rawTracks} startTrackId={startTrackId} />
     </AudioPlayerProvider>,

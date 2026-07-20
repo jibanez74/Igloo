@@ -135,6 +135,7 @@ async function fulfillJSON(route: Route, body: unknown, status = 200) {
 
 async function mockAlbumDetailsApi(page: Page, { isAdmin = true }: { isAdmin?: boolean } = {}) {
   const unexpectedApiRequests: string[] = [];
+  const likedTrackIds = new Set([101]);
 
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url());
@@ -176,7 +177,33 @@ async function mockAlbumDetailsApi(page: Page, { isAdmin = true }: { isAdmin?: b
     }
 
     if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-      await fulfillJSON(route, apiResponse({ liked_track_ids: [101] }));
+      await fulfillJSON(route, apiResponse({ liked_track_ids: [...likedTrackIds] }));
+      return;
+    }
+
+    const likeMatch = url.pathname.match(/^\/api\/music\/tracks\/(\d+)\/like$/);
+    if (likeMatch && method === "POST") {
+      const trackId = Number(likeMatch[1]);
+      if (likedTrackIds.has(trackId)) {
+        likedTrackIds.delete(trackId);
+      } else {
+        likedTrackIds.add(trackId);
+      }
+      await fulfillJSON(
+        route,
+        apiResponse({ track_id: trackId, is_liked: likedTrackIds.has(trackId) }),
+      );
+      return;
+    }
+
+    // Starting playback makes the audio element request the stream; playback
+    // itself is irrelevant here, the request just must not count as unexpected.
+    if (/^\/api\/music\/tracks\/\d+\/stream$/.test(url.pathname) && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "audio/flac",
+        body: Buffer.alloc(0),
+      });
       return;
     }
 
@@ -245,6 +272,55 @@ test("album details renders hero, tracklist, and details without console issues"
   await expect(page.getByRole("group", { name: "Spotify popularity 73 out of 100" })).toBeVisible();
 
   await expectPageHasNoHorizontalScroll(page);
+  expect(unexpectedApiRequests).toEqual([]);
+  browserIssues.assertClean();
+});
+
+test("audio player like button toggles the current track's liked state", async ({ page }) => {
+  const browserIssues = trackBrowserIssues(page);
+  const unexpectedApiRequests = await mockAlbumDetailsApi(page);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/music/album/${ALBUM_ID}`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Glacier Sessions" })).toBeVisible();
+
+  // Starting playback opens the expanded player with the like button
+  // (track 101 is pre-liked in the mock).
+  await page.getByRole("button", { name: "Play Northern Drift" }).click();
+  const dialog = page.getByRole("dialog");
+  const expandedLike = dialog.getByRole("button", { name: "Remove Northern Drift from liked" });
+  await expect(expandedLike).toBeVisible();
+  await expect(expandedLike).toHaveAttribute("aria-pressed", "true");
+
+  // Unlike from the expanded player.
+  await expandedLike.click();
+  const expandedUnliked = dialog.getByRole("button", { name: "Add Northern Drift to liked" });
+  await expect(expandedUnliked).toBeVisible();
+  await expect(expandedUnliked).toHaveAttribute("aria-pressed", "false");
+
+  // The mini bar has its own like button and stays in sync.
+  await dialog.getByRole("button", { name: "Minimize player (Escape)" }).click();
+  const miniBar = page.getByRole("region", { name: "Audio player" });
+  const miniLike = miniBar.getByRole("button", { name: "Add Northern Drift to liked" });
+  await expect(miniLike).toBeVisible();
+
+  // Like again from the mini bar; the track row shares the cache and flips too.
+  await miniLike.click();
+  await expect(
+    miniBar.getByRole("button", { name: "Remove Northern Drift from liked" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("button", { name: "Remove Northern Drift from liked" }),
+  ).toBeVisible();
+
+  // The extra button must not push the mini bar past a narrow viewport.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(
+    miniBar.getByRole("button", { name: "Remove Northern Drift from liked" }),
+  ).toBeVisible();
+  await expectPageHasNoHorizontalScroll(page);
+
   expect(unexpectedApiRequests).toEqual([]);
   browserIssues.assertClean();
 });

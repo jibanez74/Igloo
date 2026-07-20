@@ -1,12 +1,8 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
-import { toggleLikeTrack } from "@/lib/api";
+import { useLikeButtonState } from "@/hooks/useTrackLikeToggle";
 import {
   FOCUS_VISIBLE_RING_CLASS,
-  LIKED_TRACK_IDS_KEY,
-  LIKED_TRACKS_KEY,
   MOTION_LOADING_STATE_CLASS,
   MOTION_TRACK_ICON_BUTTON_CLASS,
   MOTION_TRACK_MENU_TRIGGER_CLASS,
@@ -38,12 +34,10 @@ type TrackItemProps = {
   variant: TrackItemVariant;
   isPlaying?: boolean;
   isCurrentTrack?: boolean;
-  isLiked?: boolean;
 
   // Actions
   onPlay: () => void;
   showActionsMenu?: boolean;
-  onLikeToggle?: (trackId: number, isLiked: boolean) => void;
 
   // Playlist-specific props
   playlistId?: number;
@@ -70,39 +64,22 @@ export default function TrackItem({
   variant,
   isPlaying = false,
   isCurrentTrack = false,
-  isLiked = false,
   onPlay,
   showActionsMenu,
-  onLikeToggle,
   canRemoveFromPlaylist = false,
   onRemoveFromPlaylist,
   isDraggable = false,
   isDragging = false,
   dragHandleProps,
 }: TrackItemProps) {
-  const queryClient = useQueryClient();
-  const [isLikeLoading, setIsLikeLoading] = useState(false);
+  const likeButton = useLikeButtonState(id, title);
 
   // Determine if actions menu should show based on variant or explicit prop
   const shouldShowActions = showActionsMenu ?? variant === "library";
 
-  const handleLikeClick = async (e: React.MouseEvent) => {
+  const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLikeLoading) return;
-
-    setIsLikeLoading(true);
-    try {
-      const response = await toggleLikeTrack(id);
-      if (!response.error && response.data) {
-        onLikeToggle?.(id, response.data.is_liked);
-        queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
-        queryClient.invalidateQueries({ queryKey: [LIKED_TRACK_IDS_KEY] });
-      }
-    } catch (error) {
-      console.error("Failed to toggle like:", error);
-    }
-
-    setIsLikeLoading(false);
+    likeButton.toggle();
   };
 
   // Play button visibility classes based on variant
@@ -198,20 +175,22 @@ export default function TrackItem({
       <button
         type="button"
         onClick={handleLikeClick}
-        disabled={isLikeLoading}
+        aria-disabled={likeButton.isDisabled || undefined}
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
           FOCUS_VISIBLE_RING_CLASS,
           MOTION_TRACK_ICON_BUTTON_CLASS,
-          isLiked
+          likeButton.isLiked
             ? "text-destructive"
             : "text-muted-foreground hover:text-destructive",
-          isLikeLoading && "opacity-50",
+          likeButton.isDisabled && "cursor-not-allowed opacity-50",
         )}
-        aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
+        aria-label={likeButton.ariaLabel}
+        aria-pressed={likeButton.ariaPressed}
+        aria-busy={likeButton.ariaBusy}
       >
         <Heart
-          className={`size-4 ${isLiked ? "fill-current" : ""}`}
+          className={`size-4 ${likeButton.isLiked ? "fill-current" : ""}`}
           aria-hidden="true"
         />
       </button>
