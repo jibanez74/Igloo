@@ -5,6 +5,15 @@ import AppShell from "@/components/app/AppShell";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { convertToAudioTrack } from "@/lib/audio-utils";
+import { renderWithQueryClient } from "@/test/helpers/render";
+
+vi.mock("@/lib/api", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
+  getLikedTrackIds: vi.fn().mockResolvedValue({
+    error: false,
+    data: { liked_track_ids: [] },
+  }),
+}));
 
 vi.mock("@/components/app/app-sidebar", () => ({
   default: () => (
@@ -113,7 +122,7 @@ describe("AppShell", () => {
     });
 
     it("reserves bottom space only while the minimized player is visible", () => {
-      render(
+      renderWithQueryClient(
         <AudioPlayerProvider>
           <AppShell>
             <h1>Route content</h1>

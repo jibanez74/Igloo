@@ -1,15 +1,21 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AudioPlayerProvider } from "@/context/AudioPlayerContext";
 import { useAudioPlayerActions } from "@/hooks/useAudioPlayerActions";
 import { useAudioPlayerState } from "@/hooks/useAudioPlayerState";
 import { getShuffleTracks } from "@/lib/api";
+import { renderWithQueryClient } from "@/test/helpers/render";
 import type { TrackListItemType } from "@/types";
 
 vi.mock("@/lib/api", () => ({
   getShuffleTracks: vi.fn(),
   getTracksPaginated: vi.fn(),
   recordPlayEvent: vi.fn(),
+  getLikedTrackIds: vi.fn().mockResolvedValue({
+    error: false,
+    data: { liked_track_ids: [] },
+  }),
+  toggleLikeTrack: vi.fn(),
 }));
 
 const originalLoad = HTMLMediaElement.prototype.load;
@@ -84,7 +90,7 @@ describe("endless shuffle queue", () => {
   it(
     "keeps the queue bounded and the track counter monotonic across trims",
     async () => {
-      render(
+      renderWithQueryClient(
         <AudioPlayerProvider>
           <EndlessQueueHarness />
         </AudioPlayerProvider>,

@@ -1,4 +1,5 @@
-import { createRef, useRef, useState, type ReactNode } from "react";
+import { createRef, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -17,6 +18,32 @@ import {
   MOTION_PLAYER_CHROME_ENTER_CLASS,
 } from "@/lib/constants";
 import type { TrackType } from "@/types";
+
+vi.mock("@/lib/api", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
+  getLikedTrackIds: vi.fn().mockResolvedValue({
+    error: false,
+    data: { liked_track_ids: [] },
+  }),
+}));
+
+// The player subtree queries liked-track ids, so every render needs a
+// QueryClientProvider. useState keeps the client stable across rerenders.
+function Providers({ children }: PropsWithChildren) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      }),
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
 
 const originalMediaMetadataDescriptor = Object.getOwnPropertyDescriptor(
   globalThis,
@@ -138,6 +165,7 @@ function renderAudioPlayer({
         onClose={onClose}
       />
     </>,
+    { wrapper: Providers },
   );
 
   const audio = view.container.querySelector("audio");
@@ -323,7 +351,9 @@ describe("AudioPlayer Media Session", () => {
       onExpand: vi.fn(),
     };
 
-    const { rerender } = render(<AudioPlayer track={track()} {...sharedProps} />);
+    const { rerender } = render(<AudioPlayer track={track()} {...sharedProps} />, {
+      wrapper: Providers,
+    });
     expect(mediaSession.metadata).not.toBeNull();
 
     rerender(<AudioPlayer track={null} {...sharedProps} />);
@@ -350,6 +380,7 @@ describe("AudioPlayer Media Session", () => {
 
     const { rerender, container } = render(
       <AudioPlayer track={first} {...sharedProps} />,
+      { wrapper: Providers },
     );
 
     const audio = container.querySelector("audio");
@@ -509,6 +540,7 @@ describe("AudioPlayer Media Session", () => {
           onClose={vi.fn()}
         />
       </>,
+      { wrapper: Providers },
     );
 
     const dialog = screen.getByRole("dialog", {
@@ -527,7 +559,7 @@ describe("AudioPlayer Media Session", () => {
 
   it("restores focus to the minimized expand control after Escape", async () => {
     const user = userEvent.setup();
-    render(<AudioPlayerFocusHarness />);
+    render(<AudioPlayerFocusHarness />, { wrapper: Providers });
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Play" })).toHaveFocus();
@@ -851,6 +883,7 @@ describe("AudioPlayer Media Session", () => {
 
       const { rerender, container } = render(
         <AudioPlayer track={first} {...sharedProps} />,
+        { wrapper: Providers },
       );
 
       rerender(<AudioPlayer track={second} {...sharedProps} />);

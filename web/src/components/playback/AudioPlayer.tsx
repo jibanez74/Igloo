@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { TrackType } from "@/types";
+import PlayerLikeButton from "@/components/playback/PlayerLikeButton";
 import ProgressBar from "@/components/playback/ProgressBar";
 import VolumeControl from "@/components/playback/VolumeControl";
 import {
@@ -678,14 +679,22 @@ export default function AudioPlayer({
                 )}
               </div>
 
-              <div className="mb-8 max-w-md text-center">
-                <h1
-                  id="track-title"
-                  className="truncate text-2xl font-bold text-foreground sm:text-3xl"
-                >
-                  {track.title}
-                </h1>
-                <p className="mt-1 truncate text-lg text-primary">{artist}</p>
+              <div className="mb-8 flex max-w-md items-center gap-3">
+                <div className="size-10 shrink-0" aria-hidden="true" />
+                <div className="min-w-0 text-center">
+                  <h1
+                    id="track-title"
+                    className="truncate text-2xl font-bold text-foreground sm:text-3xl"
+                  >
+                    {track.title}
+                  </h1>
+                  <p className="mt-1 truncate text-lg text-primary">{artist}</p>
+                </div>
+                <PlayerLikeButton
+                  trackId={track.id}
+                  trackTitle={track.title}
+                  variant="expanded"
+                />
               </div>
 
               <ProgressBar
@@ -812,6 +821,12 @@ export default function AudioPlayer({
                   <p className="truncate text-xs text-muted-foreground">{artist}</p>
                 </div>
               </button>
+
+              <PlayerLikeButton
+                trackId={track.id}
+                trackTitle={track.title}
+                variant="minimized"
+              />
 
               <div
                 className="flex items-center gap-2"

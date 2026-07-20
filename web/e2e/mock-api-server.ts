@@ -103,6 +103,7 @@ const devices: MockDevice[] = [];
 const pendingPairings = new Map<string, PendingPairing>();
 const playbackPreferences = new Map<number, PlaybackPreferences>();
 const likedMovieIds = new Set<number>();
+const likedTrackIds = new Set<number>();
 const watchProgress = new Map<number, MovieWatchProgress>();
 const moviePlaylists = [
   {
@@ -1708,7 +1709,22 @@ function handleMusicRoutes(
   }
 
   if (url.pathname === "/api/music/tracks/liked-ids" && method === "GET") {
-    sendSuccess(response, { liked_track_ids: [] });
+    sendSuccess(response, { liked_track_ids: [...likedTrackIds] });
+    return true;
+  }
+
+  const trackLikeMatch = url.pathname.match(/^\/api\/music\/tracks\/(\d+)\/like$/);
+  if (trackLikeMatch && method === "POST") {
+    const trackId = Number(trackLikeMatch[1]);
+    if (likedTrackIds.has(trackId)) {
+      likedTrackIds.delete(trackId);
+    } else {
+      likedTrackIds.add(trackId);
+    }
+    sendSuccess(response, {
+      track_id: trackId,
+      is_liked: likedTrackIds.has(trackId),
+    });
     return true;
   }
 

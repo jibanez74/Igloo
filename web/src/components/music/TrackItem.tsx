@@ -1,12 +1,8 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
-import { toggleLikeTrack } from "@/lib/api";
+import { useTrackLikeToggle } from "@/hooks/useTrackLikeToggle";
 import {
   FOCUS_VISIBLE_RING_CLASS,
-  LIKED_TRACK_IDS_KEY,
-  LIKED_TRACKS_KEY,
   MOTION_LOADING_STATE_CLASS,
   MOTION_TRACK_ICON_BUTTON_CLASS,
   MOTION_TRACK_MENU_TRIGGER_CLASS,
@@ -43,7 +39,6 @@ type TrackItemProps = {
   // Actions
   onPlay: () => void;
   showActionsMenu?: boolean;
-  onLikeToggle?: (trackId: number, isLiked: boolean) => void;
 
   // Playlist-specific props
   playlistId?: number;
@@ -73,36 +68,21 @@ export default function TrackItem({
   isLiked = false,
   onPlay,
   showActionsMenu,
-  onLikeToggle,
   canRemoveFromPlaylist = false,
   onRemoveFromPlaylist,
   isDraggable = false,
   isDragging = false,
   dragHandleProps,
 }: TrackItemProps) {
-  const queryClient = useQueryClient();
-  const [isLikeLoading, setIsLikeLoading] = useState(false);
+  const likeMutation = useTrackLikeToggle();
 
   // Determine if actions menu should show based on variant or explicit prop
   const shouldShowActions = showActionsMenu ?? variant === "library";
 
-  const handleLikeClick = async (e: React.MouseEvent) => {
+  const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLikeLoading) return;
-
-    setIsLikeLoading(true);
-    try {
-      const response = await toggleLikeTrack(id);
-      if (!response.error && response.data) {
-        onLikeToggle?.(id, response.data.is_liked);
-        queryClient.invalidateQueries({ queryKey: [LIKED_TRACKS_KEY] });
-        queryClient.invalidateQueries({ queryKey: [LIKED_TRACK_IDS_KEY] });
-      }
-    } catch (error) {
-      console.error("Failed to toggle like:", error);
-    }
-
-    setIsLikeLoading(false);
+    if (likeMutation.isPending) return;
+    likeMutation.mutate(id);
   };
 
   // Play button visibility classes based on variant
@@ -198,7 +178,7 @@ export default function TrackItem({
       <button
         type="button"
         onClick={handleLikeClick}
-        disabled={isLikeLoading}
+        disabled={likeMutation.isPending}
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
           FOCUS_VISIBLE_RING_CLASS,
@@ -206,9 +186,10 @@ export default function TrackItem({
           isLiked
             ? "text-destructive"
             : "text-muted-foreground hover:text-destructive",
-          isLikeLoading && "opacity-50",
+          likeMutation.isPending && "opacity-50",
         )}
         aria-label={isLiked ? `Remove ${title} from liked` : `Add ${title} to liked`}
+        aria-pressed={isLiked}
       >
         <Heart
           className={`size-4 ${isLiked ? "fill-current" : ""}`}
