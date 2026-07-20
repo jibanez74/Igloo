@@ -139,3 +139,34 @@ export function useTrackLikeToggle(trackId: number) {
     toggle,
   };
 }
+
+/**
+ * Render-ready state for a like button. Every like control must derive its
+ * disabled/aria state from here so duplicate controls stay consistent — use
+ * aria-disabled (never native disabled) to keep the button in the focus order
+ * while pending.
+ */
+export function useLikeButtonState(trackId: number, trackTitle: string) {
+  const { isLiked, isReady, isStatusPending, isPending, toggle } =
+    useTrackLikeToggle(trackId);
+  const isDisabled = !isReady || isPending;
+  const ariaLabel = isReady
+    ? isLiked
+      ? `Remove ${trackTitle} from liked`
+      : `Add ${trackTitle} to liked`
+    : isStatusPending
+      ? `Loading liked status for ${trackTitle}`
+      : `Liked status unavailable for ${trackTitle}`;
+
+  return {
+    isLiked,
+    isDisabled,
+    ariaLabel,
+    ariaPressed: isReady ? isLiked : undefined,
+    ariaBusy: isStatusPending || isPending || undefined,
+    toggle: () => {
+      if (isDisabled) return;
+      toggle();
+    },
+  };
+}

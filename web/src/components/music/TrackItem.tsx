@@ -1,6 +1,6 @@
 import { Volume2, Heart, Pause, Play, GripVertical } from "lucide-react";
 import { formatTrackDuration } from "@/lib/format";
-import { useTrackLikeToggle } from "@/hooks/useTrackLikeToggle";
+import { useLikeButtonState } from "@/hooks/useTrackLikeToggle";
 import {
   FOCUS_VISIBLE_RING_CLASS,
   MOTION_LOADING_STATE_CLASS,
@@ -72,23 +72,14 @@ export default function TrackItem({
   isDragging = false,
   dragHandleProps,
 }: TrackItemProps) {
-  const likeToggle = useTrackLikeToggle(id);
-  const isLikeDisabled = !likeToggle.isReady || likeToggle.isPending;
-  const likeAriaLabel = likeToggle.isReady
-    ? likeToggle.isLiked
-      ? `Remove ${title} from liked`
-      : `Add ${title} to liked`
-    : likeToggle.isStatusPending
-      ? `Loading liked status for ${title}`
-      : `Liked status unavailable for ${title}`;
+  const likeButton = useLikeButtonState(id, title);
 
   // Determine if actions menu should show based on variant or explicit prop
   const shouldShowActions = showActionsMenu ?? variant === "library";
 
   const handleLikeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLikeDisabled) return;
-    likeToggle.toggle();
+    likeButton.toggle();
   };
 
   // Play button visibility classes based on variant
@@ -184,24 +175,22 @@ export default function TrackItem({
       <button
         type="button"
         onClick={handleLikeClick}
-        disabled={isLikeDisabled}
+        aria-disabled={likeButton.isDisabled || undefined}
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
           FOCUS_VISIBLE_RING_CLASS,
           MOTION_TRACK_ICON_BUTTON_CLASS,
-          likeToggle.isLiked
+          likeButton.isLiked
             ? "text-destructive"
             : "text-muted-foreground hover:text-destructive",
-          isLikeDisabled && "cursor-not-allowed opacity-50",
+          likeButton.isDisabled && "cursor-not-allowed opacity-50",
         )}
-        aria-label={likeAriaLabel}
-        aria-pressed={likeToggle.isReady ? likeToggle.isLiked : undefined}
-        aria-busy={
-          likeToggle.isStatusPending || likeToggle.isPending || undefined
-        }
+        aria-label={likeButton.ariaLabel}
+        aria-pressed={likeButton.ariaPressed}
+        aria-busy={likeButton.ariaBusy}
       >
         <Heart
-          className={`size-4 ${likeToggle.isLiked ? "fill-current" : ""}`}
+          className={`size-4 ${likeButton.isLiked ? "fill-current" : ""}`}
           aria-hidden="true"
         />
       </button>

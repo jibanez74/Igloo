@@ -74,6 +74,38 @@ describe("TrackItem motion", () => {
 });
 
 describe("TrackItem like button", () => {
+  it("stays focusable while liked status loads", async () => {
+    const status = deferred<Awaited<ReturnType<typeof getLikedTrackIds>>>();
+    vi.mocked(getLikedTrackIds).mockReturnValue(status.promise);
+
+    renderWithQueryClient(
+      <TrackItem
+        id={7}
+        title="Signal Fire"
+        duration={211}
+        variant="album"
+        onPlay={vi.fn()}
+        showActionsMenu={false}
+      />,
+    );
+
+    const loadingButton = screen.getByRole("button", {
+      name: "Loading liked status for Signal Fire",
+    });
+    expect(loadingButton).toHaveAttribute("aria-disabled", "true");
+    expect(loadingButton).not.toBeDisabled();
+    loadingButton.focus();
+    expect(loadingButton).toHaveFocus();
+    fireEvent.click(loadingButton);
+    expect(toggleLikeTrack).not.toHaveBeenCalled();
+
+    status.resolve(likedIds([]));
+    const readyButton = await screen.findByRole("button", {
+      name: "Add Signal Fire to liked",
+    });
+    expect(readyButton).not.toHaveAttribute("aria-disabled");
+  });
+
   it("toggles the cached liked ids through the shared mutation", async () => {
     vi.mocked(getLikedTrackIds).mockResolvedValue(likedIds([]));
     vi.mocked(toggleLikeTrack).mockResolvedValue({

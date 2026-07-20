@@ -1,5 +1,5 @@
 import { Heart } from "lucide-react";
-import { useTrackLikeToggle } from "@/hooks/useTrackLikeToggle";
+import { useLikeButtonState } from "@/hooks/useTrackLikeToggle";
 import { PLAYER_ICON_BUTTON_CLASS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -14,44 +14,31 @@ export default function PlayerLikeButton({
   trackTitle,
   variant,
 }: PlayerLikeButtonProps) {
-  const likeToggle = useTrackLikeToggle(trackId);
-  const isDisabled = !likeToggle.isReady || likeToggle.isPending;
-  const ariaLabel = likeToggle.isReady
-    ? likeToggle.isLiked
-      ? `Remove ${trackTitle} from liked`
-      : `Add ${trackTitle} to liked`
-    : likeToggle.isStatusPending
-      ? `Loading liked status for ${trackTitle}`
-      : `Liked status unavailable for ${trackTitle}`;
+  const likeButton = useLikeButtonState(trackId, trackTitle);
 
   return (
     <button
       type="button"
-      onClick={() => {
-        if (isDisabled) return;
-        likeToggle.toggle();
-      }}
-      aria-disabled={isDisabled || undefined}
-      aria-busy={
-        likeToggle.isStatusPending || likeToggle.isPending || undefined
-      }
+      onClick={likeButton.toggle}
+      aria-disabled={likeButton.isDisabled || undefined}
+      aria-busy={likeButton.ariaBusy}
       className={cn(
         PLAYER_ICON_BUTTON_CLASS,
         variant === "expanded"
-          ? "size-10 hover:bg-accent/50"
+          ? "size-10 shrink-0 hover:bg-accent/50"
           : "size-10 shrink-0 hover:bg-accent",
-        likeToggle.isLiked
+        likeButton.isLiked
           ? "text-destructive hover:text-destructive"
           : "hover:text-destructive",
-        isDisabled && "cursor-not-allowed opacity-50",
+        likeButton.isDisabled && "cursor-not-allowed opacity-50",
       )}
-      aria-label={ariaLabel}
-      aria-pressed={likeToggle.isReady ? likeToggle.isLiked : undefined}
+      aria-label={likeButton.ariaLabel}
+      aria-pressed={likeButton.ariaPressed}
     >
       <Heart
         className={cn(
           variant === "expanded" ? "size-5" : "size-4",
-          likeToggle.isLiked && "fill-current",
+          likeButton.isLiked && "fill-current",
         )}
         aria-hidden="true"
       />
