@@ -433,6 +433,13 @@ export default function AudioPlayer({
     };
   }, [audioRef, track]);
 
+  const handleTogglePlay = () => {
+    // While loading the button is aria-disabled (never `disabled`, which
+    // would drop it from the VoiceOver focus order) — guard here instead.
+    if (isLoading) return;
+    toggleMediaPlayback(audioRef.current);
+  };
+
   const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const audio = audioRef.current;
 
@@ -479,15 +486,15 @@ export default function AudioPlayer({
 
       const interactive = target.closest(INTERACTIVE_SELECTOR);
       if (interactive) {
-        // Space must activate the focused control everywhere, and arrow keys
-        // belong to widgets like tabs and radios — except inside the player's
-        // own chrome, where arrows keep seeking and adjusting volume.
+        // Space must activate the focused control everywhere, and navigation
+        // keys belong to widgets like tabs and radios — except inside the
+        // player's own chrome, where they keep controlling playback.
         if (event.key === " ") {
           return;
         }
 
         if (
-          ARROW_KEYS.has(event.key) &&
+          (ARROW_KEYS.has(event.key) || event.key === "Home") &&
           !interactive.closest("[data-audio-player]")
         ) {
           return;
@@ -498,7 +505,7 @@ export default function AudioPlayer({
     switch (event.key) {
       case " ":
         event.preventDefault();
-        toggleMediaPlayback(audio);
+        handleTogglePlay();
         break;
       case "ArrowLeft":
         event.preventDefault();
@@ -549,13 +556,6 @@ export default function AudioPlayer({
 
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
-
-  const handleTogglePlay = () => {
-    // While loading the button is aria-disabled (never `disabled`, which
-    // would drop it from the VoiceOver focus order) — guard here instead.
-    if (isLoading) return;
-    toggleMediaPlayback(audioRef.current);
-  };
 
   const playNext = () => {
     if (hasNext) {

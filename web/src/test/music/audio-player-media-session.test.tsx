@@ -743,6 +743,22 @@ describe("AudioPlayer Media Session", () => {
       expect(setCurrentTime).toHaveBeenCalledWith(0);
     });
 
+    it("leaves Home on an external tab control unhandled", () => {
+      const { audio } = renderAudioPlayer({
+        siblings: <button role="tab" type="button">Outside tab</button>,
+      });
+      const setCurrentTime = observeAudioCurrentTime(audio, 30);
+      const outsideTab = screen.getByRole("tab", { name: "Outside tab" });
+
+      outsideTab.focus();
+      const defaultNotPrevented = fireEvent.keyDown(outsideTab, {
+        key: "Home",
+      });
+
+      expect(defaultNotPrevented).toBe(true);
+      expect(setCurrentTime).not.toHaveBeenCalled();
+    });
+
     it("leaves Home on the expanded volume slider to the native control", () => {
       const { audio } = renderAudioPlayer({ isExpanded: true });
       const setCurrentTime = observeAudioCurrentTime(audio, 30);
@@ -757,6 +773,22 @@ describe("AudioPlayer Media Session", () => {
 
       expect(defaultNotPrevented).toBe(true);
       expect(setCurrentTime).not.toHaveBeenCalled();
+    });
+
+    it("prevents Space without toggling playback while audio is loading", () => {
+      const { audio } = renderAudioPlayer();
+      const playMock = HTMLMediaElement.prototype.play as ReturnType<
+        typeof vi.fn
+      >;
+
+      fireEvent(audio, new Event("loadstart"));
+      playMock.mockClear();
+
+      const defaultNotPrevented = fireEvent.keyDown(document.body, { key: " " });
+
+      expect(defaultNotPrevented).toBe(false);
+      expect(playMock).not.toHaveBeenCalled();
+      expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     });
 
     it("keeps letter shortcuts working from the player's own sliders, leaving arrows to the slider", () => {
